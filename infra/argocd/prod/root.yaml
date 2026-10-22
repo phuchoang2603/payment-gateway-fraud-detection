@@ -19,6 +19,12 @@ spec:
         namePrefix: payment-gateway-prod
         destinationServer: https://kubernetes.default.svc
         applications:
+          data-pipelines:
+            enabled: false
+            destinationNamespace: fraud-data-prod
+            path: infra/charts/data-pipelines
+            valuesFile:
+              - infra/charts/data-pipelines/values-prod.yaml
           payment-gateway:
             enabled: true
             chartTargetRevision: main

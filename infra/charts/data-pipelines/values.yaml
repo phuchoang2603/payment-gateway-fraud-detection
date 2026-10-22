@@ -1,0 +1,32 @@
+enabled: false
+prerequisitesVerified: false
+namespace: fraud-data-prod
+secretStoreName: fraud-doppler
+images:
+  spark: ""
+  metadata: ""
+config:
+  SOURCE_ROOT: s3://synthetic-source/historical/v7
+  DATASET_VERSION: v7
+  SOURCE_INVENTORY_URI: ""
+  SOURCE_INVENTORY_SHA256: ""
+  EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence
+  ICEBERG_REST_URI: https://minio.home.phuchoang.sbs/iceberg
+  ICEBERG_WAREHOUSE: fraud-lakehouse-prod
+  ICEBERG_SIGV4_ENABLED: "true"
+  ICEBERG_SIGNING_NAME: s3
+  S3_ENDPOINT: https://minio.home.phuchoang.sbs
+  AWS_REGION: us-east-1
+  DATAHUB_GMS_URL: http://datahub-datahub-gms.datahub.svc.cluster.local:8080
+  DATAHUB_ENV: PROD
+  DATAHUB_PLATFORM_INSTANCE: fraud-lakehouse-prod
+secrets:
+  lake:
+    SOURCE_ACCESS_KEY_ID: DP1_LAKE_RUSTFS_ACCESS_KEY
+    SOURCE_SECRET_ACCESS_KEY: DP1_LAKE_RUSTFS_SECRET_KEY
+    LAKE_ACCESS_KEY_ID: DP1_LAKE_RUSTFS_ACCESS_KEY
+    LAKE_SECRET_ACCESS_KEY: DP1_LAKE_RUSTFS_SECRET_KEY
+  metadata:
+    DATAHUB_TOKEN: DP1_DATAHUB_TOKEN
+    CATALOG_ACCESS_KEY_ID: DP1_METADATA_RUSTFS_ACCESS_KEY
+    CATALOG_SECRET_ACCESS_KEY: DP1_METADATA_RUSTFS_SECRET_KEY

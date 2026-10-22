@@ -80,3 +80,18 @@ The maintained generator starts fresh with a US-only electronics calibration pro
 Distribution/scenario/skew counters are informational diagnostics, not source publication gates. Amount/context/time/activity counters use payments, missingness/risk counters use attempts, and purchase-weighted activity is not a population census. Chargeback reporting probability and availability beyond the configured history end are explicit; absent chargebacks are not confirmed negatives. Oracle scenario/truth and postdecision outcomes must be excluded from features. Use forward-time evaluation with mature labels plus entity/campaign holdouts; public payment context does not establish a representative checkout fraud distribution.
 
 The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai-1 (50%)`, cell B5: offline simulation of at least 100 GB. Compression accounting is unspecified there. Full-scale coursework evidence requires at least **100,000,000,000 physical bytes** across inventory-listed raw event and label Parquet files, counted once, excluding `_run`, reports, streaming data, replicas and downstream copies. The v13 smoke export does not satisfy this target. The manifest separately records uncompressed Parquet column-chunk bytes and decimal GB/GiB. A configured full-scale byte gate still prevents undersized publication. Changing logical inputs requires a new dataset version after publication.
+
+## Bronze payments
+
+`bronze-payments` is a separate source-aligned product with `bronze.raw_payment_events` and `bronze.raw_fraud_labels` Iceberg ports. Its contracts preserve business fields and duplicate deliveries, normalize the absent v1 browser field to null, and append `_source_dataset_version`, `_source_manifest_sha256`, `_source_file`, `_ingestion_run_id` and `_ingested_at`. Contract/product/source versions remain independent. Labels retain their availability cutoff and feature-leakage restrictions.
+
+Source publication still uses the unchanged Data Contract CLI/DuckDB commands above. DP1 exports the bronze ODCS rules with Data Contract CLI 1.2.7 and imports them into GX 1.24 on Spark 3.5.8; exporting a suite does not validate data or translate DuckDB SQL. Each bronze quality block contains Spark unexpected-row SQL with its source semantic rule ID. Preparation rejects missing/unsupported rules; generated conditional checks cover nested required fields and array items, and recursive physical checks enforce the exact normalized schema. The native top-level column-set expectation permits GX's nested Spark column listing because the recursive check separately rejects extra columns.
+
+After integrating the generator inventory change, run the locked fixtures and contract lint from the repository devenv. An isolated checkout can set `DP1_GENERATOR_ROOT` to the integrated `src/simulator` dependency:
+
+```bash
+bash scripts/check-data-platform.sh
+bash scripts/ci-checks.sh contracts
+```
+
+Run `dp1 validate` in the Spark image against a recorded snapshot pair; `dp1 publish` is the separate metadata command. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and replay. DataHub consumes metadata/results and does not replace either validation engine.

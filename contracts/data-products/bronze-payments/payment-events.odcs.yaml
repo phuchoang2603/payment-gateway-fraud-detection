@@ -1,0 +1,531 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:bronze-payment-events
+name: Bronze payment-events
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Complete synthetic payment lifecycle histories for reproducible pipeline development.
+  usage: Validate source datasets before publication and ingestion. Deduplicate identical event deliveries before interpreting
+    lifecycle transitions.
+  limitations: Synthetic data only. Histories are complete across all date partitions. Empty configured schedules are valid.
+team:
+  name: Fraud data platform
+  members:
+  - username: phuchoang2603
+    role: owner
+tags:
+- synthetic
+- bronze
+- payments
+customProperties:
+- property: classification
+  value: synthetic
+- property: sqlDialect
+  value: spark
+- property: upstreamContract
+  value:
+    id: urn:datacontract:fraud:historical-payment-events
+    version: 3.1.0
+- property: snapshotRetention
+  value: Preserve every snapshot referenced by a durable run or acceptance record.
+servers:
+- server: bronze
+  type: custom
+  environment: prod
+  host: https://minio.home.phuchoang.sbs/iceberg/v1
+  database: fraud-lakehouse-prod
+  schema: bronze
+  description: REST catalog with independently configured signing and S3FileIO credentials. Read accepted snapshot pairs,
+    never unvalidated latest state.
+schema:
+- name: payment_events
+  physicalName: bronze.raw_payment_events
+  logicalType: object
+  physicalType: table
+  description: One authoritative transition per event_id; repeated identical deliveries are permitted. Histories are complete
+    across all date partitions.
+  dataGranularityDescription: One delivered payment lifecycle event.
+  customProperties:
+  - property: schemaVersions
+    value:
+    - 1
+    - 2
+  properties:
+  - name: event_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Opaque event identity. Repeated deliveries retain this identity and identical content.
+  - name: payment_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Payment aggregate identity within integration_id.
+  - name: aggregate_version
+    logicalType: integer
+    physicalType: long
+    required: true
+    description: Consecutive authoritative transition number starting at one; delivery duplicates do not increment it.
+  - name: integration_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Dedicated synthetic integration namespace; never share it with a real integration.
+  - name: occurred_at
+    logicalType: timestamp
+    physicalType: timestamp
+    logicalTypeOptions: &id001
+      timezone: true
+      defaultTimezone: UTC
+    required: true
+    description: Business occurrence time in UTC at microsecond precision.
+  - name: recorded_at
+    logicalType: timestamp
+    physicalType: timestamp
+    logicalTypeOptions: *id001
+    required: true
+    description: Source recording time, at or after occurred_at; not ingestion time.
+  - name: schema_version
+    logicalType: integer
+    physicalType: long
+    required: true
+    description: Physical event schema. Version one omits user_agent_family; version two permits it.
+  - name: correlation_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Correlation identity shared across one payment history.
+  - name: payment_created
+    logicalType: object
+    description: Initial immutable checkout snapshot. Exactly one lifecycle payload is present per event.
+    properties:
+    - name: merchant
+      logicalType: object
+      required: true
+      description: Integration-scoped merchant references.
+      properties:
+      - name: merchant_id
+        logicalType: string
+        physicalType: string
+        required: true
+        description: Gateway merchant identity.
+      - name: external_seller_id
+        logicalType: string
+        physicalType: string
+        required: true
+        description: Integration seller identity.
+    - name: customer
+      logicalType: object
+      required: true
+      description: Integration-scoped customer references.
+      properties:
+      - name: customer_id
+        logicalType: string
+        physicalType: string
+        required: true
+        description: Gateway customer identity.
+      - name: external_buyer_id
+        logicalType: string
+        physicalType: string
+        required: true
+        description: Integration buyer identity.
+    - name: snapshot
+      logicalType: object
+      required: true
+      description: Checkout facts captured at creation; raw personal and payment credentials are excluded.
+      properties:
+      - name: external_order_id
+        logicalType: string
+        physicalType: string
+        required: true
+        description: Integration order reference.
+      - name: total
+        logicalType: object
+        required: true
+        description: Total in integer minor units; must equal the item sum.
+        properties: &id002
+        - name: minor_units
+          logicalType: integer
+          physicalType: long
+          required: true
+          description: Nonnegative integer amount in currency minor units.
+        - name: currency
+          logicalType: string
+          physicalType: string
+          required: true
+          description: Three-letter uppercase currency code shared by all items.
+      - name: items
+        logicalType: array
+        required: true
+        description: Nonempty checkout line items.
+        items:
+          logicalType: object
+          required: true
+          properties:
+          - name: product_id
+            logicalType: string
+            physicalType: string
+            required: true
+            description: Product reference.
+          - name: category
+            logicalType: string
+            physicalType: string
+            required: true
+            description: Refurbished electronics product type, such as phone, laptop or accessory.
+          - name: condition
+            logicalType: string
+            physicalType: string
+            required: true
+            description: 'Refurbished condition grade: excellent, good or fair.'
+          - name: quantity
+            logicalType: integer
+            physicalType: int
+            required: true
+            description: Positive item quantity.
+          - name: unit_price
+            logicalType: object
+            required: true
+            description: Price for one item in checkout currency.
+            properties: *id002
+      - name: merchant_account_created_at
+        logicalType: timestamp
+        physicalType: timestamp
+        logicalTypeOptions: *id001
+        required: true
+        description: Merchant account creation time.
+      - name: customer_account_created_at
+        logicalType: timestamp
+        physicalType: timestamp
+        logicalTypeOptions: *id001
+        required: true
+        description: Customer account creation time.
+      - name: shipping
+        logicalType: object
+        required: true
+        description: Coarse shipping geography and synthetic address fingerprint.
+        properties:
+        - name: country
+          logicalType: string
+          physicalType: string
+          required: true
+          description: Shipping country code.
+        - name: region
+          logicalType: string
+          physicalType: string
+          required: true
+          description: Shipping region.
+        - name: postal_code
+          logicalType: string
+          physicalType: string
+          required: true
+          description: Shipping postal code.
+        - name: address_fingerprint
+          logicalType: string
+          physicalType: string
+          required: true
+          description: Normalized keyed synthetic address fingerprint; no street lines.
+  - name: attempt_started
+    logicalType: object
+    description: Starts a new nonconcurrent attempt on an open payment.
+    properties:
+    - name: attempt_id
+      logicalType: string
+      physicalType: string
+      required: true
+      description: Attempt identity unique within this payment.
+    - name: signals
+      logicalType: object
+      required: true
+      description: Runtime observations; unavailable optional signals remain null.
+      properties:
+      - name: attempted_at
+        logicalType: timestamp
+        physicalType: timestamp
+        logicalTypeOptions: *id001
+        required: true
+        description: Attempt occurrence time.
+      - name: payment_method
+        logicalType: object
+        required: true
+        description: Method category and keyed synthetic token fingerprint.
+        properties:
+        - name: type
+          logicalType: string
+          physicalType: string
+          required: true
+          description: Payment method category.
+        - name: fingerprint
+          logicalType: string
+          physicalType: string
+          required: true
+          description: Synthetic method fingerprint; never raw credentials.
+      - name: device_fingerprint
+        logicalType: string
+        physicalType: string
+        description: Observed synthetic device fingerprint.
+      - name: ip_country
+        logicalType: string
+        physicalType: string
+        description: Resolved IP country if available.
+      - name: ip_network_fingerprint
+        logicalType: string
+        physicalType: string
+        description: Keyed network fingerprint; never raw IP.
+      - name: user_agent_family
+        logicalType: string
+        physicalType: string
+        description: Optional browser family introduced in physical schema two.
+        customProperties:
+        - property: sinceSchemaVersion
+          value: 2
+  - name: risk_decision_recorded
+    logicalType: object
+    description: Exactly one assessment for the active attempt before any processor request.
+    properties:
+    - name: attempt_id
+      logicalType: string
+      physicalType: string
+      required: true
+      description: Active attempt identity.
+    - name: assessment
+      logicalType: object
+      required: true
+      description: Decision evidence. Optional model and feature versions are absent for rules-only decisions.
+      properties:
+      - name: outcome
+        logicalType: string
+        physicalType: string
+        required: true
+        description: RISK_OUTCOME_APPROVE or RISK_OUTCOME_DECLINE.
+      - name: reason_codes
+        logicalType: array
+        required: true
+        description: Nonempty policy reason codes.
+        items:
+          logicalType: string
+          physicalType: string
+          required: true
+      - name: policy_version
+        logicalType: string
+        physicalType: string
+        required: true
+        description: Evaluated policy version.
+      - name: model_version
+        logicalType: string
+        physicalType: string
+        description: Evaluated model version if a model was used.
+      - name: feature_set_version
+        logicalType: string
+        physicalType: string
+        description: Evaluated feature-set version if features were used.
+      - name: risk_score
+        logicalType: number
+        physicalType: double
+        description: Optional model risk score.
+  - name: processor_operation_requested
+    logicalType: object
+    description: Processor authorization request after risk approval.
+    properties:
+    - name: attempt_id
+      logicalType: string
+      physicalType: string
+      required: true
+      description: Active approved attempt identity.
+    - name: operation_key
+      logicalType: string
+      physicalType: string
+      required: true
+      description: Idempotent processor operation identity.
+  - name: processor_outcome_unknown
+    logicalType: object
+    description: Pending processor result; only processor decline or success can resolve it.
+    properties:
+    - name: attempt_id
+      logicalType: string
+      physicalType: string
+      required: true
+      description: Active requested attempt identity.
+  - name: attempt_declined
+    logicalType: object
+    description: Risk or processor decline that permits a subsequent attempt.
+    properties:
+    - name: attempt_id
+      logicalType: string
+      physicalType: string
+      required: true
+      description: Active declined attempt identity.
+    - name: source
+      logicalType: string
+      physicalType: string
+      required: true
+      description: DECLINE_SOURCE_RISK or DECLINE_SOURCE_PROCESSOR.
+    - name: reason
+      logicalType: string
+      physicalType: string
+      required: true
+      description: Decline reason.
+  - name: payment_succeeded
+    logicalType: object
+    description: Terminal successful processor result.
+    properties:
+    - name: attempt_id
+      logicalType: string
+      physicalType: string
+      required: true
+      description: Successful requested attempt identity.
+    - name: processor_reference
+      logicalType: string
+      physicalType: string
+      required: true
+      description: Synthetic processor result reference.
+  - name: payment_expired
+    logicalType: object
+    description: Terminal expiry with no pending processor result.
+    properties:
+    - name: _present
+      logicalType: boolean
+      physicalType: boolean
+      required: true
+      description: True marker for the otherwise empty expiry payload.
+  - name: _source_dataset_version
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Immutable source dataset version, independent of contract and product versions.
+  - name: _source_manifest_sha256
+    logicalType: string
+    physicalType: string
+    required: true
+    description: SHA-256 of exact completed source manifest bytes.
+  - name: _source_file
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Exact manifest-selected input object URI.
+  - name: _ingestion_run_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Stable logical ingestion identity, reused after driver retries.
+  - name: _ingested_at
+    logicalType: timestamp
+    physicalType: timestamp
+    required: true
+    description: Stable UTC microsecond ingestion time, distinct from source recorded_at.
+  quality:
+  - id: payment_delivery_consistency
+    type: custom
+    description: Repeated event identities must carry identical content.
+    name: payment_delivery_consistency
+    engine: great-expectations
+    implementation:
+      type: unexpected_rows_expectation
+      kwargs:
+        unexpected_rows_query: "SELECT * FROM (\n  SELECT event_id FROM {batch} e\n  GROUP BY event_id HAVING count(DISTINCT\
+          \ to_json(struct(e.event_id, e.payment_id, e.aggregate_version, e.integration_id, e.occurred_at, e.recorded_at,\
+          \ e.schema_version, e.correlation_id, e.payment_created, e.attempt_started, e.risk_decision_recorded, e.processor_operation_requested,\
+          \ e.processor_outcome_unknown, e.attempt_declined, e.payment_succeeded, e.payment_expired))) > 1\n)\n"
+      meta:
+        semantic_rule_id: payment_delivery_consistency
+  - id: payment_envelope
+    type: custom
+    description: Envelope identities are nonempty, timestamps are ordered, schemas are supported and exactly one lifecycle
+      payload is present.
+    name: payment_envelope
+    engine: great-expectations
+    implementation:
+      type: unexpected_rows_expectation
+      kwargs:
+        unexpected_rows_query: "SELECT * FROM {batch}\nWHERE event_id = '' OR payment_id = '' OR integration_id = ''\n  OR\
+          \ correlation_id = ''\n  OR schema_version NOT IN (1, 2) OR aggregate_version < 1\n  OR recorded_at < occurred_at\n\
+          \  OR (CAST(payment_created IS NOT NULL AS INTEGER)\n    + CAST(attempt_started IS NOT NULL AS INTEGER)\n    +\
+          \ CAST(risk_decision_recorded IS NOT NULL AS INTEGER)\n    + CAST(processor_operation_requested IS NOT NULL AS\
+          \ INTEGER)\n    + CAST(processor_outcome_unknown IS NOT NULL AS INTEGER)\n    + CAST(attempt_declined IS NOT NULL\
+          \ AS INTEGER)\n    + CAST(payment_succeeded IS NOT NULL AS INTEGER)\n    + CAST(payment_expired IS NOT NULL AS\
+          \ INTEGER)) <> 1\n  OR (payment_expired IS NOT NULL AND NOT payment_expired._present)\n"
+      meta:
+        semantic_rule_id: payment_envelope
+  - id: payment_lifecycle
+    type: custom
+    description: Complete canonical histories have consecutive versions, legal transitions, consistent attempt identities
+      and correlation. Causation is implied by aggregate_version order.
+    name: payment_lifecycle
+    engine: great-expectations
+    implementation:
+      type: unexpected_rows_expectation
+      kwargs:
+        unexpected_rows_query: "WITH canonical AS (SELECT DISTINCT event_id, payment_id, aggregate_version, integration_id,\
+          \ occurred_at, recorded_at, schema_version, correlation_id, payment_created, attempt_started, risk_decision_recorded,\
+          \ processor_operation_requested, processor_outcome_unknown, attempt_declined, payment_succeeded, payment_expired\
+          \ FROM {batch}),\ntyped AS (\n  SELECT *,\n    CASE\n      WHEN payment_created IS NOT NULL THEN 'created'\n  \
+          \    WHEN attempt_started IS NOT NULL THEN 'started'\n      WHEN risk_decision_recorded IS NOT NULL THEN 'decision'\n\
+          \      WHEN processor_operation_requested IS NOT NULL THEN 'requested'\n      WHEN processor_outcome_unknown IS\
+          \ NOT NULL THEN 'unknown'\n      WHEN attempt_declined IS NOT NULL THEN 'declined'\n      WHEN payment_succeeded\
+          \ IS NOT NULL THEN 'succeeded'\n      WHEN payment_expired IS NOT NULL THEN 'expired'\n    END AS kind,\n    coalesce(attempt_started.attempt_id,\
+          \ risk_decision_recorded.attempt_id,\n      processor_operation_requested.attempt_id, processor_outcome_unknown.attempt_id,\n\
+          \      attempt_declined.attempt_id, payment_succeeded.attempt_id) AS attempt\n  FROM canonical\n),\nordered AS\
+          \ (\n  SELECT *,\n    row_number() OVER history AS ordinal,\n    count(*) OVER (PARTITION BY integration_id, payment_id)\
+          \ AS transitions,\n    lag(kind) OVER history AS previous_kind,\n    lag(occurred_at) OVER history AS previous_time,\n\
+          \    lag(correlation_id) OVER history AS previous_correlation,\n    lag(risk_decision_recorded.assessment.outcome)\
+          \ OVER history AS previous_outcome,\n    last_value(attempt_started.attempt_id, true) OVER history AS active_attempt\n\
+          \  FROM typed\n  WINDOW history AS (\n    PARTITION BY integration_id, payment_id ORDER BY aggregate_version, event_id\n\
+          \    \n  )\n)\nSELECT * FROM ordered\nWHERE aggregate_version <>\
+          \ ordinal\n  OR (ordinal = transitions AND kind NOT IN ('succeeded', 'expired'))\n  OR (ordinal > 1 AND (correlation_id\
+          \ <> previous_correlation OR occurred_at < previous_time))\n  OR (kind NOT IN ('created', 'expired') AND\n    (attempt\
+          \ IS NULL OR attempt = '' OR attempt IS DISTINCT FROM active_attempt))\n  OR NOT coalesce(CASE kind\n    WHEN 'created'\
+          \ THEN ordinal = 1\n    WHEN 'started' THEN previous_kind IN ('created', 'declined')\n    WHEN 'decision' THEN\
+          \ previous_kind = 'started'\n    WHEN 'requested' THEN previous_kind = 'decision'\n      AND previous_outcome =\
+          \ 'RISK_OUTCOME_APPROVE'\n    WHEN 'unknown' THEN previous_kind = 'requested'\n    WHEN 'declined' THEN\n     \
+          \ (previous_kind = 'decision' AND previous_outcome = 'RISK_OUTCOME_DECLINE'\n        AND attempt_declined.source\
+          \ = 'DECLINE_SOURCE_RISK')\n      OR (previous_kind IN ('requested', 'unknown')\n        AND attempt_declined.source\
+          \ = 'DECLINE_SOURCE_PROCESSOR')\n    WHEN 'succeeded' THEN previous_kind IN ('requested', 'unknown')\n    WHEN\
+          \ 'expired' THEN previous_kind IN ('created', 'started', 'decision', 'declined')\n    ELSE false END, false)\n"
+      meta:
+        semantic_rule_id: payment_lifecycle
+  - id: payment_attempt_identity
+    type: custom
+    description: Each canonical attempt identity starts once within its scoped payment.
+    name: payment_attempt_identity
+    engine: great-expectations
+    implementation:
+      type: unexpected_rows_expectation
+      kwargs:
+        unexpected_rows_query: "SELECT * FROM (\n  SELECT integration_id, payment_id, attempt_started.attempt_id\n  FROM\
+          \ (SELECT DISTINCT event_id, payment_id, aggregate_version, integration_id, occurred_at, recorded_at, schema_version,\
+          \ correlation_id, payment_created, attempt_started, risk_decision_recorded, processor_operation_requested, processor_outcome_unknown,\
+          \ attempt_declined, payment_succeeded, payment_expired FROM {batch})\n  WHERE attempt_started IS NOT NULL\n  GROUP\
+          \ BY ALL HAVING count(*) > 1\n)\n"
+      meta:
+        semantic_rule_id: payment_attempt_identity
+  - id: payment_risk_assessment
+    type: custom
+    description: Decisions declare an approve or decline outcome, policy version and nonempty reason codes.
+    name: payment_risk_assessment
+    engine: great-expectations
+    implementation:
+      type: unexpected_rows_expectation
+      kwargs:
+        unexpected_rows_query: "SELECT * FROM {batch}\nWHERE risk_decision_recorded IS NOT NULL AND (\n  risk_decision_recorded.assessment.outcome\
+          \ NOT IN ('RISK_OUTCOME_APPROVE', 'RISK_OUTCOME_DECLINE')\n  OR risk_decision_recorded.assessment.policy_version\
+          \ = ''\n  OR size(risk_decision_recorded.assessment.reason_codes) = 0\n  OR array_contains(risk_decision_recorded.assessment.reason_codes,\
+          \ '')\n)\n"
+      meta:
+        semantic_rule_id: payment_risk_assessment
+  - id: payment_snapshot_amounts
+    type: custom
+    description: Checkout item quantities and amounts are valid and sum to the total in the same currency.
+    name: payment_snapshot_amounts
+    engine: great-expectations
+    implementation:
+      type: unexpected_rows_expectation
+      kwargs:
+        unexpected_rows_query: "SELECT * FROM {batch} e\nWHERE payment_created IS NOT NULL AND (\n  payment_created.snapshot.total.minor_units\
+          \ < 0\n  OR NOT (payment_created.snapshot.total.currency RLIKE '^[A-Z][A-Z][A-Z]$')\n  OR size(payment_created.snapshot.items)\
+          \ = 0\n  OR NOT (CAST(payment_created.snapshot.total.minor_units AS DECIMAL(38,0)) <=>\n    aggregate(payment_created.snapshot.items,\
+          \ CAST(0 AS DECIMAL(38,0)),\n      (acc, item) -> CAST(acc + CAST(item.quantity AS DECIMAL(38,0)) * item.unit_price.minor_units\
+          \ AS DECIMAL(38,0))))\n  OR exists(payment_created.snapshot.items, item -> item.quantity <= 0\n    OR item.unit_price.minor_units\
+          \ < 0\n    OR NOT (item.unit_price.currency <=> payment_created.snapshot.total.currency))\n)\n"
+      meta:
+        semantic_rule_id: payment_snapshot_amounts

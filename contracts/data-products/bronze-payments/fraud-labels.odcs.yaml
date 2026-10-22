@@ -1,0 +1,151 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:bronze-fraud-labels
+name: Bronze fraud-labels
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Separately delivered simulation truth and delayed chargebacks for the historical payment events.
+  usage: Join labels to payment attempts only after label_available_at. Validate together with the payment events they reference.
+  limitations: Synthetic data only. Scenario truth and future outcomes must never become decision inputs. Labels may only
+    be used after label_available_at.
+team:
+  name: Fraud data platform
+  members:
+  - username: phuchoang2603
+    role: owner
+tags:
+- synthetic
+- bronze
+- payments
+customProperties:
+- property: classification
+  value: synthetic
+- property: sqlDialect
+  value: spark
+- property: upstreamContract
+  value:
+    id: urn:datacontract:fraud:historical-fraud-labels
+    version: 1.0.0
+- property: snapshotRetention
+  value: Preserve every snapshot referenced by a durable run or acceptance record.
+servers:
+- server: bronze
+  type: custom
+  environment: prod
+  host: https://minio.home.phuchoang.sbs/iceberg/v1
+  database: fraud-lakehouse-prod
+  schema: bronze
+  description: REST catalog with independently configured signing and S3FileIO credentials. Read accepted snapshot pairs,
+    never unvalidated latest state.
+schema:
+- name: fraud_labels
+  physicalName: bronze.raw_fraud_labels
+  logicalType: object
+  physicalType: table
+  description: Separate synthetic attempt truth and delayed chargebacks. Never join future labels into features.
+  dataGranularityDescription: One label source observation for one scoped payment attempt.
+  customProperties:
+  - property: schemaVersions
+    value:
+    - 1
+  properties:
+  - name: integration_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Same dedicated synthetic namespace as the referenced payment.
+  - name: payment_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Referenced payment aggregate identity.
+  - name: attempt_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Referenced started attempt identity.
+  - name: is_fraud
+    logicalType: boolean
+    physicalType: boolean
+    required: true
+    description: Fraud truth according to this source; friendly-fraud chargebacks may differ from simulation truth.
+  - name: occurred_at
+    logicalType: timestamp
+    physicalType: timestamp
+    logicalTypeOptions: &id001
+      timezone: true
+      defaultTimezone: UTC
+    required: true
+    description: Time of the labeled business occurrence.
+  - name: label_available_at
+    logicalType: timestamp
+    physicalType: timestamp
+    logicalTypeOptions: *id001
+    required: true
+    description: Earliest time this label may be used by training or evaluation.
+  - name: source
+    logicalType: string
+    physicalType: string
+    required: true
+    description: LABEL_SOURCE_SIMULATION_TRUTH or LABEL_SOURCE_CHARGEBACK.
+  - name: scenario
+    logicalType: string
+    physicalType: string
+    description: Synthetic generating scenario on simulation truth only; excluded from features.
+  - name: _source_dataset_version
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Immutable source dataset version, independent of contract and product versions.
+  - name: _source_manifest_sha256
+    logicalType: string
+    physicalType: string
+    required: true
+    description: SHA-256 of exact completed source manifest bytes.
+  - name: _source_file
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Exact manifest-selected input object URI.
+  - name: _ingestion_run_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Stable logical ingestion identity, reused after driver retries.
+  - name: _ingested_at
+    logicalType: timestamp
+    physicalType: timestamp
+    required: true
+    description: Stable UTC microsecond ingestion time, distinct from source recorded_at.
+  quality:
+  - id: label_availability
+    type: custom
+    description: Labels cannot be available before their occurrence and carry a recognized source.
+    name: label_availability
+    engine: great-expectations
+    implementation:
+      type: unexpected_rows_expectation
+      kwargs:
+        unexpected_rows_query: "SELECT * FROM {batch}\nWHERE label_available_at < occurred_at\n  OR source NOT IN ('LABEL_SOURCE_SIMULATION_TRUTH',\
+          \ 'LABEL_SOURCE_CHARGEBACK')\n  OR (source = 'LABEL_SOURCE_SIMULATION_TRUTH' AND coalesce(scenario, '') = '')\n\
+          \  OR (source = 'LABEL_SOURCE_CHARGEBACK' AND (NOT is_fraud OR scenario IS NOT NULL))\n"
+      meta:
+        semantic_rule_id: label_availability
+  - id: label_attempt_linkage
+    type: custom
+    description: Every label references a started attempt in the same integration and payment; chargebacks require that attempt
+      to succeed.
+    name: label_attempt_linkage
+    engine: great-expectations
+    implementation:
+      type: unexpected_rows_expectation
+      kwargs:
+        unexpected_rows_query: "SELECT * FROM {batch} label\nWHERE NOT EXISTS (\n  SELECT 1 FROM payment_events event\n \
+          \ WHERE event.integration_id = label.integration_id AND event.payment_id = label.payment_id\n    AND event.attempt_started.attempt_id\
+          \ = label.attempt_id\n) OR (label.source = 'LABEL_SOURCE_CHARGEBACK' AND NOT EXISTS (\n  SELECT 1 FROM payment_events\
+          \ event\n  WHERE event.integration_id = label.integration_id AND event.payment_id = label.payment_id\n    AND event.payment_succeeded.attempt_id\
+          \ = label.attempt_id\n))\n"
+      meta:
+        semantic_rule_id: label_attempt_linkage

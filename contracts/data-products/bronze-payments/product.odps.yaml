@@ -1,0 +1,64 @@
+apiVersion: v1.1.0
+kind: DataProduct
+id: urn:dataproduct:fraud:bronze-payments
+name: Bronze payments
+version: 1.0.0
+status: active
+domain: fraud-detection
+type: sourceAligned
+description:
+  purpose: Source-preserving historical Iceberg snapshots with contract validation and reproducible governance.
+  usage: Read the accepted record snapshot pair filtered by source dataset version. Preserve identical duplicate deliveries.
+  limitations: Synthetic source only. Labels are usable only after label_available_at; exclude scenario from features. Latest
+    table state may contain failed candidates.
+team:
+  name: Fraud data platform
+  members:
+  - username: phuchoang2603
+    role: owner
+tags:
+- synthetic
+- bronze
+- payments
+customProperties:
+- property: warehouse
+  value: s3://fraud-lakehouse-prod/
+- property: catalog
+  value: https://minio.home.phuchoang.sbs/iceberg
+- property: accessPolicy
+  value: Combined source-read/lake-write runtime identity and separate read-only metadata identity, provisioned externally; never reuse the generator writer.
+outputPorts:
+- name: payment-events
+  version: 1.0.0
+  type: table
+  contractId: urn:datacontract:fraud:bronze-payment-events
+  description: Complete payment lifecycle histories in daily occurred_date partitions of sorted Zstandard Parquet.
+  customProperties:
+  - property: table
+    value: bronze.raw_payment_events
+  - property: consumption
+    value: Use accepted snapshots and source version; preserve duplicate events, honor label availability and exclude scenario
+      from features.
+  inputContracts:
+  - id: urn:datacontract:fraud:historical-payment-events
+    version: 3.1.0
+- name: fraud-labels
+  version: 1.0.0
+  type: table
+  contractId: urn:datacontract:fraud:bronze-fraud-labels
+  description: Simulation truth and delayed chargebacks in daily label_available_date partitions of sorted Zstandard Parquet.
+  inputContracts:
+  - id: urn:datacontract:fraud:historical-fraud-labels
+    version: 1.0.0
+  - id: urn:datacontract:fraud:bronze-payment-events
+    version: 1.0.0
+  customProperties:
+  - property: table
+    value: bronze.raw_fraud_labels
+  - property: consumption
+    value: Use accepted snapshots and source version; preserve duplicate events, honor label availability and exclude scenario
+      from features.
+support:
+- channel: GitHub maintainer
+  url: https://github.com/phuchoang2603
+  scope: support

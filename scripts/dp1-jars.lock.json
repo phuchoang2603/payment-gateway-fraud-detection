@@ -1,0 +1,18 @@
+[
+  {
+    "path": "org/apache/iceberg/iceberg-spark-runtime-3.5_2.12/1.10.1/iceberg-spark-runtime-3.5_2.12-1.10.1.jar",
+    "sha256": "39ea09e6c03550a300b9d9ab498949836d2d434e441da4c12a943a086e396940"
+  },
+  {
+    "path": "org/apache/iceberg/iceberg-aws-bundle/1.10.1/iceberg-aws-bundle-1.10.1.jar",
+    "sha256": "86bf20892ea5b4c17688f19b075399885f6aa5303f6b2dc9f491e76ceef9633b"
+  },
+  {
+    "path": "org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar",
+    "sha256": "53f9ae03c681a30a50aa17524bd9790ab596b28481858e54efd989a826ed3a4a"
+  },
+  {
+    "path": "com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar",
+    "sha256": "873fe7cf495126619997bec21c44de5d992544aea7e632fdc77adb1a0915bae5"
+  }
+]

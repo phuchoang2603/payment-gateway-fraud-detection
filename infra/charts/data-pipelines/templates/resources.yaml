@@ -1,0 +1,124 @@
+{{- if .Values.enabled }}
+{{- if not .Values.prerequisitesVerified }}
+{{- fail "DP1 requires verified catalog interoperability, scoped identities, watched namespace, DataHub and concurrent capacity" }}
+{{- end }}
+{{- if or .Values.config.SOURCE_INVENTORY_URI .Values.config.SOURCE_INVENTORY_SHA256 }}
+{{- if or (not .Values.config.SOURCE_INVENTORY_URI) (not (regexMatch "^[a-f0-9]{64}$" .Values.config.SOURCE_INVENTORY_SHA256)) }}
+{{- fail "source companion requires both SOURCE_INVENTORY_URI and a SHA256 pin" }}
+{{- end }}
+{{- end }}
+{{- range $name, $image := .Values.images }}
+{{- if not (regexMatch "@sha256:[a-f0-9]{64}$" $image) }}
+{{- fail (printf "images.%s must use an immutable sha256 digest" $name) }}
+{{- end }}
+{{- end }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  annotations:
+    helm.sh/resource-policy: keep
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dp1-config
+  namespace: {{ .Values.namespace }}
+data:
+  {{- toYaml .Values.config | nindent 2 }}
+---
+{{- range $name := list "workflow" "spark" "metadata" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dp1-{{ $name }}
+  namespace: {{ $.Values.namespace }}
+---
+{{- end }}
+{{- range $name, $keys := .Values.secrets }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: dp1-{{ $name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $.Values.secretStoreName }}
+  target:
+    name: dp1-{{ $name }}
+  data:
+  {{- range $local, $remote := $keys }}
+    - secretKey: {{ $local }}
+      remoteRef:
+        key: {{ $remote }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dp1-workflow
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [sparkoperator.k8s.io]
+    resources: [sparkapplications]
+    verbs: [create, get, list, watch, delete]
+  - apiGroups: [argoproj.io]
+    resources: [workflowtaskresults]
+    verbs: [create, patch]
+  - apiGroups: [argoproj.io]
+    resources: [workflows]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dp1-spark
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, configmaps, persistentvolumeclaims]
+    verbs: [create, get, list, watch, delete, patch]
+---
+{{- range $name := list "workflow" "spark" }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dp1-{{ $name }}
+  namespace: {{ $.Values.namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: dp1-{{ $name }}
+    namespace: {{ $.Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dp1-{{ $name }}
+---
+{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dp1-metadata
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [workflowtaskresults]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dp1-metadata
+  namespace: {{ .Values.namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: dp1-metadata
+    namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dp1-metadata
+{{- end }}
