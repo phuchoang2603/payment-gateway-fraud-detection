@@ -91,6 +91,10 @@ Use one bounded full-history v7 batch. Start with one driver and one small execu
 
 Retain the existing duplicates, skew, high cardinality and physical schema change. Introduce corrupt cases only in isolated failure fixtures, never mutate v7. Record read/write bytes, output sizes/counts, duration, shuffle/spill, skew and peak memory. The pilot may expose configuration issues; it cannot prove 100 GB throughput. Later scale work must measure and tune partitioning, shuffle counts, broadcast behavior, storage requests and file compaction against the larger source.
 
+### 8. Temporary compatibility scaffolding is removed after acceptance
+
+The RustFS compatibility probe and the v7 companion inventory exist only to unblock the first run. The probe prints its report to the job log, persists nothing and drops its own table; earlier probe leftovers are deleted with it. The companion path, its configuration and the lake inventory object are removed once a later export with an embedded inventory is accepted end to end. Accepted v7 run records and snapshots are retained.
+
 ## Risks / Trade-offs
 
 - RustFS REST authentication or commit behavior differs between clients -> require bounded authenticated Spark write/read and PyIceberg metadata probes before enabling DP1; report an unresolved compatibility failure rather than adding an unplanned catalog.
@@ -106,7 +110,8 @@ Retain the existing duplicates, skew, high cardinality and physical schema chang
 2. Land the new product/contracts, jobs, behavioral checks, images and opt-in application chart. Keep existing source validation commands and generator outputs unchanged.
 3. Land coordinated platform Spark namespace and DataHub changes. Verify persistence, authenticated access, backing-service readiness and the joint resource budget.
 4. Enable prod DP1, ingest/validate v7 and publish/read back governance. Run replay, interrupted-commit, quality-failure and metadata-outage acceptance; retain evidence in the existing data-platform documentation/roadmap.
-5. Rollback stops new workflows and removes only application-owned running resources. Keep immutable source, Iceberg snapshots, acceptance records, reports and platform DataHub state. Repoint consumers to the previous accepted snapshot pair; never use destructive table or bucket deletion as rollback.
+5. After acceptance, remove the probe and, once an embedded-inventory export is accepted, the v7 companion path (tasks 8.1-8.3).
+6. Rollback stops new workflows and removes only application-owned running resources. Keep immutable source, Iceberg snapshots, acceptance records, reports and platform DataHub state. Repoint consumers to the previous accepted snapshot pair; never use destructive table or bucket deletion as rollback.
 
 ## Open Questions
 

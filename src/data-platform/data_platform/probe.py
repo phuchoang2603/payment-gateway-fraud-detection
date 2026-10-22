@@ -6,7 +6,6 @@ from pyiceberg.catalog import load_catalog
 from pyspark.sql import functions as F
 
 from data_platform.spark import session
-from data_platform.storage import Store
 
 
 def probe():
@@ -15,6 +14,7 @@ def probe():
     if not namespace.replace("_", "").isalnum():
         raise ValueError("invalid probe namespace")
     spark = None
+    table = None
     report = {
         "namespace": namespace,
         "table": name,
@@ -23,6 +23,7 @@ def probe():
         "s3_endpoint": os.environ.get("S3_ENDPOINT"),
         "path_style": True,
         "outcome": "error",
+        "cleanup": "not-needed",
     }
 
     def stage(value):
@@ -62,6 +63,12 @@ def probe():
         report["error_type"] = type(error).__name__
         return 1
     finally:
-        Store(os.environ["EVIDENCE_ROOT"]).put(f"probes/{name}.json", report, create=True)
         if spark:
+            if table:
+                try:
+                    spark.sql(f"DROP TABLE IF EXISTS {table} PURGE")
+                    report["cleanup"] = "dropped"
+                except Exception as error:
+                    report["cleanup"] = "failed:" + type(error).__name__
             spark.stop()
+        print(json.dumps(report), flush=True)
