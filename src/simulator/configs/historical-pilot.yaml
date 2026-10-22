@@ -1,0 +1,88 @@
+dataset_version: v8-pilot
+seed: 2603
+integration_id: 01234567-89ab-4cde-8fab-0123456789ab
+synthetic_key: synthetic-fingerprint-v1
+synthetic_key_version: v1
+start_date: 2026-07-01
+duration_days: 6
+counts:
+  customers: 3000000
+  merchants: 20000
+  devices: 4200000
+  ip_networks: 65536
+  addresses: 3300000
+  payment_methods: 3900000
+behavior:
+  purchases_per_customer_day: 0.17
+  merchant_zipf_exponent: 1.1
+  category_zipf_exponent: 1.2
+  familiar_merchant_probability: 0.8
+  familiar_context_probability: 0.95
+  foreign_ip_probability: 0.03
+  issuer_decline_rate: 0.04
+  insufficient_funds_rate: 0.03
+  unknown_outcome_rate: 0.02
+  unknown_resolution_minutes: 15
+  retry_rate: 0.3
+  expiry_minutes: 60
+scenarios:
+  obvious_high_value:
+    rate: 0.001
+    amount_multiplier: 8
+  stolen_card_new_device:
+    rate: 0.0004
+    window_days: 7
+    attempts_per_day: 1.5
+    amount_multiplier: 2.5
+  account_takeover:
+    rate: 0.0002
+    window_days: 3
+    attempts_per_day: 2
+    amount_multiplier: 3
+  card_testing:
+    rate: 60
+    burst_size: 25
+    burst_minutes: 10
+    decline_rate: 0.8
+  friendly_fraud:
+    rate: 0.003
+data_problems:
+  duplicate_rate: 0.02
+  schema_cutover_date: '2026-07-04'
+label_delays:
+  min_days: 7
+  max_days: 21
+acceptance_bands:
+  duplicate_rate: {minimum: 0.019, maximum: 0.021}
+  merchant_max_share: {minimum: 0.05, maximum: 0.20}
+  merchant_top_10_share: {minimum: 0.30, maximum: 0.45}
+  schema_version_shares.1: {minimum: 0.45, maximum: 0.55}
+  schema_version_shares.2: {minimum: 0.45, maximum: 0.55}
+  scenario_attempt_shares.card_testing: {minimum: 0.0015, maximum: 0.0045}
+  scenario_attempt_shares.account_takeover: {minimum: 0.004, maximum: 0.010}
+  scenario_attempt_shares.stolen_card_new_device: {minimum: 0.008, maximum: 0.018}
+  scenario_attempt_shares.friendly_fraud: {minimum: 0.0015, maximum: 0.0045}
+  scenario_attempt_shares.obvious_high_value: {minimum: 0.0006, maximum: 0.0020}
+  cardinality.customer.distinct_to_row_ratio: {minimum: 0.50, maximum: 0.70}
+  cardinality.address.distinct_to_row_ratio: {minimum: 0.45, maximum: 0.70}
+  cardinality.device.distinct_to_row_ratio: {minimum: 0.45, maximum: 0.70}
+  cardinality.ip_network.distinct_to_row_ratio: {minimum: 0.005, maximum: 0.030}
+  cardinality.payment_method.distinct_to_row_ratio: {minimum: 0.35, maximum: 0.60}
+storage:
+  row_group_rows: 131072
+  target_file_mb: 128
+output: s3://synthetic-source
+minimum_source_parquet_bytes: 0
+customer_block_size: 100000
+card_testing_bursts_per_task: 16
+chunk_purchases: 2000
+execution:
+  workers: 3
+  max_in_flight: 3
+  scratch_directory: /tmp
+  scratch_capacity_bytes: 25769803776
+  task_scratch_bytes: 268435456
+  duckdb_memory_limit_mb: 4096
+  duckdb_threads: 2
+  duckdb_spill_bytes: 17179869184
+  transfer_concurrency: 3

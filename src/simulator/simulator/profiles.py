@@ -1,10 +1,12 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
 from hashlib import sha256
+from pathlib import Path
+from typing import Callable
 
 import numpy as np
 
-from simulator.config import HistoricalConfig
+from simulator.config import ALGORITHM_VERSION, HistoricalConfig
 from simulator.identity import entity_id, fingerprint
 
 CATEGORIES = ("phone", "laptop", "accessory", "tablet", "headphones", "smartwatch", "game_console", "camera")
@@ -41,14 +43,28 @@ def zipf_weights(count: int, exponent: float) -> np.ndarray:
     return weights / weights.sum()
 
 
+class IdentityPool(Sequence):
+    def __init__(self, count: int, derive: Callable[[int], str]):
+        self.count = count
+        self.derive = derive
+
+    def __len__(self):
+        return self.count
+
+    def __getitem__(self, index):
+        if not 0 <= index < self.count:
+            raise IndexError(index)
+        return self.derive(int(index))
+
+
 @dataclass(frozen=True)
 class Profiles:
-    merchant_ids: tuple[str, ...]
-    merchant_external_ids: tuple[str, ...]
+    merchant_ids: IdentityPool
+    merchant_external_ids: IdentityPool
     merchant_categories: np.ndarray
     merchant_age_days: np.ndarray
-    customer_ids: tuple[str, ...]
-    customer_external_ids: tuple[str, ...]
+    customer_ids: IdentityPool
+    customer_external_ids: IdentityPool
     customer_age_days: np.ndarray
     customer_countries: np.ndarray
     familiar_merchants: np.ndarray
@@ -56,19 +72,19 @@ class Profiles:
     home_networks: np.ndarray
     addresses: np.ndarray
     payment_methods: np.ndarray
-    device_pool: tuple[str, ...]
-    network_pool: tuple[str, ...]
-    address_pool: tuple[str, ...]
-    method_pool: tuple[str, ...]
+    device_pool: IdentityPool
+    network_pool: IdentityPool
+    address_pool: IdentityPool
+    method_pool: IdentityPool
+    identity_digest: str
 
     def digest(self) -> str:
-        digest = sha256()
+        digest = sha256(self.identity_digest.encode())
         for name, value in sorted(vars(self).items()):
-            digest.update(name.encode())
             if isinstance(value, np.ndarray):
-                digest.update(np.ascontiguousarray(value, dtype=np.int64).tobytes())
-            else:
-                digest.update("\x1f".join(value).encode())
+                digest.update(name.encode())
+                for start in range(0, len(value), 8192):
+                    digest.update(np.ascontiguousarray(value[start : start + 8192], dtype=np.int64).tobytes())
         return digest.hexdigest()
 
 
@@ -84,59 +100,130 @@ class Schedule:
         return len(self.customers)
 
 
-def build_profiles(config: HistoricalConfig) -> Profiles:
+def build_profiles(config: HistoricalConfig, directory: Path | None = None, *, reopen: bool = False) -> Profiles:
     counts = config.counts
     random = stage_rng(config.seed, PROFILE_STAGE)
     key = config.synthetic_key
+    arrays = {}
+    if directory:
+        directory.mkdir(parents=True, exist_ok=True)
+
+    def array(name, shape, generate):
+        if directory and reopen:
+            value = np.load(directory / f"{name}.npy", mmap_mode="r")
+        else:
+            value = (
+                np.lib.format.open_memmap(directory / f"{name}.npy", mode="w+", dtype="int64", shape=shape)
+                if directory
+                else np.empty(shape, dtype="int64")
+            )
+            for start in range(0, shape[0], 8192):
+                stop = min(start + 8192, shape[0])
+                value[start:stop] = generate(stop - start)
+            if directory:
+                value.flush()
+                value = np.load(directory / f"{name}.npy", mmap_mode="r")
+            else:
+                value.flags.writeable = False
+        arrays[name] = value
+
     category_weights = zipf_weights(len(CATEGORIES), config.behavior.category_zipf_exponent)
-    merchant_weights = zipf_weights(counts.merchants, config.behavior.merchant_zipf_exponent)
-    merchant_external = tuple(f"seller-{index + 1:06d}" for index in range(counts.merchants))
-    customer_external = tuple(f"buyer-{index + 1:06d}" for index in range(counts.customers))
+    merchant_cdf = np.cumsum(zipf_weights(counts.merchants, config.behavior.merchant_zipf_exponent))
     familiar_count = min(3, counts.merchants)
+
+    def familiar(size):
+        result = np.empty((size, familiar_count), dtype="int64")
+        for column in range(familiar_count):
+            result[:, column] = np.searchsorted(merchant_cdf, random.random(size))
+            collisions = np.any(result[:, :column] == result[:, column : column + 1], axis=1)
+            while collisions.any():
+                result[collisions, column] = np.searchsorted(merchant_cdf, random.random(int(collisions.sum())))
+                collisions = np.any(result[:, :column] == result[:, column : column + 1], axis=1)
+        return result
+
+    array("merchant_categories", (counts.merchants,), lambda n: random.choice(len(CATEGORIES), n, p=category_weights))
+    array("merchant_age_days", (counts.merchants,), lambda n: random.integers(30, 1500, n))
+    array("customer_age_days", (counts.customers,), lambda n: random.integers(1, 2500, n))
+    array("customer_countries", (counts.customers,), lambda n: random.choice(len(COUNTRIES), n, p=COUNTRY_WEIGHTS))
+    array("familiar_merchants", (counts.customers, familiar_count), familiar)
+    array("familiar_devices", (counts.customers, 2), lambda n: random.integers(0, counts.devices, (n, 2)))
+    array("home_networks", (counts.customers,), lambda n: random.integers(0, counts.ip_networks, n))
+    array("addresses", (counts.customers,), lambda n: random.integers(0, counts.addresses, n))
+    array("payment_methods", (counts.customers, 2), lambda n: random.integers(0, counts.payment_methods, (n, 2)))
+    merchant_external = IdentityPool(counts.merchants, lambda i: f"seller-{i + 1:06d}")
+    customer_external = IdentityPool(counts.customers, lambda i: f"buyer-{i + 1:06d}")
+    identity_digest = sha256(f"{config.integration_id}:{key}:{counts.model_dump_json()}".encode()).hexdigest()
     return Profiles(
-        merchant_ids=tuple(entity_id(config.integration_id, "merchant", value) for value in merchant_external),
+        **arrays,
+        merchant_ids=IdentityPool(
+            counts.merchants, lambda i: entity_id(config.integration_id, "merchant", merchant_external[i])
+        ),
         merchant_external_ids=merchant_external,
-        merchant_categories=random.choice(len(CATEGORIES), size=counts.merchants, p=category_weights),
-        merchant_age_days=random.integers(30, 1500, size=counts.merchants),
-        customer_ids=tuple(entity_id(config.integration_id, "customer", value) for value in customer_external),
+        customer_ids=IdentityPool(
+            counts.customers, lambda i: entity_id(config.integration_id, "customer", customer_external[i])
+        ),
         customer_external_ids=customer_external,
-        customer_age_days=random.integers(1, 2500, size=counts.customers),
-        customer_countries=random.choice(len(COUNTRIES), size=counts.customers, p=COUNTRY_WEIGHTS),
-        familiar_merchants=np.stack(
-            [
-                random.choice(counts.merchants, size=familiar_count, replace=False, p=merchant_weights)
-                for _ in range(counts.customers)
-            ]
+        device_pool=IdentityPool(counts.devices, lambda i: fingerprint(key, "device", f"device-{i:06d}")),
+        network_pool=IdentityPool(
+            counts.ip_networks, lambda i: fingerprint(key, "ip_network", f"10.{i // 256}.{i % 256}.1")
         ),
-        familiar_devices=random.integers(0, counts.devices, size=(counts.customers, 2)),
-        home_networks=random.integers(0, counts.ip_networks, size=counts.customers),
-        addresses=random.integers(0, counts.addresses, size=counts.customers),
-        payment_methods=random.integers(0, counts.payment_methods, size=(counts.customers, 2)),
-        device_pool=tuple(fingerprint(key, "device", f"device-{index:06d}") for index in range(counts.devices)),
-        network_pool=tuple(
-            fingerprint(key, "ip_network", f"10.{index // 256}.{index % 256}.1") for index in range(counts.ip_networks)
+        address_pool=IdentityPool(
+            counts.addresses, lambda i: fingerprint(key, "address", f"{i} Market Street, Example City")
         ),
-        address_pool=tuple(
-            fingerprint(key, "address", f"{index} Market Street, Example City") for index in range(counts.addresses)
+        method_pool=IdentityPool(
+            counts.payment_methods, lambda i: fingerprint(key, "payment_method", f"tok_card-{i:06d}_ok")
         ),
-        method_pool=tuple(
-            fingerprint(key, "payment_method", f"tok_card-{index:06d}_ok") for index in range(counts.payment_methods)
-        ),
+        identity_digest=identity_digest,
     )
 
 
-def compromised_on(config: HistoricalConfig, scenario: int, offset: int) -> np.ndarray:
+@dataclass(frozen=True)
+class GenerationTask:
+    offset: int
+    kind: int
+    block: int
+
+    @property
+    def key(self):
+        return f"day-{self.offset:05d}-kind-{self.kind}-block-{self.block:08d}"
+
+    def ordinal(self, index: int) -> int:
+        if index >= 2**32:
+            raise ValueError("logical task exceeds purchase ordinal capacity")
+        return ((self.block * 2 + self.kind) << 32) + index
+
+
+def tasks_for_day(config: HistoricalConfig, offset: int):
+    for block in range((config.counts.customers + config.customer_block_size - 1) // config.customer_block_size):
+        yield GenerationTask(offset, 0, block)
+    bursts = stage_rng(config.seed, CARD_TESTING_STAGE, offset).poisson(config.scenarios.card_testing.rate)
+    for block in range((int(bursts) + config.card_testing_bursts_per_task - 1) // config.card_testing_bursts_per_task):
+        yield GenerationTask(offset, 1, block)
+
+
+def compromised_on(config: HistoricalConfig, scenario: int, offset: int, block: int | None = None) -> np.ndarray:
     settings = (
         config.scenarios.stolen_card_new_device
         if scenario == STOLEN_CARD_NEW_DEVICE
         else config.scenarios.account_takeover
     )
-    random = stage_rng(config.seed, COMPROMISE_STAGE, scenario, offset)
-    return np.flatnonzero(random.random(config.counts.customers) < settings.rate)
+    if block is None:
+        return np.concatenate(
+            [
+                compromised_on(config, scenario, offset, i)
+                for i in range(
+                    (config.counts.customers + config.customer_block_size - 1) // config.customer_block_size
+                )
+            ]
+        )
+    start = block * config.customer_block_size
+    count = min(config.customer_block_size, config.counts.customers - start)
+    random = stage_rng(config.seed, COMPROMISE_STAGE, scenario, offset, block)
+    return start + np.flatnonzero(random.random(count) < settings.rate)
 
 
-def active_compromises(config: HistoricalConfig, scenario: int, offset: int) -> np.ndarray:
-    """Customers whose compromise window covers this day, recovered without replaying purchases."""
+def active_compromises(config: HistoricalConfig, scenario: int, offset: int, block: int) -> np.ndarray:
+    """Recover only this block's active windows without replaying preceding purchases."""
     settings = (
         config.scenarios.stolen_card_new_device
         if scenario == STOLEN_CARD_NEW_DEVICE
@@ -145,69 +232,80 @@ def active_compromises(config: HistoricalConfig, scenario: int, offset: int) -> 
     starts = [
         np.column_stack([selected, np.full(len(selected), start)])
         for start in range(max(0, offset - settings.window_days + 1), offset + 1)
-        if len(selected := compromised_on(config, scenario, start))
+        if len(selected := compromised_on(config, scenario, start, block))
     ]
-    if not starts:
-        return np.empty((0, 2), dtype=np.int64)
-    return np.concatenate(starts)
+    return np.concatenate(starts) if starts else np.empty((0, 2), dtype=np.int64)
 
 
-def schedule_for_day(config: HistoricalConfig, day: date, profiles: Profiles) -> Schedule:
-    offset = (day - config.start_date).days
-    if not 0 <= offset < config.duration_days:
-        raise ValueError("day is outside the configured dataset")
-    behavior = config.behavior
-    scenarios = config.scenarios
-    random = stage_rng(config.seed, SCHEDULE_STAGE, offset)
-    customer_count = len(profiles.customer_ids)
-    merchant_weights = zipf_weights(len(profiles.merchant_ids), behavior.merchant_zipf_exponent)
-
-    customers = np.repeat(
-        np.arange(customer_count), random.poisson(behavior.purchases_per_customer_day, customer_count)
-    )
-    familiar = random.random(len(customers)) < behavior.familiar_merchant_probability
-    familiar_choice = profiles.familiar_merchants[
-        customers, random.integers(0, profiles.familiar_merchants.shape[1], len(customers))
-    ]
-    merchants = np.where(
-        familiar, familiar_choice, random.choice(len(merchant_weights), len(customers), p=merchant_weights)
-    )
-    seconds = random.integers(0, 86400, len(customers))
-    kinds = np.where(random.random(len(customers)) < scenarios.obvious_high_value.rate, OBVIOUS_HIGH_VALUE, LEGITIMATE)
-    groups = np.full(len(customers), -1)
-    parts = [(customers, merchants, seconds, kinds, groups)]
-
-    for scenario, settings in (
-        (STOLEN_CARD_NEW_DEVICE, scenarios.stolen_card_new_device),
-        (ACCOUNT_TAKEOVER, scenarios.account_takeover),
-    ):
-        active = active_compromises(config, scenario, offset)
-        attempts = random.poisson(settings.attempts_per_day, len(active))
-        victims = np.repeat(active[:, 0], attempts)
+def schedule_for_task(config: HistoricalConfig, task: GenerationTask, profiles: Profiles) -> Schedule:
+    behavior, scenarios = config.behavior, config.scenarios
+    random = stage_rng(config.seed, SCHEDULE_STAGE, task.offset, task.kind, task.block)
+    weights = zipf_weights(config.counts.merchants, behavior.merchant_zipf_exponent)
+    parts = []
+    if task.kind == 0:
+        start = task.block * config.customer_block_size
+        stop = min(start + config.customer_block_size, config.counts.customers)
+        customers = np.repeat(
+            np.arange(start, stop), random.poisson(behavior.purchases_per_customer_day, stop - start)
+        )
+        familiar = profiles.familiar_merchants[
+            customers, random.integers(0, profiles.familiar_merchants.shape[1], len(customers))
+        ]
+        merchants = np.where(
+            random.random(len(customers)) < behavior.familiar_merchant_probability,
+            familiar,
+            random.choice(len(weights), len(customers), p=weights),
+        )
         parts.append(
             (
-                victims,
-                profiles.familiar_merchants[victims, 0],
-                random.integers(0, 86400, len(victims)),
-                np.full(len(victims), scenario),
-                np.repeat(active[:, 1], attempts),
+                customers,
+                merchants,
+                random.integers(0, 86400, len(customers)),
+                np.where(
+                    random.random(len(customers)) < scenarios.obvious_high_value.rate, OBVIOUS_HIGH_VALUE, LEGITIMATE
+                ),
+                np.full(len(customers), -1),
             )
         )
-
-    testing = scenarios.card_testing
-    bursts = random.poisson(testing.rate)
-    for burst in range(bursts):
-        start = int(random.integers(0, 86400 - testing.burst_minutes * 60))
-        parts.append(
-            (
-                np.full(testing.burst_size, int(random.integers(0, customer_count))),
-                np.full(testing.burst_size, int(random.choice(len(merchant_weights), p=merchant_weights))),
-                np.sort(start + random.integers(0, testing.burst_minutes * 60, testing.burst_size)),
-                np.full(testing.burst_size, CARD_TESTING),
-                np.full(testing.burst_size, burst),
+        for scenario, settings in (
+            (STOLEN_CARD_NEW_DEVICE, scenarios.stolen_card_new_device),
+            (ACCOUNT_TAKEOVER, scenarios.account_takeover),
+        ):
+            active = active_compromises(config, scenario, task.offset, task.block)
+            attempts = random.poisson(settings.attempts_per_day, len(active))
+            victims = np.repeat(active[:, 0], attempts)
+            parts.append(
+                (
+                    victims,
+                    profiles.familiar_merchants[victims, 0],
+                    random.integers(0, 86400, len(victims)),
+                    np.full(len(victims), scenario),
+                    np.repeat(active[:, 1], attempts),
+                )
             )
-        )
+    else:
+        bursts = int(stage_rng(config.seed, CARD_TESTING_STAGE, task.offset).poisson(scenarios.card_testing.rate))
+        start = task.block * config.card_testing_bursts_per_task
+        for burst in range(start, min(start + config.card_testing_bursts_per_task, bursts)):
+            testing = scenarios.card_testing
+            clock = int(random.integers(0, 86400 - testing.burst_minutes * 60))
+            parts.append(
+                (
+                    np.full(testing.burst_size, int(random.integers(0, config.counts.customers))),
+                    np.full(testing.burst_size, int(random.choice(len(weights), p=weights))),
+                    np.sort(clock + random.integers(0, testing.burst_minutes * 60, testing.burst_size)),
+                    np.full(testing.burst_size, CARD_TESTING),
+                    np.full(testing.burst_size, burst),
+                )
+            )
+    columns = [np.concatenate(column).astype(np.int64) for column in zip(*parts)]
+    return Schedule(*columns)
 
-    customers, merchants, seconds, kinds, groups = (np.concatenate(column) for column in zip(*parts))
-    order = np.lexsort((merchants, customers, kinds, seconds))
-    return Schedule(customers[order], merchants[order], seconds[order], kinds[order], groups[order])
+
+def profiles_from_manifest(manifest: dict, directory: Path | None = None) -> Profiles:
+    if manifest.get("algorithm_version") != ALGORITHM_VERSION:
+        raise ValueError("unsupported historical generation algorithm for continuation")
+    profiles = build_profiles(HistoricalConfig.model_validate(manifest["configuration"]), directory)
+    if profiles.digest() != manifest["profile_sha256"]:
+        raise ValueError("historical profile digest mismatch for continuation")
+    return profiles

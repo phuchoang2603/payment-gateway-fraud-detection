@@ -1,5 +1,5 @@
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 from simulator.generation import GeneratedHistory
@@ -20,7 +20,7 @@ class DatasetStatistics:
     scenarios: Counter = field(default_factory=Counter)
     merchants: Counter = field(default_factory=Counter)
     categories: Counter = field(default_factory=Counter)
-    identities: dict[str, set[str]] = field(default_factory=lambda: {name: set() for name in IDENTITIES})
+    attempts: Counter = field(default_factory=Counter)
 
     def observe(self, history: GeneratedHistory, duplicates: int) -> None:
         self.payments += 1
@@ -35,13 +35,9 @@ class DatasetStatistics:
             if (created := event.get("payment_created")) is not None:
                 self.merchants[created["merchant"]["merchant_id"]] += 1
                 self.categories[created["snapshot"]["items"][0]["category"]] += 1
-                self.identities["customer"].add(created["customer"]["customer_id"])
-                self.identities["address"].add(created["snapshot"]["shipping"]["address_fingerprint"])
             elif (started := event.get("attempt_started")) is not None:
+                self.attempts[history.truth] += 1
                 signals = started["signals"]
-                self.identities["device"].add(signals["device_fingerprint"])
-                self.identities["ip_network"].add(signals["ip_network_fingerprint"])
-                self.identities["payment_method"].add(signals["payment_method"]["fingerprint"])
                 present = signals.get("user_agent_family") is not None
                 if event["schema_version"] == 1:
                     self.field_present_before_cutover += present
@@ -61,7 +57,45 @@ class DatasetStatistics:
             "category_payments": dict(sorted(self.categories.items())),
             "merchant_count": len(self.merchants),
             "merchant_max_share": max(self.merchants.values()) / self.payments if self.payments else 0,
-            "distinct": {name: len(values) for name, values in self.identities.items()},
+            "scenario_attempts": dict(sorted(self.attempts.items())),
+            "scenario_attempt_shares": {
+                name: count / sum(self.attempts.values()) for name, count in sorted(self.attempts.items())
+            },
+            "attempts": sum(self.attempts.values()),
+            "merchant_top_10_share": sum(sorted(self.merchants.values(), reverse=True)[:10]) / self.payments
+            if self.payments
+            else 0,
             "user_agent_family_present_before_cutover": self.field_present_before_cutover,
             "user_agent_family_present_after_cutover": self.field_present_after_cutover,
         }
+
+    def to_dict(self) -> dict:
+        result = asdict(self)
+        for name in ("scenarios", "merchants", "categories", "attempts"):
+            result[name] = dict(getattr(self, name))
+        result["history_end"] = self.history_end.isoformat() if self.history_end else None
+        return result
+
+    @classmethod
+    def from_dict(cls, values: dict):
+        values = values.copy()
+        values["history_end"] = datetime.fromisoformat(values["history_end"]) if values["history_end"] else None
+        for name in ("scenarios", "merchants", "categories", "attempts"):
+            values[name] = Counter(values[name])
+        return cls(**values)
+
+    def combine(self, other):
+        for name in (
+            "payments",
+            "unique_events",
+            "duplicate_events",
+            "labels",
+            "chargebacks",
+            "field_present_before_cutover",
+            "field_present_after_cutover",
+        ):
+            setattr(self, name, getattr(self, name) + getattr(other, name))
+        for name in ("scenarios", "merchants", "categories", "attempts"):
+            getattr(self, name).update(getattr(other, name))
+        if other.history_end:
+            self.history_end = max(self.history_end, other.history_end) if self.history_end else other.history_end
