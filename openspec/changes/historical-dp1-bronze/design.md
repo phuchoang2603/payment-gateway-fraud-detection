@@ -6,8 +6,8 @@ See [proposal.md](proposal.md) for motivation and scope. Current evidence:
 
 - `historical-payments` describes immutable source files, not bronze. Accepted v7 has 2,215,309 exported event rows, 2,171,314 unique events and 442,817 labels. Events span 90 occurrence dates; delayed labels and payment histories cross date boundaries. The event export is about 237 MiB, suitable for correctness acceptance.
 - Source ODCS contracts declare DuckDB SQL, including nested structures, `UNNEST`, list functions and windowed lifecycle checks. Data Contract CLI 1.2.7's GX exporter maps top-level properties and GX-native quality implementations; it does not translate our existing `type: sql` quality blocks. Its output alone is not complete enforcement of the source contracts.
-- `talos-proxmox/apps/components/kubeflow` configures Spark Operator 2.5.2, watching only `kubeflow`. Argo Workflows already includes `fraud-data-prod` in its workflow namespaces. Operators are platform-owned. Live readiness is unverified because no Kubernetes context is selected.
-- RustFS is provided at `https://minio.home.phuchoang.sbs`; `/iceberg` is the expected catalog base. An unauthenticated config request required a signature. Authentication and Spark/PyIceberg interoperability still require a bounded live probe; catalog availability does not prove write compatibility.
+- `talos-proxmox/apps/components/kubeflow` configures an unused Spark Operator 2.5.2 watching only `kubeflow`; DP1 does not use it. Argo Workflows already includes `fraud-data-prod` in its workflow namespaces. Operators are platform-owned. Live readiness is unverified because no Kubernetes context is selected.
+- RustFS is provided at `https://minio.home.phuchoang.sbs`; `/iceberg` is the expected catalog base. An unauthenticated config request required a signature. Spark/PyIceberg write compatibility is proven by the workflow's own preflight smoke stage; catalog availability alone does not prove it.
 - No DataHub deployment was found in the inspected platform manifests. Existing CNPG and Strimzi operators are not proof that a usable database or Kafka cluster exists.
 - CardFraudPlatform demonstrates raw preservation and GX evidence publication, but uses legacy GX 0.18. RecSys demonstrates Parquet-to-Iceberg and metadata publishing, but uses a Hadoop catalog and its current `all_success` publication dependency does not cover validation failures. Reuse these responsibilities, not their incompatible catalog/API/failure assumptions.
 
@@ -57,15 +57,15 @@ Before live acceptance, exercise source DuckDB and bronze Spark/GX on shared sma
 
 An alternative is validating bronze with DuckDB alone. That can check v7, but it would not establish the chosen distributed execution path for later datasets. Two independently handwritten suites are also rejected: engine-specific implementations live in their respective contracts and semantic parity protects their overlap.
 
-### 4. Argo owns workflow retries; Spark Operator owns application lifecycle
+### 4. Argo owns workflow retries and Spark runs directly in Argo pods
 
-Add `infra/charts/data-pipelines` with namespace-scoped WorkflowTemplates, configuration, ExternalSecrets and distinct workflow/Spark/metadata service accounts in `fraud-data-prod`. The application chart owns this data namespace; it is not a Kubeflow Profile namespace. Extend the platform operator's watched namespace list without installing another controller. Preserve current dev and service rollout defaults; DP1 is an explicit prod opt-in after prerequisites pass.
+Add `infra/charts/data-pipelines` with namespace-scoped WorkflowTemplates, configuration, ExternalSecrets and distinct Spark/metadata service accounts in `fraud-data-prod`. The application chart owns this data namespace; it is not a Kubeflow Profile namespace. Preserve current dev and service rollout defaults; DP1 is an explicit prod opt-in after prerequisites pass.
 
-Use a common Argo resource template creating `sparkoperator.k8s.io/v1beta2` SparkApplications. Success is `status.applicationState.state == COMPLETED`; terminal failures include `FAILED` and `SUBMISSION_FAILED` in the configured 2.5.2 API. Use operator `restartPolicy: Never`, bounded Argo retries and stage deadlines. `UNKNOWN` or missing status must not wait forever. Resource names distinguish attempts; the logical data run identity stays stable. Grant workflow identities only the resource verbs required to create, observe and clean up applications, and Spark drivers only their executor/configuration permissions.
+Use one Argo container template per Spark stage that runs `spark-submit` semantics through PySpark in Kubernetes client mode: the Argo pod is the driver, executors are created from a ConfigMap pod template with the driver pod as owner, and the step's exit code is the result. Success, failure and deadlines are Argo's; there is no operator, SparkApplication state or status polling. The Spark service account gets only pod, service, ConfigMap and PVC verbs in `fraud-data-prod`. Resource names distinguish attempts; the logical data run identity stays stable.
 
-Workflow stages are preflight, ingest, validate, publish governance and final acceptance. Exit handling publishes available failure evidence even when validation fails; absence of a validation report is an execution error, never a pass. Governance tasks run in lightweight metadata pods, not another Spark cluster. Persist reports before external publication. Enable bounded publication retries and a metadata-only replay mode taking an existing run record; final success requires validation and governance publication, while their failure states remain separately recorded.
+Workflow stages are preflight, smoke, ingest, validate, publish governance and final acceptance. The smoke stage is a Spark step that creates a uniquely named table in the lake namespace, replaces one partition, reads the earlier snapshot, confirms PyIceberg sees the same snapshot and drops the table; its result lives in workflow status and logs only. Exit handling publishes available failure evidence even when validation fails; absence of a validation report is an execution error, never a pass. Governance tasks run in lightweight metadata pods, not another Spark cluster. Persist reports before external publication. Enable bounded publication retries and a metadata-only replay mode taking an existing run record; final success requires validation and governance publication, while their failure states remain separately recorded.
 
-Use owner references for eventual cleanup, plus explicit cancellation/timeout deletion of running SparkApplications; an owner reference alone does not stop work while a terminated Workflow object remains. Retain reports and diagnostics independently of resource TTLs. Do not retry a deterministic failed quality check as a way to obtain a pass.
+Stopping or deleting a stage pod removes its executors through owner references, so cancellation and deadlines need no reaper. Run reports and diagnostics live in the durable run records, not in resource TTLs. Do not retry a deterministic failed quality check as a way to obtain a pass.
 
 ### 5. Include platform DataHub deployment and verify its dependencies
 
@@ -91,13 +91,13 @@ Use one bounded full-history v7 batch. Start with one driver and one small execu
 
 Retain the existing duplicates, skew, high cardinality and physical schema change. Introduce corrupt cases only in isolated failure fixtures, never mutate v7. Record read/write bytes, output sizes/counts, duration, shuffle/spill, skew and peak memory. The pilot may expose configuration issues; it cannot prove 100 GB throughput. Later scale work must measure and tune partitioning, shuffle counts, broadcast behavior, storage requests and file compaction against the larger source.
 
-### 8. Temporary compatibility scaffolding is removed after acceptance
+### 8. The v7 companion inventory is removed after acceptance
 
-The RustFS compatibility probe and the v7 companion inventory exist only to unblock the first run. The probe prints its report to the job log, persists nothing and drops its own table; earlier probe leftovers are deleted with it. The companion path, its configuration and the lake inventory object are removed once a later export with an embedded inventory is accepted end to end. Accepted v7 run records and snapshots are retained.
+The companion inventory exists only to unblock v7. Once a later export with an embedded inventory is accepted end to end, remove the companion path, its configuration and the lake inventory object. Accepted v7 run records and snapshots are retained.
 
 ## Risks / Trade-offs
 
-- RustFS REST authentication or commit behavior differs between clients -> require bounded authenticated Spark write/read and PyIceberg metadata probes before enabling DP1; report an unresolved compatibility failure rather than adding an unplanned catalog.
+- RustFS REST authentication or commit behavior differs between clients -> the preflight smoke stage must pass before any ingest write; report an unresolved compatibility failure rather than adding an unplanned catalog.
 - Source and bronze SQL dialects diverge -> stable semantic rule mapping, explicit coverage and shared valid/invalid fixture parity; keep accepted source contracts untouched.
 - Partial table commits or metadata outages -> snapshot-pinned durable run state, version-scoped replacement, serialized writers, no acceptance until all required stages complete, metadata-only retries.
 - DataHub introduces more always-on cost than v7 processing -> provision dependencies explicitly, measure combined capacity and document the course deployment's availability limitations.
@@ -106,11 +106,11 @@ The RustFS compatibility probe and the v7 companion inventory exist only to unbl
 
 ## Migration Plan
 
-1. Prove the dependency/client matrix and RustFS operations in an isolated disposable namespace/prefix; preserve accepted source and existing warehouse data.
+1. Prove the dependency/client matrix locally; RustFS operations are proven in the cluster by the preflight smoke stage. Preserve accepted source and existing warehouse data.
 2. Land the new product/contracts, jobs, behavioral checks, images and opt-in application chart. Keep existing source validation commands and generator outputs unchanged.
 3. Land coordinated platform Spark namespace and DataHub changes. Verify persistence, authenticated access, backing-service readiness and the joint resource budget.
 4. Enable prod DP1, ingest/validate v7 and publish/read back governance. Run replay, interrupted-commit, quality-failure and metadata-outage acceptance; retain evidence in the existing data-platform documentation/roadmap.
-5. After acceptance, remove the probe and, once an embedded-inventory export is accepted, the v7 companion path (tasks 8.1-8.3).
+5. Once an embedded-inventory export is accepted, remove the v7 companion path (tasks 8.1-8.2).
 6. Rollback stops new workflows and removes only application-owned running resources. Keep immutable source, Iceberg snapshots, acceptance records, reports and platform DataHub state. Repoint consumers to the previous accepted snapshot pair; never use destructive table or bucket deletion as rollback.
 
 ## Open Questions
@@ -122,5 +122,5 @@ The RustFS compatibility probe and the v7 companion inventory exist only to unbl
 
 - Local source interfaces: `contracts/data-products/historical-payments/`, `docs/data-ml/data-products.md` and `src/simulator/notebooks/historical-sanity.ipynb`.
 - Platform configuration: `talos-proxmox/apps/components/{kubeflow,argo-workflows,cnpg,strimzi}`; reference job implementations in `card-fraud-platform/pipelines/spark` and `RecSys-MLops/apps/data-platform/src`.
-- [Data Contract CLI GX export](https://docs.datacontract.com/exports/great-expectations), [Argo resource templates](https://argo-workflows.readthedocs.io/en/latest/walk-through/kubernetes-resources/), [Spark Operator v2.5.2 API](https://github.com/kubeflow/spark-operator/blob/v2.5.2/api/v1beta2/sparkapplication_types.go).
+- [Data Contract CLI GX export](https://docs.datacontract.com/exports/great-expectations), [Spark on Kubernetes client mode](https://spark.apache.org/docs/3.5.8/running-on-kubernetes.html#client-mode).
 - [DataHub Iceberg connector](https://docs.datahub.com/docs/generated/ingestion/sources/iceberg), [GX integration](https://docs.datahub.com/docs/metadata-ingestion/integration_docs/great-expectations), [DataHub Helm](https://github.com/acryldata/datahub-helm).

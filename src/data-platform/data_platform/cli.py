@@ -21,9 +21,7 @@ def main(argv=None):
             "validate",
             "publish",
             "accept",
-            "probe",
-            "cleanup",
-            "reap",
+            "smoke",
             "source-inventory",
             "verify-source",
         ],
@@ -43,20 +41,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
     spark = None
     try:
-        if args.stage == "reap":
-            from data_platform.lifecycle import reap
+        if args.stage == "smoke":
+            from data_platform.smoke import smoke
 
-            reap()
-            return 0
-        if args.stage == "cleanup":
-            from data_platform.lifecycle import cleanup
-
-            cleanup(args.workflow)
-            return 0
-        if args.stage == "probe":
-            from data_platform.probe import probe
-
-            return probe()
+            return smoke()
         if args.stage == "source-inventory":
             from data_platform.inventory import create_companion
 

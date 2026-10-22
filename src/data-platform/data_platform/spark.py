@@ -11,6 +11,26 @@ PACKAGES = (
 )
 
 
+def kubernetes(builder):
+    return (
+        builder.master("k8s://https://kubernetes.default.svc")
+        .config("spark.submit.deployMode", "client")
+        .config("spark.kubernetes.namespace", os.environ["POD_NAMESPACE"])
+        .config("spark.kubernetes.container.image", os.environ["SPARK_IMAGE"])
+        .config("spark.kubernetes.driver.pod.name", os.environ["HOSTNAME"])
+        .config("spark.kubernetes.executor.podTemplateFile", "/etc/dp1/executor-pod.yaml")
+        .config("spark.kubernetes.executor.label.dp1-workflow", os.environ.get("WORKFLOW_ID", "local"))
+        .config("spark.driver.host", os.environ["POD_IP"])
+        .config("spark.driver.memory", "2g")
+        .config("spark.driver.port", "7078")
+        .config("spark.blockManager.port", "7079")
+        .config("spark.executor.instances", "1")
+        .config("spark.executor.cores", "1")
+        .config("spark.executor.memory", "2g")
+        .config("spark.executor.memoryOverhead", "512m")
+    )
+
+
 def session(local_warehouse=None):
     os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
     builder = (
@@ -69,6 +89,8 @@ def session(local_warehouse=None):
             "aws.credentials.provider": "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
         }.items():
             builder = builder.config(hadoop + key, value)
+    if not local_warehouse and os.environ.get("SPARK_IMAGE"):
+        builder = kubernetes(builder)
     spark = builder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
     return spark

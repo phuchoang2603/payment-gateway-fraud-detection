@@ -1,5 +1,5 @@
 apiVersion: v2
 name: data-pipelines
-description: Opt-in historical DP1 workloads using platform-owned Argo, Spark Operator and DataHub
+description: Opt-in historical DP1 workloads using platform-owned Argo and DataHub, with Spark run directly by Argo steps
 type: application
 version: 0.1.0

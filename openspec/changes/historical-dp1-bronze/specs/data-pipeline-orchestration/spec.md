@@ -13,23 +13,18 @@ DP1 SHALL expose distinct ingest and validate stages with input, output and run 
 - **WHEN** a user inspects a DP1 run
 - **THEN** they can identify its source manifest, ingest result, validated snapshots, validation outcome and governance outcome
 
-### Requirement: Shared Spark application orchestration
+### Requirement: Argo-run Spark stages
 
-Argo SHALL create and observe SparkApplication resources through reusable resource templates using the shared Spark Operator. It SHALL wait for application completion, recognize terminal execution/submission failures and enforce a deadline when status does not resolve.
+Argo SHALL run each Spark stage as a container step in Kubernetes client mode, with the step pod as driver and executors owned by it. Stage success SHALL be the step's exit code, and a deadline SHALL stop a stage that does not finish. No Spark operator SHALL be required.
 
-#### Scenario: Submission is rejected
+#### Scenario: Stage fails or times out
 
-- **WHEN** a SparkApplication reaches terminal submission failure
-- **THEN** its Argo stage fails with diagnostics rather than succeeding on resource creation
-
-#### Scenario: Application stops reporting progress
-
-- **WHEN** the application remains unknown, pending or without usable status beyond its deadline
-- **THEN** Argo fails the stage and initiates cleanup without waiting indefinitely
+- **WHEN** a Spark step exits nonzero or exceeds its deadline
+- **THEN** its Argo stage fails with the step's diagnostics and its executors are removed
 
 ### Requirement: Bounded retry and cancellation
 
-Argo SHALL own bounded stage retries with stable logical run identity and distinct execution attempts. Deterministic quality failures SHALL NOT be retried for acceptance. Cancellation and deadlines SHALL stop active Spark applications and release writer serialization without deleting durable evidence.
+Argo SHALL own bounded stage retries with stable logical run identity and distinct execution attempts. Deterministic quality failures SHALL NOT be retried for acceptance. Cancellation and deadlines SHALL stop the active Spark pods and their executors and release writer serialization without deleting durable evidence.
 
 #### Scenario: Retry after transient driver failure
 
@@ -61,8 +56,20 @@ Pipeline stages SHALL use centrally supplied endpoints, explicit resource budget
 
 #### Scenario: Missing workload prerequisite
 
-- **WHEN** a watched namespace, required permission, credential or service endpoint is unavailable
+- **WHEN** a required permission, credential or service endpoint is unavailable
 - **THEN** preflight identifies the missing prerequisite and the run does not claim successful ingestion or platform readiness
+
+### Requirement: Preflight compatibility smoke
+
+Preflight SHALL be followed by a smoke Spark step that writes, overwrites by partition and snapshot-reads a uniquely named disposable lake table, confirms the same snapshot through PyIceberg and drops the table. It SHALL persist no evidence beyond workflow status and logs.
+
+#### Scenario: Smoke passes
+- **WHEN** the smoke table operations and PyIceberg check succeed
+- **THEN** the table is dropped and ingestion may start
+
+#### Scenario: Smoke fails
+- **WHEN** any smoke operation fails
+- **THEN** the run fails before any bronze write and identifies the failed operation
 
 ### Requirement: Pinned legacy inventory configuration
 

@@ -4,7 +4,7 @@ metadata:
   name: historical-dp1-bronze
   namespace: __NAMESPACE__
 spec:
-  serviceAccountName: dp1-workflow
+  serviceAccountName: dp1-metadata
   entrypoint: historical
   onExit: finalizer
   activeDeadlineSeconds: 7200
@@ -21,6 +21,11 @@ spec:
             arguments:
               parameters:
                 - {name: stage, value: preflight}
+        - - name: smoke
+            template: spark
+            arguments:
+              parameters:
+                - {name: stage, value: smoke}
         - - name: ingest
             template: spark
             arguments:
@@ -46,6 +51,7 @@ spec:
               parameters:
                 - {name: stage, value: validate}
     - name: spark
+      serviceAccountName: dp1-spark
       inputs:
         parameters:
           - name: stage
@@ -57,58 +63,30 @@ spec:
           duration: 15s
           factor: 2
           maxDuration: 2m
-      resource:
-        action: create
-        setOwnerReference: true
-        successCondition: status.applicationState.state == COMPLETED
-        failureCondition: status.applicationState.state in (FAILED, SUBMISSION_FAILED)
-        manifest: |
-          apiVersion: sparkoperator.k8s.io/v1beta2
-          kind: SparkApplication
-          metadata:
-            generateName: dp1-{{inputs.parameters.stage}}-
-            namespace: __NAMESPACE__
-            labels:
-              dp1-workflow: "{{workflow.name}}"
-          spec:
-            type: Python
-            mode: cluster
-            sparkVersion: 3.5.8
-            pythonVersion: "3"
-            image: __SPARK_IMAGE__
-            imagePullPolicy: IfNotPresent
-            mainApplicationFile: local:///opt/dp1/data_platform/cli.py
-            arguments: ["{{inputs.parameters.stage}}"]
-            restartPolicy:
-              type: Never
-            timeToLiveSeconds: 86400
-            sparkConf:
-              spark.sql.session.timeZone: UTC
-              spark.sql.shuffle.partitions: "4"
-              spark.sql.adaptive.enabled: "true"
-              spark.kubernetes.driverEnv.PYTHONPATH: /opt/dp1
-              spark.executorEnv.PYTHONPATH: /opt/dp1
-              spark.eventLog.enabled: "false"
-            driver:
-              cores: 1
-              memory: 2g
-              memoryOverhead: 512m
-              serviceAccount: dp1-spark
-              envFrom:
-                - configMapRef: {name: dp1-config}
-                - secretRef: {name: dp1-lake}
-              env:
-                - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
-                - {name: DP1_BUNDLED_JARS, value: "true"}
-                - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
-            executor:
-              instances: 1
-              cores: 1
-              memory: 2g
-              memoryOverhead: 512m
-              envFrom:
-                - configMapRef: {name: dp1-config}
-                - secretRef: {name: dp1-lake}
+      volumes:
+        - name: executor-template
+          configMap:
+            name: dp1-executor-template
+      container:
+        image: __SPARK_IMAGE__
+        command: [dp1]
+        args: ["{{inputs.parameters.stage}}"]
+        envFrom:
+          - configMapRef: {name: dp1-config}
+          - secretRef: {name: dp1-lake}
+        env:
+          - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
+          - {name: SPARK_IMAGE, value: __SPARK_IMAGE__}
+          - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
+          - name: POD_NAMESPACE
+            valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+          - name: POD_IP
+            valueFrom: {fieldRef: {fieldPath: status.podIP}}
+        volumeMounts:
+          - {name: executor-template, mountPath: /etc/dp1, readOnly: true}
+        resources:
+          requests: {cpu: "1", memory: 2560Mi}
+          limits: {cpu: "2", memory: 3Gi}
     - name: metadata
       serviceAccountName: dp1-metadata
       inputs:
@@ -134,30 +112,12 @@ spec:
           limits: {cpu: "1", memory: 1Gi}
     - name: finalizer
       steps:
-        - - name: cleanup
-            template: cleanup
-            continueOn: {failed: true, error: true}
         - - name: publish-failure
             template: metadata
             when: "{{workflow.status}} != Succeeded"
             arguments:
               parameters:
                 - {name: stage, value: publish}
-    - name: cleanup
-      activeDeadlineSeconds: 120
-      retryStrategy: {limit: "2"}
-      container:
-        image: __METADATA_IMAGE__
-        command: [dp1]
-        args: [cleanup, --workflow, "{{workflow.name}}"]
-        envFrom:
-          - configMapRef: {name: dp1-config}
-          - secretRef: {name: dp1-lake}
-        env:
-          - {name: POD_NAMESPACE, value: __NAMESPACE__}
-        resources:
-          requests: {cpu: 50m, memory: 128Mi}
-          limits: {cpu: 500m, memory: 512Mi}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
@@ -182,35 +142,3 @@ spec:
           requests: {cpu: 100m, memory: 512Mi}
           limits: {cpu: "1", memory: 1Gi}
 
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: dp1-cancellation-reaper
-  namespace: __NAMESPACE__
-spec:
-  schedule: "* * * * *"
-  concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 3
-  jobTemplate:
-    spec:
-      activeDeadlineSeconds: 120
-      backoffLimit: 1
-      template:
-        spec:
-          serviceAccountName: dp1-workflow
-          restartPolicy: Never
-          containers:
-            - name: reaper
-              image: __METADATA_IMAGE__
-              command: [dp1]
-              args: [reap]
-              envFrom:
-                - configMapRef: {name: dp1-config}
-                - secretRef: {name: dp1-lake}
-              env:
-                - {name: POD_NAMESPACE, value: __NAMESPACE__}
-              resources:
-                requests: {cpu: 50m, memory: 128Mi}
-                limits: {cpu: 500m, memory: 512Mi}

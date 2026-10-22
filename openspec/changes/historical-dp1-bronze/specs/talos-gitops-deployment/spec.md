@@ -16,7 +16,7 @@ The deployment SHALL provide an explicitly enabled prod DP1 application in `frau
 
 ### Requirement: Data-platform ownership boundary
 
-Application deployment SHALL own DP1 workloads and its data namespace. The shared platform SHALL own Spark/Argo controllers, Spark watched-namespace configuration, DataHub and its backing services. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
+Application deployment SHALL own DP1 workloads and its data namespace. The shared platform SHALL own Argo, DataHub and its backing services. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
 
 #### Scenario: Remove the data-pipeline application
 

@@ -3,7 +3,7 @@
 ## 1. Compatibility and storage prerequisites
 
 - [x] 1.1 Create the locked `src/data-platform` runtime/tooling setup and pin a supported Spark/Java/Python/Iceberg/GX/GX-plugin/PyIceberg/DataHub-client matrix; verify local Spark startup, native GX export/import and plugin imports with the selected versions, independently of root Python 3.14.
-- [ ] 1.2 Add a bounded RustFS compatibility probe for authenticated REST namespace/table creation, write, snapshot-pinned read and version-filtered overwrite in an isolated disposable test scope; verify equivalent PyIceberg metadata access and record catalog-signing versus S3/TLS settings without secret values. The probe prints its report to its log, stores no evidence object and drops its own table.
+- [ ] 1.2 Replace the standalone `probe` CLI stage, `data_platform/probe.py` and their documentation with a preflight smoke stage run as an Argo Spark step: create, partition overwrite, snapshot-pinned read, PyIceberg check and table drop in a uniquely named lake table; record catalog-signing versus S3/TLS settings without secret values and persist no evidence.
 - [x] 1.3 Allocate a separate lake/evidence scope and source-read, lake-write and metadata identities through the existing external-secret mechanism; verify source reads succeed, pipeline source writes are denied and warehouse access is confined to its intended scope.
 - [x] 1.4 Pin the official DataHub chart/server and compatible PostgreSQL/Kafka/search dependency versions in the platform implementation, checking for an existing live deployment first; deliver a rendered dependency/capacity inventory covering PVCs, JVM/container memory and concurrent Spark headroom, with unresolved live checks clearly identified.
 
@@ -27,7 +27,7 @@
 
 ## 4. Shared platform deployment
 
-- [ ] 4.1 In the coordinated platform change, add `fraud-data-prod` to Spark Operator watched namespaces while retaining existing namespace/controller ownership; verify Helm rendering and live reconciliation of a bounded SparkApplication in that namespace.
+- [ ] 4.1 In the coordinated platform change, remove the unused Spark Operator from the `kubeflow` component and its scoped roles; verify Helm rendering, that nothing else consumes it and that live reconciliation leaves Kubeflow healthy.
 - [ ] 4.2 Deploy or verify the platform-owned DataHub chart and persistent PostgreSQL, Kafka and supported search dependencies using the inventory from 1.4; verify setup/migrations, authenticated GMS access, private frontend access and restart persistence, and document the course deployment's availability limits in the platform's existing guide.
 - [ ] 4.3 Configure DataHub external credentials, workload connectivity and least-privilege publication/readback access; verify no secrets appear in rendered manifests/logs and a data-platform identity can publish/read back only through the configured authenticated endpoint.
 - [ ] 4.4 Measure dependency readiness and combined DataHub/Spark scheduling, memory and storage footprint against cluster headroom; record accepted requests/limits/PVC budgets and block rollout if the required workloads cannot coexist.
@@ -35,9 +35,9 @@
 ## 5. Argo execution and application rollout
 
 - [x] 5.1 Add the opt-in `data-pipelines` chart, application-owned data namespace, configuration, ExternalSecrets and scoped workflow/Spark/metadata RBAC; verify existing defaults remain unchanged, enabled prod renders correctly and neither mode installs shared controllers or DataHub services.
-- [ ] 5.2 Add shared Argo SparkApplication resource templates with completion/failure conditions, `Never` restart policy, bounded retries/deadlines and serialized writers; verify rendered resources against the installed API and exercise submission-failure, stalled-status and stable-run retry behavior.
+- [ ] 5.2 Add the Argo Spark container template (client mode, executor pod template, owner-referenced executors, bounded retries/deadlines, serialized writers); verify rendered resources against the installed API and exercise stage failure, deadline and stable-run retry behavior.
 - [ ] 5.3 Wire preflight, ingest, validate, governance and acceptance stages with success/failure publication paths; verify deterministic quality failure stays failed, missing reports are execution errors and governance-only replay launches no Spark ingest/validation applications.
-- [ ] 5.4 Implement active-application cleanup on cancellation/deadline and diagnostic/report retention independent of resource TTLs; verify a cancelled workflow stops its Spark pods, releases serialization and retains durable run evidence.
+- [ ] 5.4 Verify cancellation and deadlines remove the stage pod and its executors, release serialization and leave durable run evidence intact.
 - [x] 5.5 Add dedicated Spark-job and metadata image definitions plus explicit jobs using the existing reusable image workflow; extend existing Python/Helm CI entrypoints for the new project/charts and required Java setup, verifying locked fixture checks and PR image builds without live credentials or publication.
 - [x] 5.6 Update only affected deployment/data-pipeline guide sections with prerequisites, enablement, commands and rollback; remove superseded native-submit/operator-candidate wording in this area and verify the documented rendered configuration does not alter service/dev rollout defaults.
 
@@ -58,9 +58,8 @@
 
 ## 8. Remove temporary scaffolding
 
-- [ ] 8.1 After 1.2 and 7.1-7.3 pass, remove the compatibility probe: the `probe` CLI stage, `data_platform/probe.py`, its documentation and design-risk wording, and any `dp1_probe_*` tables and `dp1-evidence/probes/` objects left by earlier runs. Verify no references remain and the opt-in enablement guidance no longer requires a probe.
-- [ ] 8.2 After a v8 or later export that carries an embedded inventory is ingested, validated, governed and accepted, remove the v7 companion path: `source-inventory` stage and `data_platform/inventory.py` companion creation, `--inventory-*` options, companion selection in manifest/run records, the chart's `SOURCE_INVENTORY_URI`/`SOURCE_INVENTORY_SHA256` values and validation, their tests, documentation and spec scenarios, and the lake `source-inventories/v7.json` object. Keep accepted v7 run records and snapshots intact, and verify the remaining embedded-inventory path and the data-pipeline guide still pass.
-- [ ] 8.3 Run the repository CI entrypoints and strict OpenSpec validation after 8.1 and 8.2, and confirm no probe, companion or v7-specific configuration remains outside the accepted run records.
+- [ ] 8.1 After a v8 or later export that carries an embedded inventory is ingested, validated, governed and accepted, remove the v7 companion path: `source-inventory` stage and companion creation in `data_platform/inventory.py`, `--inventory-*` options, companion selection in manifest/run records, the chart's `SOURCE_INVENTORY_URI`/`SOURCE_INVENTORY_SHA256` values and validation, their tests, documentation and spec scenarios, and the lake `source-inventories/v7.json` object. Keep accepted v7 run records and snapshots.
+- [ ] 8.2 Run the repository CI entrypoints and strict OpenSpec validation, and confirm no companion or v7-specific configuration remains outside accepted run records.
 
 ## Verification and outstanding prerequisites (2026-10-22)
 
@@ -70,7 +69,7 @@ Completed checkboxes represent verified local behavior or the parent’s explici
 
 The canonical generator `inventory`/`key` manifest was verified against the immutable `historical/runtime-process-check-2800fb7138e74bd699970de8f4ccfdc8` export: 31 objects, 3,957 event rows and 882 labels, with every listed hash/size/row count verified. Its manifest SHA256 is `6b2312130f0d6c80e235ca80e187561af203257b983bed49c03fd94f38fb6cde`. Accepted v7 remains unchanged. The user explicitly approved a separate companion inventory for its legacy manifest; the create-only companion at `s3://fraud-lakehouse-prod/dp1-evidence/source-inventories/v7.json` (SHA256 `408e44f10b20eaab9d875578d11fc5daa686b13e465fb04ae068a9d0d777ebf3`, original manifest `020523c95eb960748cfc7953b740c204418479213c7e87f7a7e02d9a7c0a5dd7`) lists 202 Parquet files, 271,619,442 bytes, 2,215,309 event rows and 442,817 label rows; recreation was rejected with HTTP 412 and source object metadata was unchanged. This records current source integrity only; v7 bronze acceptance remains unverified.
 
-Task 1.2 remains incomplete: the bounded live Spark probe returned `Py4JJavaError` after creating its table and initial append snapshot, and did not complete overwrite/pinned-read verification. Read-only PyIceberg namespace/table listing and the parent's REST create/load/drop and scoped IAM tests passed, but they do not establish complete Spark interoperability. Namespace `bronze` is preprovisioned; runtime checks existence before requesting creation, which is intentionally ungranted. Source S3A disables root bucket probing to respect prefix-scoped listing. Earlier failed probes left `dp1_probe_*` tables and `dp1-evidence/probes/` reports; task 8.1 removes them.
+Task 1.2 is superseded: an earlier local Spark probe was inconclusive, so compatibility is now proven by the workflow's preflight smoke stage. Namespace `bronze` is preprovisioned; runtime checks existence before requesting creation, which is intentionally ungranted. Source S3A disables root bucket probing to respect prefix-scoped listing.
 
 Platform implementation is committed separately in `talos-proxmox` at `88749337eda154bcf5d4c4158567f47feda7a716` on `t3/historical-dp1-bronze`; shared Spark ownership is retained and DataHub remains disabled. Tasks 4.*, 5.2–5.5, 6.1–6.4 and 7.* retain their required live/CI checks. Deployment requires integration and reconciliation of that platform change, measured DataHub/Spark/storage headroom and persistence, DataHub external authentication secrets including `DP1_DATAHUB_TOKEN`, final image digests, successful Spark/Argo probes, authenticated metadata graph/assertion readback and approved v7 integrity evidence. RustFS console-reported free capacity is not retention or reservation proof.
 
@@ -85,6 +84,6 @@ In the locked Python 3.12 devenv, all 12 focused manifest/run tests passed in 34
 
 ## Follow-up verification (2026-10-22)
 
-PR #84 passed all nine checks, including 38 DP1 tests and both image builds. The application-owned `fraud-data-prod` namespace was bootstrapped before reconciling the platform's existing scoped Spark roles; the controller subsequently reached 1/1 Ready and an impersonated SparkApplication list check passed. The API intermittently reported etcd readiness failures before returning Ready; no DP1 workload or v7/v8 acceptance was present. DataHub GMS/frontend and all three persistent dependencies were Running with synced external secrets. Authenticated governance and restart persistence remain unverified; the consumer `prd` config lacks `DP1_DATAHUB_TOKEN`.
+PR #84 passed all nine checks, including 35 DP1 tests and both image builds. DataHub GMS/frontend and its persistent dependencies are running with synced external secrets. Authenticated governance and restart persistence remain unverified.
 
 The follow-up removes duplicate tests and reuses one source preparation across SQL parity cases, reducing the suite from 38 to 35 cases and its shared fixture from 20 to 8 customers. The fixture still spans both source schemas and produces 21 labels for the 20-row failure-sample bound. Full integration verification runs in CI. A local REST/Spark probe exceeded its 240-second limit without proving interoperability; no v7 ingestion or acceptance is claimed.

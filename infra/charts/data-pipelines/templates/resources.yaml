@@ -1,6 +1,6 @@
 {{- if .Values.enabled }}
 {{- if not .Values.prerequisitesVerified }}
-{{- fail "DP1 requires verified catalog interoperability, scoped identities, watched namespace, DataHub and concurrent capacity" }}
+{{- fail "DP1 requires scoped identities, DataHub readiness and concurrent capacity" }}
 {{- end }}
 {{- if or .Values.config.SOURCE_INVENTORY_URI .Values.config.SOURCE_INVENTORY_SHA256 }}
 {{- if or (not .Values.config.SOURCE_INVENTORY_URI) (not (regexMatch "^[a-f0-9]{64}$" .Values.config.SOURCE_INVENTORY_SHA256)) }}
@@ -27,7 +27,7 @@ metadata:
 data:
   {{- toYaml .Values.config | nindent 2 }}
 ---
-{{- range $name := list "workflow" "spark" "metadata" }}
+{{- range $name := list "spark" "metadata" }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -59,45 +59,46 @@ spec:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: dp1-workflow
-  namespace: {{ .Values.namespace }}
-rules:
-  - apiGroups: [sparkoperator.k8s.io]
-    resources: [sparkapplications]
-    verbs: [create, get, list, watch, delete]
-  - apiGroups: [argoproj.io]
-    resources: [workflowtaskresults]
-    verbs: [create, patch]
-  - apiGroups: [argoproj.io]
-    resources: [workflows]
-    verbs: [get, list]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
   name: dp1-spark
   namespace: {{ .Values.namespace }}
 rules:
   - apiGroups: [""]
     resources: [pods, services, configmaps, persistentvolumeclaims]
     verbs: [create, get, list, watch, delete, patch]
+  - apiGroups: [argoproj.io]
+    resources: [workflowtaskresults]
+    verbs: [create, patch]
 ---
-{{- range $name := list "workflow" "spark" }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: dp1-{{ $name }}
-  namespace: {{ $.Values.namespace }}
+  name: dp1-spark
+  namespace: {{ .Values.namespace }}
 subjects:
   - kind: ServiceAccount
-    name: dp1-{{ $name }}
-    namespace: {{ $.Values.namespace }}
+    name: dp1-spark
+    namespace: {{ .Values.namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: dp1-{{ $name }}
+  name: dp1-spark
 ---
-{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dp1-executor-template
+  namespace: {{ .Values.namespace }}
+data:
+  executor-pod.yaml: |
+    apiVersion: v1
+    kind: Pod
+    spec:
+      containers:
+        - name: spark-kubernetes-executor
+          envFrom:
+            - configMapRef: {name: dp1-config}
+            - secretRef: {name: dp1-lake}
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
