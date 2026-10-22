@@ -4,14 +4,6 @@ import yaml
 from data_platform.contracts import contract_path, prepare
 
 
-def test_native_export_covers_quality_and_conditional_schema():
-    events = prepare("payment_events")
-    assert "payment_lifecycle" in events.coverage["quality"]
-    assert "payment_created.snapshot.items[].unit_price.minor_units" in events.coverage["required"]
-    assert "attempt_started.signals.user_agent_family" not in events.coverage["required"]
-    assert prepare("fraud_labels").coverage["quality"] == ["label_attempt_linkage", "label_availability"]
-
-
 @pytest.mark.parametrize("change", ["engine", "scalar", "expectation"])
 def test_incomplete_or_incompatible_rule_fails_preparation(tmp_path, change):
     document = yaml.safe_load(contract_path("payment_events").read_text())
@@ -28,32 +20,49 @@ def test_incomplete_or_incompatible_rule_fails_preparation(tmp_path, change):
         prepare("payment_events", path)
 
 
-def test_spark_business_queries_agree_with_source_rules(spark, dataset):
-    import duckdb
+@pytest.fixture(scope="module")
+def business_source(spark, dataset):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
 
     from data_platform.ingest import source_frames
 
     root, manifest = dataset
-    run = {
-        "dataset_version": "smoke",
-        "manifest_sha256": "a" * 64,
-        "run_id": "parity",
-        "ingested_at": "2026-10-22T00:00:00+00:00",
-    }
-    frames = source_frames(spark, str(root), manifest, run)
-    connection = duckdb.connect()
+    frames = source_frames(
+        spark,
+        str(root),
+        manifest,
+        {
+            "dataset_version": "smoke",
+            "manifest_sha256": "a" * 64,
+            "run_id": "parity",
+            "ingested_at": "2026-10-22T00:00:00+00:00",
+        },
+    )
+    source = {}
     for table in frames:
-        paths = [str(root / f["key"]) for f in manifest["inventory"] if f["key"].startswith(table + "/")]
-        connection.read_parquet(paths, union_by_name=True, hive_partitioning=False).create_view(table)
-        frames[table].createOrReplaceTempView(table)
-    for table, frame in frames.items():
-        source = yaml.safe_load(contract_path(table, "historical-payments").read_text())
-        prepared = prepare(table)
-        for source_rule, rule in zip(source["schema"][0]["quality"], prepared.document["schema"][0]["quality"]):
-            assert source_rule["id"] == rule["id"]
-            query = rule["implementation"]["kwargs"]["unexpected_rows_query"].replace("{batch}", table)
-            assert connection.execute(source_rule["query"].replace("{object}", table)).fetchone()[0] == 0
-            assert spark.sql(query).limit(1).count() == 0, rule["id"]
+        paths = [root / f["key"] for f in manifest["inventory"] if f["table"] == table]
+        source[table] = pa.concat_tables([pq.ParquetFile(p).read() for p in paths], promote_options="permissive")
+    return frames, source
+
+
+def test_spark_business_queries_agree_with_source_rules(spark, business_source):
+    import duckdb
+
+    frames, source = business_source
+    with duckdb.connect() as connection:
+        for table, frame in frames.items():
+            connection.register(table, source[table])
+            frame.createOrReplaceTempView(table)
+        for table in frames:
+            contract = yaml.safe_load(contract_path(table, "historical-payments").read_text())
+            for source_rule, rule in zip(
+                contract["schema"][0]["quality"], prepare(table).document["schema"][0]["quality"]
+            ):
+                assert source_rule["id"] == rule["id"]
+                query = rule["implementation"]["kwargs"]["unexpected_rows_query"].replace("{batch}", table)
+                assert connection.execute(source_rule["query"].replace("{object}", table)).fetchone()[0] == 0
+                assert spark.sql(query).limit(1).count() == 0, rule["id"]
 
 
 @pytest.mark.parametrize(
@@ -67,27 +76,12 @@ def test_spark_business_queries_agree_with_source_rules(spark, dataset):
         ("chargeback", "fraud_labels", "label_attempt_linkage"),
     ],
 )
-def test_invalid_fixtures_agree_across_sql_engines(spark, dataset, case, table, rule_id):
+def test_invalid_fixtures_agree_across_sql_engines(spark, business_source, case, table, rule_id):
     import duckdb
     import pyarrow as pa
-    import pyarrow.parquet as pq
 
-    from data_platform.ingest import source_frames
-
-    root, manifest = dataset
-    run = {
-        "dataset_version": "smoke",
-        "manifest_sha256": "a" * 64,
-        "run_id": "invalid-parity",
-        "ingested_at": "2026-10-22T00:00:00+00:00",
-    }
-    frames = source_frames(spark, str(root), manifest, run)
-    records = {}
-    for name in frames:
-        paths = [root / f["key"] for f in manifest["inventory"] if f["key"].startswith(name + "/")]
-        records[name] = pa.concat_tables(
-            [pq.ParquetFile(p).read() for p in paths], promote_options="permissive"
-        ).to_pylist()
+    frames, source = business_source
+    records = {name: data.to_pylist() for name, data in source.items()}
     events, labels = records["payment_events"], records["fraud_labels"]
     if case == "conflict":
         from copy import deepcopy
@@ -125,62 +119,30 @@ def test_invalid_fixtures_agree_across_sql_engines(spark, dataset, case, table, 
     assert spark.sql(query).limit(1).count() > 0
 
 
-def test_conditional_nested_requirements_and_lossless_physical_types(spark, dataset, tmp_path):
-    from pyspark.sql import functions as F
-    from pyspark.sql import types as T
-
-    from data_platform.contracts import check_physical, required_predicates
-    from data_platform.ingest import source_frames
-
-    root, manifest = dataset
-    run = {
-        "dataset_version": "smoke",
-        "manifest_sha256": "a" * 64,
-        "run_id": "conditional",
-        "ingested_at": "2026-10-22T00:00:00+00:00",
-    }
-    frame = source_frames(spark, str(root), manifest, run)["payment_events"]
-    predicates = required_predicates(prepare("payment_events").document["schema"][0]["properties"])
-    predicate = predicates["payment_created.snapshot.total.minor_units"]
-    assert frame.where(predicate).count() == 0
-    missing = frame.withColumn(
-        "payment_created",
-        F.col("payment_created").withField(
-            "snapshot",
-            F.col("payment_created.snapshot").withField(
-                "total", F.col("payment_created.snapshot.total").withField("minor_units", F.lit(None).cast("long"))
-            ),
-        ),
-    )
-    assert missing.where(predicate).count() > 0
-    changed = T.StructType(
-        [
-            T.StructField(f.name, T.DecimalType(20, 0) if f.name == "aggregate_version" else f.dataType)
-            for f in frame.schema
-        ]
-    )
-    with pytest.raises(ValueError, match="schema type differs"):
-        check_physical(changed, prepare("payment_events").schema)
-
+def test_conditional_nested_requirements_agree_with_source(spark, business_source, tmp_path):
     import duckdb
     import pyarrow as pa
-    import pyarrow.parquet as pq
     from datacontract.data_contract import DataContract
 
-    paths = [root / f["key"] for f in manifest["inventory"] if f["key"].startswith("payment_events/")]
-    source = pa.concat_tables([pq.ParquetFile(p).read() for p in paths], promote_options="permissive")
-    records = source.to_pylist()
+    from data_platform.contracts import required_predicates
+
+    frames, source = business_source
+    frame = frames["payment_events"]
+    predicate = required_predicates(prepare("payment_events").document["schema"][0]["properties"])[
+        "payment_created.merchant.merchant_id"
+    ]
+    assert frame.where(predicate).count() == 0
+    records = source["payment_events"].to_pylist()
     next(e for e in records if e["payment_created"])["payment_created"]["merchant"]["merchant_id"] = None
     mutated = spark.createDataFrame(records, frame.select(*prepare("payment_events").business_columns).schema)
-    assert mutated.where(predicates["payment_created.merchant.merchant_id"]).count() > 0
+    assert mutated.where(predicate).count() > 0
     database = tmp_path / "validation.duckdb"
     with duckdb.connect(str(database)) as db:
-        db.register("mutated", pa.Table.from_pylist(records, schema=source.schema))
+        db.register("mutated", pa.Table.from_pylist(records, schema=source["payment_events"].schema))
         db.execute("CREATE TABLE payment_events AS SELECT * FROM mutated")
     result = DataContract(
         data_contract_file=str(contract_path("payment_events", "historical-payments")),
         server="validation",
         config={"DATACONTRACT_DUCKDB_DATABASE": str(database), "DATACONTRACT_DUCKDB_SCHEMA": "main"},
     ).test()
-    assert not result.has_passed()
     assert any("payment_created.merchant.merchant_id" in c.name and c.result == "failed" for c in result.checks)

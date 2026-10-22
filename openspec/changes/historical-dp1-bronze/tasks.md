@@ -38,7 +38,7 @@
 - [ ] 5.2 Add shared Argo SparkApplication resource templates with completion/failure conditions, `Never` restart policy, bounded retries/deadlines and serialized writers; verify rendered resources against the installed API and exercise submission-failure, stalled-status and stable-run retry behavior.
 - [ ] 5.3 Wire preflight, ingest, validate, governance and acceptance stages with success/failure publication paths; verify deterministic quality failure stays failed, missing reports are execution errors and governance-only replay launches no Spark ingest/validation applications.
 - [ ] 5.4 Implement active-application cleanup on cancellation/deadline and diagnostic/report retention independent of resource TTLs; verify a cancelled workflow stops its Spark pods, releases serialization and retains durable run evidence.
-- [ ] 5.5 Add dedicated Spark-job and metadata image definitions plus explicit jobs using the existing reusable image workflow; extend existing Python/Helm CI entrypoints for the new project/charts and required Java setup, verifying locked fixture checks and PR image builds without live credentials or publication.
+- [x] 5.5 Add dedicated Spark-job and metadata image definitions plus explicit jobs using the existing reusable image workflow; extend existing Python/Helm CI entrypoints for the new project/charts and required Java setup, verifying locked fixture checks and PR image builds without live credentials or publication.
 - [x] 5.6 Update only affected deployment/data-pipeline guide sections with prerequisites, enablement, commands and rollback; remove superseded native-submit/operator-candidate wording in this area and verify the documented rendered configuration does not alter service/dev rollout defaults.
 
 ## 6. Catalog metadata, lineage and assertions
@@ -76,3 +76,9 @@ Platform implementation is committed separately in `talos-proxmox` at `88749337e
 - [x] Verify failed Spark/GX checks and execution-error reports preserve the declaration and do not create acceptance evidence; reconcile the affected pipeline guidance and specs.
 
 In the locked Python 3.12 devenv, all 12 focused manifest/run tests passed in 34.45 seconds. The selected Spark/Iceberg recovery/replay and failed-validation tests plus inventory/governance suites passed all 10 tests in 541.93 seconds. Ruff, formatting and strict OpenSpec validation passed. A clean reinstall of altered shared-cache package files restored the existing lockfile environment; no dependency pin changes were required. These are local checks, not live v7/v8 or cluster/governance acceptance.
+
+## Follow-up verification (2026-10-22)
+
+PR #84 passed all nine checks, including 38 DP1 tests and both image builds. The application-owned `fraud-data-prod` namespace was bootstrapped before reconciling the platform's existing scoped Spark roles; the controller subsequently reached 1/1 Ready and an impersonated SparkApplication list check passed. The API intermittently reported etcd readiness failures before returning Ready; no DP1 workload or v7/v8 acceptance was present. DataHub GMS/frontend and all three persistent dependencies were Running with synced external secrets. Authenticated governance and restart persistence remain unverified; the consumer `prd` config lacks `DP1_DATAHUB_TOKEN`.
+
+The follow-up removes duplicate tests and reuses one source preparation across SQL parity cases, reducing the suite from 38 to 35 cases and its shared fixture from 20 to 8 customers. The fixture still spans both source schemas and produces 21 labels for the 20-row failure-sample bound. Full integration verification runs in CI. A local REST/Spark probe exceeded its 240-second limit without proving interoperability; no v7 ingestion or acceptance is claimed.

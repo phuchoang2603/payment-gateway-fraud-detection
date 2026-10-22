@@ -1,10 +1,10 @@
+import json
 import os
 import uuid
 
 from pyiceberg.catalog import load_catalog
 from pyspark.sql import functions as F
 
-from data_platform.catalog import iceberg_config
 from data_platform.spark import session
 from data_platform.storage import Store
 
@@ -14,7 +14,7 @@ def probe():
     namespace = os.environ.get("ICEBERG_PROBE_NAMESPACE", "bronze")
     if not namespace.replace("_", "").isalnum():
         raise ValueError("invalid probe namespace")
-    spark = session()
+    spark = None
     report = {
         "namespace": namespace,
         "table": name,
@@ -24,19 +24,34 @@ def probe():
         "path_style": True,
         "outcome": "error",
     }
+
+    def stage(value):
+        report["stage"] = value
+        print(json.dumps({"probe": name, "stage": value}), flush=True)
+
     try:
+        stage("session")
+        spark = session()
+        stage("namespace")
         if not spark.catalog.databaseExists(f"lake.{namespace}"):
             spark.sql(f"CREATE NAMESPACE lake.{namespace}")
         table = f"lake.{namespace}.{name}"
         frame = spark.createDataFrame([("first", 1), ("other", 2)], "version string, value long")
+        stage("create")
         frame.writeTo(table).using("iceberg").partitionedBy("version").create()
+        stage("snapshot")
         snapshot = spark.table(table + ".snapshots").select("snapshot_id").first()[0]
+        stage("overwrite")
         spark.createDataFrame([("first", 3)], "version string, value long").writeTo(table).overwrite(
             F.col("version") == "first"
         )
+        stage("pinned-read")
         assert spark.table(table).where("version='other'").first().value == 2
         pinned = spark.read.format("iceberg").option("snapshot-id", snapshot).load(table)
         assert pinned.where("version='first'").first().value == 1
+        stage("metadata")
+        from data_platform.catalog import iceberg_config
+
         properties = iceberg_config()["catalog"]["lake"]
         catalog = load_catalog("lake", **properties)
         metadata = catalog.load_table((namespace, name))
@@ -48,4 +63,5 @@ def probe():
         return 1
     finally:
         Store(os.environ["EVIDENCE_ROOT"]).put(f"probes/{name}.json", report, create=True)
-        spark.stop()
+        if spark:
+            spark.stop()

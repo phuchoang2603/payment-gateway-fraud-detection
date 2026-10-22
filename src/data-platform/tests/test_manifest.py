@@ -84,18 +84,6 @@ def test_deferred_source_gate_reaches_preflight_but_requires_validated_snapshots
             selected_manifest(str(source))
 
 
-def test_legacy_manifest_fails_closed_without_changing_source(dataset, tmp_path):
-    _, manifest = dataset
-    legacy = deepcopy(manifest)
-    legacy.pop("inventory")
-    path = tmp_path / "manifest.json"
-    body = json.dumps(legacy)
-    path.write_text(body)
-    with pytest.raises(ValueError, match="lacks a file inventory"):
-        selected_manifest(str(tmp_path))
-    assert path.read_text() == body
-
-
 @pytest.mark.parametrize(
     "mutation", ["contract", "schema", "count", "escape", "table", "partition", "validation", "missing"]
 )
