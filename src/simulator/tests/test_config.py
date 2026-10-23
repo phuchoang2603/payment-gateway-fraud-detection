@@ -47,7 +47,6 @@ def test_generation_identity_separates_logical_inputs_from_execution():
         output="/another/location",
         chunk_purchases=13,
         accepted_version=True,
-        validation_gate="dp1-spark-gx",
         **{
             "execution.workers": 2,
             "execution.max_in_flight": 2,
@@ -78,13 +77,6 @@ def test_scale_pilot_uses_same_profiles_algorithm_and_layout_without_changing_v7
     assert pilot.dataset_version != scale.dataset_version != legacy.dataset_version
     assert scale.minimum_source_parquet_bytes == 100000000000
     assert pilot.minimum_source_parquet_bytes == 0
-    assert scale.validation_gate == "dp1-spark-gx"
-    assert pilot.validation_gate == legacy.validation_gate == "native"
-
-
-def test_unknown_validation_gate_is_rejected():
-    with pytest.raises(ValidationError, match="validation_gate"):
-        small_config(validation_gate="none")
 
 
 def test_acceptance_bands_are_validated_without_forming_logical_identity():

@@ -8,12 +8,10 @@ from simulator.cli import main
 from tests.conftest import small_config
 
 
-@pytest.mark.parametrize("gate", ["native", "dp1-spark-gx"])
-def test_normal_command_resumes_cleans_and_retries_publication(tmp_path, monkeypatch, gate):
+def test_normal_command_resumes_cleans_and_retries_publication(tmp_path, monkeypatch):
     config = small_config(
         duration_days=2,
         customer_block_size=20,
-        validation_gate=gate,
         **{"counts.customers": 20, "data_problems.schema_cutover_date": "2026-07-02"},
     )
     path = tmp_path / "config.yaml"
@@ -33,12 +31,6 @@ def test_normal_command_resumes_cleans_and_retries_publication(tmp_path, monkeyp
         main(command)
     assert failure.value.code == 2
     original = (root / "manifest.json").read_bytes()
-    manifest = json.loads(original)
-    if gate == "native":
-        assert manifest["validation"] == {"payment-events": "passed", "fraud-labels": "passed"}
-    else:
-        assert manifest["validation"]["gate"] == gate
-        assert manifest["validation"]["result"] == "skipped"
 
     def unexpected(*args):
         raise AssertionError("completed output must not regenerate")

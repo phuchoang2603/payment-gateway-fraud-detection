@@ -6,7 +6,7 @@ from typing import Callable
 
 import numpy as np
 
-from simulator.config import ALGORITHM_VERSION, HistoricalConfig
+from simulator.config import ALGORITHM_VERSION, HistoricalConfig, load_published_config
 from simulator.identity import entity_id, fingerprint
 
 CATEGORIES = ("phone", "laptop", "accessory", "tablet", "headphones", "smartwatch", "game_console", "camera")
@@ -305,7 +305,7 @@ def schedule_for_task(config: HistoricalConfig, task: GenerationTask, profiles: 
 def profiles_from_manifest(manifest: dict, directory: Path | None = None) -> Profiles:
     if manifest.get("algorithm_version") != ALGORITHM_VERSION:
         raise ValueError("unsupported historical generation algorithm for continuation")
-    profiles = build_profiles(HistoricalConfig.model_validate(manifest["configuration"]), directory)
+    profiles = build_profiles(load_published_config(manifest["configuration"]), directory)
     if profiles.digest() != manifest["profile_sha256"]:
         raise ValueError("historical profile digest mismatch for continuation")
     return profiles

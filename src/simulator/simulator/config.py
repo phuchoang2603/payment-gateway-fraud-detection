@@ -2,7 +2,7 @@ import json
 from datetime import date, timedelta
 from hashlib import sha256
 from pathlib import Path
-from typing import Literal, Self
+from typing import Self
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -147,7 +147,6 @@ class HistoricalConfig(StrictModel):
     card_testing_bursts_per_task: int = Field(default=16, gt=0)
     minimum_source_parquet_bytes: int = Field(default=0, ge=0)
     accepted_version: bool = False
-    validation_gate: Literal["native", "dp1-spark-gx"] = "native"
     execution: Execution = Field(default_factory=Execution)
     acceptance_bands: dict[str, AcceptanceBand] = Field(default_factory=dict)
     counts: EntityCounts
@@ -181,7 +180,6 @@ class HistoricalConfig(StrictModel):
                 "chunk_purchases",
                 "accepted_version",
                 "acceptance_bands",
-                "validation_gate",
             },
         )
         values["storage"].pop("sort_memory_limit_mb")
@@ -244,3 +242,8 @@ class HistoricalConfig(StrictModel):
 
 def load_config(path: Path) -> HistoricalConfig:
     return HistoricalConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+
+
+def load_published_config(values: dict) -> HistoricalConfig:
+    # Manifests published before the native validation gate was retired still carry this key.
+    return HistoricalConfig.model_validate({key: value for key, value in values.items() if key != "validation_gate"})

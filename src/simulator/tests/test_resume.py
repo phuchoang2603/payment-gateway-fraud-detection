@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 import duckdb
 import pyarrow.fs as fs
@@ -86,7 +85,6 @@ def test_prepare_handoff_verifies_inventory_without_regeneration(tmp_path, monke
     changed = configuration(**{"execution.duckdb_memory_limit_mb": 768, "execution.duckdb_threads": 2})
     manifest = storage.generate(changed, fs.LocalFileSystem(), str(tmp_path), resume=True)
     assert len(manifest["execution_attempts"]) == 2
-    assert manifest["validation"] == {"payment-events": "passed", "fraud-labels": "passed"}
     assert manifest["inventory"] == prepared["files"]
 
 
@@ -118,28 +116,26 @@ def test_single_writer_crash_takeover_and_exclusive_publication(tmp_path):
     assert store.json("manifest.json") == {"accepted": True}
 
 
-def test_size_gate_keeps_native_reports_and_prepared_data(tmp_path):
+def test_size_gate_keeps_prepared_data(tmp_path):
     with pytest.raises(ValueError, match="physical source byte gate"):
         storage.generate(configuration(minimum_source_parquet_bytes=10**12), fs.LocalFileSystem(), str(tmp_path))
     root = tmp_path / "historical" / "smoke"
     assert not (root / "manifest.json").exists()
     assert (root / "_run/prepared.json").exists()
-    for table in (storage.EVENTS, storage.LABELS):
-        report = json.loads((root / f"validation/{table.contract}.json").read_text())
-        assert report["result"] == "passed"
 
 
-def test_post_validation_file_change_refuses_completion(tmp_path, monkeypatch):
-    validate = storage._validate
+def test_post_check_file_change_refuses_completion(tmp_path, monkeypatch):
+    observe = storage._observations
 
-    def change_after_validation(connection, store, run):
-        result = validate(connection, store, run)
-        item = store.json("_run/prepared.json")["files"][0]
-        Path(store.uri(item["key"])).write_bytes(b"changed after validation")
+    def change_after_observations(connection, stats):
+        result = observe(connection, stats)
+        root = tmp_path / "historical" / "smoke"
+        item = json.loads((root / "_run/prepared.json").read_text())["files"][0]
+        (root / item["key"]).write_bytes(b"changed after checks")
         return result
 
-    monkeypatch.setattr(storage, "_validate", change_after_validation)
-    with pytest.raises((ValueError, duckdb.Error), match="integrity|Parquet|parquet"):
+    monkeypatch.setattr(storage, "_observations", change_after_observations)
+    with pytest.raises(ValueError, match="integrity changed"):
         storage.generate(configuration(), fs.LocalFileSystem(), str(tmp_path))
     assert not (tmp_path / "historical/smoke/manifest.json").exists()
 
@@ -171,27 +167,6 @@ def test_cumulative_remote_output_exceeds_active_scratch(tmp_path):
     assert report["sampled_peaks"]["scratch_bytes"] <= config.execution.scratch_capacity_bytes
     remote = sum(item.stat().st_size for item in root.rglob("*.parquet"))
     assert remote > config.execution.scratch_capacity_bytes
-
-
-def test_validation_budget_exhaustion_keeps_prepared_files_for_larger_resume(tmp_path, monkeypatch):
-    config = configuration()
-    native = storage._validate
-
-    def exhausted(*args):
-        raise duckdb.OutOfMemoryException("injected validation memory budget exhaustion")
-
-    monkeypatch.setattr(storage, "_validate", exhausted)
-    with pytest.raises(duckdb.OutOfMemoryException, match="budget exhaustion"):
-        storage.generate(config, fs.LocalFileSystem(), str(tmp_path))
-    root = tmp_path / "historical/smoke"
-    inventory = json.loads((root / "_run/prepared.json").read_text())["files"]
-    assert not (root / "manifest.json").exists()
-    monkeypatch.setattr(storage, "_validate", native)
-    manifest = storage.generate(
-        configuration(**{"execution.duckdb_memory_limit_mb": 768}), fs.LocalFileSystem(), str(tmp_path), resume=True
-    )
-    assert manifest["inventory"] == inventory
-    assert manifest["validation"] == {"payment-events": "passed", "fraud-labels": "passed"}
 
 
 def test_lost_state_checkpoint_acknowledgement_releases_writer_for_normal_resume(tmp_path):

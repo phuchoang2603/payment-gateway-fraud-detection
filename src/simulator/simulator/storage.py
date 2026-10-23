@@ -43,10 +43,6 @@ COMPRESSION = "zstd"
 COMPRESSION_LEVEL = 3
 
 
-class ContractViolation(ValueError):
-    pass
-
-
 @dataclass(frozen=True)
 class Table:
     name: str
@@ -389,34 +385,6 @@ def _views(connection, inventory, store, scratch):
         )
 
 
-def _validate(connection, store, run):
-    from datacontract.data_contract import DataContract
-
-    from simulator.native_validation import controlled_native_connection
-
-    results, failures = {}, []
-    for table in (EVENTS, LABELS):
-        with controlled_native_connection(connection):
-            result = DataContract(
-                data_contract_file=str(PRODUCT_DIR / f"{table.contract}.odcs.yaml"),
-                server="validation",
-                duckdb_connection=connection,
-            ).test()
-        run.check_owner()
-        store.put_json(f"validation/{table.contract}.json", json.loads(result.model_dump_json()))
-        results[table.contract] = result.result
-        failures.extend(
-            f"{table.contract}/{check.name}: {check.reason or check.result}"
-            for check in result.checks
-            if check.result not in ("passed", "info")
-        )
-        if not result.has_passed() and not failures:
-            failures.append(f"{table.contract}: {result.result}")
-    if failures:
-        raise ContractViolation("contract validation failed: " + "; ".join(failures))
-    return results
-
-
 def _cardinality(connection):
     columns = {
         "customer": "payment_created.customer.customer_id",
@@ -653,18 +621,13 @@ def generate(
                 _views(connection, inventory, store, scratch)
                 run.state["phase"] = "validation"
                 run.checkpoint()
-                start = time.monotonic()
-                if config.validation_gate == "dp1-spark-gx":
-                    validation = {
-                        "result": "skipped",
-                        "gate": "dp1-spark-gx",
-                        "reason": "validation_gate: dp1-spark-gx; the downstream pipeline is the contract gate",
-                    }
-                else:
-                    validation = _validate(connection, store, run)
+                validation = {
+                    "result": "skipped",
+                    "gate": "dp1-spark-gx",
+                    "reason": "validation deferred to dp1-spark-gx; the downstream pipeline is the contract gate",
+                }
                 observed = _observations(connection, stats)
                 _gate_observed(config, observed)
-                timings["validation_seconds"] = time.monotonic() - start
                 monitor.check()
                 physical = sum(item["bytes"] for item in inventory)
                 if physical < config.minimum_source_parquet_bytes:

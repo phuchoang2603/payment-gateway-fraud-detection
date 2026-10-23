@@ -1,7 +1,7 @@
 import json
 from hashlib import sha256
 
-from simulator.config import HistoricalConfig
+from simulator.config import load_published_config
 
 PUBLICATION_KEY = "_run/publication.json"
 
@@ -58,11 +58,10 @@ def finish_publication(config, store, *, cleanup_intermediates=False):
     manifest = store.json("manifest.json")
     if not isinstance(manifest.get("inventory"), list):
         raise ValueError("completed manifest lacks an integrity inventory; publication recovery refused")
-    published = HistoricalConfig.model_validate(manifest["configuration"])
+    published = load_published_config(manifest["configuration"])
     if (
         config.logical_configuration != published.logical_configuration
         or config.accepted_version != published.accepted_version
-        or config.validation_gate != published.validation_gate
     ):
         raise ValueError("publication configuration differs from the completed manifest")
     if not all(store.verify(item) for item in manifest["inventory"]):

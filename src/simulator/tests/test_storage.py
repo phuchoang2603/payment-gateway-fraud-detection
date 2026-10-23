@@ -10,7 +10,6 @@ import yaml
 
 import simulator.storage as storage
 from simulator.arrow import LABEL_SCHEMA, event_schema
-from simulator.generation import GeneratedHistory
 from simulator.profiles import build_profiles, schedule_for_task, tasks_for_day
 from tests.conftest import small_config
 
@@ -54,11 +53,15 @@ def test_arrow_schema_matches_contract(contract, schema):
     }
 
 
-def test_published_dataset_passes_both_contracts(dataset):
+def test_published_dataset_records_deferred_validation(dataset):
     root, manifest = dataset
-    assert manifest["validation"] == {"payment-events": "passed", "fraud-labels": "passed"}
+    assert manifest["validation"] == {
+        "result": "skipped",
+        "gate": "dp1-spark-gx",
+        "reason": "validation deferred to dp1-spark-gx; the downstream pipeline is the contract gate",
+    }
     assert (root / "manifest.json").exists()
-    assert {path.name for path in (root / "validation").iterdir()} == {"payment-events.json", "fraud-labels.json"}
+    assert not (root / "validation").exists()
 
 
 def test_rebuilt_profiles_match_the_manifest_digest(dataset):
@@ -195,25 +198,6 @@ def test_labels_are_separate_from_events(dataset):
     assert declined_fraud[0] > 0 and declined_fraud[1] == 0
 
 
-def test_contract_violation_blocks_publication(tmp_path, monkeypatch):
-    build = storage.build_history
-
-    def skip_risk_decision(*args, **kwargs):
-        history = build(*args, **kwargs)
-        events = tuple(event for event in history.events if event.get("risk_decision_recorded") is None)
-        return GeneratedHistory(events, history.labels, history.truth)
-
-    monkeypatch.setattr(storage, "build_history", skip_risk_decision)
-    with pytest.raises(storage.ContractViolation, match="payment-events"):
-        storage.generate(
-            small_config(duration_days=2, **{"data_problems.schema_cutover_date": "2026-07-02"}),
-            fs.LocalFileSystem(),
-            str(tmp_path),
-        )
-    assert not (tmp_path / "historical" / "smoke" / "manifest.json").exists()
-    assert (tmp_path / "historical" / "smoke" / "_run" / "prepared.json").exists()
-
-
 def test_row_groups_respect_the_configured_size(tmp_path):
     config = small_config(
         duration_days=2,
@@ -248,26 +232,8 @@ def test_empty_schedule_publishes_an_empty_valid_dataset(tmp_path):
     )
     manifest = storage.generate(config, fs.LocalFileSystem(), str(tmp_path), allow_small_dataset=True)
     assert manifest["observed"]["payments"] == 0
-    assert manifest["validation"] == {"payment-events": "passed", "fraud-labels": "passed"}
     assert manifest["storage"]["payment_events"]["files"] == 0
     assert (tmp_path / "historical" / "smoke" / "manifest.json").exists()
-
-
-def test_configured_dp1_gate_publishes_with_a_recorded_reason(tmp_path, monkeypatch):
-    config = small_config(dataset_version="unvalidated", accepted_version=True, validation_gate="dp1-spark-gx")
-
-    def unexpected(*args):
-        raise AssertionError("DP1 is the configured contract gate")
-
-    monkeypatch.setattr(storage, "_validate", unexpected)
-    manifest = storage.generate(config, fs.LocalFileSystem(), str(tmp_path))
-    assert manifest["validation"] == {
-        "result": "skipped",
-        "gate": "dp1-spark-gx",
-        "reason": "validation_gate: dp1-spark-gx; the downstream pipeline is the contract gate",
-    }
-    assert manifest["observed"]["payments"] > 0
-    assert (tmp_path / "historical" / "unvalidated" / "manifest.json").exists()
 
 
 def test_task_fragments_are_one_file_per_table_and_schema_version(dataset):

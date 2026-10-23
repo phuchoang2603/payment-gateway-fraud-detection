@@ -63,8 +63,6 @@ def test_failed_tagging_recovers_without_retagging_or_rewriting_completed_object
     (tmp_path / "first").write_bytes(b"first")
     with pytest.raises(ValueError, match="configuration differs"):
         finish_publication(small_config(seed=999, accepted_version=True), store)
-    with pytest.raises(ValueError, match="configuration differs"):
-        finish_publication(small_config(accepted_version=True, validation_gate="dp1-spark-gx"), store)
     assert finish_publication(config, store, cleanup_intermediates=True) == manifest
     receipt = store.json("_run/publication.json")
     assert receipt["tagging"] == "tagged" and receipt["cleanup"] == "removed"
