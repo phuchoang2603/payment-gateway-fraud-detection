@@ -11,6 +11,7 @@ dependencies = [
     "numpy>=2.3,<3",
     "pyarrow>=23,<25",
     "pydantic>=2.12,<3",
+    "pytz==2026.5",
     "pyyaml>=6,<7",
 ]
 
