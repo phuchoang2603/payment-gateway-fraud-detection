@@ -21,7 +21,7 @@ The historical-source contracts SHALL declare executable SQL rules. Identical re
 
 ### Requirement: Execution boundaries
 
-Documentation SHALL distinguish source DuckDB checks, bronze Spark/GX checks, contract lint and catalog ingestion. Producing and ingesting jobs SHALL own data preparation, physical file checks and publication gating. DataHub SHALL consume contract metadata and execution evidence without replacing validation. Flink integration SHALL remain with its pipeline.
+Documentation SHALL distinguish source DuckDB checks, bronze Spark/GX checks, contract lint and catalog ingestion. Producing and ingesting jobs SHALL own data preparation, physical file checks and publication gating. OpenMetadata SHALL import the Git-authoritative ODCS contracts and consume GX execution evidence without replacing validation or introducing an independent rule source. Flink integration SHALL remain with its pipeline.
 
 #### Scenario: Dataset validation
 

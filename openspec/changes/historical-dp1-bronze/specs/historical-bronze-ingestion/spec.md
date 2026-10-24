@@ -101,7 +101,7 @@ A completed DP1 run SHALL expose an accepted record pinning both validated snaps
 
 #### Scenario: Governance publication fails
 
-- **WHEN** data validation passes but DataHub publication is incomplete
+- **WHEN** data validation passes but OpenMetadata publication is incomplete
 - **THEN** the run records validated data and a separate governance failure without claiming completed DP1 acceptance
 
 ### Requirement: Bounded pilot execution

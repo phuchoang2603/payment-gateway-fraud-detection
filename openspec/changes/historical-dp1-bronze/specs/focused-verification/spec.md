@@ -12,7 +12,7 @@ Focused checks SHALL cover explicit deferred-source preflight, preservation of i
 
 ### Requirement: Data-pipeline behavioral verification
 
-Small local fixtures SHALL protect source integrity, schema normalization, duplicate preservation, snapshot selection, uncertain-commit recovery and safe replay. They SHALL also protect contract coverage/parity, failed-result publication, cancellation and canonical catalog identity. Ordinary CI SHALL NOT require live cluster or storage credentials.
+Small local fixtures SHALL protect source integrity, schema normalization, duplicate preservation, snapshot selection, uncertain-commit recovery and safe replay. They SHALL also protect contract coverage/parity, failed-result publication, cancellation and canonical catalog identity. Catalog replacement checks SHALL cover ODCS identity preservation, custom GX success/failure/error results, idempotent metadata-only recovery and refusal of acceptance on incomplete OpenMetadata readback, reusing existing fixtures. Ordinary CI SHALL NOT require live cluster or storage credentials.
 
 #### Scenario: Verify changes without infrastructure access
 
@@ -31,14 +31,14 @@ Small local fixtures SHALL protect source integrity, schema normalization, dupli
 
 ### Requirement: Live historical and governance acceptance
 
-Live acceptance SHALL separately exercise complete v7 ingestion, persisted-snapshot validation, replay, partial-commit recovery and DataHub readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
+Live acceptance SHALL separately exercise complete v7 ingestion, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
 
 #### Scenario: Complete v7 acceptance
 
 - **WHEN** the configured live DP1 acceptance run succeeds
-- **THEN** it verifies source-to-bronze content/count conservation, safe replay and visible products, schemas, lineage and validation results on canonical DataHub assets
+- **THEN** it verifies source-to-bronze content/count conservation, safe replay and visible products, schemas, imported contracts, lineage and validation results on canonical OpenMetadata assets
 
 #### Scenario: Dependency unavailable
 
-- **WHEN** cluster access, REST catalog compatibility, DataHub readiness or capacity cannot be verified
+- **WHEN** cluster access, REST catalog compatibility, OpenMetadata readiness or capacity cannot be verified
 - **THEN** planning/local checks are reported separately and no live deployment or end-to-end acceptance is claimed

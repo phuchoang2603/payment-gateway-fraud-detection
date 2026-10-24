@@ -13,6 +13,20 @@ DP1 SHALL expose distinct ingest and validate stages with input, output and run 
 - **WHEN** a user inspects a DP1 run
 - **THEN** they can identify its source manifest, ingest result, validated snapshots, validation outcome and governance outcome
 
+### Requirement: Versioned-export batch selection
+
+Each workflow submission SHALL select one completed, immutable source export through `source-root` and `dataset-version` parameters, with chart-configured defaults. The ingestion and metadata-only replay workflows SHALL also expose `inventory-uri` and `inventory-sha256` for an explicitly pinned companion when required. Every stage SHALL use the selected parameters consistently. Recurring batches SHALL select newly completed export versions; a schedule alone SHALL NOT discover daily partitions in a growing source.
+
+#### Scenario: Process the next completed export
+
+- **WHEN** a submission overrides the source root and dataset version for a newly completed export
+- **THEN** all stages use that export's manifest and selected inventory, and writes remain isolated from other source versions
+
+#### Scenario: Resubmit an accepted export
+
+- **WHEN** the same completed export is submitted after its source version is accepted
+- **THEN** the run reuses its recorded snapshots without adding deliveries or treating the submission as new source data
+
 ### Requirement: Argo-run Spark stages
 
 Argo SHALL run each Spark stage as a container step in Kubernetes client mode, with the step pod as driver and executors owned by it. Stage success SHALL be the step's exit code, and a deadline SHALL stop a stage that does not finish. No Spark operator SHALL be required.
@@ -43,9 +57,9 @@ The workflow SHALL persist validation evidence before signaling failed quality c
 #### Scenario: A quality check fails
 
 - **WHEN** validation computes a failed expectation
-- **THEN** the workflow remains failed, retains its report and attempts to publish the failed assertion to DataHub
+- **THEN** the workflow remains failed, retains its report and attempts to publish the failed assertion to OpenMetadata
 
-#### Scenario: DataHub recovers after an outage
+#### Scenario: OpenMetadata recovers after an outage
 
 - **WHEN** a persisted run is replayed for metadata publication only
 - **THEN** publication uses the original reports, snapshots and run identity without starting ingest or validation again
