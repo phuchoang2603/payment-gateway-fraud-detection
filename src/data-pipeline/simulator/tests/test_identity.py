@@ -4,7 +4,7 @@ from uuid import UUID
 
 from simulator.identity import IDENTITY_NAMESPACE, entity_id, fingerprint
 
-VECTORS = json.loads((Path(__file__).resolve().parents[3] / "contracts/synthetic/identity-vectors.json").read_text())
+VECTORS = json.loads((Path(__file__).resolve().parents[4] / "contracts/synthetic/identity-vectors.json").read_text())
 
 
 def test_identity_vectors():

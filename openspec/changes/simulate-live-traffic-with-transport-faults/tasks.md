@@ -4,7 +4,7 @@
 
 ## 2. Simulator configuration and fault injector
 
-- [ ] 2.1 Add httpx and confluent-kafka to `src/simulator`, the pydantic model for `configs/live-v1.yaml` (`dataset`, `traffic`, `faults`, `kafka`) and the `live`/`faults` CLI entry points; verify `uv sync --locked` and that an invalid delay range is rejected at startup
+- [ ] 2.1 Add httpx and confluent-kafka to `src/data-pipeline/simulator`, the pydantic model for `configs/live-v1.yaml` (`dataset`, `traffic`, `faults`, `kafka`) and the `live`/`faults` CLI entry points; verify `uv sync --locked` and that an invalid delay range is rejected at startup
 - [ ] 2.2 Implement hash-based selection and delays for duplicate and late delivery, plus the wall-clock burst hold; verify a test that two runs over the same event IDs select the same events with the same delays
 - [ ] 2.3 Implement the consume, schedule and produce loop with unchanged key/value pass-through, per-partition commits trailing the oldest unpublished offset, the `max_pending` pause and the periodic JSON summary; verify the all-faults-disabled pass-through test and the restart-with-held-records test against a CI Kafka service container
 

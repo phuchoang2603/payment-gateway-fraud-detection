@@ -6,6 +6,7 @@ synthetic_key_version: v1
 start_date: 2026-07-01
 duration_days: 6
 chunk_purchases: 50
+customer_block_size: 300
 counts: {customers: 300, merchants: 20, devices: 400, ip_networks: 100, addresses: 320, payment_methods: 400}
 behavior: {purchases_per_customer_day: 0.3, merchant_zipf_exponent: 1.1, category_zipf_exponent: 1.2, familiar_merchant_probability: 0.8, familiar_context_probability: 0.9, foreign_ip_probability: 0.05, issuer_decline_rate: 0.05, insufficient_funds_rate: 0.03, unknown_outcome_rate: 0.05, unknown_resolution_minutes: 15, retry_rate: 0.5, expiry_minutes: 60}
 scenarios:
