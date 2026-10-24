@@ -10,7 +10,10 @@ import yaml
 
 import simulator.storage as storage
 from simulator.arrow import LABEL_SCHEMA, event_schema
+from simulator.object_store import ObjectStore
 from simulator.profiles import build_profiles, schedule_for_task, tasks_for_day
+from simulator.publication import publication_receipt
+from simulator.resources import ResourceMonitor
 from tests.conftest import small_config
 
 duckdb.execute("SET TimeZone = 'UTC'")
@@ -281,3 +284,13 @@ def test_publication_receipt_records_accepted_version_flag(tmp_path):
     publication = json.loads((tmp_path / "historical" / "unprotected" / "_run" / "publication.json").read_text())
     assert publication["accepted_version"] is True
     assert publication["tagging"] == "skipped"
+
+
+def test_resource_samples_do_not_change_publication_receipt(tmp_path):
+    monitor = ResourceMonitor(tmp_path, small_config().execution)
+    manifest = {"configuration": {}, "execution_attempts": [{"resources": monitor.report()}]}
+    store = ObjectStore(str(tmp_path))
+    receipt = publication_receipt(store, manifest)
+    monitor.sample()
+    assert monitor.peaks["process_tree_rss_bytes"] > 0
+    assert publication_receipt(store, manifest) == receipt

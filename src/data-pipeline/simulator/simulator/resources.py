@@ -83,7 +83,7 @@ class ResourceMonitor:
     def report(self):
         return {
             "sample_interval_seconds": 0.1,
-            "sampled_peaks": self.peaks,
+            "sampled_peaks": self.peaks.copy(),
             "elapsed_seconds": time.monotonic() - self.started,
         }
 
