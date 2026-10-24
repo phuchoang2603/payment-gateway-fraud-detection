@@ -31,7 +31,7 @@ def smoke():
         spark = session()
         stage("namespace")
         if not spark.catalog.databaseExists(f"lake.{namespace}"):
-            raise RuntimeError("bronze namespace is not provisioned")
+            spark.sql(f"CREATE NAMESPACE lake.{namespace}")
         stage("create")
         frame = spark.createDataFrame([("first", 1), ("other", 2)], "version string, value long")
         frame.writeTo(table).using("iceberg").partitionedBy("version").create()

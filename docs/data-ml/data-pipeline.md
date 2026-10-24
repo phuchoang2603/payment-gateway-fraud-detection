@@ -115,7 +115,14 @@ The [Vietnam payment policy research](../research/vietnam-payment-policy.md) sep
 
 ## Historical DP1
 
-`src/data-platform` locks Python 3.12, Java 17, Spark 3.5.8, Iceberg 1.10.1, GX 1.24.0, PyIceberg 0.11.1 and DataHub client/GX plugin 1.7.0.16. Root Python 3.14 remains the service/generator toolchain. The Spark image contains verified, checksum-pinned Iceberg/S3A JARs; the smaller metadata image omits Spark/Java. `infra/charts/data-pipelines` and its prod Application are disabled by default.
+`src/data-pipeline/bronze-ingestion` locks Python 3.12, Java 17, Spark 3.5.8, Iceberg 1.10.1, GX 1.24.0, PyIceberg 0.11.1 and DataHub client/GX plugin 1.7.0.16. Root Python 3.14 remains the service/generator toolchain. The Spark image contains verified, checksum-pinned Iceberg/S3A JARs; the smaller metadata image omits Spark/Java. `infra/charts/data-pipelines` and its prod Application are disabled by default.
+
+Data workloads live under `src/data-pipeline/`: `simulator` and `bronze-ingestion`. Each workload retains its own Python version and lockfile. The Spark and metadata Dockerfiles build self-contained images with dependencies installed in a separate build stage and runtime caches and unused test directories pruned.
+
+```bash
+docker buildx build -f infra/docker/data-platform-spark.Dockerfile -t data-pipeline/bronze-spark:local --load .
+docker buildx build -f infra/docker/data-platform-metadata.Dockerfile -t data-pipeline/bronze-metadata:local --load .
+```
 
 The chart owns `fraud-data-prod` and retains it when disabled.
 

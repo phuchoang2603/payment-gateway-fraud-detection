@@ -120,7 +120,7 @@ The companion inventory exists only to unblock v7. Once a later export with an e
 
 ## References
 
-- Local source interfaces: `contracts/data-products/historical-payments/`, `docs/data-ml/data-products.md` and `src/simulator/notebooks/historical-sanity.ipynb`.
+- Local source interfaces: `contracts/data-products/historical-payments/`, `docs/data-ml/data-products.md` and `src/data-pipeline/simulator/notebooks/historical-sanity.ipynb`.
 - Platform configuration: `talos-proxmox/apps/components/{kubeflow,argo-workflows,cnpg,strimzi}`; reference job implementations in `card-fraud-platform/pipelines/spark` and `RecSys-MLops/apps/data-platform/src`.
 - [Data Contract CLI GX export](https://docs.datacontract.com/exports/great-expectations), [Spark on Kubernetes client mode](https://spark.apache.org/docs/3.5.8/running-on-kubernetes.html#client-mode).
 - [DataHub Iceberg connector](https://docs.datahub.com/docs/generated/ingestion/sources/iceberg), [GX integration](https://docs.datahub.com/docs/metadata-ingestion/integration_docs/great-expectations), [DataHub Helm](https://github.com/acryldata/datahub-helm).

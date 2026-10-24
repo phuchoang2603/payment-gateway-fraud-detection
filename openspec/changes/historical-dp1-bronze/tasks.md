@@ -2,7 +2,7 @@
 
 ## 1. Compatibility and storage prerequisites
 
-- [x] 1.1 Create the locked `src/data-platform` runtime/tooling setup and pin a supported Spark/Java/Python/Iceberg/GX/GX-plugin/PyIceberg/DataHub-client matrix; verify local Spark startup, native GX export/import and plugin imports with the selected versions, independently of root Python 3.14.
+- [x] 1.1 Create the locked `src/data-pipeline/bronze-ingestion` runtime/tooling setup and pin a supported Spark/Java/Python/Iceberg/GX/GX-plugin/PyIceberg/DataHub-client matrix; verify local Spark startup, native GX export/import and plugin imports with the selected versions, independently of root Python 3.14.
 - [ ] 1.2 Replace the standalone `probe` CLI stage, `data_platform/probe.py` and their documentation with a preflight smoke stage run as an Argo Spark step: create, partition overwrite, snapshot-pinned read, PyIceberg check and table drop in a uniquely named lake table; record catalog-signing versus S3/TLS settings without secret values and persist no evidence.
 - [x] 1.3 Allocate a separate lake/evidence scope and source-read, lake-write and metadata identities through the existing external-secret mechanism; verify source reads succeed, pipeline source writes are denied and warehouse access is confined to its intended scope.
 - [x] 1.4 Pin the official DataHub chart/server and compatible PostgreSQL/Kafka/search dependency versions in the platform implementation, checking for an existing live deployment first; deliver a rendered dependency/capacity inventory covering PVCs, JVM/container memory and concurrent Spark headroom, with unresolved live checks clearly identified.

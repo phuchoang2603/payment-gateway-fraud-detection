@@ -31,7 +31,7 @@ The accepted historical v7 dataset can exercise DP1 while payment-gateway work c
 
 ## Impact
 
-- Proposed implementation locations: `src/data-platform/` for locked Spark/validation/metadata jobs and tests; `contracts/data-products/bronze-payments/`; `infra/charts/data-pipelines/`; and dedicated Spark-job/metadata image definitions using the existing reusable image workflow. Extend existing CI entrypoints proportionally, retaining independent Python, Go, Helm and contract checks.
+- Proposed implementation locations: `src/data-pipeline/bronze-ingestion/` for locked Spark/validation/metadata jobs and tests; `contracts/data-products/bronze-payments/`; `infra/charts/data-pipelines/`; and dedicated Spark-job/metadata image definitions using the existing reusable image workflow. Extend existing CI entrypoints proportionally, retaining independent Python, Go, Helm and contract checks.
 - Coordinated platform work in `talos-proxmox`: remove the unused Spark Operator; deploy/verify DataHub and backing services; configure persistence, credentials, private access and resource budgets. This proposal records that work; it does not edit the other repository or deploy anything.
 - Reuse RustFS object storage and its Iceberg REST endpoint, subject to authenticated Spark and PyIceberg/DataHub compatibility checks. Source-read, lake-write and metadata identities must remain separate from the generator's source-writer credential.
 - Update only affected sections of existing data-products, data-pipeline, deployment and roadmap documentation, plus generated references for the new contracts. Keep `scale-historical-data-generation` independent; DP1 does not require a 100 GB source or claim large-scale optimization evidence from v7.

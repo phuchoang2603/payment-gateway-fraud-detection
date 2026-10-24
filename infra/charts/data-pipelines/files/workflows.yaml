@@ -85,7 +85,7 @@ spec:
         volumeMounts:
           - {name: executor-template, mountPath: /etc/dp1, readOnly: true}
         resources:
-          requests: {cpu: "1", memory: 2560Mi}
+          requests: {cpu: 500m, memory: 2560Mi}
           limits: {cpu: "2", memory: 3Gi}
     - name: metadata
       serviceAccountName: dp1-metadata

@@ -87,10 +87,14 @@ The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai
 
 Source publication still uses the unchanged Data Contract CLI/DuckDB commands above. DP1 exports the bronze ODCS rules with Data Contract CLI 1.2.7 and imports them into GX 1.24 on Spark 3.5.8; exporting a suite does not validate data or translate DuckDB SQL. Each bronze quality block contains Spark unexpected-row SQL with its source semantic rule ID. Preparation rejects missing/unsupported rules; generated conditional checks cover nested required fields and array items, and recursive physical checks enforce the exact normalized schema. The native top-level column-set expectation permits GX's nested Spark column listing because the recursive check separately rejects extra columns.
 
-After integrating the generator inventory change, run the locked fixtures and contract lint from the repository devenv. An isolated checkout can set `DP1_GENERATOR_ROOT` to the integrated `src/simulator` dependency:
+After integrating the generator inventory change, run the locked fixtures and contract lint from the repository devenv. An isolated checkout can set `DP1_GENERATOR_ROOT` to the integrated `src/data-pipeline/simulator` dependency:
 
 ```bash
-bash scripts/check-data-platform.sh
+python3 scripts/prepare-dp1-jars.py /tmp/dp1-jars --local
+UV_PROJECT_ENVIRONMENT="$PWD/src/data-pipeline/bronze-ingestion/.venv" \
+UV_PYTHON_PREFERENCE=managed UV_PYTHON_DOWNLOADS=automatic \
+DP1_JARS="$(find /tmp/dp1-jars -name 'iceberg-spark-runtime*.jar' -print -quit)" \
+  uv run --project src/data-pipeline/bronze-ingestion --locked pytest src/data-pipeline/bronze-ingestion/tests
 bash scripts/ci-checks.sh contracts
 ```
 

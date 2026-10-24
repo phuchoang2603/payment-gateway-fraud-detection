@@ -64,7 +64,7 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: [pods, services, configmaps, persistentvolumeclaims]
-    verbs: [create, get, list, watch, delete, patch]
+    verbs: [create, get, list, watch, delete, deletecollection, patch]
   - apiGroups: [argoproj.io]
     resources: [workflowtaskresults]
     verbs: [create, patch]
@@ -93,6 +93,15 @@ data:
     apiVersion: v1
     kind: Pod
     spec:
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchExpressions:
+                    - {key: workflows.argoproj.io/workflow, operator: Exists}
       containers:
         - name: spark-kubernetes-executor
           envFrom:
