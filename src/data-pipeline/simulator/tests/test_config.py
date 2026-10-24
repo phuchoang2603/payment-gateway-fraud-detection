@@ -30,7 +30,7 @@ def test_output_url_must_not_carry_credentials():
     [
         {"execution.workers": 0},
         {"execution.workers": 2, "execution.max_in_flight": 1},
-        {"execution.duckdb_spill_bytes": 10**12},
+        {"execution.task_scratch_bytes": 10**12},
         {"execution.transfer_concurrency": 2},
         {"execution.aws_secret_access_key": "secret"},
         {"minimum_source_parquet_bytes": -1},
@@ -50,7 +50,7 @@ def test_generation_identity_separates_logical_inputs_from_execution():
         **{
             "execution.workers": 2,
             "execution.max_in_flight": 2,
-            "execution.duckdb_memory_limit_mb": 1024,
+            "execution.transfer_concurrency": 2,
             "acceptance_bands": {"duplicate_rate": {"minimum": 0.01, "maximum": 0.03}},
         },
     )

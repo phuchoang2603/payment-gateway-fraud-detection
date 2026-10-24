@@ -39,6 +39,4 @@ label_delays:
   max_days: 21
 storage:
   row_group_rows: 131072
-  target_file_mb: 128
-  sort_memory_limit_mb: 256
 output: s3://synthetic-source

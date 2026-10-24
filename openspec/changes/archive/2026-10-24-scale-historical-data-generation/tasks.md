@@ -1,5 +1,39 @@
 # Tasks
 
+## Approved delta: generation-only raw publication
+
+The following tasks track the raw-publication implementation. Sections 1–7 and the implementation/command evidence below are a frozen historical record of the legacy sorted/native-validation path. Their checked items do not claim this delta is implemented; their pending full-run/second-host tasks are superseded by the milestones below. Historical measurements remain evidence only for the path that produced them. The old `v8` finalizer is stopped; a one-time source handoff is separate from DP1 quality acceptance.
+
+- [x] 8.1 Replace simulator daily sorting/compaction/finalization and native DuckDB remote scans with direct persistent `raw/{table}/{task.key}/v{schema_version}.parquet` publication. Add manifest format 3, `source_layout: task-fragments-v1`, exact per-file checksum/bytes/rows/schema version and `partitions: {date: rows}`; verify multi-date task files, physical schema cutover, duplicate preservation and complete delayed labels without an ordering promise.
+- [x] 8.2 Make the normal command generate/upload, verify receipts/checksums/row accounting and the configured physical-byte gate, write the manifest last, then tag and clean only `_run/`. Make `--prepare-only` leave generated inventory ready without sorting or a manifest; verify retry, integrity/size failure, competing ownership and partial tagging/cleanup recovery preserve all listed raw files.
+- [x] 8.3 Keep the simulator generation-only: remove the legacy migration command, its runtime module/tests, server-side copy adapter, retired-configuration normalization and migration-only provenance fields. Retain normal compatible generation resume and publication retries.
+- [x] 8.4 Complete the one-time v8 handoff outside the repository after stopping the old finalizer. Verify complete task receipts and original provenance before server-side copying to persistent raw keys, then verify checksums/byte/row gates and publish the manifest last. Retain the original fragments and distinguish this source publication from downstream quality acceptance.
+- [x] 8.5 Version the historical-payments physical product boundary to `5.0.0`, retain unchanged logical ODCS contracts and emit the explicit skipped `dp1-spark-gx` declaration. Replace remote cardinality scans with cheap additive receipt statistics, distinguish configured pools from observations and mark cardinality validation downstream; verify reports do not invent measurements.
+- [x] 8.6 Adapt DP1 to validate exactly the manifest-listed raw files and schema/count/integrity metadata, preserve duplicate deliveries and delayed labels, and derive Bronze partitions from timestamp columns. Verify multi-date fragments, cross-midnight histories, late labels and rejection of inconsistent inventories; require Spark/GX results on both persisted tables plus governance for Bronze acceptance.
+- [x] 8.7 Run the focused locked checks for the new path and record fresh raw-layout byte/resource/publication evidence before any new scale claim. Separate source publication from measured DP1 quality acceptance, report actual 100,000,000,000-byte inventory totals and downstream cardinality results, and update only affected existing evidence after measurement. Do not infer downstream quality acceptance from source publication.
+
+## One-time v8 source publication evidence (2026-10-24)
+
+The external handoff exited 0 after verifying complete task receipts and original provenance, server-side copying to persistent raw keys and verifying checksums/byte/row gates. It published `s3://synthetic-source/historical/v8/manifest.json` last: 24,982 files, 123,286,939,620 physical Parquet bytes (123.29 GB, 114.82 GiB) against the 100,000,000,000-byte minimum, and 243,759,611,982 uncompressed Parquet bytes. The original fragments were retained. Validation was recorded as skipped with gate `dp1-spark-gx`; this is source publication only and no downstream quality acceptance, cardinality result or Bronze acceptance is claimed. Focused locked checks passed (49 core simulator tests, 10 DP1 manifest tests, Ruff lint/format, diff checks and strict OpenSpec validation).
+
+## Handed off to the DP1 history slice
+
+These legacy tasks depend on downstream validation or the removed native path and are not completed by this change. They are tracked by the DP1 history slice:
+
+- 4.4 (second-host prepare/resume): superseded by the generation-only path, which has no native validation to resume on another host.
+- 6.2 (full-data validation and quality acceptance): requires the `dp1-spark-gx` results on both persisted tables plus governance against `v8`.
+- 6.3 (accepted-version evidence in the guide, notebook and roadmap): follows DP1 acceptance of `v8`.
+
+## Raw-publication local evidence (2026-10-24)
+
+Before removing permanent migration support, the focused locked simulator suite passed 55 tests with the expensive scale-calibration test deselected. The isolated two-day DP1 source fixture published six raw files totaling 80,740 physical bytes and 34,228 uncompressed Parquet bytes, with 91 event rows, 21 labels and two multi-date files. Generation took 1.06 seconds; the sampled process-tree RSS/scratch peaks were 654,331,904/52,457 bytes, including the local test process tree. These are small local correctness observations, not scale calibration, remote-copy throughput or live acceptance evidence. Full-scale publication and DP1 acceptance remain pending under tasks 8.4/8.7.
+
+Paired DP1 manifest/inventory/Spark checks passed 16 tests initially; the null-timestamp fixture correctly failed quality validation but reduced the existing bounded-sample assertion from 20 invalid rows to 17. After selecting exactly one null label and retaining 20 invalid-date labels, that check passed in isolation. Together these cover all 17 selected DP1 checks, including legacy-table partition evolution, snapshot recovery/replay, deferred cardinality measurements and persisted null-timestamp failure evidence. Recovery checks also passed again after eliminating a redundant checksum read on verified-copy reuse. Scoped Ruff lint/format, diff checks and strict OpenSpec validation passed. No live source recovery, storage mutation, Bronze write or quality acceptance was performed.
+
+Generation-only cleanup on 2026-10-24 removed the permanent migration command/module/tests, copy adapter, retired-configuration normalization and migration-only manifest fields. The stable locked core suite passed 49 tests with one scale-calibration test deselected. The old finalizer (PID 1094155) exited after an interrupt; its run state remained generation-complete in `finalization` with ownership released and no manifest. A local rehearsal of the one-time external handoff passed while retaining original fragments. The external handoff is running separately; task 8.4 remains pending until source publication is verified, and no downstream quality acceptance is claimed.
+
+## Historical legacy implementation record
+
 ## 1. Configuration and reproducibility boundary
 
 - [x] 1.1 Add validated logical generation identity, algorithm/run-state versions, minimum physical-source bytes and separate execution controls for workers, in-flight work, scratch, DuckDB memory/threads/spill and transfers; verify invalid budgets/credential fields fail before writes and resource-only changes preserve generation identity while logical/contract changes do not.
@@ -26,7 +60,6 @@
 - [x] 4.1 Finalize one remote-backed daily partition at a time using receipt-selected inputs, deterministic sorting and existing Zstandard/row-group/file-size settings; reuse layout tests and add a partition spanning task boundaries to verify global order, duplicate preservation, physical schema cutover and equal filtered/full reads.
 - [x] 4.2 Run both native ODCS contracts over the exact complete final-object inventory using session-only S3 credentials and the controlled DuckDB connection; verify cross-midnight transitions and labels beyond history end pass, illegal transitions/missing linkage fail, and budget exhaustion preserves prepared data without publishing.
 - [x] 4.3 Add the physical-source byte gate, per-file integrity inventory, physical/uncompressed Parquet accounting and exclusive manifest-last completion; verify undersized output, changed files or competing publication cannot complete, while reports/checkpoints/replicas are excluded from the counted total.
-- [ ] 4.4 Verify prepare on one process/host followed by resume on another validation host reads the same files without regeneration; reuse a small integration dataset and record both execution budgets. Update the guide's handoff instructions and clarify that a larger spill/memory budget may still be necessary for exact full-history validation.
 
 ## 5. Pilot and scale configuration
 
@@ -40,8 +73,6 @@
 ## 6. Integration and scale acceptance
 
 - [x] 6.1 Run the existing simulator lint/format and focused behavior suite in the locked environment and existing independent CI Python job; verify legacy identity/schema/lifecycle guarantees and the new resume/resource gates without generating large data or adding score gates to CI.
-- [ ] 6.2 Execute the fixed full scale plan, exercising a controlled interruption/resume and full-data contract validation through the declared source-native or DP1 Spark/GX gate; verify actual final event-plus-label Parquet bytes meet 100,000,000,000, configured distribution bands hold and successful size/integrity/distribution gates produce the completion manifest and quality acceptance requires both table reports through the declared gate. Record actual duration and resource peaks; preserve and report failures honestly if the host or fixed plan cannot meet acceptance.
-- [ ] 6.3 Update only the affected existing data-products guide, historical sanity notebook and roadmap evidence with the accepted version, commands, revision/configuration/contract hashes, byte accounting and the declared gate’s full-data reports; verify references resolve and clearly distinguish the pilot, full run and any subset-only checks. Confirm immutable v7 and the source-only boundary are preserved.
 - [x] 6.4 Run `openspec validate scale-historical-data-generation --strict` and verify the artifacts and implementation evidence agree, with no gateway, streaming, Iceberg, DataHub or platform-deployment work attributed to this change.
 
 ## 7. Publication footprint and bucket lifecycle

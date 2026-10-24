@@ -93,8 +93,6 @@ class LabelDelays(StrictModel):
 
 class StorageLayout(StrictModel):
     row_group_rows: int = Field(default=131072, gt=0)
-    target_file_mb: int = Field(default=128, gt=0)
-    sort_memory_limit_mb: int = Field(default=256, ge=64)
 
 
 ALGORITHM_VERSION = "historical-blocks-v2"
@@ -107,17 +105,14 @@ class Execution(StrictModel):
     scratch_directory: Path = Path("/tmp")
     scratch_capacity_bytes: int = Field(default=8 * 1024**3, gt=0)
     task_scratch_bytes: int = Field(default=256 * 1024**2, gt=0)
-    duckdb_memory_limit_mb: int = Field(default=512, ge=64)
-    duckdb_threads: int = Field(default=1, gt=0)
-    duckdb_spill_bytes: int = Field(default=2 * 1024**3, ge=0)
     transfer_concurrency: int = Field(default=1, gt=0)
 
     @model_validator(mode="after")
     def validate_capacity(self) -> Self:
         if self.max_in_flight < self.workers:
             raise ValueError("max_in_flight must be at least workers")
-        if self.max_in_flight * self.task_scratch_bytes + self.duckdb_spill_bytes >= self.scratch_capacity_bytes:
-            raise ValueError("scratch capacity must exceed in-flight task reservations plus DuckDB spill")
+        if self.max_in_flight * self.task_scratch_bytes >= self.scratch_capacity_bytes:
+            raise ValueError("scratch capacity must exceed in-flight task reservations")
         if self.transfer_concurrency > self.max_in_flight:
             raise ValueError("transfer_concurrency must not exceed max_in_flight")
         return self
@@ -157,19 +152,6 @@ class HistoricalConfig(StrictModel):
     storage: StorageLayout = Field(default_factory=StorageLayout)
     output: str = Field(min_length=1)
 
-    @model_validator(mode="before")
-    @classmethod
-    def legacy_sort_budget(cls, values):
-        if isinstance(values, dict) and "sort_memory_limit_mb" in values.get("storage", {}):
-            values = {
-                **values,
-                "execution": {
-                    "duckdb_memory_limit_mb": values["storage"]["sort_memory_limit_mb"],
-                    **values.get("execution", {}),
-                },
-            }
-        return values
-
     @property
     def logical_configuration(self) -> dict:
         values = self.model_dump(
@@ -182,7 +164,6 @@ class HistoricalConfig(StrictModel):
                 "acceptance_bands",
             },
         )
-        values["storage"].pop("sort_memory_limit_mb")
         return values
 
     def generation_identity(self, contracts: dict, revision: str) -> str:
@@ -242,8 +223,3 @@ class HistoricalConfig(StrictModel):
 
 def load_config(path: Path) -> HistoricalConfig:
     return HistoricalConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
-
-
-def load_published_config(values: dict) -> HistoricalConfig:
-    # Manifests published before the native validation gate was retired still carry this key.
-    return HistoricalConfig.model_validate({key: value for key, value in values.items() if key != "validation_gate"})

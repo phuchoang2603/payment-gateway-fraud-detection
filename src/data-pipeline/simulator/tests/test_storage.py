@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import duckdb
@@ -19,8 +19,13 @@ from tests.conftest import small_config
 duckdb.execute("SET TimeZone = 'UTC'")
 
 
+def _paths(root: Path, table: str):
+    manifest = json.loads((root / "manifest.json").read_text())
+    return [str(root / item["key"]) for item in manifest["inventory"] if item["table"] == table]
+
+
 def _read(root: Path, table: str):
-    return duckdb.sql(f"SELECT * FROM read_parquet('{root}/{table}/*/*.parquet', union_by_name = true)")
+    return duckdb.read_parquet(_paths(root, table), union_by_name=True, hive_partitioning=False)
 
 
 def _odcs_fields(properties: list[dict]) -> dict:
@@ -79,12 +84,12 @@ def test_regeneration_is_byte_identical(dataset, tmp_path):
     files = sorted(
         path.relative_to(root)
         for name in ("payment_events", "fraud_labels")
-        for path in (root / name).rglob("*.parquet")
+        for path in (root / "raw" / name).rglob("*.parquet")
     )
     assert files == sorted(
         path.relative_to(again)
         for name in ("payment_events", "fraud_labels")
-        for path in (again / name).rglob("*.parquet")
+        for path in (again / "raw" / name).rglob("*.parquet")
     )
     assert all((root / path).read_bytes() == (again / path).read_bytes() for path in files)
 
@@ -111,10 +116,9 @@ def test_completed_publication_recovery_reuses_output(dataset, monkeypatch):
 def test_schema_cutover_is_physical(dataset):
     root, _ = dataset
     cutover = small_config().data_problems.schema_cutover_date
-    for path in (root / "payment_events").rglob("*.parquet"):
-        day = date.fromisoformat(path.parent.name.split("=")[1])
+    for path in _paths(root, "payment_events"):
         signals = pq.ParquetFile(path).schema_arrow.field("attempt_started").type.field("signals").type
-        assert (signals.get_field_index("user_agent_family") >= 0) == (day >= cutover)
+        assert (signals.get_field_index("user_agent_family") >= 0) == (Path(path).stem == "v2")
     nulls = (
         _read(root, "payment_events")
         .filter("attempt_started IS NOT NULL")
@@ -131,24 +135,21 @@ def test_duplicates_repeat_identical_events_beside_their_originals(dataset):
     root, manifest = dataset
     rows, distinct, conflicting = duckdb.sql(
         f"SELECT count(*), count(DISTINCT event_id), count(DISTINCT to_json(e)) "
-        f"FROM read_parquet('{root}/payment_events/*/*.parquet', union_by_name = true) e"
+        f"FROM read_parquet({_paths(root, 'payment_events')!r}, union_by_name = true) e"
     ).fetchone()
     assert distinct == conflicting
     assert (rows - distinct) / rows == pytest.approx(0.05, abs=0.02)
     assert manifest["observed"]["duplicate_events"] == rows - distinct
 
 
-def test_partitions_are_sorted_single_files_with_time_pruning(dataset):
+def test_raw_chunks_keep_time_statistics_and_filterable_rows(dataset):
     root, _ = dataset
-    for path in (root / "payment_events").rglob("*.parquet"):
-        assert path.name == "part-0.parquet"
-        times = pq.read_table(path, columns=["occurred_at"]).column(0).to_pylist()
-        assert times == sorted(times)
+    for path in _paths(root, "payment_events"):
         statistics = pq.ParquetFile(path).metadata.row_group(0).column(4).statistics
         assert statistics.has_min_max
     window = "occurred_at BETWEEN TIMESTAMPTZ '2026-07-02 06:00:00+00' AND TIMESTAMPTZ '2026-07-02 07:00:00+00'"
     pruned = duckdb.sql(
-        f"SELECT event_id FROM read_parquet('{root}/payment_events/*/*.parquet', union_by_name = true) "
+        f"SELECT event_id FROM read_parquet({_paths(root, 'payment_events')!r}, union_by_name = true) "
         f"WHERE {window} ORDER BY ALL"
     ).fetchall()
     full = [row for row in _read(root, "payment_events").order("event_id").fetchall()]
@@ -179,17 +180,17 @@ def test_labels_are_separate_from_events(dataset):
     root, _ = dataset
     events = duckdb.sql(
         f"SELECT string_agg(to_json(e)::VARCHAR, '') "
-        f"FROM read_parquet('{root}/payment_events/*/*.parquet', union_by_name = true) e"
+        f"FROM read_parquet({_paths(root, 'payment_events')!r}, union_by_name = true) e"
     ).fetchone()[0]
     for scenario in ("stolen_card_new_device", "account_takeover", "card_testing", "friendly_fraud"):
         assert scenario not in events
     declined_fraud = duckdb.sql(
         f"""
-        WITH labels AS (SELECT * FROM read_parquet('{root}/fraud_labels/*/*.parquet')),
+        WITH labels AS (SELECT * FROM read_parquet({_paths(root, "fraud_labels")!r})),
         truth AS (SELECT * FROM labels WHERE source = 'LABEL_SOURCE_SIMULATION_TRUTH' AND is_fraud),
         succeeded AS (
             SELECT DISTINCT payment_succeeded.attempt_id AS attempt_id
-            FROM read_parquet('{root}/payment_events/*/*.parquet', union_by_name = true)
+            FROM read_parquet({_paths(root, "payment_events")!r}, union_by_name = true)
             WHERE payment_succeeded IS NOT NULL
         )
         SELECT count(*), count(*) FILTER (EXISTS (
@@ -211,7 +212,7 @@ def test_row_groups_respect_the_configured_size(tmp_path):
         },
     )
     manifest = storage.generate(config, fs.LocalFileSystem(), str(tmp_path))
-    paths = list((tmp_path / "historical" / "smoke" / "payment_events").rglob("*.parquet"))
+    paths = list((tmp_path / "historical" / "smoke" / "raw" / "payment_events").rglob("*.parquet"))
     groups = [
         pq.ParquetFile(path).metadata.row_group(index)
         for path in paths
@@ -241,11 +242,11 @@ def test_empty_schedule_publishes_an_empty_valid_dataset(tmp_path):
 
 def test_task_fragments_are_one_file_per_table_and_schema_version(dataset):
     root, _ = dataset
-    for task in (root / "_run" / "fragments").iterdir():
+    for task in (root / "raw" / "payment_events").iterdir():
         names = sorted(path.name for path in task.iterdir())
-        assert names == [name for name in names if name.startswith(("payment_events-v", "fraud_labels-v"))]
+        assert all(name in ("v1.parquet", "v2.parquet") for name in names)
         assert len(names) == len(set(names))
-        assert len(names) <= 3
+        assert len(names) <= 2
 
 
 def test_publication_receipt_records_skipped_cleanup(dataset):
@@ -253,7 +254,7 @@ def test_publication_receipt_records_skipped_cleanup(dataset):
     publication = json.loads((root / "_run" / "publication.json").read_text())
     assert publication["cleanup"] == "skipped"
     assert publication["tagging"] == "skipped"
-    assert (root / "_run" / "fragments").is_dir()
+    assert (root / "raw").is_dir()
 
 
 def test_cleanup_removes_intermediates_after_publication(tmp_path):

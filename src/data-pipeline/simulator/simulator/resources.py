@@ -42,8 +42,7 @@ class ResourceMonitor:
         self.execution = execution
         self.stop = threading.Event()
         self.error = None
-        self.connection = None
-        self.peaks = {"process_tree_rss_bytes": 0, "scratch_bytes": 0, "spill_bytes": 0}
+        self.peaks = {"process_tree_rss_bytes": 0, "scratch_bytes": 0}
         self.started = time.monotonic()
         self.thread = threading.Thread(target=self._run, daemon=True)
 
@@ -56,15 +55,10 @@ class ResourceMonitor:
             except psutil.Error:
                 pass
         scratch = directory_bytes(self.root)
-        spill = directory_bytes(self.root / "spill")
-        for key, value in zip(self.peaks, (rss, scratch, spill)):
+        for key, value in zip(self.peaks, (rss, scratch)):
             self.peaks[key] = max(self.peaks[key], value)
         if scratch > self.execution.scratch_capacity_bytes:
             self.error = CapacityExceeded("combined scratch capacity exhausted; prepared output remains resumable")
-        if spill > self.execution.duckdb_spill_bytes:
-            self.error = CapacityExceeded("DuckDB spill capacity exhausted; prepared output remains resumable")
-        if self.error and self.connection:
-            self.connection.interrupt()
 
     def _run(self):
         while not self.stop.wait(0.1):

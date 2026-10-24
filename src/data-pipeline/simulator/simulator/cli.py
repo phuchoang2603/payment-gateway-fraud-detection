@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import duckdb
 import pyarrow.fs as fs
 
 from simulator.config import load_config
@@ -44,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     historical.add_argument("--config", type=Path, required=True)
     historical.add_argument("--output", help="Override the configured s3:// bucket or local directory")
     historical.add_argument(
-        "--prepare-only", action="store_true", help="Prepare final files without publishing a manifest"
+        "--prepare-only", action="store_true", help="Generate raw files without publishing a manifest"
     )
     historical.add_argument(
         "--takeover-stopped-writer",
@@ -70,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
             cleanup_intermediates=True,
             allow_small_dataset=args.allow_small_dataset,
         )
-    except (ValueError, FileExistsError, OSError, duckdb.Error) as error:
+    except (ValueError, OSError) as error:
         message = str(error)
         for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
             if value := os.environ.get(name):

@@ -1,19 +1,15 @@
-import importlib.resources
 import json
 import multiprocessing
 import os
-import shutil
 import time
 from collections import Counter, defaultdict
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import timedelta
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from urllib.parse import urlsplit
 
-import duckdb
 import numpy as np
 import pyarrow as pa
 import pyarrow.fs as fs
@@ -46,24 +42,18 @@ COMPRESSION_LEVEL = 3
 @dataclass(frozen=True)
 class Table:
     name: str
-    partition: str
     time_column: str
-    sort_columns: tuple[str, ...]
     contract: str
 
 
 EVENTS = Table(
     "payment_events",
-    "occurred_date",
     "occurred_at",
-    ("occurred_at", "payment_id", "aggregate_version", "event_id"),
     "payment-events",
 )
 LABELS = Table(
     "fraud_labels",
-    "label_available_date",
     "label_available_at",
-    ("label_available_at", "payment_id", "attempt_id", "source"),
     "fraud-labels",
 )
 
@@ -187,7 +177,7 @@ def _generate_task(config, profiles, task, directory):
         fragments.append(
             _file_item(
                 path,
-                f"_run/fragments/{task.key}/{path.name}",
+                f"raw/{table.name}/{task.key}/v{name[1]}.parquet",
                 table,
                 schema_version=name[1],
                 partitions=dict(sorted(partitions[name].items())),
@@ -288,135 +278,13 @@ def _generate(config, profiles, scratch, store, run, monitor, transfers, index):
     return stats
 
 
-def _connection(config, scratch, store):
-    execution = config.execution
-    connection = duckdb.connect(
-        config={
-            "memory_limit": f"{execution.duckdb_memory_limit_mb}MiB",
-            "threads": execution.duckdb_threads,
-            "temp_directory": str(scratch / "spill"),
-            "max_temp_directory_size": f"{execution.duckdb_spill_bytes}B",
-            "preserve_insertion_order": True,
-        }
-    )
-    if store.remote:
-        extension = (
-            importlib.resources.files("duckdb_extension_httpfs")
-            / "extensions"
-            / f"v{duckdb.__version__}"
-            / "httpfs.duckdb_extension"
-        )
-        connection.execute(f"LOAD '{str(extension).replace(chr(39), chr(39) * 2)}'")
-        endpoint = urlsplit(os.environ.get("AWS_ENDPOINT_URL_S3", "https://minio.home.phuchoang.sbs"))
-        connection.execute(
-            "CREATE SECRET historical_source (TYPE s3, KEY_ID $key, SECRET $secret, SESSION_TOKEN $token, "
-            "REGION $region, ENDPOINT $endpoint, URL_STYLE 'path', USE_SSL $ssl)",
-            {
-                "key": os.environ["AWS_ACCESS_KEY_ID"],
-                "secret": os.environ["AWS_SECRET_ACCESS_KEY"],
-                "token": os.environ.get("AWS_SESSION_TOKEN", ""),
-                "region": os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-                "endpoint": endpoint.netloc,
-                "ssl": endpoint.scheme == "https",
-            },
-        )
-    connection.execute("SET TimeZone = 'UTC'")
-    return connection
-
-
-def _finalize(config, index, scratch, store, run, connection, monitor, transfers):
-    inventory = []
-    partitions = {}
-    for table in (EVENTS, LABELS):
-        partitions[table.name] = {}
-        for day in index.days(table.name):
-            count = 0
-            paths = []
-            source_digest = sha256()
-            for item, rows in index.sources(table.name, day):
-                paths.append(store.uri(item["key"]))
-                source_digest.update(json.dumps(item, sort_keys=True).encode())
-                count += rows
-            partitions[table.name][day] = count
-            key = f"_run/partitions/{table.name}/{day}.json"
-            receipt = _receipt(store, key)
-            source_identity = source_digest.hexdigest()
-            if receipt and receipt.get("source_identity") == source_identity:
-                inventory.extend(receipt["files"])
-                continue
-            run.check_owner()
-            output = scratch / "partition"
-            shutil.rmtree(output, ignore_errors=True)
-            sql_path = str(output).replace("'", "''")
-            connection.execute(
-                f"COPY (SELECT * FROM read_parquet($sources, hive_partitioning=false) "
-                f"WHERE CAST({table.time_column} AS DATE) = $day ORDER BY {', '.join(table.sort_columns)}) "
-                f"TO '{sql_path}' (FORMAT parquet, COMPRESSION {COMPRESSION}, COMPRESSION_LEVEL {COMPRESSION_LEVEL}, "
-                f"ROW_GROUP_SIZE {config.storage.row_group_rows}, FILE_SIZE_BYTES {config.storage.target_file_mb * 1024**2}, "
-                "FILENAME_PATTERN 'part-{i}', PER_THREAD_OUTPUT false)",
-                {"sources": paths, "day": date.fromisoformat(day)},
-            )
-            monitor.check()
-            items = [
-                _file_item(
-                    path,
-                    f"{table.name}/{table.partition}={day}/{path.name}",
-                    table,
-                    partition=day,
-                    local_path=str(path),
-                )
-                for path in sorted(output.glob("*.parquet"))
-            ]
-            if sum(item["rows"] for item in items) != count:
-                raise ValueError(f"final partition row count mismatch: {table.name}/{day}")
-            receipt = _upload_receipt(store, run, key, {"source_identity": source_identity, "files": items}, transfers)
-            inventory.extend(receipt["files"])
-            output.rmdir()
-    return inventory, partitions
-
-
-def _views(connection, inventory, store, scratch):
-    for table, schema in ((EVENTS, event_schema(2)), (LABELS, LABEL_SCHEMA)):
-        empty = scratch / f"{table.name}-empty.parquet"
-        pq.write_table(schema.empty_table(), empty)
-        paths = [str(empty), *[store.uri(item["key"]) for item in inventory if item["table"] == table.name]]
-        connection.read_parquet(paths, union_by_name=True, hive_partitioning=False).create_view(
-            table.name, replace=True
-        )
-
-
-def _cardinality(connection):
-    columns = {
-        "customer": "payment_created.customer.customer_id",
-        "address": "payment_created.snapshot.shipping.address_fingerprint",
-        "device": "attempt_started.signals.device_fingerprint",
-        "ip_network": "attempt_started.signals.ip_network_fingerprint",
-        "payment_method": "attempt_started.signals.payment_method.fingerprint",
-    }
-    result = {}
-    for name, column in columns.items():
-        estimated, rows = connection.execute(
-            f"SELECT approx_count_distinct({column}), count({column}) FROM payment_events"
-        ).fetchone()
-        result[name] = {
-            "estimate": estimated,
-            "method": "duckdb.approx_count_distinct",
-            "denominator": "exported non-null field rows (includes identical duplicate exports)",
-            "rows": rows,
-            "distinct_to_row_ratio": estimated / rows if rows else 0,
-        }
-    return result
-
-
-def _observations(connection, stats):
+def _observations(stats, inventory):
     observed = stats.observed()
-    observed["cardinality"] = _cardinality(connection)
-    counts = dict(
-        connection.execute(
-            "SELECT CAST(schema_version AS VARCHAR), count(*) FROM payment_events GROUP BY 1"
-        ).fetchall()
-    )
-    observed["schema_version_rows"] = {version: counts.get(version, 0) for version in ("1", "2")}
+    counts = Counter()
+    for item in inventory:
+        if item["table"] == EVENTS.name:
+            counts[str(item["schema_version"])] += item["rows"]
+    observed["schema_version_rows"] = {version: counts[version] for version in ("1", "2")}
     rows = sum(counts.values())
     observed["schema_version_shares"] = {
         version: count / rows if rows else 0 for version, count in observed["schema_version_rows"].items()
@@ -426,6 +294,8 @@ def _observations(connection, stats):
 
 def _gate_observed(config, observed):
     for metric, band in config.acceptance_bands.items():
+        if metric.startswith("cardinality."):
+            continue
         value = observed
         for part in metric.split("."):
             value = value.get(part, 0) if isinstance(value, dict) else None
@@ -435,8 +305,8 @@ def _gate_observed(config, observed):
             )
 
 
-def _manifest(config, run, profiles, stats, inventory, partitions, validation, observed, revision, descriptor):
-    configuration = config.model_dump(mode="json")
+def _manifest(config, run, stats, inventory, partitions, observed, descriptor):
+    configuration = run.state["configuration"]
     storage = {}
     for table in (EVENTS, LABELS):
         files = [item for item in inventory if item["table"] == table.name]
@@ -444,19 +314,20 @@ def _manifest(config, run, profiles, stats, inventory, partitions, validation, o
             name: sum(item[name] for item in files)
             for name in ("bytes", "rows", "row_groups", "uncompressed_parquet_bytes")
         }
-        storage[table.name].update(files=len(files), sort_columns=list(table.sort_columns))
+        storage[table.name].update(files=len(files))
     physical = sum(item["bytes"] for item in inventory)
     return {
-        "manifest_version": RUN_STATE_VERSION,
+        "manifest_version": 3,
+        "source_layout": "task-fragments-v1",
         "algorithm_version": ALGORITHM_VERSION,
         "generation_identity": run.state["generation_identity"],
         "dataset_version": config.dataset_version,
         "seed": config.seed,
         "configuration": configuration,
         "config_sha256": sha256(json.dumps(configuration, sort_keys=True).encode()).hexdigest(),
-        "generator_revision": revision,
+        "generator_revision": run.state["generator_revision"],
         "data_product": descriptor,
-        "profile_sha256": profiles.digest(),
+        "profile_sha256": run.state["profile_sha256"],
         "synthetic_key_version": config.synthetic_key_version,
         "history_end": stats.history_end.isoformat() if stats.history_end else None,
         "schema_versions": {EVENTS.name: [1, 2], LABELS.name: [1]},
@@ -466,7 +337,6 @@ def _manifest(config, run, profiles, stats, inventory, partitions, validation, o
             "compression": COMPRESSION,
             "compression_level": COMPRESSION_LEVEL,
             "row_group_rows": config.storage.row_group_rows,
-            "target_file_mb": config.storage.target_file_mb,
             **storage,
         },
         "source_bytes": {
@@ -477,7 +347,12 @@ def _manifest(config, run, profiles, stats, inventory, partitions, validation, o
             "minimum_physical_parquet": config.minimum_source_parquet_bytes,
         },
         "inventory": inventory,
-        "validation": validation,
+        "validation": {
+            "result": "skipped",
+            "gate": "dp1-spark-gx",
+            "reason": "validation deferred to dp1-spark-gx; the downstream pipeline is the contract gate",
+        },
+        "deferred_observations": ["cardinality"],
         "execution_attempts": run.state["attempts"],
         "configured": {
             "duplicate_rate": config.data_problems.duplicate_rate,
@@ -531,9 +406,9 @@ def generate(
     with TemporaryDirectory(prefix="historical-", dir=execution.scratch_directory) as directory:
         scratch = Path(directory)
         profile_bytes = (config.counts.customers * 13 + config.counts.merchants * 2) * 8 + 16384
-        reserved = execution.max_in_flight * execution.task_scratch_bytes + execution.duckdb_spill_bytes
+        reserved = execution.max_in_flight * execution.task_scratch_bytes
         if profile_bytes + reserved >= execution.scratch_capacity_bytes:
-            raise CapacityExceeded("profile mappings plus task/spill reservations exceed combined scratch capacity")
+            raise CapacityExceeded("profile mappings plus task reservations exceed combined scratch capacity")
         profile_start = time.monotonic()
         with ResourceMonitor(scratch, execution) as profile_monitor:
             profiles = build_profiles(config, scratch / "profiles")
@@ -567,112 +442,100 @@ def generate(
             )
             timings = {"profile_setup_seconds": profile_seconds}
             index = None
-            connection = None
             try:
                 monitor.check()
-                connection = _connection(config, scratch, store)
-                monitor.connection = connection
-                prepared = _receipt(store, "_run/prepared.json") if resume else None
-                if prepared and prepared.get("generation_identity") == identity:
-                    stats = DatasetStatistics.from_dict(prepared["statistics"])
-                    inventory, partitions = prepared["inventory"], prepared["partitions"]
-                    intermediate_bytes = prepared["intermediate_bytes"]
-                    timings["generation_seconds"] = timings["finalization_seconds"] = 0
-                else:
-                    start = time.monotonic()
-                    index = FragmentIndex(scratch / "fragments.sqlite")
-                    stats = _generate(config, profiles, scratch, store, run, monitor, transfers, index)
-                    timings["generation_seconds"] = time.monotonic() - start
-                    intermediate_bytes = index.total_bytes()
-                    run.state["phase"] = "finalization"
-                    run.checkpoint()
-                    start = time.monotonic()
-                    inventory, partitions = _finalize(
-                        config, index, scratch, store, run, connection, monitor, transfers
-                    )
-                    timings["finalization_seconds"] = time.monotonic() - start
-                    prepared = {
-                        "generation_identity": identity,
-                        "inventory": inventory,
-                        "partitions": partitions,
-                        "statistics": stats.to_dict(),
-                        "profile_sha256": profiles.digest(),
-                        "intermediate_bytes": intermediate_bytes,
-                    }
-                    run.receipt("_run/prepared.json", {**prepared, "files": inventory})
+                start = time.monotonic()
+                index = FragmentIndex(scratch / "fragments.sqlite")
+                stats = _generate(config, profiles, scratch, store, run, monitor, transfers, index)
+                timings["generation_seconds"] = time.monotonic() - start
+                inventory, partitions = index.inventory(), index.partitions()
                 run.state["phase"] = "prepared"
                 run.checkpoint()
+                run.receipt(
+                    "_run/prepared.json",
+                    {"generation_identity": identity, "files": inventory, "statistics": stats.to_dict()},
+                )
                 if prepare_only:
                     return {
                         "dataset_version": config.dataset_version,
                         "generation_identity": identity,
                         "phase": "prepared",
-                        "config_sha256": sha256(
-                            json.dumps(config.model_dump(mode="json"), sort_keys=True).encode()
-                        ).hexdigest(),
+                        "config_sha256": run.state["config_sha256"],
                         "history_end": stats.history_end.isoformat() if stats.history_end else None,
                     }
-                if config.counts.customers < config.customer_block_size and not allow_small_dataset:
-                    raise ValueError(
-                        f"publication refused: {config.counts.customers} customers is below one "
-                        f"{config.customer_block_size}-customer block; pass --allow-small-dataset for a contract "
-                        "probe or generate locally with --output"
-                    )
-                _views(connection, inventory, store, scratch)
-                run.state["phase"] = "validation"
-                run.checkpoint()
-                validation = {
-                    "result": "skipped",
-                    "gate": "dp1-spark-gx",
-                    "reason": "validation deferred to dp1-spark-gx; the downstream pipeline is the contract gate",
-                }
-                observed = _observations(connection, stats)
-                _gate_observed(config, observed)
-                monitor.check()
-                physical = sum(item["bytes"] for item in inventory)
-                if physical < config.minimum_source_parquet_bytes:
-                    raise ValueError(
-                        f"physical source byte gate failed: observed {physical}, required {config.minimum_source_parquet_bytes}"
-                    )
-                if not all(store.verify(item) for item in inventory):
-                    raise ValueError("final object integrity changed after validation; no publication")
-                report = {
+                run.state["attempts"][-1]["resources"] = {
                     **monitor.report(),
                     "timings": timings,
-                    "remote_intermediate_bytes": intermediate_bytes,
-                    "source_bytes": physical,
+                    "source_bytes": index.total_bytes(),
                     "capabilities": capabilities,
                     "local_profile_bytes": directory_bytes(scratch / "profiles"),
                     "transfers": store.transfer_report(),
                     "profile_setup": profile_resources,
                 }
-                run.state["attempts"][-1]["resources"] = report
-                run.state["phase"] = "validated"
-                run.checkpoint()
-                manifest = _manifest(
-                    config, run, profiles, stats, inventory, partitions, validation, observed, revision, descriptor
+                return publish_inventory(
+                    config,
+                    store,
+                    run,
+                    stats,
+                    inventory,
+                    partitions,
+                    descriptor,
+                    cleanup_intermediates=cleanup_intermediates,
+                    allow_small_dataset=allow_small_dataset,
                 )
-                run.check_owner()
-                store.put_json(PUBLICATION_KEY, publication_receipt(store, manifest))
-                store.put_json("manifest.json", manifest, absent=True)
-                complete_publication(store, manifest, cleanup_intermediates=cleanup_intermediates)
-                return manifest
             except BaseException as error:
                 run.state["failure"] = {"phase": run.state["phase"], "type": type(error).__name__}
                 raise
             finally:
                 if index:
                     index.close()
-                if connection:
-                    monitor.connection = None
-                    connection.close()
                 run.state["attempts"][-1].setdefault(
-                    "resources",
-                    {
-                        **monitor.report(),
-                        "timings": timings,
-                        "transfers": store.transfer_report(),
-                        "profile_setup": profile_resources,
-                    },
+                    "resources", {**monitor.report(), "timings": timings, "transfers": store.transfer_report()}
                 )
                 run.release()
+
+
+def publish_inventory(
+    config,
+    store,
+    run,
+    stats,
+    inventory,
+    partitions,
+    descriptor,
+    *,
+    cleanup_intermediates=False,
+    allow_small_dataset=False,
+):
+    for table, expected in (
+        (EVENTS.name, stats.unique_events + stats.duplicate_events),
+        (LABELS.name, stats.labels),
+    ):
+        files = [item for item in inventory if item["table"] == table]
+        counts = Counter()
+        for item in files:
+            if not item["key"].startswith(f"raw/{table}/") or sum(item["partitions"].values()) != item["rows"]:
+                raise ValueError("raw file inventory has inconsistent paths or row counts")
+            counts.update(item["partitions"])
+        if dict(counts) != partitions[table] or sum(item["rows"] for item in files) != expected:
+            raise ValueError("raw inventory differs from generated row statistics")
+    if config.counts.customers < config.customer_block_size and not allow_small_dataset:
+        raise ValueError(
+            f"publication refused: {config.counts.customers} customers is below one "
+            f"{config.customer_block_size}-customer block; pass --allow-small-dataset for a contract probe"
+        )
+    observed = _observations(stats, inventory)
+    _gate_observed(config, observed)
+    physical = sum(item["bytes"] for item in inventory)
+    if physical < config.minimum_source_parquet_bytes:
+        raise ValueError(
+            f"physical source byte gate failed: observed {physical}, required {config.minimum_source_parquet_bytes}"
+        )
+    run.state["phase"] = "generated"
+    run.checkpoint()
+    manifest = _manifest(config, run, stats, inventory, partitions, observed, descriptor)
+    run.check_owner()
+    store.put_json(PUBLICATION_KEY, publication_receipt(store, manifest))
+    store.put_json("manifest.json", manifest, absent=True)
+    complete_publication(store, manifest, cleanup_intermediates=cleanup_intermediates)
+    return manifest

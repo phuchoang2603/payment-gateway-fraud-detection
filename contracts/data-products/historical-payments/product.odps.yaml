@@ -2,7 +2,7 @@ apiVersion: v1.1.0
 kind: DataProduct
 id: urn:dataproduct:fraud:historical-payments
 name: Historical synthetic payments
-version: 4.1.0
+version: 5.0.0
 status: active
 domain: fraud-detection
 type: sourceAligned
@@ -32,23 +32,23 @@ outputPorts:
     version: 3.1.0
     type: files
     contractId: urn:datacontract:fraud:historical-payment-events
-    description: Complete payment lifecycle histories in daily occurred_date partitions of sorted Zstandard Parquet.
+    description: Complete payment lifecycle histories in immutable task chunks of Zstandard Parquet. Exact files and their date counts are declared by the completion manifest; ordering and compaction belong to ingestion.
     customProperties:
       - property: path
-        value: payment_events/occurred_date={YYYY-MM-DD}/
+        value: raw/payment_events/{task}/v{schema_version}.parquet
       - property: consumption
         value: Deduplicate identical event deliveries and read complete histories across occurrence dates. Drift metadata is manifest-only.
   - name: fraud-labels
     version: 1.0.0
     type: files
     contractId: urn:datacontract:fraud:historical-fraud-labels
-    description: Simulation truth and delayed chargebacks in daily label_available_date partitions of sorted Zstandard Parquet.
+    description: Simulation truth and delayed chargebacks in immutable task chunks of Zstandard Parquet. A chunk may span several label availability dates.
     inputContracts:
       - id: urn:datacontract:fraud:historical-payment-events
         version: 3.1.0
     customProperties:
       - property: path
-        value: fraud_labels/label_available_date={YYYY-MM-DD}/
+        value: raw/fraud_labels/{task}/v1.parquet
       - property: consumption
         value: Join labels only after label_available_at, exclude feature warmup, and never use scenario as a feature.
 support:

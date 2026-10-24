@@ -1204,8 +1204,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
-    { name = "duckdb" },
-    { name = "duckdb-extension-httpfs" },
     { name = "numpy" },
     { name = "psutil" },
     { name = "pyarrow" },
@@ -1216,10 +1214,13 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "duckdb" },
     { name = "pytest" },
     { name = "ruff" },
 ]
 notebook = [
+    { name = "duckdb" },
+    { name = "duckdb-extension-httpfs" },
     { name = "jupyter" },
     { name = "matplotlib" },
 ]
@@ -1227,8 +1228,6 @@ notebook = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = "==1.43.117" },
-    { name = "duckdb", specifier = "==1.5.5" },
-    { name = "duckdb-extension-httpfs", specifier = "==1.5.5" },
     { name = "numpy", specifier = ">=2.3,<3" },
     { name = "psutil", specifier = "==7.2.2" },
     { name = "pyarrow", specifier = ">=23,<25" },
@@ -1239,10 +1238,13 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "duckdb", specifier = "==1.5.5" },
     { name = "pytest", specifier = ">=9,<10" },
     { name = "ruff", specifier = ">=0.14,<1" },
 ]
 notebook = [
+    { name = "duckdb", specifier = "==1.5.5" },
+    { name = "duckdb-extension-httpfs", specifier = "==1.5.5" },
     { name = "jupyter", specifier = ">=1.1,<2" },
     { name = "matplotlib", specifier = ">=3.10,<4" },
 ]

@@ -20,7 +20,7 @@ def configuration(**overrides):
 def final_rows(root):
     return {
         table: duckdb.sql(
-            f"SELECT to_json(t) FROM read_parquet('{root}/{table}/*/*.parquet', union_by_name=true) t ORDER BY 1"
+            f"SELECT to_json(t) FROM read_parquet('{root}/raw/{table}/*/*.parquet', union_by_name=true) t ORDER BY 1"
         ).fetchall()
         for table in ("payment_events", "fraud_labels")
     }
@@ -81,8 +81,8 @@ def test_prepare_handoff_verifies_inventory_without_regeneration(tmp_path, monke
     def unexpected(*args):
         raise AssertionError("prepared final objects must not regenerate")
 
-    monkeypatch.setattr(storage, "_generate", unexpected)
-    changed = configuration(**{"execution.duckdb_memory_limit_mb": 768, "execution.duckdb_threads": 2})
+    monkeypatch.setattr(storage, "_generate_task", unexpected)
+    changed = configuration(**{"execution.transfer_concurrency": 1})
     manifest = storage.generate(changed, fs.LocalFileSystem(), str(tmp_path), resume=True)
     assert len(manifest["execution_attempts"]) == 2
     assert manifest["inventory"] == prepared["files"]
@@ -124,22 +124,6 @@ def test_size_gate_keeps_prepared_data(tmp_path):
     assert (root / "_run/prepared.json").exists()
 
 
-def test_post_check_file_change_refuses_completion(tmp_path, monkeypatch):
-    observe = storage._observations
-
-    def change_after_observations(connection, stats):
-        result = observe(connection, stats)
-        root = tmp_path / "historical" / "smoke"
-        item = json.loads((root / "_run/prepared.json").read_text())["files"][0]
-        (root / item["key"]).write_bytes(b"changed after checks")
-        return result
-
-    monkeypatch.setattr(storage, "_observations", change_after_observations)
-    with pytest.raises(ValueError, match="integrity changed"):
-        storage.generate(configuration(), fs.LocalFileSystem(), str(tmp_path))
-    assert not (tmp_path / "historical/smoke/manifest.json").exists()
-
-
 def test_task_capacity_failure_preserves_receipts_and_no_manifest(tmp_path):
     config = configuration(**{"execution.task_scratch_bytes": 50000})
     with pytest.raises(CapacityExceeded, match="scratch"):
@@ -156,7 +140,6 @@ def test_cumulative_remote_output_exceeds_active_scratch(tmp_path):
         **{
             "execution.scratch_capacity_bytes": 600000,
             "execution.task_scratch_bytes": 300000,
-            "execution.duckdb_spill_bytes": 0,
             "chunk_purchases": 10,
         }
     )

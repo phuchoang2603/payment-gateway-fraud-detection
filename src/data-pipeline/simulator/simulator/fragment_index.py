@@ -26,20 +26,17 @@ class FragmentIndex:
                     ((item["key"], day, rows) for day, rows in item["partitions"].items()),
                 )
 
-    def days(self, table):
-        return [
-            row[0]
-            for row in self.connection.execute(
-                "SELECT DISTINCT day FROM partitions JOIN files USING(key) WHERE table_name=? ORDER BY day", (table,)
-            )
-        ]
+    def inventory(self):
+        return [json.loads(row[0]) for row in self.connection.execute("SELECT item FROM files ORDER BY key")]
 
-    def sources(self, table, day):
-        for encoded, rows in self.connection.execute(
-            "SELECT item, rows FROM partitions JOIN files USING(key) WHERE table_name=? AND day=? ORDER BY key",
-            (table, day),
+    def partitions(self):
+        result = {"payment_events": {}, "fraud_labels": {}}
+        for table, day, rows in self.connection.execute(
+            "SELECT table_name, day, sum(rows) FROM partitions JOIN files USING(key) "
+            "GROUP BY table_name, day ORDER BY table_name, day"
         ):
-            yield json.loads(encoded), rows
+            result[table][day] = rows
+        return result
 
     def total_bytes(self):
         return sum(json.loads(row[0])["bytes"] for row in self.connection.execute("SELECT item FROM files"))
