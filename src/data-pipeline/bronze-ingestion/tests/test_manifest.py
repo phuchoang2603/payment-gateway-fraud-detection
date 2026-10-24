@@ -111,3 +111,36 @@ def test_invalid_source_selection_is_rejected(dataset, tmp_path, mutation):
     (tmp_path / "manifest.json").write_text(json.dumps(manifest))
     with pytest.raises(ValueError):
         selected_manifest(str(tmp_path))
+
+
+def test_manifest_without_embedded_inventory_is_rejected(dataset, tmp_path):
+    _, source = dataset
+    manifest = deepcopy(source)
+    del manifest["inventory"]
+    manifest["validation"] = {"payment-events": "passed", "fraud-labels": "passed"}
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="lacks a file inventory"):
+        selected_manifest(str(tmp_path))
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra", "hash", "symlink"])
+def test_verify_source_rejects_file_set_and_content_changes(dataset, tmp_path, mutation):
+    from data_platform.inventory import verify_source
+
+    root, manifest = dataset
+    source = tmp_path / "source"
+    shutil.copytree(root, source)
+    assert verify_source(str(source), manifest)
+    file = source / manifest["inventory"][0]["key"]
+    if mutation == "missing":
+        file.unlink()
+    elif mutation == "extra":
+        file.with_name("extra.parquet").write_bytes(file.read_bytes())
+    elif mutation == "symlink":
+        file.with_name("link.parquet").symlink_to(file)
+    else:
+        content = bytearray(file.read_bytes())
+        content[10] ^= 1
+        file.write_bytes(content)
+    with pytest.raises(ValueError):
+        verify_source(str(source), manifest)

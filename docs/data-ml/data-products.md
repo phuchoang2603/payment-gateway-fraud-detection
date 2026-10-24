@@ -96,4 +96,4 @@ UV_PYTHON_PREFERENCE=managed UV_PYTHON_DOWNLOADS=automatic \
 bash scripts/ci-checks.sh contracts
 ```
 
-Run `dp1 validate` in the Spark image against a recorded snapshot pair; `dp1 publish` is the separate metadata command. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and replay. DataHub consumes metadata/results and does not replace either validation engine.
+Run `dp1 validate` in the Spark image against a recorded snapshot pair; `dp1 publish` is the separate metadata command. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and replay. OpenMetadata consumes metadata/results and does not replace either validation engine.

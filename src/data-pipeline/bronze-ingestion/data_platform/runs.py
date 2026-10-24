@@ -9,14 +9,12 @@ def validation_key(contracts):
     return sha256("".join(f"{k}:{v}" for k, v in sorted(contracts.items())).encode()).hexdigest()
 
 
-def open_run(store, version, digest, contracts, image, workflow, source_inventory=None, source_validation=None):
+def open_run(store, version, digest, contracts, image, workflow, source_validation=None):
     key = f"versions/{version}/run.json"
     run = store.get(key)
     if run:
         if run["manifest_sha256"] != digest:
             raise ValueError("dataset version already has a different manifest digest")
-        if run.get("source_inventory") != source_inventory:
-            raise ValueError("dataset version already has a different source inventory pin")
         if run.get("source_validation") != source_validation:
             raise ValueError("dataset version already has a different source validation gate")
         return run
@@ -31,8 +29,6 @@ def open_run(store, version, digest, contracts, image, workflow, source_inventor
         "snapshots": {},
         "state": "candidate",
     }
-    if source_inventory:
-        run["source_inventory"] = source_inventory
     if source_validation:
         run["source_validation"] = source_validation
     store.put(key, run, create=True)
@@ -55,8 +51,6 @@ def accept(store, run, contracts):
         raise ValueError("acceptance requires a persisted passing report")
     if report.get("snapshots") != run["snapshots"] or report.get("manifest_sha256") != run["manifest_sha256"]:
         raise ValueError("validation identity differs from candidate")
-    if report.get("source_inventory") != run.get("source_inventory"):
-        raise ValueError("validation source inventory differs from candidate")
     if report.get("source_validation") != run.get("source_validation"):
         raise ValueError("validation source gate differs from candidate")
     if run.get("source_validation") and (

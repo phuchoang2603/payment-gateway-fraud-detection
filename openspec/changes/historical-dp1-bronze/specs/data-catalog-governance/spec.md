@@ -6,7 +6,7 @@ Make payment data products discoverable and auditable through a persistent share
 
 ### Requirement: Verified shared catalog deployment
 
-OpenMetadata with persistent PostgreSQL and OpenSearch SHALL replace DataHub under platform ownership. Existing services SHALL be reused only after compatibility, state isolation and readiness verification. Governance publication SHALL operate through the existing Argo workflows without requiring Kafka or Airflow. Deployment SHALL include authenticated access, persistence, resource/storage budgets and capacity for concurrent pipeline execution.
+OpenMetadata with persistent PostgreSQL and OpenSearch SHALL be the catalog under platform ownership. Existing services SHALL be reused only after compatibility, state isolation and readiness verification. Governance publication SHALL operate through the existing Argo workflows without requiring Kafka or Airflow. Deployment SHALL include authenticated access, persistence, resource/storage budgets and capacity for concurrent pipeline execution.
 
 #### Scenario: Catalog is not deployed
 
@@ -82,14 +82,14 @@ DP1 governance acceptance SHALL verify product membership, schemas, imported con
 - **WHEN** metadata submission succeeds but required assets or results are not yet visible
 - **THEN** bounded readback retries occur, and unresolved absence is reported as incomplete governance rather than a passing run
 
-### Requirement: Complete DataHub retirement
+### Requirement: Single governance catalog
 
-After fresh installation, OpenMetadata SHALL be the sole governance catalog and publication target. DataHub workloads, dedicated credentials and application configuration SHALL be retired while preserving shared infrastructure, source data, Iceberg snapshots and durable reports. Existing DataHub verification SHALL NOT count as OpenMetadata acceptance.
+OpenMetadata SHALL be the sole governance catalog and publication target, with a single publisher path and no dual publication. Shared infrastructure, source data, Iceberg snapshots and durable reports SHALL be unaffected by catalog changes.
 
-#### Scenario: Retire the previous catalog
+#### Scenario: Publish governance metadata
 
-- **WHEN** the platform replaces DataHub with a fresh OpenMetadata installation
-- **THEN** DataHub and only its dedicated dependencies are removed from active deployment, with shared services and source/lake/evidence data unaffected
+- **WHEN** DP1 publishes governance metadata
+- **THEN** every product, contract, lineage and validation result is written to OpenMetadata only, with shared services and source/lake/evidence data unaffected
 
 ### Requirement: Private platform access and administrator identity
 

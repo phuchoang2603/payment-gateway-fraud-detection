@@ -2,6 +2,7 @@ import json
 import re
 import time
 from collections import Counter
+from datetime import date
 from hashlib import sha256
 from pathlib import PurePosixPath
 
@@ -15,15 +16,17 @@ from data_platform.storage import Store
 
 
 def read_manifest(root):
-    body = Store(root, "source").read("manifest.json", max_bytes=1024 * 1024)
+    body = Store(root, "source").read("manifest.json", max_bytes=64 * 1024 * 1024)
     manifest = json.loads(body)
     version = manifest.get("dataset_version", "")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", version):
         raise ValueError("invalid dataset version")
     product = yaml.safe_load((PRODUCTS / "historical-payments/product.odps.yaml").read_text())
     declared = manifest.get("data_product", {})
-    if (declared.get("id"), declared.get("version")) != (product["id"], product["version"]):
+    if declared.get("id") != product["id"] or declared.get("version") != product["version"]:
         raise ValueError("unsupported source product identity")
+    if manifest.get("source_layout") != "task-fragments-v1" or manifest.get("manifest_version") != 3:
+        raise ValueError("unsupported source layout")
     validation = manifest.get("validation", {})
     deferred = (
         validation.get("result") == "skipped"
@@ -53,14 +56,8 @@ def read_manifest(root):
     return manifest, sha256(body).hexdigest()
 
 
-def selected_manifest(root, inventory_uri=None, inventory_sha256=None):
+def selected_manifest(root):
     manifest, digest = read_manifest(root)
-    if inventory_uri or inventory_sha256:
-        from data_platform.inventory import load_companion
-
-        if "inventory" in manifest:
-            raise ValueError("native manifest inventory cannot be replaced by a companion")
-        manifest = load_companion(root, manifest, digest, inventory_uri, inventory_sha256)
     validate_inventory(manifest)
     return manifest, digest
 
@@ -73,7 +70,7 @@ def validate_inventory(manifest):
     totals = {table: 0 for table in PORTS}
     partitions = {table: Counter() for table in PORTS}
     for entry in files:
-        table, day = inventory_location(entry["key"], manifest)
+        table = inventory_location(entry["key"])
         path = PurePosixPath(entry["key"])
         if str(path) in paths:
             raise ValueError("duplicate inventory path")
@@ -89,9 +86,22 @@ def validate_inventory(manifest):
             raise ValueError("invalid inventory size/count")
         if entry.get("table") != table:
             raise ValueError("inventory table identity differs from its key")
-        if entry.get("partition") != day:
-            raise ValueError("inventory partition differs from its key")
-        partitions[table][day] += entry["rows"]
+        counts = entry.get("partitions")
+        version = int(path.stem.removeprefix("v"))
+        if type(entry.get("schema_version")) is not int or entry["schema_version"] != version:
+            raise ValueError("inventory schema version differs from its key")
+        if "partition" in entry or not isinstance(counts, dict) or not counts:
+            raise ValueError("raw inventory requires per-date counts")
+        for partition, rows in counts.items():
+            try:
+                canonical = date.fromisoformat(partition).isoformat()
+            except (ValueError, TypeError):
+                raise ValueError("invalid raw partition date") from None
+            if canonical != partition or type(rows) is not int or rows <= 0:
+                raise ValueError("invalid raw partition count")
+        if sum(counts.values()) != entry["rows"]:
+            raise ValueError("raw partition counts differ from file rows")
+        partitions[table].update(counts)
         totals[table] += entry["rows"]
     for table in PORTS:
         if dict(partitions[table]) != manifest["partitions"][table] or totals[table] != sum(
@@ -100,25 +110,13 @@ def validate_inventory(manifest):
             raise ValueError(f"inventory/manifest row counts differ: {table}")
 
 
-def inventory_location(key, manifest):
-    path = PurePosixPath(key)
-    if (
-        path.is_absolute()
-        or ".." in path.parts
-        or not path.parts
-        or str(path) != key
-        or path.parts[0] not in PORTS
-        or path.suffix != ".parquet"
-    ):
-        raise ValueError("file inventory path escapes the selected dataset")
-    table = path.parts[0]
-    partition_name = "occurred_date" if table == "payment_events" else "label_available_date"
-    if len(path.parts) != 3 or not path.parts[1].startswith(partition_name + "="):
-        raise ValueError("file inventory must identify a declared date partition")
-    day = path.parts[1].split("=", 1)[1]
-    if day not in manifest["partitions"][table]:
-        raise ValueError("file inventory references an undeclared partition")
-    return table, day
+def inventory_location(key):
+    match = re.fullmatch(
+        r"raw/(payment_events|fraud_labels)/day-[0-9]{5}-kind-[01]-block-[0-9]{8}/v([12])\.parquet", key
+    )
+    if not match or (match[1] == "fraud_labels" and match[2] != "1"):
+        raise ValueError("raw inventory path escapes the declared layout")
+    return match[1]
 
 
 def source_filesystem(root):

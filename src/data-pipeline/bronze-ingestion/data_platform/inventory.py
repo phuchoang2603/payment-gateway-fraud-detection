@@ -1,33 +1,13 @@
-import json
 import os
-import re
 import time
-from hashlib import sha256
 from pathlib import Path
 
-from data_platform.manifest import file_metadata, inventory_location, read_manifest, validate_inventory, verify_file
+from data_platform.manifest import inventory_location, verify_file
 from data_platform.products import PORTS
 from data_platform.storage import Store
 
 MAX_FILES = 10000
 MAX_BYTES = 1024**3
-MAX_JSON_BYTES = 8 * 1024**2
-
-
-def source_root(root):
-    store = Store(root, "source")
-    if store.bucket:
-        if not store.prefix or any(part in ("", ".", "..") for part in store.prefix.split("/")):
-            raise ValueError("source root must identify a canonical dataset prefix")
-        return f"s3://{store.bucket}/{store.prefix}"
-    return str(Path(store.prefix).resolve())
-
-
-def companion_store(uri):
-    if not uri or not uri.endswith(".json"):
-        raise ValueError("an explicit companion JSON URI is required")
-    parent, name = uri.rsplit("/", 1) if "/" in uri else (".", uri)
-    return Store(parent), name
 
 
 def check_deadline(deadline):
@@ -46,7 +26,9 @@ def source_listing(root, manifest, max_files=MAX_FILES, max_bytes=MAX_BYTES, dea
         check_deadline(deadline)
         if not key.endswith(".parquet"):
             return
-        inventory_location(key, manifest)
+        if not key.startswith("raw/"):
+            return
+        inventory_location(key)
         if key in files:
             raise ValueError("duplicate source file")
         files[key] = size
@@ -101,81 +83,17 @@ def inventory_totals(manifest):
     return totals
 
 
-def binding(root, manifest, digest):
-    return {
-        "inventory_format_version": 1,
-        "source_root": source_root(root),
-        "dataset_version": manifest["dataset_version"],
-        "manifest_sha256": digest,
-        "data_product": manifest["data_product"],
-        "validation": manifest["validation"],
-    }
-
-
-def load_companion(root, manifest, digest, uri, pin):
-    if not pin or not re.fullmatch(r"[a-f0-9]{64}", pin):
-        raise ValueError("an explicit companion SHA256 pin is required")
-    store, key = companion_store(uri)
-    body = store.read(key, max_bytes=MAX_JSON_BYTES)
-    if sha256(body).hexdigest() != pin:
-        raise ValueError("companion SHA256 differs from pin")
-    companion = json.loads(body)
-    expected = binding(root, manifest, digest)
-    if any(companion.get(key) != value for key, value in expected.items()):
-        raise ValueError("companion binding differs from selected source manifest")
-    selected = {**manifest, "inventory": companion.get("inventory")}
-    validate_inventory(selected)
-    if inventory_totals(selected) != companion.get("totals"):
-        raise ValueError("companion totals differ from inventory")
-    actual = source_listing(root, manifest)
-    if actual != {entry["key"]: entry["bytes"] for entry in selected["inventory"]}:
-        raise ValueError("source files differ from pinned companion inventory")
-    return selected
-
-
-def create_companion(root, uri, max_files=MAX_FILES, max_bytes=MAX_BYTES, timeout=900):
-    if not 0 < max_files <= MAX_FILES or not 0 < max_bytes <= MAX_BYTES or not 0 < timeout <= 3600:
-        raise ValueError("inventory bounds must be positive and within supported limits")
-    destination, key = companion_store(uri)
-    canonical = source_root(root)
-    target = source_root(uri)
-    if target == canonical or target.startswith(canonical + "/"):
-        raise ValueError("companion must be stored outside the immutable source dataset")
-    deadline = time.monotonic() + timeout
-    manifest, digest = read_manifest(root)
-    if "inventory" in manifest:
-        raise ValueError("native manifest already contains an inventory")
-    bindings = binding(root, manifest, digest)
-    listing = source_listing(root, manifest, max_files, max_bytes, deadline)
-    entries = []
-    for path, size in listing.items():
-        check_deadline(deadline)
-        table, day = inventory_location(path, manifest)
-        metadata = file_metadata(root, path, size, deadline)
-        if metadata["bytes"] != size:
-            raise ValueError("source size changed during inventory scan")
-        entries.append({"key": path, "table": table, "partition": day, **metadata})
-    selected = {**manifest, "inventory": entries}
-    validate_inventory(selected)
-    companion = {**bindings, "inventory": entries, "totals": inventory_totals(selected)}
-    if read_manifest(root)[1] != digest or source_listing(root, manifest, max_files, max_bytes, deadline) != listing:
-        raise ValueError("source changed during inventory scan")
-    check_deadline(deadline)
-    destination.put(key, companion, create=True)
-    body = destination.read(key, max_bytes=MAX_JSON_BYTES)
-    return {"uri": uri, "sha256": sha256(body).hexdigest(), "manifest_sha256": digest, "totals": companion["totals"]}
-
-
 def verify_source(root, manifest, timeout=900):
     if not 0 < timeout <= 3600:
         raise ValueError("inventory verification deadline must be within 3600 seconds")
     deadline = time.monotonic() + timeout
     expected = {entry["key"]: entry["bytes"] for entry in manifest["inventory"]}
-    if source_listing(root, manifest, deadline=deadline) != expected:
+    limits = {"max_files": max(MAX_FILES, len(expected)), "max_bytes": max(MAX_BYTES, sum(expected.values()))}
+    if source_listing(root, manifest, deadline=deadline, **limits) != expected:
         raise ValueError("source files differ from selected inventory")
     for entry in manifest["inventory"]:
         check_deadline(deadline)
         verify_file(root, entry, deadline)
-    if source_listing(root, manifest, deadline=deadline) != expected:
+    if source_listing(root, manifest, deadline=deadline, **limits) != expected:
         raise ValueError("source changed during integrity verification")
     return inventory_totals(manifest)

@@ -57,7 +57,7 @@ CI SHALL discover every product folder, lint each descriptor and contract with p
 
 ### Requirement: Execution boundaries
 
-Documentation SHALL distinguish contract lint, data validation and catalog ingestion, name DuckDB as the current SQL dialect, and leave Spark, Flink and DataHub integration to their pipelines. Producing and ingesting jobs SHALL own data preparation, physical file checks and publication gating.
+Documentation SHALL distinguish contract lint, data validation and catalog ingestion, name DuckDB as the current SQL dialect, and leave Spark, Flink and catalog integration to their pipelines. Producing and ingesting jobs SHALL own data preparation, physical file checks and publication gating.
 
 #### Scenario: Dataset validation
 

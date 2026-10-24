@@ -1,11 +1,6 @@
 {{- if .Values.enabled }}
 {{- if not .Values.prerequisitesVerified }}
-{{- fail "DP1 requires scoped identities, DataHub readiness and concurrent capacity" }}
-{{- end }}
-{{- if or .Values.config.SOURCE_INVENTORY_URI .Values.config.SOURCE_INVENTORY_SHA256 }}
-{{- if or (not .Values.config.SOURCE_INVENTORY_URI) (not (regexMatch "^[a-f0-9]{64}$" .Values.config.SOURCE_INVENTORY_SHA256)) }}
-{{- fail "source companion requires both SOURCE_INVENTORY_URI and a SHA256 pin" }}
-{{- end }}
+{{- fail "DP1 requires scoped identities, OpenMetadata readiness and concurrent capacity" }}
 {{- end }}
 {{- range $name, $image := .Values.images }}
 {{- if not (regexMatch "@sha256:[a-f0-9]{64}$" $image) }}

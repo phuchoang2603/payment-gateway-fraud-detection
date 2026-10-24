@@ -4,11 +4,48 @@ from datetime import datetime, timezone
 
 import great_expectations as gx
 from great_expectations.core import RunIdentifier
+from pyspark.sql import functions as F
 
 from data_platform.contracts import check_physical, prepare
 from data_platform.ingest import selected_snapshots, source_frames
 from data_platform.products import PORTS
 from data_platform.runs import report_key, save_run
+
+
+def cardinality_bands(frame, manifest):
+    columns = {
+        "customer": "payment_created.customer.customer_id",
+        "address": "payment_created.snapshot.shipping.address_fingerprint",
+        "device": "attempt_started.signals.device_fingerprint",
+        "ip_network": "attempt_started.signals.ip_network_fingerprint",
+        "payment_method": "attempt_started.signals.payment_method.fingerprint",
+    }
+    bands = manifest.get("configuration", {}).get("acceptance_bands", {})
+    aggregates = []
+    for name, column in columns.items():
+        aggregates.extend(
+            (
+                F.approx_count_distinct(column).alias(name + "_estimate"),
+                F.count(column).alias(name + "_rows"),
+            )
+        )
+    values = frame.agg(*aggregates).first()
+    result = {}
+    passed = True
+    for name in columns:
+        estimate, rows = values[name + "_estimate"], values[name + "_rows"]
+        ratio = estimate / rows if rows else 0
+        band = bands.get(f"cardinality.{name}.distinct_to_row_ratio")
+        success = band["minimum"] <= ratio <= band["maximum"] if band else None
+        result[name] = {
+            "estimate": estimate,
+            "rows": rows,
+            "distinct_to_row_ratio": ratio,
+            "method": "spark.approx_count_distinct",
+            "success": success,
+        }
+        passed = passed and success is not False
+    return result, passed
 
 
 def validate(spark, root, manifest, store, run, contracts, image, namespace="bronze"):
@@ -17,7 +54,6 @@ def validate(spark, root, manifest, store, run, contracts, image, namespace="bro
         "run_id": run["run_id"],
         "dataset_version": run["dataset_version"],
         "manifest_sha256": run["manifest_sha256"],
-        "source_inventory": run.get("source_inventory"),
         "source_validation": run.get("source_validation"),
         "snapshots": run["snapshots"].copy(),
         "contracts": contracts,
@@ -87,12 +123,23 @@ def validate(spark, root, manifest, store, run, contracts, image, namespace="bro
             )
             rows = frame.count()
             expected_rows = sum(manifest["partitions"][table].values())
-            passed = result.success and conserved and rows == expected_rows
+            column = "occurred_at" if table == "payment_events" else "label_available_at"
+            date_buckets = frame.groupBy(F.to_date(column).alias("day")).count().collect()
+            null_date_rows = sum(row["count"] for row in date_buckets if row["day"] is None)
+            date_counts = {row["day"].isoformat(): row["count"] for row in date_buckets if row["day"] is not None}
+            partitions_match = not null_date_rows and date_counts == manifest["partitions"][table]
+            cardinality, cardinality_passed = (
+                cardinality_bands(frame, manifest) if table == "payment_events" else ({}, True)
+            )
+            passed = result.success and conserved and rows == expected_rows and partitions_match and cardinality_passed
             report["tables"][table] = {
                 "coverage": prepared.coverage,
                 "rows": rows,
                 "source_rows": expected_rows,
                 "conserved": bool(conserved),
+                "partitions_match": partitions_match,
+                "null_date_rows": null_date_rows,
+                "cardinality": cardinality,
                 "success": bool(passed),
                 "gx": bounded_result(result.to_json_dict()),
             }

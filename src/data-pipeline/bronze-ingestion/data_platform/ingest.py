@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 
 from pyspark.sql import functions as F
@@ -19,7 +20,7 @@ def source_frames(spark, root, manifest, run):
     result = {}
     for table in PORTS:
         prepared = prepare(table)
-        paths = [root.rstrip("/") + "/" + f["key"] for f in manifest["inventory"] if f["key"].startswith(table + "/")]
+        paths = [root.rstrip("/") + "/" + entry["key"] for entry in manifest["inventory"] if entry["table"] == table]
         if paths:
             frame = spark.read.option("mergeSchema", "true").parquet(*[p.replace("s3://", "s3a://", 1) for p in paths])
             if table == "payment_events":
@@ -70,6 +71,14 @@ def committed_snapshot(spark, name, run):
     return row.snapshot_id
 
 
+def ensure_date_partition(spark, name, table):
+    column = "occurred_at" if table == "payment_events" else "label_available_at"
+    definition = spark.sql(f"SHOW CREATE TABLE {name}").first()[0]
+    canonical = re.sub(r"\s+", "", definition.replace("`", "")).lower()
+    if f"days({column})" not in canonical:
+        spark.sql(f"ALTER TABLE {name} ADD PARTITION FIELD days({column})")
+
+
 def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=None):
     if set(run["snapshots"]) == set(PORTS):
         return run
@@ -86,12 +95,16 @@ def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=N
                 frame.limit(0)
                 .writeTo(name)
                 .using("iceberg")
-                .partitionedBy("_source_dataset_version")
+                .partitionedBy(
+                    "_source_dataset_version",
+                    F.days(F.col("occurred_at" if table == "payment_events" else "label_available_at")),
+                )
                 .tableProperty("format-version", "2")
                 .tableProperty("write.target-file-size-bytes", "134217728")
                 .tableProperty("history.expire.max-snapshot-age-ms", "9223372036854775807")
                 .create()
             )
+        ensure_date_partition(spark, name, table)
         snapshot = committed_snapshot(spark, name, run)
         if snapshot is None:
             (

@@ -78,7 +78,7 @@ def session(local_warehouse=None):
         }
         for key, value in options.items():
             builder = builder.config(prefix + key, value)
-        source_bucket = urlsplit(os.environ.get("SOURCE_ROOT", "s3://synthetic-source/historical/v7")).netloc
+        source_bucket = urlsplit(os.environ.get("SOURCE_ROOT", "s3://synthetic-source/historical/v10")).netloc
         hadoop = f"spark.hadoop.fs.s3a.bucket.{source_bucket}."
         for key, value in {
             "access.key": os.environ["SOURCE_ACCESS_KEY_ID"],

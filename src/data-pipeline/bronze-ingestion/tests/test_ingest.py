@@ -11,6 +11,36 @@ from data_platform.storage import Store
 from data_platform.validate import validate
 
 
+def test_raw_chunks_ingest_directly_into_date_partitioned_bronze(spark, dataset, tmp_path):
+    from data_platform.ingest import source_frames
+
+    root, manifest = dataset
+    assert manifest["source_layout"] == "task-fragments-v1"
+    store = Store(str(tmp_path / "evidence"))
+    run = open_run(store, "smoke", "a" * 64, hashes(), "image", "workflow")
+    source = source_frames(spark, str(root), manifest, run)
+    spark.sql("CREATE NAMESPACE lake.raw_chunks")
+    (
+        source["payment_events"]
+        .limit(0)
+        .writeTo(table_name("payment_events", "raw_chunks"))
+        .using("iceberg")
+        .partitionedBy("_source_dataset_version")
+        .tableProperty("format-version", "2")
+        .create()
+    )
+    ingest(spark, str(root), manifest, store, run, namespace="raw_chunks")
+    snapshots = selected_snapshots(spark, run, namespace="raw_chunks")
+    for table in PORTS:
+        actual = snapshots[table]
+        expected = source[table]
+        assert actual.count() == sum(manifest["partitions"][table].values())
+        assert not actual.exceptAll(expected).take(1) and not expected.exceptAll(actual).take(1)
+        partition_type = spark.table(table_name(table, "raw_chunks") + ".partitions").schema["partition"].dataType
+        assert len(partition_type.fields) == 2
+        assert partition_type.fields[1].name.endswith("_day")
+
+
 def test_snapshot_recovery_isolation_validation_and_replay(spark, dataset, tmp_path):
     root, manifest = dataset
     _, digest = selected_manifest(str(root))
@@ -36,6 +66,13 @@ def test_snapshot_recovery_isolation_validation_and_replay(spark, dataset, tmp_p
     report = validate(spark, str(root), manifest, store, run, contracts, "image@sha256:test", "recovery")
     assert report["data_outcome"] == "passed", report
     assert all(t["conserved"] for t in report["tables"].values())
+    assert set(report["tables"]["payment_events"]["cardinality"]) == {
+        "customer",
+        "address",
+        "device",
+        "ip_network",
+        "payment_method",
+    }
     ingest(spark, str(root), manifest, store, run, namespace="recovery")
     assert run["snapshots"] == original
     revised = {**contracts, "payment_events": "revised-contract"}
@@ -78,8 +115,13 @@ def test_validation_failure_and_bounded_samples_are_persisted(spark, dataset, tm
     run = open_run(store, "smoke", "a" * 64, contracts, "image", "workflow", source_validation=declaration)
     run["snapshots"] = {"payment_events": 1, "fraud_labels": 2}
     frames = source_frames(spark, str(root), manifest, run)
+    null_label = frames["fraud_labels"].select("attempt_id", "source").first()
     frames["fraud_labels"] = frames["fraud_labels"].withColumn(
-        "label_available_at", F.col("occurred_at") - F.expr("INTERVAL 1 DAY")
+        "label_available_at",
+        F.when(
+            (F.col("attempt_id") == null_label.attempt_id) & (F.col("source") == null_label.source),
+            F.lit(None).cast("timestamp"),
+        ).otherwise(F.col("occurred_at") - F.expr("INTERVAL 1 DAY")),
     )
     monkeypatch.setattr(validation, "selected_snapshots", lambda *args: frames)
     report = validation.validate(spark, str(root), manifest, store, run, contracts, "image")
@@ -87,6 +129,8 @@ def test_validation_failure_and_bounded_samples_are_persisted(spark, dataset, tm
     persisted = store.get(report_key(run, contracts))
     assert persisted["source_validation"] == declaration
     assert persisted["data_outcome"] == "failed" and not persisted["execution_errors"]
+    assert persisted["tables"]["fraud_labels"]["null_date_rows"] > 0
+    assert not persisted["tables"]["fraud_labels"]["partitions_match"]
     results = persisted["tables"]["fraud_labels"]["gx"]["results"]
     availability = next(r for r in results if r["expectation_config"]["meta"].get("id") == "label_availability")
     assert availability["success"] is False
@@ -120,7 +164,7 @@ def test_integrity_and_overflow_fail_before_table_creation(spark, dataset, tmp_p
     shutil.copytree(root, cloned)
     candidate = deepcopy(manifest)
     for entry in candidate["inventory"]:
-        if not entry["key"].startswith("payment_events/"):
+        if entry["table"] != "payment_events":
             continue
         path = cloned / entry["key"]
         frame = pq.ParquetFile(path).read()

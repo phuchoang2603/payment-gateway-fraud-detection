@@ -17,26 +17,27 @@ Small local fixtures SHALL protect source integrity, schema normalization, dupli
 #### Scenario: Verify changes without infrastructure access
 
 - **WHEN** DP1 behavioral checks run in CI
-- **THEN** bounded fixtures and suitable local/fake boundaries exercise the relevant failure paths without reading v7 or contacting production services
+- **THEN** bounded fixtures and suitable local/fake boundaries exercise the relevant failure paths without reading live source exports or contacting production services
 
 #### Scenario: Source and bronze rule parity
 
 - **WHEN** shared valid/invalid fixtures are evaluated by source and bronze engines
 - **THEN** equivalent business checks agree, including duplicates, nested payloads, schema cutover, lifecycle gaps, bad amounts and label linkage/availability
 
-#### Scenario: Verify legacy inventory evidence
-
-- **WHEN** focused fixtures exercise companion creation and selection for more than one dataset version
-- **THEN** they prove bounded reads, source immutability, create-only evidence, explicit URI/digest pinning, original manifest/contract binding, rejection of altered evidence or inconsistent file/partition/row/file-byte totals, and rejection of cross-version reuse, while retaining embedded-inventory behavior
-
 ### Requirement: Live historical and governance acceptance
 
-Live acceptance SHALL separately exercise complete v7 ingestion, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
+Live acceptance SHALL separately exercise complete v10 smoke ingestion, then v8 ingestion, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
 
-#### Scenario: Complete v7 acceptance
+#### Scenario: Complete v10 smoke acceptance
 
-- **WHEN** the configured live DP1 acceptance run succeeds
+- **WHEN** the configured live DP1 run over the small v10 export succeeds
 - **THEN** it verifies source-to-bronze content/count conservation, safe replay and visible products, schemas, imported contracts, lineage and validation results on canonical OpenMetadata assets
+
+#### Scenario: Complete v8 source acceptance
+
+- **WHEN** the live acceptance run ingests the published v8 manifest after the v10 smoke run
+- **THEN** it verifies the exact manifest-listed inventory and byte/row totals, preserved duplicates and delayed labels, Spark/GX results on both persisted tables including cardinality and distribution bands, safe replay and OpenMetadata readback
+- **THEN** a failed band or resource exhaustion is reported as a failure and v8 is not advertised as accepted
 
 #### Scenario: Dependency unavailable
 

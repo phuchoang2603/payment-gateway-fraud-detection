@@ -5,8 +5,6 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
   "great-expectations==1.24.0",
   "datacontract-cli[duckdb]==1.2.7",
-  "acryl-datahub[iceberg]==1.7.0.16",
-  "acryl-datahub-gx-plugin==1.7.0.16",
   "pyiceberg[pyarrow,s3fs]==0.11.1",
   "pyarrow==23.0.1",
   "pyyaml==6.0.3",

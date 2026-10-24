@@ -1,162 +1,167 @@
 import os
-from datetime import datetime
 
-from datahub.emitter import mce_builder as builder
-from datahub.ingestion.api.common import PipelineContext
-from datahub.ingestion.source.iceberg.iceberg import IcebergSource
-from datahub.metadata import schema_classes as S
-from datahub_gx_plugin.action_v1 import DataHubValidationAction
-from datahub_gx_plugin.common import build_assertions_with_results, emit_assertion_results
-from great_expectations.core import ExpectationSuiteValidationResult, RunIdentifier
+import yaml
+from pyiceberg import types as T
+from pyiceberg.catalog import load_catalog
 
-from data_platform.products import PORTS
+from data_platform.products import PORTS, PRODUCTS
+
+LAKE_SERVICE = os.environ.get("OPENMETADATA_LAKE_SERVICE", "fraud-lakehouse-prod")
+LAKE_DATABASE = os.environ.get("OPENMETADATA_LAKE_DATABASE", "lake")
+SOURCE_SERVICE = os.environ.get("OPENMETADATA_SOURCE_SERVICE", "synthetic-source")
+SOURCE_DATABASE = os.environ.get("OPENMETADATA_SOURCE_DATABASE", "historical")
+SCHEMA = "bronze"
 
 
 def iceberg_config():
+    access = os.environ.get("CATALOG_ACCESS_KEY_ID") or os.environ["LAKE_ACCESS_KEY_ID"]
+    secret = os.environ.get("CATALOG_SECRET_ACCESS_KEY") or os.environ["LAKE_SECRET_ACCESS_KEY"]
+    region = os.environ.get("AWS_REGION", "us-east-1")
     return {
-        "env": os.environ.get("DATAHUB_ENV", "PROD"),
-        "platform_instance": os.environ.get("DATAHUB_PLATFORM_INSTANCE", "fraud-lakehouse-prod"),
-        "catalog": {
-            "lake": {
-                "type": "rest",
-                "uri": os.environ["ICEBERG_REST_URI"],
-                "warehouse": os.environ.get("ICEBERG_WAREHOUSE", "fraud-lakehouse-prod"),
-                "client.access-key-id": os.environ.get("CATALOG_ACCESS_KEY_ID") or os.environ["LAKE_ACCESS_KEY_ID"],
-                "client.secret-access-key": os.environ.get("CATALOG_SECRET_ACCESS_KEY")
-                or os.environ["LAKE_SECRET_ACCESS_KEY"],
-                "client.region": os.environ.get("AWS_REGION", "us-east-1"),
-                "rest.sigv4-enabled": os.environ.get("ICEBERG_SIGV4_ENABLED", "true"),
-                "rest.signing-name": os.environ.get("ICEBERG_SIGNING_NAME", "s3"),
-                "rest.signing-region": os.environ.get("AWS_REGION", "us-east-1"),
-                "s3.endpoint": os.environ.get("S3_ENDPOINT", "https://minio.home.phuchoang.sbs"),
-                "s3.region": os.environ.get("AWS_REGION", "us-east-1"),
-                "s3.access-key-id": os.environ.get("CATALOG_ACCESS_KEY_ID") or os.environ["LAKE_ACCESS_KEY_ID"],
-                "s3.secret-access-key": os.environ.get("CATALOG_SECRET_ACCESS_KEY")
-                or os.environ["LAKE_SECRET_ACCESS_KEY"],
-            }
-        },
-        "namespace_pattern": {"allow": ["^bronze$"]},
-        "table_pattern": {"allow": ["^bronze\\.raw_(payment_events|fraud_labels)$"]},
-        "profiling": {"enabled": False},
-        "stateful_ingestion": {"enabled": False},
+        "type": "rest",
+        "uri": os.environ["ICEBERG_REST_URI"],
+        "warehouse": os.environ.get("ICEBERG_WAREHOUSE", "fraud-lakehouse-prod"),
+        "client.access-key-id": access,
+        "client.secret-access-key": secret,
+        "client.region": region,
+        "rest.sigv4-enabled": os.environ.get("ICEBERG_SIGV4_ENABLED", "true"),
+        "rest.signing-name": os.environ.get("ICEBERG_SIGNING_NAME", "s3"),
+        "rest.signing-region": region,
+        "s3.endpoint": os.environ.get("S3_ENDPOINT", "https://minio.home.phuchoang.sbs"),
+        "s3.region": region,
+        "s3.access-key-id": access,
+        "s3.secret-access-key": secret,
     }
 
 
-def discover(emitter, config, run_id):
-    source = IcebergSource.create(config, PipelineContext(run_id=run_id))
+SCALARS = {
+    T.BooleanType: "BOOLEAN",
+    T.IntegerType: "INT",
+    T.LongType: "BIGINT",
+    T.FloatType: "FLOAT",
+    T.DoubleType: "DOUBLE",
+    T.DateType: "DATE",
+    T.TimeType: "TIME",
+    T.TimestampType: "TIMESTAMP",
+    T.TimestamptzType: "TIMESTAMP",
+    T.StringType: "STRING",
+    T.UUIDType: "UUID",
+    T.BinaryType: "BINARY",
+}
+
+
+def om_type(kind):
+    if isinstance(kind, T.StructType):
+        return "STRUCT"
+    if isinstance(kind, T.ListType):
+        return "ARRAY"
+    if isinstance(kind, T.MapType):
+        return "MAP"
+    if isinstance(kind, T.DecimalType):
+        return "DECIMAL"
+    if isinstance(kind, T.FixedType):
+        return "BINARY"
+    for scalar, name in SCALARS.items():
+        if isinstance(kind, scalar):
+            return name
+    raise ValueError(f"unsupported Iceberg type {kind}")
+
+
+def om_column(name, kind, doc=None):
+    column = {"name": name, "dataType": om_type(kind), "dataTypeDisplay": str(kind)}
+    if doc:
+        column["description"] = doc
+    if isinstance(kind, T.StructType):
+        column["children"] = [om_column(f.name, f.field_type, f.doc) for f in kind.fields]
+    elif isinstance(kind, T.ListType):
+        column["arrayDataType"] = om_type(kind.element_type)
+        if isinstance(kind.element_type, T.StructType):
+            column["children"] = [om_column(f.name, f.field_type, f.doc) for f in kind.element_type.fields]
+    return column
+
+
+def lake_columns(schema):
+    return [om_column(f.name, f.field_type, f.doc) for f in schema.fields]
+
+
+CONTRACT_TYPES = {
+    "string": "STRING",
+    "integer": "BIGINT",
+    "number": "DOUBLE",
+    "boolean": "BOOLEAN",
+    "timestamp": "TIMESTAMP",
+    "date": "DATE",
+    "object": "JSON",
+    "array": "JSON",
+}
+
+
+def source_columns(contract):
+    return [
+        {
+            "name": p["name"],
+            "dataType": CONTRACT_TYPES[p["logicalType"]],
+            "dataTypeDisplay": p.get("physicalType", p["logicalType"]),
+            **({"description": p["description"]} if p.get("description") else {}),
+        }
+        for p in contract["schema"][0]["properties"]
+    ]
+
+
+def load_contract(table, product):
+    return yaml.safe_load((PRODUCTS / product / f"{PORTS[table]}.odcs.yaml").read_text())
+
+
+def put_table(client, service, database, schema, name, columns, description, owner=None):
+    client.put("/v1/services/databaseServices", {"name": service, "serviceType": "CustomDatabase"})
+    client.put("/v1/databases", {"name": database, "service": service})
+    client.put("/v1/databaseSchemas", {"name": schema, "database": f"{service}.{database}"})
+    body = {
+        "name": name,
+        "databaseSchema": f"{service}.{database}.{schema}",
+        "tableType": "Regular",
+        "columns": columns,
+        "description": description,
+    }
+    if owner:
+        body["owners"] = [{"type": "user", "name": owner}]
+    table = client.put("/v1/tables", body)
+    return {"id": table["id"], "fqn": table["fullyQualifiedName"]}
+
+
+def discover(client, run_id, owner=None):
+    catalog = load_catalog("lake", **iceberg_config())
     identities = {}
-    try:
-        for workunit in source.get_workunits():
-            proposal = workunit.metadata
-            if getattr(proposal, "aspectName", None) == "schemaMetadata":
-                urn = workunit.get_urn()
-                for table in PORTS:
-                    if f"bronze.raw_{table}," in urn:
-                        identities[table] = urn
-            emitter.emit(proposal)
-        report = source.get_report()
-        if getattr(report, "failures", None) or set(identities) != set(PORTS):
-            raise RuntimeError("native Iceberg ingestion did not discover both canonical schemas")
-    finally:
-        source.close()
+    for table in PORTS:
+        iceberg = catalog.load_table(f"{SCHEMA}.raw_{table}")
+        contract = load_contract(table, "bronze-payments")
+        identities[table] = put_table(
+            client,
+            LAKE_SERVICE,
+            LAKE_DATABASE,
+            SCHEMA,
+            f"raw_{table}",
+            lake_columns(iceberg.schema()),
+            contract["schema"][0]["description"],
+            owner,
+        )
+    if set(identities) != set(PORTS):
+        raise RuntimeError("Iceberg discovery did not find both canonical tables")
     return identities
 
 
-def action_for(urn, endpoint, token, env, platform_instance):
-    dataset = urn.split(",", 1)[1].rsplit(",", 1)[0]
-    prefix = platform_instance + "."
-    if not dataset.startswith(prefix):
-        raise ValueError("canonical native Iceberg identity has a different platform instance")
-    action = DataHubValidationAction(
-        server_url=endpoint,
-        token=token,
-        platform="iceberg",
-        dataset_name=dataset.removeprefix(prefix),
-        platform_instance=platform_instance,
-        env=env,
-        graceful_exceptions=False,
-        timeout_sec=15,
-        retry_max_times=2,
-        emit_mode="SYNC_WAIT",
-    )
-    resolved = action._resolve_dataset_urn({}, action.dataset_name, "")
-    if resolved != urn:
-        raise ValueError("GX identity differs from native Iceberg ingestion")
-    return action
-
-
-def assertion_evidence(report, identities, env, instance):
-    evidence = []
-    run_identifier = RunIdentifier(run_name=report["run_id"], run_time=report["run_time"])
-    for table, data in report["tables"].items():
-        result = ExpectationSuiteValidationResult(**data["gx"])
-        action = action_for(identities[table], "http://unused", None, env, instance)
-        datasets = action._datasets_from_validation_result(result)
-        assertions = build_assertions_with_results(
-            result,
-            result.meta.get("expectation_suite_name"),
-            run_identifier,
-            datasets,
-            context_properties={"dp1_run_id": report["run_id"]},
+def register_source(client, run, owner=None):
+    manifest = f"{run['source_root']}/manifest.json"
+    return {
+        table: put_table(
+            client,
+            SOURCE_SERVICE,
+            SOURCE_DATABASE,
+            run["dataset_version"],
+            table,
+            source_columns(contract := load_contract(table, "historical-payments")),
+            f"{contract['schema'][0]['description']} Immutable manifest: {manifest} (sha256 {run['manifest_sha256']}).",
+            owner,
         )
-        for raw_result, assertion in zip(result.results, assertions):
-            meta = raw_result["expectation_config"].get("meta", {})
-            props = assertion["assertionInfo"].customProperties or {}
-            props.update(
-                {
-                    "semantic_rule_id": str(meta.get("id", meta.get("expectation_id", "schema"))),
-                    "contract_sha256": report["contracts"][table],
-                    "manifest_sha256": report["manifest_sha256"],
-                    "snapshot_id": str(report["snapshots"][table]),
-                }
-            )
-            assertion["assertionInfo"].customProperties = props
-            evidence.append(assertion)
-    return evidence
-
-
-def publish_gx(report, identities, emitter, env, instance):
-    assertions = assertion_evidence(report, identities, env, instance)
-    timestamp = int(datetime.fromisoformat(report["run_time"]).timestamp() * 1000)
-    for assertion in assertions:
-        for event in assertion["assertionResults"]:
-            event.timestampMillis = timestamp
-            event.runId = (
-                report["run_id"]
-                + ":"
-                + report["contracts"][next(t for t in identities if identities[t] == event.asserteeUrn)][:16]
-            )
-    for table, data in report["tables"].items():
-        for raw, assertion in zip(
-            data["gx"]["results"], [a for a in assertions if a["assertionResults"][0].asserteeUrn == identities[table]]
-        ):
-            if raw.get("exception_info", {}).get("raised_exception"):
-                assertion["assertionResults"][0].result.type = "ERROR"
-    if report.get("execution_errors"):
-        for table, urn in identities.items():
-            assertion_urn = builder.make_assertion_urn(builder.datahub_guid({"dataset": urn, "rule": "dp1.execution"}))
-            assertions.append(
-                {
-                    "assertionUrn": assertion_urn,
-                    "assertionInfo": S.AssertionInfoClass(
-                        type="CUSTOM",
-                        customAssertion=S.CustomAssertionInfoClass(type="dp1.execution", entity=urn),
-                        customProperties={"dp1_run_id": report["run_id"]},
-                    ),
-                    "assertionPlatform": S.DataPlatformInstanceClass(
-                        platform=builder.make_data_platform_urn("great-expectations")
-                    ),
-                    "assertionResults": [
-                        S.AssertionRunEventClass(
-                            timestampMillis=timestamp,
-                            runId=report["run_id"],
-                            asserteeUrn=urn,
-                            assertionUrn=assertion_urn,
-                            status="COMPLETE",
-                            result=S.AssertionResultClass(type="ERROR", nativeResults={"stage": "validation"}),
-                        )
-                    ],
-                }
-            )
-    emit_assertion_results(emitter, assertions)
-    return assertions
+        for table in PORTS
+    }

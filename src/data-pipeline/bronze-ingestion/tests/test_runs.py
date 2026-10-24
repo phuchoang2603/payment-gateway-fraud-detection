@@ -7,10 +7,10 @@ from data_platform.storage import Store
 def test_stable_context_manifest_guard_and_acceptance_requires_both_stages(tmp_path):
     store = Store(str(tmp_path))
     contracts = {"payment_events": "one", "fraud_labels": "two"}
-    run = open_run(store, "v7", "digest", contracts, "image", "workflow")
-    assert open_run(store, "v7", "digest", contracts, "other-image", "retry") == run
+    run = open_run(store, "v10", "digest", contracts, "image", "workflow")
+    assert open_run(store, "v10", "digest", contracts, "other-image", "retry") == run
     with pytest.raises(ValueError, match="different manifest"):
-        open_run(store, "v7", "changed", contracts, "image", "retry")
+        open_run(store, "v10", "changed", contracts, "image", "retry")
     with pytest.raises(ValueError, match="both committed"):
         accept(store, run, contracts)
     run["snapshots"] = {"payment_events": 1, "fraud_labels": 2}
@@ -31,4 +31,4 @@ def test_stable_context_manifest_guard_and_acceptance_requires_both_stages(tmp_p
     store.put(report_key(run, contracts), {"data_outcome": "failed"})
     with pytest.raises(ValueError):
         accept(store, run, contracts)
-    assert store.get("accepted/v7.json") == accepted
+    assert store.get("accepted/v10.json") == accepted

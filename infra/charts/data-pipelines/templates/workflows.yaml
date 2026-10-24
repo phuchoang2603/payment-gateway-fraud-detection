@@ -5,7 +5,5 @@
   | replace "__METADATA_IMAGE__" .Values.images.metadata
   | replace "__SOURCE_ROOT__" (.Values.config.SOURCE_ROOT | quote)
   | replace "__DATASET_VERSION__" (.Values.config.DATASET_VERSION | quote)
-  | replace "__SOURCE_INVENTORY_URI__" (.Values.config.SOURCE_INVENTORY_URI | quote)
-  | replace "__SOURCE_INVENTORY_SHA256__" (.Values.config.SOURCE_INVENTORY_SHA256 | quote)
 }}
 {{- end }}

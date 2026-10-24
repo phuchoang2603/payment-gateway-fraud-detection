@@ -15,12 +15,12 @@ DP1 SHALL expose distinct ingest and validate stages with input, output and run 
 
 ### Requirement: Versioned-export batch selection
 
-Each workflow submission SHALL select one completed, immutable source export through `source-root` and `dataset-version` parameters, with chart-configured defaults. The ingestion and metadata-only replay workflows SHALL also expose `inventory-uri` and `inventory-sha256` for an explicitly pinned companion when required. Every stage SHALL use the selected parameters consistently. Recurring batches SHALL select newly completed export versions; a schedule alone SHALL NOT discover daily partitions in a growing source.
+Each workflow submission SHALL select one completed, immutable source export through `source-root` and `dataset-version` parameters, with chart-configured defaults. Every stage SHALL use the selected parameters consistently. Recurring batches SHALL select newly completed export versions; a schedule alone SHALL NOT discover daily partitions in a growing source.
 
 #### Scenario: Process the next completed export
 
 - **WHEN** a submission overrides the source root and dataset version for a newly completed export
-- **THEN** all stages use that export's manifest and selected inventory, and writes remain isolated from other source versions
+- **THEN** all stages use that export's manifest and embedded inventory, and writes remain isolated from other source versions
 
 #### Scenario: Resubmit an accepted export
 
@@ -85,11 +85,3 @@ Preflight SHALL be followed by a smoke Spark step that writes, overwrites by par
 - **WHEN** any smoke operation fails
 - **THEN** the run fails before any bronze write and identifies the failed operation
 
-### Requirement: Pinned legacy inventory configuration
-
-For any accepted source version without an embedded inventory, stage configuration SHALL supply the companion URI and SHA-256 pin together. Preflight SHALL verify the companion's integrity and source bindings before ingestion; workflows SHALL NOT generate or silently discover replacement inventory evidence.
-
-#### Scenario: Incomplete companion configuration
-
-- **WHEN** a v7 workflow omits either the companion URI or its digest pin
-- **THEN** preflight fails before ingestion and identifies the missing evidence configuration
