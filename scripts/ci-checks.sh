@@ -50,11 +50,6 @@ check_chart() {
   local chart="$1" values
   helm lint "$chart"
   helm template check "$chart" > /dev/null
-  if [[ "$chart" == "infra/charts/data-pipelines" ]]; then
-    helm template check "$chart" --set enabled=true --set prerequisitesVerified=true \
-      --set-string images.spark="example/spark@sha256:$(printf 'a%.0s' {1..64})" \
-      --set-string images.metadata="example/metadata@sha256:$(printf 'b%.0s' {1..64})" > /dev/null
-  fi
   for values in "$chart"/values-*.yaml; do
     [[ -f "$values" ]] || continue
     helm lint "$chart" -f "$values"

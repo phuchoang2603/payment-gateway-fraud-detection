@@ -119,10 +119,7 @@ The [Vietnam payment policy research](../research/vietnam-payment-policy.md) sep
 
 Data workloads live under `src/data-pipeline/`: `simulator` and `bronze-ingestion`. Each workload retains its own Python version and lockfile. The Spark and metadata Dockerfiles build self-contained images with dependencies installed in a separate build stage and runtime caches and unused test directories pruned.
 
-```bash
-docker buildx build -f infra/docker/data-platform-spark.Dockerfile -t data-pipeline/bronze-spark:local --load .
-docker buildx build -f infra/docker/data-platform-metadata.Dockerfile -t data-pipeline/bronze-metadata:local --load .
-```
+Service-image CI builds and publishes both images; deployments use the published image digests.
 
 The chart owns `fraud-data-prod` and retains it when disabled.
 
@@ -137,8 +134,11 @@ helm template data-pipelines infra/charts/data-pipelines \
   --set enabled=true --set prerequisitesVerified=true \
   --set-string images.spark="$DP1_SPARK_IMAGE" \
   --set-string images.metadata="$DP1_METADATA_IMAGE"
-argo submit -n fraud-data-prod --from workflowtemplate/historical-dp1-bronze
+argo submit -n fraud-data-prod --from workflowtemplate/historical-dp1-bronze \
+  -p source-root=s3://synthetic-source/historical/v8 -p dataset-version=v8
 ```
+
+Each submission is a batch over one completed source export. `source-root`, `dataset-version`, `inventory-uri` and `inventory-sha256` are workflow parameters with chart-configured defaults. Submit a new source version for the next batch; retries of an accepted version reuse its recorded snapshots. Daily incremental source discovery is outside this historical-export workflow.
 
 The workflow serializes writers, persists logical ingestion identity before commits, and runs smoke, ingest and validate as Spark steps: a driver pod with 1 core and 2.5 GiB requested, plus one 1-core/2-GiB executor with 512 MiB overhead created from the `dp1-executor-template` ConfigMap and owned by the driver. Argo owns two ingest retries; validation is not retried. Stage and workflow deadlines bound every step, and deleting a step pod removes its executors. Exit handling attempts failure publication.
 

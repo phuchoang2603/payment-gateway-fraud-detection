@@ -29,9 +29,5 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Prepare Spark test jars
-        run: |
-          python3 scripts/prepare-dp1-jars.py "$RUNNER_TEMP/dp1-jars" --local
-          echo "DP1_JARS=$(find "$RUNNER_TEMP/dp1-jars" -name 'iceberg-spark-runtime*.jar' -print -quit)" >> "$GITHUB_ENV"
       - name: Python lint, format and tests
         run: bash scripts/ci-checks.sh python

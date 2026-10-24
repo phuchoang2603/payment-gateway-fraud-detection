@@ -5,9 +5,9 @@ from urllib.parse import urlsplit
 from pyspark.sql import SparkSession
 
 ICEBERG_VERSION = "1.10.1"
+ICEBERG_RUNTIME = f"org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:{ICEBERG_VERSION}"
 PACKAGES = (
-    f"org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:{ICEBERG_VERSION},"
-    f"org.apache.iceberg:iceberg-aws-bundle:{ICEBERG_VERSION},org.apache.hadoop:hadoop-aws:3.3.4"
+    f"{ICEBERG_RUNTIME},org.apache.iceberg:iceberg-aws-bundle:{ICEBERG_VERSION},org.apache.hadoop:hadoop-aws:3.3.4"
 )
 
 
@@ -49,10 +49,8 @@ def session(local_warehouse=None):
         .config("spark.redaction.regex", "(?i)secret|password|token|access.?key|credential")
         .config("spark.sql.catalog.lake", "org.apache.iceberg.spark.SparkCatalog")
     )
-    if os.environ.get("DP1_JARS"):
-        builder = builder.config("spark.jars", os.environ["DP1_JARS"])
-    elif not os.environ.get("DP1_BUNDLED_JARS"):
-        builder = builder.config("spark.jars.packages", PACKAGES)
+    if not os.environ.get("DP1_BUNDLED_JARS"):
+        builder = builder.config("spark.jars.packages", ICEBERG_RUNTIME if local_warehouse else PACKAGES)
     if local_warehouse:
         builder = (
             builder.master("local[2]")

@@ -1,3 +1,11 @@
 {{- if .Values.enabled }}
-{{ .Files.Get "files/workflows.yaml" | replace "__NAMESPACE__" .Values.namespace | replace "__SPARK_IMAGE__" .Values.images.spark | replace "__METADATA_IMAGE__" .Values.images.metadata }}
+{{ .Files.Get "files/workflows.yaml"
+  | replace "__NAMESPACE__" .Values.namespace
+  | replace "__SPARK_IMAGE__" .Values.images.spark
+  | replace "__METADATA_IMAGE__" .Values.images.metadata
+  | replace "__SOURCE_ROOT__" (.Values.config.SOURCE_ROOT | quote)
+  | replace "__DATASET_VERSION__" (.Values.config.DATASET_VERSION | quote)
+  | replace "__SOURCE_INVENTORY_URI__" (.Values.config.SOURCE_INVENTORY_URI | quote)
+  | replace "__SOURCE_INVENTORY_SHA256__" (.Values.config.SOURCE_INVENTORY_SHA256 | quote)
+}}
 {{- end }}

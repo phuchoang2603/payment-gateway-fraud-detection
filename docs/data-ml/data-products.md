@@ -90,10 +90,8 @@ Source publication still uses the unchanged Data Contract CLI/DuckDB commands ab
 After integrating the generator inventory change, run the locked fixtures and contract lint from the repository devenv. An isolated checkout can set `DP1_GENERATOR_ROOT` to the integrated `src/data-pipeline/simulator` dependency:
 
 ```bash
-python3 scripts/prepare-dp1-jars.py /tmp/dp1-jars --local
 UV_PROJECT_ENVIRONMENT="$PWD/src/data-pipeline/bronze-ingestion/.venv" \
 UV_PYTHON_PREFERENCE=managed UV_PYTHON_DOWNLOADS=automatic \
-DP1_JARS="$(find /tmp/dp1-jars -name 'iceberg-spark-runtime*.jar' -print -quit)" \
   uv run --project src/data-pipeline/bronze-ingestion --locked pytest src/data-pipeline/bronze-ingestion/tests
 bash scripts/ci-checks.sh contracts
 ```

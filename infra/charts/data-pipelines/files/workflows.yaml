@@ -6,6 +6,12 @@ metadata:
 spec:
   serviceAccountName: dp1-metadata
   entrypoint: historical
+  arguments:
+    parameters:
+      - {name: source-root, value: __SOURCE_ROOT__}
+      - {name: dataset-version, value: __DATASET_VERSION__}
+      - {name: inventory-uri, value: __SOURCE_INVENTORY_URI__}
+      - {name: inventory-sha256, value: __SOURCE_INVENTORY_SHA256__}
   onExit: finalizer
   activeDeadlineSeconds: 7200
   synchronization:
@@ -75,6 +81,10 @@ spec:
           - configMapRef: {name: dp1-config}
           - secretRef: {name: dp1-lake}
         env:
+          - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
+          - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
+          - {name: SOURCE_INVENTORY_URI, value: "{{workflow.parameters.inventory-uri}}"}
+          - {name: SOURCE_INVENTORY_SHA256, value: "{{workflow.parameters.inventory-sha256}}"}
           - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
           - {name: SPARK_IMAGE, value: __SPARK_IMAGE__}
           - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
@@ -105,6 +115,10 @@ spec:
           - secretRef: {name: dp1-lake}
           - secretRef: {name: dp1-metadata}
         env:
+          - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
+          - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
+          - {name: SOURCE_INVENTORY_URI, value: "{{workflow.parameters.inventory-uri}}"}
+          - {name: SOURCE_INVENTORY_SHA256, value: "{{workflow.parameters.inventory-sha256}}"}
           - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
           - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
         resources:
@@ -127,6 +141,12 @@ metadata:
 spec:
   serviceAccountName: dp1-metadata
   entrypoint: replay
+  arguments:
+    parameters:
+      - {name: source-root, value: __SOURCE_ROOT__}
+      - {name: dataset-version, value: __DATASET_VERSION__}
+      - {name: inventory-uri, value: __SOURCE_INVENTORY_URI__}
+      - {name: inventory-sha256, value: __SOURCE_INVENTORY_SHA256__}
   activeDeadlineSeconds: 600
   templates:
     - name: replay
@@ -138,7 +158,11 @@ spec:
           - configMapRef: {name: dp1-config}
           - secretRef: {name: dp1-lake}
           - secretRef: {name: dp1-metadata}
+        env:
+          - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
+          - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
+          - {name: SOURCE_INVENTORY_URI, value: "{{workflow.parameters.inventory-uri}}"}
+          - {name: SOURCE_INVENTORY_SHA256, value: "{{workflow.parameters.inventory-sha256}}"}
         resources:
           requests: {cpu: 100m, memory: 512Mi}
           limits: {cpu: "1", memory: 1Gi}
-
