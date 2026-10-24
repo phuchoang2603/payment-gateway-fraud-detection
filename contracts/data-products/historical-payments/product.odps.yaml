@@ -26,7 +26,7 @@ customProperties:
   - property: accessPolicy
     value: Shared historical-source identity from Doppler prd; historical/* list/read/write, no deletion or pipeline artifact access. Accepted versions are immutable by publication protocol.
   - property: generator
-    value: https://github.com/phuchoang2603/payment-gateway-fraud-detection/tree/main/src/simulator
+    value: https://github.com/phuchoang2603/payment-gateway-fraud-detection/tree/main/src/data-pipeline/simulator
 outputPorts:
   - name: payment-events
     version: 3.1.0

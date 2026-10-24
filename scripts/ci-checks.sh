@@ -16,7 +16,9 @@ check_python() (
   cd "$1"
   uv run --locked ruff check .
   uv run --locked ruff format --check .
-  uv run --locked pytest -q
+  if [[ -d tests ]]; then
+    uv run --locked pytest -q
+  fi
 )
 
 check_go() (

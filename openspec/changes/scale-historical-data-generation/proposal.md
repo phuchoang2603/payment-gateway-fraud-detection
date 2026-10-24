@@ -28,7 +28,7 @@ None.
 
 ## Impact
 
-- `src/simulator/simulator/{config,cli,profiles,generation,statistics,storage}.py`, focused task/checkpoint modules where responsibilities require them, and existing simulator tests.
-- A separate `src/simulator/configs/historical-scale.yaml`; retain `historical.yaml` as the documented v7 configuration and add narrowly scoped pilot/runtime settings without credentials. Pin any dependency needed for conditional S3 run-state ownership and DuckDB remote reads after compatibility checks.
+- `src/data-pipeline/simulator/simulator/{config,cli,profiles,generation,statistics,storage}.py`, focused task/checkpoint modules where responsibilities require them, and existing simulator tests.
+- A separate `src/data-pipeline/simulator/configs/historical-scale.yaml`; retain `historical.yaml` as the documented v7 configuration and add narrowly scoped pilot/runtime settings without credentials. Pin any dependency needed for conditional S3 run-state ownership and DuckDB remote reads after compatibility checks.
 - Minimal affected sections of `docs/data-ml/data-products.md` and the existing historical sanity notebook for commands, coursework provenance, byte accounting, calibrated distributions and measured resource results. Update the roadmap's generator evidence only after an actual accepted run.
 - Reuses the existing RustFS service and source bucket. No gateway, live generator, DP1/Iceberg writes, Spark Operator, DataHub, Kubernetes workload or platform deployment is included. Spark-backed ODCS execution and DataHub governance belong to the subsequent DP1 change.

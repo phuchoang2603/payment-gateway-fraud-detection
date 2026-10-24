@@ -24,7 +24,7 @@
 
 ## Impact
 
-- `src/simulator`: `live` and `faults` commands (httpx, confluent-kafka), `configs/live-v1.yaml`.
+- `src/data-pipeline/simulator`: `live` and `faults` commands (httpx, confluent-kafka), `configs/live-v1.yaml`.
 - `infra/charts/kafka` gains two topics; new `infra/charts/simulator`, `infra/docker/simulator.Dockerfile`, a `simulator` image job and an app-of-apps child.
 - Depends on `build-minimum-payment-gateway` (append-only event ledger, Kafka cluster with `payments.events.v1` publication, edge with the payment-method route, deterministic identities, synthetic fingerprint key) and the archived `generate-historical-synthetic-data` (`historical-data-generation` spec: reproducible profiles and manifest digest).
 - Docs: `docs/data-ml/live-traffic-evidence.md`, roadmap #44 row, and the fault-injection step in the data pipeline architecture doc.

@@ -28,7 +28,7 @@ The fraud-labels linkage rule reads `payment_events`, so validate labels in a da
 
 ### Published version
 
-`historical/v7` is the current accepted dataset, generated from [`src/simulator/configs/historical.yaml`](../../src/simulator/configs/historical.yaml) (seed 2603) and validated against both contracts before publication. Its `manifest.json` records the configuration hash, generator revision, contract hashes, per-partition row counts and storage metrics; [`historical-sanity.ipynb`](../../src/simulator/notebooks/historical-sanity.ipynb) holds the executed distribution, skew, cutover, duplicate and layout checks.
+`historical/v7` is the current accepted dataset, generated from [`src/data-pipeline/simulator/configs/historical.yaml`](../../src/data-pipeline/simulator/configs/historical.yaml) (seed 2603) and validated against both contracts before publication. Its `manifest.json` records the configuration hash, generator revision, contract hashes, per-partition row counts and storage metrics; [`historical-sanity.ipynb`](../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb) holds the executed distribution, skew, cutover, duplicate and layout checks.
 
 | Measure | Value |
 |---|---|
@@ -44,7 +44,7 @@ The fraud-labels linkage rule reads `payment_events`, so validate labels in a da
 Generate a new version from the devenv shell; completed inventory-backed versions are verified and recovered without rewriting their data:
 
 ```bash
-cd src/simulator
+cd src/data-pipeline/simulator
 doppler run -p payment-gateway-fraud-detection -c prd -- sh -c \
   'AWS_ACCESS_KEY_ID="$HISTORICAL_RUSTFS_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$HISTORICAL_RUSTFS_SECRET_KEY" \
    uv run --locked simulator historical --config configs/historical.yaml'
@@ -64,7 +64,7 @@ The 2026-10-22 RustFS probe confirmed create-if-absent, ETag-conditional update 
 
 Without explicit deferral, both native contracts run over views of the exact final inventory, including transitions across midnight and all delayed labels. DuckDB and its bundled HTTPFS extension are pinned together. Data Contract CLI 1.2.7 ignores its `duckdb_connection` argument for DuckDB servers; the simulator uses a scoped connection adapter to keep the unchanged native checks on the caller's resource-controlled connection. Failed validation, capacity, integrity or size gates retain prepared data without publishing. Resource reports distinguish sampled process-tree RSS, scratch/spill peaks and remote intermediate bytes; DuckDB's memory limit is not a process-wide cap.
 
-[`historical-scale.yaml`](../../src/simulator/configs/historical-scale.yaml) (dataset version `v8`, the intended scale target) and [`historical-pilot.yaml`](../../src/simulator/configs/historical-pilot.yaml) (`v8-pilot`) share three million customer profiles, layout, scenarios and one year or six days of history. The measured pilot produced 3,124,545 payments, 1,985,818,453 physical final Parquet bytes and 4,843,810,164 uncompressed column-chunk bytes. Generation/finalization took 1,440.4/952.5 seconds and native validation took 1,942.6 seconds over two attempts. Process-tree RSS, scratch and spill peaks were 5,112,930,304, 8,686,332,811 and 8,421,998,592 bytes. These measurements project roughly 120.8 GB of final Parquet and 40.4 hours of generation/finalization for the fixed full plan; they do not establish full-run acceptance.
+[`historical-scale.yaml`](../../src/data-pipeline/simulator/configs/historical-scale.yaml) (dataset version `v8`, the intended scale target) and [`historical-pilot.yaml`](../../src/data-pipeline/simulator/configs/historical-pilot.yaml) (`v8-pilot`) share three million customer profiles, layout, scenarios and one year or six days of history. The measured pilot produced 3,124,545 payments, 1,985,818,453 physical final Parquet bytes and 4,843,810,164 uncompressed column-chunk bytes. Generation/finalization took 1,440.4/952.5 seconds and native validation took 1,942.6 seconds over two attempts. Process-tree RSS, scratch and spill peaks were 5,112,930,304, 8,686,332,811 and 8,421,998,592 bytes. These measurements project roughly 120.8 GB of final Parquet and 40.4 hours of generation/finalization for the fixed full plan; they do not establish full-run acceptance.
 
 The six-day pilot includes the warmup of seven-day stolen-card compromise windows. A bounded calibration sample using the intended profiles and the first 100,000-customer block on days 30–35 estimated a 2.67% stolen-card attempt share. The full config therefore gates that share at 2.0–3.2%; the pilot retains its observed 0.8–1.8% band. Both configurations retain the measured duplicate/skew/schema and other scenario bands and 60 card-testing bursts/day. Full-year distribution and byte acceptance remain unmeasured. Native full-history validation projects about 512 GB of spill from the pilot, exceeding this workstation's capacity. The explicit DP1 handoff defers those source checks to Spark/GX; publication and protected storage alone do not establish data-quality acceptance. DP1 persists the declaration and requires both validated bronze snapshots and verified governance before acceptance.
 

@@ -23,7 +23,9 @@ The repository implements six Go services, including the independent fraud decis
 │   └── docker/            # Service Dockerfiles and reusable Go template
 ├── openspec/              # Capability specifications and change plans
 ├── src/payment-gateway/   # Go gateway services, shared module and workspace
-├── src/simulator/         # Historical data simulator
+├── src/data-pipeline/     # Data workloads and shared helpers
+│   ├── simulator/        # Historical data simulator
+│   └── shared/           # Common data-pipeline utilities
 ├── devenv.nix             # Local development environment
 ├── devenv.yaml            # Devenv inputs
 └── devenv.lock            # Locked environment dependencies
