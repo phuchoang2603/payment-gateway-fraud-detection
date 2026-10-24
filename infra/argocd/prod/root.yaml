@@ -9,7 +9,7 @@ spec:
   project: payment-gateway-fraud-detection
   source:
     repoURL: https://github.com/phuchoang2603/payment-gateway-fraud-detection.git
-    targetRevision: &revision t3/go-observability-single-replica
+    targetRevision: &revision main
     path: infra/argocd/app-of-apps
     helm:
       releaseName: payment-gateway-prod
