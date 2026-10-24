@@ -357,16 +357,6 @@ wheels = [
 ]
 
 [[package]]
-name = "data-pipeline-shared"
-version = "0.1.0"
-source = { editable = "../shared" }
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.14,<1" }]
-
-[[package]]
 name = "debugpy"
 version = "1.8.22"
 source = { registry = "https://pypi.org/simple" }
@@ -1214,7 +1204,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
-    { name = "data-pipeline-shared" },
     { name = "duckdb" },
     { name = "duckdb-extension-httpfs" },
     { name = "numpy" },
@@ -1238,7 +1227,6 @@ notebook = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = "==1.43.117" },
-    { name = "data-pipeline-shared", editable = "../shared" },
     { name = "duckdb", specifier = "==1.5.5" },
     { name = "duckdb-extension-httpfs", specifier = "==1.5.5" },
     { name = "numpy", specifier = ">=2.3,<3" },

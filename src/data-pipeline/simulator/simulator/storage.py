@@ -19,7 +19,6 @@ import pyarrow as pa
 import pyarrow.fs as fs
 import pyarrow.parquet as pq
 import yaml
-from data_pipeline_shared import data_products_root
 
 from simulator.arrow import LABEL_SCHEMA, event_schema
 from simulator.config import ALGORITHM_VERSION, RUN_STATE_VERSION, HistoricalConfig
@@ -39,7 +38,7 @@ from simulator.resources import CapacityExceeded, LimitedWriter, ResourceMonitor
 from simulator.run_state import RunState
 from simulator.statistics import DatasetStatistics
 
-PRODUCT_DIR = data_products_root() / "historical-payments"
+PRODUCT_DIR = Path(__file__).resolve().parents[4] / "contracts" / "data-products" / "historical-payments"
 COMPRESSION = "zstd"
 COMPRESSION_LEVEL = 3
 
