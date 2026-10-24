@@ -26,7 +26,7 @@ func TestFromLookupDefaultsAndFaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.GRPCAddr != ":8000" || cfg.MetricsAddr != ":8010" || cfg.MigrateDatabaseURL != "postgres://x" {
+	if cfg.GRPCAddr != ":8000" || cfg.MigrateDatabaseURL != "postgres://x" {
 		t.Fatalf("unexpected config %+v", cfg)
 	}
 	if cfg.Seed != 42 || cfg.LatencyMin != 20*time.Millisecond || cfg.LatencyMax != 80*time.Millisecond || cfg.TimeoutRate != 0.05 {

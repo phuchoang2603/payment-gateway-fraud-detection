@@ -8,6 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+	"go.opentelemetry.io/otel"
+
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/notifier/internal/domain"
 )
 
@@ -52,7 +55,7 @@ func (w *DeliveryWorker) Run(ctx context.Context) {
 	defer ticker.Stop()
 	for {
 		if _, err := w.Tick(ctx); err != nil && ctx.Err() == nil {
-			slog.Error("delivery tick failed", "error", err)
+			slog.ErrorContext(ctx, "delivery tick failed", "error", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -87,6 +90,8 @@ func (w *DeliveryWorker) Tick(ctx context.Context) (int, error) {
 }
 
 func (w *DeliveryWorker) deliver(ctx context.Context, delivery domain.Delivery) {
+	ctx, span := otel.Tracer("notifier").Start(observe.RestoreContext(ctx, delivery.TraceContext), "webhook.delivery.attempt")
+	defer span.End()
 	attemptNumber := delivery.Attempts + 1
 	attempt := w.attempt(ctx, delivery, attemptNumber)
 	switch attempt.Status {
@@ -98,8 +103,10 @@ func (w *DeliveryWorker) deliver(ctx context.Context, delivery domain.Delivery) 
 		w.Metrics.Delivery("retry")
 	}
 	if err := w.Queue.Record(context.WithoutCancel(ctx), delivery.EventID, attempt); err != nil {
-		slog.Error("record delivery attempt", "event_id", delivery.EventID, "error", err)
+		slog.ErrorContext(ctx, "record delivery attempt", "event_id", delivery.EventID, "error", err)
+		return
 	}
+	slog.InfoContext(ctx, "webhook delivery attempt", "event_id", delivery.EventID, "payment_id", delivery.PaymentID, "attempt", attemptNumber, "status", attempt.Status)
 }
 
 func (w *DeliveryWorker) attempt(ctx context.Context, delivery domain.Delivery, attemptNumber int) domain.Attempt {

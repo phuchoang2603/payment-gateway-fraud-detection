@@ -4,6 +4,8 @@ Each service is an independently buildable and deployable unit that owns its run
 
 ## Layout
 
+The layout below includes the independent Go fraud service. The [active change](../../openspec/changes/go-service-observability/proposal.md) tracks common telemetry acceptance; Feast/KServe deployment follows separately.
+
 ```text
 contracts/
   payments/v1/                   # payment types, lifecycle events, labels, PaymentService
@@ -20,19 +22,14 @@ src/
     notifier/
     vault-simulator/
     processor-simulator/
-    fraud-service/               # Python package; app.main:FraudServer is the composition root
-      app/main.py                # gRPC composition and lifecycle
-      app/domain/                # validated decision values and pure policy rules
-      app/transport/             # gRPC adapter, request mapping and correlation
-      app/telemetry/             # logging, metrics and tracing setup
-      gen/fraud/v1/              # generated decision bindings
-      gen/payments/v1/           # generated shared payment types
-      tests/
-    shared/                      # one Go module: proto, testutil, runtime and security
+    fraud/                       # Go module; cmd/fraud is the composition root
+      internal/domain/           # pure decision values and policy
+      internal/transport/        # gRPC mapping and validation
+    shared/                      # one Go module: proto, testutil, observe and security
   simulator/                     # historical data generation
 ```
 
-Both languages keep business rules separate from transport. Edge now has checkout validation/fingerprinting domain values, application coordination and gRPC adapters. Payments, notifier, vault-simulator and processor-simulator each own a Go module, composition root, domain/application packages and persistence adapters. Python fraud serving evaluates a single stateless policy in `app/domain`, maps protobuf at `app/transport` and keeps telemetry in `app/telemetry`. Add an application/use-case layer only when a service coordinates multiple domain or I/O operations, and add storage adapters only when it persists data. Do not create empty layers for symmetry.
+Both languages keep business rules separate from transport. Edge now has checkout validation/fingerprinting domain values, application coordination and gRPC adapters. Payments, notifier, vault-simulator and processor-simulator each own a Go module, composition root, domain/application packages and persistence adapters. Go fraud follows the same module/composition pattern, keeps policy in `internal/domain` and uses shared Go telemetry. Add feature/model adapters and a use-case coordinator when it calls Feast and KServe; their Python runtimes stay outside gateway orchestration. Add an application/use-case layer only when a service coordinates multiple domain or I/O operations, and add storage adapters only when it persists data. Do not create empty layers for symmetry.
 
 ## Dependency direction
 
@@ -47,12 +44,12 @@ Composition roots validate configuration and assemble the service; they contain 
 
 Each service owns its schema, migrations and persistence adapter; a deployment or migration job for one service cannot modify another service's state. Domain events, integration messages and projections remain separate concepts.
 
-Internal synchronous communication uses versioned protobuf services under `contracts/<capability>/vN/` with generated, committed Go and Python bindings; no parallel internal REST/JSON API is maintained. Additive changes require compatible readers; breaking semantics require a new version and an announced migration window. Public HTTP/JSON belongs only at the Go edge. Asynchronous events may use protobuf payloads but need their own durable transport with an outbox or equivalent boundary.
+Internal synchronous business APIs use versioned protobuf services under `contracts/<capability>/vN/` with generated bindings for actual consumers; no parallel internal REST/JSON API is maintained. The fresh Go fraud replacement removes unused Python bindings and wiring without a compatibility wrapper or dual-runtime migration. Keep `fraud.v1` where its semantics remain useful; a runtime language change alone needs no new wire version. Coordinate intentional contract changes with callers. Feast and KServe adapters use their supported vendor HTTP/gRPC protocols rather than introducing another internal business API. Public HTTP/JSON belongs only at the Go edge. Asynchronous events may use protobuf payloads but need their own durable transport with an outbox or equivalent boundary.
 
 The versioned protobufs in `contracts/` are the shared wire contracts. Extract technical helpers only when multiple services in the same language actually reuse them; Go and Python cannot share runtime code directly. Do not share mutable domain models or cross-service repositories. No database, broker, event store or application framework is chosen by these conventions; Payments uses versioned state rows with an append-only Postgres ledger, Redis-first idempotency and Debezium publication.
 
 ## Images and reference material
 
-The edge image is built from its own module with `GOWORK=off` using the reusable [`infra/docker/go-service.Dockerfile`](../../infra/docker/go-service.Dockerfile); the fraud image keeps its `src/fraud-service` context. Seven explicit image jobs share one workflow (see [CONTRIBUTING](../../CONTRIBUTING.md)).
+The edge image is built from its own module with `GOWORK=off` using the reusable [`infra/docker/go-service.Dockerfile`](../../infra/docker/go-service.Dockerfile); fraud uses the same image pattern from `src/payment-gateway/fraud`. All six Go services use the `infra/charts/payment-gateway` services map, with independent Deployments and Services. Seven explicit image jobs share one workflow (see [CONTRIBUTING](../../CONTRIBUTING.md)).
 
 In the marketplace, `services/orders/cmd/orders/main.go` demonstrates a composition root, `shared/runtime/http.go` bounded HTTP shutdown, `shared/err/grpcerr/map.go` transport error mapping and `docs/development/code-generation.md` workspace/module conventions. This repository adopts those patterns selectively and keeps gateway domain ownership separate.

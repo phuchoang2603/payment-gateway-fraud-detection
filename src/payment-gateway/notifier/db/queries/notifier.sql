@@ -7,8 +7,8 @@ ON CONFLICT (payment_id) DO NOTHING;
 SELECT order_reference FROM payment_refs WHERE payment_id = $1;
 
 -- name: InsertDelivery :execrows
-INSERT INTO webhook_deliveries (event_id, integration_id, payment_id, event_type, body, next_attempt_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO webhook_deliveries (event_id, integration_id, payment_id, event_type, body, next_attempt_at, tracingspancontext)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (event_id) DO NOTHING;
 
 -- name: ClaimDueDeliveries :many
@@ -22,7 +22,7 @@ WHERE event_id IN (
     LIMIT sqlc.arg(batch_size)
     FOR UPDATE SKIP LOCKED
 )
-RETURNING event_id, integration_id, payment_id, event_type, body, attempts, created_at;
+RETURNING event_id, integration_id, payment_id, event_type, body, attempts, created_at, tracingspancontext;
 
 -- name: RecordAttempt :exec
 UPDATE webhook_deliveries

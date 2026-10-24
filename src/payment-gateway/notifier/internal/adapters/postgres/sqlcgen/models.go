@@ -18,16 +18,17 @@ type PaymentRef struct {
 }
 
 type WebhookDelivery struct {
-	EventID       string
-	IntegrationID string
-	PaymentID     string
-	EventType     string
-	Body          []byte
-	Status        string
-	Attempts      int32
-	NextAttemptAt time.Time
-	LastStatus    pgtype.Int4
-	LastError     pgtype.Text
-	CreatedAt     time.Time
-	DeliveredAt   *time.Time
+	EventID            string
+	IntegrationID      string
+	PaymentID          string
+	EventType          string
+	Body               []byte
+	Status             string
+	Attempts           int32
+	NextAttemptAt      time.Time
+	LastStatus         pgtype.Int4
+	LastError          pgtype.Text
+	CreatedAt          time.Time
+	DeliveredAt        *time.Time
+	Tracingspancontext *string
 }

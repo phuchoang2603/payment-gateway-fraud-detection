@@ -8,6 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/processor-simulator/internal/adapters/postgres"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/processor-simulator/internal/adapters/vault"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/processor-simulator/internal/application"
@@ -17,7 +19,7 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	slog.SetDefault(slog.New(observe.NewLogHandler(os.Stdout, "processor-simulator")))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -54,6 +56,12 @@ func migrate(ctx context.Context) error {
 }
 
 func serve(ctx context.Context) error {
+	shutdown, err := observe.Init(ctx, "processor-simulator")
+	if err != nil {
+		return err
+	}
+	defer shutdown()
+
 	cfg, err := config.FromEnv()
 	if err != nil {
 		return err
@@ -83,11 +91,6 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	metricsListener, err := net.Listen("tcp", cfg.MetricsAddr)
-	if err != nil {
-		_ = grpcListener.Close()
-		return err
-	}
-	slog.Info("starting processor simulator", "grpc_addr", cfg.GRPCAddr, "metrics_addr", cfg.MetricsAddr)
-	return server.Run(ctx, grpcListener, metricsListener)
+	slog.Info("starting processor simulator", "grpc_addr", cfg.GRPCAddr)
+	return server.Run(ctx, grpcListener)
 }

@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/notifier/internal/application"
 )
 
@@ -18,7 +20,8 @@ type Sender struct {
 
 func NewSender(timeout time.Duration) *Sender {
 	return &Sender{client: &http.Client{
-		Timeout: timeout,
+		Timeout:   timeout,
+		Transport: observe.HTTPTransport{},
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},

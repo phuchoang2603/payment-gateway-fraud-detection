@@ -118,13 +118,9 @@ func newHarness(t *testing.T, options harnessOptions) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	metricsListener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- server.Run(runCtx, grpcListener, metricsListener) }()
+	go func() { done <- server.Run(runCtx, grpcListener) }()
 	t.Cleanup(func() {
 		cancel()
 		<-done

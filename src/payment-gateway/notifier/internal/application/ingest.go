@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
+
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
 
 	"google.golang.org/protobuf/proto"
 
@@ -78,6 +81,7 @@ func (i *Ingestor) Handle(ctx context.Context, value []byte) (Result, error) {
 		}
 		inserted, err := repo.InsertDelivery(ctx, domain.Delivery{
 			EventID:       event.GetEventId(),
+			TraceContext:  observe.SerializeContext(ctx),
 			IntegrationID: event.GetIntegrationId(),
 			PaymentID:     event.GetPaymentId(),
 			EventType:     outcome.Type,
@@ -97,5 +101,6 @@ func (i *Ingestor) Handle(ctx context.Context, value []byte) (Result, error) {
 	if err != nil {
 		return ResultIgnored, err
 	}
+	slog.InfoContext(ctx, "payment event handled", "event_id", event.GetEventId(), "payment_id", event.GetPaymentId(), "request_id", event.GetCorrelationId(), "result", result)
 	return result, nil
 }

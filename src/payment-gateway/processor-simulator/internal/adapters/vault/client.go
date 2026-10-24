@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -23,7 +26,7 @@ type Client struct {
 }
 
 func NewClient(cfg config.Vault) (*Client, error) {
-	conn, err := grpc.NewClient(cfg.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(cfg.Address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(otelgrpc.NewClientHandler(otelgrpc.WithFilter(observe.RPCFilter))), grpc.WithChainUnaryInterceptor(observe.UnaryClientInterceptor()))
 	if err != nil {
 		return nil, err
 	}

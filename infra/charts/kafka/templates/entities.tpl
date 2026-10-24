@@ -75,6 +75,9 @@ spec:
     transforms.outbox.table.field.event.key: {{ .router.key | quote }}
     transforms.outbox.table.field.event.payload: {{ .router.payload | quote }}
     transforms.outbox.table.expand.json.payload: "false"
+    transforms.outbox.tracing.span.context.field: tracingspancontext
+    transforms.outbox.tracing.with.context.field.only: "true"
+    transforms.outbox.table.fields.additional.placement: "tracingspancontext:header:tracingspancontext"
     transforms.outbox.route.by.field: {{ .router.routeByField | quote }}
     transforms.outbox.route.topic.replacement: {{ .router.topic | quote }}
     key.converter: org.apache.kafka.connect.storage.StringConverter

@@ -61,12 +61,13 @@ func (r repository) OrderReference(ctx context.Context, paymentID string) (strin
 
 func (r repository) InsertDelivery(ctx context.Context, delivery domain.Delivery) (bool, error) {
 	rows, err := r.q.InsertDelivery(ctx, sqlcgen.InsertDeliveryParams{
-		EventID:       delivery.EventID,
-		IntegrationID: delivery.IntegrationID,
-		PaymentID:     delivery.PaymentID,
-		EventType:     delivery.EventType,
-		Body:          delivery.Body,
-		NextAttemptAt: delivery.NextAttemptAt,
+		EventID:            delivery.EventID,
+		IntegrationID:      delivery.IntegrationID,
+		PaymentID:          delivery.PaymentID,
+		EventType:          delivery.EventType,
+		Body:               delivery.Body,
+		Tracingspancontext: delivery.TraceContext,
+		NextAttemptAt:      delivery.NextAttemptAt,
 	})
 	return rows == 1, err
 }
@@ -88,6 +89,7 @@ func (s *Store) Claim(ctx context.Context, now time.Time, limit int, lease time.
 			PaymentID:     row.PaymentID,
 			EventType:     row.EventType,
 			Body:          row.Body,
+			TraceContext:  row.Tracingspancontext,
 			Attempts:      int(row.Attempts),
 			CreatedAt:     row.CreatedAt,
 		})

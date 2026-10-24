@@ -1,6 +1,12 @@
-{{- range $name, $settings := .Values.services }}
-{{- if $settings.enabled }}
-{{- $svc := mergeOverwrite (deepCopy $.Values.defaults) $settings }}
+{{- range $name, $svc := include "payment-gateway.services" . | fromYaml }}
+{{- $port := first $svc.ports }}
+{{- $image := include "payment-gateway.image" (dict "root" $ "name" $name "service" $svc) }}
+{{- $mounts := list }}
+{{- range $svc.externalSecrets }}
+{{- if .mountPath }}
+{{- $mounts = append $mounts . }}
+{{- end }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -18,6 +24,8 @@ spec:
       {{- include "payment-gateway.selector" $name | nindent 6 }}
   template:
     metadata:
+      annotations:
+        resource.opentelemetry.io/service.name: {{ $name | quote }}
       labels:
         {{- include "payment-gateway.selector" $name | nindent 8 }}
         {{- if $svc.mesh.enabled }}
@@ -33,88 +41,92 @@ spec:
         runAsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
-      {{- if $svc.migrate.enabled }}
+      {{- if $svc.database }}
       initContainers:
         - name: migrate
-          image: "{{ $svc.image.repository }}:{{ $.Values.imageTag | default $svc.image.tag }}"
+          image: {{ $image | quote }}
           imagePullPolicy: {{ $svc.image.pullPolicy }}
           args: [migrate]
           securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: [ALL]
-          {{- with $svc.migrate.env }}
+            {{- include "payment-gateway.container-security" . | nindent 12 }}
           env:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- include "payment-gateway.database-env" (dict "database" $svc.database "migrate" true) | nindent 12 }}
       {{- end }}
       containers:
         - name: {{ $name }}
-          image: "{{ $svc.image.repository }}:{{ $.Values.imageTag | default $svc.image.tag }}"
+          image: {{ $image | quote }}
           imagePullPolicy: {{ $svc.image.pullPolicy }}
-          {{- with $svc.args }}
-          args:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
           securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: [ALL]
+            {{- include "payment-gateway.container-security" . | nindent 12 }}
           ports:
             {{- range $svc.ports }}
             - name: {{ .name }}
               containerPort: {{ .containerPort }}
               protocol: TCP
             {{- end }}
-          {{- with $svc.env }}
           env:
+            - name: OTEL_SERVICE_NAME
+              value: {{ $name | quote }}
+            - name: TRACING_ENABLED
+              value: {{ $svc.telemetry.tracingEnabled | quote }}
+            - name: METRICS_ENABLED
+              value: {{ $svc.telemetry.metricsEnabled | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ $svc.telemetry.endpoint | quote }}
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: {{ $svc.telemetry.samplingRatio | quote }}
+            - name: OTEL_METRIC_EXPORT_INTERVAL
+              value: {{ $svc.telemetry.metricExportInterval | quote }}
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: SERVICE_REVISION
+              value: {{ $.Values.imageTag | quote }}
+            {{- if $svc.database }}
+            {{- include "payment-gateway.database-env" (dict "database" $svc.database "migrate" false) | nindent 12 }}
+            {{- end }}
+            {{- range $mounts }}
+            {{- $mountPath := .mountPath }}
+            {{- range .data }}
+            {{- if .env }}
+            - name: {{ .env }}
+              value: {{ printf "%s/%s" $mountPath .secretKey | quote }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- with $svc.env }}
             {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- with $svc.volumeMounts }}
+            {{- end }}
+          {{- with $mounts }}
           volumeMounts:
-            {{- toYaml . | nindent 12 }}
+            {{- range . }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+              readOnly: true
+            {{- end }}
           {{- end }}
-          {{- if eq $svc.probes.type "grpc" }}
-          livenessProbe:
-            grpc:
-              port: {{ $svc.probes.grpcPort }}
-              service: liveness
-            {{- toYaml $svc.probes.liveness | nindent 12 }}
-          readinessProbe:
-            grpc:
-              port: {{ $svc.probes.grpcPort }}
-              service: readiness
-            {{- toYaml $svc.probes.readiness | nindent 12 }}
-          {{- else if eq $svc.probes.type "http" }}
-          livenessProbe:
+          {{- range $probe, $path := dict "liveness" "/health" "readiness" "/ready" }}
+          {{ $probe }}Probe:
+            {{- if eq $port.name "http" }}
             httpGet:
-              path: /health
-              port: {{ $svc.probes.httpPort }}
-            {{- toYaml $svc.probes.liveness | nindent 12 }}
-          readinessProbe:
-            httpGet:
-              path: /ready
-              port: {{ $svc.probes.httpPort }}
-            {{- toYaml $svc.probes.readiness | nindent 12 }}
-          {{- else if eq $svc.probes.type "exec" }}
-          livenessProbe:
-            exec:
-              command:
-                {{- toYaml (concat $svc.probes.exec.command (list "liveness")) | nindent 16 }}
-            {{- toYaml $svc.probes.liveness | nindent 12 }}
-          readinessProbe:
-            exec:
-              command:
-                {{- toYaml (concat $svc.probes.exec.command (list "readiness")) | nindent 16 }}
-            {{- toYaml $svc.probes.readiness | nindent 12 }}
+              path: {{ $path }}
+              port: {{ $port.containerPort }}
+            {{- else }}
+            grpc:
+              port: {{ $port.containerPort }}
+              service: {{ $probe }}
+            {{- end }}
+            {{- toYaml (index $svc.probes $probe) | nindent 12 }}
           {{- end }}
           resources:
             {{- toYaml $svc.resources | nindent 12 }}
-      {{- with $svc.volumes }}
+      {{- with $mounts }}
       volumes:
-        {{- toYaml . | nindent 8 }}
+        {{- range . }}
+        - name: {{ .name }}
+          secret:
+            secretName: {{ .name }}
+        {{- end }}
       {{- end }}
-{{- end }}
 {{- end }}

@@ -4,8 +4,8 @@ global:
 destinationName: dev
 namePrefix: payment-gateway-dev
 applications:
-  fraud-service:
+  payment-gateway:
     enabled: true
     destinationNamespace: payment-gateway
-    path: infra/charts/fraud-service
+    path: infra/charts/payment-gateway
     valuesFile: []

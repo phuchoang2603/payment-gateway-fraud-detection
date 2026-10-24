@@ -3,25 +3,17 @@ package grpc
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net"
-	"strings"
-	"time"
 
-	"github.com/google/uuid"
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/application"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/domain"
 	paymentsv1 "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1"
-)
-
-const (
-	RequestIDHeader    = "x-request-id"
-	maxRequestIDLength = 128
 )
 
 type Server struct {
@@ -83,34 +75,10 @@ func toStatus(err error) error {
 }
 
 func CorrelationInterceptor() grpc.UnaryServerInterceptor {
+	observeRequest := observe.UnaryServerInterceptor()
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		requestID := ""
-		if md, ok := metadata.FromIncomingContext(ctx); ok {
-			if values := md.Get(RequestIDHeader); len(values) > 0 {
-				requestID = sanitize(values[0])
-			}
-		}
-		if requestID == "" {
-			requestID = uuid.NewString()
-		}
-		ctx = application.WithCorrelationID(ctx, requestID)
-		started := time.Now()
-		response, err := handler(ctx, request)
-		slog.Info("payments rpc", "service", "payments", "method", info.FullMethod, "code", status.Code(err).String(),
-			"duration_ms", time.Since(started).Milliseconds(), "request_id", requestID)
-		return response, err
+		return observeRequest(ctx, request, info, func(ctx context.Context, request any) (any, error) {
+			return handler(application.WithCorrelationID(ctx, observe.RequestID(ctx)), request)
+		})
 	}
-}
-
-func sanitize(value string) string {
-	value = strings.TrimSpace(strings.Map(func(character rune) rune {
-		if character >= 32 && character < 127 {
-			return character
-		}
-		return -1
-	}, value))
-	if runes := []rune(value); len(runes) > maxRequestIDLength {
-		value = string(runes[:maxRequestIDLength])
-	}
-	return value
 }

@@ -8,13 +8,15 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/adapters/postgres"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/app"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/config"
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)).With("service", "payments"))
+	slog.SetDefault(slog.New(observe.NewLogHandler(os.Stdout, "payments")))
 	command := "serve"
 	if len(os.Args) > 1 {
 		command = os.Args[1]
@@ -50,6 +52,12 @@ func main() {
 }
 
 func serve(ctx context.Context, cfg config.Config) error {
+	shutdown, err := observe.Init(ctx, "payments")
+	if err != nil {
+		return err
+	}
+	defer shutdown()
+
 	application, err := app.New(ctx, cfg)
 	if err != nil {
 		return err
@@ -59,12 +67,6 @@ func serve(ctx context.Context, cfg config.Config) error {
 		application.Close()
 		return err
 	}
-	metricsListener, err := net.Listen("tcp", cfg.MetricsAddr)
-	if err != nil {
-		_ = grpcListener.Close()
-		application.Close()
-		return err
-	}
-	slog.Info("starting payments service", "grpc", cfg.GRPCAddr, "metrics", cfg.MetricsAddr)
-	return application.Serve(ctx, grpcListener, metricsListener)
+	slog.Info("starting payments service", "grpc", cfg.GRPCAddr)
+	return application.Serve(ctx, grpcListener)
 }

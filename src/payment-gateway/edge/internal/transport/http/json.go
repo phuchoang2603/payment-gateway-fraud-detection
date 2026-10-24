@@ -68,7 +68,7 @@ func logFailure(r *http.Request, status int, err error) {
 	if status < http.StatusInternalServerError {
 		return
 	}
-	slog.Error("edge request failed", "service", "edge", "request_id", requestid.From(r.Context()), "status", status, "error", err.Error())
+	slog.ErrorContext(r.Context(), "edge request failed", "service", "edge", "request_id", requestid.From(r.Context()), "status", status, "error", err.Error())
 }
 
 func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {

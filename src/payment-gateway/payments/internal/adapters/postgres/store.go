@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/wire"
 
 	"github.com/google/uuid"
@@ -221,7 +223,7 @@ func insertEvent(ctx context.Context, q *sqlcgen.Queries, event *paymentsv1.Paym
 	}
 	_, err = q.InsertEvent(ctx, sqlcgen.InsertEventParams{
 		EventID: eventID, PaymentID: paymentID, AggregateVersion: int64(event.GetAggregateVersion()),
-		EventType: eventType(event), Payload: payload,
+		EventType: eventType(event), Payload: payload, Tracingspancontext: observe.SerializeContext(ctx),
 		OccurredAt: event.GetOccurredAt().AsTime(), RecordedAt: event.GetRecordedAt().AsTime(),
 	})
 	if err != nil {

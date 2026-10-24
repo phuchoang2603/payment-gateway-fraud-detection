@@ -37,10 +37,10 @@ metadata:
   name: {{ .Values.redis.password.secretName }}
   namespace: {{ .Release.Namespace }}
 spec:
-  refreshInterval: {{ .Values.redis.externalSecrets.refreshInterval }}
+  refreshInterval: {{ .Values.externalSecrets.refreshInterval }}
   secretStoreRef:
-    kind: {{ .Values.redis.externalSecrets.secretStoreRef.kind }}
-    name: {{ .Values.redis.externalSecrets.secretStoreRef.name }}
+    kind: {{ .Values.externalSecrets.secretStoreRef.kind }}
+    name: {{ .Values.externalSecrets.secretStoreRef.name }}
   target:
     name: {{ .Values.redis.password.secretName }}
     creationPolicy: Owner

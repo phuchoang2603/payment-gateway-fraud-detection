@@ -6,7 +6,7 @@ Establish independently operable Go and Python service boundaries with predictab
 
 ### Requirement: Independent service ownership
 
-Services SHALL build and run without starting another service or accessing its database. Go SHALL be primary for edge, Payments, notifier, vault simulator and processor simulator; fraud serving and training SHALL retain Python ownership. Shared artifacts SHALL contain technical helpers or versioned wire contracts, not shared mutable domain models. The conventions SHALL document composition, transport/domain/persistence boundaries, service-owned migrations and independently deployable units.
+Services SHALL build and run without starting another service or accessing its database. Go SHALL own edge, Payments, fraud decision serving, notifier, vault simulator and processor simulator. Training, Feast transformations and custom model runtimes MAY use Python. Go fraud SHALL call separately deployed Feast/KServe serving APIs directly when those dependencies are introduced, without a custom Python coordinator. Shared artifacts SHALL contain technical helpers or versioned wire contracts, not shared mutable domain models. The conventions SHALL document composition, transport/domain/persistence boundaries, service-owned migrations and independently deployable units.
 
 #### Scenario: Build a service independently
 
@@ -58,7 +58,7 @@ Service startup SHALL validate configuration before reporting ready. Shutdown SH
 
 ### Requirement: Versioned contracts and safe errors
 
-The supported fraud decision request/response schemas, policy thresholds, validation semantics and operational endpoints SHALL be explicit in the versioned contract and the documentation; decision rules and thresholds SHALL be protected by behavior tests. Legacy compatibility SHALL NOT constrain modernization; intentional changes SHALL update implementation, contracts and tests together. Internal synchronous business contracts SHALL use versioned protobuf services with generated bindings for each consuming language; legacy internal JSON APIs SHALL be removed. Contract conventions SHALL state ownership, compatibility rules and breaking-version handling. Public errors SHALL NOT expose stack traces, credentials or storage internals; new contracts SHALL use stable error categories mapped at the transport boundary.
+The supported fraud decision request/response schemas, policy thresholds, validation semantics and operational endpoints SHALL be explicit in the versioned contract and the documentation; decision rules and thresholds SHALL be protected by behavior tests. Legacy compatibility SHALL NOT constrain modernization; intentional changes SHALL update implementation, contracts and tests together. Internal synchronous business contracts SHALL use versioned protobuf services with generated bindings for actual consumers; legacy internal JSON APIs SHALL be removed. Vendor Feast/KServe HTTP or gRPC protocols SHALL be isolated behind adapters and SHALL NOT introduce parallel internal business APIs. The replaced Python fraud runtime and unused bindings SHALL be removed without a compatibility wrapper. Contract conventions SHALL state ownership, compatibility rules and breaking-version handling. Public errors SHALL NOT expose stack traces, credentials or storage internals; new contracts SHALL use stable error categories mapped at the transport boundary.
 
 #### Scenario: Supported decision caller
 
@@ -72,7 +72,7 @@ The supported fraud decision request/response schemas, policy thresholds, valida
 
 ### Requirement: Consistent operational identity
 
-Both language examples SHALL emit structured logs with a consistent service identity and real trace/span identifiers when available. Request correlation SHALL be propagated or generated when absent. Metric dimensions SHALL avoid unbounded request, customer, payment or transaction identifiers. The current fraud decision metrics (`fraud_decisions_total{outcome,reason}` and `fraud_decision_latency_seconds`) SHALL be documented and available from the application metrics endpoint. Trace export SHALL be disabled by default and SHALL require explicit enablement and a configured OTLP endpoint; disabled tracing SHALL NOT require a trace backend for service startup or requests. Application dashboards and alerts are deferred.
+All gateway services SHALL emit structured logs with a consistent service identity and real trace/span identifiers when available. Request correlation SHALL be propagated or generated when absent. Metric dimensions SHALL avoid unbounded request, customer, payment or transaction identifiers. Fraud SHALL export decision outcomes, separate reason matches, policy latency and RPC latency over OTLP. The old Python Prometheus endpoint SHALL be removed. One decision matching multiple reasons SHALL increment the decision total once. Declines SHALL NOT count as RPC errors. Trace export SHALL be disabled by default and SHALL require explicit enablement and a configured OTLP endpoint; disabled tracing SHALL NOT require a trace backend for service startup or requests. Application dashboards and alerts are deferred.
 
 #### Scenario: Request without an incoming correlation identifier
 
@@ -97,12 +97,12 @@ Both language examples SHALL emit structured logs with a consistent service iden
 
 ### Requirement: Internal Go service operation
 
-Payments, notifier, vault simulator and processor simulator SHALL follow the edge's composition-root shape with transport, application, domain and adapter packages.
+Payments, fraud, notifier, vault simulator and processor simulator SHALL follow the edge's composition-root shape with transport, application, domain and adapter packages.
 
 #### Scenario: Complete internal go service operation contract
 
 - **WHEN** the `Internal Go service operation` capability is configured or exercised
-- **THEN** Payments, notifier, vault simulator and processor simulator SHALL follow the edge's composition-root shape with transport, application, domain and adapter packages. Each SHALL expose standard gRPC health checks with `liveness` and `readiness` service names. Readiness SHALL require its own database to be reachable with migrations applied, and SHALL NOT require any other service or Redis to be reachable. Each SHALL apply only its own migrations, bound shutdown like the edge, and emit structured logs, traces and metrics with a consistent service identity. Internal gRPC SHALL rely on the service mesh for transport encryption and caller identity rather than application TLS or bearer credentials; the vault SHALL separate tokenization/metadata from processing resolution on distinct ports authorized per workload identity. Probes SHALL use the native gRPC health check.
+- **THEN** Payments, fraud, notifier, vault simulator and processor simulator SHALL follow the edge's composition-root shape with transport, application, domain and adapter packages. Each SHALL expose standard gRPC health checks with `liveness` and `readiness` service names. For services with a database, readiness SHALL require their own database to be reachable with migrations applied, and SHALL NOT require any other service or Redis to be reachable. Each SHALL apply only its own migrations, bound shutdown like the edge, and emit structured logs, traces and metrics with a consistent service identity. Internal gRPC SHALL rely on the service mesh for transport encryption and caller identity rather than application TLS or bearer credentials; the vault SHALL separate tokenization/metadata from processing resolution on distinct ports authorized per workload identity. Probes SHALL use the native gRPC health check.
 
 #### Scenario: Fraud unavailable at Payments startup
 

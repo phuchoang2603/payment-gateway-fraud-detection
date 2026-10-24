@@ -31,7 +31,7 @@ func TestDefaultsMatchTheDocumentedValues(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if cfg.GRPCAddr != ":8000" || cfg.MetricsAddr != ":8010" || cfg.ShutdownTimeout != 10*time.Second || cfg.IdempotencyTTL != 24*time.Hour ||
+	if cfg.GRPCAddr != ":8000" || cfg.ShutdownTimeout != 10*time.Second || cfg.IdempotencyTTL != 24*time.Hour ||
 		cfg.PaymentExpiry != 15*time.Minute || cfg.AttemptBudget != 5*time.Second || cfg.FraudTimeout != time.Second ||
 		cfg.ProcessorTimeout != 3*time.Second || cfg.RecoveryGrace != 10*time.Second || cfg.RedisTimeout != 50*time.Millisecond {
 		t.Fatalf("defaults = %+v", cfg)

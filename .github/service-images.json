@@ -3,8 +3,9 @@
     {
       "service": "fraud",
       "image-suffix": "",
-      "context": "src/fraud-service",
-      "dockerfile": "infra/docker/fraud-service.Dockerfile"
+      "context": ".",
+      "dockerfile": "infra/docker/go-service.Dockerfile",
+      "build-args": "SERVICE_PATH=src/payment-gateway/fraud\nBUILD_PKG=./cmd/fraud\nBUILD_BIN=fraud\nEXPOSE_PORT=8000\n"
     },
     {
       "service": "edge",

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/testutil/telemetry"
+
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/testsupport"
 )
 
@@ -75,6 +77,7 @@ func TestRedisRecordsNeverContainTokensCredentialsOrRequestBodies(t *testing.T) 
 }
 
 func TestRedisCountersTrackHitsMissesAndErrors(t *testing.T) {
+	reader := telemetry.Metrics(t)
 	stack := newStack(t, true)
 	payment := mustCreate(t, stack, "key-1", "order-1")
 	mustStart(t, stack, payment, "attempt-1", "vault-token")
@@ -83,30 +86,9 @@ func TestRedisCountersTrackHitsMissesAndErrors(t *testing.T) {
 	unreachable := testsupport.NewStack(t, testsupport.StackOptions{Config: shortConfig(), WithRedis: true, RedisAddr: "127.0.0.1:1"})
 	mustCreate(t, unreachable, "key-1", "order-1")
 
-	families, err := stack.Metrics.Registry.Gather()
-	if err != nil {
-		t.Fatal(err)
-	}
-	values := map[string]float64{}
-	for _, family := range families {
-		for _, metric := range family.GetMetric() {
-			if metric.GetCounter() != nil {
-				values[family.GetName()] += metric.GetCounter().GetValue()
-			}
-		}
-	}
-	if values["payments_redis_idempotency_hits_total"] < 1 || values["payments_redis_idempotency_misses_total"] < 2 {
-		t.Fatalf("hit/miss counters = %v", values)
-	}
-	unreachableFamilies, _ := unreachable.Metrics.Registry.Gather()
-	var errorsSeen float64
-	for _, family := range unreachableFamilies {
-		if family.GetName() == "payments_redis_idempotency_errors_total" {
-			errorsSeen = family.GetMetric()[0].GetCounter().GetValue()
-		}
-	}
-	if errorsSeen < 1 {
-		t.Fatalf("error counter = %v", errorsSeen)
+	values := telemetry.Sums(t, reader)
+	if values["payments.redis.idempotency.hits"] < 1 || values["payments.redis.idempotency.misses"] < 2 || values["payments.redis.idempotency.errors"] < 1 {
+		t.Fatalf("Redis counters = %v", values)
 	}
 }
 

@@ -92,7 +92,7 @@ func (s *Service) StartAttempt(ctx context.Context, request *paymentsv1.StartAtt
 		existing, ok, cacheErr := s.deps.Cache.Claim(ctx, input.cacheKey, CacheRecord{Digest: digest, State: CacheInFlight, ClaimedAtMs: started.UnixMilli(), AttemptID: attemptID.String()})
 		switch {
 		case cacheErr != nil:
-			slog.Warn("idempotency cache unavailable; using database", "error", cacheErr)
+			slog.WarnContext(ctx, "idempotency cache unavailable; using database", "error", cacheErr)
 		case ok:
 			claimed = true
 		case existing.Digest != digest:
@@ -120,7 +120,7 @@ func (s *Service) StartAttempt(ctx context.Context, request *paymentsv1.StartAtt
 			AttemptStatus: result.GetStatus().String(), DeclineReason: result.GetDeclineReason(),
 		}
 		if err := s.deps.Cache.Complete(ctx, input.cacheKey, completion); err != nil {
-			slog.Warn("complete idempotency cache record", "error", err)
+			slog.WarnContext(ctx, "complete idempotency cache record", "error", err)
 		}
 	}
 	return result, nil
@@ -324,12 +324,12 @@ func (s *Service) assess(budgetCtx context.Context, state domain.State, input at
 		CorrelationID: input.correlationID,
 	})
 	if err != nil || assessment == nil {
-		slog.Warn("fraud decision unavailable; failing closed", "payment_id", state.PaymentID, "error", err)
+		slog.WarnContext(budgetCtx, "fraud decision unavailable; failing closed", "payment_id", state.PaymentID, "error", err)
 		return fallback
 	}
 	if assessment.GetPolicyVersion() == "" || slices.Contains(assessment.GetReasonCodes(), "") ||
 		(assessment.GetOutcome() != paymentsv1.RiskOutcome_RISK_OUTCOME_APPROVE && assessment.GetOutcome() != paymentsv1.RiskOutcome_RISK_OUTCOME_DECLINE) {
-		slog.Warn("fraud returned an unusable assessment; failing closed", "payment_id", state.PaymentID)
+		slog.WarnContext(budgetCtx, "fraud returned an unusable assessment; failing closed", "payment_id", state.PaymentID)
 		return fallback
 	}
 	return assessment
@@ -371,7 +371,7 @@ func (s *Service) callProcessor(ctx, budgetCtx context.Context, state domain.Sta
 		CorrelationID: input.correlationID,
 	})
 	if err != nil {
-		slog.Warn("processor outcome unknown", "payment_id", state.PaymentID, "operation_key", attempt.OperationKey, "error", err)
+		slog.WarnContext(ctx, "processor outcome unknown", "payment_id", state.PaymentID, "operation_key", attempt.OperationKey, "error", err)
 		s.failure("processor_unknown")
 		return s.commit(ctx, state, nil, nil, domain.RecordOutcomeUnknown{Envelope: s.envelope(state.Version), AttemptID: attempt.ID})
 	}

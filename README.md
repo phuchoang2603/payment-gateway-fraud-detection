@@ -2,7 +2,7 @@
 
 This project builds an ecommerce payment gateway with fraud decisioning. The planned gateway owns hosted checkout, payment execution and risk decisions; the marketplace keeps ownership of customers, sellers, orders and inventory. Initial processing uses synthetic payment-method tokens and a processor simulator.
 
-The current repository contains a health-only Go HTTP edge and a Python gRPC fraud decision service with a stateless rules baseline, behavior tests, container/CI configuration, Talos GitOps manifests and application telemetry. Gateway services, ecommerce feature pipelines and the coursework extensions are planned. Source/configuration presence does not establish a live deployment or completed coursework.
+The repository implements six Go services, including the independent fraud decision service at `src/payment-gateway/fraud` with a stateless rules baseline. The [Go fraud and observability change](openspec/changes/go-service-observability/proposal.md) adds correlated telemetry; CI and deployed acceptance remain pending. Later, Go fraud calls Feast feature serving and KServe inference directly; Python remains in training, feature transformations and model runtimes where needed. Data/ML pipelines and production acceptance have their own milestones. Source/configuration presence does not establish a live deployment or completed coursework.
 
 ## Repository structure
 
@@ -23,7 +23,6 @@ The current repository contains a health-only Go HTTP edge and a Python gRPC fra
 │   └── docker/            # Service Dockerfiles and reusable Go template
 ├── openspec/              # Capability specifications and change plans
 ├── src/payment-gateway/   # Go gateway services, shared module and workspace
-├── src/fraud-service/     # Python fraud decision service
 ├── src/simulator/         # Historical data simulator
 ├── devenv.nix             # Local development environment
 ├── devenv.yaml            # Devenv inputs

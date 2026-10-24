@@ -1,8 +1,6 @@
-{{- range $name, $settings := .Values.services }}
-{{- if $settings.enabled }}
-{{- $svc := mergeOverwrite (deepCopy $.Values.defaults) $settings }}
----
+{{- range $name, $svc := include "payment-gateway.services" . | fromYaml }}
 {{- with $svc.networkPolicy.egress }}
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -16,6 +14,5 @@ spec:
     - Egress
   egress:
     {{- toYaml . | nindent 4 }}
-{{- end }}
 {{- end }}
 {{- end }}

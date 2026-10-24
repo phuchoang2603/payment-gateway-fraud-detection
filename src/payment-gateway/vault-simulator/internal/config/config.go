@@ -13,13 +13,12 @@ import (
 const (
 	defaultGRPCAddr        = ":8000"
 	defaultProcessingAddr  = ":8001"
-	defaultMetricsAddr     = ":8010"
 	defaultShutdownTimeout = 10 * time.Second
 )
 
 // Environment variables (each secret also accepts <NAME>_FILE with a mounted file path):
 //
-//	VAULT_GRPC_ADDR (VaultService), VAULT_PROCESSING_ADDR (ProcessingService), VAULT_METRICS_ADDR, VAULT_SHUTDOWN_TIMEOUT
+//	VAULT_GRPC_ADDR (VaultService), VAULT_PROCESSING_ADDR (ProcessingService), VAULT_SHUTDOWN_TIMEOUT
 //	VAULT_DATABASE_URL, VAULT_MIGRATE_DATABASE_URL (owner role, falls back to VAULT_DATABASE_URL)
 //	VAULT_ENCRYPTION_KEY: base64 of 32 bytes (AES-256-GCM)
 //	VAULT_FINGERPRINT_KEY: synthetic HMAC key shared with contracts/synthetic/identity-vectors.json
@@ -28,7 +27,6 @@ const (
 type Config struct {
 	GRPCAddr           string
 	ProcessingAddr     string
-	MetricsAddr        string
 	ShutdownTimeout    time.Duration
 	DatabaseURL        string
 	MigrateDatabaseURL string
@@ -44,7 +42,6 @@ func FromLookup(lookup func(string) string) (Config, error) {
 	cfg := Config{
 		GRPCAddr:        defaultGRPCAddr,
 		ProcessingAddr:  defaultProcessingAddr,
-		MetricsAddr:     defaultMetricsAddr,
 		ShutdownTimeout: defaultShutdownTimeout,
 	}
 	if value := lookup("VAULT_PROCESSING_ADDR"); value != "" {
@@ -52,9 +49,6 @@ func FromLookup(lookup func(string) string) (Config, error) {
 	}
 	if value := lookup("VAULT_GRPC_ADDR"); value != "" {
 		cfg.GRPCAddr = value
-	}
-	if value := lookup("VAULT_METRICS_ADDR"); value != "" {
-		cfg.MetricsAddr = value
 	}
 	if value := lookup("VAULT_SHUTDOWN_TIMEOUT"); value != "" {
 		duration, err := time.ParseDuration(value)
@@ -98,9 +92,6 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := validateAddr("VAULT_PROCESSING_ADDR", c.ProcessingAddr); err != nil {
-		return err
-	}
-	if err := validateAddr("VAULT_METRICS_ADDR", c.MetricsAddr); err != nil {
 		return err
 	}
 	if c.ShutdownTimeout <= 0 {

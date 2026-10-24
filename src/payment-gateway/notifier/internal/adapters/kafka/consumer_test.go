@@ -9,6 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/testutil/telemetry"
+	"go.opentelemetry.io/otel/trace"
+
 	testkafka "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/testutil/kafka"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -22,6 +26,9 @@ import (
 )
 
 func TestConsumerRecordsOnceAcrossRestartsAndGroups(t *testing.T) {
+	provider, recorder := telemetry.Traces(t)
+	origin, parent := provider.Tracer("producer").Start(context.Background(), "append event")
+	parent.End()
 	brokers := testkafka.SetupKafka(t)
 	pool, _ := testutil.NewPool(t)
 	set, err := domain.ParseIntegrations([]byte(`[
@@ -55,6 +62,11 @@ func TestConsumerRecordsOnceAcrossRestartsAndGroups(t *testing.T) {
 	defer cancelProduce()
 	for _, message := range messages {
 		record := &kgo.Record{Topic: topic, Key: []byte(message.key), Value: message.value}
+		if message.key == "p1" {
+			record.Headers = []kgo.RecordHeader{{Key: "tracingspancontext", Value: []byte(*observe.SerializeContext(origin))}}
+		} else {
+			record.Headers = []kgo.RecordHeader{{Key: "tracingspancontext", Value: []byte("traceparent=invalid\n")}}
+		}
 		if err := producer.ProduceSync(produceCtx, record).FirstErr(); err != nil {
 			t.Fatalf("produce: %v", err)
 		}
@@ -120,6 +132,25 @@ func TestConsumerRecordsOnceAcrossRestartsAndGroups(t *testing.T) {
 
 	runConsumer(group + "-replay")
 	assertDeliveries()
+	for _, eventID := range []string{"k2", "k3"} {
+		var saved *string
+		if err := pool.QueryRow(context.Background(), "SELECT tracingspancontext FROM webhook_deliveries WHERE event_id=$1", eventID).Scan(&saved); err != nil {
+			t.Fatal(err)
+		}
+		sc := trace.SpanContextFromContext(observe.RestoreContext(context.Background(), saved))
+		if !sc.IsValid() || sc.TraceID() != parent.SpanContext().TraceID() {
+			t.Fatal("Kafka/replay lost the event parent")
+		}
+	}
+	matched := false
+	for _, span := range recorder.Ended() {
+		if span.Name() == "payments.events.v1 process" && span.Parent().SpanID() == parent.SpanContext().SpanID() {
+			matched = true
+		}
+	}
+	if !matched {
+		t.Fatal("consumer spans do not descend from committed context")
+	}
 }
 
 type observedHandler struct {

@@ -1,6 +1,6 @@
 # Payment gateway architecture
 
-This is the **planned target** for the payment gateway and its fraud decisioning path; the [verification evidence](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md) records what the prod deployment currently proves. The implemented slice supplies Edge, Payments, notifier, vault and processor simulators, plus Python fraud decisioning; it takes synthetic payment-method tokens through hosted checkout, evaluates risk, executes simulated processor operations, and delivers durable payment outcomes.
+This is the **planned target** for the payment gateway and its fraud decisioning path; the [verification evidence](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md) records what the prod deployment currently proves. The implemented slice supplies Edge, Payments, notifier, vault and processor simulators, plus Go fraud decisioning; it takes synthetic payment-method tokens through hosted checkout, evaluates risk, executes simulated processor operations, and delivers durable payment outcomes.
 
 ## How the gateway is organized
 

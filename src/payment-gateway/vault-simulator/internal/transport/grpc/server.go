@@ -3,15 +3,13 @@ package grpctransport
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net"
-	"net/http"
 	"sync"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+
 	"github.com/google/uuid"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -47,8 +45,6 @@ type Server struct {
 	readiness       Readiness
 	shutdownTimeout time.Duration
 	health          *health.Server
-	registry        *prometheus.Registry
-	requests        *prometheus.CounterVec
 }
 
 type processingServer struct {
@@ -62,22 +58,17 @@ func NewServer(cfg config.Config, vault Vault, readiness Readiness) *Server {
 		readiness:       readiness,
 		shutdownTimeout: cfg.ShutdownTimeout,
 		health:          health.NewServer(),
-		registry:        prometheus.NewRegistry(),
-		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "vault_requests_total", Help: "Vault gRPC requests by method and status code.",
-		}, []string{"method", "code"}),
 	}
-	server.registry.MustRegister(server.requests)
 	server.health.SetServingStatus(LivenessService, healthpb.HealthCheckResponse_SERVING)
 	server.health.SetServingStatus(ReadinessService, healthpb.HealthCheckResponse_NOT_SERVING)
 	return server
 }
 
-func (s *Server) Run(ctx context.Context, vaultListener, processingListener, metricsListener net.Listener) error {
+func (s *Server) Run(ctx context.Context, vaultListener, processingListener net.Listener) error {
 	newGRPC := func() *grpc.Server {
 		return grpc.NewServer(
-			grpc.StatsHandler(otelgrpc.NewServerHandler()),
-			grpc.ChainUnaryInterceptor(s.observe),
+			grpc.StatsHandler(otelgrpc.NewServerHandler(otelgrpc.WithFilter(observe.RPCFilter))),
+			grpc.ChainUnaryInterceptor(observe.UnaryServerInterceptor()),
 		)
 	}
 	vaultServer := newGRPC()
@@ -86,20 +77,9 @@ func (s *Server) Run(ctx context.Context, vaultListener, processingListener, met
 	processingGRPC := newGRPC()
 	vaultv1.RegisterProcessingServiceServer(processingGRPC, processingServer{server: s})
 
-	metrics := http.NewServeMux()
-	metrics.Handle("/metrics", promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{}))
-	metricsServer := &http.Server{Handler: metrics, ReadHeaderTimeout: 5 * time.Second}
-
 	errs := make(chan error, 3)
 	go func() { errs <- vaultServer.Serve(vaultListener) }()
 	go func() { errs <- processingGRPC.Serve(processingListener) }()
-	go func() {
-		if err := metricsServer.Serve(metricsListener); !errors.Is(err, http.ErrServerClosed) {
-			errs <- err
-			return
-		}
-		errs <- nil
-	}()
 	healthCtx, stopHealth := context.WithCancel(ctx)
 	defer stopHealth()
 	go s.pollReadiness(healthCtx)
@@ -109,7 +89,7 @@ func (s *Server) Run(ctx context.Context, vaultListener, processingListener, met
 	case <-ctx.Done():
 	case runErr = <-errs:
 	}
-	s.health.Shutdown()
+	s.health.SetServingStatus(ReadinessService, healthpb.HealthCheckResponse_NOT_SERVING)
 	stopHealth()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.shutdownTimeout)
@@ -132,9 +112,6 @@ func (s *Server) Run(ctx context.Context, vaultListener, processingListener, met
 	case <-shutdownCtx.Done():
 		vaultServer.Stop()
 		processingGRPC.Stop()
-	}
-	if err := metricsServer.Shutdown(shutdownCtx); err != nil {
-		_ = metricsServer.Close()
 	}
 	return runErr
 }
@@ -162,19 +139,6 @@ func (s *Server) pollReadiness(ctx context.Context) {
 			check()
 		}
 	}
-}
-
-func (s *Server) observe(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	start := time.Now()
-	resp, err := handler(ctx, req)
-	code := status.Code(err)
-	s.requests.WithLabelValues(info.FullMethod, code.String()).Inc()
-	slog.InfoContext(ctx, "vault request",
-		"method", info.FullMethod,
-		"code", code.String(),
-		"duration_ms", time.Since(start).Milliseconds(),
-	)
-	return resp, err
 }
 
 func (s *Server) TokenizeCard(ctx context.Context, req *vaultv1.TokenizeCardRequest) (*vaultv1.TokenizeCardResponse, error) {

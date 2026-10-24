@@ -9,6 +9,7 @@ const (
 )
 
 type Delivery struct {
+	TraceContext  *string
 	EventID       string
 	IntegrationID string
 	PaymentID     string

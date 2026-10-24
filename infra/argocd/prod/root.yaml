@@ -19,23 +19,18 @@ spec:
         namePrefix: payment-gateway-prod
         destinationServer: https://kubernetes.default.svc
         applications:
-          fraud-service:
-            enabled: true
-            valuesFile:
-              - infra/charts/fraud-service/values-prod.yaml
-            syncRetry: &retry
-              limit: -1
-              backoff:
-                duration: 5s
-                factor: 2
-                maxDuration: 3m
           payment-gateway:
             enabled: true
             destinationNamespace: payment-gateway
             path: infra/charts/payment-gateway
             valuesFile:
               - infra/charts/payment-gateway/values-prod.yaml
-            syncRetry: *retry
+            syncRetry: &retry
+              limit: -1
+              backoff:
+                duration: 5s
+                factor: 2
+                maxDuration: 3m
           kafka:
             enabled: true
             destinationNamespace: payment-gateway

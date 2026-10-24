@@ -1,54 +1,40 @@
 package metrics
 
 import (
+	"context"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type Metrics struct {
-	Registry          *prometheus.Registry
-	attemptLatency    prometheus.Histogram
-	attemptFailures   *prometheus.CounterVec
-	pendingOutcomeAge prometheus.Gauge
-	redisHits         prometheus.Counter
-	redisMisses       prometheus.Counter
-	redisErrors       prometheus.Counter
+	attemptLatency                      metric.Float64Histogram
+	attemptFailures                     metric.Int64Counter
+	pendingOutcomeAge                   metric.Float64Gauge
+	redisHits, redisMisses, redisErrors metric.Int64Counter
 }
 
 func New() *Metrics {
-	m := &Metrics{
-		Registry: prometheus.NewRegistry(),
-		attemptLatency: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Name: "payments_attempt_duration_seconds", Help: "Duration of StartAttempt orchestration.",
-			Buckets: []float64{0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 10},
-		}),
-		attemptFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "payments_attempt_failures_total", Help: "Attempts that did not succeed, by reason.",
-		}, []string{"reason"}),
-		pendingOutcomeAge: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "payments_pending_outcome_age_seconds", Help: "Age of the oldest attempt awaiting a processor outcome.",
-		}),
-		redisHits:   prometheus.NewCounter(prometheus.CounterOpts{Name: "payments_redis_idempotency_hits_total", Help: "Idempotency lookups answered by Redis."}),
-		redisMisses: prometheus.NewCounter(prometheus.CounterOpts{Name: "payments_redis_idempotency_misses_total", Help: "Idempotency lookups that found no Redis record."}),
-		redisErrors: prometheus.NewCounter(prometheus.CounterOpts{Name: "payments_redis_idempotency_errors_total", Help: "Redis operations that failed or timed out."}),
+	return &Metrics{
+		attemptLatency:    observe.Histogram("payments.attempt.duration", "s"),
+		attemptFailures:   observe.Counter("payments.attempt.failures", "{attempt}"),
+		pendingOutcomeAge: observe.Gauge("payments.pending.outcome.age", "s"),
+		redisHits:         observe.Counter("payments.redis.idempotency.hits", "{lookup}"),
+		redisMisses:       observe.Counter("payments.redis.idempotency.misses", "{lookup}"),
+		redisErrors:       observe.Counter("payments.redis.idempotency.errors", "{operation}"),
 	}
-	m.Registry.MustRegister(m.attemptLatency, m.attemptFailures, m.pendingOutcomeAge, m.redisHits, m.redisMisses, m.redisErrors)
-	return m
 }
 
 func (m *Metrics) ObserveAttempt(duration time.Duration) {
-	m.attemptLatency.Observe(duration.Seconds())
+	m.attemptLatency.Record(context.Background(), duration.Seconds())
 }
 
-func (m *Metrics) AttemptFailure(reason string) {
-	m.attemptFailures.WithLabelValues(reason).Inc()
-}
+func (m *Metrics) AttemptFailure(reason string) { observe.Count(m.attemptFailures, "reason", reason) }
 
 func (m *Metrics) SetPendingOutcomeAge(age time.Duration) {
-	m.pendingOutcomeAge.Set(age.Seconds())
+	m.pendingOutcomeAge.Record(context.Background(), age.Seconds())
 }
-
-func (m *Metrics) CacheHit()   { m.redisHits.Inc() }
-func (m *Metrics) CacheMiss()  { m.redisMisses.Inc() }
-func (m *Metrics) CacheError() { m.redisErrors.Inc() }
+func (m *Metrics) CacheHit()   { m.redisHits.Add(context.Background(), 1) }
+func (m *Metrics) CacheMiss()  { m.redisMisses.Add(context.Background(), 1) }
+func (m *Metrics) CacheError() { m.redisErrors.Add(context.Background(), 1) }

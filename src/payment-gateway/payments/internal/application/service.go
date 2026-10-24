@@ -112,7 +112,7 @@ func (s *Service) CreatePayment(ctx context.Context, request *paymentsv1.CreateP
 		existing, ok, cacheErr := s.deps.Cache.Claim(ctx, cacheKey, CacheRecord{Digest: digest, State: CacheInFlight, ClaimedAtMs: s.now().UnixMilli()})
 		switch {
 		case cacheErr != nil:
-			slog.Warn("idempotency cache unavailable; using database", "error", cacheErr)
+			slog.WarnContext(ctx, "idempotency cache unavailable; using database", "error", cacheErr)
 		case ok:
 			claimed = true
 		case existing.Digest != digest:
@@ -134,7 +134,7 @@ func (s *Service) CreatePayment(ctx context.Context, request *paymentsv1.CreateP
 	if s.deps.Cache != nil {
 		completion := CacheRecord{Digest: digest, State: CacheCompleted, ClaimedAtMs: s.now().UnixMilli(), PaymentID: payment.GetPaymentId()}
 		if err := s.deps.Cache.Complete(ctx, cacheKey, completion); err != nil {
-			slog.Warn("complete idempotency cache record", "error", err)
+			slog.WarnContext(ctx, "complete idempotency cache record", "error", err)
 		}
 	}
 	return payment, nil
@@ -142,7 +142,7 @@ func (s *Service) CreatePayment(ctx context.Context, request *paymentsv1.CreateP
 
 func (s *Service) release(ctx context.Context, key CacheKey, digest string) {
 	if err := s.deps.Cache.Release(context.WithoutCancel(ctx), key, digest); err != nil {
-		slog.Warn("release idempotency claim", "error", err)
+		slog.WarnContext(ctx, "release idempotency claim", "error", err)
 	}
 }
 

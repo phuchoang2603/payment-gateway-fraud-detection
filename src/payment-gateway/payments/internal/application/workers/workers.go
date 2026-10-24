@@ -50,15 +50,15 @@ func (w *Workers) Run(ctx context.Context) {
 }
 
 func (w *Workers) lead(ctx context.Context) {
-	slog.Info("payments workers elected leader")
+	slog.InfoContext(ctx, "payments workers elected leader")
 	ticker := time.NewTicker(w.config.Interval)
 	defer ticker.Stop()
 	for {
 		if _, err := w.RecoverOnce(ctx); err != nil && ctx.Err() == nil {
-			slog.Warn("recovery pass failed", "error", err)
+			slog.WarnContext(ctx, "recovery pass failed", "error", err)
 		}
 		if _, err := w.ExpireOnce(ctx); err != nil && ctx.Err() == nil {
-			slog.Warn("expiry pass failed", "error", err)
+			slog.WarnContext(ctx, "expiry pass failed", "error", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -76,7 +76,7 @@ func (w *Workers) RecoverOnce(ctx context.Context) (int, error) {
 	recovered := 0
 	for _, candidate := range candidates {
 		if err := w.service.RecoverAttempt(ctx, candidate); err != nil {
-			slog.Warn("recover attempt", "payment_id", candidate.PaymentID, "attempt_id", candidate.AttemptID, "error", err)
+			slog.WarnContext(ctx, "recover attempt", "payment_id", candidate.PaymentID, "attempt_id", candidate.AttemptID, "error", err)
 			continue
 		}
 		recovered++
@@ -92,7 +92,7 @@ func (w *Workers) ExpireOnce(ctx context.Context) (int, error) {
 	expired := 0
 	for _, paymentID := range payments {
 		if err := w.service.ExpirePayment(ctx, paymentID); err != nil {
-			slog.Warn("expire payment", "payment_id", paymentID, "error", err)
+			slog.WarnContext(ctx, "expire payment", "payment_id", paymentID, "error", err)
 			continue
 		}
 		expired++

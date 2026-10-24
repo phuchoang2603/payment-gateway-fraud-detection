@@ -1,6 +1,4 @@
-{{- range $name, $settings := .Values.services }}
-{{- if $settings.enabled }}
-{{- $svc := mergeOverwrite (deepCopy $.Values.defaults) $settings }}
+{{- range $name, $svc := include "payment-gateway.services" . | fromYaml }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -64,12 +62,11 @@ spec:
       to:
         - operation:
             ports:
-              {{- range $svc.networkPolicy.ingressPorts }}
-              - {{ . | quote }}
+              {{- range $svc.ports }}
+              - {{ .containerPort | quote }}
               {{- end }}
   {{- else }}
   rules: []
   {{- end }}
-{{- end }}
 {{- end }}
 {{- end }}

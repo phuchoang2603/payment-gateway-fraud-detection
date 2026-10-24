@@ -92,10 +92,10 @@ func newHarness(t *testing.T) *harness {
 		}
 		return listener
 	}
-	vaultListener, processingListener, metricsListener := listen(), listen(), listen()
+	vaultListener, processingListener := listen(), listen()
 	runCtx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- server.Run(runCtx, vaultListener, processingListener, metricsListener) }()
+	go func() { done <- server.Run(runCtx, vaultListener, processingListener) }()
 	t.Cleanup(func() {
 		cancel()
 		<-done

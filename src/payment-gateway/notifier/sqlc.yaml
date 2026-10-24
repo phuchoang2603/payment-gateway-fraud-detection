@@ -9,6 +9,10 @@ sql:
         out: internal/adapters/postgres/sqlcgen
         sql_package: pgx/v5
         overrides:
+          - column: webhook_deliveries.tracingspancontext
+            go_type:
+              type: string
+              pointer: true
           - db_type: timestamptz
             go_type: time.Time
           - db_type: timestamptz

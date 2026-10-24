@@ -24,7 +24,7 @@ func TestDefaults(t *testing.T) {
 	if err := cfg.ValidateServe(); err != nil {
 		t.Fatal(err)
 	}
-	if cfg.GRPCAddr != ":8000" || cfg.MetricsAddr != ":8010" || cfg.KafkaTopic != "payments.events.v1" || cfg.KafkaGroup != "gateway-notifier" {
+	if cfg.GRPCAddr != ":8000" || cfg.KafkaTopic != "payments.events.v1" || cfg.KafkaGroup != "gateway-notifier" {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 	if len(cfg.KafkaBrokers) != 2 || cfg.Schedule.MaxAttempts != 12 || cfg.DeliveryTimeout != 10*time.Second {

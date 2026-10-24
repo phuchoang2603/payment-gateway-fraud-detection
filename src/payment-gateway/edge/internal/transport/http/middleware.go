@@ -58,7 +58,7 @@ func (s *Server) withCorrelation(next http.Handler) http.Handler {
 		if route == "" {
 			route = "unmatched"
 		}
-		slog.Info("edge request", "service", "edge", "request_id", requestID, "method", r.Method, "route", route, "status", recorder.status)
+		slog.InfoContext(r.Context(), "edge request", "service", "edge", "request_id", requestID, "method", r.Method, "route", route, "status", recorder.status)
 	})
 }
 
@@ -66,7 +66,7 @@ func (s *Server) withRecovery(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if recover() != nil {
-				slog.Error("edge handler panic", "service", "edge", "request_id", w.Header().Get("X-Request-ID"))
+				slog.ErrorContext(r.Context(), "edge handler panic", "service", "edge", "request_id", w.Header().Get("X-Request-ID"))
 				writeError(w, http.StatusInternalServerError, "internal_error", "internal error")
 			}
 		}()

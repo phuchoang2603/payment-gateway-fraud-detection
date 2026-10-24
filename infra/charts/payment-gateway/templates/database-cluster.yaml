@@ -19,8 +19,8 @@ spec:
       max_replication_slots: "16"
       max_wal_senders: "16"
     pg_hba:
-      {{- range .Values.database.databases }}
-      - host {{ .name }} {{ join "," .connectRoles }} all scram-sha-256
+      {{- range $name, $database := .Values.database.databases }}
+      - host {{ $name }} {{ join "," (concat (list $name) (keys ($database.roles | default dict) | sortAlpha)) }} all scram-sha-256
       {{- end }}
       - host replication payments_cdc all scram-sha-256
       - host all all all reject
@@ -32,7 +32,7 @@ spec:
         name: {{ .Values.database.name }}-payments
   managed:
     roles:
-      {{- range .Values.database.roles }}
+      {{- range include "payment-gateway.database-roles" . | fromYamlArray }}
       {{- if ne .name "payments" }}
       - name: {{ .name }}
         ensure: present
@@ -42,21 +42,21 @@ spec:
           name: {{ $.Values.database.name }}-{{ .name | replace "_" "-" }}
       {{- end }}
       {{- end }}
-{{- range .Values.database.databases }}
-{{- if ne .name "payments" }}
+{{- range $name, $database := .Values.database.databases }}
+{{- if ne $name "payments" }}
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
-  name: {{ $.Values.database.name }}-{{ .name }}
+  name: {{ $.Values.database.name }}-{{ $name }}
   namespace: {{ $.Release.Namespace }}
   annotations:
     argocd.argoproj.io/sync-wave: "4"
 spec:
   cluster:
     name: {{ $.Values.database.name }}
-  name: {{ .name }}
-  owner: {{ .owner }}
+  name: {{ $name }}
+  owner: {{ $name }}
   databaseReclaimPolicy: retain
 {{- end }}
 {{- end }}

@@ -6,6 +6,9 @@ import (
 	"net"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
@@ -26,7 +29,7 @@ type Server struct {
 
 func New(ready func(context.Context) error) *Server {
 	s := &Server{
-		grpc:         grpc.NewServer(),
+		grpc:         grpc.NewServer(grpc.StatsHandler(otelgrpc.NewServerHandler(otelgrpc.WithFilter(observe.RPCFilter)))),
 		health:       health.NewServer(),
 		ready:        ready,
 		pollInterval: 2 * time.Second,
@@ -47,7 +50,7 @@ func (s *Server) Serve(ctx context.Context, listener net.Listener, shutdownTimeo
 		return err
 	case <-ctx.Done():
 	}
-	s.health.Shutdown()
+	s.health.SetServingStatus(ReadinessService, healthpb.HealthCheckResponse_NOT_SERVING)
 	stopped := make(chan struct{})
 	go func() {
 		s.grpc.GracefulStop()

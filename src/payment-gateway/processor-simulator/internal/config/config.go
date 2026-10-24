@@ -12,7 +12,6 @@ import (
 
 const (
 	defaultGRPCAddr          = ":8000"
-	defaultMetricsAddr       = ":8010"
 	defaultShutdownTimeout   = 10 * time.Second
 	defaultReadinessInterval = 2 * time.Second
 	defaultVaultTimeout      = 2 * time.Second
@@ -21,14 +20,13 @@ const (
 
 // Environment variables (each secret also accepts <NAME>_FILE with a mounted file path):
 //
-//	PROCESSOR_GRPC_ADDR, PROCESSOR_METRICS_ADDR, PROCESSOR_SHUTDOWN_TIMEOUT, PROCESSOR_READINESS_INTERVAL
+//	PROCESSOR_GRPC_ADDR, PROCESSOR_SHUTDOWN_TIMEOUT, PROCESSOR_READINESS_INTERVAL
 //	PROCESSOR_DATABASE_URL, PROCESSOR_MIGRATE_DATABASE_URL (owner role, falls back to PROCESSOR_DATABASE_URL)
 //	PROCESSOR_SEED (uint64), PROCESSOR_LATENCY_MIN, PROCESSOR_LATENCY_MAX (durations),
 //	PROCESSOR_TIMEOUT_RATE (0..1), PROCESSOR_TIMEOUT_HOLD (longest an injected timeout withholds the response)
 //	VAULT_ADDRESS (host:port of the vault ProcessingService listener), VAULT_TIMEOUT (per resolve call, default 2s)
 type Config struct {
 	GRPCAddr           string
-	MetricsAddr        string
 	ShutdownTimeout    time.Duration
 	ReadinessInterval  time.Duration
 	DatabaseURL        string
@@ -53,7 +51,6 @@ func FromEnv() (Config, error) {
 func FromLookup(lookup func(string) string) (Config, error) {
 	cfg := Config{
 		GRPCAddr:          defaultGRPCAddr,
-		MetricsAddr:       defaultMetricsAddr,
 		ShutdownTimeout:   defaultShutdownTimeout,
 		ReadinessInterval: defaultReadinessInterval,
 		TimeoutHold:       defaultTimeoutHold,
@@ -64,9 +61,6 @@ func FromLookup(lookup func(string) string) (Config, error) {
 	}
 	if value := lookup("PROCESSOR_GRPC_ADDR"); value != "" {
 		cfg.GRPCAddr = value
-	}
-	if value := lookup("PROCESSOR_METRICS_ADDR"); value != "" {
-		cfg.MetricsAddr = value
 	}
 	durations := []struct {
 		name   string
@@ -120,9 +114,6 @@ func FromLookup(lookup func(string) string) (Config, error) {
 
 func (c Config) Validate() error {
 	if err := validateAddr("PROCESSOR_GRPC_ADDR", c.GRPCAddr); err != nil {
-		return err
-	}
-	if err := validateAddr("PROCESSOR_METRICS_ADDR", c.MetricsAddr); err != nil {
 		return err
 	}
 	for name, value := range map[string]time.Duration{

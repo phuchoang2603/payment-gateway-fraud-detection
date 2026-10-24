@@ -21,7 +21,6 @@ pin() {
 }
 
 pin infra/charts/payment-gateway/values-prod.yaml '^imageTag: .*$' "imageTag: ${tag}"
-pin infra/charts/fraud-service/values-prod.yaml '^  tag: ".*"$' "  tag: \"${tag}\""
 pin infra/charts/kafka/values-prod.yaml '^  imageTag: .*$' "  imageTag: ${tag}"
 if git diff --quiet; then
   echo "image tags already at ${tag}"
@@ -29,6 +28,6 @@ if git diff --quiet; then
 fi
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-git add infra/charts/payment-gateway/values-prod.yaml infra/charts/fraud-service/values-prod.yaml infra/charts/kafka/values-prod.yaml
+git add infra/charts/payment-gateway/values-prod.yaml infra/charts/kafka/values-prod.yaml
 git commit -m "chore(infra): track service images ${tag} [skip ci]"
 git push

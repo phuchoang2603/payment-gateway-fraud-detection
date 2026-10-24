@@ -16,7 +16,7 @@ import (
 //
 //	DATABASE_URL / DATABASE_URL_FILE                runtime database URL (serve)
 //	MIGRATE_DATABASE_URL / _FILE                    owner database URL (migrate); falls back to DATABASE_URL
-//	GRPC_ADDR (:8000), METRICS_ADDR (:8010), SHUTDOWN_TIMEOUT (10s)
+//	GRPC_ADDR (:8000), SHUTDOWN_TIMEOUT (10s)
 //	INTEGRATIONS_FILE                               path of the mounted integrations JSON
 //	KAFKA_BROKERS                                   comma-separated bootstrap servers
 //	KAFKA_TOPIC (payments.events.v1), KAFKA_GROUP (gateway-notifier)
@@ -25,7 +25,6 @@ import (
 //	DELIVERY_BATCH_SIZE (20), DELIVERY_CONCURRENCY (4)
 const (
 	defaultGRPCAddr        = ":8000"
-	defaultMetricsAddr     = ":8010"
 	defaultShutdownTimeout = 10 * time.Second
 	defaultTopic           = "payments.events.v1"
 	defaultGroup           = "gateway-notifier"
@@ -35,7 +34,6 @@ type Config struct {
 	DatabaseURL        string
 	MigrateDatabaseURL string
 	GRPCAddr           string
-	MetricsAddr        string
 	ShutdownTimeout    time.Duration
 	IntegrationsFile   string
 	KafkaBrokers       []string
@@ -57,7 +55,6 @@ func FromEnv() (Config, error) {
 func FromLookup(lookup Lookup, readFile func(string) ([]byte, error)) (Config, error) {
 	cfg := Config{
 		GRPCAddr:        orDefault(lookup("NOTIFIER_GRPC_ADDR"), defaultGRPCAddr),
-		MetricsAddr:     orDefault(lookup("NOTIFIER_METRICS_ADDR"), defaultMetricsAddr),
 		ShutdownTimeout: defaultShutdownTimeout,
 		KafkaTopic:      orDefault(lookup("NOTIFIER_KAFKA_TOPIC"), defaultTopic),
 		KafkaGroup:      orDefault(lookup("NOTIFIER_KAFKA_GROUP"), defaultGroup),
@@ -146,7 +143,7 @@ func (c Config) ValidateServe() error {
 	if c.KafkaTopic == "" || c.KafkaGroup == "" {
 		return errors.New("NOTIFIER_KAFKA_TOPIC and NOTIFIER_KAFKA_GROUP must not be empty")
 	}
-	for name, addr := range map[string]string{"NOTIFIER_GRPC_ADDR": c.GRPCAddr, "NOTIFIER_METRICS_ADDR": c.MetricsAddr} {
+	for name, addr := range map[string]string{"NOTIFIER_GRPC_ADDR": c.GRPCAddr} {
 		if _, _, err := net.SplitHostPort(addr); err != nil {
 			return fmt.Errorf("%s must be host:port: %w", name, err)
 		}

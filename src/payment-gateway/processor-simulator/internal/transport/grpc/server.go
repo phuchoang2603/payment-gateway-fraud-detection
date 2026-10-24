@@ -3,13 +3,12 @@ package grpctransport
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net"
-	"net/http"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+	"go.opentelemetry.io/otel/metric"
+
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -48,9 +47,7 @@ type Server struct {
 	readiness Readiness
 	options   Options
 	health    *health.Server
-	registry  *prometheus.Registry
-	requests  *prometheus.CounterVec
-	outcomes  *prometheus.CounterVec
+	outcomes  metric.Int64Counter
 }
 
 func NewServer(options Options, processor Processor, readiness Readiness) *Server {
@@ -59,41 +56,23 @@ func NewServer(options Options, processor Processor, readiness Readiness) *Serve
 		readiness: readiness,
 		options:   options,
 		health:    health.NewServer(),
-		registry:  prometheus.NewRegistry(),
-		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "processor_requests_total", Help: "Processor gRPC requests by method and status code.",
-		}, []string{"method", "code"}),
-		outcomes: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "processor_sale_outcomes_total", Help: "Sale outcomes returned to callers.",
-		}, []string{"outcome"}),
+		outcomes:  observe.Counter("processor.sale.outcomes", "{sale}"),
 	}
-	server.registry.MustRegister(server.requests, server.outcomes)
 	server.health.SetServingStatus(LivenessService, healthpb.HealthCheckResponse_SERVING)
 	server.health.SetServingStatus(ReadinessService, healthpb.HealthCheckResponse_NOT_SERVING)
 	return server
 }
 
-func (s *Server) Run(ctx context.Context, grpcListener, metricsListener net.Listener) error {
+func (s *Server) Run(ctx context.Context, grpcListener net.Listener) error {
 	grpcServer := grpc.NewServer(
-		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.ChainUnaryInterceptor(s.observe),
+		grpc.StatsHandler(otelgrpc.NewServerHandler(otelgrpc.WithFilter(observe.RPCFilter))),
+		grpc.ChainUnaryInterceptor(observe.UnaryServerInterceptor()),
 	)
 	processorv1.RegisterProcessorServiceServer(grpcServer, s)
 	healthpb.RegisterHealthServer(grpcServer, s.health)
 
-	metrics := http.NewServeMux()
-	metrics.Handle("/metrics", promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{}))
-	metricsServer := &http.Server{Handler: metrics, ReadHeaderTimeout: 5 * time.Second}
-
 	errs := make(chan error, 2)
 	go func() { errs <- grpcServer.Serve(grpcListener) }()
-	go func() {
-		if err := metricsServer.Serve(metricsListener); !errors.Is(err, http.ErrServerClosed) {
-			errs <- err
-			return
-		}
-		errs <- nil
-	}()
 	healthCtx, stopHealth := context.WithCancel(ctx)
 	defer stopHealth()
 	go s.pollReadiness(healthCtx)
@@ -103,7 +82,7 @@ func (s *Server) Run(ctx context.Context, grpcListener, metricsListener net.List
 	case <-ctx.Done():
 	case runErr = <-errs:
 	}
-	s.health.Shutdown()
+	s.health.SetServingStatus(ReadinessService, healthpb.HealthCheckResponse_NOT_SERVING)
 	stopHealth()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.options.ShutdownTimeout)
@@ -117,9 +96,6 @@ func (s *Server) Run(ctx context.Context, grpcListener, metricsListener net.List
 	case <-stopped:
 	case <-shutdownCtx.Done():
 		grpcServer.Stop()
-	}
-	if err := metricsServer.Shutdown(shutdownCtx); err != nil {
-		_ = metricsServer.Close()
 	}
 	return runErr
 }
@@ -149,19 +125,6 @@ func (s *Server) pollReadiness(ctx context.Context) {
 	}
 }
 
-func (s *Server) observe(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	start := time.Now()
-	resp, err := handler(ctx, req)
-	code := status.Code(err)
-	s.requests.WithLabelValues(info.FullMethod, code.String()).Inc()
-	slog.InfoContext(ctx, "processor request",
-		"method", info.FullMethod,
-		"code", code.String(),
-		"duration_ms", time.Since(start).Milliseconds(),
-	)
-	return resp, err
-}
-
 func (s *Server) Sale(ctx context.Context, req *processorv1.SaleRequest) (*processorv1.Operation, error) {
 	operation, err := s.processor.Sale(ctx, domain.Sale{
 		OperationKey:    req.GetOperationKey(),
@@ -173,7 +136,7 @@ func (s *Server) Sale(ctx context.Context, req *processorv1.SaleRequest) (*proce
 	if err != nil {
 		return nil, mapError(err)
 	}
-	s.outcomes.WithLabelValues(string(operation.Outcome)).Inc()
+	s.outcomes.Add(ctx, 1, observe.Label("outcome", string(operation.Outcome)))
 	return toProto(operation), nil
 }
 

@@ -4,7 +4,7 @@ Planned generators, DP1–DP3 pipelines and feature stores. Deployable units and
 
 ## Flow
 
-This is a target flow, not a claim that its data engines, catalog or warehouse are deployed. Solid arrows show batch/storage transfers and synchronous reads; dotted arrows show streaming events or asynchronous triggers. Storage nodes are labelled by role; feature-access libraries are embedded in jobs/APIs rather than depicted as deployable services.
+This is a target flow, not a claim that its data engines, catalog or warehouse are deployed. Solid arrows show batch/storage transfers and synchronous reads; dotted arrows show streaming events or asynchronous triggers. Storage nodes are labelled by role. Feast feature serving is a separate runtime accessed by Go fraud; feature-access libraries remain embedded in the jobs/server that use them.
 
 ```mermaid
 flowchart TB
@@ -28,7 +28,8 @@ flowchart TB
     MT["Incremental materialization job"]
     TR["Kubeflow Pipelines training, Katib and distributed workers"]
     MR[("Versioned lake datasets and Hub Registry metadata")]
-    F["Fraud feature API - Knative"]
+    F["Go fraud decision service"]
+    FS["Feast feature server - Python"]
     I["Model inference - KServe"]
     D["Drift API - Knative, and scheduled comparison job"]
     H -->|"1. seeded valid histories"| S
@@ -55,7 +56,10 @@ flowchart TB
     T -->|"21. labels available by training cutoff"| TR
     TR -->|"22. data versions, candidate model and metrics"| MR
     MR -->|"23. approved compatible model via storageUri"| I
-    N -->|"24. fresh feature values and metadata"| F
+    G -->|"decision request"| F
+    F -->|"versioned feature request"| FS
+    FS -->|"online feature lookup"| N
+    FS -->|"24. fresh feature values and metadata"| F
     F -->|"25. validated vector"| I
     I -->|"26. score and model version"| F
     O -->|"27. reference and current distributions"| D
@@ -81,6 +85,6 @@ Long-running Flink jobs and their checkpoints stay on premises near Kafka and th
 
 ## Shared storage and service boundaries
 
-Shared storage infrastructure may host separate service-owned databases and credentials; services must not share mutable domain models or query one another's tables. Start with Edge, Payments, the existing fraud decision service, a processor simulator, an isolated vault simulator, Redis, Kafka and the webhook notifier. Integration configuration and derived IDs replace Accounts. Keep recovery and expiry workers inside Payments until independent scaling or isolation is needed; features, inference, drift and investigation follow their own acceptance steps.
+Shared storage infrastructure may host separate service-owned databases and credentials; services must not share mutable domain models or query one another's tables. The planned gateway includes Edge, Payments, Go fraud, a processor simulator, an isolated vault simulator, Redis, Kafka and the webhook notifier. Go fraud owns the rules decision runtime; Feast feature serving and KServe inference are introduced later as separate dependencies called directly by Go fraud. Integration configuration and derived IDs replace Accounts. Keep recovery and expiry workers inside Payments until independent scaling or isolation is needed; features, inference, drift and investigation follow their own acceptance steps.
 
 The [Vietnam payment policy research](../research/vietnam-payment-policy.md) separates current regulatory sources, provider policies and fictional simulator assumptions, including authentication and dispute scope.

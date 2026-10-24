@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/testutil/telemetry"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/notifier/internal/adapters/postgres"
@@ -166,6 +169,9 @@ type received struct {
 }
 
 func TestDeliveryRecoversAfterReceiverOutage(t *testing.T) {
+	provider, recorder := telemetry.Traces(t)
+	origin, originSpan := provider.Tracer("test").Start(context.Background(), "committed event")
+	originSpan.End()
 	pool, _ := testutil.NewPool(t)
 	var mu sync.Mutex
 	var requests []received
@@ -192,7 +198,7 @@ func TestDeliveryRecoversAfterReceiverOutage(t *testing.T) {
 	if _, err := in.Handle(context.Background(), testutil.Created(t, "d0", "pd", subscribed, "order-d")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := in.Handle(context.Background(), testutil.Succeeded(t, "d1", "pd", subscribed, "a1")); err != nil {
+	if _, err := in.Handle(origin, testutil.Succeeded(t, "d1", "pd", subscribed, "a1")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -213,6 +219,9 @@ func TestDeliveryRecoversAfterReceiverOutage(t *testing.T) {
 	ctx := context.Background()
 
 	for range failures + 1 {
+		restarted := *worker
+		restarted.Queue = postgres.NewStore(pool)
+		worker = &restarted
 		if _, err := worker.Tick(ctx); err != nil {
 			t.Fatal(err)
 		}
@@ -220,6 +229,27 @@ func TestDeliveryRecoversAfterReceiverOutage(t *testing.T) {
 			t.Fatal("a pending delivery must not be claimable before its backoff elapses")
 		}
 		clk.Advance(2 * time.Hour)
+	}
+
+	attemptsSeen := map[string]bool{}
+	for _, span := range recorder.Ended() {
+		if span.Name() != "webhook.delivery.attempt" {
+			continue
+		}
+		if span.Parent().SpanID() != originSpan.SpanContext().SpanID() || span.SpanContext().TraceID() != originSpan.SpanContext().TraceID() {
+			t.Fatal("restarted retry lost persisted causality")
+		}
+		attemptsSeen[span.SpanContext().SpanID().String()] = true
+	}
+	if len(attemptsSeen) != failures+1 {
+		t.Fatalf("distinct attempt spans = %d", len(attemptsSeen))
+	}
+	var persisted *string
+	if err := pool.QueryRow(ctx, "SELECT tracingspancontext FROM webhook_deliveries WHERE event_id = 'd1'").Scan(&persisted); err != nil {
+		t.Fatal(err)
+	}
+	if persisted == nil || *persisted != *observe.SerializeContext(origin) {
+		t.Fatal("delivery context changed across retries")
 	}
 
 	mu.Lock()

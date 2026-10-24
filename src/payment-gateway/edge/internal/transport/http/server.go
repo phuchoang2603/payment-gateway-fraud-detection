@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/edge/internal/application"
 )
 
@@ -65,7 +67,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /checkout/{session_id}", s.checkoutPage)
 	mux.HandleFunc("POST /checkout/{session_id}/pay", s.checkoutPay)
 	mux.HandleFunc("GET /checkout/{session_id}/status", s.checkoutStatus)
-	return s.withRecovery(s.withCorrelation(mux))
+	return observe.HTTPServer(mux, s.withCorrelation(s.withRecovery(mux)))
 }
 
 func (s *Server) Run(ctx context.Context) error {

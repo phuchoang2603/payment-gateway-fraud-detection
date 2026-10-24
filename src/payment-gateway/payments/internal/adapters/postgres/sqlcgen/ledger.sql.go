@@ -13,19 +13,20 @@ import (
 )
 
 const insertEvent = `-- name: InsertEvent :one
-INSERT INTO payment_events (event_id, payment_id, aggregate_version, event_type, payload, occurred_at, recorded_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO payment_events (event_id, payment_id, aggregate_version, event_type, payload, occurred_at, recorded_at, tracingspancontext)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING global_position
 `
 
 type InsertEventParams struct {
-	EventID          uuid.UUID
-	PaymentID        uuid.UUID
-	AggregateVersion int64
-	EventType        string
-	Payload          []byte
-	OccurredAt       time.Time
-	RecordedAt       time.Time
+	EventID            uuid.UUID
+	PaymentID          uuid.UUID
+	AggregateVersion   int64
+	EventType          string
+	Payload            []byte
+	OccurredAt         time.Time
+	RecordedAt         time.Time
+	Tracingspancontext *string
 }
 
 func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) (int64, error) {
@@ -37,6 +38,7 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) (int64
 		arg.Payload,
 		arg.OccurredAt,
 		arg.RecordedAt,
+		arg.Tracingspancontext,
 	)
 	var global_position int64
 	err := row.Scan(&global_position)

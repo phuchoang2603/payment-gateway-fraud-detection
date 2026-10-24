@@ -58,7 +58,7 @@ func (s *Service) lookupOperation(ctx context.Context, state domain.State, attem
 		return nil, fmt.Errorf("load processor request: %w", err)
 	}
 	if len(record.EncryptedToken) == 0 {
-		slog.Error("processor request has no token to resubmit", "payment_id", state.PaymentID, "operation_key", attempt.OperationKey)
+		slog.ErrorContext(ctx, "processor request has no token to resubmit", "payment_id", state.PaymentID, "operation_key", attempt.OperationKey)
 		return nil, nil
 	}
 	token, err := s.deps.Sealer.Open(record.EncryptedToken, candidate.AttemptID[:])

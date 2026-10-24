@@ -56,14 +56,15 @@ type Payment struct {
 }
 
 type PaymentEvent struct {
-	GlobalPosition   int64
-	EventID          uuid.UUID
-	PaymentID        uuid.UUID
-	AggregateVersion int64
-	EventType        string
-	Payload          []byte
-	OccurredAt       time.Time
-	RecordedAt       time.Time
+	GlobalPosition     int64
+	EventID            uuid.UUID
+	PaymentID          uuid.UUID
+	AggregateVersion   int64
+	EventType          string
+	Payload            []byte
+	OccurredAt         time.Time
+	RecordedAt         time.Time
+	Tracingspancontext *string
 }
 
 type ProcessorRequest struct {

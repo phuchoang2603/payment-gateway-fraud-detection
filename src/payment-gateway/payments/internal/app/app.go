@@ -2,18 +2,15 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
-	"net/http"
 	"sync"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -58,7 +55,6 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("create database pool: %w", err)
 	}
 	app := &App{config: cfg, pool: pool, metrics: metrics.New()}
-	app.metrics.Registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
 	sealer, err := secretbox.New(cfg.EncryptionKey)
 	if err != nil {
@@ -100,7 +96,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 func dial(addr string) (*grpc.ClientConn, error) {
 	return grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler(otelgrpc.WithFilter(observe.RPCFilter))),
+		grpc.WithChainUnaryInterceptor(observe.UnaryClientInterceptor()),
 	)
 }
 
@@ -118,23 +115,18 @@ func (a *App) Close() {
 	a.pool.Close()
 }
 
-func (a *App) Serve(ctx context.Context, grpcListener, metricsListener net.Listener) error {
+func (a *App) Serve(ctx context.Context, grpcListener net.Listener) error {
 	defer a.Close()
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus(transport.LivenessService, healthpb.HealthCheckResponse_SERVING)
 	healthServer.SetServingStatus(transport.ReadinessService, healthpb.HealthCheckResponse_NOT_SERVING)
 
 	grpcServer := grpc.NewServer(
-		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.StatsHandler(otelgrpc.NewServerHandler(otelgrpc.WithFilter(observe.RPCFilter))),
 		grpc.ChainUnaryInterceptor(transport.CorrelationInterceptor()),
 	)
 	paymentsv1.RegisterPaymentServiceServer(grpcServer, transport.NewServer(a.service))
 	healthpb.RegisterHealthServer(grpcServer, healthServer)
-
-	metricsServer := &http.Server{
-		Handler:           metricsMux(a.metrics.Registry),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
 
 	background, stopBackground := context.WithCancel(context.WithoutCancel(ctx))
 	var group sync.WaitGroup
@@ -154,11 +146,6 @@ func (a *App) Serve(ctx context.Context, grpcListener, metricsListener net.Liste
 
 	errCh := make(chan error, 2)
 	go func() { errCh <- grpcServer.Serve(grpcListener) }()
-	go func() {
-		if err := metricsServer.Serve(metricsListener); !errors.Is(err, http.ErrServerClosed) {
-			errCh <- err
-		}
-	}()
 
 	var serveErr error
 	select {
@@ -166,7 +153,8 @@ func (a *App) Serve(ctx context.Context, grpcListener, metricsListener net.Liste
 	case <-ctx.Done():
 	}
 
-	healthServer.Shutdown()
+	stopBackground()
+	healthServer.SetServingStatus("readiness", healthpb.HealthCheckResponse_NOT_SERVING)
 	stopped := make(chan struct{})
 	go func() {
 		grpcServer.GracefulStop()
@@ -181,16 +169,6 @@ func (a *App) Serve(ctx context.Context, grpcListener, metricsListener net.Liste
 		grpcServer.Stop()
 		<-stopped
 	}
-	if err := metricsServer.Shutdown(shutdownCtx); err != nil {
-		_ = metricsServer.Close()
-	}
-	stopBackground()
 	group.Wait()
 	return serveErr
-}
-
-func metricsMux(registry *prometheus.Registry) http.Handler {
-	mux := http.NewServeMux()
-	mux.Handle("GET /metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
-	return mux
 }

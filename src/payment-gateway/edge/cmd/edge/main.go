@@ -7,6 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/edge/internal/adapters/grpcclient"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/edge/internal/adapters/integrations"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/edge/internal/adapters/payments"
@@ -17,7 +19,7 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	slog.SetDefault(slog.New(observe.NewLogHandler(os.Stdout, "edge")))
 	if err := run(); err != nil {
 		slog.Error("edge service stopped with error", "error", err)
 		os.Exit(1)
@@ -25,6 +27,12 @@ func main() {
 }
 
 func run() error {
+	shutdown, err := observe.Init(context.Background(), "edge")
+	if err != nil {
+		return err
+	}
+	defer shutdown()
+
 	cfg, err := config.FromEnv()
 	if err != nil {
 		return err

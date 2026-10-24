@@ -33,7 +33,7 @@ func TestFromLookup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.GRPCAddr != ":8000" || cfg.MetricsAddr != ":8010" || cfg.MigrateDatabaseURL != "postgres://x" || cfg.ProcessingAddr != ":8001" {
+	if cfg.GRPCAddr != ":8000" || cfg.MigrateDatabaseURL != "postgres://x" || cfg.ProcessingAddr != ":8001" {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 

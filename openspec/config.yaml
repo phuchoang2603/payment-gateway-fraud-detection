@@ -2,7 +2,8 @@ schema: spec-driven
 
 context: |
   This repository implements a real-time payment gateway and fraud detection.
-  Go services and Python fraud serving own their runtime, contracts and dependencies.
+  Go services, including fraud, own their runtime, contracts and dependencies.
+  Python remains available for simulation and future training/model tooling.
   Public HTTP/JSON belongs at the Go edge. Internal synchronous business APIs use
   gRPC with versioned protobuf contracts and generated bindings; do not maintain
   parallel internal REST/JSON APIs. Events may use protobuf over their event transport.
@@ -15,9 +16,8 @@ context: |
   edge has no business domain until checkout behavior is added. Extract shared
   runtime helpers only for real reuse within the same language; contracts/ is
   the existing cross-language shared boundary.
-  Keep protobuf definitions under root contracts/ and generated Python bindings
-  under src/fraud-service/gen/ outside app/; make gen/ importable without
-  coupling domain code to generated modules.
+  Keep protobuf definitions under root contracts/ and generated Go bindings
+  under src/payment-gateway/shared/proto/ outside domain code.
   Prefer supported modern APIs and idiomatic code; use Context7 for current public
   library, SDK and framework guidance. Prefer the repository's Nix devenv.
   Keep devenv task definitions and CI workflow steps short. Move substantive shell
@@ -35,8 +35,11 @@ context: |
   Keep Python tests, Go lint and Helm lint in independent CI jobs without
   change-detection jobs or matrices. Discover and validate all Helm charts. Keep
   check jobs in the CI workflow and reuse one image workflow for explicit service
-  image jobs. Let CI own full integration checks and image builds; run only
-  relevant fast checks locally.
+  image jobs. Do not run any tests locally, including unit, integration, smoke,
+  end-to-end or acceptance tests. Let CI checks run all tests and image builds;
+  inspect their results and report pending or failed checks honestly. Local
+  verification is limited to non-test checks such as lint, formatting, schema
+  validation and diff review.
   Do not add score-only tests or custom coverage/mutation gate tooling. Record real
   failures honestly; replacing a verification policy does not turn old failures into passes.
   Keep documentation minimal. The root README is the entry point; CONTRIBUTING.md
@@ -59,6 +62,7 @@ rules:
   tasks:
     - Include cleanup of superseded code and affected references in implementation tasks.
     - Reuse existing behavioral coverage; add tests only for distinct uncovered risks.
+    - Run all tests through CI checks, never locally; distinguish non-test local checks from CI test execution.
     - Keep documentation work proportional; update existing guides instead of adding READMEs.
 
 operations:
@@ -66,7 +70,7 @@ operations:
     guidance:
       - Use devenv when available and Context7 for current public API guidance.
       - Remove superseded implementations rather than retaining parallel legacy paths.
-      - Run checks appropriate to the change; skip runtime tests for documentation-only edits.
+      - Never run tests locally; let CI checks run all unit, integration, smoke, end-to-end and acceptance tests. Use only relevant non-test checks locally and inspect CI results.
       - Report actual validation results and remaining gaps without adding low-value tests.
   archive:
     guidance:

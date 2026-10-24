@@ -23,7 +23,7 @@ WHERE event_id IN (
     LIMIT $3
     FOR UPDATE SKIP LOCKED
 )
-RETURNING event_id, integration_id, payment_id, event_type, body, attempts, created_at
+RETURNING event_id, integration_id, payment_id, event_type, body, attempts, created_at, tracingspancontext
 `
 
 type ClaimDueDeliveriesParams struct {
@@ -33,13 +33,14 @@ type ClaimDueDeliveriesParams struct {
 }
 
 type ClaimDueDeliveriesRow struct {
-	EventID       string
-	IntegrationID string
-	PaymentID     string
-	EventType     string
-	Body          []byte
-	Attempts      int32
-	CreatedAt     time.Time
+	EventID            string
+	IntegrationID      string
+	PaymentID          string
+	EventType          string
+	Body               []byte
+	Attempts           int32
+	CreatedAt          time.Time
+	Tracingspancontext *string
 }
 
 func (q *Queries) ClaimDueDeliveries(ctx context.Context, arg ClaimDueDeliveriesParams) ([]ClaimDueDeliveriesRow, error) {
@@ -59,6 +60,7 @@ func (q *Queries) ClaimDueDeliveries(ctx context.Context, arg ClaimDueDeliveries
 			&i.Body,
 			&i.Attempts,
 			&i.CreatedAt,
+			&i.Tracingspancontext,
 		); err != nil {
 			return nil, err
 		}
@@ -100,18 +102,19 @@ func (q *Queries) GetOrderReference(ctx context.Context, paymentID string) (stri
 }
 
 const insertDelivery = `-- name: InsertDelivery :execrows
-INSERT INTO webhook_deliveries (event_id, integration_id, payment_id, event_type, body, next_attempt_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO webhook_deliveries (event_id, integration_id, payment_id, event_type, body, next_attempt_at, tracingspancontext)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (event_id) DO NOTHING
 `
 
 type InsertDeliveryParams struct {
-	EventID       string
-	IntegrationID string
-	PaymentID     string
-	EventType     string
-	Body          []byte
-	NextAttemptAt time.Time
+	EventID            string
+	IntegrationID      string
+	PaymentID          string
+	EventType          string
+	Body               []byte
+	NextAttemptAt      time.Time
+	Tracingspancontext *string
 }
 
 func (q *Queries) InsertDelivery(ctx context.Context, arg InsertDeliveryParams) (int64, error) {
@@ -122,6 +125,7 @@ func (q *Queries) InsertDelivery(ctx context.Context, arg InsertDeliveryParams) 
 		arg.EventType,
 		arg.Body,
 		arg.NextAttemptAt,
+		arg.Tracingspancontext,
 	)
 	if err != nil {
 		return 0, err

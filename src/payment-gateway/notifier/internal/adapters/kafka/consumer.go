@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
+
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
 
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -91,6 +94,18 @@ func (c *Consumer) Run(ctx context.Context) {
 }
 
 func (c *Consumer) process(ctx context.Context, record *kgo.Record) bool {
+	headers := map[string]string{}
+	for _, header := range record.Headers {
+		key := strings.ToLower(header.Key)
+		if key == "traceparent" || key == "tracestate" || key == "tracingspancontext" {
+			headers[key] = string(header.Value)
+		}
+	}
+	if raw, ok := headers["tracingspancontext"]; ok {
+		ctx = observe.RestoreContext(ctx, &raw)
+	}
+	ctx, span := observe.StartConsumer(ctx, headers)
+	defer span.End()
 	for {
 		result, err := c.handler.Handle(ctx, record.Value)
 		switch {
@@ -100,14 +115,14 @@ func (c *Consumer) process(ctx context.Context, record *kgo.Record) bool {
 			return true
 		case errors.Is(err, application.ErrMalformed):
 			c.metrics.Consumed("malformed")
-			slog.Error("skipping malformed event", "partition", record.Partition, "offset", record.Offset)
+			slog.ErrorContext(ctx, "skipping malformed event", "partition", record.Partition, "offset", record.Offset)
 			return true
 		}
 		if ctx.Err() != nil {
 			return false
 		}
 		c.metrics.ConsumerError("handle")
-		slog.Error("handle event failed", "partition", record.Partition, "offset", record.Offset, "error", err)
+		slog.ErrorContext(ctx, "handle event failed", "partition", record.Partition, "offset", record.Offset, "error", err)
 		select {
 		case <-ctx.Done():
 			return false

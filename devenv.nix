@@ -8,7 +8,6 @@
     gofumpt
     golangci-lint
 
-    grpc
     protobuf
     protoc-gen-go
     protoc-gen-go-grpc
@@ -43,7 +42,7 @@
   };
 
   tasks."codegen:proto" = {
-    exec = ''bash "${config.git.root}/scripts/codegen-proto.sh" "${pkgs.grpc}/bin/grpc_python_plugin"'';
+    exec = ''bash "${config.git.root}/scripts/codegen-proto.sh"'';
     before = [ "devenv:enterShell" ];
     execIfModified = [
       "contracts/**/*.proto"
@@ -73,9 +72,6 @@
     config.programs = {
       ruff-format = {
         enable = true;
-        excludes = [
-          "src/fraud-service/gen/**"
-        ];
       };
       gofumpt = {
         enable = true;

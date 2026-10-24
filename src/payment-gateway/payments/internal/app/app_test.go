@@ -2,12 +2,11 @@ package app_test
 
 import (
 	"context"
-	"io"
 	"net"
-	"net/http"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/testutil/telemetry"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -25,17 +24,16 @@ import (
 const closedAddr = "127.0.0.1:1"
 
 type running struct {
-	conn       *grpc.ClientConn
-	metricsURL string
-	cancel     context.CancelFunc
-	done       chan struct{}
-	payments   paymentsv1.PaymentServiceClient
-	health     healthpb.HealthClient
+	conn     *grpc.ClientConn
+	cancel   context.CancelFunc
+	done     chan struct{}
+	payments paymentsv1.PaymentServiceClient
+	health   healthpb.HealthClient
 }
 
 func testConfig(databaseURL, fraudAddr, processorAddr, redisAddr string) config.Config {
 	return config.Config{
-		GRPCAddr: "127.0.0.1:0", MetricsAddr: "127.0.0.1:0", ShutdownTimeout: 500 * time.Millisecond,
+		GRPCAddr: "127.0.0.1:0", ShutdownTimeout: 500 * time.Millisecond,
 		DatabaseURL: databaseURL, RedisAddr: redisAddr, RedisTimeout: 50 * time.Millisecond,
 		FraudAddr: fraudAddr, ProcessorAddr: processorAddr,
 		EncryptionKey: []byte("0123456789abcdef0123456789abcdef"), CheckoutTokenKey: []byte("checkout-token-key-for-tests-0123456789"),
@@ -54,22 +52,18 @@ func startApp(t *testing.T, cfg config.Config) *running {
 	if err != nil {
 		t.Fatal(err)
 	}
-	metricsListener, err := net.Listen("tcp", cfg.MetricsAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_ = application.Serve(ctx, grpcListener, metricsListener)
+		_ = application.Serve(ctx, grpcListener)
 	}()
 	conn, err := grpc.NewClient(grpcListener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	instance := &running{
-		conn: conn, metricsURL: "http://" + metricsListener.Addr().String() + "/metrics", cancel: cancel, done: done,
+		conn: conn, cancel: cancel, done: done,
 		payments: paymentsv1.NewPaymentServiceClient(conn), health: healthpb.NewHealthClient(conn),
 	}
 	t.Cleanup(func() {
@@ -217,7 +211,8 @@ func TestGRPCErrorMappingAndCorrelationPropagation(t *testing.T) {
 	}
 }
 
-func TestMetricsEndpointExposesTheOperationalMetrics(t *testing.T) {
+func TestOTLPMetricsRecordFraudDecline(t *testing.T) {
+	reader := telemetry.Metrics(t)
 	db := testsupport.NewDatabase(t)
 	fraud, _ := testsupport.NewFakeFraud(t)
 	processor, _ := testsupport.NewFakeProcessor(t)
@@ -232,19 +227,9 @@ func TestMetricsEndpointExposesTheOperationalMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	response, err := http.Get(instance.metricsURL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = response.Body.Close() }()
-	body, _ := io.ReadAll(response.Body)
-	for _, name := range []string{
-		"payments_attempt_duration_seconds_count 1", "payments_attempt_failures_total", "payments_pending_outcome_age_seconds",
-		"payments_redis_idempotency_hits_total", "payments_redis_idempotency_misses_total", "payments_redis_idempotency_errors_total",
-	} {
-		if !strings.Contains(string(body), name) {
-			t.Errorf("metrics lack %q", name)
-		}
+	values := telemetry.Sums(t, reader)
+	if values["payments.attempt.failures"] != 1 {
+		t.Fatalf("failure metrics = %v", values)
 	}
 }
 

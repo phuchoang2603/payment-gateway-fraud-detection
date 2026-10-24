@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/edge/internal/requestid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -27,6 +30,7 @@ func Interceptor(timeout time.Duration) grpc.UnaryClientInterceptor {
 func Dial(target string, timeout time.Duration, extra ...grpc.DialOption) (*grpc.ClientConn, error) {
 	options := append([]grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler(otelgrpc.WithFilter(observe.RPCFilter))),
 		grpc.WithChainUnaryInterceptor(Interceptor(timeout)),
 	}, extra...)
 	return grpc.NewClient(target, options...)

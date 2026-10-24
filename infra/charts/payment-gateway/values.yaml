@@ -1,12 +1,23 @@
-imageTag: ""
+imageRepository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection
+imageTag: latest
+
+externalSecrets:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: fraud-doppler
 
 defaults:
+  enabled: true
   replicaCount: 1
   image:
-    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments
-    tag: latest
     pullPolicy: IfNotPresent
-  args: []
+  telemetry:
+    tracingEnabled: true
+    metricsEnabled: true
+    endpoint: otel-agent.observability.svc.cluster.local:4317
+    samplingRatio: '0.1'
+    metricExportInterval: 60000
   mesh:
     enabled: false
     callers: []
@@ -16,18 +27,8 @@ defaults:
   - name: grpc
     containerPort: 8000
     appProtocol: kubernetes.io/h2c
-  - name: http-metrics
-    containerPort: 8010
   env: []
-  migrate:
-    enabled: false
-    env: []
-  volumes: []
-  volumeMounts: []
   probes:
-    type: grpc
-    grpcPort: 8000
-    httpPort: 8080
     liveness:
       initialDelaySeconds: 5
       periodSeconds: 10
@@ -38,8 +39,6 @@ defaults:
       periodSeconds: 5
       timeoutSeconds: 5
       failureThreshold: 3
-    exec:
-      command: []
   resources:
     requests:
       cpu: 50m
@@ -47,45 +46,31 @@ defaults:
     limits:
       memory: 256Mi
   terminationGracePeriodSeconds: 30
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: fraud-doppler
   externalSecrets: []
   networkPolicy:
     enabled: true
     ingressFrom: []
-    ingressPorts:
-    - 8000
     egress: []
   httpRoute:
     enabled: false
-    gateway: payment-gateway-ingress
     hostnames: []
     pathPrefix: /checkout/
-    port: 8080
     timeouts:
       request: 10s
+
 services:
   edge:
-    enabled: true
     mesh:
       callers:
       - payment-gateway-ingress-istio
       callerNamespaces:
       - ecommerce
-    image:
-      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/edge
     ports:
     - name: http
       containerPort: 8080
-    probes:
-      type: http
-      httpPort: 8080
     env:
     - name: EDGE_HTTP_ADDR
       value: :8080
-    - name: EDGE_INTEGRATIONS_FILE
-      value: /etc/edge/integrations/integrations.json
     - name: EDGE_PAYMENTS_ADDR
       value: payments.payment-gateway.svc.cluster.local:8000
     - name: EDGE_VAULT_ADDRESS
@@ -98,109 +83,53 @@ services:
       value: '1'
     - name: EDGE_SYNTHETIC_FINGERPRINT_KEY
       value: synthetic-fingerprint-v1
-    - name: EDGE_FINGERPRINT_KEY_FILE
-      value: /etc/edge/secrets/fingerprint-key
-    - name: EDGE_CHECKOUT_COOKIE_KEY_FILE
-      value: /etc/edge/secrets/cookie-key
-    volumes:
-    - name: integrations
-      secret:
-        secretName: edge-integrations
-    - name: secrets
-      secret:
-        secretName: edge-secrets
-    volumeMounts:
-    - name: integrations
-      mountPath: /etc/edge/integrations
-      readOnly: true
-    - name: secrets
-      mountPath: /etc/edge/secrets
-      readOnly: true
     externalSecrets:
     - name: edge-integrations
       data:
       - secretKey: integrations.json
         remoteKey: GATEWAY_INTEGRATIONS_JSON
+        env: EDGE_INTEGRATIONS_FILE
+      mountPath: /etc/edge/integrations
     - name: edge-secrets
       data:
       - secretKey: fingerprint-key
         remoteKey: GATEWAY_FINGERPRINT_KEY
+        env: EDGE_FINGERPRINT_KEY_FILE
       - secretKey: cookie-key
         remoteKey: GATEWAY_CHECKOUT_COOKIE_KEY
+        env: EDGE_CHECKOUT_COOKIE_KEY_FILE
+      mountPath: /etc/edge/secrets
     networkPolicy:
-      ingressPorts:
-      - 8080
       ingressFrom:
       - podSelector:
           matchLabels:
             gateway.networking.k8s.io/gateway-name: payment-gateway-ingress
-      - namespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: ecommerce
     httpRoute:
       enabled: true
-      gateway: payment-gateway-ingress
       hostnames:
       - pay-gateway.phuchoang.sbs
-      pathPrefix: /checkout/
-      port: 8080
-    resources:
-      requests:
-        cpu: 50m
-        memory: 64Mi
-      limits:
-        memory: 256Mi
-  notifier:
-    enabled: true
+  fraud-service:
+    mesh:
+      callers:
+      - payments
     image:
-      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/notifier
-    migrate:
-      enabled: true
-      env:
-      - name: NOTIFIER_MIGRATE_DATABASE_URL
-        valueFrom:
-          secretKeyRef:
-            name: notifier-database
-            key: migrate-database-url
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection
+  notifier:
     env:
-    - name: NOTIFIER_DATABASE_URL
-      valueFrom:
-        secretKeyRef:
-          name: notifier-database
-          key: database-url
-    - name: NOTIFIER_INTEGRATIONS_FILE
-      value: /etc/notifier/integrations/integrations.json
     - name: NOTIFIER_KAFKA_BROKERS
       value: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc.cluster.local:9092
     - name: NOTIFIER_KAFKA_TOPIC
       value: payments.events.v1
     - name: NOTIFIER_KAFKA_GROUP
       value: gateway-notifier
-    volumes:
-    - name: integrations
-      secret:
-        secretName: notifier-integrations
-    volumeMounts:
-    - name: integrations
-      mountPath: /etc/notifier/integrations
-      readOnly: true
     externalSecrets:
     - name: notifier-integrations
       data:
       - secretKey: integrations.json
         remoteKey: GATEWAY_INTEGRATIONS_JSON
-    - name: notifier-database
-      template:
-        database-url: postgres://notifier:{{ .password | urlquery }}@payment-gateway-pg-rw.payment-gateway.svc.cluster.local:5432/notifier?sslmode=require
-        migrate-database-url: postgres://notifier:{{ .password | urlquery }}@payment-gateway-pg-rw.payment-gateway.svc.cluster.local:5432/notifier?sslmode=require
-      data:
-      - secretKey: password
-        remoteKey: GATEWAY_DB_NOTIFIER_PASSWORD
+        env: NOTIFIER_INTEGRATIONS_FILE
+      mountPath: /etc/notifier/integrations
     networkPolicy:
-      ingressPorts:
-      - 8000
-      - 8010
-      ingressFrom: []
       egress:
       - to:
         - namespaceSelector:
@@ -228,6 +157,16 @@ services:
       - to:
         - namespaceSelector:
             matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: otel-agent
+        ports:
+        - port: 4317
+          protocol: TCP
+      - to:
+        - namespaceSelector:
+            matchLabels:
               kubernetes.io/metadata.name: ecommerce
           podSelector:
             matchLabels:
@@ -237,27 +176,12 @@ services:
           protocol: TCP
         - port: 15008
           protocol: TCP
+    database: notifier
   payments:
-    enabled: true
     mesh:
       callers:
       - edge
-    image:
-      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments
-    migrate:
-      enabled: true
-      env:
-      - name: PAYMENTS_MIGRATE_DATABASE_URL
-        valueFrom:
-          secretKeyRef:
-            name: payments-database
-            key: migrate-database-url
     env:
-    - name: PAYMENTS_DATABASE_URL
-      valueFrom:
-        secretKeyRef:
-          name: payments-database
-          key: database-url
     - name: PAYMENTS_GRPC_ADDR
       value: :8000
     - name: PAYMENTS_FRAUD_ADDR
@@ -266,72 +190,31 @@ services:
       value: processor-simulator.payment-gateway.svc.cluster.local:8000
     - name: PAYMENTS_REDIS_ADDR
       value: payment-gateway-redis.payment-gateway.svc.cluster.local:6379
-    - name: PAYMENTS_REDIS_PASSWORD_FILE
-      value: /etc/payments/secrets/redis-password
-    - name: PAYMENTS_ENCRYPTION_KEY_FILE
-      value: /etc/payments/secrets/encryption-key
-    - name: PAYMENTS_CHECKOUT_TOKEN_KEY_FILE
-      value: /etc/payments/secrets/checkout-token-key
-    volumes:
-    - name: secrets
-      secret:
-        secretName: payments-secrets
-    volumeMounts:
-    - name: secrets
-      mountPath: /etc/payments/secrets
-      readOnly: true
     externalSecrets:
     - name: payments-secrets
       data:
       - secretKey: redis-password
         remoteKey: GATEWAY_REDIS_PASSWORD
+        env: PAYMENTS_REDIS_PASSWORD_FILE
       - secretKey: encryption-key
         remoteKey: GATEWAY_PAYMENTS_ENCRYPTION_KEY
+        env: PAYMENTS_ENCRYPTION_KEY_FILE
       - secretKey: checkout-token-key
         remoteKey: GATEWAY_CHECKOUT_TOKEN_KEY
-    - name: payments-database
-      template:
-        database-url: postgres://payments_app:{{ .app | urlquery }}@payment-gateway-pg-rw.payment-gateway.svc.cluster.local:5432/payments?sslmode=require
-        migrate-database-url: postgres://payments:{{ .owner | urlquery }}@payment-gateway-pg-rw.payment-gateway.svc.cluster.local:5432/payments?sslmode=require
-      data:
-      - secretKey: app
-        remoteKey: GATEWAY_DB_PAYMENTS_APP_PASSWORD
-      - secretKey: owner
-        remoteKey: GATEWAY_DB_PAYMENTS_PASSWORD
-    networkPolicy:
-      ingressPorts:
-      - 8000
-      ingressFrom:
-      - podSelector:
-          matchLabels:
-            app.kubernetes.io/name: edge
+        env: PAYMENTS_CHECKOUT_TOKEN_KEY_FILE
+      mountPath: /etc/payments/secrets
     resources:
       requests:
         cpu: 100m
         memory: 128Mi
       limits:
         memory: 512Mi
+    database: payments
   processor-simulator:
-    enabled: true
     mesh:
       callers:
       - payments
-    image:
-      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/processor-simulator
-    migrate:
-      enabled: true
-      env:
-      - name: PROCESSOR_MIGRATE_DATABASE_URL
-        valueFrom:
-          secretKeyRef:
-            name: processor-database
-            key: migrate-database-url
     env:
-    - name: PROCESSOR_DATABASE_URL
-      valueFrom:
-        secretKeyRef:
-          name: processor-database
-          key: database-url
     - name: PROCESSOR_GRPC_ADDR
       value: :8000
     - name: PROCESSOR_SEED
@@ -344,23 +227,8 @@ services:
       value: '0'
     - name: VAULT_ADDRESS
       value: vault-simulator.payment-gateway.svc.cluster.local:8001
-    externalSecrets:
-    - name: processor-database
-      template:
-        database-url: postgres://processor:{{ .password | urlquery }}@payment-gateway-pg-rw.payment-gateway.svc.cluster.local:5432/processor?sslmode=require
-        migrate-database-url: postgres://processor:{{ .password | urlquery }}@payment-gateway-pg-rw.payment-gateway.svc.cluster.local:5432/processor?sslmode=require
-      data:
-      - secretKey: password
-        remoteKey: GATEWAY_DB_PROCESSOR_PASSWORD
-    networkPolicy:
-      ingressPorts:
-      - 8000
-      ingressFrom:
-      - podSelector:
-          matchLabels:
-            app.kubernetes.io/name: payments
+    database: processor
   vault-simulator:
-    enabled: true
     mesh:
       rules:
       - callers:
@@ -378,63 +246,22 @@ services:
     - name: processing
       containerPort: 8001
       appProtocol: kubernetes.io/h2c
-    - name: http-metrics
-      containerPort: 8010
-    image:
-      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/vault-simulator
-    migrate:
-      enabled: true
-      env:
-      - name: VAULT_MIGRATE_DATABASE_URL
-        valueFrom:
-          secretKeyRef:
-            name: vault-database
-            key: migrate-database-url
     env:
-    - name: VAULT_DATABASE_URL
-      valueFrom:
-        secretKeyRef:
-          name: vault-database
-          key: database-url
     - name: VAULT_GRPC_ADDR
       value: :8000
     - name: VAULT_PROCESSING_ADDR
       value: :8001
-    - name: VAULT_ENCRYPTION_KEY_FILE
-      value: /etc/vault/keys/encryption-key
     - name: VAULT_FINGERPRINT_KEY
       value: synthetic-fingerprint-v1
-    volumes:
-    - name: keys
-      secret:
-        secretName: vault-keys
-    volumeMounts:
-    - name: keys
-      mountPath: /etc/vault/keys
-      readOnly: true
     externalSecrets:
     - name: vault-keys
       data:
       - secretKey: encryption-key
         remoteKey: GATEWAY_VAULT_ENCRYPTION_KEY
-    - name: vault-database
-      template:
-        database-url: postgres://vault:{{ .password | urlquery }}@payment-gateway-pg-rw.payment-gateway.svc.cluster.local:5432/vault?sslmode=require
-        migrate-database-url: postgres://vault:{{ .password | urlquery }}@payment-gateway-pg-rw.payment-gateway.svc.cluster.local:5432/vault?sslmode=require
-      data:
-      - secretKey: password
-        remoteKey: GATEWAY_DB_VAULT_PASSWORD
-    networkPolicy:
-      ingressPorts:
-      - 8000
-      - 8001
-      ingressFrom:
-      - podSelector:
-          matchLabels:
-            app.kubernetes.io/name: edge
-      - podSelector:
-          matchLabels:
-            app.kubernetes.io/name: processor-simulator
+        env: VAULT_ENCRYPTION_KEY_FILE
+      mountPath: /etc/vault/keys
+    database: vault
+
 database:
   name: payment-gateway-pg
   instances: 1
@@ -447,40 +274,19 @@ database:
       memory: 256Mi
     limits:
       memory: 1Gi
-  externalSecrets:
-    secretStoreRef:
-      kind: ClusterSecretStore
-      name: fraud-doppler
-    refreshInterval: 1h
   # Each owner role owns only its database. Payments migrates as `payments` and serves as `payments_app`.
-  databases:
-  - name: payments
-    owner: payments
-    connectRoles:
-    - payments
-    - payments_app
-    - payments_cdc
-  - name: notifier
-    owner: notifier
-    connectRoles:
-    - notifier
-  - name: vault
-    owner: vault
-    connectRoles:
-    - vault
-  - name: processor
-    owner: processor
-    connectRoles:
-    - processor
   # Doppler keys follow GATEWAY_DB_<ROLE>_PASSWORD.
-  roles:
-  - name: payments
-  - name: payments_app
-  - name: payments_cdc
-    replication: true
-  - name: notifier
-  - name: vault
-  - name: processor
+  databases:
+    payments:
+      roles:
+        payments_app: {}
+        payments_cdc:
+          replication: true
+      runtimeRole: payments_app
+    notifier: {}
+    vault: {}
+    processor: {}
+
 redis:
   name: payment-gateway-redis
   image:
@@ -500,20 +306,9 @@ redis:
     secretName: payment-gateway-redis
     secretKey: password
     remoteKey: GATEWAY_REDIS_PASSWORD
-  externalSecrets:
-    secretStoreRef:
-      kind: ClusterSecretStore
-      name: fraud-doppler
-    refreshInterval: 1h
   clients:
   - payments
-secretStore:
-  name: fraud-doppler
-  project: payment-gateway-fraud-detection
-  config: prd
-  tokenSecret:
-    name: gateway-doppler-token
-    key: dopplerToken
+
 ingress:
   enabled: true
   name: payment-gateway-ingress

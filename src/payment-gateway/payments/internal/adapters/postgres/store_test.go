@@ -1,11 +1,15 @@
 package postgres_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/testutil/telemetry"
 
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/wire"
 
@@ -466,8 +470,38 @@ func TestSequenceAllocationOrderMayDifferFromCommitOrder(t *testing.T) {
 
 func TestPublicationCoversOnlyLedgerInsertsAndCDCRoleReadsOnlyLedger(t *testing.T) {
 	f := newFixture(t)
-	f.create(t, "order-cdc")
-	ctx := context.Background()
+	provider, _ := telemetry.Traces(t)
+	ctx, span := provider.Tracer("test").Start(context.Background(), "create payment")
+	defer span.End()
+	command := testsupport.NewCreateCommand(testsupport.IntegrationID, "order-cdc", f.tick())
+	_, expectedEvent, err := domain.Transition(domain.State{}, command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected, err := proto.Marshal(wire.Event(expectedEvent))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.store.CreatePayment(ctx, application.CreateRequest{
+		Command:     command,
+		Idempotency: application.IdempotencyClaim{IntegrationID: testsupport.IntegrationID, Scope: application.ScopeCreatePayment, Key: "key-cdc", Digest: []byte("cdc"), PaymentID: uuid.MustParse(command.PaymentID)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var payload []byte
+	var saved *string
+	if err := f.db.App.QueryRow(ctx, "SELECT payload, tracingspancontext FROM payment_events").Scan(&payload, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(payload, expected) {
+		t.Fatal("trace metadata changed serialized event bytes")
+	}
+	if saved == nil || *saved != *observe.SerializeContext(ctx) {
+		t.Fatal("ledger did not persist transport context")
+	}
+	if _, err := f.db.App.Exec(ctx, "UPDATE payment_events SET tracingspancontext = NULL"); err == nil {
+		t.Fatal("trace metadata bypassed event immutability")
+	}
 
 	rows, err := f.db.Owner.Query(ctx, `
 		SELECT p.pubname, t.tablename, p.pubinsert, p.pubupdate, p.pubdelete, p.pubtruncate

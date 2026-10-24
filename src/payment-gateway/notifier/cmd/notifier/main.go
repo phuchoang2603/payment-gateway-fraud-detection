@@ -2,17 +2,17 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -27,7 +27,7 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)).With("service", "notifier"))
+	slog.SetDefault(slog.New(observe.NewLogHandler(os.Stdout, "notifier")))
 	command := "serve"
 	if len(os.Args) > 1 {
 		command = os.Args[1]
@@ -67,6 +67,12 @@ func migrate(ctx context.Context) error {
 }
 
 func serve(ctx context.Context) error {
+	shutdown, err := observe.Init(ctx, "notifier")
+	if err != nil {
+		return err
+	}
+	defer shutdown()
+
 	cfg, err := config.FromEnv()
 	if err != nil {
 		return err
@@ -120,7 +126,6 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen grpc: %w", err)
 	}
-	metricsServer := &http.Server{Addr: cfg.MetricsAddr, Handler: metricsMux(m), ReadHeaderTimeout: 5 * time.Second}
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -138,15 +143,10 @@ func serve(ctx context.Context) error {
 			errc <- err
 		}
 	})
-	spawn(func() {
-		if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errc <- err
-		}
-	})
 	spawn(func() { consumer.Run(runCtx) })
 	spawn(func() { postgres.NewLeader(pool, postgres.LeaderLockKey).Run(runCtx, worker.Run) })
 
-	slog.Info("notifier started", "grpc", cfg.GRPCAddr, "metrics", cfg.MetricsAddr, "integrations", integrations.Len())
+	slog.Info("notifier started", "grpc", cfg.GRPCAddr, "integrations", integrations.Len())
 	var runErr error
 	select {
 	case <-ctx.Done():
@@ -155,7 +155,6 @@ func serve(ctx context.Context) error {
 	cancel()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer shutdownCancel()
-	_ = metricsServer.Shutdown(shutdownCtx)
 	finished := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -166,10 +165,4 @@ func serve(ctx context.Context) error {
 	case <-shutdownCtx.Done():
 	}
 	return runErr
-}
-
-func metricsMux(m *metrics.Metrics) http.Handler {
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", m.Handler())
-	return mux
 }
