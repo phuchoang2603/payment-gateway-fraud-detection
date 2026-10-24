@@ -60,21 +60,18 @@ def test_generation_identity_separates_logical_inputs_from_execution():
     assert small_config().generation_identity({"contract": "v1"}, "another revision") != base
 
 
-def test_scale_pilot_uses_same_profiles_algorithm_and_layout_without_changing_v7():
+def test_scale_pilot_uses_same_profiles_algorithm_and_layout():
     from pathlib import Path
 
     from simulator.config import load_config
 
     directory = Path(__file__).resolve().parents[1] / "configs"
-    scale, pilot, legacy = (
-        load_config(directory / name) for name in ("historical-scale.yaml", "historical-pilot.yaml", "historical.yaml")
-    )
-    assert legacy.dataset_version == "v7"
+    scale, pilot = (load_config(directory / name) for name in ("historical-scale.yaml", "historical-pilot.yaml"))
     assert pilot.duration_days >= 6
     assert pilot.counts == scale.counts and pilot.storage == scale.storage
     assert pilot.scenarios == scale.scenarios and pilot.label_delays == scale.label_delays
     assert pilot.customer_block_size == scale.customer_block_size
-    assert pilot.dataset_version != scale.dataset_version != legacy.dataset_version
+    assert pilot.dataset_version != scale.dataset_version
     assert scale.minimum_source_parquet_bytes == 100000000000
     assert pilot.minimum_source_parquet_bytes == 0
 

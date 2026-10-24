@@ -119,7 +119,7 @@ Small tests SHALL verify `manifest_version: 3`, `source_layout: task-fragments-v
 
 ### Requirement: Historical evidence boundary
 
-Legacy v7, pilot, separate-process native-validation measurements and prior checked tasks SHALL remain explicitly historical. They SHALL NOT establish implementation, new raw-layout measurements or live `v8` validation. The product-version change to `5.0.0` SHALL preserve logical ODCS contracts.
+Legacy pilot, separate-process native-validation measurements and prior checked tasks SHALL remain explicitly historical. They SHALL NOT establish implementation, new raw-layout measurements or live `v8` validation. The product-version change to `5.0.0` SHALL preserve logical ODCS contracts.
 
 #### Scenario: New scale evidence
 

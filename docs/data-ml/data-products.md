@@ -28,18 +28,7 @@ The fraud-labels linkage rule reads `payment_events`, so validate labels in a da
 
 ### Published version
 
-`historical/v7` is the current accepted dataset, generated from [`src/data-pipeline/simulator/configs/historical.yaml`](../../src/data-pipeline/simulator/configs/historical.yaml) (seed 2603) and validated against both contracts before publication. Its `manifest.json` records the configuration hash, generator revision, contract hashes, per-partition row counts and storage metrics; [`historical-sanity.ipynb`](../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb) holds the executed distribution, skew, cutover, duplicate and layout checks.
-
-| Measure | Value |
-|---|---|
-| History | 2026-07-01 to 2026-09-28 (90 days); schema cutover 2026-08-15 |
-| Catalogue | Refurbished electronics: phone, smartwatch, laptop, accessory, tablet, headphones, game console, camera; condition excellent, good or fair |
-| Payments / unique events / exported event rows | 420,392 / 2,171,314 / 2,215,309 |
-| Duplicate export rate | 1.99% (configured 2%) |
-| Fraud attempts by scenario | stolen card 12,157; account takeover 3,360; card testing 1,225; obvious high value 510 |
-| Labels / chargebacks / friendly-fraud payments | 442,817 / 12,309 / 1,175 |
-| Distinct customers / devices / IP networks / addresses / payment methods | 30,000 / 53,845 / 9,202 / 20,123 / 26,724 |
-| Layout | 91 event files (median 2.5 MiB, 237 MiB total) and 111 label files (median 0.24 MiB), one zstd file per day |
+`historical/v8` is the published full-scale source, generated from [`historical-scale.yaml`](../../src/data-pipeline/simulator/configs/historical-scale.yaml) (seed 2603): 24,982 raw files, 123,286,939,620 physical and 243,759,611,982 uncompressed Parquet bytes, with validation deferred to the `dp1-spark-gx` gate. `historical/v10` is a small smoke export from [`historical-smoke.yaml`](../../src/data-pipeline/simulator/configs/historical-smoke.yaml) (100,000 customers, six days) using the same manifest format. Each `manifest.json` records the configuration hash, generator revision, contract hashes, per-file inventory, per-partition row counts and storage metrics. [`historical-sanity.ipynb`](../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb) reads a published manifest for distribution, skew, cutover and duplicate checks.
 
 The command runs from the devenv shell. The generation-only publication path below does not establish a completed migration or validation of `v8`:
 
@@ -47,7 +36,7 @@ The command runs from the devenv shell. The generation-only publication path bel
 cd src/data-pipeline/simulator
 doppler run -p payment-gateway-fraud-detection -c prd -- sh -c \
   'AWS_ACCESS_KEY_ID="$HISTORICAL_RUSTFS_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$HISTORICAL_RUSTFS_SECRET_KEY" \
-   uv run --locked simulator historical --config configs/historical.yaml'
+   uv run --locked simulator historical --config configs/historical-scale.yaml'
 ```
 
 Bump `dataset_version` in the config for every new dataset. Pass `--output <dir>` to generate locally without credentials.
@@ -70,7 +59,7 @@ Historical legacy sizing evidence: [`historical-scale.yaml`](../../src/data-pipe
 
 The six-day pilot includes the warmup of seven-day stolen-card compromise windows. A bounded calibration sample using the intended profiles and the first 100,000-customer block on days 30–35 estimated a 2.67% stolen-card attempt share. The full config therefore gates that share at 2.0–3.2%; the pilot retains its observed 0.8–1.8% band. Both configurations retain the measured duplicate/skew/schema and other scenario bands and 60 card-testing bursts/day. Full-year distribution and byte acceptance remain unmeasured. Legacy native full-history validation projected about 512 GB of spill from the pilot, exceeding this workstation's capacity. The approved new path assigns quality processing to DP1 Spark/GX; these estimates establish no validation result for live `v8`.
 
-The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai-1 (50%)`, cell B5: offline simulation of at least 100 GB. Compression accounting is unspecified there. This project conservatively requires at least **100,000,000,000 physical bytes** across inventory-listed raw event and label Parquet files for the new path, counted once, excluding `_run`, reports, streaming data, replicas and downstream copies. The manifest separately records uncompressed Parquet column-chunk bytes and decimal GB/GiB. A fixed plan below the byte gate cannot publish; changing logical inputs requires a new dataset version. v7 remains the accepted correctness dataset until a separately measured full run passes every gate.
+The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai-1 (50%)`, cell B5: offline simulation of at least 100 GB. Compression accounting is unspecified there. This project conservatively requires at least **100,000,000,000 physical bytes** across inventory-listed raw event and label Parquet files for the new path, counted once, excluding `_run`, reports, streaming data, replicas and downstream copies. The manifest separately records uncompressed Parquet column-chunk bytes and decimal GB/GiB. A fixed plan below the byte gate cannot publish; changing logical inputs requires a new dataset version.
 
 Historical legacy integration evidence: a small remote integration check on 2026-10-22 published `s3://synthetic-source/historical/runtime-process-check-2800fb7138e74bd699970de8f4ccfdc8/manifest.json` and removed it after measurement, so that object no longer resolves: 707 payments, 3,957 exported event rows, 882 labels, 582,399 physical and 894,981 uncompressed Parquet bytes. Both native reports passed. Separate CLI processes on the same workstation prepared then resumed the files. Preparation took 45.39 seconds (8.50 generation/upload; 35.46 finalization), with sampled RSS/scratch peaks of 253,603,840/246,483 bytes. Resume used 768 MiB/two DuckDB threads instead of 512 MiB/one thread, regenerated and uploaded nothing, and took 52.76 seconds (46.86 validation), with RSS/scratch peaks of 325,181,440/40,939 bytes and no sampled spill. Remote receipted intermediates totaled 997,221 bytes. Preparation uploaded 1,579,620 file bytes in 4.10 transfer-seconds; checksum read bytes and per-attempt budgets are in the manifest. This fixture used 300 customers, test scenario rates and 5% duplicates; its compression and throughput are **not scale calibration**. Its generator revision is `b2d88d5304ea53d3b87084522763e81496047fc2e6a1e946829a7e4d85cc7ec5`, resume configuration SHA-256 `86de17c995ba8688f96077137edb979e36a0a2473db5105e5907e627e6b62e8a`; the manifest retains profile and unchanged source-contract hashes. This measured legacy native-validation handoff is not a requirement or validation result for the new raw path; 100 GB full-run quality acceptance remains unverified.
 
