@@ -60,20 +60,18 @@ def test_generation_identity_separates_logical_inputs_from_execution():
     assert small_config().generation_identity({"contract": "v1"}, "another revision") != base
 
 
-def test_scale_pilot_uses_same_profiles_algorithm_and_layout():
+def test_smoke_uses_same_algorithm_and_layout_as_scale():
     from pathlib import Path
 
     from simulator.config import load_config
 
     directory = Path(__file__).resolve().parents[1] / "configs"
-    scale, pilot = (load_config(directory / name) for name in ("historical-scale.yaml", "historical-pilot.yaml"))
-    assert pilot.duration_days >= 6
-    assert pilot.counts == scale.counts and pilot.storage == scale.storage
-    assert pilot.scenarios == scale.scenarios and pilot.label_delays == scale.label_delays
-    assert pilot.customer_block_size == scale.customer_block_size
-    assert pilot.dataset_version != scale.dataset_version
+    scale, smoke = (load_config(directory / name) for name in ("historical-scale.yaml", "historical-smoke.yaml"))
+    assert smoke.storage == scale.storage and smoke.label_delays == scale.label_delays
+    assert smoke.customer_block_size == scale.customer_block_size
+    assert smoke.dataset_version != scale.dataset_version
     assert scale.minimum_source_parquet_bytes == 100000000000
-    assert pilot.minimum_source_parquet_bytes == 0
+    assert smoke.minimum_source_parquet_bytes == 0
 
 
 def test_acceptance_bands_are_validated_without_forming_logical_identity():

@@ -128,7 +128,7 @@ def test_local_cleanup_failure_counts_only_removed_files(tmp_path, monkeypatch):
     assert failure.value.removed == {"objects": 1, "bytes": deleted[0]}
 
 
-def test_legacy_publication_without_integrity_inventory_is_not_modified(tmp_path):
+def test_manifest_without_integrity_inventory_is_not_modified(tmp_path):
     store = ObjectStore(str(tmp_path))
     store.put_json("manifest.json", {"dataset_version": "legacy"})
     original = (tmp_path / "manifest.json").read_bytes()
