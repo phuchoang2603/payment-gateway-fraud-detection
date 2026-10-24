@@ -1,6 +1,4 @@
-{{- range $name, $settings := .Values.services }}
-{{- if $settings.enabled }}
-{{- $svc := mergeOverwrite (deepCopy $.Values.defaults) $settings }}
+{{- range $name, $svc := include "payment-gateway.services" . | fromYaml }}
 ---
 apiVersion: v1
 kind: Service
@@ -23,5 +21,4 @@ spec:
     {{- end }}
   selector:
     {{- include "payment-gateway.selector" $name | nindent 4 }}
-{{- end }}
 {{- end }}

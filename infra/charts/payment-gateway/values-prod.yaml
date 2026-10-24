@@ -1,11 +1,9 @@
 defaults:
-  replicaCount: 1
   mesh:
     enabled: true
   image:
     pullPolicy: Always
 database:
-  instances: 1
   storage:
     size: 10Gi
   resources:
@@ -17,14 +15,11 @@ database:
 redis:
   resources:
     requests:
-      cpu: 100m
       memory: 768Mi
     limits:
       cpu: '1'
       memory: 1Gi
-  maxmemory: 512mb
 ingress:
-  enabled: true
   tunnel:
     enabled: true
     clusterTunnel: talos-proxmox

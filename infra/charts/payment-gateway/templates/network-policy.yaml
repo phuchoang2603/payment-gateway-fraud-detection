@@ -1,8 +1,19 @@
-{{- range $name, $settings := .Values.services }}
-{{- if $settings.enabled }}
-{{- $svc := mergeOverwrite (deepCopy $.Values.defaults) $settings }}
----
+{{- range $name, $svc := include "payment-gateway.services" . | fromYaml }}
 {{- if $svc.networkPolicy.enabled }}
+{{- $callers := $svc.mesh.callers }}
+{{- range $svc.mesh.rules }}
+{{- $callers = concat $callers .callers }}
+{{- end }}
+{{- $from := deepCopy $svc.networkPolicy.ingressFrom }}
+{{- if not $from }}
+{{- range $callers | uniq }}
+{{- $from = append $from (dict "podSelector" (dict "matchLabels" (dict "app.kubernetes.io/name" .))) }}
+{{- end }}
+{{- end }}
+{{- range $svc.mesh.callerNamespaces }}
+{{- $from = append $from (dict "namespaceSelector" (dict "matchLabels" (dict "kubernetes.io/metadata.name" .))) }}
+{{- end }}
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -23,17 +34,16 @@ spec:
         - ipBlock:
             cidr: 169.254.7.127/32
     {{- end }}
-    {{- if $svc.networkPolicy.ingressFrom }}
+    {{- if $from }}
     - from:
-        {{- toYaml $svc.networkPolicy.ingressFrom | nindent 8 }}
+        {{- toYaml $from | nindent 8 }}
       ports:
-        {{- range $svc.networkPolicy.ingressPorts }}
-        - port: {{ . }}
+        {{- range $svc.ports }}
+        - port: {{ .containerPort }}
           protocol: TCP
         {{- end }}
     {{- else if not $svc.mesh.enabled }}
     []
     {{- end }}
-{{- end }}
 {{- end }}
 {{- end }}

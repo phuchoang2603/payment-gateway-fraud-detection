@@ -1,8 +1,6 @@
-{{- range $name, $settings := .Values.services }}
-{{- if $settings.enabled }}
-{{- $svc := mergeOverwrite (deepCopy $.Values.defaults) $settings }}
----
+{{- range $name, $svc := include "payment-gateway.services" . | fromYaml }}
 {{- if $svc.httpRoute.enabled }}
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -10,7 +8,7 @@ metadata:
   namespace: {{ $.Release.Namespace }}
 spec:
   parentRefs:
-    - name: {{ $svc.httpRoute.gateway }}
+    - name: {{ $.Values.ingress.name }}
   {{- with $svc.httpRoute.hostnames }}
   hostnames:
     {{- toYaml . | nindent 4 }}
@@ -30,7 +28,6 @@ spec:
         {{- toYaml $svc.httpRoute.timeouts | nindent 8 }}
       backendRefs:
         - name: {{ $name }}
-          port: {{ $svc.httpRoute.port }}
-{{- end }}
+          port: {{ (first $svc.ports).containerPort }}
 {{- end }}
 {{- end }}
