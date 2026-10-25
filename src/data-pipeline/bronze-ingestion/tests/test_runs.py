@@ -32,3 +32,19 @@ def test_stable_context_manifest_guard_and_acceptance_requires_both_stages(tmp_p
     with pytest.raises(ValueError):
         accept(store, run, contracts)
     assert store.get("accepted/v10.json") == accepted
+
+
+def test_validation_policy_change_preserves_old_reports_and_requires_revalidation(tmp_path, monkeypatch):
+    from data_platform import runs
+
+    store = Store(str(tmp_path))
+    contracts = {"payment_events": "one", "fraud_labels": "two"}
+    run = open_run(store, "smoke", "digest", contracts, "image", "workflow")
+    run["snapshots"] = {"payment_events": 1, "fraud_labels": 2}
+    previous = report_key(run, contracts)
+    store.put(previous, {"data_outcome": "failed"})
+    monkeypatch.setattr(runs, "VALIDATION_POLICY", "different-policy")
+    assert report_key(run, contracts) != previous
+    with pytest.raises(ValueError, match="persisted passing"):
+        accept(store, run, contracts)
+    assert store.get(previous) == {"data_outcome": "failed"}

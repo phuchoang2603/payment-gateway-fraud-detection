@@ -11,7 +11,7 @@ spec:
       - {name: source-root, value: __SOURCE_ROOT__}
       - {name: dataset-version, value: __DATASET_VERSION__}
   onExit: finalizer
-  activeDeadlineSeconds: 7200
+  activeDeadlineSeconds: __WORKFLOW_DEADLINE__
   synchronization:
     mutexes:
       - name: bronze-payments-writer
@@ -102,7 +102,7 @@ spec:
         parameters:
           - name: stage
           - name: attempt
-      activeDeadlineSeconds: 2400
+      activeDeadlineSeconds: __SPARK_DEADLINE__
       resource:
         action: create
         setOwnerReference: true
@@ -154,7 +154,7 @@ spec:
                     dp1-workflow: "{{workflow.name}}"
                     dp1-stage: "{{inputs.parameters.stage}}"
                 spec:
-                  activeDeadlineSeconds: 2400
+                  activeDeadlineSeconds: __SPARK_DEADLINE__
                   terminationGracePeriodSeconds: 30
                   containers:
                     - name: spark-kubernetes-driver

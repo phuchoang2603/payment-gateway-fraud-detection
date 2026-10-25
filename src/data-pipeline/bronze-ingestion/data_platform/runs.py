@@ -4,9 +4,11 @@ from uuid import uuid4
 
 from data_platform.products import PORTS
 
+VALIDATION_POLICY = "bronze-contracts-v2"
+
 
 def validation_key(contracts):
-    return sha256("".join(f"{k}:{v}" for k, v in sorted(contracts.items())).encode()).hexdigest()
+    return sha256((VALIDATION_POLICY + "".join(f"{k}:{v}" for k, v in sorted(contracts.items()))).encode()).hexdigest()
 
 
 def open_run(store, version, digest, contracts, image, workflow, source_validation=None):
@@ -63,6 +65,7 @@ def accept(store, run, contracts):
         raise ValueError("acceptance requires verified governance readback")
     record = {
         **run,
+        "validation_policy": VALIDATION_POLICY,
         "contracts": contracts,
         "validation_report": report_key(run, contracts),
         "governance": governance,

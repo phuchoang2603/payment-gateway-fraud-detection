@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from data_platform.manifest import selected_manifest
 from data_platform.products import hashes
-from data_platform.runs import accept, open_run, save_run
+from data_platform.runs import VALIDATION_POLICY, accept, open_run, save_run
 from data_platform.storage import Store
 
 
@@ -112,6 +112,7 @@ def main(argv=None):
             from data_platform.runs import report_key
 
             failure = {
+                "validation_policy": VALIDATION_POLICY,
                 "run_id": run["run_id"],
                 "dataset_version": run["dataset_version"],
                 "manifest_sha256": run["manifest_sha256"],

@@ -4,7 +4,10 @@ secretStoreName: fraud-doppler
 images:
   spark: ""
   metadata: ""
+workflow:
+  activeDeadlineSeconds: 7200
 spark:
+  activeDeadlineSeconds: 2400
   executors: 2
   shufflePartitions: 1024
 config:

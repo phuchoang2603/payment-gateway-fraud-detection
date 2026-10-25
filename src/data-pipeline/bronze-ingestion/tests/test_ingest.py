@@ -63,9 +63,14 @@ def test_snapshot_recovery_isolation_validation_and_replay(spark, dataset, tmp_p
     frames = selected_snapshots(spark, run, "recovery")
     for table in PORTS:
         assert frames[table].count() == sum(manifest["partitions"][table].values())
+    manifest = deepcopy(manifest)
+    manifest.setdefault("configuration", {}).setdefault("acceptance_bands", {})[
+        "cardinality.ip_network.distinct_to_row_ratio"
+    ] = {"minimum": 0, "maximum": 0}
     report = validate(spark, str(root), manifest, store, run, contracts, "image@sha256:test", "recovery")
     assert report["data_outcome"] == "passed", report
     assert all(t["conserved"] for t in report["tables"].values())
+    assert report["tables"]["payment_events"]["cardinality"]["ip_network"]["within_band"] is False
     assert set(report["tables"]["payment_events"]["cardinality"]) == {
         "customer",
         "address",
