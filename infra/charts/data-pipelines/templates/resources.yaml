@@ -85,6 +85,9 @@ rules:
     resources: [sparkapplications]
     verbs: [create, get, list, watch, delete, deletecollection]
   - apiGroups: [argoproj.io]
+    resources: [workflows/finalizers]
+    verbs: [update]
+  - apiGroups: [argoproj.io]
     resources: [workflowtaskresults]
     verbs: [create, patch]
 ---
