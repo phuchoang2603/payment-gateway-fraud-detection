@@ -29,7 +29,7 @@ The catalog SHALL expose source and bronze products, owners, classifications and
 
 ### Requirement: Authoritative contract publication
 
-Git-versioned ODCS contracts SHALL remain authoritative. OpenMetadata SHALL expose imported contracts with their original identities, versions, hashes and artifact references. Catalog publication SHALL NOT create an independent validation rule source or rerun quality checks through a second engine.
+Git-versioned ODCS contracts SHALL remain authoritative. OpenMetadata SHALL expose native contracts with the complete original ODCS YAML, identities, versions, hashes and artifact references. Native schemas and quality-rule metadata SHALL preserve the declared rules without modifying Git contracts or immutable source manifests. Catalog publication SHALL NOT create an independent validation rule source or rerun quality checks through a second engine.
 
 #### Scenario: Inspect a published contract
 

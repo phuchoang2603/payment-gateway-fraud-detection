@@ -60,6 +60,12 @@ class Client:
     def put(self, path, body, query=None, content_type="application/json"):
         return self.call("PUT", path, body, query, content_type)
 
+    def post(self, path, body):
+        return self.call("POST", path, body)
+
+    def patch(self, path, operations):
+        return self.call("PATCH", path, operations, content_type="application/json-patch+json")
+
     def find(self, path, query=None):
         try:
             return self.get(path, query)

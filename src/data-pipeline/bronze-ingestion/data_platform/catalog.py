@@ -101,7 +101,7 @@ def source_columns(contract):
         {
             "name": p["name"],
             "dataType": CONTRACT_TYPES[p["logicalType"]],
-            "dataTypeDisplay": p.get("physicalType", p["logicalType"]),
+            "dataTypeDisplay": p.get("physicalType", p["logicalType"]).lower(),
             **({"description": p["description"]} if p.get("description") else {}),
         }
         for p in contract["schema"][0]["properties"]
@@ -126,7 +126,7 @@ def put_table(client, service, database, schema, name, columns, description, own
     if owner:
         body["owners"] = [{"type": "user", "name": owner}]
     table = client.put("/v1/tables", body)
-    return {"id": table["id"], "fqn": table["fullyQualifiedName"]}
+    return {"id": table["id"], "fqn": table["fullyQualifiedName"], "columns": columns}
 
 
 def discover(client, run_id, owner=None):

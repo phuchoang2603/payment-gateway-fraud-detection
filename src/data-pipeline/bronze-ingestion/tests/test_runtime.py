@@ -16,6 +16,14 @@ def test_preprovisioned_namespace_does_not_request_namespace_creation(tmp_path, 
         catalog = Catalog()
 
         def sql(self, query):
+            if query.startswith("SHOW CREATE TABLE lake.bronze.raw_"):
+                column = "occurred_at" if query.endswith("payment_events") else "label_available_at"
+
+                class Definition:
+                    def first(self):
+                        return [f"PARTITIONED BY (_source_dataset_version, days({column}))"]
+
+                return Definition()
             raise AssertionError("preprovisioned namespace must not be mutated")
 
     monkeypatch.setattr(ingest, "verify_files", lambda *args: None)

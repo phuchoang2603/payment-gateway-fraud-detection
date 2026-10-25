@@ -1,12 +1,14 @@
+import json
 import os
 import time
 from datetime import datetime
+from hashlib import sha256
 from urllib.parse import quote
 
 import yaml
 
 from data_platform.catalog import discover, load_contract, register_source
-from data_platform.openmetadata import Client
+from data_platform.openmetadata import ApiError, Client
 from data_platform.products import PORTS, PRODUCTS, contract_path
 from data_platform.runs import report_key, save_run
 
@@ -59,16 +61,73 @@ def column_lineage(table, source, lake):
     return [{"fromColumns": [f"{source['fqn']}.{n}"], "toColumn": f"{lake['fqn']}.{n}"} for n in names]
 
 
+def contract_document(table, product, identity):
+    artifact = contract_path(table, product)
+    original = artifact.read_bytes()
+    contract = yaml.safe_load(original)
+    rules = []
+    for element in contract["schema"]:
+        for rule in element.get("quality", []):
+            rule = dict(rule)
+            if isinstance(rule.get("implementation"), (dict, list)):
+                rule["implementation"] = json.dumps(rule["implementation"], sort_keys=True)
+            rules.append(rule)
+    provenance = (
+        f"ODCS id={contract['id']} version={contract['version']} sha256={sha256(original).hexdigest()} "
+        f"artifact=contracts/data-products/{product}/{artifact.name}"
+    )
+    return {
+        "name": contract["id"],
+        "displayName": contract["name"],
+        "description": provenance + "\n\n```yaml\n" + original.decode() + "\n```",
+        "entity": reference(identity),
+        "schema": identity["columns"],
+        "odcsQualityRules": rules,
+        "termsOfUse": contract["description"]["usage"],
+    }
+
+
+def contains(actual, expected):
+    if isinstance(expected, dict):
+        return isinstance(actual, dict) and all(k in actual and contains(actual[k], v) for k, v in expected.items())
+    if isinstance(expected, list):
+        return (
+            isinstance(actual, list)
+            and len(actual) == len(expected)
+            and all(contains(a, e) for a, e in zip(actual, expected))
+        )
+    return actual == expected
+
+
+def publish_result(client, path, result):
+    try:
+        client.post(path, result)
+    except ApiError as failure:
+        if failure.status != 409:
+            raise
+        found = client.get(path, {"startTs": result["timestamp"], "endTs": result["timestamp"]})
+        if not found.get("data"):
+            raise RuntimeError("existing quality result is not available for readback") from None
+        if not any(contains(existing, result) for existing in found.get("data", [])):
+            raise ValueError("existing quality result differs from persisted execution evidence") from None
+
+
 def write(client, run, report, lake, source, report_uri, owner):
     owners = [{"type": "user", "name": owner}] if owner else []
     timestamp = int(datetime.fromisoformat(report["run_time"]).timestamp() * 1000)
-    client.put(
+    domain = client.put(
         "/v1/domains",
         {"name": DOMAIN, "domainType": "Aggregate", "description": "Fraud detection data platform"},
     )
     assets = {"historical-payments": source, "bronze-payments": lake}
+    contracts = {}
     for product, members in assets.items():
         doc = product_document(product)
+        for identity in members.values():
+            client.patch(
+                f"/v1/tables/{identity['id']}",
+                [{"op": "add", "path": "/domains", "value": [reference(domain, "domain")]}],
+            )
         client.put(
             "/v1/dataProducts",
             {
@@ -77,23 +136,16 @@ def write(client, run, report, lake, source, report_uri, owner):
                 "description": f"{doc['description']['purpose']} ODPS {doc['id']} version {doc['version']}.",
                 "domains": [DOMAIN],
                 "owners": owners,
-                "assets": [reference(i) for i in members.values()],
             },
         )
+        client.put(
+            f"/v1/dataProducts/{quote(product, safe='')}/assets/add",
+            {"assets": [reference(i) for i in members.values()]},
+        )
         for table, identity in members.items():
-            contract_file = contract_path(table, product)
-            client.put(
-                "/v1/dataContracts/odcs/yaml",
-                contract_file.read_bytes(),
-                {
-                    "entityId": identity["id"],
-                    "entityType": "table",
-                    "mode": "replace",
-                    "createTestCases": "false",
-                    "objectName": load_contract(table, product)["schema"][0]["name"],
-                },
-                "application/yaml",
-            )
+            document = contract_document(table, product, identity)
+            client.put("/v1/dataContracts", document)
+            contracts[identity["id"]] = document
     client.put("/v1/services/pipelineServices", {"name": PIPELINE_SERVICE, "serviceType": "CustomPipeline"})
     pipeline = client.put(
         "/v1/pipelines",
@@ -178,13 +230,14 @@ def write(client, run, report, lake, source, report_uri, owner):
                 "testResultValue": [{"name": k, "value": v} for k, v in values.items()],
             }
             fqn = case["fullyQualifiedName"]
-            client.put(f"/v1/dataQuality/testCases/testCaseResults/{quote(fqn, safe='')}", result)
-            results[fqn] = status
+            publish_result(client, f"/v1/dataQuality/testCases/testCaseResults/{quote(fqn, safe='')}", result)
+            results[fqn] = result
     return {
         "timestamp": timestamp,
         "results": results,
         "pipeline_status": "Successful" if ingest_ok and validate_ok else "Failed",
         "assets": assets,
+        "contracts": contracts,
     }
 
 
@@ -192,15 +245,24 @@ def missing(client, expected, lake, source):
     gaps = []
     window = {"startTs": expected["timestamp"], "endTs": expected["timestamp"]}
     for product, members in expected["assets"].items():
-        found = client.find(f"/v1/dataProducts/name/{quote(product, safe='')}", {"fields": "assets"})
-        have = {a["id"] for a in (found or {}).get("assets", [])}
+        found = client.find(f"/v1/dataProducts/name/{quote(product, safe='')}/assets", {"limit": 100})
+        have = {a["id"] for a in (found or {}).get("data", [])}
         gaps += [("dataProduct", product, i["fqn"]) for i in members.values() if i["id"] not in have]
         for identity in members.values():
             table = client.find(f"/v1/tables/name/{quote(identity['fqn'], safe='')}", {"fields": "columns"})
-            if not table or not table.get("columns"):
+            if not table or not table.get("columns") or not contains(table["columns"], identity["columns"]):
                 gaps.append(("table", identity["fqn"], "schema"))
             contract = client.find("/v1/dataContracts/entity", {"entityId": identity["id"], "entityType": "table"})
-            if not contract:
+            document = expected["contracts"][identity["id"]]
+            if (
+                not contract
+                or contract.get("name") != document["name"]
+                or contract.get("description") != document["description"]
+                or not contains(contract.get("entity"), document["entity"])
+                or not contains(contract.get("odcsQualityRules", []), document["odcsQualityRules"])
+                or not contains(contract.get("schema"), document["schema"])
+                or contract.get("termsOfUse") != document["termsOfUse"]
+            ):
                 gaps.append(("contract", identity["fqn"], product))
     for table in PORTS:
         found = client.find(
@@ -212,10 +274,10 @@ def missing(client, expected, lake, source):
         if table == "fraud_labels":
             needed.add((lake["payment_events"]["id"], lake["fraud_labels"]["id"]))
         gaps += [("lineage", lake[table]["fqn"], str(pair)) for pair in needed - sources]
-    for fqn, status in expected["results"].items():
+    for fqn, result in expected["results"].items():
         found = client.find(f"/v1/dataQuality/testCases/testCaseResults/{quote(fqn, safe='')}", window)
-        if not any(r["testCaseStatus"] == status for r in (found or {}).get("data", [])):
-            gaps.append(("testResult", fqn, status))
+        if not any(contains(r, result) for r in (found or {}).get("data", [])):
+            gaps.append(("testResult", fqn, result["testCaseStatus"]))
     found = client.find(f"/v1/pipelines/{quote(PIPELINE_FQN, safe='')}/status", window)
     if not any(r["executionStatus"] == expected["pipeline_status"] for r in (found or {}).get("data", [])):
         gaps.append(("pipelineStatus", PIPELINE_FQN, expected["pipeline_status"]))

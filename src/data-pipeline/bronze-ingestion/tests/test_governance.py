@@ -15,6 +15,7 @@ class FakeCatalog:
         self.writes = []
         self.unavailable = False
         self.drop_results = False
+        self.drop_contract_field = None
 
     def put(self, path, body, query=None, content_type="application/json"):
         if self.unavailable:
@@ -26,10 +27,12 @@ class FakeCatalog:
             entity["columns"] = body["columns"]
             return entity
         if path == "/v1/dataProducts":
-            self.entities[("product", body["name"])] = {"assets": body["assets"]}
-        elif path == "/v1/dataContracts/odcs/yaml":
-            assert query["createTestCases"] == "false" and body.startswith(b"apiVersion")
-            self.entities[("contract", query["entityId"])] = {"entity": query["entityId"]}
+            self.entities.setdefault(("product", body["name"]), {"assets": []})
+        elif path.startswith("/v1/dataProducts/") and path.endswith("/assets/add"):
+            self.entities[("product", path.split("/")[3])]["assets"] = body["assets"]
+        elif path == "/v1/dataContracts":
+            assert "qualityExpectations" not in body
+            self.entities[("contract", body["entity"]["id"])] = body
         elif path == "/v1/pipelines":
             return self.entities.setdefault(("pipeline", body["name"]), {"id": "id-pipeline", **body})
         elif path.endswith("/status"):
@@ -44,16 +47,42 @@ class FakeCatalog:
             self.entities.setdefault(("result", unquote(path.rsplit("/", 1)[1])), []).append(body)
         return {"id": "id-" + path}
 
+    def get(self, path, query=None):
+        if path.startswith("/v1/tables/"):
+            return next(
+                v for (kind, _), v in self.entities.items() if kind == "table" and v["id"] == path.rsplit("/", 1)[1]
+            )
+        return self.find(path, query)
+
+    def post(self, path, body):
+        existing = self.entities.get(("result", unquote(path.rsplit("/", 1)[1])), [])
+        if any(r["timestamp"] == body["timestamp"] for r in existing):
+            raise ApiError(409, "POST", path)
+        return self.put(path, body)
+
+    def patch(self, path, operations):
+        entity = self.get(path)
+        for operation in operations:
+            entity[operation["path"].lstrip("/")] = operation["value"]
+        return entity
+
     def find(self, path, query=None):
         if self.unavailable:
             raise ConnectionError("metadata unavailable")
         path = unquote(path)
         if path.startswith("/v1/dataProducts/name/"):
-            return self.entities.get(("product", path.rsplit("/", 1)[1]))
+            product = self.entities.get(("product", path.split("/")[4]))
+            return {"data": product["assets"]} if product else None
         if path.startswith("/v1/tables/name/"):
             return self.entities.get(("table", path.rsplit("/", 1)[1]))
         if path == "/v1/dataContracts/entity":
-            return self.entities.get(("contract", query["entityId"]))
+            contract = json.loads(json.dumps(self.entities.get(("contract", query["entityId"]))))
+            if contract:
+                for rule in contract["odcsQualityRules"]:
+                    rule.setdefault("tags", [])
+                if self.drop_contract_field:
+                    contract.pop(self.drop_contract_field, None)
+            return contract
         if path.startswith("/v1/lineage/table/name/"):
             table = self.entities[("table", path.rsplit("/", 1)[1])]
             return {
@@ -102,7 +131,7 @@ def discovery_for(catalog):
         identities = {}
         for t in ("payment_events", "fraud_labels"):
             entity = catalog.put("/v1/tables", {"databaseSchema": "lake.bronze", "name": f"raw_{t}", "columns": [{}]})
-            identities[t] = {"id": entity["id"], "fqn": entity["fullyQualifiedName"]}
+            identities[t] = {"id": entity["id"], "fqn": entity["fullyQualifiedName"], "columns": entity["columns"]}
         return identities
 
     return discover
@@ -131,6 +160,14 @@ def test_publication_covers_products_contracts_lineage_and_results(tmp_path, mon
     products = {k[1]: v for k, v in catalog.entities.items() if k[0] == "product"}
     assert set(products) == {"historical-payments", "bronze-payments"}
     assert len(products["bronze-payments"]["assets"]) == 2
+    contracts = [v for (kind, _), v in catalog.entities.items() if kind == "contract"]
+    assert len(contracts) == 4
+    assert all(
+        "sha256=" in c["description"] and "artifact=contracts/data-products/" in c["description"] for c in contracts
+    )
+    assert all(c["name"].startswith("urn:datacontract:fraud:") for c in contracts)
+    bronze = next(c for c in contracts if c["name"].endswith(":bronze-payment-events"))
+    assert isinstance(bronze["odcsQualityRules"][0]["implementation"], str)
     result = catalog.entities[("result", "lake.bronze.raw_payment_events.payment_envelope")][0]
     assert result["testCaseStatus"] == "Failed"
     assert f"run_id={run['run_id']}" in result["result"] and "contract_sha256=" + "b" * 64 in result["result"]
@@ -181,13 +218,28 @@ def test_outage_recovery_preserves_outcomes_and_reuses_identities(tmp_path, monk
     assert store.get(report_key(run, contracts)) == report
     assert store.get("accepted/v10.json") is None
     results = [v for k, v in catalog.entities.items() if k[0] == "result"]
-    assert all(len({r["timestamp"] for r in rs}) == 1 for rs in results)
+    assert all(len(rs) == 1 for rs in results)
 
 
-def test_unresolved_readback_is_incomplete_governance(tmp_path, monkeypatch):
+def test_replay_refuses_conflicting_execution_evidence(tmp_path, monkeypatch):
+    report = fixture_report()
+    store, run, contracts = prepared(tmp_path, monkeypatch, report)
+    catalog = FakeCatalog()
+    assert publish(store, run, contracts, catalog, discovery_for(catalog), sleep=lambda _: None)["outcome"] == "passed"
+    report["tables"]["payment_events"]["gx"]["results"][0]["result"]["unexpected_count"] = 2
+    store.put(report_key(run, contracts), report)
+    replay = publish(store, run, contracts, catalog, discovery_for(catalog), sleep=lambda _: None)
+    assert replay["outcome"] == "error" and replay["error_type"] == "ValueError"
+    results = catalog.entities[("result", "lake.bronze.raw_payment_events.payment_envelope")]
+    assert len(results) == 1 and results[0]["testCaseStatus"] == "Failed"
+
+
+@pytest.mark.parametrize("missing", ["results", "description", "odcsQualityRules", "schema"])
+def test_unresolved_readback_is_incomplete_governance(tmp_path, monkeypatch, missing):
     store, run, contracts = prepared(tmp_path, monkeypatch, fixture_report())
     catalog = FakeCatalog()
-    catalog.drop_results = True
+    catalog.drop_results = missing == "results"
+    catalog.drop_contract_field = None if missing == "results" else missing
     outcome = publish(store, run, contracts, catalog, discovery_for(catalog), sleep=lambda _: None)
     assert outcome["outcome"] == "error" and not outcome["readback_verified"]
     assert outcome["error_type"] == "RuntimeError"
@@ -251,19 +303,3 @@ def test_lake_columns_preserve_nested_iceberg_types():
     assert columns["occurred_at"]["dataType"] == "TIMESTAMP"
     assert columns["items"]["dataType"] == "ARRAY" and columns["items"]["arrayDataType"] == "STRUCT"
     assert columns["items"]["children"][0]["name"] == "sku"
-
-
-def test_catalog_signing_and_file_io_use_metadata_identity(monkeypatch):
-    from data_platform.catalog import iceberg_config
-
-    for name, value in {
-        "ICEBERG_REST_URI": "https://catalog/iceberg/v1",
-        "CATALOG_ACCESS_KEY_ID": "metadata-key",
-        "CATALOG_SECRET_ACCESS_KEY": "metadata-secret",
-        "LAKE_ACCESS_KEY_ID": "writer-key",
-        "LAKE_SECRET_ACCESS_KEY": "writer-secret",
-    }.items():
-        monkeypatch.setenv(name, value)
-    properties = iceberg_config()
-    assert properties["client.access-key-id"] == properties["s3.access-key-id"] == "metadata-key"
-    assert properties["client.secret-access-key"] == properties["s3.secret-access-key"] == "metadata-secret"

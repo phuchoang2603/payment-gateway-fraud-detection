@@ -19,7 +19,14 @@ spark = ["pyspark==3.5.8"]
 dp1 = "data_platform.cli:main"
 
 [dependency-groups]
-dev = ["pyspark==3.5.8", "pytest==9.0.2", "ruff==0.15.0", "numpy>=2.3,<3", "pydantic>=2.12,<3"]
+dev = [
+    "pyspark==3.5.8",
+    "pytest==9.0.2",
+    "ruff==0.15.0",
+    "numpy>=2.3,<3",
+    "pydantic>=2.12,<3",
+    "psutil==7.2.2",
+]
 
 [build-system]
 requires = ["uv_build>=0.13,<0.14"]

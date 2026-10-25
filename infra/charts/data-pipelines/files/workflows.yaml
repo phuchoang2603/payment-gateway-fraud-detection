@@ -98,7 +98,7 @@ spec:
       inputs:
         parameters:
           - name: stage
-      activeDeadlineSeconds: 300
+      activeDeadlineSeconds: 900
       retryStrategy:
         limit: "2"
         backoff: {duration: 10s, factor: 2, maxDuration: 1m}
@@ -139,7 +139,7 @@ spec:
     parameters:
       - {name: source-root, value: __SOURCE_ROOT__}
       - {name: dataset-version, value: __DATASET_VERSION__}
-  activeDeadlineSeconds: 600
+  activeDeadlineSeconds: 1200
   templates:
     - name: replay
       container:
