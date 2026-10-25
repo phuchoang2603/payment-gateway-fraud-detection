@@ -261,7 +261,7 @@ def missing(client, expected, lake, source):
                 or not contains(contract.get("entity"), document["entity"])
                 or not contains(contract.get("odcsQualityRules", []), document["odcsQualityRules"])
                 or not contains(contract.get("schema"), document["schema"])
-                or contract.get("termsOfUse") != document["termsOfUse"]
+                or not contains(contract.get("termsOfUse"), {"content": document["termsOfUse"], "inherited": False})
             ):
                 gaps.append(("contract", identity["fqn"], product))
     for table in PORTS:

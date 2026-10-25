@@ -134,7 +134,7 @@ spec:
               spark.executor.cores: "1"
               spark.kubernetes.executor.request.cores: 500m
               spark.executor.memory: 2g
-              spark.executor.memoryOverhead: 512m
+              spark.executor.memoryOverhead: 1g
               spark.kubernetes.executor.deleteOnTermination: "true"
               spark.sql.shuffle.partitions: "__SHUFFLE_PARTITIONS__"
               spark.pyspark.python: /opt/data-pipeline/bronze-ingestion/.venv/bin/python

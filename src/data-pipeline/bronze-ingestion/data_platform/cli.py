@@ -24,11 +24,11 @@ def main(argv=None):
             "verify-source",
         ],
     )
-    parser.add_argument("--source", default=os.environ.get("SOURCE_ROOT", "s3://synthetic-source/historical/v10"))
+    parser.add_argument("--source", default=os.environ.get("SOURCE_ROOT", "s3://synthetic-source/historical/v11"))
     parser.add_argument(
         "--evidence", default=os.environ.get("EVIDENCE_ROOT", "s3://fraud-lakehouse-prod/dp1-evidence")
     )
-    parser.add_argument("--version", default=os.environ.get("DATASET_VERSION", "v10"))
+    parser.add_argument("--version", default=os.environ.get("DATASET_VERSION", "v11"))
     parser.add_argument("--workflow", default=os.environ.get("WORKFLOW_ID", "local"))
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--local-warehouse")

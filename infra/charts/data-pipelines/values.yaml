@@ -8,8 +8,8 @@ spark:
   executors: 1
   shufflePartitions: 4
 config:
-  SOURCE_ROOT: s3://synthetic-source/historical/v10
-  DATASET_VERSION: v10
+  SOURCE_ROOT: s3://synthetic-source/historical/v11
+  DATASET_VERSION: v11
   EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence
   ICEBERG_REST_URI: https://minio.home.phuchoang.sbs/iceberg
   ICEBERG_WAREHOUSE: fraud-lakehouse-prod

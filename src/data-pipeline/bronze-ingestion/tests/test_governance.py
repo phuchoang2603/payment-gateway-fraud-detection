@@ -78,6 +78,7 @@ class FakeCatalog:
         if path == "/v1/dataContracts/entity":
             contract = json.loads(json.dumps(self.entities.get(("contract", query["entityId"]))))
             if contract:
+                contract["termsOfUse"] = {"content": contract["termsOfUse"], "inherited": False}
                 for rule in contract["odcsQualityRules"]:
                     rule.setdefault("tags", [])
                 if self.drop_contract_field:
@@ -234,7 +235,7 @@ def test_replay_refuses_conflicting_execution_evidence(tmp_path, monkeypatch):
     assert len(results) == 1 and results[0]["testCaseStatus"] == "Failed"
 
 
-@pytest.mark.parametrize("missing", ["results", "description", "odcsQualityRules", "schema"])
+@pytest.mark.parametrize("missing", ["results", "description", "odcsQualityRules", "schema", "termsOfUse"])
 def test_unresolved_readback_is_incomplete_governance(tmp_path, monkeypatch, missing):
     store, run, contracts = prepared(tmp_path, monkeypatch, fixture_report())
     catalog = FakeCatalog()

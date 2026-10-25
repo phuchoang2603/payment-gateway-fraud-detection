@@ -10,7 +10,7 @@ DP1 SHALL ingest only files selected by a completed immutable source manifest an
 
 #### Scenario: Accepted historical version
 
-- **WHEN** an accepted version such as v8 or the v10 smoke export is selected with its completed manifest and matching source files
+- **WHEN** an accepted version such as v8 or the v11 smoke export is selected with its completed manifest and matching source files
 - **THEN** the run records the manifest digest, source version and exact input files without regenerating or modifying them
 
 #### Scenario: Explicit deferred source validation
@@ -83,9 +83,9 @@ A completed DP1 run SHALL expose an accepted record pinning both validated snaps
 
 ### Requirement: Bounded pilot execution
 
-The v10 smoke run SHALL use explicit compute and storage budgets, bounded failure samples and distributed data access. It SHALL report duration, input/output bytes, file counts, peak memory and available shuffle/spill evidence. It SHALL NOT claim 100 GB or large-scale optimization acceptance; the separate v8 acceptance reports its own measured resources.
+The v11 smoke run SHALL use explicit compute and storage budgets, bounded failure samples and distributed data access. It SHALL report duration, input/output bytes, file counts, peak memory and available shuffle/spill evidence. It SHALL NOT claim 100 GB or large-scale optimization acceptance; the separate v8 acceptance reports its own measured resources.
 
 #### Scenario: Small historical acceptance
 
-- **WHEN** the complete v10 smoke dataset is processed
+- **WHEN** the complete v11 smoke dataset is processed
 - **THEN** evidence identifies resource settings and measured results, preserves existing data problems and distinguishes correctness acceptance from later scale evaluation
