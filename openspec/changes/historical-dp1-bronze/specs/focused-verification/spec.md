@@ -12,7 +12,7 @@ Focused checks SHALL cover explicit deferred-source preflight, preservation of i
 
 ### Requirement: Data-pipeline behavioral verification
 
-Small local fixtures SHALL protect source integrity, schema normalization, duplicate preservation, snapshot selection, uncertain-commit recovery and safe replay. They SHALL also protect SparkApplication terminal-state handling, bounded retries, cancellation/deadline cleanup, contract coverage/parity, failed-result publication, cancellation and canonical catalog identity. Catalog replacement checks SHALL cover ODCS identity preservation, custom GX success/failure/error results, idempotent metadata-only recovery and refusal of acceptance on incomplete OpenMetadata readback, reusing existing fixtures. Ordinary CI SHALL NOT require live cluster or storage credentials.
+Small local fixtures SHALL protect source integrity, schema normalization, duplicate preservation, snapshot selection, uncertain-commit recovery and safe replay. They SHALL also protect SparkApplication terminal-state handling, bounded retries, cancellation/deadline cleanup, native admission rejection of active deletion/hard termination with allowed graceful stop/completed deletion and unaffected other namespaces, contract coverage/parity, failed-result publication, cancellation and canonical catalog identity. Catalog replacement checks SHALL cover ODCS identity preservation, custom GX success/failure/error results, idempotent metadata-only recovery and refusal of acceptance on incomplete OpenMetadata readback, reusing existing fixtures. Ordinary CI SHALL NOT require live cluster or storage credentials.
 
 #### Scenario: Verify changes without infrastructure access
 

@@ -16,7 +16,7 @@ The deployment SHALL provide an explicitly enabled prod DP1 application in `frau
 
 ### Requirement: Data-platform ownership boundary
 
-Application deployment SHALL own DP1 workloads and its data namespace. The shared platform SHALL own Argo, Apache Spark Operator and its CRDs, OpenMetadata and its PostgreSQL/OpenSearch backing services. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
+Application deployment SHALL own DP1 workloads and its data namespace. The shared platform SHALL own Argo, the native Workflow lifecycle admission policy and binding scoped to `fraud-data-prod`, Apache Spark Operator and its CRDs, OpenMetadata and its PostgreSQL/OpenSearch backing services. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
 
 #### Scenario: Remove the data-pipeline application
 

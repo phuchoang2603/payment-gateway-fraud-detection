@@ -38,7 +38,7 @@ Argo SHALL create and watch a distinct Apache `spark.apache.org/v1` SparkApplica
 
 ### Requirement: Bounded retry and cancellation
 
-Argo SHALL own bounded stage retries with stable logical run identity and distinct execution attempts. Deterministic quality failures SHALL NOT be retried for acceptance. Cancellation, workflow deletion and deadlines SHALL delete active SparkApplications, verify driver/executor cleanup and then release writer serialization without deleting durable evidence.
+Argo SHALL own bounded stage retries with stable logical run identity and distinct execution attempts. Deterministic quality failures SHALL NOT be retried for acceptance. Graceful cancellation and deadlines SHALL delete active SparkApplications, verify driver/executor cleanup and then release writer serialization without deleting durable evidence. A platform-owned native Kubernetes admission policy SHALL reject Workflow deletion in `fraud-data-prod` unless its recorded phase is Succeeded, Failed or Error. It SHALL reject setting `spec.shutdown: Terminate` unless the existing phase is Pending or terminal. Operators SHALL stop active Workflows gracefully and verify completed cleanup before deletion. Missing phase SHALL NOT permit deletion or hard termination. Workflows in other namespaces SHALL remain unaffected. Terminal status alone SHALL NOT be considered proof of successful Spark cleanup.
 
 #### Scenario: Retry after transient driver failure
 
@@ -49,6 +49,17 @@ Argo SHALL own bounded stage retries with stable logical run identity and distin
 
 - **WHEN** a workflow is cancelled while Spark is running
 - **THEN** active applications are terminated, writer serialization is released and persisted reports/run context remain available
+
+#### Scenario: Delete or hard-terminate an active workflow
+
+- **WHEN** a user requests deletion or hard termination of a running Workflow in `fraud-data-prod`
+- **THEN** Kubernetes rejects the request with guidance to use graceful stop and wait for completion
+- **AND** graceful stop remains permitted, completed Workflows can be deleted, and other workflow namespaces are unaffected
+
+#### Scenario: Cleanup fails
+
+- **WHEN** exit cleanup fails and Spark resources remain
+- **THEN** terminal Workflow status does not establish a safe writer handoff or satisfy the rollout gate
 
 ### Requirement: Publication despite upstream failure
 
