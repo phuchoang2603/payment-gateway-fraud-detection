@@ -58,7 +58,9 @@ def smoke():
         if spark:
             if created:
                 try:
-                    spark.sql(f"DROP TABLE IF EXISTS {table} PURGE")
+                    spark.sql(f"DROP TABLE IF EXISTS {table}")
+                    if spark.catalog.tableExists(table):
+                        raise RuntimeError("smoke table remains in catalog after drop")
                     report["cleanup"] = "dropped"
                 except Exception as error:
                     report["cleanup"] = "failed:" + type(error).__name__
