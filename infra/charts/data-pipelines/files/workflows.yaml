@@ -15,11 +15,16 @@ spec:
   synchronization:
     mutexes:
       - name: bronze-payments-writer
+  podMetadata:
+    labels:
+      dp1-product: bronze-payments
   podGC:
     strategy: OnWorkflowCompletion
   templates:
     - name: historical
       steps:
+        - - name: recover-previous
+            template: recover-previous
         - - name: preflight
             template: metadata
             arguments:
@@ -61,6 +66,17 @@ spec:
           factor: 2
           cap: 2m
       steps:
+        - - name: prepare-creators
+            template: delete-pods
+            arguments:
+              parameters:
+                - name: selector
+                  value: "workflows.argoproj.io/workflow={{workflow.name}},dp1-application-stage={{inputs.parameters.stage}}"
+        - - name: prepare
+            template: cleanup-spark
+            arguments:
+              parameters:
+                - {name: selector, value: "dp1-workflow={{workflow.name}},dp1-stage={{inputs.parameters.stage}}"}
         - - name: application
             template: spark-application
             continueOn: {failed: true, error: true}
@@ -79,6 +95,9 @@ spec:
               parameters:
                 - {name: status, value: "{{steps.application.status}}"}
     - name: spark-application
+      metadata:
+        labels:
+          dp1-application-stage: "{{inputs.parameters.stage}}"
       inputs:
         parameters:
           - name: stage
@@ -96,6 +115,7 @@ spec:
             name: dp1-{{workflow.uid}}-{{inputs.parameters.stage}}-{{inputs.parameters.attempt}}
             namespace: __NAMESPACE__
             labels:
+              dp1-product: bronze-payments
               dp1-workflow: "{{workflow.name}}"
               dp1-stage: "{{inputs.parameters.stage}}"
           spec:
@@ -128,6 +148,7 @@ spec:
               podTemplateSpec:
                 metadata:
                   labels:
+                    dp1-product: bronze-payments
                     dp1-workflow: "{{workflow.name}}"
                     dp1-stage: "{{inputs.parameters.stage}}"
                 spec:
@@ -149,6 +170,7 @@ spec:
               podTemplateSpec:
                 metadata:
                   labels:
+                    dp1-product: bronze-payments
                     dp1-workflow: "{{workflow.name}}"
                     dp1-stage: "{{inputs.parameters.stage}}"
                 spec:
@@ -158,6 +180,20 @@ spec:
                       envFrom:
                         - configMapRef: {name: dp1-config}
                         - secretRef: {name: dp1-lake}
+    - name: recover-previous
+      steps:
+        - - name: workflow-pods
+            template: delete-pods
+            arguments:
+              parameters:
+                - name: selector
+                  value: "dp1-product=bronze-payments,workflows.argoproj.io/workflow,workflows.argoproj.io/workflow!={{workflow.name}}"
+        - - name: spark
+            template: cleanup-spark
+            arguments:
+              parameters:
+                - name: selector
+                  value: "dp1-product=bronze-payments,dp1-workflow,dp1-workflow!={{workflow.name}}"
     - name: cleanup-spark
       inputs:
         parameters:
@@ -169,7 +205,7 @@ spec:
               parameters:
                 - {name: selector, value: "{{inputs.parameters.selector}}"}
         - - name: pods
-            template: delete-spark-pods
+            template: delete-pods
             arguments:
               parameters:
                 - {name: selector, value: "{{inputs.parameters.selector}}"}
@@ -187,7 +223,7 @@ spec:
           - --cascade=foreground
           - --wait=true
           - --timeout=120s
-    - name: delete-spark-pods
+    - name: delete-pods
       inputs:
         parameters:
           - name: selector

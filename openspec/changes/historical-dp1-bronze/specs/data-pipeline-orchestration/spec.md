@@ -59,7 +59,8 @@ Argo SHALL own bounded stage retries with stable logical run identity and distin
 #### Scenario: Cleanup fails
 
 - **WHEN** exit cleanup fails and Spark resources remain
-- **THEN** terminal Workflow status does not establish a safe writer handoff or satisfy the rollout gate
+- **THEN** the next workflow removes previous workflow pods, SparkApplications and Spark pods under the writer mutex before ingestion
+- **AND** a failed recovery prevents ingestion, and a Spark retry clears its prior stage resources before creating another application
 
 ### Requirement: Publication despite upstream failure
 
