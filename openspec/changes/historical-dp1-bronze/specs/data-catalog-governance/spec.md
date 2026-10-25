@@ -20,7 +20,7 @@ OpenMetadata with persistent PostgreSQL and OpenSearch SHALL be the catalog unde
 
 ### Requirement: Product and contract discovery
 
-The catalog SHALL expose source and bronze products, owners, classifications and output assets with the corresponding ODPS/ODCS identities, versions and artifact references. Source assets SHALL identify the immutable dataset manifest without creating a catalog entity for every file.
+The catalog SHALL expose source and bronze products, owners, classifications and output assets with the corresponding ODPS/ODCS identities, versions and artifact references. Historical source assets SHALL identify the immutable dataset manifest without creating a catalog entity for every file.
 
 #### Scenario: Discover a bronze output
 
@@ -104,3 +104,12 @@ OpenMetadata SHALL be reachable at its HTTPS Cloudflare Tunnel hostname, authent
 
 - **WHEN** a caller requests protected metadata without authentication
 - **THEN** the API rejects the request and does not disclose catalog data
+
+### Requirement: Recurring batch governance identity
+
+Recurring runs SHALL publish source/batch lineage, validation outcomes and exact changed/unchanged output snapshot references on canonical assets scoped to their source environment. Publication retries SHALL use persisted evidence without re-ingesting data. Missing synthetic manifest identities SHALL NOT prevent representation of real landing inputs or cause fabricated historical provenance.
+
+#### Scenario: Publish a recurring batch
+
+- **WHEN** recurring data checks pass and catalog readback completes
+- **THEN** its accepted evidence identifies immutable landing inputs, source origin, validated snapshot set and applicable contracts without mixing isolated simulation and real assets

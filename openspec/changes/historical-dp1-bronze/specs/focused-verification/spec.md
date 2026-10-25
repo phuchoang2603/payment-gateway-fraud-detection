@@ -43,3 +43,12 @@ Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain histo
 
 - **WHEN** cluster access, REST catalog compatibility, OpenMetadata readiness or capacity cannot be verified
 - **THEN** planning/local checks are reported separately and no live deployment or end-to-end acceptance is claimed
+
+### Requirement: Recurring ingestion verification
+
+CI SHALL cover no-input runs, newly completed files in older date partitions, changed-content rejection, preserved source duplicates, retry/uncertain-commit recovery, metadata-only recovery, independent delayed labels and real/simulator isolation using bounded fixtures. Separate live recurring acceptance SHALL demonstrate repeated runs, late input and recovery with exact input/output accounting and catalog readback; historical v11 acceptance SHALL NOT establish recurring readiness.
+
+#### Scenario: Advance across multiple batches
+
+- **WHEN** two completed input batches, a late file and a retried committed batch are processed
+- **THEN** all original deliveries remain accounted for without ingestion-generated duplicates and accepted snapshot/progress references are reproducible

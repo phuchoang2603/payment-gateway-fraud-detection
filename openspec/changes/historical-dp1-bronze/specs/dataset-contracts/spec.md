@@ -80,3 +80,12 @@ Equivalent source and bronze business checks SHALL retain traceable semantic rul
 
 - **WHEN** a lifecycle payload is absent in a valid event but a required child is missing from a present payload in an invalid event
 - **THEN** both execution paths accept the valid absence and reject the invalid child omission
+
+### Requirement: Recurring input provenance and validation scope
+
+Versioned bronze contracts SHALL distinguish historical-manifest provenance from recurring landing/batch and supplied Kafka provenance, preserve source isolation and define which rules require historical context or label maturity. Synthetic-only acceptance bands SHALL NOT become requirements for real traffic. Contract and consumer changes SHALL be coordinated without rewriting published historical contracts or source manifests.
+
+#### Scenario: Real event without a synthetic manifest
+
+- **WHEN** an isolated real-event landing batch is selected
+- **THEN** its provenance resolves to actual landing/batch identities rather than fabricated historical dataset versions or manifest hashes

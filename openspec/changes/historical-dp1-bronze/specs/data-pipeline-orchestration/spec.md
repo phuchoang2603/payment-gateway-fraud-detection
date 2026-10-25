@@ -6,7 +6,7 @@ Coordinate finite data-pipeline stages through the shared cluster execution serv
 
 ### Requirement: Observable ingest and validate stages
 
-DP1 SHALL expose distinct ingest and validate stages with input, output and run references. Validation SHALL begin only after both output snapshots are recorded. Stage results SHALL distinguish failed data checks, execution errors and governance publication errors.
+DP1 SHALL expose distinct ingest and validate stages with input, output and run references. Validation SHALL begin only after the candidate snapshot set is recorded, including both outputs for historical exports and explicit unchanged-port references for recurring batches. Stage results SHALL distinguish failed data checks, execution errors and governance publication errors.
 
 #### Scenario: Inspect a historical workflow
 
@@ -15,7 +15,7 @@ DP1 SHALL expose distinct ingest and validate stages with input, output and run 
 
 ### Requirement: Versioned-export batch selection
 
-Each workflow submission SHALL select one completed, immutable source export through `source-root` and `dataset-version` parameters, with chart-configured defaults. Every stage SHALL use the selected parameters consistently. Recurring batches SHALL select newly completed export versions; a schedule alone SHALL NOT discover daily partitions in a growing source.
+Each historical-mode workflow submission SHALL select one completed, immutable source export through `source-root` and `dataset-version` parameters, with chart-configured defaults. Every stage SHALL use the selected parameters consistently. Subsequent historical batches SHALL select newly completed export versions. Recurring landing mode SHALL select completed input units through durable input tracking; a schedule alone SHALL NOT constitute discovery or retry safety.
 
 #### Scenario: Process the next completed export
 
@@ -87,10 +87,23 @@ Pipeline stages SHALL use centrally supplied endpoints, explicit resource budget
 
 ### Requirement: Direct batch execution
 
-The workflow SHALL proceed from manifest/run-context preflight to ingestion without a disposable-table compatibility smoke stage. The CLI SHALL NOT expose a rollout-only smoke command. Source integrity, persisted-data validation, governance acceptance and lifecycle cleanup SHALL remain enforced.
+The workflow SHALL proceed from input/run-context preflight to ingestion without a disposable-table compatibility smoke stage. The CLI SHALL NOT expose a rollout-only smoke command. Source integrity, persisted-data validation, governance acceptance and lifecycle cleanup SHALL remain enforced.
 
 #### Scenario: Submit a historical batch
 
 - **WHEN** manifest/run-context preflight succeeds
 - **THEN** ingestion starts without creating a disposable compatibility table
 
+### Requirement: Recurring bounded ingestion
+
+DP1 SHALL support Argo-scheduled finite runs over newly completed immutable landing inputs, reusing its ingest, validate, publish and accept stages. Input progress SHALL identify files or completed batches independently of event dates. Historical exports SHALL remain an explicit input mode. Overlapping runs SHALL preserve writer serialization and cleanup guarantees; a run with no new input SHALL be a no-op without rewriting accepted data.
+
+#### Scenario: Late file in an older date partition
+
+- **WHEN** a new completed landing file contains events older than the latest processed event date
+- **THEN** the next eligible run selects it once as input without rescanning accepted files as new deliveries
+
+#### Scenario: Retry or metadata outage
+
+- **WHEN** a recurring run is retried after an uncertain commit or governance failure
+- **THEN** durable batch identity and recorded snapshots support recovery without adding ingestion-generated copies, and metadata-only replay does not start Spark

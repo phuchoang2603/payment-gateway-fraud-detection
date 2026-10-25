@@ -4,25 +4,28 @@
 
 A small historical export can exercise DP1 while payment-gateway work continues, but this repository has no source-to-bronze pipeline, bronze contracts or verified catalog governance. Ingesting a small `v11` smoke export through the existing RustFS Iceberg catalog gives us a correctness baseline before accepting the full `v8` export.
 
+DP1 must also ingest ongoing completed batches from immutable live-event landing files. Historical exports are one input mode of the same source-to-bronze pipeline. Real and simulator-driven payment events share versioned service event contracts while retaining isolated environments and provenance.
+
 The published v10 smoke export failed its IP-network cardinality band. Publish v11 with a 1,024-network pool and the unchanged acceptance bands; preserve v8/v10 source objects, manifests and contracts.
 
 ## What Changes
 
 - Add a historical DP1 that reads a completed source manifest, verifies its files and ingests payment events and fraud labels into isolated bronze Iceberg tables. Read `s3://synthetic-source/historical/v11/` (smoke) and `historical/v8/` at `https://minio.home.phuchoang.sbs`; do not regenerate or modify accepted source objects. The retired `v7` export is deleted and not supported.
-- Support only manifests that embed a per-file integrity inventory (v8, v10, v11 and later). The retired v7 export and its companion-inventory mechanism are out of scope and removed.
+- Add recurring bounded DP1 execution over newly completed landing files, with durable input progress, late-file discovery, retry-safe Iceberg commits and per-batch validation/governance evidence. Kafka-to-landing and simulator implementation belong to the live-streaming change; use a separate landing location from historical synthetic exports.
+- Support only historical manifests that embed a per-file integrity inventory (v8, v10, v11 and later). The retired v7 export and its companion-inventory mechanism are out of scope and removed.
 - Introduce the `bronze-payments` ODPS product and one ODCS contract per output port. Preserve raw business content, identical duplicate deliveries, delayed labels and upstream contract references while declaring normalized schemas and ingestion provenance.
 - Execute bronze contract checks with current GX on Spark, generating suites from ODCS and rejecting incomplete rule coverage. Keep generator publication on the existing source ODCS/Data Contract CLI/DuckDB path; verify equivalent business-rule outcomes across both engines on small fixtures.
 - Orchestrate separate ingest and validate stages through Apache Spark Operator `spark.apache.org/v1` SparkApplications created and watched by Argo. Upgrade the application runtime to Spark 4.1.3 and Iceberg 1.12.0 for Scala 2.13, retaining Python 3.12 and verifying GX compatibility. Include namespace/RBAC prerequisites, bounded retries, graceful cancellation, recoverable table commits and snapshot-pinned validation. Add a platform-owned native Kubernetes admission guard in `fraud-data-prod` requiring terminal Workflow status before deletion and rejecting hard termination of active workflows; use stop, completed cleanup, then deletion.
 - Use platform-owned OpenMetadata, PostgreSQL and OpenSearch, with measured resource/storage sizing and private authenticated access. Use Argo-owned metadata publication without Kafka or Airflow. Verify existing backing-service compatibility and isolated state before reuse.
 - Publish source/bronze product metadata, Iceberg schemas, source-to-job-to-table lineage, ODCS contracts and successful/failed/errored GX results into OpenMetadata. Persist reports before publication and allow metadata-only retries without re-ingestion.
 - **BREAKING:** Governance clients, identities, endpoint/token configuration and acceptance use OpenMetadata only, installed fresh. Retain source data, lake snapshots and durable evidence.
-- Prove ingestion, failure reporting and safe replay with bounded resources on a small `v11` smoke export, then accept the published `v8` source (manifest format 3, `task-fragments-v1`, 24,982 files, 123,286,939,620 physical bytes, validation deferred to `dp1-spark-gx`) as the first DP1 scale input. Record missing live prerequisites honestly. No streaming generator, DP2/DP3, deduplication, new Iceberg catalog service or production payment-storage integration is included. No existing source-contract or accepted-dataset breaking change is intended.
+- Prove ingestion, failure reporting and safe replay with bounded resources on a small `v11` smoke export, then accept the published `v8` source (manifest format 3, `task-fragments-v1`, 24,982 files, 123,286,939,620 physical bytes, validation deferred to `dp1-spark-gx`) as the first DP1 scale input. Record missing live prerequisites honestly. No simulator or Kafka-to-landing implementation, direct Kafka consumption by DP1, general database CDC, DP2/DP3 curation, deduplication, new Iceberg catalog service or production payment-storage deployment is included. Recurring ingestion consumes the completed landing-file interface coordinated with the live-streaming change; this planning extension does not claim that mode is implemented. No existing source-contract or accepted-dataset breaking change is intended.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `historical-bronze-ingestion`: Manifest-selected, content-preserving and recoverable ingestion into versioned bronze Iceberg snapshots, with persisted-output validation and run acceptance.
+- `historical-bronze-ingestion`: Content-preserving and recoverable ingestion from historical manifests and completed recurring landing batches into bronze Iceberg snapshots, with durable input progress, persisted-output validation and run acceptance.
 - `data-pipeline-orchestration`: Argo-managed finite Spark stages with operator-owned drivers and executors, scoped identities, bounded lifecycle handling and explicit publication/failure stages.
 - `data-catalog-governance`: OpenMetadata deployment readiness, product/table metadata, canonical dataset identities, pipeline lineage and reproducible validation evidence.
 

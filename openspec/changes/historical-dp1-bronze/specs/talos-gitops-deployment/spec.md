@@ -40,3 +40,12 @@ The platform SHALL install pinned Apache Spark Operator 1.0.0 with Helm chart 1.
 
 - **WHEN** the prod platform reconciles the operator component
 - **THEN** the `spark.apache.org/v1` API and controller become ready with access scoped to the data namespace, independently of DP1 workload rollout
+
+### Requirement: Recurring DP1 schedule ownership
+
+The application deployment SHALL own explicitly configured DP1 CronWorkflows, persistent input-progress configuration and scoped landing-read permissions. Argo CD SHALL reconcile declared deployment resources; Argo Workflows SHALL execute finite batches. Shared Kafka/landing producers SHALL remain separately owned, and a deployment or schedule change SHALL NOT reset input progress or select incomplete inputs.
+
+#### Scenario: Change a batch schedule
+
+- **WHEN** the recurring schedule is reconciled with a different cadence
+- **THEN** completed input tracking and accepted evidence remain intact, with no accidental full replay or concurrent unguarded writers
