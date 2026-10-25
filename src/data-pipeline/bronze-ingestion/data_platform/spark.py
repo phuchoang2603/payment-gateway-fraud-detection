@@ -44,7 +44,7 @@ def session(local_warehouse=None):
             "io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
             "rest.access-key-id": os.environ["LAKE_ACCESS_KEY_ID"],
             "rest.secret-access-key": os.environ["LAKE_SECRET_ACCESS_KEY"],
-            "rest.sigv4-enabled": os.environ.get("ICEBERG_SIGV4_ENABLED", "true"),
+            "rest.auth.type": "sigv4" if os.environ.get("ICEBERG_SIGV4_ENABLED", "true").lower() == "true" else "none",
             "rest.signing-region": os.environ.get("AWS_REGION", "us-east-1"),
             "rest.signing-name": os.environ.get("ICEBERG_SIGNING_NAME", "s3"),
             "s3.endpoint": os.environ.get("S3_ENDPOINT", "https://minio.home.phuchoang.sbs"),

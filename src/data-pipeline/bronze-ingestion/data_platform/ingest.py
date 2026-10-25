@@ -3,6 +3,7 @@ from datetime import datetime
 
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
+from pyspark.sql.functions import partitioning
 
 from data_platform.contracts import check_physical, prepare
 from data_platform.manifest import verify_files
@@ -97,7 +98,7 @@ def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=N
                 .using("iceberg")
                 .partitionedBy(
                     "_source_dataset_version",
-                    F.days(F.col("occurred_at" if table == "payment_events" else "label_available_at")),
+                    partitioning.days("occurred_at" if table == "payment_events" else "label_available_at"),
                 )
                 .tableProperty("format-version", "2")
                 .tableProperty("write.target-file-size-bytes", "134217728")
