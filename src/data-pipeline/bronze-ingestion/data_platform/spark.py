@@ -4,34 +4,11 @@ from urllib.parse import urlsplit
 
 from pyspark.sql import SparkSession
 
-ICEBERG_VERSION = "1.10.1"
-ICEBERG_RUNTIME = f"org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:{ICEBERG_VERSION}"
+ICEBERG_VERSION = "1.12.0"
+ICEBERG_RUNTIME = f"org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:{ICEBERG_VERSION}"
 PACKAGES = (
-    f"{ICEBERG_RUNTIME},org.apache.iceberg:iceberg-aws-bundle:{ICEBERG_VERSION},org.apache.hadoop:hadoop-aws:3.3.4"
+    f"{ICEBERG_RUNTIME},org.apache.iceberg:iceberg-aws-bundle:{ICEBERG_VERSION},org.apache.hadoop:hadoop-aws:3.4.2"
 )
-
-
-def kubernetes(builder):
-    return (
-        builder.master("k8s://https://kubernetes.default.svc")
-        .config("spark.submit.deployMode", "client")
-        .config("spark.kubernetes.namespace", os.environ["POD_NAMESPACE"])
-        .config("spark.kubernetes.container.image", os.environ["SPARK_IMAGE"])
-        .config("spark.kubernetes.driver.pod.name", os.environ["HOSTNAME"])
-        .config("spark.kubernetes.executor.podTemplateFile", "/etc/dp1/executor-pod.yaml")
-        .config("spark.kubernetes.executor.label.dp1-workflow", os.environ.get("WORKFLOW_ID", "local"))
-        .config("spark.driver.host", os.environ["POD_IP"])
-        .config("spark.driver.memory", "2g")
-        .config("spark.driver.bindAddress", "0.0.0.0")
-        .config("spark.kubernetes.executor.podNamePrefix", os.environ["HOSTNAME"])
-        .config("spark.driver.port", "7078")
-        .config("spark.blockManager.port", "7079")
-        .config("spark.executor.instances", "1")
-        .config("spark.executor.cores", "1")
-        .config("spark.kubernetes.executor.request.cores", "500m")
-        .config("spark.executor.memory", "2g")
-        .config("spark.executor.memoryOverhead", "512m")
-    )
 
 
 def session(local_warehouse=None):
@@ -40,7 +17,7 @@ def session(local_warehouse=None):
         SparkSession.builder.appName("historical-dp1-bronze")
         .config("spark.sql.session.timeZone", "UTC")
         .config("spark.sql.ansi.enabled", "true")
-        .config("spark.sql.shuffle.partitions", "4")
+        .config("spark.sql.shuffle.partitions", os.environ.get("SPARK_SHUFFLE_PARTITIONS", "4"))
         .config("spark.sql.adaptive.enabled", "true")
         .config("spark.sql.ui.retainedExecutions", "20")
         .config("spark.ui.retainedJobs", "20")
@@ -86,12 +63,11 @@ def session(local_warehouse=None):
             "endpoint": os.environ.get("S3_ENDPOINT", "https://minio.home.phuchoang.sbs"),
             "path.style.access": "true",
             "bucket.probe": "0",
+            "endpoint.region": os.environ.get("AWS_REGION", "us-east-1"),
             "connection.ssl.enabled": "true",
             "aws.credentials.provider": "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
         }.items():
             builder = builder.config(hadoop + key, value)
-    if not local_warehouse and os.environ.get("SPARK_IMAGE"):
-        builder = kubernetes(builder)
     spark = builder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
     return spark

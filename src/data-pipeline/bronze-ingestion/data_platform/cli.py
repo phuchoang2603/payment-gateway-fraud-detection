@@ -79,6 +79,12 @@ def main(argv=None):
             if not run:
                 raise ValueError("run context is missing")
         if args.stage in ("ingest", "validate"):
+            application = os.environ.get("SPARK_APPLICATION_NAME")
+            if application:
+                attempts = run.setdefault("spark_applications", {}).setdefault(args.stage, [])
+                if application not in attempts:
+                    attempts.append(application)
+                save_run(store, run)
             from data_platform.spark import session
 
             spark = session(args.local_warehouse)

@@ -55,44 +55,137 @@ spec:
               parameters:
                 - {name: stage, value: validate}
     - name: spark
-      serviceAccountName: dp1-spark
       inputs:
         parameters:
           - name: stage
-      activeDeadlineSeconds: 2400
       retryStrategy:
         limit: "{{=inputs.parameters.stage == 'ingest' ? 2 : 0}}"
-        retryPolicy: Always
+        retryPolicy: OnFailure
         backoff:
           duration: 15s
           factor: 2
-          maxDuration: 2m
-      volumes:
-        - name: executor-template
-          configMap:
-            name: dp1-executor-template
+          cap: 2m
+      steps:
+        - - name: application
+            template: spark-application
+            continueOn: {failed: true, error: true}
+            arguments:
+              parameters:
+                - {name: stage, value: "{{inputs.parameters.stage}}"}
+                - {name: attempt, value: "{{retries}}"}
+        - - name: cleanup
+            template: cleanup-spark
+            arguments:
+              parameters:
+                - {name: selector, value: "dp1-workflow={{workflow.name}},dp1-stage={{inputs.parameters.stage}}"}
+        - - name: outcome
+            template: spark-outcome
+            arguments:
+              parameters:
+                - {name: status, value: "{{steps.application.status}}"}
+    - name: spark-application
+      inputs:
+        parameters:
+          - name: stage
+          - name: attempt
+      activeDeadlineSeconds: 2400
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          apiVersion: spark.apache.org/v1
+          kind: SparkApplication
+          metadata:
+            name: dp1-{{workflow.uid}}-{{inputs.parameters.stage}}-{{inputs.parameters.attempt}}
+            namespace: __NAMESPACE__
+            labels:
+              dp1-workflow: "{{workflow.name}}"
+              dp1-stage: "{{inputs.parameters.stage}}"
+          spec:
+            pyFiles: local:///opt/data-pipeline/bronze-ingestion/.venv/lib/python3.12/site-packages/data_platform/cli.py
+            driverArgs: ["{{inputs.parameters.stage}}"]
+            runtimeVersions:
+              sparkVersion: "4.1.3"
+            sparkConf:
+              spark.kubernetes.container.image: __SPARK_IMAGE__
+              spark.kubernetes.authenticate.driver.serviceAccountName: dp1-spark
+              spark.driver.memory: 2g
+              spark.driver.memoryOverhead: 512m
+              spark.kubernetes.driver.request.cores: 500m
+              spark.kubernetes.driver.limit.cores: "2"
+              spark.executor.instances: "__EXECUTORS__"
+              spark.executor.cores: "1"
+              spark.kubernetes.executor.request.cores: 500m
+              spark.executor.memory: 2g
+              spark.executor.memoryOverhead: 512m
+              spark.kubernetes.executor.deleteOnTermination: "true"
+              spark.sql.shuffle.partitions: "__SHUFFLE_PARTITIONS__"
+              spark.pyspark.python: /opt/data-pipeline/bronze-ingestion/.venv/bin/python
+            applicationTolerations:
+              restartConfig:
+                restartPolicy: Never
+              resourceRetainPolicy: OnFailure
+              resourceRetainDurationMillis: 300000
+              ttlAfterStopMillis: 3600000
+            driverSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    dp1-workflow: "{{workflow.name}}"
+                spec:
+                  activeDeadlineSeconds: 2400
+                  terminationGracePeriodSeconds: 30
+                  containers:
+                    - name: spark-kubernetes-driver
+                      envFrom:
+                        - configMapRef: {name: dp1-config}
+                        - secretRef: {name: dp1-lake}
+                      env:
+                        - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
+                        - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
+                        - {name: SPARK_SHUFFLE_PARTITIONS, value: "__SHUFFLE_PARTITIONS__"}
+                        - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
+                        - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
+                        - {name: SPARK_APPLICATION_NAME, value: "dp1-{{workflow.uid}}-{{inputs.parameters.stage}}-{{inputs.parameters.attempt}}"}
+            executorSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    dp1-workflow: "{{workflow.name}}"
+                spec:
+                  terminationGracePeriodSeconds: 30
+                  containers:
+                    - name: spark-kubernetes-executor
+                      envFrom:
+                        - configMapRef: {name: dp1-config}
+                        - secretRef: {name: dp1-lake}
+    - name: cleanup-spark
+      inputs:
+        parameters:
+          - name: selector
+      activeDeadlineSeconds: 180
+      resource:
+        action: delete
+        flags:
+          - sparkapplications.spark.apache.org
+          - --namespace=__NAMESPACE__
+          - --selector={{inputs.parameters.selector}}
+          - --cascade=foreground
+          - --wait=true
+          - --timeout=120s
+    - name: spark-outcome
+      inputs:
+        parameters:
+          - name: status
       container:
-        image: __SPARK_IMAGE__
-        command: [dp1]
-        args: ["{{inputs.parameters.stage}}"]
-        envFrom:
-          - configMapRef: {name: dp1-config}
-          - secretRef: {name: dp1-lake}
-        env:
-          - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
-          - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
-          - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
-          - {name: SPARK_IMAGE, value: __SPARK_IMAGE__}
-          - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
-          - name: POD_NAMESPACE
-            valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
-          - name: POD_IP
-            valueFrom: {fieldRef: {fieldPath: status.podIP}}
-        volumeMounts:
-          - {name: executor-template, mountPath: /etc/dp1, readOnly: true}
+        image: __METADATA_IMAGE__
+        command: [python, -c]
+        args: ["import sys; sys.exit(0 if sys.argv[1] == 'Succeeded' else 1)", "{{inputs.parameters.status}}"]
         resources:
-          requests: {cpu: 500m, memory: 2560Mi}
-          limits: {cpu: "2", memory: 3Gi}
+          requests: {cpu: 100m, memory: 128Mi}
+          limits: {cpu: "1", memory: 256Mi}
     - name: metadata
       serviceAccountName: dp1-metadata
       inputs:
@@ -120,6 +213,11 @@ spec:
           limits: {cpu: "1", memory: 1Gi}
     - name: finalizer
       steps:
+        - - name: cleanup
+            template: cleanup-spark
+            arguments:
+              parameters:
+                - {name: selector, value: "dp1-workflow={{workflow.name}}"}
         - - name: publish-failure
             template: metadata
             when: "{{workflow.status}} != Succeeded"

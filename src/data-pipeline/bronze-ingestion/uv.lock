@@ -470,7 +470,7 @@ requires-dist = [
     { name = "great-expectations", specifier = "==1.24.0" },
     { name = "pyarrow", specifier = "==23.0.1" },
     { name = "pyiceberg", extras = ["pyarrow", "s3fs"], specifier = "==0.11.1" },
-    { name = "pyspark", marker = "extra == 'spark'", specifier = "==3.5.8" },
+    { name = "pyspark", marker = "extra == 'spark'", specifier = "==4.1.3" },
     { name = "pyyaml", specifier = "==6.0.3" },
 ]
 provides-extras = ["spark"]
@@ -480,7 +480,7 @@ dev = [
     { name = "numpy", specifier = ">=2.3,<3" },
     { name = "psutil", specifier = "==7.2.2" },
     { name = "pydantic", specifier = ">=2.12,<3" },
-    { name = "pyspark", specifier = "==3.5.8" },
+    { name = "pyspark", specifier = "==4.1.3" },
     { name = "pytest", specifier = "==9.0.2" },
     { name = "ruff", specifier = "==0.15.0" },
 ]
@@ -1106,12 +1106,12 @@ wheels = [
 
 [[package]]
 name = "pyspark"
-version = "3.5.8"
+version = "4.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "py4j" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/80/5a/3806f44eb47387e8af803508cdd6bbc0df784febf4dc010700be04a1ff89/pyspark-3.5.8.tar.gz", hash = "sha256:54cca0767b21b40e3953ad1d30f8601c53abf9cbda763653289cdcfcac52313c", size = 317817299, upload-time = "2026-01-15T11:46:14.487Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a7/ae/33e589ae3cf03c2e9bb78139de00bdfbdc083ebc45b9a4c282f5e33efe70/pyspark-4.1.3.tar.gz", hash = "sha256:b600238e771e45618a58beaf9d63cfd9aa06f61ce193244cedf890a04a4409f7", size = 455504008, upload-time = "2026-07-15T10:39:01.647Z" }
 
 [[package]]
 name = "pytest"

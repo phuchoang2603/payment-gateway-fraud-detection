@@ -60,9 +60,6 @@ rules:
   - apiGroups: [""]
     resources: [pods, services, configmaps, persistentvolumeclaims]
     verbs: [create, get, list, watch, delete, deletecollection, patch]
-  - apiGroups: [argoproj.io]
-    resources: [workflowtaskresults]
-    verbs: [create, patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -78,37 +75,15 @@ roleRef:
   kind: Role
   name: dp1-spark
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: dp1-executor-template
-  namespace: {{ .Values.namespace }}
-data:
-  executor-pod.yaml: |
-    apiVersion: v1
-    kind: Pod
-    spec:
-      affinity:
-        podAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-                labelSelector:
-                  matchExpressions:
-                    - {key: workflows.argoproj.io/workflow, operator: Exists}
-      containers:
-        - name: spark-kubernetes-executor
-          envFrom:
-            - configMapRef: {name: dp1-config}
-            - secretRef: {name: dp1-lake}
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: dp1-metadata
   namespace: {{ .Values.namespace }}
 rules:
+  - apiGroups: [spark.apache.org]
+    resources: [sparkapplications]
+    verbs: [create, get, list, watch, delete, deletecollection]
   - apiGroups: [argoproj.io]
     resources: [workflowtaskresults]
     verbs: [create, patch]

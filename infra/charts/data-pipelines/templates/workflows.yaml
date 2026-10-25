@@ -1,5 +1,7 @@
 {{- if .Values.enabled }}
 {{ .Files.Get "files/workflows.yaml"
+  | replace "__EXECUTORS__" (.Values.spark.executors | toString)
+  | replace "__SHUFFLE_PARTITIONS__" (.Values.spark.shufflePartitions | toString)
   | replace "__NAMESPACE__" .Values.namespace
   | replace "__SPARK_IMAGE__" .Values.images.spark
   | replace "__METADATA_IMAGE__" .Values.images.metadata

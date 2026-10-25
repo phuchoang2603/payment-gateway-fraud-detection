@@ -13,14 +13,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-spark = ["pyspark==3.5.8"]
+spark = ["pyspark==4.1.3"]
 
 [project.scripts]
 dp1 = "data_platform.cli:main"
 
 [dependency-groups]
 dev = [
-    "pyspark==3.5.8",
+    "pyspark==4.1.3",
     "pytest==9.0.2",
     "ruff==0.15.0",
     "numpy>=2.3,<3",

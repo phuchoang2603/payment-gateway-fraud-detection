@@ -5,6 +5,9 @@ secretStoreName: fraud-doppler
 images:
   spark: ""
   metadata: ""
+spark:
+  executors: 1
+  shufflePartitions: 4
 config:
   SOURCE_ROOT: s3://synthetic-source/historical/v10
   DATASET_VERSION: v10

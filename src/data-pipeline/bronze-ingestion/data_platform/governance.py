@@ -159,7 +159,7 @@ def write(client, run, report, lake, source, report_uri, owner):
     )
     description = (
         f"workflow={run['workflow']} run_id={run['run_id']} manifest_sha256={run['manifest_sha256']} "
-        f"snapshots={run['snapshots']} report={report_uri}"
+        f"snapshots={run['snapshots']} spark_applications={run.get('spark_applications', {})} report={report_uri}"
     )
     for table in PORTS:
         edge = {

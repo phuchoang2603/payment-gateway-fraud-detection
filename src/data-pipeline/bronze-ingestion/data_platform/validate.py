@@ -59,6 +59,7 @@ def validate(spark, root, manifest, store, run, contracts, image, namespace="bro
         "contracts": contracts,
         "image": image,
         "workflow": run["workflow"],
+        "spark_applications": run.get("spark_applications", {}),
         "run_time": datetime.now(timezone.utc).isoformat(),
         "data_outcome": "error",
         "tables": {},
