@@ -81,6 +81,9 @@ metadata:
   name: dp1-metadata
   namespace: {{ .Values.namespace }}
 rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch, delete, deletecollection]
   - apiGroups: [spark.apache.org]
     resources: [sparkapplications]
     verbs: [create, get, list, watch, delete, deletecollection]

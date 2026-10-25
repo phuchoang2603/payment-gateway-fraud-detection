@@ -134,6 +134,7 @@ spec:
                 metadata:
                   labels:
                     dp1-workflow: "{{workflow.name}}"
+                    dp1-stage: "{{inputs.parameters.stage}}"
                 spec:
                   activeDeadlineSeconds: 2400
                   terminationGracePeriodSeconds: 30
@@ -154,6 +155,7 @@ spec:
                 metadata:
                   labels:
                     dp1-workflow: "{{workflow.name}}"
+                    dp1-stage: "{{inputs.parameters.stage}}"
                 spec:
                   terminationGracePeriodSeconds: 30
                   containers:
@@ -165,11 +167,40 @@ spec:
       inputs:
         parameters:
           - name: selector
+      steps:
+        - - name: applications
+            template: delete-spark-applications
+            arguments:
+              parameters:
+                - {name: selector, value: "{{inputs.parameters.selector}}"}
+        - - name: pods
+            template: delete-spark-pods
+            arguments:
+              parameters:
+                - {name: selector, value: "{{inputs.parameters.selector}}"}
+    - name: delete-spark-applications
+      inputs:
+        parameters:
+          - name: selector
       activeDeadlineSeconds: 180
       resource:
         action: delete
         flags:
           - sparkapplications.spark.apache.org
+          - --namespace=__NAMESPACE__
+          - --selector={{inputs.parameters.selector}}
+          - --cascade=foreground
+          - --wait=true
+          - --timeout=120s
+    - name: delete-spark-pods
+      inputs:
+        parameters:
+          - name: selector
+      activeDeadlineSeconds: 180
+      resource:
+        action: delete
+        flags:
+          - pods
           - --namespace=__NAMESPACE__
           - --selector={{inputs.parameters.selector}}
           - --cascade=foreground
