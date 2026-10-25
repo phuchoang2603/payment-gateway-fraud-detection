@@ -75,7 +75,7 @@ def validate(spark, root, manifest, store, run, contracts, image, namespace="bro
         frames = selected_snapshots(spark, run, namespace)
         source = source_frames(spark, root, manifest, run)
         for frame in (*frames.values(), *source.values()):
-            frame.persist(StorageLevel.DISK_ONLY)
+            frame.persist(StorageLevel.MEMORY_AND_DISK_DESER)
             cached.append(frame)
         for table, frame in frames.items():
             frame.createOrReplaceTempView(table)
