@@ -1,5 +1,6 @@
 import argparse
 import json
+import logging
 import os
 import re
 import sys
@@ -12,6 +13,7 @@ from data_platform.storage import Store
 
 
 def main(argv=None):
+    logging.disable(logging.INFO)
     parser = argparse.ArgumentParser(prog="dp1")
     parser.add_argument(
         "stage",

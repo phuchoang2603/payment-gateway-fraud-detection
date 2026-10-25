@@ -38,6 +38,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN groupadd --gid 185 spark && useradd --uid 185 --gid 185 --home-dir /opt/spark spark
 COPY --from=build /opt/data-pipeline/bronze-ingestion/.venv /opt/data-pipeline/bronze-ingestion/.venv
 COPY --from=jars /jars/ /opt/spark/jars/
+COPY infra/docker/data-platform-spark/log4j2.properties /opt/dp1/log4j2.properties
 COPY contracts/data-products /contracts/data-products
 ENV PATH="/opt/data-pipeline/bronze-ingestion/.venv/bin:$PATH" \
     PYSPARK_PYTHON="/opt/data-pipeline/bronze-ingestion/.venv/bin/python" \

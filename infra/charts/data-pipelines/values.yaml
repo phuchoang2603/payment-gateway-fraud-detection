@@ -6,7 +6,7 @@ images:
   metadata: ""
 spark:
   executors: 2
-  shufflePartitions: 4
+  shufflePartitions: 1024
 config:
   SOURCE_ROOT: s3://synthetic-source/historical/v11
   DATASET_VERSION: v11

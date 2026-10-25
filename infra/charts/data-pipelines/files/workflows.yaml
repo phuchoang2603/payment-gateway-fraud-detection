@@ -135,6 +135,8 @@ spec:
               spark.kubernetes.executor.request.cores: 500m
               spark.executor.memory: 2g
               spark.executor.memoryOverhead: 1g
+              spark.driver.extraJavaOptions: -Dlog4j.configurationFile=file:/opt/dp1/log4j2.properties
+              spark.executor.extraJavaOptions: -Dlog4j.configurationFile=file:/opt/dp1/log4j2.properties
               spark.kubernetes.executor.deleteOnTermination: "true"
               spark.sql.shuffle.partitions: "__SHUFFLE_PARTITIONS__"
               spark.pyspark.python: /opt/data-pipeline/bronze-ingestion/.venv/bin/python

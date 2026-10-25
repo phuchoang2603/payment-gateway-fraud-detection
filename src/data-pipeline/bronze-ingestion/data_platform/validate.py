@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import great_expectations as gx
 from great_expectations.core import RunIdentifier
+from pyspark import StorageLevel
 from pyspark.sql import functions as F
 
 from data_platform.contracts import check_physical, prepare
@@ -69,9 +70,13 @@ def validate(spark, root, manifest, store, run, contracts, image, namespace="bro
         "input_files": len(manifest["inventory"]),
         "input_bytes": sum(f["bytes"] for f in manifest["inventory"]),
     }
+    cached = []
     try:
         frames = selected_snapshots(spark, run, namespace)
         source = source_frames(spark, root, manifest, run)
+        for frame in (*frames.values(), *source.values()):
+            frame.persist(StorageLevel.DISK_ONLY)
+            cached.append(frame)
         for table, frame in frames.items():
             frame.createOrReplaceTempView(table)
         context = gx.get_context(mode="ephemeral")
@@ -149,6 +154,12 @@ def validate(spark, root, manifest, store, run, contracts, image, namespace="bro
     except Exception as error:
         report["execution_errors"].append({"type": type(error).__name__, "stage": "validation"})
     finally:
+        for frame in cached:
+            try:
+                frame.unpersist()
+            except Exception as error:
+                report["execution_errors"].append({"type": type(error).__name__, "stage": "cache_cleanup"})
+                report["data_outcome"] = "error"
         report["duration_seconds"] = time.monotonic() - started
         store.put(report_key(run, contracts), report)
         run["state"] = "validated" if report["data_outcome"] == "passed" else "validation_" + report["data_outcome"]
