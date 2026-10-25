@@ -49,13 +49,11 @@ def smoke():
         stage("metadata")
         from data_platform.catalog import iceberg_config
 
-        catalog = load_catalog("lake", **iceberg_config()["catalog"]["lake"])
+        catalog = load_catalog("lake", **iceberg_config())
         assert catalog.load_table((namespace, name)).snapshot_by_id(snapshot) is not None
         report["outcome"] = "passed"
-        return 0
     except Exception as error:
         report["error_type"] = type(error).__name__
-        return 1
     finally:
         if spark:
             if created:
@@ -64,5 +62,7 @@ def smoke():
                     report["cleanup"] = "dropped"
                 except Exception as error:
                     report["cleanup"] = "failed:" + type(error).__name__
+                    report["outcome"] = "error"
             spark.stop()
         print(json.dumps(report), flush=True)
+    return 0 if report["outcome"] == "passed" and report.get("cleanup") == "dropped" else 1
