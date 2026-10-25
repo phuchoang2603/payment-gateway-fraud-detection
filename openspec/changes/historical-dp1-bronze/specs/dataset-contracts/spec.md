@@ -83,9 +83,9 @@ Equivalent source and bronze business checks SHALL retain traceable semantic rul
 
 ### Requirement: Recurring input provenance and validation scope
 
-Versioned bronze contracts SHALL distinguish historical-manifest provenance from recurring landing/batch and supplied Kafka provenance, preserve source isolation and define which rules require historical context or label maturity. Synthetic-only acceptance bands SHALL NOT become requirements for real traffic. Contract and consumer changes SHALL be coordinated without rewriting published historical contracts or source manifests.
+Versioned bronze contracts SHALL distinguish historical-manifest provenance from recurring landing/batch and supplied Kafka provenance, retain source origin and define which rules require historical context or label maturity. Generator distribution bands SHALL remain informational diagnostics rather than bronze acceptance requirements. Simulation truth SHALL be usable as a training target while scenario/oracle-only fields remain excluded from features and label-availability restrictions remain enforced. Contract and consumer changes SHALL be coordinated without rewriting published historical contracts or source manifests.
 
 #### Scenario: Real event without a synthetic manifest
 
-- **WHEN** an isolated real-event landing batch is selected
+- **WHEN** a landing batch without a historical manifest is selected
 - **THEN** its provenance resolves to actual landing/batch identities rather than fabricated historical dataset versions or manifest hashes

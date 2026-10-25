@@ -92,12 +92,12 @@ The v11 smoke run SHALL use explicit compute and storage budgets, bounded failur
 
 ### Requirement: Shared recurring source boundary
 
-DP1 SHALL ingest completed immutable landing batches through the same versioned payment-event interface for real and simulator-driven service events. It SHALL retain source environment/origin, immutable file and batch identities, event identity/timestamps, schema versions and supplied Kafka topic/partition/offset provenance. Simulation inputs SHALL remain isolated from real inputs and SHALL NOT require rewriting historical sources or sharing their prefix. Ingestion retries SHALL NOT create extra deliveries; actual source-delivered duplicates SHALL remain preserved for silver curation.
+DP1 SHALL ingest completed immutable landing batches through the same versioned payment-event interface for real and simulator-driven service events. It SHALL retain source environment/origin, immutable file and batch identities, event identity/timestamps, schema versions and supplied Kafka topic/partition/offset provenance. The current synthetic platform SHALL use one shared environment, codebase and common ingestion configuration for analytics and training without mandatory real/simulator-specific topics, storage or deployments. Origin provenance SHALL remain distinguishable; immutable historical exports SHALL remain separate from growing landing inputs. Ingestion retries SHALL NOT create extra deliveries; actual source-delivered duplicates SHALL remain preserved for silver curation.
 
 #### Scenario: Same event interface across origins
 
-- **WHEN** isolated real and simulator-driven inputs follow the supported event contract
-- **THEN** the same ingestion logic processes each while evidence and output scopes keep their origins distinguishable and isolated
+- **WHEN** supported inputs follow the shared versioned event contract
+- **THEN** common ingestion logic and configuration process them in the current environment while retaining their source origin in evidence
 
 #### Scenario: Changed input under an existing identity
 
@@ -106,7 +106,7 @@ DP1 SHALL ingest completed immutable landing batches through the same versioned 
 
 ### Requirement: Context-aware recurring validation
 
-Recurring validation SHALL reconcile the selected delivered content with recorded output snapshots and evaluate history-dependent rules using explicitly pinned prior context and declared completeness boundaries. Event and label inputs MAY arrive independently; missing same-batch labels or terminal lifecycle events SHALL NOT alone be a quality failure. Unavailable required context SHALL be reported as incomplete evidence and SHALL NOT satisfy acceptance. Historical full-history and synthetic-band acceptance requirements SHALL remain unchanged and SHALL NOT be applied indiscriminately to real or incomplete live batches.
+Recurring validation SHALL reconcile the selected delivered content with recorded output snapshots and evaluate history-dependent rules using explicitly pinned prior context and declared completeness boundaries. Event and label inputs MAY arrive independently; missing same-batch labels or terminal lifecycle events SHALL NOT alone be a quality failure. Unavailable required context SHALL be reported as incomplete evidence and SHALL NOT satisfy acceptance. Historical integrity, conservation and executable contract checks SHALL remain enforced. Full-history rules SHALL respect input completeness. Generator cardinality/distribution/scenario bands SHALL be informational diagnostics rather than bronze acceptance gates for historical or recurring input.
 
 #### Scenario: Delayed real label
 
@@ -117,3 +117,12 @@ Recurring validation SHALL reconcile the selected delivered content with recorde
 
 - **WHEN** a bounded batch ends before a payment has reached a terminal state
 - **THEN** validation respects the declared history boundary and distinguishes incomplete context from a violated lifecycle rule
+
+### Requirement: Dataset diagnostics are distinct from ingestion validity
+
+Generator cardinality, duplicate-rate, skew, schema-share and scenario distribution bands SHALL NOT independently fail bronze acceptance. Reports SHALL distinguish available diagnostic measurements from blocking integrity, conservation, schema and contract outcomes. Published source configuration, contracts and prior execution evidence SHALL remain unchanged; a new policy SHALL require new versioned validation evidence rather than relabeling an old failed run.
+
+#### Scenario: Generator band is exceeded
+
+- **WHEN** a dataset passes required integrity, conservation and contract checks but a generator distribution band is exceeded
+- **THEN** the report records the diagnostic finding without failing ingestion solely for that band, and acceptance still requires all other gates including governance readback

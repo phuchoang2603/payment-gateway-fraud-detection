@@ -112,4 +112,4 @@ Recurring runs SHALL publish source/batch lineage, validation outcomes and exact
 #### Scenario: Publish a recurring batch
 
 - **WHEN** recurring data checks pass and catalog readback completes
-- **THEN** its accepted evidence identifies immutable landing inputs, source origin, validated snapshot set and applicable contracts without mixing isolated simulation and real assets
+- **THEN** its accepted evidence identifies immutable landing inputs, source origin, validated snapshot set and applicable contracts without requiring separate real/simulator catalog infrastructure in the current environment

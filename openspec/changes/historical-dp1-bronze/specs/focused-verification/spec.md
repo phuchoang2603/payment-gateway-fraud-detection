@@ -36,8 +36,8 @@ Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain histo
 #### Scenario: Complete v8 source acceptance
 
 - **WHEN** the live acceptance run ingests the published v8 manifest after the v11 smoke run
-- **THEN** it verifies the exact manifest-listed inventory and byte/row totals, preserved duplicates and delayed labels, Spark/GX results on both persisted tables including cardinality and distribution bands, safe replay and OpenMetadata readback
-- **THEN** a failed band or resource exhaustion is reported as a failure and v8 is not advertised as accepted
+- **THEN** it verifies the exact manifest-listed inventory and byte/row totals, preserved duplicates and delayed labels, Spark/GX results on both persisted tables, separately reported available cardinality and distribution diagnostics, safe replay and OpenMetadata readback
+- **THEN** a failed blocking contract/integrity check or resource exhaustion is reported as failure, while an exceeded generator band alone is informational
 
 #### Scenario: Dependency unavailable
 
@@ -46,7 +46,7 @@ Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain histo
 
 ### Requirement: Recurring ingestion verification
 
-CI SHALL cover no-input runs, newly completed files in older date partitions, changed-content rejection, preserved source duplicates, retry/uncertain-commit recovery, metadata-only recovery, independent delayed labels and real/simulator isolation using bounded fixtures. Separate live recurring acceptance SHALL demonstrate repeated runs, late input and recovery with exact input/output accounting and catalog readback; historical v11 acceptance SHALL NOT establish recurring readiness.
+CI SHALL cover no-input runs, newly completed files in older date partitions, changed-content rejection, preserved source duplicates, retry/uncertain-commit recovery, metadata-only recovery, independent delayed labels, retained source origin, valid simulation-truth training targets and separation of informational bands from blocking checks using bounded fixtures. Separate live recurring acceptance SHALL demonstrate repeated runs, late input and recovery with exact input/output accounting and catalog readback; historical v11 acceptance SHALL NOT establish recurring readiness.
 
 #### Scenario: Advance across multiple batches
 
