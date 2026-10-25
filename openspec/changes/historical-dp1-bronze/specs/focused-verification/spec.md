@@ -12,7 +12,7 @@ Focused checks SHALL cover explicit deferred-source preflight, preservation of i
 
 ### Requirement: Data-pipeline behavioral verification
 
-Small local fixtures SHALL protect source integrity, schema normalization, duplicate preservation, snapshot selection, uncertain-commit recovery and safe replay. They SHALL also protect contract coverage/parity, failed-result publication, cancellation and canonical catalog identity. Catalog replacement checks SHALL cover ODCS identity preservation, custom GX success/failure/error results, idempotent metadata-only recovery and refusal of acceptance on incomplete OpenMetadata readback, reusing existing fixtures. Ordinary CI SHALL NOT require live cluster or storage credentials.
+Small local fixtures SHALL protect source integrity, schema normalization, duplicate preservation, snapshot selection, uncertain-commit recovery and safe replay. They SHALL also protect SparkApplication terminal-state handling, bounded retries, cancellation/deadline cleanup, contract coverage/parity, failed-result publication, cancellation and canonical catalog identity. Catalog replacement checks SHALL cover ODCS identity preservation, custom GX success/failure/error results, idempotent metadata-only recovery and refusal of acceptance on incomplete OpenMetadata readback, reusing existing fixtures. Ordinary CI SHALL NOT require live cluster or storage credentials.
 
 #### Scenario: Verify changes without infrastructure access
 
@@ -26,7 +26,7 @@ Small local fixtures SHALL protect source integrity, schema normalization, dupli
 
 ### Requirement: Live historical and governance acceptance
 
-Live acceptance SHALL separately exercise complete v10 smoke ingestion, then v8 ingestion, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
+The Spark 4.1/Iceberg 1.12 runtime and operator path SHALL repeat native RustFS compatibility smoke; earlier client-mode evidence SHALL remain historical evidence only. Live acceptance SHALL separately exercise complete v10 smoke ingestion, then v8 ingestion, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
 
 #### Scenario: Complete v10 smoke acceptance
 

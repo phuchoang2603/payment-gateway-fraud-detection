@@ -16,7 +16,7 @@ The deployment SHALL provide an explicitly enabled prod DP1 application in `frau
 
 ### Requirement: Data-platform ownership boundary
 
-Application deployment SHALL own DP1 workloads and its data namespace. The shared platform SHALL own Argo, OpenMetadata and its PostgreSQL/OpenSearch backing services. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
+Application deployment SHALL own DP1 workloads and its data namespace. The shared platform SHALL own Argo, Apache Spark Operator and its CRDs, OpenMetadata and its PostgreSQL/OpenSearch backing services. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
 
 #### Scenario: Remove the data-pipeline application
 
@@ -31,3 +31,12 @@ DP1 SHALL receive externally managed identities for source reading, lake/run-evi
 
 - **WHEN** the DP1 charts are rendered without live secret values
 - **THEN** source, lake and catalog credentials remain external references with independently scoped access, and no plaintext replacement credentials are embedded
+
+### Requirement: Scoped Apache Spark Operator
+
+The platform SHALL install pinned Apache Spark Operator 1.0.0 with Helm chart 1.8.0 for prod, watching only `fraud-data-prod` with namespace-scoped operator RBAC. It SHALL NOT adopt the application-owned workload namespace, service accounts or driver permissions, or launch application jobs during controller installation. Existing dev defaults and Kubeflow workloads SHALL remain unchanged.
+
+#### Scenario: Reconcile the operator
+
+- **WHEN** the prod platform reconciles the operator component
+- **THEN** the `spark.apache.org/v1` API and controller become ready with access scoped to the data namespace, independently of DP1 workload rollout

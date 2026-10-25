@@ -27,18 +27,18 @@ Each workflow submission SHALL select one completed, immutable source export thr
 - **WHEN** the same completed export is submitted after its source version is accepted
 - **THEN** the run reuses its recorded snapshots without adding deliveries or treating the submission as new source data
 
-### Requirement: Argo-run Spark stages
+### Requirement: Operator-managed Spark stages
 
-Argo SHALL run each Spark stage as a container step in Kubernetes client mode, with the step pod as driver and executors owned by it. Stage success SHALL be the step's exit code, and a deadline SHALL stop a stage that does not finish. No Spark operator SHALL be required.
+Argo SHALL create and watch a distinct Apache `spark.apache.org/v1` SparkApplication for each smoke, ingest and validate attempt. The platform-owned Apache Spark Operator SHALL manage driver and executor lifecycle. Stage success SHALL require a successful terminal application status; failed applications and deadlines SHALL fail the stage with diagnostics. Operator restarts SHALL be disabled so Argo remains the bounded retry authority.
 
 #### Scenario: Stage fails or times out
 
-- **WHEN** a Spark step exits nonzero or exceeds its deadline
-- **THEN** its Argo stage fails with the step's diagnostics and its executors are removed
+- **WHEN** a SparkApplication fails or its stage exceeds its deadline
+- **THEN** its Argo stage fails with application diagnostics and its driver and executors are removed
 
 ### Requirement: Bounded retry and cancellation
 
-Argo SHALL own bounded stage retries with stable logical run identity and distinct execution attempts. Deterministic quality failures SHALL NOT be retried for acceptance. Cancellation and deadlines SHALL stop the active Spark pods and their executors and release writer serialization without deleting durable evidence.
+Argo SHALL own bounded stage retries with stable logical run identity and distinct execution attempts. Deterministic quality failures SHALL NOT be retried for acceptance. Cancellation, workflow deletion and deadlines SHALL delete active SparkApplications, verify driver/executor cleanup and then release writer serialization without deleting durable evidence.
 
 #### Scenario: Retry after transient driver failure
 
