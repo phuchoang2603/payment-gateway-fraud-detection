@@ -128,7 +128,7 @@ def selected_snapshots(spark, run, namespace="bronze"):
         raise ValueError("validation requires a complete recorded snapshot pair")
     return {
         table: spark.read.format("iceberg")
-        .option("snapshot-id", str(snapshot))
+        .option("versionAsOf", str(snapshot))
         .load(table_name(table, namespace))
         .where(F.col("_source_dataset_version") == run["dataset_version"])
         for table, snapshot in run["snapshots"].items()

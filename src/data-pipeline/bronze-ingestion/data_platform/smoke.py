@@ -44,7 +44,7 @@ def smoke():
         )
         stage("pinned-read")
         assert spark.table(table).where("version='other'").first().value == 2
-        pinned = spark.read.format("iceberg").option("snapshot-id", snapshot).load(table)
+        pinned = spark.read.format("iceberg").option("versionAsOf", snapshot).load(table)
         assert pinned.where("version='first'").first().value == 1
         stage("metadata")
         from data_platform.catalog import iceberg_config
