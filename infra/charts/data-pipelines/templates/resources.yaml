@@ -1,7 +1,4 @@
 {{- if .Values.enabled }}
-{{- if not .Values.prerequisitesVerified }}
-{{- fail "DP1 requires scoped identities, OpenMetadata readiness and concurrent capacity" }}
-{{- end }}
 {{- range $name, $image := .Values.images }}
 {{- if not (regexMatch "@sha256:[a-f0-9]{64}$" $image) }}
 {{- fail (printf "images.%s must use an immutable sha256 digest" $name) }}

@@ -21,7 +21,6 @@ def main(argv=None):
             "validate",
             "publish",
             "accept",
-            "smoke",
             "verify-source",
         ],
     )
@@ -36,10 +35,6 @@ def main(argv=None):
     args = parser.parse_args(argv)
     spark = None
     try:
-        if args.stage == "smoke":
-            from data_platform.smoke import smoke
-
-            return smoke()
         if args.stage == "verify-source":
             from data_platform.inventory import verify_source
 

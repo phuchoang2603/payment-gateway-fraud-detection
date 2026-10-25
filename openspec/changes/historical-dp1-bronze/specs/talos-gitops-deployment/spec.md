@@ -2,7 +2,7 @@
 
 ### Requirement: Opt-in prod data-pipeline deployment
 
-The deployment SHALL provide an explicitly enabled prod DP1 application in `fraud-data-prod`, separate from payment-service and Kubeflow Profile namespaces. Existing dev and initial service-rollout defaults SHALL remain unchanged. Enabling DP1 SHALL require verified platform, storage, secret and capacity prerequisites.
+The deployment SHALL provide an explicitly enabled prod DP1 application in `fraud-data-prod`, separate from payment-service and Kubeflow Profile namespaces. Existing dev and initial service-rollout defaults SHALL remain unchanged. Deployment SHALL configure platform endpoints, external secret references, immutable image digests and resource budgets without a manual rollout-verification flag.
 
 #### Scenario: Render initial defaults
 

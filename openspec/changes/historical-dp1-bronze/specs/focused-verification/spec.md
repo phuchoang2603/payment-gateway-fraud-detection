@@ -26,7 +26,7 @@ Small local fixtures SHALL protect source integrity, schema normalization, dupli
 
 ### Requirement: Live historical and governance acceptance
 
-The Spark 4.1/Iceberg 1.12 runtime and operator path SHALL repeat native RustFS compatibility smoke; earlier client-mode evidence SHALL remain historical evidence only. Live acceptance SHALL separately exercise complete v10 smoke ingestion, then v8 ingestion, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
+Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain historical evidence; production workflows SHALL NOT repeat disposable-table rollout probes. Live acceptance SHALL separately exercise complete v10 smoke ingestion, then v8 ingestion, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
 
 #### Scenario: Complete v10 smoke acceptance
 

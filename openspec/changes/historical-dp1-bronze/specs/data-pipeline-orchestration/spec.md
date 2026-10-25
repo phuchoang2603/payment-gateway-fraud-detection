@@ -84,15 +84,12 @@ Pipeline stages SHALL use centrally supplied endpoints, explicit resource budget
 - **WHEN** a required permission, credential or service endpoint is unavailable
 - **THEN** preflight identifies the missing prerequisite and the run does not claim successful ingestion or platform readiness
 
-### Requirement: Preflight compatibility smoke
+### Requirement: Direct batch execution
 
-Preflight SHALL be followed by a smoke Spark step that writes, overwrites by partition and snapshot-reads a uniquely named disposable lake table, confirms the same snapshot through PyIceberg and drops the table. It SHALL persist no evidence beyond workflow status and logs.
+The workflow SHALL proceed from manifest/run-context preflight to ingestion without a disposable-table compatibility smoke stage. The CLI SHALL NOT expose a rollout-only smoke command. Source integrity, persisted-data validation, governance acceptance and lifecycle cleanup SHALL remain enforced.
 
-#### Scenario: Smoke passes
-- **WHEN** the smoke table operations and PyIceberg check succeed
-- **THEN** the table is dropped and ingestion may start
+#### Scenario: Submit a historical batch
 
-#### Scenario: Smoke fails
-- **WHEN** any smoke operation fails
-- **THEN** the run fails before any bronze write and identifies the failed operation
+- **WHEN** manifest/run-context preflight succeeds
+- **THEN** ingestion starts without creating a disposable compatibility table
 

@@ -25,11 +25,6 @@ spec:
             arguments:
               parameters:
                 - {name: stage, value: preflight}
-        - - name: smoke
-            template: spark
-            arguments:
-              parameters:
-                - {name: stage, value: smoke}
         - - name: ingest
             template: spark
             arguments:

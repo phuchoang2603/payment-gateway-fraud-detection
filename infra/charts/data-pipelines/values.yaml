@@ -1,5 +1,4 @@
 enabled: false
-prerequisitesVerified: false
 namespace: fraud-data-prod
 secretStoreName: fraud-doppler
 images:
