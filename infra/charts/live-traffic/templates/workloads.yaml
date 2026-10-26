@@ -80,9 +80,9 @@ spec:
             - name: LANDING_BUCKET
               value: {{ $settings.bucket | quote }}
             - name: LANDING_MAX_RECORDS
-              value: {{ $settings.maxRecords | quote }}
+              value: {{ $settings.maxRecords | int | quote }}
             - name: LANDING_MAX_BYTES
-              value: {{ $settings.maxBytes | quote }}
+              value: {{ $settings.maxBytes | int | quote }}
             - name: LANDING_FLUSH_INTERVAL
               value: {{ $settings.flushInterval | quote }}
           args: [archive]
