@@ -65,7 +65,7 @@ class Store:
     def list(self, prefix):
         if self.client:
             for page in self.client.get_paginator("list_objects_v2").paginate(
-                Bucket=self.bucket, Prefix=self.key(prefix)
+                Bucket=self.bucket, Prefix=self.key(prefix) + ("/" if prefix.endswith("/") else "")
             ):
                 for item in page.get("Contents", []):
                     yield item["Key"][len(self.prefix) + 1 :] if self.prefix else item["Key"]

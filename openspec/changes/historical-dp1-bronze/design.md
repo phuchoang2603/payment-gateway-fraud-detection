@@ -46,7 +46,7 @@ Verify external catalog selection for metadata, profiler and test connections. T
 
 Use discovered entity IDs/FQNs for products, contracts, lineage and readback. Retain logical source ports linked to immutable manifests rather than one asset per file. Native contracts retain original ODCS ID/version/hash, artifact reference and complete original YAML as provenance. Do not use the importer that rejected source environments/structured properties, or retain `dp1-compatibility` conversions. Native quality definitions reflect Git SQL; no custom GX test/result projection remains.
 
-Argo HTTP templates perform the small set of explicit API operations for domain and asset membership, product, contract provenance and lineage with the Argo pipeline; writes run serially because they depend on each other. Configure Argo Agent/WorkflowTaskSet RBAC, one OpenMetadata bot secret and bounded HTTP retries. Do not recreate the removed Python client as a large YAML SDK. Acceptance readback of native results is a GET-only step in `dp1 accept`, because the results exceed Argo's output-parameter size limit. Native ingestion owns table schema, profiling and test execution. Argo lineage is explicit; do not assume Airflow instrumentation.
+Argo HTTP templates perform the small set of explicit API operations for domain and asset membership, product, contract provenance and lineage with the Argo pipeline; writes run in dependency groups: domain first, independent products/membership next, contracts/assets/lineage next, then contract provenance patches. Configure Argo Agent/WorkflowTaskSet RBAC, one OpenMetadata bot secret and bounded HTTP retries. Do not recreate the removed Python client as a large YAML SDK. Acceptance readback of native results is a GET-only step in `dp1 accept`, because the results exceed Argo's output-parameter size limit. Native ingestion owns table schema, profiling and test execution. Argo lineage is explicit; do not assume Airflow instrumentation.
 
 ### 5. Acceptance requires complete results and durable evidence
 
@@ -104,7 +104,7 @@ External-catalog discovery and nested types need end-to-end verification with th
 
 ## Verification
 
-Reuse existing CI entrypoints and behavioral fixtures for the distinct risks: normalization/conservation, uncertain commits/replay, snapshot isolation, nested SQL/linkage/label semantics, missing/failed/stale native results and lifecycle recovery. Delete tests for removed behavior. Do not add config-only tests, option matrices, new CI jobs or per-property assertions. Tests and images run only in CI; local checks are formatting/schema/OpenSpec validation and diff review. No live services or credentials in ordinary CI.
+Reuse existing CI entrypoints and behavioral fixtures for the distinct risks: normalization/conservation, uncertain commits/replay, snapshot isolation, nested raw schema and transport semantics, missing/failed/stale native results and lifecycle recovery. Delete tests for removed behavior. Do not add config-only tests, option matrices, new CI jobs or per-property assertions. Tests and images run only in CI; local checks are formatting/schema/OpenSpec validation and diff review. No live services or credentials in ordinary CI.
 
 ## References
 

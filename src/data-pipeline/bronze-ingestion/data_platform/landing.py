@@ -1,6 +1,7 @@
 import json
 import re
 from hashlib import sha256
+from itertools import zip_longest
 
 from data_platform.products import PORTS
 
@@ -74,7 +75,11 @@ def select(source, store, epoch, max_batches=100):
                 raise ValueError("pending landing manifest changed")
         return manifest
     picked, ranges = [], list(progress["ranges"])
-    for key in source.list(f"streaming/_batches/epoch={epoch}/"):
+    keys = list(source.list(f"streaming/_batches/epoch={epoch}/"))
+    groups = [[k for k in keys if f"/topic={topic}/" in k] for topic in TOPICS]
+    if sum(map(len, groups)) != len(keys):
+        raise ValueError("only authoritative clean topics may enter bronze")
+    for key in (k for pair in zip_longest(*groups) for k in pair if k is not None):
         body = source.read(key, max_bytes=1024 * 1024)
         digest = sha256(body).hexdigest()
         if key in progress["accepted"]:

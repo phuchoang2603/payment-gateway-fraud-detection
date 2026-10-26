@@ -33,7 +33,7 @@ spec:
             template: select
         - - name: ingest-selected
             template: historical
-            when: "{{steps.select.outputs.parameters.version}} != none"
+            when: "{{=steps.select.outputs.parameters.version != 'none'}}"
     - name: select
       container:
         image: __SPARK_IMAGE__

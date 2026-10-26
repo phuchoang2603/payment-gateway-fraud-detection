@@ -24,6 +24,7 @@ dev = [
     "pydantic>=2.12,<3",
     "psutil==7.2.2",
     "pytz==2026.5",
+    "protobuf>=7.36.1,<8",
 ]
 
 [build-system]

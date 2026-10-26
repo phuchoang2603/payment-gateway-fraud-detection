@@ -185,7 +185,13 @@ def test_workflow(table, case_list):
         "source": {
             "type": "testsuite",
             "serviceName": SERVICE,
-            "sourceConfig": {"config": {"type": "TestSuite", "entityFullyQualifiedName": entity(table)}},
+            "sourceConfig": {
+                "config": {
+                    "type": "TestSuite",
+                    "entityFullyQualifiedName": entity(table),
+                    "testCases": [c.name for c in case_list if c.table == table],
+                }
+            },
         },
         "processor": {
             "type": "orm-test-runner",
