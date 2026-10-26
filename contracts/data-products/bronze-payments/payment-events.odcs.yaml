@@ -636,7 +636,7 @@ schema:
     name: attempt_context_consistency
     type: sql
     description: Each attempt carries the immutable checkout context from its payment creation.
-    query: "WITH created AS (\n  SELECT DISTINCT integration_id, payment_id, payment_created FROM {events}\n  WHERE payment_created\
+    query: "WITH created AS (\n  SELECT DISTINCT integration_id, payment_id, payment_created FROM {events} AS source_events\n  WHERE payment_created\
       \ IS NOT NULL\n)\nSELECT COUNT(*) FROM {events} AS e\nLEFT JOIN created c ON e.integration_id = c.integration_id AND\
       \ e.payment_id = c.payment_id\nWHERE e.attempt_started IS NOT NULL AND (\n  e.attempt_started.context IS NULL OR c.payment_created\
       \ IS NULL\n  OR NOT (TO_JSON(e.attempt_started.context) <=> TO_JSON(c.payment_created))\n)\n"
