@@ -1,5 +1,7 @@
 from datetime import date
 
+import pytest
+
 from simulator.generation import build_history
 from simulator.profiles import (
     CARD_TESTING,
@@ -52,8 +54,9 @@ def test_compromise_windows_started_earlier_continue_on_a_rebuilt_day():
     assert not (schedule.groups[fraud] < 0).any()
 
 
-def test_card_testing_bursts_share_a_device_across_many_low_amount_methods():
-    config = small_config(**{"scenarios.card_testing.rate": 3})
+@pytest.mark.parametrize("reuse", [0, 1])
+def test_card_testing_bursts_configure_context_reuse_across_many_low_amount_methods(reuse):
+    config = small_config(**{"scenarios.card_testing.rate": 3, "behavior.familiar_context_probability": reuse})
     schedule, histories = _histories(config, date(2026, 7, 2))
     bursts = {}
     for index, history in enumerate(histories):
@@ -65,7 +68,7 @@ def test_card_testing_bursts_share_a_device_across_many_low_amount_methods():
         bursts.setdefault(int(schedule.groups[index]), []).append(signals)
     assert bursts
     for signals in bursts.values():
-        assert len({signal["device_fingerprint"] for signal in signals}) == 1
+        assert (len({signal["device_fingerprint"] for signal in signals}) == 1) == bool(reuse)
         assert len({signal["payment_method"]["fingerprint"] for signal in signals}) == len(signals)
         span = max(signal["attempted_at"] for signal in signals) - min(signal["attempted_at"] for signal in signals)
         assert span.total_seconds() <= config.scenarios.card_testing.burst_minutes * 60 + 5
@@ -111,8 +114,6 @@ def test_memory_mapped_profiles_are_read_only_distinct_and_rebuild_in_another_pr
 
 
 def test_continuation_refuses_unsupported_algorithm_and_profile_mismatch():
-    import pytest
-
     from simulator.config import ALGORITHM_VERSION
     from simulator.profiles import profiles_from_manifest
 

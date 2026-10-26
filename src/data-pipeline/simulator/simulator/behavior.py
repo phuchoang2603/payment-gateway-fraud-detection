@@ -94,10 +94,13 @@ def purchase_context(
         campaign = stage_rng(config.seed, 40, offset, group)
         quantity = 1
         unit_price = int(random.integers(50, 501))
-        device_index = int(campaign.integers(0, len(profiles.device_pool)))
-        network_index = int(campaign.integers(0, len(profiles.network_pool)))
-        method_index = (int(campaign.integers(0, len(profiles.method_pool))) + ordinal) % len(profiles.method_pool)
-        missing = campaign
+        method_start = int(campaign.integers(0, len(profiles.method_pool)))
+        shared = random.random() < config.behavior.familiar_context_probability
+        context_random = campaign if shared else random
+        device_index = int(context_random.integers(0, len(profiles.device_pool)))
+        network_index = int(context_random.integers(0, len(profiles.network_pool)))
+        method_index = (method_start + ordinal) % len(profiles.method_pool)
+        missing = campaign if shared else random
     device = (
         profiles.device_pool[device_index] if missing.random() >= CALIBRATION["device_missing_probability"] else None
     )
