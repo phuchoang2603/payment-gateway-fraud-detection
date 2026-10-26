@@ -1,0 +1,108 @@
+{
+  "scope": "v16 persisted-bronze and native governance development acceptance",
+  "run_id": "301b3be8-3cda-4aa9-abec-73b291ed405e",
+  "accepted_record": {
+    "uri": "s3://fraud-lakehouse-prod/dp1-evidence/starrocks-v2/accepted/v16.json",
+    "sha256": "1b1557ae2470a123e0c042a6305c56d2c7aaeb074e1b4522f34078beb74fcbdf"
+  },
+  "source": {
+    "manifest": "s3://synthetic-source/historical/v16/manifest.json",
+    "sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+    "files": 1954,
+    "physical_bytes": 139597476,
+    "payment_events": 795718,
+    "fraud_labels": 161967,
+    "event_time_bounds_utc": [
+      "2025-07-01T00:02:27Z",
+      "2025-09-29T00:58:24Z"
+    ],
+    "label_availability_bounds_utc": [
+      "2025-07-01T00:02:28.834Z",
+      "2025-10-19T22:17:57.008Z"
+    ],
+    "product": {
+      "contracts": {
+        "fraud-labels": {
+          "id": "urn:datacontract:fraud:historical-fraud-labels",
+          "sha256": "05682ccb1887681dd84ac6c2be9409cb7d310e5f5844220093704ea77f063fba",
+          "version": "1.0.0"
+        },
+        "payment-events": {
+          "id": "urn:datacontract:fraud:historical-payment-events",
+          "sha256": "133b6defb4ca7fde65857d22b83c5697a182978b53b80dfa3d89206bb82d248f",
+          "version": "4.0.1"
+        }
+      },
+      "feature_definition": {
+        "sha256": "2ee2a5153a248bdc98df3b2643e10a65bc5693ea111129b6c65a67352aa4ec0b",
+        "version": "fraud-baseline-v1"
+      },
+      "id": "urn:dataproduct:fraud:historical-payments",
+      "version": "6.0.1"
+    }
+  },
+  "result": {
+    "conservation": {
+      "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+      "method": "spark-exceptAll-bidirectional",
+      "outcome": "passed",
+      "snapshots": {
+        "fraud_labels": 5152445850499535440,
+        "payment_events": 7824267020900509388
+      }
+    },
+    "contracts": {
+      "fraud_labels": "c9baf04b2360fd0a7336b6df03e57972220d104fb78e3a0c672546412df06b7e",
+      "payment_events": "f11cdfa3d7472dd977f48f2027dd67c26bfd4376f062a0b95a0d40c659388b77"
+    },
+    "expected_cases": 146,
+    "governance_gaps": [],
+    "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+    "outcome": "passed",
+    "problem_count": 0,
+    "problems": {},
+    "run_id": "301b3be8-3cda-4aa9-abec-73b291ed405e",
+    "snapshots": {
+      "fraud_labels": 5152445850499535440,
+      "payment_events": 7824267020900509388
+    },
+    "validation_policy": "bronze-starrocks-v2"
+  },
+  "workflow": {
+    "name": "historical-dp1-bronze-krbdj",
+    "phase": "Succeeded",
+    "finished_at": "2026-10-26T23:31:54Z",
+    "entrypoint": "govern-and-accept",
+    "image": "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark@sha256:e7e86ac88f9af8f6bb1be011c9f80c720b5ffba639768f349f70060113fbf325",
+    "native_image": "openmetadata/ingestion@sha256:fd104fda383aa86750d89af8787d6e1f5b8f3aa8c606fee08eb4c616fcf5df85"
+  },
+  "recovery": {
+    "first_failed_workflow": "historical-dp1-bronze-vh8qh",
+    "native_retry_workflow": "historical-dp1-bronze-6kwlj",
+    "failed_receipts": [
+      "v16-first-attempt.json",
+      "v16-governance-retry.json"
+    ],
+    "snapshot_pair_reused": true,
+    "canonical_test_ids_preserved": true,
+    "governance_only_recovery_reused_native_results": true,
+    "native_discovery_and_profiling": "passed"
+  },
+  "cleanup": {
+    "workflow_nodes": "all succeeded, skipped or omitted",
+    "remaining_spark_applications": 0,
+    "active_historical_workflow_pods": 0,
+    "active_openmetadata_starrocks_queries": 0
+  },
+  "limitations": [
+    "One executor OOM during original Spark reconciliation recovered; resource sizing remains provisional.",
+    "Resource observations are samples, not complete peak memory or shuffle/spill measurements.",
+    "Deliberate isolated SQL-violation and metadata-outage exercises remain pending.",
+    "No 100 GB/coursework, recurring ingestion, feature/as-of, model-quality, training or serving acceptance."
+  ],
+  "code_validation": {
+    "revision": "1da4a5c9df56fa65d9a9f7d85d142cbfd1a43836",
+    "checks": 30,
+    "status": "passed (image pin skipped)"
+  }
+}
