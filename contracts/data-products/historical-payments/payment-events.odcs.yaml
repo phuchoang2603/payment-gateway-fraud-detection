@@ -2,7 +2,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: urn:datacontract:fraud:historical-payment-events
 name: Historical synthetic payment events
-version: 4.0.0
+version: 4.0.1
 status: active
 domain: fraud-detection
 description:
@@ -379,13 +379,14 @@ schema:
         mustBe: 0
       - id: payment_risk_assessment
         type: sql
-        description: Decisions declare an approve or decline outcome, policy version and nonempty reason codes.
+        description: Decisions declare an approve or decline outcome and policy version. Declines require a reason; clean approvals may have no reasons.
         query: |
           SELECT count(*) FROM {object}
           WHERE risk_decision_recorded IS NOT NULL AND (
             risk_decision_recorded.assessment.outcome NOT IN ('RISK_OUTCOME_APPROVE', 'RISK_OUTCOME_DECLINE')
             OR risk_decision_recorded.assessment.policy_version = ''
-            OR len(risk_decision_recorded.assessment.reason_codes) = 0
+            OR (risk_decision_recorded.assessment.outcome = 'RISK_OUTCOME_DECLINE'
+              AND len(risk_decision_recorded.assessment.reason_codes) = 0)
             OR list_contains(risk_decision_recorded.assessment.reason_codes, '')
           )
         mustBe: 0

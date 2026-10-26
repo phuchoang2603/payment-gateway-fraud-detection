@@ -1,0 +1,230 @@
+{
+  "manifest": "s3://synthetic-source/historical/v15/manifest.json",
+  "manifest_sha256": "5aa667564df3beb0ac9189856d9dd0d501ee57d3f907cabc990af5e71c234310",
+  "checked_at": "2026-10-26T20:21:23.440936+00:00",
+  "inventory": {
+    "compression": "zstd",
+    "compression_level": 3,
+    "format": "parquet",
+    "fraud_labels": {
+      "bytes": 11759272,
+      "files": 977,
+      "row_groups": 977,
+      "rows": 161967,
+      "uncompressed_parquet_bytes": 16548467
+    },
+    "payment_events": {
+      "bytes": 127837079,
+      "files": 977,
+      "row_groups": 977,
+      "rows": 795718,
+      "uncompressed_parquet_bytes": 218758921
+    },
+    "row_group_rows": 131072
+  },
+  "publication_receipt": {
+    "bytes": 8852076,
+    "cleanup": "removed",
+    "manifest": "s3://synthetic-source/historical/v15/manifest.json",
+    "manifest_sha256": "44b30a750d4208a592d6738ab88b466860c32a88de013a2492f531e39aebacb8",
+    "objects": 980
+  },
+  "feature_definition": {
+    "sha256": "2ee2a5153a248bdc98df3b2643e10a65bc5693ea111129b6c65a67352aa4ec0b",
+    "version": "fraud-baseline-v1"
+  },
+  "checks": [
+    {
+      "id": "payment_delivery_consistency",
+      "violations": 0,
+      "expected": 0,
+      "passed": true
+    },
+    {
+      "id": "payment_envelope",
+      "violations": 0,
+      "expected": 0,
+      "passed": true
+    },
+    {
+      "id": "payment_lifecycle",
+      "violations": 0,
+      "expected": 0,
+      "passed": true
+    },
+    {
+      "id": "payment_attempt_identity",
+      "violations": 0,
+      "expected": 0,
+      "passed": true
+    },
+    {
+      "id": "payment_risk_assessment",
+      "violations": 155620,
+      "expected": 0,
+      "passed": false
+    },
+    {
+      "id": "payment_snapshot_amounts",
+      "violations": 0,
+      "expected": 0,
+      "passed": true
+    },
+    {
+      "id": "attempt_context_consistency",
+      "violations": 0,
+      "expected": 0,
+      "passed": true
+    },
+    {
+      "id": "label_availability",
+      "violations": 0,
+      "expected": 0,
+      "passed": true
+    },
+    {
+      "id": "label_attempt_linkage",
+      "violations": 0,
+      "expected": 0,
+      "passed": true
+    }
+  ],
+  "all_checks_passed": false,
+  "ranges": {
+    "payment_events": {
+      "occurred_min": "2025-07-01 00:02:27+00:00",
+      "occurred_max": "2025-09-29 00:58:24+00:00",
+      "available_min": "2025-07-01 00:02:27+00:00",
+      "available_max": "2025-09-29 00:58:24+00:00"
+    },
+    "fraud_labels": {
+      "occurred_min": "2025-07-01 00:02:28+00:00",
+      "occurred_max": "2025-09-28 23:59:50+00:00",
+      "available_min": "2025-07-01 00:02:28.834000+00:00",
+      "available_max": "2025-10-19 22:17:57.008000+00:00"
+    }
+  },
+  "cohorts": [
+    {
+      "scenario": "account_takeover",
+      "is_fraud": true,
+      "attempts": 1216,
+      "first_attempt": "2025-07-01 03:49:17+00:00",
+      "last_attempt": "2025-09-28 22:05:56+00:00"
+    },
+    {
+      "scenario": "card_testing",
+      "is_fraud": true,
+      "attempts": 4325,
+      "first_attempt": "2025-07-01 03:06:29+00:00",
+      "last_attempt": "2025-09-28 17:57:42+00:00"
+    },
+    {
+      "scenario": "friendly_fraud",
+      "is_fraud": false,
+      "attempts": 400,
+      "first_attempt": "2025-07-01 13:04:37.969000+00:00",
+      "last_attempt": "2025-09-28 20:58:54+00:00"
+    },
+    {
+      "scenario": "legitimate",
+      "is_fraud": false,
+      "attempts": 147684,
+      "first_attempt": "2025-07-01 00:02:28+00:00",
+      "last_attempt": "2025-09-28 23:59:50+00:00"
+    },
+    {
+      "scenario": "stolen_card_new_device",
+      "is_fraud": true,
+      "attempts": 3577,
+      "first_attempt": "2025-07-01 19:03:39+00:00",
+      "last_attempt": "2025-09-28 23:43:30+00:00"
+    }
+  ],
+  "splits": [
+    {
+      "attempts": 41657,
+      "positives": 2848,
+      "negatives": 38809,
+      "available_truth_labels": 41657,
+      "customers": 8121,
+      "methods": 8844,
+      "name": "train",
+      "start_inclusive": "2025-07-08",
+      "end_exclusive": "2025-08-01",
+      "simulated_training_cutoff": "2025-08-22"
+    },
+    {
+      "attempts": 17132,
+      "positives": 914,
+      "negatives": 16218,
+      "available_truth_labels": 17132,
+      "customers": 6108,
+      "methods": 6591,
+      "name": "validation",
+      "start_inclusive": "2025-08-22",
+      "end_exclusive": "2025-09-01",
+      "simulated_training_cutoff": "2025-09-22"
+    },
+    {
+      "attempts": 12635,
+      "positives": 679,
+      "negatives": 11956,
+      "available_truth_labels": 12635,
+      "customers": 5364,
+      "methods": 5844,
+      "name": "test",
+      "start_inclusive": "2025-09-22",
+      "end_exclusive": "2025-09-29",
+      "simulated_training_cutoff": "2025-10-20"
+    }
+  ],
+  "entity_overlap": [
+    {
+      "left": "train",
+      "right": "validation",
+      "entity": "customer",
+      "shared": 5500
+    },
+    {
+      "left": "train",
+      "right": "validation",
+      "entity": "method",
+      "shared": 5998
+    },
+    {
+      "left": "train",
+      "right": "test",
+      "entity": "customer",
+      "shared": 4874
+    },
+    {
+      "left": "train",
+      "right": "test",
+      "entity": "method",
+      "shared": 5346
+    },
+    {
+      "left": "validation",
+      "right": "test",
+      "entity": "customer",
+      "shared": 3982
+    },
+    {
+      "left": "validation",
+      "right": "test",
+      "entity": "method",
+      "shared": 4431
+    }
+  ],
+  "warmup": {
+    "days": 7,
+    "exclude_anchors_before": "2025-07-08T00:00:00Z"
+  },
+  "label_policy": "Counts use simulation truth, a valid synthetic training target, only when available at the stated cutoff. Chargebacks are a separate delayed input; absence is not a negative. Maximum configured label delay is 21 days.",
+  "split_caveat": "Train on July 8-August 1 anchors with labels available before August 22, then evaluate August 22-September 1. Wait until September 22 for validation label maturity and model selection, then evaluate September 22-29. Test labels mature by October 20. Excluded embargo intervals are not prospective evaluation data. Account for measured label availability even within these conservative bounds.",
+  "campaign_overlap": "Not directly measurable: no stable campaign ID is exported. Customer/method overlaps are measured proxies; a true campaign holdout requires explicit grouping in a future generation contract.",
+  "availability_basis": "Historical recorded_at / label_available_at, not measured online serving availability",
+  "downstream_acceptance": "pending: Spark bronze ingestion, snapshot-pinned StarRocks SQL/OpenMetadata, Flink/Feast parity and model quality",
+  "feature_leakage": "Canonical baseline feature inputs exclude labels/scenario/risk outcomes; model feature materialization remains unimplemented."
+}

@@ -126,6 +126,15 @@ def test_attempt_context_matches_immutable_checkout(dataset):
     assert mismatches == 0
 
 
+def test_generated_risk_assessments_satisfy_source_contract(dataset):
+    root, _ = dataset
+    contract = yaml.safe_load((storage.PRODUCT_DIR / "payment-events.odcs.yaml").read_text())
+    rule = next(rule for rule in contract["schema"][0]["quality"] if rule["id"] == "payment_risk_assessment")
+    with duckdb.connect() as connection:
+        connection.register("payment_events", _read(root, "payment_events").arrow())
+        assert connection.sql(rule["query"].replace("{object}", "payment_events")).fetchone()[0] == rule["mustBe"]
+
+
 def test_duplicates_repeat_identical_events_beside_their_originals(dataset):
     root, manifest = dataset
     rows, distinct, conflicting = duckdb.sql(
