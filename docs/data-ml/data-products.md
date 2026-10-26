@@ -32,11 +32,23 @@ The fraud-labels linkage rule reads `payment_events`, so validate labels in a da
 
 `historical/v12` is an immutable one-off -365-day calendar shift of v8, with the same entities/content and no regeneration. Its manifest SHA-256 is `66aa2af7fecb1177e0d3891ea86054ff9c076ff6e8743b35b6bec0bd351511ce`; 2,851 files received full row/remote readback checks and 22,131 received upload-integrity/HEAD checks. Spark/GX acceptance remains pending. Live decoded Parquet lands separately under `streaming/`; see the [landing interface](data-pipeline.md#live-simulation-and-landing).
 
-The maintained smoke profile now targets a new 90-day development source, provisionally `historical/v16`: 10,000 customers, 2,000 merchants, July 1 through September 28, 2025 purchase starts, seed 2603 and current payload schema 3. Lifecycle completion and scheduled label availability may extend beyond that range. It has no 100 GB size gate. Publication and acceptance for this version remain pending until the exact manifest and run evidence are recorded; never select an incomplete prefix. Previous source versions are historical evidence, not supported current-runtime inputs; the operator removed the old sources and stopped v14.
+The maintained smoke profile now targets a new 90-day development source, `historical/v16`: 10,000 customers, 2,000 merchants, July 1 through September 28, 2025 purchase starts, seed 2603 and current payload schema 3. Lifecycle completion and scheduled label availability may extend beyond that range. It has no 100 GB size gate. Publication and source checks passed: [manifest](https://minio.home.phuchoang.sbs/synthetic-source/historical/v16/manifest.json) SHA-256 `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`. The CI-image Kubernetes run verified all 1,954 inventory files and all nine source SQL checks. It contains 795,718 events and 161,967 labels in 139,597,476 physical Parquet bytes; this is development-source evidence, not DP1 acceptance. Previous source versions are historical evidence, not supported current-runtime inputs; the operator removed the old sources and stopped v14.
 
-The first schema-3 candidate v15 failed its declared risk-assessment rule because that rule incorrectly required reason codes on clean approvals. Its manifest and failed evidence remain unchanged. Contract 4.0.1 corrects the rule to require reasons on declines; the new candidate uses v16.
+The first schema-3 candidate v15 failed its declared risk-assessment rule because that rule incorrectly required reason codes on clean approvals. Its manifest and failed evidence remain unchanged. Contract 4.0.1 corrects the rule to require reasons on declines; v16 passes the corrected rule.
 
 The enriched attempt context matches gateway scoring inputs. The manifest pins [baseline feature definitions](../../contracts/features/fraud-baseline-v1.yaml); it does not contain computed feature snapshots or certify downstream ingestion. Use a seven-day history warmup, chronological splits and label maturity at each training cutoff. Absent chargebacks are not confirmed negatives. Report class/cohort counts and temporal/entity/campaign overlap before interpreting model results.
+
+The [manifest-bound development report](../../openspec/changes/finalize-feature-contract-and-90-day-smoke/evidence/v16-development-report.json) records events through September 29 00:58:24 UTC and label availability through October 19 22:17:57.008 UTC. It measures 9,118 positive and 148,084 negative simulation-truth attempts. Friendly-dispute simulation truth remains negative while its chargeback label is positive; choose a label-source/target policy rather than merging those targets implicitly.
+
+After seven days of warmup, one conservative evaluation schedule is:
+
+| Anchors (end exclusive) | Role | Positive / negative attempts | Labels available before |
+|---|---|---|---|
+| July 8–August 1 | Training | 2,848 / 38,809 | August 22 |
+| August 22–September 1 | Validation | 914 / 16,218 | September 22 |
+| September 22–29 | Test | 679 / 11,956 | October 20 |
+
+Fit after training maturity, select after validation maturity, then evaluate the untouched test interval. The excluded intervals allow the configured 21-day chargeback tail; always enforce actual availability. Customer/method overlap is substantial (4,874 customers and 5,346 methods shared between training and test), so this is temporal evaluation, not an entity holdout. Stable campaign IDs are not exported; campaign overlap is unmeasured and customer/method overlap is only a proxy. These counts support pipeline experiments, not a model-quality claim.
 
 Generate only the development profile now. Full-volume Python generation is deferred until ingestion, features, training and serving have been exercised; no Spark simulator is required. Run generation from the devenv shell:
 

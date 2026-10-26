@@ -1,0 +1,191 @@
+{
+  "manifest": "s3://synthetic-source/historical/v16/manifest.json",
+  "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+  "source_epoch": "v16-acceptance-20261026",
+  "groups": {
+    "landing": "payments-parquet-v16-acceptance-20261026",
+    "faults": "delivery-faults-v16-acceptance-20261026"
+  },
+  "initial_offsets": {
+    "landing": [
+      {
+        "topic": "payments.events.v1.faulty",
+        "partition": 0,
+        "offset": 1549
+      },
+      {
+        "topic": "payments.events.v1.faulty",
+        "partition": 1,
+        "offset": 1691
+      },
+      {
+        "topic": "payments.events.v1.faulty",
+        "partition": 2,
+        "offset": 1488
+      },
+      {
+        "topic": "fraud.labels.v1",
+        "partition": 0,
+        "offset": 278
+      },
+      {
+        "topic": "fraud.labels.v1",
+        "partition": 1,
+        "offset": 244
+      },
+      {
+        "topic": "fraud.labels.v1",
+        "partition": 2,
+        "offset": 286
+      }
+    ],
+    "faults": [
+      {
+        "topic": "payments.events.v1",
+        "partition": 0,
+        "offset": 1353
+      },
+      {
+        "topic": "payments.events.v1",
+        "partition": 1,
+        "offset": 1465
+      },
+      {
+        "topic": "payments.events.v1",
+        "partition": 2,
+        "offset": 1294
+      }
+    ]
+  },
+  "final_offsets": {
+    "landing": [
+      {
+        "topic": "payments.events.v1.faulty",
+        "partition": 0,
+        "offset": 2095
+      },
+      {
+        "topic": "payments.events.v1.faulty",
+        "partition": 1,
+        "offset": 2210
+      },
+      {
+        "topic": "payments.events.v1.faulty",
+        "partition": 2,
+        "offset": 2011
+      },
+      {
+        "topic": "fraud.labels.v1",
+        "partition": 0,
+        "offset": 345
+      },
+      {
+        "topic": "fraud.labels.v1",
+        "partition": 1,
+        "offset": 338
+      },
+      {
+        "topic": "fraud.labels.v1",
+        "partition": 2,
+        "offset": 366
+      }
+    ],
+    "faults": [
+      {
+        "topic": "payments.events.v1",
+        "partition": 0,
+        "offset": 1762
+      },
+      {
+        "topic": "payments.events.v1",
+        "partition": 1,
+        "offset": 1855
+      },
+      {
+        "topic": "payments.events.v1",
+        "partition": 2,
+        "offset": 1694
+      }
+    ]
+  },
+  "run": {
+    "event": "traffic_start",
+    "run_id": "02af49c81643432b9ef61a32aa304c08",
+    "manifest": "s3://synthetic-source/historical/v16/manifest.json",
+    "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+    "generation_identity": "10dc2ee731c20419d4c22484db999e70f6f4e6b31046597e917c2de4513ce515",
+    "calibration_sha256": "0cb5f26c760c293207eda07d058a21783d0ca0008e0e6397c03d7d993c7ca163",
+    "clock": "UTC-wall-clock"
+  },
+  "traffic": {
+    "event": "traffic_stop",
+    "admitted": 240,
+    "completed": 240,
+    "unfinished": 0,
+    "max_arrival_lag_seconds": 0.005511272989679128
+  },
+  "labels": {
+    "event": "live_stop",
+    "pending_chargebacks": 1,
+    "truth_published": 240,
+    "chargebacks_published": 1,
+    "label_schedule": "in-memory; lost on process failure",
+    "failed_loops": 0
+  },
+  "faults": {
+    "event": "fault_stop",
+    "consumed": 1194,
+    "acknowledged": 1553,
+    "duplicates_selected": 373,
+    "late_selected": 620,
+    "burst_held": 394,
+    "observed_duplicate_rate": 0.31239530988274705,
+    "observed_late_rate": 0.5192629815745393,
+    "observed_held_rate": 0.32998324958123953,
+    "pending_records": 23,
+    "pending_bytes": 16598,
+    "recovery": "uncommitted records replay; additional duplicates possible"
+  },
+  "batch_manifests": 193,
+  "files_verified": 193,
+  "event_deliveries": 1627,
+  "unique_events": 1199,
+  "payments": 240,
+  "attempts": 240,
+  "labels_delivered": 251,
+  "label_sources": {
+    "LABEL_SOURCE_SIMULATION_TRUTH": 250,
+    "LABEL_SOURCE_CHARGEBACK": 1
+  },
+  "missing_signals": {
+    "device_fingerprint": 10,
+    "ip_network_fingerprint": 5,
+    "user_agent_family": 6
+  },
+  "recovery": {
+    "injected_before_offset_ack": true,
+    "published_manifests_unchanged": 6,
+    "replayed_kafka_positions": 49,
+    "all_selected_positions_landed": true
+  },
+  "verification": "All selected batch files passed SHA256, size, schema and row checks; deployed checks decoded preserved protobuf identities/schema and verified checkout-context equality, linkage, availability and complete selected Kafka-position coverage. Representative cross-language field/optional-presence projection is covered by CI. This is not DP1, feature or model acceptance.",
+  "limits": [
+    "One chargeback remained pending in the in-memory schedule at bounded shutdown; the label scheduler is not durable.",
+    "The original fault loop stopped with pending work; a second pass with the same group drained it before final Kafka coverage checks.",
+    "Repeated Kafka positions and event IDs are preserved deliveries; silver must deduplicate, and no cross-system exactly-once claim is made."
+  ],
+  "fault_drain": {
+    "event": "fault_stop",
+    "consumed": 28,
+    "acknowledged": 35,
+    "duplicates_selected": 7,
+    "late_selected": 17,
+    "burst_held": 3,
+    "observed_duplicate_rate": 0.25,
+    "observed_late_rate": 0.6071428571428571,
+    "observed_held_rate": 0.10714285714285714,
+    "pending_records": 0,
+    "pending_bytes": 0,
+    "recovery": "uncommitted records replay; additional duplicates possible"
+  }
+}

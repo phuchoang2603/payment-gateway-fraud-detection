@@ -26,7 +26,7 @@ The rules runtime is implemented as an independently deployable Go service at `s
 4. Add Kubeflow training, evaluation and model registration, then KServe integration through Go Fraud with feature compatibility, latency/freshness and served-vector evidence.
 5. Only after the end-to-end path is built and exercised, run full-scale Python generation and repeat scale/coursework acceptance. The 100 GB target remains required later; no Spark generator or legacy source compatibility is planned.
 
-The six-day v13 acceptance remains historical evidence; old source versions are not current selectors. The operator stopped v14 and removed the old sources. The new development version is provisional until published and accepted; do not mark future engines or model quality complete from source generation alone.
+The six-day v13 acceptance remains historical evidence; old source versions are not current selectors. The operator stopped v14 and removed the old sources. V16 publication and source/live acceptance are recorded in the change evidence; downstream DP1, feature and model acceptance remain pending. Do not mark future engines or model quality complete from source generation alone.
 
 ## Planned data-platform direction
 

@@ -2,4 +2,4 @@ imageTag: pr-90-b905998d1cf304f7ecae4db8bead3e0aa59a9447
 simulator:
   enabled: false
 archiver:
-  enabled: false
+  enabled: true
