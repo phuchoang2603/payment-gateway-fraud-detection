@@ -1,5 +1,5 @@
-imageTag: main-0c73bc62202ba024d11dcfce343349acfcac7784
+imageTag: pr-90-f8cae5148c3d8e8989c00757f00f49d885574bce
 simulator:
   enabled: false
 archiver:
-  enabled: true
+  enabled: false

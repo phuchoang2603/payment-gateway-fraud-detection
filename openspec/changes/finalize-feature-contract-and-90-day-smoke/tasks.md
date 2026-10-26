@@ -5,8 +5,8 @@ All tests and image builds run in CI; smoke/acceptance validation runs in CI or 
 ## 1. Contract and gateway producer
 
 - [x] 1.1 Restore/select a valid complete implementation worktree without discarding these artifacts or unrelated work; record its revision, inspect coordinated DP1 changes and confirm no active v14 writer before any source operation. Verify Git status, required contracts/docs and writer identity; do not resume/delete v14.
-- [ ] 1.2 Add shared immutable AttemptContext to the existing AttemptStarted protobuf and assign the explicit schema-3 shape; regenerate Go/Python bindings and representative fixtures through existing tooling. Verify cross-language context/optional-field preservation in existing CI coverage without a standalone proto-check script.
-- [ ] 1.3 Update Payments domain/application/wire and persisted event mapping to capture context from committed state; retain durable start/idempotency -> Fraud -> durable decision -> processor ordering. Verify context consistency and retry/crash behavior through existing gateway CI tests, keeping Fraud rules outcomes unchanged.
+- [x] 1.2 Add shared immutable AttemptContext to the existing AttemptStarted protobuf and assign the explicit schema-3 shape; regenerate Go/Python bindings and representative fixtures through existing tooling. Verify cross-language context/optional-field preservation in existing CI coverage without a standalone proto-check script.
+- [x] 1.3 Update Payments domain/application/wire and persisted event mapping to capture context from committed state; retain durable start/idempotency -> Fraud -> durable decision -> processor ordering. Verify context consistency and retry/crash behavior through existing gateway CI tests, keeping Fraud rules outcomes unchanged.
 - [x] 1.4 Update ODPS/ODCS versions, physical schema declarations and generated references for current attempt context; update affected payment-flow/architecture docs. Verify native contract lint/reference checks in CI and review that documented fields/order match the new contract.
 
 ## 2. Shared feature definitions
@@ -18,7 +18,7 @@ All tests and image builds run in CI; smoke/acceptance validation runs in CI or 
 ## 3. Generator and typed landing adoption
 
 - [x] 3.1 Update generated lifecycle records, current Arrow/Parquet schema and relevant generator/landing validation for enriched attempts. Remove superseded current-schema branches/config switches while leaving published sources untouched; verify generation/decoding/nullability/row preservation in existing Python CI cases.
-- [ ] 3.2 Update live reference selection and vault mapping assumptions to use the selected supported profile rather than fixed v8/v12 cardinality. Verify profile-digest mismatch refusal and token/fingerprint mapping in existing CI coverage; keep gateway APIs authoritative and payment IDs run-scoped.
+- [x] 3.2 Update live reference selection and vault mapping assumptions to use the selected supported profile rather than fixed v8/v12 cardinality. Verify profile-digest mismatch refusal and token/fingerprint mapping in existing CI coverage; keep gateway APIs authoritative and payment IDs run-scoped.
 - [ ] 3.3 Update historical/live source guides, affected deployment/run instructions and reference notebook defaults for the current contract; retain old published-version facts. Verify links, matching schema/version names, optional signals and absence of stale active selection or legacy compatibility instructions by diff/reference review.
 
 ## 4. Ninety-day development source
