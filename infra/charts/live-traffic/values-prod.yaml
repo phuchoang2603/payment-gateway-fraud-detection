@@ -1,10 +1,10 @@
-imageTag: pr-89-3795038f7a229f4a9d01effe4681bbc7c86e8559
+imageTag: pr-89-3bd6c4f8700c59263222b7df9036265a01b383a6
 simulator:
-  enabled: false
+  enabled: true
   config:
     duration_seconds: 90
     payments_per_second: 0.5
     concurrency: 2
     label_time_scale: 86400
     faults:
-      enabled: false
+      enabled: true
