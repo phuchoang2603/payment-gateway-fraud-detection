@@ -59,9 +59,9 @@ customer_block_size: 100000
 card_testing_bursts_per_task: 16
 chunk_purchases: 2000
 execution:
-  workers: 3
-  max_in_flight: 3
+  workers: 4
+  max_in_flight: 4
   scratch_directory: /tmp
-  scratch_capacity_bytes: 17179869184
+  scratch_capacity_bytes: 8589934592
   task_scratch_bytes: 268435456
-  transfer_concurrency: 3
+  transfer_concurrency: 4

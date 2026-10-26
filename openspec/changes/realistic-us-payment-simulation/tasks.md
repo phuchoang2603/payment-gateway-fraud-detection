@@ -15,6 +15,6 @@
 ## 3. Verify and generate
 
 - [ ] 3.1 Obtain relevant CI results and run only non-test lint/format/schema checks locally; verify no new config/getter tests, proto-check script, broker CI infrastructure or image builds are run locally.
-- [ ] 3.2 Inspect current machine resources and measure bounded generation/upload throughput; deliver full-run time/storage estimates and worker/scratch settings for a fixed unused-version/date/scale plan retaining the existing physical-volume target.
+- [x] 3.2 Inspect current machine resources and measure bounded generation/upload throughput; deliver full-run time/storage estimates and worker/scratch settings for a fixed unused-version/date/scale plan retaining the existing physical-volume target.
 - [ ] 3.3 Generate/resume and publish through the existing immutable manifest-last flow; verify publication receipts, manifest URI/hash, event/label ranges and file/row/byte totals without modifying v8/v11/v12.
 - [ ] 3.4 Deliver the concise dataset report and DP1 handoff with distribution/shortcut diagnostics, source limitations, label maturity and temporal/entity/campaign split guidance; verify source checks and downstream Spark/GX acceptance are reported separately, leaving live deployment and feature pipelines unchanged.
