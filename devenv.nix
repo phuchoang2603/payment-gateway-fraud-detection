@@ -72,6 +72,7 @@
     config.programs = {
       ruff-format = {
         enable = true;
+        excludes = [ "src/data-pipeline/simulator/simulator/contracts/**" ];
       };
       gofumpt = {
         enable = true;

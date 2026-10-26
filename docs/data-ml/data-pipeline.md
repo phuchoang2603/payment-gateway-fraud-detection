@@ -14,6 +14,8 @@ flowchart TB
     T[("Separate scenario truth and delayed labels")]
     S[("TrueNAS MinIO: immutable synthetic source")]
     Q[("Strimzi Kafka: committed events")]
+    A["Python protobuf-to-Parquet archiver"]
+    LS[("synthetic-source/streaming: immutable completed batches")]
     D1["DP1 Spark batch: ingest and validate"]
     B[("Governed S3 lake: bronze Iceberg tables")]
     D2["DP2 Spark batch: cleanse and validate"]
@@ -37,7 +39,9 @@ flowchart TB
     L -->|"3. live payment commands"| G
     L -->|"4. decision IDs and delayed truth"| T
     G -.->|"5. committed versioned events"| Q
-    Q -.->|"6. live event ingestion"| D1
+    Q -.->|"6. selected events and independent labels"| A
+    A -->|"decoded business columns and raw Kafka provenance"| LS
+    LS -->|"bounded completed-file ingestion: next DP1 slice"| D1
     S -->|"7. source records"| D1
     D1 -->|"8. validated raw records and quarantine"| B
     B -->|"9. incremental raw batches"| D2
@@ -70,6 +74,18 @@ flowchart TB
 ## Generation
 
 Historical generation persists valid lifecycle histories outside bronze and outside production payment event storage. Live simulation calls gateway commands so Payments creates authoritative events. Both modes share versioned scenarios for customer, seller, device and synthetic method profiles: ordinary purchases, stolen-card/new-device behavior, unusual geography, reshipping, card testing and retry attacks. Burst, lateness and duplicate delivery are transport conditions; they never fabricate duplicate authoritative transitions.
+
+## Live simulation and landing
+
+`simulator live --config <path>` reuses a pinned historical manifest and verifies its profile digest, then drives gateway commands at current machine time. A historical gap is valid; there is no catch-up or maximum-gap requirement. New vault tokens resolve to the 3.9 million historical card fingerprints. Merchant/customer assignments and familiar device/network pools are reused; account-created dates anchor profile ages to historical start. Shipping fingerprints follow the gateway's full-address canonicalization and are not guaranteed identical to the historical street-only fingerprints.
+
+Traffic, independent protobuf labels and optional post-commit delay/duplicate/burst-hold delivery run in one Python process. Request retries preserve idempotency keys and content; the fault loop preserves original event bytes, keys and ordered headers on `payments.events.v1.faulty`. Held records commit only through acknowledged contiguous offsets, so restart may add deliveries. Label schedules are bounded in memory: interrupted or unsuccessful schedules are reported, not claimed durable. Synthetic truth is valid for training; scenario/oracle fields remain excluded from features and label joins respect availability time.
+
+The independently enabled Python archiver uses the simulator package/image (`simulator archive`) and historical Arrow schemas to write historical-compatible event/label business columns plus reserved `_transport` metadata to `synthetic-source/streaming/`, alongside explicit `historical/<version>/` exports. Each fresh source epoch uses explicit frozen Kafka start offsets and its own landing group; manifests record the epoch and file paths include `epoch=<id>` so resets cannot mix sources. Live startup logs pin the reference manifest hash, generation/calibration identity and unique run ID; live payments retain distinct IDs and current UTC timestamps. The [completed-batch contract](../../contracts/landing/payments-parquet-v1.schema.json) defines manifests and provenance. It conditionally publishes content-addressed Parquet and then a batch manifest, confirms remote metadata/size, and only then commits Kafka offsets. Retries with different boundaries may overlap; bronze must preserve deliveries and silver owns deduplication. Raw protobuf remains available for exact replay. No Connect S3 plugin, registry or Flink landing workload is required.
+
+The opt-in [live-traffic chart](../../infra/charts/live-traffic/values.yaml) shares Kafka, RustFS and the existing synthetic integration/source credentials. Exercise the simulator first with the archiver disabled, after its CI/image prerequisites pass: current-time gateway traffic, identities, labels, then delivery faults. Streaming-write policy access is needed for the later archiver session, not simulator-only traffic. Exercise landing/recovery next and review that evidence before starting DP1 multi-source ingestion. Select either clean or faulty events plus labels; avoid selecting both payment topics accidentally. Disable both workloads to roll back without deleting Kafka or landed data. The simulator is single-replica `Recreate`; bounded runs stop after configured duration and an enabled Deployment restarts them with a new run ID.
+
+DP1 multi-source configuration, durable discovery of completed manifests (including late files), incremental Iceberg commits and contextual validation belong to the next slice. Existing DP1 cannot ingest these paths merely by changing `SOURCE_ROOT`. Preserve historical source contracts, published bands and previous evidence; generator distribution/cardinality diagnostics becoming informational is a future DP1 runtime-policy change. V12 publication does not establish Spark/GX acceptance. Accepted v11 evidence remains separate.
 
 ## Pipelines and schemas
 

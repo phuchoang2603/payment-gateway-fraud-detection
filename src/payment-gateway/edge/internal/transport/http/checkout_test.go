@@ -195,9 +195,9 @@ func TestCrossSiteSubmissionIsRejected(t *testing.T) {
 	form := parseForm(t, h.page(payment, cookie).body)
 
 	tests := map[string]submission{
-		"foreign origin": {form: form, number: "4242424242424242", origin: "https://evil.example"},
-		"wrong csrf":     {form: form, number: "4242424242424242", csrf: "AAAA"},
-		"empty csrf":     {form: formState{key: form.key}, number: "4242424242424242"},
+		"foreign origin": {form: form, number: "4111000000000008", origin: "https://evil.example"},
+		"wrong csrf":     {form: form, number: "4111000000000008", csrf: "AAAA"},
+		"empty csrf":     {form: formState{key: form.key}, number: "4111000000000008"},
 	}
 	for name, s := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -215,10 +215,10 @@ func TestCrossSiteSubmissionIsRejected(t *testing.T) {
 	}
 	other := h.createPayment("order-2", realKey, "order-2")
 	otherCookie := h.cookie(other)
-	if res := h.submit(other, otherCookie, submission{form: form, number: "4242424242424242"}); res.StatusCode != http.StatusForbidden {
+	if res := h.submit(other, otherCookie, submission{form: form, number: "4111000000000008"}); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("csrf token replayed on another session = %d", res.StatusCode)
 	}
-	if res := h.submit(payment, nil, submission{form: form, number: "4242424242424242"}); res.StatusCode != http.StatusNotFound {
+	if res := h.submit(payment, nil, submission{form: form, number: "4111000000000008"}); res.StatusCode != http.StatusNotFound {
 		t.Fatalf("no cookie = %d", res.StatusCode)
 	}
 }
@@ -229,11 +229,11 @@ func TestSubmissionWithoutOriginOrRefererUsesTheCSRFToken(t *testing.T) {
 	cookie := h.cookie(payment)
 	form := parseForm(t, h.page(payment, cookie).body)
 
-	res := h.submit(payment, cookie, submission{form: form, number: "4242424242424242", origin: "-"})
+	res := h.submit(payment, cookie, submission{form: form, number: "4111000000000008", origin: "-"})
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("no Origin or Referer = %d: %s", res.StatusCode, res.body)
 	}
-	if res := h.submit(payment, cookie, submission{form: form, number: "4242424242424242", origin: "-", csrf: "AAAA"}); res.StatusCode != http.StatusForbidden {
+	if res := h.submit(payment, cookie, submission{form: form, number: "4111000000000008", origin: "-", csrf: "AAAA"}); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("no Origin with a wrong CSRF token = %d", res.StatusCode)
 	}
 }
@@ -244,11 +244,11 @@ func TestOpaqueOriginUsesTheCSRFToken(t *testing.T) {
 	cookie := h.cookie(payment)
 	form := parseForm(t, h.page(payment, cookie).body)
 
-	res := h.submit(payment, cookie, submission{form: form, number: "4242424242424242", origin: "null"})
+	res := h.submit(payment, cookie, submission{form: form, number: "4111000000000008", origin: "null"})
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("null Origin = %d: %s", res.StatusCode, res.body)
 	}
-	if res := h.submit(payment, cookie, submission{form: form, number: "4242424242424242", origin: "null", csrf: "AAAA"}); res.StatusCode != http.StatusForbidden {
+	if res := h.submit(payment, cookie, submission{form: form, number: "4111000000000008", origin: "null", csrf: "AAAA"}); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("null Origin with a wrong CSRF token = %d", res.StatusCode)
 	}
 }
@@ -259,7 +259,7 @@ func TestSubmissionFromTheServingHostIsAccepted(t *testing.T) {
 	cookie := h.cookie(payment)
 	form := parseForm(t, h.page(payment, cookie).body)
 
-	res := h.submit(payment, cookie, submission{form: form, number: "4242424242424242", origin: h.server.URL})
+	res := h.submit(payment, cookie, submission{form: form, number: "4111000000000008", origin: h.server.URL})
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("origin of the serving host = %d: %s", res.StatusCode, res.body)
 	}
@@ -274,7 +274,7 @@ func TestSuccessfulPaymentRedirectsWithPageContext(t *testing.T) {
 	form := parseForm(t, h.page(payment, cookie).body)
 
 	res := h.submit(payment, cookie, submission{
-		form: form, number: "4242 4242 4242 4242", device: "device-hash-1",
+		form: form, number: "4111 0000 0000 0008", device: "device-hash-1",
 		forward: "198.51.100.9, " + network.Input,
 	})
 	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "https://shop.example.com/return" {
@@ -294,7 +294,7 @@ func TestSuccessfulPaymentRedirectsWithPageContext(t *testing.T) {
 	if signals.GetIpNetworkFingerprint() != wantNetwork {
 		t.Fatalf("network fingerprint = %s, want %s (rightmost trusted entry under the real key)", signals.GetIpNetworkFingerprint(), wantNetwork)
 	}
-	h.assertLogsExclude("4242424242424242", "4242 4242", payment.CheckoutToken, call.GetPaymentMethodToken(), network.Input, "198.51.100.9")
+	h.assertLogsExclude("4111000000000008", "4111 0000", payment.CheckoutToken, call.GetPaymentMethodToken(), network.Input, "198.51.100.9")
 }
 
 func TestUntrustedForwardedHeaderYieldsNoNetworkSignal(t *testing.T) {
@@ -302,7 +302,7 @@ func TestUntrustedForwardedHeaderYieldsNoNetworkSignal(t *testing.T) {
 	payment := h.createPayment("order-1", realKey, "order-1")
 	cookie := h.cookie(payment)
 	form := parseForm(t, h.page(payment, cookie).body)
-	res := h.submit(payment, cookie, submission{form: form, number: "4242424242424242", forward: "not-an-ip", device: "bad device!"})
+	res := h.submit(payment, cookie, submission{form: form, number: "4111000000000008", forward: "not-an-ip", device: "bad device!"})
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("status = %d: %s", res.StatusCode, res.body)
 	}
@@ -320,7 +320,7 @@ func TestDeclineThenRetrySucceeds(t *testing.T) {
 	cookie := h.cookie(payment)
 	first := parseForm(t, h.page(payment, cookie).body)
 
-	declined := h.submit(payment, cookie, submission{form: first, number: "4000000000009995"})
+	declined := h.submit(payment, cookie, submission{form: first, number: "4112000000000007"})
 	if declined.StatusCode != http.StatusOK || !strings.Contains(declined.body, "insufficient funds") {
 		t.Fatalf("decline = %d: %s", declined.StatusCode, declined.body)
 	}
@@ -332,7 +332,7 @@ func TestDeclineThenRetrySucceeds(t *testing.T) {
 		t.Fatalf("payment must stay open: %d", page.StatusCode)
 	}
 
-	success := h.submit(payment, cookie, submission{form: second, number: "4242424242424242"})
+	success := h.submit(payment, cookie, submission{form: second, number: "4111000000000008"})
 	if success.StatusCode != http.StatusSeeOther || success.Header.Get("Location") != "https://shop.example.com/return" {
 		t.Fatalf("retry = %d: %s", success.StatusCode, success.body)
 	}
@@ -353,8 +353,8 @@ func TestDoubleSubmitStartsOneAttempt(t *testing.T) {
 	cookie := h.cookie(payment)
 	form := parseForm(t, h.page(payment, cookie).body)
 
-	one := h.submit(payment, cookie, submission{form: form, number: "4000000000009995"})
-	two := h.submit(payment, cookie, submission{form: form, number: "4000000000009995"})
+	one := h.submit(payment, cookie, submission{form: form, number: "4112000000000007"})
+	two := h.submit(payment, cookie, submission{form: form, number: "4112000000000007"})
 	for _, res := range []response{one, two} {
 		if res.StatusCode != http.StatusOK || !strings.Contains(res.body, "insufficient funds") {
 			t.Fatalf("response = %d: %s", res.StatusCode, res.body)
@@ -377,8 +377,8 @@ func TestDoubleSubmitThroughAnotherReplicaStillShowsTheSingleAttempt(t *testing.
 	form := parseForm(t, h.page(payment, cookie).body)
 
 	replica := h.mount(h.replicaService())
-	one := h.submit(payment, cookie, submission{form: form, number: "4000000000009995"})
-	two := h.submitTo(replica.URL, payment, cookie, submission{form: form, number: "4000000000009995"})
+	one := h.submit(payment, cookie, submission{form: form, number: "4112000000000007"})
+	two := h.submitTo(replica.URL, payment, cookie, submission{form: form, number: "4112000000000007"})
 	for _, res := range []response{one, two} {
 		if res.StatusCode != http.StatusOK || !strings.Contains(res.body, "insufficient funds") {
 			t.Fatalf("response = %d: %s", res.StatusCode, res.body)
@@ -428,7 +428,7 @@ func TestExpiredSessionShowsExpiryPage(t *testing.T) {
 	if res := h.page(payment, cookie); res.StatusCode != http.StatusGone || !strings.Contains(res.body, "expired") {
 		t.Fatalf("page = %d: %s", res.StatusCode, res.body)
 	}
-	if res := h.submit(payment, cookie, submission{form: form, number: "4242424242424242"}); res.StatusCode != http.StatusGone {
+	if res := h.submit(payment, cookie, submission{form: form, number: "4111000000000008"}); res.StatusCode != http.StatusGone {
 		t.Fatalf("submit = %d: %s", res.StatusCode, res.body)
 	}
 	h.world.mu.Lock()
@@ -457,7 +457,7 @@ func TestPendingOutcomeShowsStatusPageUntilResolved(t *testing.T) {
 	form := parseForm(t, h.page(payment, cookie).body)
 	h.world.forcePending = true
 
-	res := h.submit(payment, cookie, submission{form: form, number: "4242424242424242"})
+	res := h.submit(payment, cookie, submission{form: form, number: "4111000000000008"})
 	if res.StatusCode != http.StatusOK || !strings.Contains(res.body, "/checkout/"+payment.SessionID+"/status") {
 		t.Fatalf("pending page = %d: %s", res.StatusCode, res.body)
 	}
@@ -496,7 +496,7 @@ func TestHostedPageReportsDependencyOutageWithoutDetails(t *testing.T) {
 	cookie := h.cookie(payment)
 	form := parseForm(t, h.page(payment, cookie).body)
 	h.world.fail("TokenizeCard", grpcUnavailable())
-	res := h.submit(payment, cookie, submission{form: form, number: "4242424242424242"})
+	res := h.submit(payment, cookie, submission{form: form, number: "4111000000000008"})
 	if res.StatusCode != http.StatusServiceUnavailable || strings.Contains(res.body, "vault") {
 		t.Fatalf("status = %d: %s", res.StatusCode, res.body)
 	}

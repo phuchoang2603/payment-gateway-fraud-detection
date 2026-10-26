@@ -202,7 +202,7 @@ func TestInvalidSnapshotsAreRejectedBeforePayments(t *testing.T) {
 func TestMutatingRoutesRequireAnIdempotencyKey(t *testing.T) {
 	h := newHarness(t)
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
-	token, _ := h.tokenize(syntheticKey, "4242424242424242")
+	token, _ := h.tokenize(syntheticKey, "4111000000000008")
 	h.world.mu.Lock()
 	baseline := len(h.world.createCalls)
 	h.world.mu.Unlock()
@@ -211,7 +211,7 @@ func TestMutatingRoutesRequireAnIdempotencyKey(t *testing.T) {
 	}{
 		{"create payment", "/v1/payments", syntheticKey, orderBody("order-2")},
 		{"attempt", "/v1/checkout/sessions/" + payment.SessionID + "/attempts", payment.CheckoutToken, fmt.Sprintf(`{"payment_method_token": %q}`, token)},
-		{"payment method", "/v1/payment-methods", syntheticKey, `{"card_number": "4242424242424242"}`},
+		{"payment method", "/v1/payment-methods", syntheticKey, `{"card_number": "4111000000000008"}`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -255,7 +255,7 @@ func TestUnknownAPIKeyIsRejected(t *testing.T) {
 }
 
 func TestRawCardFieldsAreRejectedOnEveryJSONRoute(t *testing.T) {
-	const number = "4242424242424242"
+	const number = "4111000000000008"
 	h := newHarness(t)
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
 	attemptPath := "/v1/checkout/sessions/" + payment.SessionID + "/attempts"
@@ -345,7 +345,7 @@ func TestGetPaymentReturnsOwnPayment(t *testing.T) {
 
 func TestPaymentMethodRouteIsSyntheticOnly(t *testing.T) {
 	h := newHarness(t)
-	res := h.do("POST", "/v1/payment-methods", apiHeaders(realKey, "k"), `{"card_number": "4242424242424242"}`)
+	res := h.do("POST", "/v1/payment-methods", apiHeaders(realKey, "k"), `{"card_number": "4111000000000008"}`)
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("status = %d: %s", res.StatusCode, res.body)
 	}
@@ -405,7 +405,7 @@ func TestNumberOutsideAllowListIsRejectedAndNeverLogged(t *testing.T) {
 func TestUnavailableVaultDoesNotLeakIntoRejectedCardStatus(t *testing.T) {
 	h := newHarness(t)
 	h.world.fail("TokenizeCard", status.Error(codes.Unavailable, "vault down"))
-	res := h.do("POST", "/v1/payment-methods", apiHeaders(syntheticKey, "k"), `{"card_number": "4242424242424242"}`)
+	res := h.do("POST", "/v1/payment-methods", apiHeaders(syntheticKey, "k"), `{"card_number": "4111000000000008"}`)
 	if res.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d", res.StatusCode)
 	}
@@ -420,7 +420,7 @@ func TestSyntheticAttemptCarriesVaultFingerprintAndSimulatedContext(t *testing.T
 	network := vectors.Fingerprint(t, "ip_network")
 	h := newHarness(t)
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
-	token, fingerprint := h.tokenize(syntheticKey, "4242424242424242")
+	token, fingerprint := h.tokenize(syntheticKey, "4111000000000008")
 
 	body := fmt.Sprintf(`{"payment_method_token": %q, "device_fingerprint": "device-abc", "user_agent_family": "chrome",
 		"simulated_client": {"ip_country": "VN", "ip_network": %q}}`, token, network.Input)
@@ -500,11 +500,11 @@ func TestAttemptResultsMapToApiStatuses(t *testing.T) {
 		card, status, reason string
 		pending              bool
 	}{
-		{card: "4242424242424242", status: "SUCCEEDED"},
-		{card: "4000000000009995", status: "DECLINED", reason: "INSUFFICIENT_FUNDS"},
-		{card: "4000000000000002", status: "DECLINED", reason: "ISSUER_DECLINED"},
-		{card: "4000000000000069", status: "DECLINED", reason: "INVALID_CARD"},
-		{card: "4242424242424242", status: "PENDING", pending: true},
+		{card: "4111000000000008", status: "SUCCEEDED"},
+		{card: "4112000000000007", status: "DECLINED", reason: "INSUFFICIENT_FUNDS"},
+		{card: "4113000000000006", status: "DECLINED", reason: "ISSUER_DECLINED"},
+		{card: "4114000000000005", status: "DECLINED", reason: "INVALID_CARD"},
+		{card: "4111000000000008", status: "PENDING", pending: true},
 	}
 	for _, test := range tests {
 		t.Run(test.status+test.reason, func(t *testing.T) {
@@ -530,7 +530,7 @@ func TestAttemptResultsMapToApiStatuses(t *testing.T) {
 func TestAttemptRejectsBadCheckoutCredentials(t *testing.T) {
 	h := newHarness(t)
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
-	token, _ := h.tokenize(syntheticKey, "4242424242424242")
+	token, _ := h.tokenize(syntheticKey, "4111000000000008")
 	body := fmt.Sprintf(`{"payment_method_token": %q}`, token)
 
 	if res := h.do("POST", attemptPath(payment), map[string]string{"Idempotency-Key": "a"}, body); res.StatusCode != http.StatusUnauthorized {
@@ -576,7 +576,7 @@ func TestUnknownInactiveOrForeignTokensAreRejectedBeforeStartingAnAttempt(t *tes
 func TestSimulatedClientValidation(t *testing.T) {
 	h := newHarness(t)
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
-	token, _ := h.tokenize(syntheticKey, "4242424242424242")
+	token, _ := h.tokenize(syntheticKey, "4111000000000008")
 	for name, client := range map[string]string{
 		"bad country": `{"ip_country": "Vietnam"}`,
 		"bad network": `{"ip_network": "not-an-ip"}`,

@@ -125,7 +125,7 @@ def test_size_gate_keeps_prepared_data(tmp_path):
 
 
 def test_task_capacity_failure_preserves_receipts_and_no_manifest(tmp_path):
-    config = configuration(**{"execution.task_scratch_bytes": 50000})
+    config = configuration(**{"execution.task_scratch_bytes": 1})
     with pytest.raises(CapacityExceeded, match="scratch"):
         storage.generate(config, fs.LocalFileSystem(), str(tmp_path))
     root = tmp_path / "historical/smoke"

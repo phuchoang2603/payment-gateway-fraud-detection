@@ -1,0 +1,138 @@
+{{- range $name, $settings := dict "live-simulator" .Values.simulator "stream-archiver" .Values.archiver }}
+{{- if $settings.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+{{- if eq $name "live-simulator" }}
+        istio.io/dataplane-mode: ambient
+{{- end }}
+      annotations:
+        checksum/config: {{ toJson $.Values | sha256sum }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $name }}
+          image: {{ printf "%s/%s:%s" $.Values.imageRepository "live-simulator" $.Values.imageTag | quote }}
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            {{- toYaml $settings.resources | nindent 12 }}
+          envFrom:
+            - secretRef:
+                name: live-source
+          env:
+            - name: S3_ENDPOINT
+              value: {{ $.Values.s3Endpoint | quote }}
+            - name: AWS_REGION
+              value: us-east-1
+            - name: KAFKA_BROKERS
+              value: {{ $.Values.kafkaBrokers | quote }}
+{{- if eq $name "live-simulator" }}
+            - name: GATEWAY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: live-gateway
+                  key: api-key
+          args: [live, --config, /etc/simulator/live.yaml]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/simulator
+              readOnly: true
+            - name: scratch
+              mountPath: /tmp
+{{- else }}
+            - name: LANDING_TOPICS
+              value: {{ $settings.topics | quote }}
+            - name: LANDING_GROUP
+              value: {{ $settings.group | quote }}
+            - name: LANDING_SOURCE_EPOCH
+              value: {{ $settings.sourceEpoch | quote }}
+            - name: LANDING_BUCKET
+              value: {{ $settings.bucket | quote }}
+            - name: LANDING_MAX_RECORDS
+              value: {{ $settings.maxRecords | int | quote }}
+            - name: LANDING_MAX_BYTES
+              value: {{ $settings.maxBytes | int | quote }}
+            - name: LANDING_FLUSH_INTERVAL
+              value: {{ $settings.flushInterval | quote }}
+          args: [archive]
+{{- end }}
+{{- if eq $name "live-simulator" }}
+      volumes:
+        - name: config
+          configMap:
+            name: live-simulator
+        - name: scratch
+          emptyDir:
+            sizeLimit: 64Mi
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              strimzi.io/cluster: payment-gateway-kafka
+      ports:
+        - {protocol: TCP, port: 9092}
+    - ports:
+        - {protocol: TCP, port: 443}
+{{- if eq $name "live-simulator" }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: edge
+      ports:
+        - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 15008}
+{{- end }}
+{{- end }}
+{{- end }}

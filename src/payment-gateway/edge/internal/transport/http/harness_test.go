@@ -114,10 +114,10 @@ func newWorld(t *testing.T) *world {
 		tokens:       map[string]*vaultToken{},
 	}
 	named := map[string][2]string{
-		"4242424242424242": {"card-0001", "ok"},
-		"4000000000009995": {"card-0002", "nsf"},
-		"4000000000000002": {"card-0003", "issuer"},
-		"4000000000000069": {"card-0004", "invalid"},
+		"4111000000000008": {"card-000000", "ok"},
+		"4112000000000007": {"card-000000", "nsf"},
+		"4113000000000006": {"card-000000", "issuer"},
+		"4114000000000005": {"card-000000", "invalid"},
 	}
 	for number, ref := range named {
 		mac := hmac.New(sha256.New, []byte(vectors.SyntheticKey))

@@ -18,6 +18,8 @@ Only Edge calls vault tokenization: the hosted form accepts an allow-listed test
 
 At attempt submission, Edge authenticates checkout access and calls the vault's restricted metadata API with the resolved integration identity. The response contains only method type and a stable fingerprint, derived from the fixture's card identity with the shared synthetic fingerprint key. It excludes token behavior and fixture contents. Thus token rotation does not change the card fingerprint or break historical/live identity parity. Unknown, inactive or foreign tokens are rejected before starting an attempt.
 
+Synthetic PANs use prefixes `4111` (ok), `4112` (nsf), `4113` (issuer), or `4114` (invalid), an eleven-digit zero-based index below 3,900,000, and a Luhn check digit. Each behavior variant resolves to `card-{index:06d}` and the same historical fingerprint; old named fixtures are rejected.
+
 Only the authenticated processor-simulator identity may resolve a token to its fictional processing fixture. Payments stores an encrypted opaque token in a private operation-request record, committed with the effect intent, so crash recovery can submit an operation that was never received. Clear that encrypted token when the terminal outcome commits. Payments records only the safe method fingerprint in its existing event contract and never reads the vault database. Token values and fixture payloads must not enter event history, Fraud inputs, Redis or analytics. Known operation-status recovery needs no new token resolution. The isolation models a PCI DSS-oriented boundary; it does not establish compliance.
 
 ## Payment authority and recovery

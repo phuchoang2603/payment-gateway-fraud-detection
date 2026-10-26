@@ -9,18 +9,20 @@ spec:
   project: payment-gateway-fraud-detection
   source:
     repoURL: https://github.com/phuchoang2603/payment-gateway-fraud-detection.git
-    targetRevision: &revision main
+    targetRevision: main
     path: infra/argocd/app-of-apps
     helm:
       releaseName: payment-gateway-prod
       valuesObject:
         global:
-          targetRevision: *revision
+          targetRevision: main
         namePrefix: payment-gateway-prod
         destinationServer: https://kubernetes.default.svc
         applications:
           payment-gateway:
             enabled: true
+            chartTargetRevision: main
+            valuesTargetRevision: main
             destinationNamespace: payment-gateway
             path: infra/charts/payment-gateway
             valuesFile:
@@ -33,10 +35,22 @@ spec:
                 maxDuration: 3m
           kafka:
             enabled: true
+            chartTargetRevision: main
+            valuesTargetRevision: main
             destinationNamespace: payment-gateway
             path: infra/charts/kafka
             valuesFile:
               - infra/charts/kafka/values-prod.yaml
+            syncRetry: *retry
+          live-traffic:
+            enabled: true
+            allowEmpty: true
+            chartTargetRevision: main
+            valuesTargetRevision: main
+            destinationNamespace: payment-gateway
+            path: infra/charts/live-traffic
+            valuesFile:
+              - infra/charts/live-traffic/values-prod.yaml
             syncRetry: *retry
           secret-store:
             enabled: true

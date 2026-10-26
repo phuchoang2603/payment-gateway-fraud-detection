@@ -66,6 +66,12 @@ entities:
       - name: payments.events.v1
         partitions: 3
         retention: 604800000
+      - name: payments.events.v1.faulty
+        partitions: 3
+        retention: 604800000
+      - name: fraud.labels.v1
+        partitions: 3
+        retention: 604800000
     connector:
       name: payments-events
       sourceSecretName: payments-cdc

@@ -7,7 +7,6 @@ from urllib.parse import urlsplit
 import pyarrow.fs as fs
 
 from simulator.config import load_config
-from simulator.storage import generate
 
 S3_ENDPOINT = "minio.home.phuchoang.sbs"
 
@@ -55,8 +54,32 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Publish a dataset smaller than one customer block, for contract probes only",
     )
+    live = commands.add_parser("live", help="Drive current-time gateway traffic and optional delivery faults")
+    live.add_argument("--config", type=Path, required=True)
+    commands.add_parser("archive", help="Land committed Kafka protobuf as immutable historical-compatible Parquet")
     args = parser.parse_args(argv)
+    if args.command == "archive":
+        from simulator.landing.runtime import main as archive
+
+        try:
+            archive()
+        except Exception as error:
+            parser.exit(2, f"stream archiver failed: {type(error).__name__}\n")
+        return 0
+    if args.command == "live":
+        import asyncio
+
+        from simulator.live.config import load_live_config
+        from simulator.live.runtime import run_live
+
+        try:
+            asyncio.run(run_live(load_live_config(args.config)))
+        except Exception as error:
+            parser.exit(2, f"live simulation failed: {type(error).__name__}\n")
+        return 0
     try:
+        from simulator.storage import generate
+
         config = load_config(args.config)
         filesystem, root = destination(args.output or config.output)
         manifest = generate(

@@ -9,6 +9,8 @@ from uuid import UUID
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from simulator.calibration import provenance
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -29,7 +31,6 @@ class PurchaseBehavior(StrictModel):
     category_zipf_exponent: float = Field(gt=0)
     familiar_merchant_probability: float = Field(ge=0, le=1)
     familiar_context_probability: float = Field(ge=0, le=1)
-    foreign_ip_probability: float = Field(ge=0, le=1)
     issuer_decline_rate: float = Field(ge=0, le=1)
     insufficient_funds_rate: float = Field(ge=0, le=1)
     unknown_outcome_rate: float = Field(ge=0, le=1)
@@ -77,10 +78,12 @@ class Scenarios(StrictModel):
 
 class DataProblems(StrictModel):
     duplicate_rate: float = Field(ge=0, lt=1)
-    schema_cutover_date: date
+    schema_cutover_date: date | None = None
+    experiment: bool = False
 
 
 class LabelDelays(StrictModel):
+    reporting_probability: float = Field(default=0.85, ge=0, le=1)
     min_days: int = Field(ge=0)
     max_days: int = Field(ge=0)
 
@@ -95,7 +98,7 @@ class StorageLayout(StrictModel):
     row_group_rows: int = Field(default=131072, gt=0)
 
 
-ALGORITHM_VERSION = "historical-blocks-v2"
+ALGORITHM_VERSION = "us-electronics-v1"
 RUN_STATE_VERSION = 2
 
 
@@ -118,17 +121,6 @@ class Execution(StrictModel):
         return self
 
 
-class AcceptanceBand(StrictModel):
-    minimum: float = Field(ge=0)
-    maximum: float = Field(ge=0)
-
-    @model_validator(mode="after")
-    def validate_range(self) -> Self:
-        if self.minimum > self.maximum:
-            raise ValueError("acceptance minimum must not exceed maximum")
-        return self
-
-
 class HistoricalConfig(StrictModel):
     dataset_version: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
     seed: int = Field(ge=0)
@@ -141,9 +133,8 @@ class HistoricalConfig(StrictModel):
     customer_block_size: int = Field(default=1000, gt=0)
     card_testing_bursts_per_task: int = Field(default=16, gt=0)
     minimum_source_parquet_bytes: int = Field(default=0, ge=0)
-    accepted_version: bool = False
     execution: Execution = Field(default_factory=Execution)
-    acceptance_bands: dict[str, AcceptanceBand] = Field(default_factory=dict)
+    calibration_sha256: str = Field(default_factory=lambda: provenance()["sha256"])
     counts: EntityCounts
     behavior: PurchaseBehavior
     scenarios: Scenarios
@@ -151,6 +142,11 @@ class HistoricalConfig(StrictModel):
     label_delays: LabelDelays
     storage: StorageLayout = Field(default_factory=StorageLayout)
     output: str = Field(min_length=1)
+
+    @classmethod
+    def from_manifest(cls, manifest):
+        configuration = manifest["configuration"]
+        return cls.model_validate({name: value for name, value in configuration.items() if name in cls.model_fields})
 
     @property
     def logical_configuration(self) -> dict:
@@ -160,8 +156,6 @@ class HistoricalConfig(StrictModel):
                 "execution",
                 "output",
                 "chunk_purchases",
-                "accepted_version",
-                "acceptance_bands",
             },
         )
         return values
@@ -184,31 +178,17 @@ class HistoricalConfig(StrictModel):
         return self.start_date + timedelta(days=self.duration_days)
 
     def schema_version_on(self, day: date) -> int:
-        return 1 if day < self.data_problems.schema_cutover_date else 2
+        return 1 if self.data_problems.schema_cutover_date and day < self.data_problems.schema_cutover_date else 2
 
     @model_validator(mode="after")
     def validate_dates(self) -> Self:
-        if not self.start_date < self.data_problems.schema_cutover_date < self.end_date:
+        if self.calibration_sha256 != provenance()["sha256"]:
+            raise ValueError("calibration identity differs from installed inputs")
+        cutover = self.data_problems.schema_cutover_date
+        if cutover and not self.start_date < cutover < self.end_date:
             raise ValueError("data_problems.schema_cutover_date must fall strictly inside the dataset")
-        allowed = {"duplicate_rate", "merchant_max_share", "merchant_top_10_share"}
-        allowed.update(
-            f"cardinality.{name}.distinct_to_row_ratio"
-            for name in ("customer", "device", "ip_network", "address", "payment_method")
-        )
-        allowed.update(
-            f"scenario_attempt_shares.{name}"
-            for name in (
-                "legitimate",
-                "friendly_fraud",
-                "obvious_high_value",
-                "stolen_card_new_device",
-                "account_takeover",
-                "card_testing",
-            )
-        )
-        allowed.update(("schema_version_shares.1", "schema_version_shares.2"))
-        if set(self.acceptance_bands) - allowed:
-            raise ValueError("unknown observed acceptance metric")
+        if (cutover or self.data_problems.duplicate_rate) and not self.data_problems.experiment:
+            raise ValueError("schema cutover and duplicate exports require data_problems.experiment")
         parsed = urlsplit(self.output)
         if parsed.scheme and parsed.scheme != "s3":
             raise ValueError("output must be a local directory or s3:// bucket")

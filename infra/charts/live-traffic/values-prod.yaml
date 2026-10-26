@@ -1,0 +1,5 @@
+imageTag: pr-89-8c30ea5dbba18acd742df40d6036c3d4bd27b2f3
+simulator:
+  enabled: false
+archiver:
+  enabled: true

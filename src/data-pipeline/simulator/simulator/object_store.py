@@ -192,23 +192,6 @@ class ObjectStore:
             raise CleanupFailed(f"S3 delete failed for {len(failed)} objects ({codes})", removed)
         return removed
 
-    def tag(self, key, tags):
-        if not self.remote:
-            return
-        try:
-            current = self.client.get_object_tagging(Bucket=self.bucket, Key=self._key(key))
-            existing = {item["Key"]: item["Value"] for item in current["TagSet"]}
-            if all(existing.get(name) == value for name, value in tags.items()):
-                return
-            tags = {**existing, **tags}
-            self.client.put_object_tagging(
-                Bucket=self.bucket,
-                Key=self._key(key),
-                Tagging={"TagSet": [{"Key": name, "Value": value} for name, value in sorted(tags.items())]},
-            )
-        except ClientError as error:
-            raise OSError(f"S3 tagging failed ({error.response['Error']['Code']})") from None
-
     def put(self, key, stream, size, *, expected=None, absent=False):
         if self.remote:
             conditions = {"IfNoneMatch": "*"} if absent else ({"IfMatch": expected} if expected else {})

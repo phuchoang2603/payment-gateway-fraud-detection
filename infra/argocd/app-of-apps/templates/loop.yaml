@@ -43,6 +43,9 @@ spec:
     automated:
       prune: true
       selfHeal: true
+      {{- if $appConfig.allowEmpty }}
+      allowEmpty: true
+      {{- end }}
     {{- with $appConfig.syncRetry }}
     retry:
       {{- toYaml . | nindent 6 }}

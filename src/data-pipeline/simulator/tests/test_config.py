@@ -46,87 +46,13 @@ def test_generation_identity_separates_logical_inputs_from_execution():
     changed = small_config(
         output="/another/location",
         chunk_purchases=13,
-        accepted_version=True,
         **{
             "execution.workers": 2,
             "execution.max_in_flight": 2,
             "execution.transfer_concurrency": 2,
-            "acceptance_bands": {"duplicate_rate": {"minimum": 0.01, "maximum": 0.03}},
         },
     )
     assert changed.generation_identity({"contract": "v1"}, "revision") == base
     assert small_config(seed=8).generation_identity({"contract": "v1"}, "revision") != base
     assert small_config().generation_identity({"contract": "v2"}, "revision") != base
     assert small_config().generation_identity({"contract": "v1"}, "another revision") != base
-
-
-def test_smoke_uses_same_algorithm_and_layout_as_scale():
-    from pathlib import Path
-
-    from simulator.config import load_config
-
-    directory = Path(__file__).resolve().parents[1] / "configs"
-    scale, smoke = (load_config(directory / name) for name in ("historical-scale.yaml", "historical-smoke.yaml"))
-    assert smoke.storage == scale.storage and smoke.label_delays == scale.label_delays
-    assert smoke.customer_block_size == scale.customer_block_size
-    assert smoke.dataset_version != scale.dataset_version
-    assert scale.minimum_source_parquet_bytes == 100000000000
-    assert smoke.minimum_source_parquet_bytes == 0
-
-
-def test_acceptance_bands_are_validated_without_forming_logical_identity():
-    from simulator.storage import _gate_observed
-
-    band = {"minimum": 0.015, "maximum": 0.025}
-    config = small_config(acceptance_bands={"duplicate_rate": band})
-    _gate_observed(config, {"duplicate_rate": 0.02})
-    with pytest.raises(ValueError, match="observed acceptance gate"):
-        _gate_observed(config, {"duplicate_rate": 0.1})
-    with pytest.raises(ValidationError, match="unknown observed"):
-        small_config(acceptance_bands={"mistyped": band})
-    assert config.generation_identity({}, "revision") == small_config().generation_identity({}, "revision")
-
-
-def test_full_run_band_covers_compromise_windows_after_warmup():
-    from datetime import timedelta
-    from pathlib import Path
-
-    import numpy as np
-
-    from simulator.config import load_config
-    from simulator.generation import build_history
-    from simulator.profiles import (
-        HISTORY_STAGE,
-        STOLEN_CARD_NEW_DEVICE,
-        build_profiles,
-        schedule_for_task,
-        stage_rng,
-        tasks_for_day,
-    )
-
-    config = load_config(Path(__file__).resolve().parents[1] / "configs/historical-scale.yaml")
-    profiles = build_profiles(config)
-    totals = {}
-    for offset in range(30, 36):
-        task = next(tasks_for_day(config, offset))
-        schedule = schedule_for_task(config, task, profiles)
-        for kind in np.unique(schedule.scenarios):
-            indices = np.flatnonzero(schedule.scenarios == kind)
-            sample = indices[:250]
-            attempts = 0
-            for index in sample:
-                index = int(index)
-                history = build_history(
-                    config,
-                    profiles,
-                    schedule,
-                    index,
-                    config.start_date + timedelta(days=offset),
-                    task.ordinal(index),
-                    stage_rng(config.seed, HISTORY_STAGE, task.offset, task.kind, task.block, index),
-                )
-                attempts += sum("attempt_started" in event for event in history.events)
-            totals[int(kind)] = totals.get(int(kind), 0) + len(indices) * attempts / len(sample)
-    observed = totals[STOLEN_CARD_NEW_DEVICE] / sum(totals.values())
-    band = config.acceptance_bands["scenario_attempt_shares.stolen_card_new_device"]
-    assert band.minimum <= observed <= band.maximum

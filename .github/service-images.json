@@ -47,6 +47,12 @@
       "image-suffix": "/connect-debezium",
       "context": ".",
       "dockerfile": "infra/docker/connect-debezium.Dockerfile"
+    },
+    {
+      "service": "live-simulator",
+      "image-suffix": "/live-simulator",
+      "context": ".",
+      "dockerfile": "infra/docker/live-simulator.Dockerfile"
     }
   ]
 }

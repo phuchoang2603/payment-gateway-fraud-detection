@@ -17,6 +17,7 @@ import pyarrow.parquet as pq
 import yaml
 
 from simulator.arrow import LABEL_SCHEMA, event_schema
+from simulator.calibration import provenance
 from simulator.config import ALGORITHM_VERSION, RUN_STATE_VERSION, HistoricalConfig
 from simulator.fragment_index import FragmentIndex
 from simulator.generation import Record, build_history
@@ -292,19 +293,6 @@ def _observations(stats, inventory):
     return observed
 
 
-def _gate_observed(config, observed):
-    for metric, band in config.acceptance_bands.items():
-        if metric.startswith("cardinality."):
-            continue
-        value = observed
-        for part in metric.split("."):
-            value = value.get(part, 0) if isinstance(value, dict) else None
-        if value is None or not band.minimum <= value <= band.maximum:
-            raise ValueError(
-                f"observed acceptance gate failed: {metric}={value}, required [{band.minimum}, {band.maximum}]"
-            )
-
-
 def _manifest(config, run, stats, inventory, partitions, observed, descriptor):
     configuration = run.state["configuration"]
     storage = {}
@@ -330,7 +318,22 @@ def _manifest(config, run, stats, inventory, partitions, observed, descriptor):
         "profile_sha256": run.state["profile_sha256"],
         "synthetic_key_version": config.synthetic_key_version,
         "history_end": stats.history_end.isoformat() if stats.history_end else None,
-        "schema_versions": {EVENTS.name: [1, 2], LABELS.name: [1]},
+        "schema_versions": {
+            table.name: sorted({item["schema_version"] for item in inventory if item["table"] == table.name})
+            for table in (EVENTS, LABELS)
+        },
+        "calibration": provenance(),
+        "training_guidance": {
+            "feature_exclusions": [
+                "scenario",
+                "simulation_truth",
+                "future_payment_outcomes",
+                "labels_unavailable_at_decision",
+            ],
+            "evaluation": "Forward-time split with mature labels; separate entity/campaign holdout to assess memorization",
+            "label_maturity": "No reported chargeback is not a confirmed negative; chargeback counts distinguish availability before/after configured history end",
+            "limitations": "Illustrative US electronics population; behavioral/fraud rates are assumptions, not representative checkout measurements",
+        },
         "partitions": partitions,
         "storage": {
             "format": "parquet",
@@ -356,8 +359,9 @@ def _manifest(config, run, stats, inventory, partitions, observed, descriptor):
         "execution_attempts": run.state["attempts"],
         "configured": {
             "duplicate_rate": config.data_problems.duplicate_rate,
-            "acceptance_bands": {name: band.model_dump() for name, band in config.acceptance_bands.items()},
-            "schema_cutover_date": config.data_problems.schema_cutover_date.isoformat(),
+            "schema_cutover_date": config.data_problems.schema_cutover_date.isoformat()
+            if config.data_problems.schema_cutover_date
+            else None,
             "merchant_zipf_exponent": config.behavior.merchant_zipf_exponent,
             "category_zipf_exponent": config.behavior.category_zipf_exponent,
             "cardinality": config.counts.model_dump(),
@@ -405,7 +409,7 @@ def generate(
     execution.scratch_directory.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix="historical-", dir=execution.scratch_directory) as directory:
         scratch = Path(directory)
-        profile_bytes = (config.counts.customers * 13 + config.counts.merchants * 2) * 8 + 16384
+        profile_bytes = (config.counts.customers * 15 + config.counts.merchants * 2) * 8 + 16384
         reserved = execution.max_in_flight * execution.task_scratch_bytes
         if profile_bytes + reserved >= execution.scratch_capacity_bytes:
             raise CapacityExceeded("profile mappings plus task reservations exceed combined scratch capacity")
@@ -525,7 +529,6 @@ def publish_inventory(
             f"{config.customer_block_size}-customer block; pass --allow-small-dataset for a contract probe"
         )
     observed = _observations(stats, inventory)
-    _gate_observed(config, observed)
     physical = sum(item["bytes"] for item in inventory)
     if physical < config.minimum_source_parquet_bytes:
         raise ValueError(

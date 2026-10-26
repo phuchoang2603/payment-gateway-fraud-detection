@@ -1,23 +1,22 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import timedelta
 from hashlib import sha256
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
 
+from simulator.calibration import CALIBRATION, REGIONS, hourly_weights, purchase_seconds
 from simulator.config import ALGORITHM_VERSION, HistoricalConfig
 from simulator.identity import entity_id, fingerprint
 
 CATEGORIES = ("phone", "laptop", "accessory", "tablet", "headphones", "smartwatch", "game_console", "camera")
-CATEGORY_PRICES = np.array([35000, 65000, 3000, 30000, 12000, 18000, 28000, 45000])
+CATEGORY_PRICES = np.array(CALIBRATION["category_prices_minor"])
 CONDITIONS = ("excellent", "good", "fair")
-CONDITION_WEIGHTS = np.array([0.4, 0.4, 0.2])
-CONDITION_PRICE_FACTORS = np.array([1.0, 0.88, 0.75])
+CONDITION_WEIGHTS = np.array(CALIBRATION["condition_weights"])
+CONDITION_PRICE_FACTORS = np.array(CALIBRATION["condition_price_factors"])
 ACCESSORY = CATEGORIES.index("accessory")
-COUNTRIES = ("US", "CA", "GB")
-COUNTRY_WEIGHTS = np.array([0.8, 0.12, 0.08])
-REGIONS = {"US": ("NY", "10001"), "CA": ("ON", "M5V 2T6"), "GB": ("LDN", "EC1A 1BB")}
 
 LEGITIMATE = 0
 OBVIOUS_HIGH_VALUE = 1
@@ -43,6 +42,16 @@ def zipf_weights(count: int, exponent: float) -> np.ndarray:
     return weights / weights.sum()
 
 
+def address_parts(index: int):
+    region, postal, city, _, _ = REGIONS[index % len(REGIONS)]
+    return f"{index + 1} Market Street", city, region, postal
+
+
+def address_value(index: int) -> str:
+    line, city, region, postal = address_parts(index)
+    return f"{line} {city} {region} {postal} US"
+
+
 class IdentityPool(Sequence):
     def __init__(self, count: int, derive: Callable[[int], str]):
         self.count = count
@@ -66,7 +75,9 @@ class Profiles:
     customer_ids: IdentityPool
     customer_external_ids: IdentityPool
     customer_age_days: np.ndarray
-    customer_countries: np.ndarray
+    customer_regions: np.ndarray
+    activity_milli: np.ndarray
+    spend_milli: np.ndarray
     familiar_merchants: np.ndarray
     familiar_devices: np.ndarray
     home_networks: np.ndarray
@@ -144,11 +155,46 @@ def build_profiles(config: HistoricalConfig, directory: Path | None = None, *, r
     array("merchant_categories", (counts.merchants,), lambda n: random.choice(len(CATEGORIES), n, p=category_weights))
     array("merchant_age_days", (counts.merchants,), lambda n: random.integers(30, 1500, n))
     array("customer_age_days", (counts.customers,), lambda n: random.integers(1, 2500, n))
-    array("customer_countries", (counts.customers,), lambda n: random.choice(len(COUNTRIES), n, p=COUNTRY_WEIGHTS))
+    array("customer_regions", (counts.customers,), lambda n: random.choice(len(REGIONS), n, p=[r[4] for r in REGIONS]))
+    sigma = CALIBRATION["activity_log_sigma"]
+    array(
+        "activity_milli",
+        (counts.customers,),
+        lambda n: np.maximum(1, random.lognormal(-(sigma**2) / 2, sigma, n) * 1000),
+    )
+    array(
+        "spend_milli",
+        (counts.customers,),
+        lambda n: np.maximum(1, random.lognormal(0, CALIBRATION["spend_log_sigma"], n) * 1000),
+    )
     array("familiar_merchants", (counts.customers, familiar_count), familiar)
-    array("familiar_devices", (counts.customers, 2), lambda n: random.integers(0, counts.devices, (n, 2)))
+    device_cursor = 0
+
+    def devices(n):
+        nonlocal device_cursor
+        customers = np.arange(device_cursor, device_cursor + n)
+        device_cursor += n
+        shared = customers // 2
+        return np.column_stack((customers % counts.devices, (shared + counts.customers) % counts.devices))
+
+    array("familiar_devices", (counts.customers, 2), devices)
     array("home_networks", (counts.customers,), lambda n: random.integers(0, counts.ip_networks, n))
-    array("addresses", (counts.customers,), lambda n: random.integers(0, counts.addresses, n))
+    address_cursor = 0
+
+    def addresses(n):
+        nonlocal address_cursor
+        regions = arrays["customer_regions"][address_cursor : address_cursor + n]
+        address_cursor += n
+        return np.array(
+            [
+                int(r) + len(REGIONS) * int(random.integers(0, (counts.addresses - 1 - int(r)) // len(REGIONS) + 1))
+                if int(r) < counts.addresses
+                else int(r) % counts.addresses
+                for r in regions
+            ]
+        )
+
+    array("addresses", (counts.customers,), addresses)
     array("payment_methods", (counts.customers, 2), lambda n: random.integers(0, counts.payment_methods, (n, 2)))
     merchant_external = IdentityPool(counts.merchants, lambda i: f"seller-{i + 1:06d}")
     customer_external = IdentityPool(counts.customers, lambda i: f"buyer-{i + 1:06d}")
@@ -167,9 +213,7 @@ def build_profiles(config: HistoricalConfig, directory: Path | None = None, *, r
         network_pool=IdentityPool(
             counts.ip_networks, lambda i: fingerprint(key, "ip_network", f"10.{i // 256}.{i % 256}.1")
         ),
-        address_pool=IdentityPool(
-            counts.addresses, lambda i: fingerprint(key, "address", f"{i} Market Street, Example City")
-        ),
+        address_pool=IdentityPool(counts.addresses, lambda i: fingerprint(key, "address", address_value(i))),
         method_pool=IdentityPool(
             counts.payment_methods, lambda i: fingerprint(key, "payment_method", f"tok_card-{i:06d}_ok")
         ),
@@ -245,9 +289,18 @@ def schedule_for_task(config: HistoricalConfig, task: GenerationTask, profiles: 
     if task.kind == 0:
         start = task.block * config.customer_block_size
         stop = min(start + config.customer_block_size, config.counts.customers)
-        customers = np.repeat(
-            np.arange(start, stop), random.poisson(behavior.purchases_per_customer_day, stop - start)
-        )
+        day = config.start_date + timedelta(days=task.offset)
+        regions = profiles.customer_regions[start:stop]
+        intensities = np.array([hourly_weights(day, int(r))[1] for r in range(len(REGIONS))])
+        rates = behavior.purchases_per_customer_day * profiles.activity_milli[start:stop] / 1000 * intensities[regions]
+        customers = np.repeat(np.arange(start, stop), random.poisson(rates))
+        centers = purchase_seconds(day, regions, random)
+        seconds = (
+            centers[customers - start]
+            + random.integers(
+                -CALIBRATION["session_jitter_seconds"], CALIBRATION["session_jitter_seconds"] + 1, len(customers)
+            )
+        ) % 86400
         familiar = profiles.familiar_merchants[
             customers, random.integers(0, profiles.familiar_merchants.shape[1], len(customers))
         ]
@@ -260,7 +313,7 @@ def schedule_for_task(config: HistoricalConfig, task: GenerationTask, profiles: 
             (
                 customers,
                 merchants,
-                random.integers(0, 86400, len(customers)),
+                seconds,
                 np.where(
                     random.random(len(customers)) < scenarios.obvious_high_value.rate, OBVIOUS_HIGH_VALUE, LEGITIMATE
                 ),
@@ -278,7 +331,7 @@ def schedule_for_task(config: HistoricalConfig, task: GenerationTask, profiles: 
                 (
                     victims,
                     profiles.familiar_merchants[victims, 0],
-                    random.integers(0, 86400, len(victims)),
+                    purchase_seconds(day, profiles.customer_regions[victims], random),
                     np.full(len(victims), scenario),
                     np.repeat(active[:, 1], attempts),
                 )
@@ -305,7 +358,7 @@ def schedule_for_task(config: HistoricalConfig, task: GenerationTask, profiles: 
 def profiles_from_manifest(manifest: dict, directory: Path | None = None) -> Profiles:
     if manifest.get("algorithm_version") != ALGORITHM_VERSION:
         raise ValueError("unsupported historical generation algorithm for continuation")
-    profiles = build_profiles(HistoricalConfig.model_validate(manifest["configuration"]), directory)
+    profiles = build_profiles(HistoricalConfig.from_manifest(manifest), directory)
     if profiles.digest() != manifest["profile_sha256"]:
         raise ValueError("historical profile digest mismatch for continuation")
     return profiles
