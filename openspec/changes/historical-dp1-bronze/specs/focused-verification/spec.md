@@ -12,7 +12,7 @@ Focused checks SHALL cover explicit deferred-source preflight, preservation of i
 
 ### Requirement: Data-pipeline behavioral verification
 
-Small local fixtures SHALL protect source integrity, schema normalization, duplicate preservation, snapshot selection, uncertain-commit recovery and safe replay. They SHALL also protect SparkApplication terminal-state handling, bounded retries, cancellation/deadline cleanup, native admission rejection of active deletion/hard termination with allowed graceful stop/completed deletion and unaffected other namespaces, contract coverage/parity, failed-result publication, cancellation and canonical catalog identity. Catalog replacement checks SHALL cover ODCS identity preservation, custom GX success/failure/error results, idempotent metadata-only recovery and refusal of acceptance on incomplete OpenMetadata readback, reusing existing fixtures. Ordinary CI SHALL NOT require live cluster or storage credentials.
+Bounded CI fixtures SHALL protect the distinct behavioral risks: source integrity/lossless normalization, duplicate-preserving ingestion, uncertain commits/replay, snapshot isolation, nested SQL/lifecycle/linkage/label semantics, native result completeness and metadata-only recovery. Existing CI entrypoints SHALL be reused; obsolete GX/custom publisher tests SHALL be removed. No configuration-only test suites, per-option/property matrices, new CI jobs or duplicate layer assertions SHALL be added. Tests and image builds SHALL run only in CI; local checks SHALL be limited to lint/format/schema/OpenSpec validation and diff review. Ordinary CI SHALL NOT require live credentials.
 
 #### Scenario: Verify changes without infrastructure access
 
@@ -26,7 +26,7 @@ Small local fixtures SHALL protect source integrity, schema normalization, dupli
 
 ### Requirement: Live historical and governance acceptance
 
-Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain historical evidence; production workflows SHALL NOT repeat disposable-table rollout probes. Live acceptance SHALL separately exercise complete v11 smoke ingestion, then v12 ingestion, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
+Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain historical evidence; production workflows SHALL NOT repeat disposable-table rollout probes. Live acceptance SHALL separately exercise fresh native v11 smoke ingestion, then v12 ingestion, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
 
 #### Scenario: Complete v11 smoke acceptance
 
@@ -36,7 +36,7 @@ Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain histo
 #### Scenario: Complete v12 source acceptance
 
 - **WHEN** the live acceptance run ingests the published v12 manifest after the v11 smoke run
-- **THEN** it verifies the exact manifest-listed inventory and byte/row totals, preserved duplicates and delayed labels, Spark/GX results on both persisted tables, separately reported available cardinality and distribution diagnostics, safe replay and OpenMetadata readback
+- **THEN** it verifies the exact manifest-listed inventory and byte/row totals, preserved duplicates and delayed labels, native OpenMetadata StarRocks SQL results on both persisted tables, separately reported available cardinality and distribution diagnostics, safe replay and OpenMetadata readback
 - **THEN** a failed blocking contract/integrity check or resource exhaustion is reported as failure, while an exceeded generator band alone is informational
 
 #### Scenario: Dependency unavailable
@@ -52,3 +52,12 @@ CI SHALL cover no-input runs, newly completed files in older date partitions, ch
 
 - **WHEN** two completed input batches, a late file and a retried committed batch are processed
 - **THEN** all original deliveries remain accounted for without ingestion-generated duplicates and accepted snapshot/progress references are reproducible
+
+### Requirement: Native StarRocks integration evidence
+
+Implementation SHALL verify direct RustFS SigV4 access, external-catalog discovery, nested schemas, snapshot-specific SQL and native OpenMetadata passing/failing quality results with the selected versions. This SHALL be implementation acceptance rather than a per-batch disposable compatibility stage. Previous GX evidence SHALL remain historical and SHALL NOT establish StarRocks acceptance. SQL execution failure or unsupported discovery SHALL be reported without a hidden legacy fallback.
+
+#### Scenario: Native external-catalog discovery is incomplete
+
+- **WHEN** StarRocks can query a table but OpenMetadata cannot natively discover or profile its external-catalog identity correctly
+- **THEN** integration readiness remains unverified and DP1 does not claim completed native acceptance

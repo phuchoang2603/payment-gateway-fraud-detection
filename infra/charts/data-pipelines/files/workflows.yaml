@@ -4,12 +4,13 @@ metadata:
   name: historical-dp1-bronze
   namespace: __NAMESPACE__
 spec:
-  serviceAccountName: dp1-metadata
+  serviceAccountName: dp1-workflow
   entrypoint: historical
   arguments:
     parameters:
       - {name: source-root, value: __SOURCE_ROOT__}
       - {name: dataset-version, value: __DATASET_VERSION__}
+      - {name: openmetadata-url, value: __OPENMETADATA_URL__}
   onExit: finalizer
   activeDeadlineSeconds: __WORKFLOW_DEADLINE__
   synchronization:
@@ -26,7 +27,7 @@ spec:
         - - name: recover-previous
             template: recover-previous
         - - name: preflight
-            template: metadata
+            template: python
             arguments:
               parameters:
                 - {name: stage, value: preflight}
@@ -35,25 +36,109 @@ spec:
             arguments:
               parameters:
                 - {name: stage, value: ingest}
-        - - name: validate
-            template: validate-once
-        - - name: governance
-            template: metadata
+        - - name: prepare
+            template: prepare
+        - - name: discover
+            template: openmetadata
             arguments:
               parameters:
-                - {name: stage, value: publish}
+                - {name: command, value: ingest}
+                - {name: config, value: "{{steps.prepare.outputs.parameters.metadata}}"}
+        - - name: test-events
+            template: openmetadata
+            arguments:
+              parameters:
+                - {name: command, value: test}
+                - {name: config, value: "{{steps.prepare.outputs.parameters.payment-events}}"}
+          - name: test-labels
+            template: openmetadata
+            arguments:
+              parameters:
+                - {name: command, value: test}
+                - {name: config, value: "{{steps.prepare.outputs.parameters.fraud-labels}}"}
+        - - name: govern
+            template: govern-and-accept
+    - name: govern-and-accept
+      steps:
+        - - name: events-table
+            template: openmetadata-get
+            arguments:
+              parameters:
+                - {name: path, value: "/v1/tables/name/starrocks.lakehouse.bronze.raw_payment_events"}
+          - name: labels-table
+            template: openmetadata-get
+            arguments:
+              parameters:
+                - {name: path, value: "/v1/tables/name/starrocks.lakehouse.bronze.raw_fraud_labels"}
+        - - name: pipeline-service
+            template: openmetadata-write
+            arguments:
+              parameters:
+                - {name: method, value: PUT}
+                - {name: path, value: /v1/services/pipelineServices}
+                - {name: body, value: '{"name": "argo", "serviceType": "CustomPipeline"}'}
+        - - name: pipeline
+            template: openmetadata-write
+            arguments:
+              parameters:
+                - {name: method, value: PUT}
+                - {name: path, value: /v1/pipelines}
+                - name: body
+                  value: '{"name": "historical-dp1-bronze", "displayName": "Historical DP1 bronze", "service": "argo", "description": "Argo workflow {{workflow.name}}"}'
+        - - name: requests
+            template: python
+            arguments:
+              parameters:
+                - {name: stage, value: governance}
+                - name: table-ids
+                  value: '{"payment_events": "{{=jsonpath(steps["events-table"].outputs.result, "$.id")}}", "fraud_labels": "{{=jsonpath(steps["labels-table"].outputs.result, "$.id")}}", "pipeline": "{{=jsonpath(steps.pipeline.outputs.result, "$.id")}}"}'
+        - - name: write
+            template: write-in-order
+            arguments:
+              parameters:
+                - {name: requests, value: "{{steps.requests.outputs.result}}"}
         - - name: accept
-            template: metadata
+            template: python
             arguments:
               parameters:
                 - {name: stage, value: accept}
-    - name: validate-once
+    - name: write-in-order
+      parallelism: 1
+      inputs:
+        parameters:
+          - name: requests
       steps:
-        - - name: validate
-            template: spark
+        - - name: write
+            template: openmetadata-write
+            withParam: "{{inputs.parameters.requests}}"
             arguments:
               parameters:
-                - {name: stage, value: validate}
+                - {name: method, value: "{{item.method}}"}
+                - {name: path, value: "{{item.path}}"}
+                - {name: body, value: "{{item.body}}"}
+    - name: prepare
+      container:
+        image: __SPARK_IMAGE__
+        command: [dp1]
+        args: [prepare]
+        envFrom:
+          - configMapRef: {name: dp1-config}
+          - secretRef: {name: dp1-lake}
+        env:
+          - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
+          - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
+          - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
+        resources:
+          requests: {cpu: 100m, memory: 512Mi}
+          limits: {cpu: "1", memory: 1Gi}
+      outputs:
+        parameters:
+          - name: metadata
+            valueFrom: {path: /tmp/out/metadata.json}
+          - name: payment-events
+            valueFrom: {path: /tmp/out/payment_events.json}
+          - name: fraud-labels
+            valueFrom: {path: /tmp/out/fraud_labels.json}
     - name: spark
       inputs:
         parameters:
@@ -244,37 +329,97 @@ spec:
         parameters:
           - name: status
       container:
-        image: __METADATA_IMAGE__
+        image: __SPARK_IMAGE__
         command: [python, -c]
         args: ["import sys; sys.exit(0 if sys.argv[1] == 'Succeeded' else 1)", "{{inputs.parameters.status}}"]
         resources:
           requests: {cpu: 100m, memory: 128Mi}
           limits: {cpu: "1", memory: 256Mi}
-    - name: metadata
-      serviceAccountName: dp1-metadata
+    - name: python
       inputs:
         parameters:
           - name: stage
+          - {name: table-ids, value: "{}"}
       activeDeadlineSeconds: 900
       retryStrategy:
         limit: "2"
         backoff: {duration: 10s, factor: 2, maxDuration: 1m}
       container:
-        image: __METADATA_IMAGE__
+        image: __SPARK_IMAGE__
         command: [dp1]
         args: ["{{inputs.parameters.stage}}"]
         envFrom:
           - configMapRef: {name: dp1-config}
           - secretRef: {name: dp1-lake}
-          - secretRef: {name: dp1-metadata}
+          - secretRef: {name: dp1-openmetadata}
         env:
           - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
           - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
           - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
           - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
+          - {name: TABLE_IDS, value: "{{inputs.parameters.table-ids}}"}
         resources:
           requests: {cpu: 100m, memory: 512Mi}
           limits: {cpu: "1", memory: 1Gi}
+    - name: openmetadata
+      inputs:
+        parameters:
+          - name: command
+          - name: config
+      activeDeadlineSeconds: __NATIVE_DEADLINE__
+      retryStrategy:
+        limit: "1"
+        backoff: {duration: 15s, factor: 2, maxDuration: 1m}
+      container:
+        image: __OPENMETADATA_IMAGE__
+        command: [bash, -c]
+        args:
+          - python3 -c 'import os,sys;sys.stdout.write(os.path.expandvars(os.environ["CONFIG"]))' > /tmp/workflow.yaml && metadata "$COMMAND" -c /tmp/workflow.yaml
+        envFrom:
+          - configMapRef: {name: dp1-config}
+          - secretRef: {name: dp1-openmetadata}
+          - secretRef: {name: dp1-starrocks}
+        env:
+          - {name: COMMAND, value: "{{inputs.parameters.command}}"}
+          - {name: CONFIG, value: "{{inputs.parameters.config}}"}
+        resources:
+          requests: {cpu: 250m, memory: 1Gi}
+          limits: {cpu: "2", memory: 2Gi}
+    - name: openmetadata-get
+      inputs:
+        parameters:
+          - name: path
+      retryStrategy:
+        limit: "3"
+        backoff: {duration: 5s, factor: 2, maxDuration: 1m}
+      http:
+        url: "{{workflow.parameters.openmetadata-url}}{{inputs.parameters.path}}"
+        method: GET
+        timeoutSeconds: 60
+        successCondition: response.statusCode == 200
+        headers:
+          - name: Authorization
+            valueFrom: {secretKeyRef: {name: dp1-openmetadata, key: authorization}}
+    - name: openmetadata-write
+      inputs:
+        parameters:
+          - name: method
+          - name: path
+          - name: body
+      retryStrategy:
+        limit: "3"
+        backoff: {duration: 5s, factor: 2, maxDuration: 1m}
+      http:
+        url: "{{workflow.parameters.openmetadata-url}}{{inputs.parameters.path}}"
+        method: "{{inputs.parameters.method}}"
+        timeoutSeconds: 60
+        successCondition: response.statusCode >= 200 && response.statusCode < 300
+        headers:
+          - name: Authorization
+            valueFrom: {secretKeyRef: {name: dp1-openmetadata, key: authorization}}
+          - name: Content-Type
+            value: application/json
+        body: "{{inputs.parameters.body}}"
     - name: finalizer
       steps:
         - - name: cleanup
@@ -282,39 +427,3 @@ spec:
             arguments:
               parameters:
                 - {name: selector, value: "dp1-workflow={{workflow.name}}"}
-        - - name: publish-failure
-            template: metadata
-            when: "{{workflow.status}} != Succeeded"
-            arguments:
-              parameters:
-                - {name: stage, value: publish}
----
-apiVersion: argoproj.io/v1alpha1
-kind: WorkflowTemplate
-metadata:
-  name: historical-dp1-governance-replay
-  namespace: __NAMESPACE__
-spec:
-  serviceAccountName: dp1-metadata
-  entrypoint: replay
-  arguments:
-    parameters:
-      - {name: source-root, value: __SOURCE_ROOT__}
-      - {name: dataset-version, value: __DATASET_VERSION__}
-  activeDeadlineSeconds: 1200
-  templates:
-    - name: replay
-      container:
-        image: __METADATA_IMAGE__
-        command: [dp1]
-        args: [publish]
-        envFrom:
-          - configMapRef: {name: dp1-config}
-          - secretRef: {name: dp1-lake}
-          - secretRef: {name: dp1-metadata}
-        env:
-          - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
-          - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
-        resources:
-          requests: {cpu: 100m, memory: 512Mi}
-          limits: {cpu: "1", memory: 1Gi}

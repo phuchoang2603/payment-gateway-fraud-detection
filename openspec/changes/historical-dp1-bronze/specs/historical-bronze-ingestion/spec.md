@@ -6,11 +6,11 @@ Publish reproducible bronze payment and label snapshots from immutable historica
 
 ### Requirement: Completed source selection
 
-In historical mode, DP1 SHALL ingest only files selected by a completed immutable source manifest and its embedded inventory; manifests without an embedded inventory are unsupported. It SHALL verify declared identities, supported schemas, file hashes, sizes and row counts before writing bronze. Source objects and the original manifest SHALL remain unchanged. Source validation SHALL either declare both native ports passed or explicitly declare `result: skipped`, `gate: dp1-spark-gx` and a nonblank reason with an embedded inventory and no conflicting port declarations. The latter permits ingestion, not quality acceptance. Run and validation evidence SHALL preserve this declaration; bronze acceptance SHALL require matching gate evidence, both persisted tables passing Spark/GX, both snapshot identities and verified governance readback.
+In historical mode, DP1 SHALL ingest only files selected by a completed immutable source manifest and its embedded inventory; manifests without an embedded inventory are unsupported. It SHALL verify declared identities, supported schemas, file hashes, sizes and row counts before writing bronze. Source objects and the original manifest SHALL remain unchanged. Source validation SHALL either declare both native ports passed or explicitly declare `result: skipped`, `gate: dp1-spark-gx` and a nonblank reason with an embedded inventory and no conflicting port declarations. The latter is original producer provenance and permits ingestion, not quality acceptance. Run and validation evidence SHALL preserve it unchanged and explicitly record its replacement by the versioned StarRocks SQL policy. Bronze acceptance SHALL require both persisted tables passing native SQL checks, complete matching rule/run/contract/snapshot evidence and verified governance readback. No GX runtime fallback or reuse of old GX acceptance SHALL satisfy this policy.
 
 #### Scenario: Accepted historical version
 
-- **WHEN** an accepted version such as the transformed v12 export or the v11 smoke export is selected with its completed manifest and matching source files
+- **WHEN** a published version such as the transformed v12 export or the v11 smoke export is selected with its completed manifest and matching source files
 - **THEN** the run records the manifest digest, source version and exact input files without regenerating or modifying them
 
 #### Scenario: Explicit deferred source validation
@@ -55,7 +55,7 @@ DP1 SHALL serialize writes to its bronze product and persist run identity before
 
 ### Requirement: Persisted snapshot validation
 
-For historical exports, validation SHALL read the recorded event and label snapshots for the selected source version. It SHALL cover complete histories and delayed labels, compare normalized business content and counts with source, and exclude ingestion metadata from business-content identity comparisons.
+For historical exports, validation SHALL read the recorded event and label snapshots for the selected source version. It SHALL execute StarRocks SQL through native OpenMetadata against both explicit snapshot IDs, cover complete histories and delayed labels, and compare persisted per-day row counts with the immutable manifest. Ingestion SHALL verify each source file's checksum and rows and normalize losslessly before writing; no second content comparison SHALL be claimed, and the report SHALL NOT describe acceptance as content-verified beyond that.
 
 #### Scenario: History spans source dates
 

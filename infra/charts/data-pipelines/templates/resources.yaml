@@ -19,7 +19,7 @@ metadata:
 data:
   {{- toYaml .Values.config | nindent 2 }}
 ---
-{{- range $name := list "spark" "metadata" }}
+{{- range $name := list "spark" "workflow" }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -27,21 +27,29 @@ metadata:
   namespace: {{ $.Values.namespace }}
 ---
 {{- end }}
-{{- range $name, $keys := .Values.secrets }}
+{{- range .Values.externalSecrets }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
-  name: dp1-{{ $name }}
+  name: {{ .name }}
   namespace: {{ $.Values.namespace }}
 spec:
   refreshInterval: 1h
   secretStoreRef:
     kind: ClusterSecretStore
-    name: {{ $.Values.secretStoreName }}
+    name: {{ .store }}
   target:
-    name: dp1-{{ $name }}
+    name: {{ .name }}
+    {{- with .template }}
+    template:
+      engineVersion: v2
+      data:
+        {{- range $key, $value := . }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
+    {{- end }}
   data:
-  {{- range $local, $remote := $keys }}
+  {{- range $local, $remote := .data }}
     - secretKey: {{ $local }}
       remoteRef:
         key: {{ $remote }}
@@ -75,7 +83,7 @@ roleRef:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: dp1-metadata
+  name: dp1-workflow
   namespace: {{ .Values.namespace }}
 rules:
   - apiGroups: [""]
@@ -90,18 +98,24 @@ rules:
   - apiGroups: [argoproj.io]
     resources: [workflowtaskresults]
     verbs: [create, patch]
+  - apiGroups: [argoproj.io]
+    resources: [workflowtasksets]
+    verbs: [list, watch]
+  - apiGroups: [argoproj.io]
+    resources: [workflowtasksets/status]
+    verbs: [patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: dp1-metadata
+  name: dp1-workflow
   namespace: {{ .Values.namespace }}
 subjects:
   - kind: ServiceAccount
-    name: dp1-metadata
+    name: dp1-workflow
     namespace: {{ .Values.namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: dp1-metadata
+  name: dp1-workflow
 {{- end }}

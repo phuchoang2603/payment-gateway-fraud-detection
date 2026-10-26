@@ -3,9 +3,6 @@ name = "fraud-data-platform"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "great-expectations==1.24.0",
-  "datacontract-cli[duckdb]==1.2.7",
-  "pyiceberg[pyarrow,s3fs]==0.11.1",
   "pyarrow==23.0.1",
   "pyyaml==6.0.3",
   "boto3==1.42.36",

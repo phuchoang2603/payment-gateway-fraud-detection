@@ -8,7 +8,6 @@ from data_platform.manifest import selected_manifest
 from data_platform.products import PORTS, hashes
 from data_platform.runs import open_run
 from data_platform.storage import Store
-from data_platform.validate import validate
 
 
 def test_raw_chunks_ingest_directly_into_date_partitioned_bronze(spark, dataset, tmp_path):
@@ -41,7 +40,7 @@ def test_raw_chunks_ingest_directly_into_date_partitioned_bronze(spark, dataset,
         assert partition_type.fields[1].name.endswith("_day")
 
 
-def test_snapshot_recovery_isolation_validation_and_replay(spark, dataset, tmp_path):
+def test_snapshot_recovery_isolation_and_replay(spark, dataset, tmp_path):
     root, manifest = dataset
     _, digest = selected_manifest(str(root))
     store = Store(str(tmp_path / "evidence"))
@@ -63,31 +62,8 @@ def test_snapshot_recovery_isolation_validation_and_replay(spark, dataset, tmp_p
     frames = selected_snapshots(spark, run, "recovery")
     for table in PORTS:
         assert frames[table].count() == sum(manifest["partitions"][table].values())
-    manifest = deepcopy(manifest)
-    manifest.setdefault("configuration", {}).setdefault("acceptance_bands", {})[
-        "cardinality.ip_network.distinct_to_row_ratio"
-    ] = {"minimum": 0, "maximum": 0}
-    report = validate(spark, str(root), manifest, store, run, contracts, "image@sha256:test", "recovery")
-    assert report["data_outcome"] == "passed", report
-    assert all(t["conserved"] for t in report["tables"].values())
-    assert report["tables"]["payment_events"]["cardinality"]["ip_network"]["within_band"] is False
-    assert set(report["tables"]["payment_events"]["cardinality"]) == {
-        "customer",
-        "address",
-        "device",
-        "ip_network",
-        "payment_method",
-    }
     ingest(spark, str(root), manifest, store, run, namespace="recovery")
     assert run["snapshots"] == original
-    revised = {**contracts, "payment_events": "revised-contract"}
-    revalidated = validate(spark, str(root), manifest, store, run, revised, "new-image", "recovery")
-    assert revalidated["data_outcome"] == "passed"
-    assert run["snapshots"] == original
-    from data_platform.runs import report_key
-
-    assert store.get(report_key(run, contracts))["contracts"] == contracts
-    assert store.get(report_key(run, revised))["contracts"] == revised
     events = frames["payment_events"]
     (
         events.withColumn("_source_dataset_version", F.lit("unrelated"))
@@ -106,47 +82,6 @@ def test_snapshot_recovery_isolation_validation_and_replay(spark, dataset, tmp_p
     assert before.exceptAll(after).count() == after.exceptAll(before).count() == 0
     assert spark.table(table_name("payment_events", "recovery")).count() == 3 * events.count()
     assert open_run(store, "smoke", digest, {"payment_events": "changed"}, "other", "retry")["snapshots"] == original
-
-
-def test_validation_failure_and_bounded_samples_are_persisted(spark, dataset, tmp_path, monkeypatch):
-    from data_platform import validate as validation
-    from data_platform.ingest import source_frames
-    from data_platform.runs import report_key
-
-    root, manifest = dataset
-    store = Store(str(tmp_path))
-    contracts = hashes()
-    declaration = {"result": "skipped", "gate": "dp1-spark-gx", "reason": "deferred source validation"}
-    run = open_run(store, "smoke", "a" * 64, contracts, "image", "workflow", source_validation=declaration)
-    run["snapshots"] = {"payment_events": 1, "fraud_labels": 2}
-    frames = source_frames(spark, str(root), manifest, run)
-    null_label = frames["fraud_labels"].select("attempt_id", "source").first()
-    frames["fraud_labels"] = frames["fraud_labels"].withColumn(
-        "label_available_at",
-        F.when(
-            (F.col("attempt_id") == null_label.attempt_id) & (F.col("source") == null_label.source),
-            F.lit(None).cast("timestamp"),
-        ).otherwise(F.col("occurred_at") - F.expr("INTERVAL 1 DAY")),
-    )
-    monkeypatch.setattr(validation, "selected_snapshots", lambda *args: frames)
-    report = validation.validate(spark, str(root), manifest, store, run, contracts, "image")
-    assert report["data_outcome"] == "failed"
-    persisted = store.get(report_key(run, contracts))
-    assert persisted["source_validation"] == declaration
-    assert persisted["data_outcome"] == "failed" and not persisted["execution_errors"]
-    assert persisted["tables"]["fraud_labels"]["null_date_rows"] > 0
-    assert not persisted["tables"]["fraud_labels"]["partitions_match"]
-    results = persisted["tables"]["fraud_labels"]["gx"]["results"]
-    availability = next(r for r in results if r["expectation_config"]["meta"].get("id") == "label_availability")
-    assert availability["success"] is False
-    assert len(availability["result"]["details"]["unexpected_rows"]) == 20
-    monkeypatch.setattr(
-        validation, "selected_snapshots", lambda *args: (_ for _ in ()).throw(ValueError("missing snapshot"))
-    )
-    error = validation.validate(spark, str(root), manifest, store, run, contracts, "image")
-    assert error["data_outcome"] == "error" and error["execution_errors"]
-    assert error["source_validation"] == declaration
-    assert store.get("accepted/smoke.json") is None
 
 
 def test_integrity_and_overflow_fail_before_table_creation(spark, dataset, tmp_path):

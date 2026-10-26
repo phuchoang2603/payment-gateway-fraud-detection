@@ -4,7 +4,8 @@ from uuid import uuid4
 
 from data_platform.products import PORTS
 
-VALIDATION_POLICY = "bronze-contracts-v2"
+VALIDATION_POLICY = "bronze-starrocks-v1"
+SUPERSEDES = {"gate": "dp1-spark-gx", "policy": VALIDATION_POLICY, "engine": "starrocks", "fallback": None}
 
 
 def validation_key(contracts):
@@ -33,6 +34,7 @@ def open_run(store, version, digest, contracts, image, workflow, source_validati
     }
     if source_validation:
         run["source_validation"] = source_validation
+        run["validation_supersedes"] = SUPERSEDES
     store.put(key, run, create=True)
     return run
 
@@ -41,37 +43,33 @@ def save_run(store, run):
     store.put(f"versions/{run['dataset_version']}/run.json", run)
 
 
-def report_key(run, contracts):
-    return f"runs/{run['run_id']}/{validation_key(contracts)}/validation.json"
+def evidence_key(run, contracts, name):
+    return f"runs/{run['run_id']}/{validation_key(contracts)}/{name}.json"
 
 
-def accept(store, run, contracts):
+def accept(store, run, contracts, problems, gaps):
     if set(run["snapshots"]) != set(PORTS):
         raise ValueError("acceptance requires both committed snapshots")
-    report = store.get(report_key(run, contracts))
-    if report is None or report.get("data_outcome") != "passed" or report.get("execution_errors"):
-        raise ValueError("acceptance requires a persisted passing report")
-    if report.get("snapshots") != run["snapshots"] or report.get("manifest_sha256") != run["manifest_sha256"]:
-        raise ValueError("validation identity differs from candidate")
-    if report.get("source_validation") != run.get("source_validation"):
-        raise ValueError("validation source gate differs from candidate")
-    if run.get("source_validation") and (
-        set(report.get("tables", {})) != set(PORTS)
-        or not all(table.get("success") is True for table in report["tables"].values())
-    ):
-        raise ValueError("deferred source validation requires both passing Spark/GX table results")
-    governance = store.get(report_key(run, contracts).replace("validation.json", "governance.json"))
-    if not governance or governance.get("outcome") != "passed" or not governance.get("readback_verified"):
-        raise ValueError("acceptance requires verified governance readback")
-    record = {
-        **run,
+    expected = store.get(evidence_key(run, contracts, "expected"))
+    if expected is None or expected["snapshots"] != run["snapshots"] or expected["run_id"] != run["run_id"]:
+        raise ValueError("acceptance requires the prepared native rule set for this run")
+    outcome = {
         "validation_policy": VALIDATION_POLICY,
+        "run_id": run["run_id"],
+        "manifest_sha256": run["manifest_sha256"],
+        "snapshots": run["snapshots"],
         "contracts": contracts,
-        "validation_report": report_key(run, contracts),
-        "governance": governance,
-        "state": "accepted",
+        "expected_cases": len(expected["cases"]),
+        "problems": dict(sorted(problems.items())[:50]),
+        "problem_count": len(problems),
+        "governance_gaps": gaps,
+        "outcome": "passed" if not problems and not gaps else "failed",
     }
-    store.put(f"accepted/{run['dataset_version']}.json", record)
-    run["state"] = "accepted"
+    store.put(evidence_key(run, contracts, "result"), outcome)
+    run["state"] = "accepted" if outcome["outcome"] == "passed" else "validation_failed"
     save_run(store, run)
+    if outcome["outcome"] != "passed":
+        raise ValueError("native results are not a complete passing set")
+    record = {**run, "validation_policy": VALIDATION_POLICY, "contracts": contracts, "result": outcome}
+    store.put(f"accepted/{run['dataset_version']}.json", record)
     return record

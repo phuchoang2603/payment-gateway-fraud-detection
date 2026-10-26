@@ -1,15 +1,16 @@
 enabled: false
 namespace: fraud-data-prod
-secretStoreName: fraud-doppler
 images:
   spark: ""
-  metadata: ""
+  openmetadata: ""
 workflow:
   activeDeadlineSeconds: 7200
 spark:
   activeDeadlineSeconds: 2400
   executors: 2
   shufflePartitions: 1024
+native:
+  activeDeadlineSeconds: 1800
 config:
   SOURCE_ROOT: s3://synthetic-source/historical/v11
   DATASET_VERSION: v11
@@ -21,13 +22,22 @@ config:
   S3_ENDPOINT: https://minio.home.phuchoang.sbs
   AWS_REGION: us-east-1
   OPENMETADATA_URL: http://openmetadata.openmetadata.svc.cluster.local:8585/api
-secrets:
-  lake:
-    SOURCE_ACCESS_KEY_ID: DP1_LAKE_RUSTFS_ACCESS_KEY
-    SOURCE_SECRET_ACCESS_KEY: DP1_LAKE_RUSTFS_SECRET_KEY
-    LAKE_ACCESS_KEY_ID: DP1_LAKE_RUSTFS_ACCESS_KEY
-    LAKE_SECRET_ACCESS_KEY: DP1_LAKE_RUSTFS_SECRET_KEY
-  metadata:
-    OPENMETADATA_TOKEN: DP1_OPENMETADATA_TOKEN
-    CATALOG_ACCESS_KEY_ID: DP1_METADATA_RUSTFS_ACCESS_KEY
-    CATALOG_SECRET_ACCESS_KEY: DP1_METADATA_RUSTFS_SECRET_KEY
+externalSecrets:
+  - name: dp1-lake
+    store: fraud-doppler
+    data:
+      SOURCE_ACCESS_KEY_ID: DP1_LAKE_RUSTFS_ACCESS_KEY
+      SOURCE_SECRET_ACCESS_KEY: DP1_LAKE_RUSTFS_SECRET_KEY
+      LAKE_ACCESS_KEY_ID: DP1_LAKE_RUSTFS_ACCESS_KEY
+      LAKE_SECRET_ACCESS_KEY: DP1_LAKE_RUSTFS_SECRET_KEY
+  - name: dp1-openmetadata
+    store: fraud-doppler
+    data:
+      OPENMETADATA_TOKEN: DP1_OPENMETADATA_TOKEN
+    template:
+      OPENMETADATA_TOKEN: "{{ .OPENMETADATA_TOKEN }}"
+      authorization: "Bearer {{ .OPENMETADATA_TOKEN }}"
+  - name: dp1-starrocks
+    store: doppler
+    data:
+      STARROCKS_PASSWORD: STARROCKS_OPENMETADATA_PASSWORD

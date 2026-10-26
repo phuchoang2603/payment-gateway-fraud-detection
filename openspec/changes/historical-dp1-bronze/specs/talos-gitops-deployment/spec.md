@@ -16,7 +16,7 @@ The deployment SHALL provide an explicitly enabled prod DP1 application in `frau
 
 ### Requirement: Data-platform ownership boundary
 
-Application deployment SHALL own DP1 workloads and its data namespace. The shared platform SHALL own Argo, the native Workflow lifecycle admission policy and binding scoped to `fraud-data-prod`, Apache Spark Operator and its CRDs, OpenMetadata and its PostgreSQL/OpenSearch backing services. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
+Application deployment SHALL own DP1 workloads and its data namespace. The shared platform SHALL own Argo, the native Workflow lifecycle admission policy and binding scoped to `fraud-data-prod`, Apache Spark Operator and its CRDs, StarRocks and its official operator/CRDs, OpenMetadata and its PostgreSQL/OpenSearch backing services. StarRocks SHALL be reconciled in the platform repository through Argo CD and the official operator/Helm chart. Application deployment SHALL own its SQL/contracts and native ingestion workflow configuration, not shared engine installation. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
 
 #### Scenario: Remove the data-pipeline application
 
@@ -25,7 +25,7 @@ Application deployment SHALL own DP1 workloads and its data namespace. The share
 
 ### Requirement: Separate pipeline credentials
 
-DP1 SHALL receive externally managed identities for source reading, lake/run-evidence writing and metadata publication. The generator's source-writer identity SHALL NOT be reused. Rendered configuration SHALL contain secret references rather than secret values.
+DP1 SHALL receive externally managed identities for source reading, lake/run-evidence writing, StarRocks query execution and metadata publication. StarRocks catalog/storage credentials SHALL be scoped separately from workload SQL access. The generator's source-writer identity SHALL NOT be reused. Rendered configuration SHALL contain secret references rather than secret values.
 
 #### Scenario: Inspect or render pipeline configuration
 
@@ -49,3 +49,12 @@ The application deployment SHALL own explicitly configured DP1 CronWorkflows, pe
 
 - **WHEN** the recurring schedule is reconciled with a different cadence
 - **THEN** completed input tracking and accepted evidence remain intact, with no accidental full replay or concurrent unguarded writers
+
+### Requirement: Shared analytical SQL service
+
+The platform SHALL provide bounded persistent StarRocks FE/BE resources for SQL quality and analytics, using the existing RustFS Iceberg REST catalog with native SigV4 and S3 access. Deployment SHALL NOT add Trino, analytical ClickHouse, a replacement catalog or a signing proxy for this path. Existing observability ClickHouse SHALL remain unaffected. Resource/PVC budgets SHALL be measured with Spark and OpenMetadata; a single-node toy deployment SHALL NOT claim HA. Shared engine deletion SHALL NOT be coupled to pipeline application removal.
+
+#### Scenario: Query accepted lake data
+
+- **WHEN** a native workflow validates a candidate
+- **THEN** StarRocks reads the recorded Iceberg snapshots directly without a mandatory imported copy and acceptance checks matching native results

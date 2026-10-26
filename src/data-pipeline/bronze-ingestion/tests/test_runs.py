@@ -1,50 +1,55 @@
 import pytest
 
-from data_platform.runs import accept, open_run, report_key, save_run
+from data_platform.runs import SUPERSEDES, accept, evidence_key, open_run, save_run
 from data_platform.storage import Store
 
+CONTRACTS = {"payment_events": "one", "fraud_labels": "two"}
 
-def test_stable_context_manifest_guard_and_acceptance_requires_both_stages(tmp_path):
+
+def prepared(store, run):
+    store.put(
+        evidence_key(run, CONTRACTS, "expected"),
+        {"run_id": run["run_id"], "snapshots": run["snapshots"], "cases": {"a": {}, "b": {}}},
+    )
+
+
+def test_stable_context_and_manifest_guard(tmp_path):
     store = Store(str(tmp_path))
-    contracts = {"payment_events": "one", "fraud_labels": "two"}
-    run = open_run(store, "v10", "digest", contracts, "image", "workflow")
-    assert open_run(store, "v10", "digest", contracts, "other-image", "retry") == run
+    run = open_run(store, "v10", "digest", CONTRACTS, "image", "workflow")
+    assert open_run(store, "v10", "digest", CONTRACTS, "other-image", "retry") == run
     with pytest.raises(ValueError, match="different manifest"):
-        open_run(store, "v10", "changed", contracts, "image", "retry")
+        open_run(store, "v10", "changed", CONTRACTS, "image", "retry")
+    gate = {"result": "skipped", "gate": "dp1-spark-gx"}
+    declared = open_run(store, "v12", "digest", CONTRACTS, "image", "workflow", source_validation=gate)
+    assert declared["source_validation"] == gate and declared["validation_supersedes"] == SUPERSEDES
+
+
+def test_acceptance_requires_a_complete_passing_native_result_set(tmp_path):
+    store = Store(str(tmp_path))
+    run = open_run(store, "v10", "digest", CONTRACTS, "image", "workflow")
     with pytest.raises(ValueError, match="both committed"):
-        accept(store, run, contracts)
+        accept(store, run, CONTRACTS, {}, [])
     run["snapshots"] = {"payment_events": 1, "fraud_labels": 2}
     save_run(store, run)
-    with pytest.raises(ValueError, match="persisted passing"):
-        accept(store, run, contracts)
-    store.put(
-        report_key(run, contracts),
-        {"data_outcome": "passed", "snapshots": run["snapshots"], "manifest_sha256": "digest"},
-    )
-    with pytest.raises(ValueError, match="governance"):
-        accept(store, run, contracts)
-    store.put(
-        report_key(run, contracts).replace("validation.json", "governance.json"),
-        {"outcome": "passed", "readback_verified": True},
-    )
-    accepted = accept(store, run, contracts)
-    store.put(report_key(run, contracts), {"data_outcome": "failed"})
-    with pytest.raises(ValueError):
-        accept(store, run, contracts)
-    assert store.get("accepted/v10.json") == accepted
+    with pytest.raises(ValueError, match="prepared native rule set"):
+        accept(store, run, CONTRACTS, {}, [])
+    prepared(store, run)
+    with pytest.raises(ValueError, match="not a complete passing set"):
+        accept(store, run, CONTRACTS, {"a": "Failed"}, [])
+    assert store.get("accepted/v10.json") is None
+    assert store.get(evidence_key(run, CONTRACTS, "result"))["problems"] == {"a": "Failed"}
+    with pytest.raises(ValueError, match="not a complete passing set"):
+        accept(store, run, CONTRACTS, {}, ["lineage:payment_events->fraud_labels"])
+    record = accept(store, run, CONTRACTS, {}, [])
+    assert store.get("accepted/v10.json") == record and record["result"]["outcome"] == "passed"
 
 
-def test_validation_policy_change_preserves_old_reports_and_requires_revalidation(tmp_path, monkeypatch):
-    from data_platform import runs
-
+def test_changed_contracts_need_separate_evidence(tmp_path):
     store = Store(str(tmp_path))
-    contracts = {"payment_events": "one", "fraud_labels": "two"}
-    run = open_run(store, "smoke", "digest", contracts, "image", "workflow")
+    run = open_run(store, "smoke", "digest", CONTRACTS, "image", "workflow")
     run["snapshots"] = {"payment_events": 1, "fraud_labels": 2}
-    previous = report_key(run, contracts)
-    store.put(previous, {"data_outcome": "failed"})
-    monkeypatch.setattr(runs, "VALIDATION_POLICY", "different-policy")
-    assert report_key(run, contracts) != previous
-    with pytest.raises(ValueError, match="persisted passing"):
-        accept(store, run, contracts)
-    assert store.get(previous) == {"data_outcome": "failed"}
+    prepared(store, run)
+    revised = {**CONTRACTS, "payment_events": "revised"}
+    assert evidence_key(run, CONTRACTS, "expected") != evidence_key(run, revised, "expected")
+    with pytest.raises(ValueError, match="prepared native rule set"):
+        accept(store, run, revised, {}, [])

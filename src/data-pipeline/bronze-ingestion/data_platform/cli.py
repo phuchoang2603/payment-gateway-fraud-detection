@@ -4,28 +4,39 @@ import logging
 import os
 import re
 import sys
+import time
 from datetime import datetime, timezone
+from pathlib import Path
 
+from data_platform import quality
 from data_platform.manifest import selected_manifest
 from data_platform.products import hashes
-from data_platform.runs import VALIDATION_POLICY, accept, open_run, save_run
+from data_platform.runs import VALIDATION_POLICY, accept, evidence_key, open_run, save_run
 from data_platform.storage import Store
+
+STAGES = ["preflight", "ingest", "prepare", "governance", "accept", "verify-source"]
+
+
+def prepare(store, run, contracts, manifest, out):
+    key = evidence_key(run, contracts, "expected")
+    cases = quality.cases(run, manifest)
+    prepared = store.get(key)
+    if prepared is None:
+        prepared = {**quality.expected(run, contracts, cases), "prepared_at": int(time.time() * 1000)}
+        store.put(key, prepared, create=True)
+    elif prepared["cases"] != quality.expected(run, contracts, cases)["cases"]:
+        raise ValueError("prepared native rule set differs from the contracts for this run")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "metadata.json").write_text(quality.dumps(quality.metadata_workflow()))
+    for table in ("payment_events", "fraud_labels"):
+        (out / f"{table}.json").write_text(quality.dumps(quality.test_workflow(table, cases)))
+    return prepared
 
 
 def main(argv=None):
     logging.disable(logging.INFO)
     parser = argparse.ArgumentParser(prog="dp1")
-    parser.add_argument(
-        "stage",
-        choices=[
-            "preflight",
-            "ingest",
-            "validate",
-            "publish",
-            "accept",
-            "verify-source",
-        ],
-    )
+    parser.add_argument("stage", choices=STAGES)
     parser.add_argument("--source", default=os.environ.get("SOURCE_ROOT", "s3://synthetic-source/historical/v11"))
     parser.add_argument(
         "--evidence", default=os.environ.get("EVIDENCE_ROOT", "s3://fraud-lakehouse-prod/dp1-evidence")
@@ -34,6 +45,8 @@ def main(argv=None):
     parser.add_argument("--workflow", default=os.environ.get("WORKFLOW_ID", "local"))
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--local-warehouse")
+    parser.add_argument("--out", default="/tmp/out")
+    parser.add_argument("--table-ids", default=os.environ.get("TABLE_IDS", "{}"))
     args = parser.parse_args(argv)
     spark = None
     try:
@@ -75,56 +88,55 @@ def main(argv=None):
             run = store.get(f"versions/{args.version}/run.json")
             if not run:
                 raise ValueError("run context is missing")
-        if args.stage in ("ingest", "validate"):
+        if args.stage == "ingest":
             application = os.environ.get("SPARK_APPLICATION_NAME")
             if application:
                 attempts = run.setdefault("spark_applications", {}).setdefault(args.stage, [])
                 if application not in attempts:
                     attempts.append(application)
                 save_run(store, run)
+            from data_platform.ingest import ingest
             from data_platform.spark import session
 
             spark = session(args.local_warehouse)
-        if args.stage == "ingest":
-            from data_platform.ingest import ingest
-
             ingest(spark, args.source, manifest, store, run)
-        elif args.stage == "validate":
-            from data_platform.validate import validate
-
+        elif args.stage == "prepare":
             manifest, digest = selected_manifest(run["source_root"])
             if digest != run["manifest_sha256"]:
                 raise ValueError("source manifest changed since ingestion")
-            report = validate(
-                spark, run["source_root"], manifest, store, run, contracts, os.environ.get("IMAGE_DIGEST", "")
-            )
-            return 0 if report["data_outcome"] == "passed" else 2
-        elif args.stage == "publish":
-            from data_platform.governance import publish
+            prepare(store, run, contracts, manifest, Path(args.out))
+        elif args.stage == "governance":
+            from data_platform.governance import requests
 
-            result = publish(store, run, contracts)
-            return 0 if result["outcome"] == "passed" else 3
+            report = f"{store.root}/{evidence_key(run, contracts, 'result')}"
+            writes = requests(run, json.loads(args.table_ids), report)
+            print(json.dumps([{**write, "body": json.dumps(write["body"])} for write in writes]))
         elif args.stage == "accept":
-            accept(store, run, contracts)
+            from data_platform import readback
+
+            expected = store.get(evidence_key(run, contracts, "expected"))
+            found = {}
+            for table in ("payment_events", "fraud_labels"):
+                found.update(readback.observed(table))
+            problems = readback.verify(expected, found, expected["prepared_at"])
+            gaps = readback.governance_gaps(("payment_events", "fraud_labels"), contracts)
+            accept(store, run, contracts, problems, gaps)
         return 0
     except Exception as error:
-        if args.stage in ("preflight", "ingest", "validate") and "run" in locals():
-            from data_platform.runs import report_key
-
+        if args.stage in ("preflight", "ingest", "prepare", "accept") and "run" in locals():
             failure = {
                 "validation_policy": VALIDATION_POLICY,
                 "run_id": run["run_id"],
                 "dataset_version": run["dataset_version"],
                 "manifest_sha256": run["manifest_sha256"],
-                "source_validation": run.get("source_validation"),
                 "contracts": contracts,
                 "snapshots": run["snapshots"],
-                "data_outcome": "error",
-                "tables": {},
+                "outcome": "error",
                 "run_time": datetime.now(timezone.utc).isoformat(),
                 "execution_errors": [{"stage": args.stage, "type": type(error).__name__}],
             }
-            store.put(report_key(run, contracts), failure)
+            if args.stage != "accept" or not isinstance(error, ValueError):
+                store.put(evidence_key(run, contracts, f"error-{args.stage}"), failure)
         print(
             json.dumps({"stage": args.stage, "error_type": type(error).__name__, "outcome": "error"}), file=sys.stderr
         )

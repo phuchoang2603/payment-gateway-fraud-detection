@@ -6,7 +6,7 @@ Make payment data products discoverable and auditable through a persistent share
 
 ### Requirement: Verified shared catalog deployment
 
-OpenMetadata with persistent PostgreSQL and OpenSearch SHALL be the catalog under platform ownership. Existing services SHALL be reused only after compatibility, state isolation and readiness verification. Governance publication SHALL operate through the existing Argo workflows without requiring Kafka or Airflow. Deployment SHALL include authenticated access, persistence, resource/storage budgets and capacity for concurrent pipeline execution.
+OpenMetadata with persistent PostgreSQL and OpenSearch SHALL be the catalog under platform ownership. Existing services SHALL be reused only after compatibility, state isolation and readiness verification. Native discovery, profiling and SQL quality execution SHALL use the official version-matched OpenMetadata ingestion image through existing Argo workflows without requiring Kafka or Airflow. Deployment SHALL include authenticated access, persistence, resource/storage budgets and capacity for concurrent pipeline execution.
 
 #### Scenario: Catalog is not deployed
 
@@ -29,7 +29,7 @@ The catalog SHALL expose source and bronze products, owners, classifications and
 
 ### Requirement: Authoritative contract publication
 
-Git-versioned ODCS contracts SHALL remain authoritative. OpenMetadata SHALL expose native contracts with the complete original ODCS YAML, identities, versions, hashes and artifact references. Native schemas and quality-rule metadata SHALL preserve the declared rules without modifying Git contracts or immutable source manifests. Catalog publication SHALL NOT create an independent validation rule source or rerun quality checks through a second engine.
+Git-versioned ODCS contracts SHALL remain authoritative. OpenMetadata SHALL expose native contracts with the complete original ODCS YAML, identities, versions, hashes and artifact references. Native schemas and quality-rule metadata SHALL preserve the declared rules without modifying Git contracts or immutable source manifests. Native OpenMetadata quality workflows SHALL execute Git-derived StarRocks SQL as the sole bronze quality path. Catalog configuration SHALL NOT become an independent rule source or retain a custom GX result projection.
 
 #### Scenario: Inspect a published contract
 
@@ -43,12 +43,12 @@ Git-versioned ODCS contracts SHALL remain authoritative. OpenMetadata SHALL expo
 
 ### Requirement: Canonical table identities
 
-Iceberg metadata ingestion, lineage and validation publication SHALL address the same catalog dataset identities. Metadata ingestion SHALL use the existing REST catalog and separately configured warehouse access. Publication SHALL NOT create duplicate assets under execution-engine names.
+Native StarRocks discovery, profiling, quality execution and lineage SHALL address the same OpenMetadata table entities. StarRocks SHALL use the existing RustFS REST catalog and separately configured warehouse access. External-catalog selection and nested schema fidelity SHALL be verified for each native workflow connection; no custom discovery, duplicate Spark/custom registrations or mandatory internal-table copies SHALL substitute for native discovery.
 
-#### Scenario: Publish Spark validation results
+#### Scenario: Execute native SQL validation
 
-- **WHEN** GX checks an Iceberg table already discovered by catalog ingestion
-- **THEN** its test definitions and results appear on that existing OpenMetadata table entity under the expected service/database/schema identity
+- **WHEN** a native OpenMetadata SQL workflow checks an Iceberg table discovered through StarRocks
+- **THEN** its native test definitions and results appear on the discovered entity with matching run, contract and snapshot references
 
 ### Requirement: Source pipeline and table lineage
 
@@ -61,7 +61,7 @@ The catalog SHALL expose lineage from each historical source port through the DP
 
 ### Requirement: Reproducible assertion evidence
 
-The catalog SHALL retain quality-test definitions and successful, failed or errored execution evidence linked to contract rules, data assets and run identity. Local reports SHALL retain exact source, contract and snapshot references. Publication retries SHALL preserve logical rule/run identity and original outcomes.
+The catalog SHALL retain quality-test definitions and successful, failed or errored execution evidence linked to contract rules, data assets and run identity. Durable bounded reports SHALL retain exact source, contract, policy, run and snapshot references. Failed assertions and execution errors SHALL remain distinct. Publication retries SHALL preserve logical rule/run identity and original outcomes.
 
 #### Scenario: Deliberate contract violation
 
@@ -75,7 +75,7 @@ The catalog SHALL retain quality-test definitions and successful, failed or erro
 
 ### Requirement: Catalog acceptance readback
 
-DP1 governance acceptance SHALL verify product membership, schemas, imported contracts, job/table lineage and validation results by catalog readback with bounded indexing retries. A successful emit or healthy deployment alone SHALL NOT count as complete governance acceptance.
+DP1 governance acceptance SHALL verify product membership, schemas, native contracts, job/table lineage and the complete expected native quality result set by catalog readback with bounded indexing retries. Every required result SHALL be Success and match the recorded run/source/contract/snapshots. Failed, Aborted, missing, stale or incomplete results SHALL prevent acceptance even if the native workflow container exits zero. A successful emit or healthy deployment alone SHALL NOT count as complete governance acceptance.
 
 #### Scenario: Search index is delayed
 
@@ -113,3 +113,12 @@ Recurring runs SHALL publish source/batch lineage, validation outcomes and exact
 
 - **WHEN** recurring data checks pass and catalog readback completes
 - **THEN** its accepted evidence identifies immutable landing inputs, source origin, validated snapshot set and applicable contracts without requiring separate real/simulator catalog infrastructure in the current environment
+
+### Requirement: Clean native catalog artifacts
+
+Implementation SHALL delete obsolete DP1-owned custom services/table registrations, products/contracts, pipelines, GX definitions/cases/results and compatibility probes including `dp1-compatibility`, then create native artifacts cleanly. It SHALL NOT introduce migration, alias or dual-publisher paths. Unrelated catalog assets, shared infrastructure, source/lake data and durable execution evidence SHALL remain unaffected. Argo HTTP templates SHALL handle only explicit product/contract/provenance/lineage operations and acceptance readback; native workflows SHALL own discovery, profiling and quality execution.
+
+#### Scenario: Replace old DP1 registrations
+
+- **WHEN** obsolete DP1-owned catalog artifacts are removed
+- **THEN** native discovery becomes the sole table identity path, unrelated assets remain intact and old durable outcomes are not relabeled

@@ -23,7 +23,7 @@ customProperties:
 - property: classification
   value: synthetic
 - property: sqlDialect
-  value: spark
+  value: starrocks
 - property: upstreamContract
   value:
     id: urn:datacontract:fraud:historical-payment-events
@@ -416,116 +416,144 @@ schema:
     description: Stable UTC microsecond ingestion time, distinct from source recorded_at.
   quality:
   - id: payment_delivery_consistency
-    type: custom
-    description: Repeated event identities must carry identical content.
     name: payment_delivery_consistency
-    engine: great-expectations
-    implementation:
-      type: unexpected_rows_expectation
-      kwargs:
-        unexpected_rows_query: "SELECT * FROM (\n  SELECT event_id FROM {batch} e\n  GROUP BY event_id HAVING count(DISTINCT\
-          \ to_json(struct(e.event_id, e.payment_id, e.aggregate_version, e.integration_id, e.occurred_at, e.recorded_at,\
-          \ e.schema_version, e.correlation_id, e.payment_created, e.attempt_started, e.risk_decision_recorded, e.processor_operation_requested,\
-          \ e.processor_outcome_unknown, e.attempt_declined, e.payment_succeeded, e.payment_expired))) > 1\n)\n"
-      meta:
-        semantic_rule_id: payment_delivery_consistency
+    type: sql
+    description: Repeated event identities must carry identical content.
+    query: |
+      SELECT COUNT(*) FROM (
+        SELECT e.event_id FROM {events} AS e GROUP BY e.event_id
+        HAVING COUNT(DISTINCT MD5(CAST(TO_JSON(NAMED_STRUCT('event_id', e.event_id, 'payment_id', e.payment_id, 'aggregate_version', e.aggregate_version, 'integration_id', e.integration_id, 'occurred_at', e.occurred_at, 'recorded_at', e.recorded_at, 'schema_version', e.schema_version, 'correlation_id', e.correlation_id, 'payment_created', e.payment_created, 'attempt_started', e.attempt_started, 'risk_decision_recorded', e.risk_decision_recorded, 'processor_operation_requested', e.processor_operation_requested, 'processor_outcome_unknown', e.processor_outcome_unknown, 'attempt_declined', e.attempt_declined, 'payment_succeeded', e.payment_succeeded, 'payment_expired', e.payment_expired)) AS VARCHAR))) > 1
+      ) AS violations
+    mustBe: 0
   - id: payment_envelope
-    type: custom
-    description: Envelope identities are nonempty, timestamps are ordered, schemas are supported and exactly one lifecycle
-      payload is present.
     name: payment_envelope
-    engine: great-expectations
-    implementation:
-      type: unexpected_rows_expectation
-      kwargs:
-        unexpected_rows_query: "SELECT * FROM {batch}\nWHERE event_id = '' OR payment_id = '' OR integration_id = ''\n  OR\
-          \ correlation_id = ''\n  OR schema_version NOT IN (1, 2) OR aggregate_version < 1\n  OR recorded_at < occurred_at\n\
-          \  OR (CAST(payment_created IS NOT NULL AS INTEGER)\n    + CAST(attempt_started IS NOT NULL AS INTEGER)\n    +\
-          \ CAST(risk_decision_recorded IS NOT NULL AS INTEGER)\n    + CAST(processor_operation_requested IS NOT NULL AS\
-          \ INTEGER)\n    + CAST(processor_outcome_unknown IS NOT NULL AS INTEGER)\n    + CAST(attempt_declined IS NOT NULL\
-          \ AS INTEGER)\n    + CAST(payment_succeeded IS NOT NULL AS INTEGER)\n    + CAST(payment_expired IS NOT NULL AS\
-          \ INTEGER)) <> 1\n  OR (payment_expired IS NOT NULL AND NOT payment_expired._present)\n"
-      meta:
-        semantic_rule_id: payment_envelope
+    type: sql
+    description: Envelope identities are nonempty, timestamps are ordered, schemas are supported and exactly one lifecycle payload is present.
+    query: |
+      SELECT COUNT(*) FROM {events} AS e
+      WHERE e.event_id = '' OR e.payment_id = '' OR e.integration_id = ''
+        OR e.correlation_id = ''
+        OR e.schema_version NOT IN (1, 2) OR e.aggregate_version < 1
+        OR e.recorded_at < e.occurred_at
+        OR (IF(e.payment_created IS NOT NULL, 1, 0)
+          + IF(e.attempt_started IS NOT NULL, 1, 0)
+          + IF(e.risk_decision_recorded IS NOT NULL, 1, 0)
+          + IF(e.processor_operation_requested IS NOT NULL, 1, 0)
+          + IF(e.processor_outcome_unknown IS NOT NULL, 1, 0)
+          + IF(e.attempt_declined IS NOT NULL, 1, 0)
+          + IF(e.payment_succeeded IS NOT NULL, 1, 0)
+          + IF(e.payment_expired IS NOT NULL, 1, 0)) <> 1
+        OR (e.payment_expired IS NOT NULL AND NOT e.payment_expired._present)
+    mustBe: 0
   - id: payment_lifecycle
-    type: custom
-    description: Complete canonical histories have consecutive versions, legal transitions, consistent attempt identities
-      and correlation. Causation is implied by aggregate_version order.
     name: payment_lifecycle
-    engine: great-expectations
-    implementation:
-      type: unexpected_rows_expectation
-      kwargs:
-        unexpected_rows_query: "WITH canonical AS (SELECT DISTINCT event_id, payment_id, aggregate_version, integration_id,\
-          \ occurred_at, recorded_at, schema_version, correlation_id, payment_created, attempt_started, risk_decision_recorded,\
-          \ processor_operation_requested, processor_outcome_unknown, attempt_declined, payment_succeeded, payment_expired\
-          \ FROM {batch}),\ntyped AS (\n  SELECT *,\n    CASE\n      WHEN payment_created IS NOT NULL THEN 'created'\n  \
-          \    WHEN attempt_started IS NOT NULL THEN 'started'\n      WHEN risk_decision_recorded IS NOT NULL THEN 'decision'\n\
-          \      WHEN processor_operation_requested IS NOT NULL THEN 'requested'\n      WHEN processor_outcome_unknown IS\
-          \ NOT NULL THEN 'unknown'\n      WHEN attempt_declined IS NOT NULL THEN 'declined'\n      WHEN payment_succeeded\
-          \ IS NOT NULL THEN 'succeeded'\n      WHEN payment_expired IS NOT NULL THEN 'expired'\n    END AS kind,\n    coalesce(attempt_started.attempt_id,\
-          \ risk_decision_recorded.attempt_id,\n      processor_operation_requested.attempt_id, processor_outcome_unknown.attempt_id,\n\
-          \      attempt_declined.attempt_id, payment_succeeded.attempt_id) AS attempt\n  FROM canonical\n),\nordered AS\
-          \ (\n  SELECT *,\n    row_number() OVER history AS ordinal,\n    count(*) OVER (PARTITION BY integration_id, payment_id)\
-          \ AS transitions,\n    lag(kind) OVER history AS previous_kind,\n    lag(occurred_at) OVER history AS previous_time,\n\
-          \    lag(correlation_id) OVER history AS previous_correlation,\n    lag(risk_decision_recorded.assessment.outcome)\
-          \ OVER history AS previous_outcome,\n    last_value(attempt_started.attempt_id, true) OVER history AS active_attempt\n\
-          \  FROM typed\n  WINDOW history AS (\n    PARTITION BY integration_id, payment_id ORDER BY aggregate_version, event_id\n\
-          \    \n  )\n)\nSELECT * FROM ordered\nWHERE aggregate_version <>\
-          \ ordinal\n  OR (ordinal = transitions AND kind NOT IN ('succeeded', 'expired'))\n  OR (ordinal > 1 AND (correlation_id\
-          \ <> previous_correlation OR occurred_at < previous_time))\n  OR (kind NOT IN ('created', 'expired') AND\n    (attempt\
-          \ IS NULL OR attempt = '' OR attempt IS DISTINCT FROM active_attempt))\n  OR NOT coalesce(CASE kind\n    WHEN 'created'\
-          \ THEN ordinal = 1\n    WHEN 'started' THEN previous_kind IN ('created', 'declined')\n    WHEN 'decision' THEN\
-          \ previous_kind = 'started'\n    WHEN 'requested' THEN previous_kind = 'decision'\n      AND previous_outcome =\
-          \ 'RISK_OUTCOME_APPROVE'\n    WHEN 'unknown' THEN previous_kind = 'requested'\n    WHEN 'declined' THEN\n     \
-          \ (previous_kind = 'decision' AND previous_outcome = 'RISK_OUTCOME_DECLINE'\n        AND attempt_declined.source\
-          \ = 'DECLINE_SOURCE_RISK')\n      OR (previous_kind IN ('requested', 'unknown')\n        AND attempt_declined.source\
-          \ = 'DECLINE_SOURCE_PROCESSOR')\n    WHEN 'succeeded' THEN previous_kind IN ('requested', 'unknown')\n    WHEN\
-          \ 'expired' THEN previous_kind IN ('created', 'started', 'decision', 'declined')\n    ELSE false END, false)\n"
-      meta:
-        semantic_rule_id: payment_lifecycle
+    type: sql
+    description: Complete canonical histories have consecutive versions, legal transitions, consistent attempt identities and correlation. Causation is implied by aggregate_version order.
+    query: |
+      WITH canonical AS (
+        SELECT * FROM (
+          SELECT e.*, ROW_NUMBER() OVER (PARTITION BY e.event_id ORDER BY e.recorded_at) AS delivery
+          FROM {events} AS e
+        ) AS deliveries WHERE delivery = 1
+      ),
+      typed AS (
+        SELECT c.*,
+          CASE
+            WHEN c.payment_created IS NOT NULL THEN 'created'
+            WHEN c.attempt_started IS NOT NULL THEN 'started'
+            WHEN c.risk_decision_recorded IS NOT NULL THEN 'decision'
+            WHEN c.processor_operation_requested IS NOT NULL THEN 'requested'
+            WHEN c.processor_outcome_unknown IS NOT NULL THEN 'unknown'
+            WHEN c.attempt_declined IS NOT NULL THEN 'declined'
+            WHEN c.payment_succeeded IS NOT NULL THEN 'succeeded'
+            WHEN c.payment_expired IS NOT NULL THEN 'expired'
+          END AS kind,
+          COALESCE(c.attempt_started.attempt_id, c.risk_decision_recorded.attempt_id,
+            c.processor_operation_requested.attempt_id, c.processor_outcome_unknown.attempt_id,
+            c.attempt_declined.attempt_id, c.payment_succeeded.attempt_id) AS attempt
+        FROM canonical AS c
+      ),
+      ordered AS (
+        SELECT t.*,
+          ROW_NUMBER() OVER (PARTITION BY t.integration_id, t.payment_id ORDER BY t.aggregate_version, t.event_id) AS ordinal,
+          COUNT(*) OVER (PARTITION BY t.integration_id, t.payment_id) AS transitions,
+          LAG(t.kind) OVER (PARTITION BY t.integration_id, t.payment_id ORDER BY t.aggregate_version, t.event_id) AS previous_kind,
+          LAG(t.occurred_at) OVER (PARTITION BY t.integration_id, t.payment_id ORDER BY t.aggregate_version, t.event_id) AS previous_time,
+          LAG(t.correlation_id) OVER (PARTITION BY t.integration_id, t.payment_id ORDER BY t.aggregate_version, t.event_id) AS previous_correlation,
+          LAG(t.risk_decision_recorded.assessment.outcome) OVER (PARTITION BY t.integration_id, t.payment_id ORDER BY t.aggregate_version, t.event_id) AS previous_outcome,
+          LAST_VALUE(t.attempt_started.attempt_id IGNORE NULLS) OVER (PARTITION BY t.integration_id, t.payment_id ORDER BY t.aggregate_version, t.event_id) AS active_attempt
+        FROM typed AS t
+      )
+      SELECT COUNT(*) FROM ordered AS o
+      WHERE o.aggregate_version <> o.ordinal
+        OR (o.ordinal = o.transitions AND o.kind NOT IN ('succeeded', 'expired'))
+        OR (o.ordinal > 1 AND (o.correlation_id <> o.previous_correlation OR o.occurred_at < o.previous_time))
+        OR (o.kind NOT IN ('created', 'expired') AND
+          (o.attempt IS NULL OR o.attempt = '' OR NOT (o.attempt <=> o.active_attempt)))
+        OR NOT COALESCE(CASE o.kind
+          WHEN 'created' THEN o.ordinal = 1
+          WHEN 'started' THEN o.previous_kind IN ('created', 'declined')
+          WHEN 'decision' THEN o.previous_kind = 'started'
+          WHEN 'requested' THEN o.previous_kind = 'decision'
+            AND o.previous_outcome = 'RISK_OUTCOME_APPROVE'
+          WHEN 'unknown' THEN o.previous_kind = 'requested'
+          WHEN 'declined' THEN
+            (o.previous_kind = 'decision' AND o.previous_outcome = 'RISK_OUTCOME_DECLINE'
+              AND o.attempt_declined.source = 'DECLINE_SOURCE_RISK')
+            OR (o.previous_kind IN ('requested', 'unknown')
+              AND o.attempt_declined.source = 'DECLINE_SOURCE_PROCESSOR')
+          WHEN 'succeeded' THEN o.previous_kind IN ('requested', 'unknown')
+          WHEN 'expired' THEN o.previous_kind IN ('created', 'started', 'decision', 'declined')
+          ELSE false END, false)
+    mustBe: 0
   - id: payment_attempt_identity
-    type: custom
-    description: Each canonical attempt identity starts once within its scoped payment.
     name: payment_attempt_identity
-    engine: great-expectations
-    implementation:
-      type: unexpected_rows_expectation
-      kwargs:
-        unexpected_rows_query: "SELECT * FROM (\n  SELECT integration_id, payment_id, attempt_started.attempt_id\n  FROM\
-          \ (SELECT DISTINCT event_id, payment_id, aggregate_version, integration_id, occurred_at, recorded_at, schema_version,\
-          \ correlation_id, payment_created, attempt_started, risk_decision_recorded, processor_operation_requested, processor_outcome_unknown,\
-          \ attempt_declined, payment_succeeded, payment_expired FROM {batch})\n  WHERE attempt_started IS NOT NULL\n  GROUP\
-          \ BY ALL HAVING count(*) > 1\n)\n"
-      meta:
-        semantic_rule_id: payment_attempt_identity
+    type: sql
+    description: Each canonical attempt identity starts once within its scoped payment.
+    query: |
+      WITH canonical AS (
+        SELECT * FROM (
+          SELECT e.*, ROW_NUMBER() OVER (PARTITION BY e.event_id ORDER BY e.recorded_at) AS delivery
+          FROM {events} AS e
+        ) AS deliveries WHERE delivery = 1
+      )
+      SELECT COUNT(*) FROM (
+        SELECT c.integration_id, c.payment_id, c.attempt_started.attempt_id AS attempt_id
+        FROM canonical AS c
+        WHERE c.attempt_started IS NOT NULL
+        GROUP BY c.integration_id, c.payment_id, c.attempt_started.attempt_id
+        HAVING COUNT(*) > 1
+      ) AS violations
+    mustBe: 0
   - id: payment_risk_assessment
-    type: custom
-    description: Decisions declare an approve or decline outcome, policy version and nonempty reason codes.
     name: payment_risk_assessment
-    engine: great-expectations
-    implementation:
-      type: unexpected_rows_expectation
-      kwargs:
-        unexpected_rows_query: "SELECT * FROM {batch}\nWHERE risk_decision_recorded IS NOT NULL AND (\n  risk_decision_recorded.assessment.outcome\
-          \ NOT IN ('RISK_OUTCOME_APPROVE', 'RISK_OUTCOME_DECLINE')\n  OR risk_decision_recorded.assessment.policy_version\
-          \ = ''\n  OR size(risk_decision_recorded.assessment.reason_codes) = 0\n  OR array_contains(risk_decision_recorded.assessment.reason_codes,\
-          \ '')\n)\n"
-      meta:
-        semantic_rule_id: payment_risk_assessment
+    type: sql
+    description: Decisions declare an approve or decline outcome, policy version and nonempty reason codes.
+    query: |
+      SELECT COUNT(*) FROM {events} AS e
+      WHERE e.risk_decision_recorded IS NOT NULL AND (
+        e.risk_decision_recorded.assessment.outcome NOT IN ('RISK_OUTCOME_APPROVE', 'RISK_OUTCOME_DECLINE')
+        OR e.risk_decision_recorded.assessment.policy_version = ''
+        OR ARRAY_LENGTH(e.risk_decision_recorded.assessment.reason_codes) = 0
+        OR ARRAY_CONTAINS(e.risk_decision_recorded.assessment.reason_codes, '')
+      )
+    mustBe: 0
   - id: payment_snapshot_amounts
-    type: custom
-    description: Checkout item quantities and amounts are valid and sum to the total in the same currency.
     name: payment_snapshot_amounts
-    engine: great-expectations
-    implementation:
-      type: unexpected_rows_expectation
-      kwargs:
-        unexpected_rows_query: "SELECT * FROM {batch} e\nWHERE payment_created IS NOT NULL AND (\n  payment_created.snapshot.total.minor_units\
-          \ < 0\n  OR NOT (payment_created.snapshot.total.currency RLIKE '^[A-Z][A-Z][A-Z]$')\n  OR size(payment_created.snapshot.items)\
-          \ = 0\n  OR NOT (CAST(payment_created.snapshot.total.minor_units AS DECIMAL(38,0)) <=>\n    aggregate(payment_created.snapshot.items,\
-          \ CAST(0 AS DECIMAL(38,0)),\n      (acc, item) -> CAST(acc + CAST(item.quantity AS DECIMAL(38,0)) * item.unit_price.minor_units\
-          \ AS DECIMAL(38,0))))\n  OR exists(payment_created.snapshot.items, item -> item.quantity <= 0\n    OR item.unit_price.minor_units\
-          \ < 0\n    OR NOT (item.unit_price.currency <=> payment_created.snapshot.total.currency))\n)\n"
-      meta:
-        semantic_rule_id: payment_snapshot_amounts
+    type: sql
+    description: Checkout item quantities and amounts are valid and sum to the total in the same currency.
+    query: |
+      SELECT COUNT(*) FROM {events} AS e
+      WHERE e.payment_created IS NOT NULL AND (
+        e.payment_created.snapshot.total.minor_units < 0
+        OR NOT (e.payment_created.snapshot.total.currency REGEXP '^[A-Z][A-Z][A-Z]$')
+        OR ARRAY_LENGTH(e.payment_created.snapshot.items) = 0
+        OR NOT (CAST(e.payment_created.snapshot.total.minor_units AS DECIMAL(38,0)) <=>
+          ARRAY_SUM(ARRAY_MAP(item -> CAST(item.quantity AS DECIMAL(38,0)) * item.unit_price.minor_units,
+            e.payment_created.snapshot.items)))
+        OR ANY_MATCH(item -> item.quantity <= 0
+          OR item.unit_price.minor_units < 0
+          OR NOT (item.unit_price.currency <=> e.payment_created.snapshot.total.currency),
+          e.payment_created.snapshot.items)
+      )
+    mustBe: 0

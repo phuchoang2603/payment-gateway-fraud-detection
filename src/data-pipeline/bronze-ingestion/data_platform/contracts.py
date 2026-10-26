@@ -1,22 +1,25 @@
-import json
 import re
 from dataclasses import dataclass
 
-import great_expectations as gx
 import yaml
-from datacontract.data_contract import DataContract
-from great_expectations.expectations.registry import get_expectation_impl
 from pyspark.sql import types as T
 
 from data_platform.products import AUDIT, contract_path
 
-TYPES = {
+SPARK_TYPES = {
     "string": T.StringType,
     "long": T.LongType,
     "int": T.IntegerType,
     "double": T.DoubleType,
     "boolean": T.BooleanType,
     "timestamp": T.TimestampType,
+}
+STARROCKS_TYPES = {
+    "string": "varchar(1073741824)",
+    "long": "bigint(20)",
+    "int": "int(11)",
+    "double": "double",
+    "timestamp": "datetime",
 }
 
 
@@ -26,7 +29,7 @@ def data_type(prop):
     if prop["logicalType"] == "array":
         return T.ArrayType(data_type(prop["items"]), containsNull=not prop["items"].get("required", False))
     try:
-        return TYPES[prop["physicalType"]]()
+        return SPARK_TYPES[prop["physicalType"]]()
     except KeyError as error:
         raise ValueError(f"unsupported physical type: {prop}") from error
 
@@ -35,96 +38,104 @@ def physical_schema(properties):
     return T.StructType([T.StructField(p["name"], data_type(p), not p.get("required", False)) for p in properties])
 
 
-def required_predicates(properties, path="", present="true"):
+def starrocks_type(prop, top=True):
+    if prop["logicalType"] == "object":
+        return "struct<" + ", ".join(f"`{p['name']}` {starrocks_type(p, False)}" for p in prop["properties"]) + ">"
+    if prop["logicalType"] == "array":
+        return "array<" + starrocks_type(prop["items"], False) + ">"
+    if prop["physicalType"] == "boolean":
+        return "tinyint(1)" if top else "boolean"
+    try:
+        return STARROCKS_TYPES[prop["physicalType"]]
+    except KeyError as error:
+        raise ValueError(f"unsupported physical type: {prop}") from error
+
+
+def required_predicates(properties, expr="e", trail="", present="TRUE", depth=0):
+    """Map each required field path to a StarRocks predicate that is true for violating rows."""
     predicates = {}
     for p in properties:
-        expr = f"{path}.`{p['name']}`" if path else f"`{p['name']}`"
-        key = expr.replace("`", "")
+        child = f"{expr}.`{p['name']}`"
+        key = f"{trail}{p['name']}"
         if p.get("required"):
-            predicates[key] = f"({present}) AND {expr} IS NULL"
+            predicates[key] = f"({present}) AND {child} IS NULL"
         if p["logicalType"] == "object":
-            predicates.update(required_predicates(p["properties"], expr, f"({present}) AND {expr} IS NOT NULL"))
+            predicates.update(
+                required_predicates(p["properties"], child, key + ".", f"({present}) AND {child} IS NOT NULL", depth)
+            )
         if p["logicalType"] == "array":
             item = p["items"]
+            name = f"item{depth}"
             if item.get("required"):
-                predicates[key + "[]"] = f"exists({expr}, item -> item IS NULL)"
+                predicates[key + "[]"] = f"({present}) AND ANY_MATCH({name} -> {name} IS NULL, {child})"
             if item["logicalType"] == "object":
-                for child, pred in required_predicates(item["properties"], "item", "item IS NOT NULL").items():
-                    predicates[key + "[]." + child.removeprefix("item.")] = f"exists({expr}, item -> {pred})"
+                inner = required_predicates(item["properties"], name, key + "[].", f"{name} IS NOT NULL", depth + 1)
+                for path, predicate in inner.items():
+                    predicates[path] = f"({present}) AND ANY_MATCH({name} -> {predicate}, {child})"
     return predicates
+
+
+def semantic_name(identifier):
+    return re.sub(r"[^A-Za-z0-9_]+", "__", identifier.replace("[]", "_items")).strip("_")
+
+
+@dataclass
+class Rule:
+    id: str
+    description: str
+    sql: str
 
 
 @dataclass
 class PreparedContract:
     document: dict
     schema: T.StructType
-    suite: gx.ExpectationSuite
-    coverage: dict
+    rules: list
 
     @property
     def business_columns(self):
         return [f.name for f in self.schema if f.name not in AUDIT]
 
 
+def count_query(identifier, query):
+    if not re.search(r"SELECT\s+COUNT\s*\(\s*\*\s*\)", query, re.I):
+        raise ValueError(f"rule must return a violation count: {identifier}")
+    return query
+
+
 def prepare(table, path=None):
     path = path or contract_path(table)
     doc = yaml.safe_load(path.read_text())
     schema = doc["schema"][0]
-    expected = physical_schema(schema["properties"])
-    raw = json.loads(
-        DataContract(data_contract_file=str(path)).export(
-            "great-expectations", schema_name=schema["name"], engine="spark"
+    rules = []
+    for column in schema["properties"]:
+        rules.append(
+            Rule(
+                f"schema_type__{semantic_name(column['name'])}",
+                f"Persisted type of {column['name']} equals the contract physical type.",
+                "SELECT COUNT(*) FROM (SELECT 1) AS anchor WHERE NOT EXISTS (\n"
+                "  SELECT 1 FROM information_schema.columns AS c\n"
+                f"  WHERE c.table_schema = '{{schema}}' AND c.table_name = '{{table}}' AND c.column_name = '{column['name']}'\n"
+                f"    AND c.column_type = '{starrocks_type(column)}'\n)",
+            )
         )
-    )
-    exported = raw["expectations"]
-    for entry in exported:
-        if entry["type"] == "expect_table_columns_to_match_set":
-            entry["kwargs"]["exact_match"] = False
-    declared = {q["id"] for q in schema.get("quality", [])}
-    if len(declared) != len(schema.get("quality", [])):
+    for key, predicate in required_predicates(schema["properties"]).items():
+        rules.append(
+            Rule(
+                f"schema_required__{semantic_name(key)}",
+                f"Required field {key} is present whenever its enclosing value is present.",
+                "SELECT COUNT(*) FROM {relation} AS e WHERE " + predicate,
+            )
+        )
+    declared = []
+    for quality in schema.get("quality", []):
+        if quality.get("type") != "sql" or quality.get("mustBe") != 0 or not quality.get("query"):
+            raise ValueError(f"unsupported quality rule: {quality.get('id')}")
+        declared.append(quality["id"])
+        rules.append(Rule(quality["id"], quality["description"], count_query(quality["id"], quality["query"])))
+    if len(declared) != len(set(declared)) or len({r.id for r in rules}) != len(rules):
         raise ValueError("duplicate quality rule ID")
-    covered = {e.get("meta", {}).get("id") for e in exported if e.get("meta", {}).get("id")}
-    if covered != declared:
-        raise ValueError(f"uncovered quality rules: {declared - covered}; unexpected rules: {covered - declared}")
-    for q in schema.get("quality", []):
-        if q.get("engine") != "great-expectations" or q.get("type") != "custom":
-            raise ValueError(f"unsupported quality engine: {q['id']}")
-        impl = q["implementation"]
-        query = impl.get("kwargs", {}).get("unexpected_rows_query", "")
-        if (
-            impl.get("type") != "unexpected_rows_expectation"
-            or not query
-            or re.search(r"SELECT\s+count\s*\(", query, re.I)
-        ):
-            raise ValueError(f"rule must return unexpected rows: {q['id']}")
-    requirements = required_predicates(schema["properties"])
-    for key, predicate in requirements.items():
-        if "." not in key and "[]" not in key:
-            if not any(
-                e["type"] == "expect_column_values_to_not_be_null" and e["kwargs"]["column"] == key for e in exported
-            ):
-                raise ValueError(f"uncovered required field: {key}")
-            continue
-        exported.append(
-            {
-                "type": "unexpected_rows_expectation",
-                "kwargs": {"unexpected_rows_query": "SELECT * FROM {batch} WHERE " + predicate},
-                "meta": {"id": "schema.required." + key},
-            }
-        )
-    expectations = []
-    for entry in exported:
-        implementation = get_expectation_impl(entry["type"])
-        if implementation is None:
-            raise ValueError(f"unsupported expectation: {entry['type']}")
-        expectations.append(implementation(**entry["kwargs"], meta=entry.get("meta", {})))
-    suite = gx.ExpectationSuite(name=raw["name"], expectations=expectations, meta=raw.get("meta", {}))
-    return PreparedContract(
-        doc,
-        expected,
-        suite,
-        {"quality": sorted(declared), "required": sorted(requirements), "physical_schema": expected.jsonValue()},
-    )
+    return PreparedContract(doc, physical_schema(schema["properties"]), rules)
 
 
 def check_physical(actual, expected, path=""):

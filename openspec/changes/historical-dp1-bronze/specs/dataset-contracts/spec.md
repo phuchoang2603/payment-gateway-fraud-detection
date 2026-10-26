@@ -21,7 +21,7 @@ The historical-source contracts SHALL declare executable SQL rules. Identical re
 
 ### Requirement: Execution boundaries
 
-Documentation SHALL distinguish source DuckDB checks, bronze Spark/GX checks, contract lint and catalog ingestion. Producing and ingesting jobs SHALL own data preparation, physical file checks and publication gating. OpenMetadata SHALL import the Git-authoritative ODCS contracts and consume GX execution evidence without replacing validation or introducing an independent rule source. Flink integration SHALL remain with its pipeline.
+Documentation SHALL distinguish source DuckDB publication checks, bronze StarRocks SQL checks, contract lint and native catalog ingestion. Producing and ingesting jobs SHALL own data preparation and physical file safeguards. Official OpenMetadata ingestion workflows SHALL execute Git-authoritative bronze SQL quality rules through StarRocks and expose native results. Argo SHALL verify acceptance separately; no GX suite, custom result publisher or independent UI-authored rule source SHALL remain. Flink integration SHALL remain with its pipeline.
 
 #### Scenario: Dataset validation
 
@@ -31,7 +31,7 @@ Documentation SHALL distinguish source DuckDB checks, bronze Spark/GX checks, co
 #### Scenario: Bronze validation
 
 - **WHEN** DP1 exposes its selected persisted bronze snapshots
-- **THEN** contract-derived Spark/GX checks validate those outputs and catalog publication reports the outcome separately
+- **THEN** native OpenMetadata tests execute contract-derived StarRocks SQL against the recorded snapshots and acceptance verifies their complete results separately
 
 ## ADDED Requirements
 
@@ -55,11 +55,11 @@ Bronze contracts SHALL define business fields, ingestion provenance, normalized 
 
 ### Requirement: Complete contract-derived bronze enforcement
 
-Bronze validation SHALL derive executable suites and schema checks from ODCS without a handwritten parallel suite. Each quality rule and required schema constraint SHALL have a verified execution path. Unsupported or omitted checks SHALL fail preparation rather than produce a partial passing result.
+Bronze validation SHALL derive native OpenMetadata test definitions and schema checks from Git ODCS with stable semantic rule IDs and explicit StarRocks SQL, without a handwritten parallel suite. Custom SQL SHALL return bounded scalar violation counts with zero as the passing threshold; validation SHALL NOT collect all invalid rows. Each quality rule and required schema constraint SHALL have a verified execution path. Unsupported or omitted checks SHALL fail preparation rather than produce a partial passing result.
 
-#### Scenario: Exporter skips a quality rule
+#### Scenario: Native preparation skips a quality rule
 
-- **WHEN** suite generation omits a declared rule or cannot enforce a nested constraint
+- **WHEN** native test preparation omits a declared rule or cannot enforce a nested constraint
 - **THEN** validation preparation fails with the uncovered rule or field identified
 
 #### Scenario: Duplicate comparison includes provenance
@@ -69,12 +69,12 @@ Bronze validation SHALL derive executable suites and schema checks from ODCS wit
 
 ### Requirement: Source and bronze semantic agreement
 
-Equivalent source and bronze business checks SHALL retain traceable semantic rule identities and agree on shared valid/invalid fixtures after declared schema normalization. Engine-specific SQL SHALL use its execution dialect; exporting a suite SHALL NOT be treated as SQL translation or data validation.
+Equivalent source and bronze business checks SHALL retain traceable semantic rule identities and agree on shared valid/invalid fixtures after declared schema normalization. Engine-specific SQL SHALL use its execution dialect; preparing test definitions SHALL NOT be treated as SQL translation or data validation.
 
-#### Scenario: Scalar aggregate differs from unexpected-row semantics
+#### Scenario: Scalar violation count
 
-- **WHEN** a source count-of-violations rule is represented as a bronze unexpected-row check
-- **THEN** valid data returns no violating rows, invalid data returns violations and both engines agree on pass/fail
+- **WHEN** a source count-of-violations rule is implemented as a native bronze custom SQL check
+- **THEN** valid data returns zero, invalid data returns a positive violation count and both engines agree on pass/fail
 
 #### Scenario: Conditional nested requirement
 
