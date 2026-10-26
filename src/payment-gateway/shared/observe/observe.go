@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -13,8 +13,8 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -52,12 +52,21 @@ func Init(ctx context.Context, service string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-	if traces || metrics {
-		host, port, err := net.SplitHostPort(endpoint)
-		portNumber, portErr := strconv.Atoi(port)
-		if err != nil || portErr != nil || portNumber < 1 || portNumber > 65535 || host == "" || strings.ContainsAny(host, " /@\t\r\n") {
-			return nil, errors.New("enabled telemetry requires OTEL_EXPORTER_OTLP_ENDPOINT as host:port")
+	tracesEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+	metricsEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")
+	for _, signal := range []struct {
+		enabled       bool
+		key, endpoint string
+	}{
+		{traces, "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", tracesEndpoint},
+		{metrics, "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", metricsEndpoint},
+	} {
+		if !signal.enabled {
+			continue
+		}
+		u, err := url.ParseRequestURI(signal.endpoint)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil {
+			return nil, fmt.Errorf("enabled telemetry requires %s as an HTTP URL", signal.key)
 		}
 	}
 	ratio := 0.1
@@ -75,7 +84,10 @@ func Init(ctx context.Context, service string) (func(), error) {
 		}
 		interval = time.Duration(ms) * time.Millisecond
 	}
-	res := resource.NewSchemaless(attribute.String("service.name", service), attribute.String("service.instance.id", os.Getenv("POD_UID")), attribute.String("service.version", os.Getenv("SERVICE_REVISION")))
+	res, err := resource.New(ctx, resource.WithFromEnv(), resource.WithAttributes(attribute.String("service.name", service), attribute.String("service.instance.id", os.Getenv("POD_UID")), attribute.String("service.version", os.Getenv("SERVICE_REVISION"))))
+	if err != nil {
+		return nil, err
+	}
 	var shutdowns []func(context.Context) error
 	shutdown := func() {
 		for _, stop := range shutdowns {
@@ -87,7 +99,7 @@ func Init(ctx context.Context, service string) (func(), error) {
 		}
 	}
 	if traces {
-		exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpoint(endpoint), otlptracegrpc.WithInsecure(), otlptracegrpc.WithTimeout(2*time.Second))
+		exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(tracesEndpoint), otlptracehttp.WithTimeout(2*time.Second))
 		if err != nil {
 			return nil, errors.New("initialize trace exporter")
 		}
@@ -100,7 +112,7 @@ func Init(ctx context.Context, service string) (func(), error) {
 		shutdowns = append(shutdowns, provider.Shutdown)
 	}
 	if metrics {
-		exporter, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithEndpoint(endpoint), otlpmetricgrpc.WithInsecure(), otlpmetricgrpc.WithTimeout(2*time.Second))
+		exporter, err := otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(metricsEndpoint), otlpmetrichttp.WithTimeout(2*time.Second))
 		if err != nil {
 			shutdown()
 			return nil, errors.New("initialize metric exporter")

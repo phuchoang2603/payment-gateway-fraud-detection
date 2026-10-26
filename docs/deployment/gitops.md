@@ -38,7 +38,7 @@ All services validate configuration at startup and exit non-zero with a sanitize
 | all Go | `METRICS_ENABLED` | `false` outside Helm | Explicit OTLP metric export |
 | fraud   | `TRACING_ENABLED`                  | `false`                                                  | Opt-in instance-owned OpenTelemetry provider                     |
 | fraud   | `OTEL_SERVICE_NAME`                | `fraud-service`                                          | Identity for logs, metrics and traces                            |
-| fraud   | `OTEL_EXPORTER_OTLP_ENDPOINT`      | unset                                                    | Required for either enabled signal; OTLP/gRPC host:port |
+| fraud | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | unset | Full HTTP URLs required for each enabled signal |
 | edge    | `EDGE_HTTP_ADDR`                   | `:8080`                                                  | Public HTTP listener                                             |
 | edge    | `EDGE_SHUTDOWN_TIMEOUT`            | `10s`                                                    | HTTP drain budget                                                |
 | edge | `EDGE_INTEGRATIONS_FILE`, `EDGE_PAYMENTS_ADDR`, `EDGE_VAULT_ADDRESS` | required / chart values | Hashed integration config and internal dependencies |

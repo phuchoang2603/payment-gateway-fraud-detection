@@ -15,7 +15,8 @@ defaults:
   telemetry:
     tracingEnabled: true
     metricsEnabled: true
-    endpoint: otel-agent.observability.svc.cluster.local:4317
+    metricsEndpoint: http://vmagent-vmks.observability.svc.cluster.local:8429/opentelemetry/v1/metrics
+    tracesEndpoint: http://vtagent-vmks.observability.svc.cluster.local:10429/insert/opentelemetry/v1/traces
     samplingRatio: '0.1'
     metricExportInterval: 60000
   mesh:
@@ -159,10 +160,14 @@ services:
             matchLabels:
               kubernetes.io/metadata.name: observability
           podSelector:
-            matchLabels:
-              app.kubernetes.io/name: otel-agent
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [vmagent, vtagent]
         ports:
-        - port: 4317
+        - port: 8429
+          protocol: TCP
+        - port: 10429
           protocol: TCP
       - to:
         - namespaceSelector:
