@@ -31,7 +31,7 @@ def contract_body(table, entity_id):
 
 
 def requests(run, ids, report_uri):
-    """Explicit OpenMetadata writes for Argo HTTP templates: [{method, path, body}]."""
+    """Named OpenMetadata writes for the ordered Argo HTTP steps."""
     bronze = product_document(PRODUCT)
     source = product_document(SOURCE_PRODUCT)
     manifest = f"{run['source_root'].rstrip('/')}/manifest.json"
@@ -40,18 +40,18 @@ def requests(run, ids, report_uri):
         f"snapshots={run['snapshots']} evidence={report_uri}"
     )
     table = lambda name: {"id": ids[name], "type": "table"}  # noqa: E731
-    out = [
-        {
+    out = {
+        "domain": {
             "method": "PUT",
             "path": "/v1/domains",
             "body": {"name": DOMAIN, "domainType": "Aggregate", "description": "Fraud detection data platform"},
         },
-        {
+        "domain_assets": {
             "method": "PUT",
             "path": f"/v1/domains/{DOMAIN}/assets/add",
             "body": {"assets": [table(name) for name in PORTS]},
         },
-        {
+        "source_product": {
             "method": "PUT",
             "path": "/v1/dataProducts",
             "body": {
@@ -62,7 +62,7 @@ def requests(run, ids, report_uri):
                 "domains": [DOMAIN],
             },
         },
-        {
+        "bronze_product": {
             "method": "PUT",
             "path": "/v1/dataProducts",
             "body": {
@@ -72,27 +72,26 @@ def requests(run, ids, report_uri):
                 "domains": [DOMAIN],
             },
         },
-        {
+        "product_assets": {
             "method": "PUT",
             "path": f"/v1/dataProducts/{PRODUCT}/assets/add",
             "body": {"assets": [table(name) for name in PORTS]},
         },
-    ]
-    out += [{"method": "PUT", "path": "/v1/dataContracts", "body": contract_body(name, ids[name])} for name in PORTS]
-    out.append(
-        {
-            "method": "PUT",
-            "path": "/v1/lineage",
-            "body": {
-                "edge": {
-                    "fromEntity": table("payment_events"),
-                    "toEntity": table("fraud_labels"),
-                    "lineageDetails": {
-                        "description": "label validation depends on payment events; " + description,
-                        "pipeline": {"id": ids["pipeline"], "type": "pipeline"},
-                    },
-                }
-            },
-        }
-    )
+    }
+    for port, name in (("payment_events", "events_contract"), ("fraud_labels", "labels_contract")):
+        out[name] = {"method": "PUT", "path": "/v1/dataContracts", "body": contract_body(port, ids[port])}
+    out["lineage"] = {
+        "method": "PUT",
+        "path": "/v1/lineage",
+        "body": {
+            "edge": {
+                "fromEntity": table("payment_events"),
+                "toEntity": table("fraud_labels"),
+                "lineageDetails": {
+                    "description": "label validation depends on payment events; " + description,
+                    "pipeline": {"id": ids["pipeline"], "type": "pipeline"},
+                },
+            }
+        },
+    }
     return out

@@ -110,7 +110,7 @@ def main(argv=None):
 
             report = f"{store.root}/{evidence_key(run, contracts, 'result')}"
             writes = requests(run, json.loads(args.table_ids), report)
-            print(json.dumps([{**write, "body": json.dumps(write["body"])} for write in writes]))
+            print(json.dumps({name: {**write, "body": json.dumps(write["body"])} for name, write in writes.items()}))
         elif args.stage == "accept":
             from data_platform import readback
 

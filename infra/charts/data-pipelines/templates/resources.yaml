@@ -109,7 +109,7 @@ rules:
     verbs: [create, patch]
   - apiGroups: [""]
     resources: [secrets]
-    resourceNames: [dp1-openmetadata]
+    resourceNames: [openmetadata]
     verbs: [get]
   - apiGroups: [argoproj.io]
     resources: [workflowtasksets]

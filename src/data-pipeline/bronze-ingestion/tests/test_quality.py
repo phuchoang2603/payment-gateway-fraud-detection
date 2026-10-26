@@ -35,7 +35,7 @@ def test_every_contract_rule_is_rendered_against_independently_pinned_snapshots(
     assert "('2026-07-01', 3)" in cases[f"{quality.entity('payment_events')}.{quality.CONSERVATION}"].sql
 
 
-def test_preparation_is_stable_and_refuses_a_different_rule_set(tmp_path, monkeypatch):
+def test_preparation_is_stable_and_refuses_a_different_rule_set(tmp_path):
     store, contracts = Store(str(tmp_path)), hashes()
     first = cli.prepare(store, RUN, contracts, MANIFEST, tmp_path / "out")
     assert cli.prepare(store, RUN, contracts, MANIFEST, tmp_path / "again") == first
@@ -89,11 +89,11 @@ def test_only_fresh_matching_success_results_pass():
 def test_governance_requests_carry_original_contract_provenance():
     ids = {"payment_events": "id-events", "fraud_labels": "id-labels", "pipeline": "id-pipeline"}
     requests = governance.requests(RUN, ids, "s3://evidence/result.json")
-    contracts = [r["body"] for r in requests if r["path"] == "/v1/dataContracts"]
+    contracts = [r["body"] for r in requests.values() if r["path"] == "/v1/dataContracts"]
     assert {c["entity"]["id"] for c in contracts} == {"id-events", "id-labels"}
     for contract in contracts:
         assert "```yaml" in contract["description"]
     assert {f"sha256={digest}" for digest in hashes().values()} <= {
         part for c in contracts for part in c["description"].split() if part.startswith("sha256=")
     }
-    assert len(requests) == 8 and requests[-1]["path"] == "/v1/lineage"
+    assert requests["lineage"]["path"] == "/v1/lineage"

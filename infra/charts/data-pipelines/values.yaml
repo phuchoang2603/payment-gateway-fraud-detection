@@ -28,10 +28,10 @@ externalSecrets:
     data:
       AWS_ACCESS_KEY_ID: LAKEHOUSE_RUSTFS_ACCESS_KEY
       AWS_SECRET_ACCESS_KEY: LAKEHOUSE_RUSTFS_SECRET_KEY
-  - name: dp1-openmetadata
+  - name: openmetadata
     store: fraud-doppler
     data:
-      OPENMETADATA_TOKEN: DP1_OPENMETADATA_TOKEN
+      OPENMETADATA_TOKEN: OPENMETADATA_TOKEN
     template:
       OPENMETADATA_TOKEN: "{{ .OPENMETADATA_TOKEN }}"
       authorization: "Bearer {{ .OPENMETADATA_TOKEN }}"
