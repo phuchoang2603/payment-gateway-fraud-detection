@@ -3,7 +3,7 @@ from copy import deepcopy
 import pytest
 from pyspark.sql import functions as F
 
-from data_platform.ingest import ingest, selected_snapshots, table_name
+from data_platform.ingest import ingest, selected_snapshots, table_name, verify_content
 from data_platform.manifest import selected_manifest
 from data_platform.products import PORTS, hashes
 from data_platform.runs import open_run
@@ -19,25 +19,28 @@ def test_raw_chunks_ingest_directly_into_date_partitioned_bronze(spark, dataset,
     run = open_run(store, "smoke", "a" * 64, hashes(), "image", "workflow")
     source = source_frames(spark, str(root), manifest, run)
     spark.sql("CREATE NAMESPACE lake.raw_chunks")
-    (
-        source["payment_events"]
-        .limit(0)
-        .writeTo(table_name("payment_events", "raw_chunks"))
-        .using("iceberg")
-        .partitionedBy("_source_dataset_version")
-        .tableProperty("format-version", "2")
-        .create()
-    )
     ingest(spark, str(root), manifest, store, run, namespace="raw_chunks")
     snapshots = selected_snapshots(spark, run, namespace="raw_chunks")
     for table in PORTS:
         actual = snapshots[table]
         expected = source[table]
+        assert run["conservation"]["snapshots"] == run["snapshots"]
         assert actual.count() == sum(manifest["partitions"][table].values())
         assert not actual.exceptAll(expected).take(1) and not expected.exceptAll(actual).take(1)
         partition_type = spark.table(table_name(table, "raw_chunks") + ".partitions").schema["partition"].dataType
         assert len(partition_type.fields) == 2
         assert partition_type.fields[1].name.endswith("_day")
+
+    name = table_name("payment_events", "raw_chunks")
+    snapshots["payment_events"].withColumn("correlation_id", F.lit("changed-content")).writeTo(name).overwrite(
+        F.lit(True)
+    )
+    changed = deepcopy(run)
+    changed["snapshots"]["payment_events"] = (
+        spark.table(name + ".snapshots").orderBy(F.col("committed_at").desc()).first().snapshot_id
+    )
+    with pytest.raises(ValueError, match="persisted content differs"):
+        verify_content(spark, source, changed, "raw_chunks")
 
 
 def test_snapshot_recovery_isolation_and_replay(spark, dataset, tmp_path):

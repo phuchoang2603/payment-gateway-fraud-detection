@@ -15,7 +15,7 @@ DP1 SHALL expose distinct ingest and validate stages with input, output and run 
 
 ### Requirement: Versioned-export batch selection
 
-Each historical-mode workflow submission SHALL select one completed, immutable source export through `source-root` and `dataset-version` parameters, with chart-configured defaults. Every stage SHALL use the selected parameters consistently. Subsequent historical batches SHALL select newly completed export versions. Recurring landing mode SHALL select completed input units through durable input tracking; a schedule alone SHALL NOT constitute discovery or retry safety.
+Each historical-mode workflow submission SHALL select one completed, immutable source export through `source-root` and `dataset-version` parameters, with chart-configured defaults selecting published v16 for development. Scale generation SHALL NOT be a prerequisite for development ingestion; later full-volume acceptance SHALL remain separate. Every stage SHALL use the selected parameters consistently. Subsequent historical batches SHALL select newly completed export versions. Recurring landing mode SHALL select completed input units through durable input tracking; a schedule alone SHALL NOT constitute discovery or retry safety.
 
 #### Scenario: Process the next completed export
 

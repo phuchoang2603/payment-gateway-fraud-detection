@@ -24,21 +24,7 @@ def source_frames(spark, root, manifest, run):
         paths = [root.rstrip("/") + "/" + entry["key"] for entry in manifest["inventory"] if entry["table"] == table]
         if paths:
             frame = spark.read.option("mergeSchema", "true").parquet(*[p.replace("s3://", "s3a://", 1) for p in paths])
-            if table == "payment_events":
-                versions = [r[0] for r in frame.select("schema_version").distinct().limit(4).collect()]
-                if any(v not in (1, 2) for v in versions):
-                    raise ValueError("unsupported row schema version")
-                signals = frame.schema["attempt_started"].dataType["signals"].dataType
-                if "user_agent_family" not in signals.fieldNames():
-                    frame = frame.withColumn(
-                        "attempt_started",
-                        F.col("attempt_started").withField(
-                            "signals",
-                            F.col("attempt_started.signals").withField(
-                                "user_agent_family", F.lit(None).cast("string")
-                            ),
-                        ),
-                    )
+            check_physical(frame.schema, T.StructType([f for f in prepared.schema if f.name not in AUDIT]))
             frame = frame.select(*prepared.business_columns)
             frame = frame.withColumn("_source_file", F.regexp_replace(F.input_file_name(), "^s3a://", "s3://"))
         else:
@@ -72,16 +58,16 @@ def committed_snapshot(spark, name, run):
     return row.snapshot_id
 
 
-def ensure_date_partition(spark, name, table):
+def check_date_partition(spark, name, table):
     column = "occurred_at" if table == "payment_events" else "label_available_at"
     definition = spark.sql(f"SHOW CREATE TABLE {name}").first()[0]
     canonical = re.sub(r"\s+", "", definition.replace("`", "")).lower()
     if f"days({column})" not in canonical:
-        spark.sql(f"ALTER TABLE {name} ADD PARTITION FIELD days({column})")
+        raise ValueError(f"table lacks the required date partition: {name}")
 
 
 def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=None):
-    if set(run["snapshots"]) == set(PORTS):
+    if set(run["snapshots"]) == set(PORTS) and run.get("conservation", {}).get("outcome") == "passed":
         return run
     verify_files(spark, root, manifest)
     frames = source_frames(spark, root, manifest, run)
@@ -105,7 +91,7 @@ def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=N
                 .tableProperty("history.expire.max-snapshot-age-ms", "9223372036854775807")
                 .create()
             )
-        ensure_date_partition(spark, name, table)
+        check_date_partition(spark, name, table)
         snapshot = committed_snapshot(spark, name, run)
         if snapshot is None:
             (
@@ -121,7 +107,23 @@ def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=N
                 raise RuntimeError("commit did not produce a recoverable snapshot")
         run["snapshots"][table] = snapshot
         save_run(store, run)
+    verify_content(spark, frames, run, namespace)
+    run["conservation"] = {
+        "outcome": "passed",
+        "method": "spark-exceptAll-bidirectional",
+        "snapshots": dict(run["snapshots"]),
+        "manifest_sha256": run["manifest_sha256"],
+    }
+    save_run(store, run)
     return run
+
+
+def verify_content(spark, frames, run, namespace):
+    persisted = selected_snapshots(spark, run, namespace)
+    for table, expected in frames.items():
+        actual = persisted[table].select(*expected.columns)
+        if actual.exceptAll(expected).limit(1).count() or expected.exceptAll(actual).limit(1).count():
+            raise ValueError(f"persisted content differs from source deliveries: {table}")
 
 
 def selected_snapshots(spark, run, namespace="bronze"):

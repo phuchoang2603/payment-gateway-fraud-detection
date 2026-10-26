@@ -40,6 +40,7 @@ COPY --from=build /opt/data-pipeline/bronze-ingestion/.venv /opt/data-pipeline/b
 COPY --from=jars /jars/ /opt/spark/jars/
 COPY src/data-pipeline/bronze-ingestion/config/log4j2.properties /opt/dp1/log4j2.properties
 COPY contracts/data-products /contracts/data-products
+COPY contracts/features /contracts/features
 ENV PATH="/opt/data-pipeline/bronze-ingestion/.venv/bin:$PATH" \
     PYSPARK_PYTHON="/opt/data-pipeline/bronze-ingestion/.venv/bin/python" \
     DATA_PRODUCTS_ROOT="/contracts/data-products" \

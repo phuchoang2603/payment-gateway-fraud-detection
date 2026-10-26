@@ -26,6 +26,7 @@ def test_preprovisioned_namespace_does_not_request_namespace_creation(tmp_path, 
                 return Definition()
             raise AssertionError("preprovisioned namespace must not be mutated")
 
+    monkeypatch.setattr(ingest, "verify_content", lambda *args: None)
     monkeypatch.setattr(ingest, "verify_files", lambda *args: None)
     monkeypatch.setattr(ingest, "source_frames", lambda *args: {"payment_events": None, "fraud_labels": None})
     monkeypatch.setattr(ingest, "committed_snapshot", lambda *args: 1)

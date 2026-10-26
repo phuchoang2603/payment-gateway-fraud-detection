@@ -6,11 +6,11 @@ Publish reproducible bronze payment and label snapshots from immutable historica
 
 ### Requirement: Completed source selection
 
-In historical mode, DP1 SHALL ingest only files selected by a completed immutable source manifest and its embedded inventory; manifests without an embedded inventory are unsupported. It SHALL verify declared identities, supported schemas, file hashes, sizes and row counts before writing bronze. Source objects and the original manifest SHALL remain unchanged. Source validation SHALL either declare both native ports passed or explicitly declare `result: skipped`, `gate: dp1-spark-gx` and a nonblank reason with an embedded inventory and no conflicting port declarations. The latter is original producer provenance and permits ingestion, not quality acceptance. Run and validation evidence SHALL preserve it unchanged and explicitly record its replacement by the versioned StarRocks SQL policy. Bronze acceptance SHALL require both persisted tables passing native SQL checks, complete matching rule/run/contract/snapshot evidence and verified governance readback. No GX runtime fallback or reuse of old GX acceptance SHALL satisfy this policy.
+In historical mode, DP1 SHALL ingest only files selected by a completed immutable source manifest and its embedded inventory; manifests without an embedded inventory are unsupported. It SHALL verify declared identities, supported schemas, file hashes, sizes and row counts before writing bronze. Source objects and the original manifest SHALL remain unchanged. Source validation SHALL either declare both native ports passed or explicitly declare `result: skipped`, `gate: dp1-starrocks-openmetadata` and a nonblank reason with an embedded inventory and no conflicting port declarations. The latter permits ingestion, not quality acceptance. Current inputs SHALL match schema 3 events, schema 1 labels, current source contracts/product and the pinned feature definition. Run and validation evidence SHALL preserve these declarations unchanged. Bronze acceptance SHALL require both persisted tables passing native SQL checks, matching duplicate-aware conservation evidence and complete rule/run/contract/snapshot/governance readback. Retired GX gate/schema compatibility SHALL NOT be a current path; historical outcomes SHALL remain unchanged.
 
 #### Scenario: Accepted historical version
 
-- **WHEN** a published version such as the transformed v12 export or the v11 smoke export is selected with its completed manifest and matching source files
+- **WHEN** a published version such as the published 90-day v16 development export is selected with its completed manifest and matching source files
 - **THEN** the run records the manifest digest, source version and exact input files without regenerating or modifying them
 
 #### Scenario: Explicit deferred source validation
@@ -29,10 +29,10 @@ In historical mode, DP1 SHALL ingest only files selected by a completed immutabl
 
 DP1 SHALL retain all delivered business records and identical duplicates in separate event and label tables. It SHALL preserve source times, normalize supported physical schemas without loss and attach source/run provenance. It SHALL NOT perform DP2 curation or deduplication.
 
-#### Scenario: Duplicate exports and schema cutover
+#### Scenario: Duplicate schema-3 deliveries
 
-- **WHEN** a historical export contains repeated identical events and both physical schema versions
-- **THEN** normalized bronze content and delivered row counts match the source, with the absent v1 field represented as null and each source schema version retained
+- **WHEN** a current-schema historical export contains repeated identical events and enriched attempt context
+- **THEN** bronze content and delivered multiplicity match the source, with complete nested attempt context and source schema version retained
 
 #### Scenario: Lossy conversion
 
@@ -55,7 +55,7 @@ DP1 SHALL serialize writes to its bronze product and persist run identity before
 
 ### Requirement: Persisted snapshot validation
 
-For historical exports, validation SHALL read the recorded event and label snapshots for the selected source version. It SHALL execute StarRocks SQL through native OpenMetadata against both explicit snapshot IDs, cover complete histories and delayed labels, and compare persisted per-day row counts with the immutable manifest. Ingestion SHALL verify each source file's checksum and rows and normalize losslessly before writing; no second content comparison SHALL be claimed, and the report SHALL NOT describe acceptance as content-verified beyond that.
+For historical exports, validation SHALL read the recorded event and label snapshots for the selected source version. It SHALL execute StarRocks SQL through native OpenMetadata against both explicit snapshot IDs, cover complete histories and delayed labels, and compare persisted per-day row counts with the immutable manifest. Ingestion SHALL verify each source file's checksum and rows before writing and reconcile the selected source frames against recorded persisted snapshots bidirectionally with duplicate multiplicity preserved. A missing, failed or mismatched conservation receipt SHALL prevent acceptance; per-day counts alone SHALL NOT establish content equality.
 
 #### Scenario: History spans source dates
 
@@ -83,11 +83,11 @@ A completed DP1 run SHALL expose an accepted record pinning its complete output 
 
 ### Requirement: Bounded pilot execution
 
-The v11 smoke run SHALL use explicit compute and storage budgets, bounded failure samples and distributed data access. It SHALL report duration, input/output bytes, file counts, peak memory and available shuffle/spill evidence. It SHALL NOT claim 100 GB or large-scale optimization acceptance; the separate v12 acceptance reports its own measured resources.
+The v16 development run SHALL use explicit compute and storage budgets, bounded failure samples and distributed data access. It SHALL report duration, input/output bytes, file counts, peak memory and available shuffle/spill evidence. It SHALL NOT claim 100 GB or large-scale optimization acceptance; later >=100 GB current-contract coursework acceptance reports its own measured resources.
 
 #### Scenario: Small historical acceptance
 
-- **WHEN** the complete v11 smoke dataset is processed
+- **WHEN** the complete v16 development dataset is processed
 - **THEN** evidence identifies resource settings and measured results, preserves existing data problems and distinguishes correctness acceptance from later scale evaluation
 
 ### Requirement: Shared recurring source boundary

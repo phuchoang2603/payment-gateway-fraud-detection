@@ -46,12 +46,12 @@ The `bronze-payments` folder SHALL contain one ODPS descriptor and ODCS contract
 
 ### Requirement: Bronze schema and consumption agreement
 
-Bronze contracts SHALL define business fields, ingestion provenance, normalized physical types and supported source schema versions. They SHALL permit identical duplicate deliveries, define nested required fields conditionally and retain label-availability and feature-leakage restrictions.
+Bronze contracts SHALL define business fields, ingestion provenance, normalized physical types and the current event schema 3 and label schema 1. They SHALL permit identical duplicate deliveries, define nested required fields conditionally and retain label-availability and feature-leakage restrictions.
 
 #### Scenario: Consume normalized historical data
 
 - **WHEN** a consumer reads the bronze contracts
-- **THEN** it can distinguish source recording time from ingestion time, interpret v1's absent field, identify source/run provenance and determine when labels can be joined
+- **THEN** it can distinguish source recording time from ingestion time, interpret schema-3 enriched AttemptStarted context, identify source/run provenance and determine when labels can be joined
 
 ### Requirement: Complete contract-derived bronze enforcement
 
@@ -69,7 +69,7 @@ Bronze validation SHALL derive native OpenMetadata test definitions and schema c
 
 ### Requirement: Source and bronze semantic agreement
 
-Equivalent source and bronze business checks SHALL retain traceable semantic rule identities and agree on shared valid/invalid fixtures after declared schema normalization. Engine-specific SQL SHALL use its execution dialect; preparing test definitions SHALL NOT be treated as SQL translation or data validation.
+Equivalent source and bronze business checks SHALL retain traceable semantic rule identities and agree on shared valid/invalid fixtures under the current source schema. Engine-specific SQL SHALL use its execution dialect; preparing test definitions SHALL NOT be treated as SQL translation or data validation.
 
 #### Scenario: Scalar violation count
 

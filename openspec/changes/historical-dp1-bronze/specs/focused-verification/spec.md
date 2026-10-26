@@ -22,20 +22,20 @@ Bounded CI fixtures SHALL protect the distinct behavioral risks: source integrit
 #### Scenario: Source and bronze rule parity
 
 - **WHEN** shared valid/invalid fixtures are evaluated by source and bronze engines
-- **THEN** equivalent business checks agree, including duplicates, nested payloads, schema cutover, lifecycle gaps, bad amounts and label linkage/availability
+- **THEN** equivalent business checks agree, including duplicates, nested payloads, enriched attempt context, lifecycle gaps, bad amounts and label linkage/availability
 
 ### Requirement: Live historical and governance acceptance
 
-Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain historical evidence; production workflows SHALL NOT repeat disposable-table rollout probes. Live acceptance SHALL separately exercise fresh native v11 smoke ingestion, then v12 ingestion, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
+Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain historical evidence; production workflows SHALL NOT repeat disposable-table rollout probes. Live acceptance SHALL separately exercise current-contract native v16 development ingestion now, with later separate full-scale/coursework acceptance, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
 
-#### Scenario: Complete v11 smoke acceptance
+#### Scenario: Complete v16 development acceptance
 
-- **WHEN** the configured live DP1 run over the small v11 export succeeds
+- **WHEN** the configured live DP1 run over the 90-day v16 export succeeds
 - **THEN** it verifies source-to-bronze content/count conservation, safe replay and visible products, schemas, imported contracts, lineage and validation results on canonical OpenMetadata assets
 
-#### Scenario: Complete v12 source acceptance
+#### Scenario: Later full-scale source acceptance
 
-- **WHEN** the live acceptance run ingests the published v12 manifest after the v11 smoke run
+- **WHEN** the live acceptance run ingests a completed current-contract >=100 GB source after the development pipeline is exercised
 - **THEN** it verifies the exact manifest-listed inventory and byte/row totals, preserved duplicates and delayed labels, native OpenMetadata StarRocks SQL results on both persisted tables, separately reported available cardinality and distribution diagnostics, safe replay and OpenMetadata readback
 - **THEN** a failed blocking contract/integrity check or resource exhaustion is reported as failure, while an exceeded generator band alone is informational
 
@@ -46,7 +46,7 @@ Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain histo
 
 ### Requirement: Recurring ingestion verification
 
-CI SHALL cover no-input runs, newly completed files in older date partitions, changed-content rejection, preserved source duplicates, retry/uncertain-commit recovery, metadata-only recovery, independent delayed labels, retained source origin, valid simulation-truth training targets and separation of informational bands from blocking checks using bounded fixtures. Separate live recurring acceptance SHALL demonstrate repeated runs, late input and recovery with exact input/output accounting and catalog readback; historical v11 acceptance SHALL NOT establish recurring readiness.
+CI SHALL cover no-input runs, newly completed files in older date partitions, changed-content rejection, preserved source duplicates, retry/uncertain-commit recovery, metadata-only recovery, independent delayed labels, retained source origin, valid simulation-truth training targets and separation of informational bands from blocking checks using bounded fixtures. Separate live recurring acceptance SHALL demonstrate repeated runs, late input and recovery with exact input/output accounting and catalog readback; historical acceptance SHALL NOT establish recurring readiness.
 
 #### Scenario: Advance across multiple batches
 

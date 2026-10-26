@@ -25,7 +25,7 @@ Application deployment SHALL own DP1 workloads and its data namespace. The share
 
 ### Requirement: Separate pipeline credentials
 
-DP1 SHALL receive externally managed identities for source reading, lake/run-evidence writing, StarRocks query execution and metadata publication. StarRocks catalog/storage credentials SHALL be scoped separately from workload SQL access. The generator's source-writer identity SHALL NOT be reused. Rendered configuration SHALL contain secret references rather than secret values.
+DP1 SHALL receive one generic externally managed lakehouse runtime access key scoped to source reads and lake/run-evidence writes, plus separate StarRocks query and metadata-publication credentials. StarRocks catalog/storage credentials SHALL be scoped separately from workload SQL access. The generator's source-writer identity SHALL NOT be reused. Rendered configuration SHALL contain secret references rather than secret values.
 
 #### Scenario: Inspect or render pipeline configuration
 

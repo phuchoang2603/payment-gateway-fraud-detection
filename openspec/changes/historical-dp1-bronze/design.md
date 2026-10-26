@@ -2,7 +2,7 @@
 
 ## Context
 
-DP1 currently ingests immutable Parquet into RustFS-backed Iceberg with Spark, validates through GX on Spark and registers/publishes OpenMetadata entities through custom Python code. The revised design retains the ingestion responsibilities and replaces validation/discovery/publication with StarRocks and native OpenMetadata workflows. Historical v11 GX acceptance remains historical evidence only; v12 has not been accepted by this design.
+Start fresh from the published v16 current-contract source: Spark ingests immutable Parquet into RustFS-backed Iceberg; StarRocks and official OpenMetadata workflows own native quality/discovery. No legacy schemas, gate compatibility, old DP1 data or imported acceptance records are retained in the active path.
 
 ## Goals / Non-Goals
 
@@ -14,9 +14,9 @@ This change does not implement gold marts, streaming simulation, Kafka landing, 
 
 ### 1. Keep Spark responsible for ingestion
 
-Retain Spark 4.1.3, Iceberg 1.12.0/Scala 2.13 and Apache Spark Operator-managed ingestion. Preserve every delivered event and label, including identical duplicates; silver owns curation. Normalize absent v1 fields to nullable fields, preserve schema versions, UTC microsecond timestamps and nested null semantics, and reject lossy numeric conversion. Bronze contracts own normalized types and ingestion provenance separately from immutable source contracts.
+Retain Spark 4.1.3, Iceberg 1.12.0/Scala 2.13 and Apache Spark Operator-managed ingestion. Preserve every delivered event and label, including identical duplicates; silver owns curation. Accept the current event schema 3 and label schema 1 only. Preserve enriched AttemptStarted context, UTC microsecond timestamps and nested null semantics, and reject lossy numeric conversion or omitted business fields. Bronze contracts own normalized types and ingestion provenance separately from immutable source contracts.
 
-Historical manifests must embed their file inventories. Verify file identity, SHA-256, bytes, footer schema and rows with bounded memory; ETags do not substitute for checksums. Never mutate accepted source data. Retain separate source-read, lake-write and evidence identities. The retired v7 companion path stays removed.
+Historical manifests must embed their file inventories. Verify file identity, SHA-256, bytes, footer schema and rows with bounded memory; ETags do not substitute for checksums. Never mutate accepted source data. Use the shared lakehouse runtime access key for source reads and lake/evidence writes, with a separate read-only StarRocks access key and generator writer; all are external generic secrets. The retired v7 companion path stays removed.
 
 Persist immutable run context before writes. Serialize product writers. Historical writes replace only the selected source-version partition; recurring commits use immutable batch/input identities. Reconcile uncertain commits before retrying and record the exact event/label snapshot pair. Two table commits are not a transaction. Partial candidates cannot replace acceptance; replay of accepted input does not add deliveries. Preserve snapshots referenced by evidence.
 
@@ -36,7 +36,7 @@ Use native custom SQL tests with COUNT semantics: return an integer violation co
 
 Validate persisted schema, duplicate consistency using business content rather than audit fields, lifecycle context, amounts, linkage and label availability. Generator cardinality/distribution/scenario bands are informational, never a reason alone to fail bronze acceptance. Simulation truth can be a training target; scenario/oracle-only fields are not inference-available features. Training joins respect event and label-availability times.
 
-Conservation is split by where it can be established cheaply. Ingestion verifies every manifest file's SHA-256, bytes, rows and footer schema before writing and normalizes losslessly while preserving source-delivered duplicates. A native SQL rule compares persisted per-day row counts for the pinned snapshot with the immutable manifest. A second row-content comparison, such as per-file digests recomputed in SQL, is deliberately not performed: it would need cross-engine canonical hashing or giving StarRocks the source bucket, and the earlier Spark `exceptAll` check does not scale to v12. Counts therefore do not prove post-write content equality; that residual risk is accepted and must not be described as content-verified.
+Ingestion verifies every manifest file's SHA-256, bytes, rows and footer schema before writing. Before native acceptance, Spark reads the recorded output snapshots and compares them bidirectionally with the selected normalized source frames using duplicate-preserving `exceptAll`, including provenance. A nonempty difference fails the candidate; only a matching manifest/snapshot conservation receipt permits acceptance. This distributed comparison remains an ingestion safeguard, not a second Spark validation application. StarRocks independently checks persisted per-day row counts against the complete manifest. Counts alone are never evidence of content equality. Measure comparison shuffle/spill and resources on v16 before making scale claims.
 
 ### 4. Native OpenMetadata owns discovery and execution results
 
@@ -54,7 +54,7 @@ A successful ingestion container exit does not mean checks passed: OpenMetadata 
 
 Keep data validation, execution and governance outcomes separate. API success or a healthy catalog alone is insufficient. Read back schemas, products, contracts, lineage and native quality results with bounded indexing retries. Metadata-only recovery uses the original evidence and outcomes without ingestion or validation reruns. Missing results remain execution errors, not invented passing/failed assertions.
 
-Version acceptance by validation policy. Preserve the original v12 producer declaration `result: skipped`, `gate: dp1-spark-gx` and reason as immutable provenance, and record an explicit replacement StarRocks policy in new run/evidence records. No GX fallback interprets that declaration. Old GX accepted records and previous failures cannot satisfy or be relabeled as new native acceptance.
+Version acceptance by validation policy (`bronze-starrocks-v2` for the current context/conservation path). Preserve v16's `result: skipped`, `gate: dp1-starrocks-openmetadata` declaration and reason, source contracts/product and feature-definition hash in run/evidence records. Source validation reports do not replace persisted-bronze checks. Retired GX gate/schema compatibility is not a current input path; old GX/native accepted records and previous failures remain historical and cannot satisfy current-contract acceptance.
 
 ### 6. Argo coordinates finite stages and safe cleanup
 
@@ -72,13 +72,17 @@ Start with a bounded single FE/BE toy-project deployment with explicit durabilit
 
 Remove the custom Python metadata HTTP client, PyIceberg discovery path, GX result/contract projection and dedicated `data-platform-metadata` image; retain any dependency genuinely needed by ingestion/recovery. Remove obsolete validation commands, Spark validation application, exporter/dependency/lock entries, image publishing jobs, charts, fixtures and config. No legacy flags, migration tools, old schema aliases or alternate publisher remain.
 
-Delete only obsolete DP1-owned OpenMetadata services/table registrations, products/contracts, pipelines, GX definitions/cases/results and compatibility probes, notably `dp1-compatibility`. Recreate native assets cleanly. Preserve unrelated shared metadata, authentication/backing services, source data, lake snapshots and immutable execution evidence. This is scoped cleanup, not a wholesale OpenMetadata database wipe.
+Delete only obsolete DP1-owned OpenMetadata services/table registrations, products/contracts, pipelines, GX definitions/cases/results and compatibility probes, notably `dp1-compatibility`. Recreate native assets cleanly. Remove old DP1 lake tables and run/evidence state as part of the authorized fresh start. Preserve unrelated shared metadata, authentication/backing services and the current immutable v16 source. This is scoped cleanup, not a wholesale OpenMetadata database wipe.
 
-### 9. Fresh v11, then v12 acceptance
+### 9. Current-contract v16 development, then later scale acceptance
 
-Previously accepted v11 memory-first GX workflow `historical-dp1-bronze-rflqv` processed 547,166 events and 107,937 labels with 117 passing checks and verified governance in 25m43s. Its validation took 332.33 seconds. Keep its durable evidence under `dp1-evidence/reruns/v11-memory-cache-20261025/`; it does not prove StarRocks acceptance or scale performance.
+Run native v16 development acceptance now using CI-built images, then exercise replay, snapshot isolation and recovery without waiting for a large source. Select the exact published manifest SHA-256 `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`, all 1,954 Parquet inventory files / 139,597,476 bytes / 795,718 events / 161,967 labels, including multi-date fragments. Purchase starts span July 1–September 28, 2025; complete event tails reach September 29 00:58:24 UTC and label-availability tails October 19 22:17:57.008 UTC. Never truncate to purchase dates or infer input selection from event-time maxima.
 
-Run fresh native v11 acceptance, snapshot isolation, deliberate failed SQL and metadata recovery using CI-built images, then v12. V12 manifest SHA-256 is `66aa2af7fecb1177e0d3891ea86054ff9c076ff6e8743b35b6bec0bd351511ce`: 24,982 Parquet files, 123,289,031,513 physical bytes, 243,759,612,001 uncompressed bytes, 1,015,047,213 events and 202,362,326 labels. It is the -365-day v8 transformation; publication is not quality acceptance. Preserve v8/v11/v12 and their manifests. Size SQL, Spark and workflow deadlines from measured work; report capacity exhaustion honestly. V12 stays unsubmitted until the native path is ready.
+Use source product 6.0.1, events ODCS 4.0.1, labels 1.0.0 and enriched schema 3. Verify the manifest's `fraud-baseline-v1` SHA-256 `2ee2a5153a248bdc98df3b2643e10a65bc5693ea111129b6c65a67352aa4ec0b`. Preserve checkout-context equality, complete lifecycles, delivery multiplicity, label linkage and availability. Clean approvals may have empty reason codes; declines require reasons. Keep all generator distribution/cardinality bands diagnostic.
+
+The archived `2026-10-26-finalize-feature-contract-and-90-day-smoke` source/live evidence is upstream acceptance only. V15's declared-rule failure remains failed evidence. V16's seven-day warmup, maturity-aware temporal splits, substantial entity overlap and missing stable campaign IDs constrain downstream evaluation; there is no model-quality claim. Live shutdown can lose in-memory delayed chargebacks. Feature/as-of join acceptance, training and serving remain separate.
+
+After development ingestion/features/training/serving are exercised, separately select a fresh completed current-contract source meeting at least 100,000,000,000 physical inventory-listed Parquet bytes. No source generation is started or implemented here. Record resources and capacity failures honestly; never mark the coursework gate complete from v16.
 
 ### 10. Recurring ingestion uses the same boundary
 

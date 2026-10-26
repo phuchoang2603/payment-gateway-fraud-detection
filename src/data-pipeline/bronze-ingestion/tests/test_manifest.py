@@ -19,16 +19,20 @@ def test_completed_inventory_and_integrity(dataset):
             verify_file(str(root), broken)
 
 
-def test_deferred_source_gate_reaches_preflight_and_records_the_superseding_policy(dataset, tmp_path, monkeypatch):
+def test_deferred_source_gate_reaches_preflight_and_records_the_native_policy(dataset, tmp_path, monkeypatch):
     from data_platform.cli import main
-    from data_platform.runs import SUPERSEDES, open_run
+    from data_platform.runs import EXECUTION, open_run
     from data_platform.storage import Store
 
     root, manifest = dataset
     source = tmp_path / "source"
     shutil.copytree(root, source)
     manifest = deepcopy(manifest)
-    manifest["validation"] = {"result": "skipped", "gate": "dp1-spark-gx", "reason": "validation deferred to DP1"}
+    manifest["validation"] = {
+        "result": "skipped",
+        "gate": "dp1-starrocks-openmetadata",
+        "reason": "validation deferred to DP1",
+    }
     path = source / "manifest.json"
     path.write_text(json.dumps(manifest))
     selected, _ = selected_manifest(str(source))
@@ -41,7 +45,7 @@ def test_deferred_source_gate_reaches_preflight_and_records_the_superseding_poli
     assert run["source_validation"] == manifest["validation"]
     with pytest.raises(ValueError, match="different source validation gate"):
         open_run(store, "smoke", run["manifest_sha256"], run["ingestion_contracts"], "image", "retry")
-    assert run["validation_supersedes"] == SUPERSEDES
+    assert run["validation_execution"] == EXECUTION
     for declaration in (
         {"result": "skipped"},
         {**manifest["validation"], "gate": "unknown"},
@@ -54,7 +58,7 @@ def test_deferred_source_gate_reaches_preflight_and_records_the_superseding_poli
 
 
 @pytest.mark.parametrize(
-    "mutation", ["contract", "schema", "count", "escape", "table", "partition", "validation", "missing"]
+    "mutation", ["contract", "schema", "count", "escape", "table", "partition", "validation", "feature", "missing"]
 )
 def test_invalid_source_selection_is_rejected(dataset, tmp_path, mutation):
     _, source = dataset
@@ -65,6 +69,8 @@ def test_invalid_source_selection_is_rejected(dataset, tmp_path, mutation):
         return
     if mutation == "contract":
         manifest["data_product"]["contracts"]["payment-events"]["sha256"] = "0" * 64
+    elif mutation == "feature":
+        manifest["data_product"]["feature_definition"]["sha256"] = "0" * 64
     elif mutation == "schema":
         manifest["schema_versions"]["payment_events"] = [99]
     elif mutation == "table":

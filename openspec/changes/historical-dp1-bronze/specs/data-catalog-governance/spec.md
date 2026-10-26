@@ -61,7 +61,7 @@ The catalog SHALL expose lineage from each historical source port through the DP
 
 ### Requirement: Reproducible assertion evidence
 
-The catalog SHALL retain quality-test definitions and successful, failed or errored execution evidence linked to contract rules, data assets and run identity. Durable bounded reports SHALL retain exact source, contract, policy, run and snapshot references. Failed assertions and execution errors SHALL remain distinct. Publication retries SHALL preserve logical rule/run identity and original outcomes.
+The catalog SHALL retain quality-test definitions and successful, failed or errored execution evidence linked to contract rules, data assets and run identity. Durable bounded reports SHALL retain exact source, contract, feature-definition, policy, run and snapshot references and duplicate-aware conservation evidence. V16 source/live checks SHALL NOT substitute for persisted-bronze or governance acceptance. Failed assertions and execution errors SHALL remain distinct. Publication retries SHALL preserve logical rule/run identity and original outcomes.
 
 #### Scenario: Deliberate contract violation
 

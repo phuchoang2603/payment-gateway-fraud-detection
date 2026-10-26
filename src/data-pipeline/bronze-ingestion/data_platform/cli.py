@@ -37,11 +37,11 @@ def main(argv=None):
     logging.disable(logging.INFO)
     parser = argparse.ArgumentParser(prog="dp1")
     parser.add_argument("stage", choices=STAGES)
-    parser.add_argument("--source", default=os.environ.get("SOURCE_ROOT", "s3://synthetic-source/historical/v11"))
+    parser.add_argument("--source", default=os.environ.get("SOURCE_ROOT", "s3://synthetic-source/historical/v16"))
     parser.add_argument(
         "--evidence", default=os.environ.get("EVIDENCE_ROOT", "s3://fraud-lakehouse-prod/dp1-evidence")
     )
-    parser.add_argument("--version", default=os.environ.get("DATASET_VERSION", "v11"))
+    parser.add_argument("--version", default=os.environ.get("DATASET_VERSION", "v16"))
     parser.add_argument("--workflow", default=os.environ.get("WORKFLOW_ID", "local"))
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--local-warehouse")
@@ -79,6 +79,7 @@ def main(argv=None):
                 if manifest["validation"].get("result") == "skipped"
                 else None,
             )
+            run["source_product"] = manifest["data_product"]
             run["source_root"] = args.source
             save_run(store, run)
             if args.stage == "preflight":

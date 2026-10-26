@@ -27,10 +27,14 @@ def read_manifest(root):
         raise ValueError("unsupported source product identity")
     if manifest.get("source_layout") != "task-fragments-v1" or manifest.get("manifest_version") != 3:
         raise ValueError("unsupported source layout")
+    definition = PRODUCTS.parent / "features/fraud-baseline-v1.yaml"
+    feature = {"version": "fraud-baseline-v1", "sha256": sha256(definition.read_bytes()).hexdigest()}
+    if declared.get("feature_definition") != feature or manifest.get("feature_definition") != feature:
+        raise ValueError("unsupported source feature definition")
     validation = manifest.get("validation", {})
     deferred = (
         validation.get("result") == "skipped"
-        and validation.get("gate") == "dp1-spark-gx"
+        and validation.get("gate") == "dp1-starrocks-openmetadata"
         and isinstance(validation.get("reason"), str)
         and bool(validation["reason"].strip())
         and isinstance(manifest.get("inventory"), list)
@@ -49,7 +53,7 @@ def read_manifest(root):
             raise ValueError(f"unsupported source contract identity: {port}")
         if validation.get(port) != "passed" and not deferred:
             raise ValueError(f"source contract validation is incomplete: {port}")
-        supported = [1, 2] if table == "payment_events" else [1]
+        supported = [3] if table == "payment_events" else [1]
         versions = manifest.get("schema_versions", {}).get(table, [])
         if not versions or any(v not in supported for v in versions):
             raise ValueError(f"unsupported source schemas: {table}")
@@ -112,9 +116,9 @@ def validate_inventory(manifest):
 
 def inventory_location(key):
     match = re.fullmatch(
-        r"raw/(payment_events|fraud_labels)/day-[0-9]{5}-kind-[01]-block-[0-9]{8}/v([12])\.parquet", key
+        r"raw/(payment_events|fraud_labels)/day-[0-9]{5}-kind-[01]-block-[0-9]{8}/v([13])\.parquet", key
     )
-    if not match or (match[1] == "fraud_labels" and match[2] != "1"):
+    if not match or match[2] != ("3" if match[1] == "payment_events" else "1"):
         raise ValueError("raw inventory path escapes the declared layout")
     return match[1]
 

@@ -83,17 +83,8 @@ The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai
 
 ## Bronze payments
 
-`bronze-payments` is a separate source-aligned product with `bronze.raw_payment_events` and `bronze.raw_fraud_labels` Iceberg ports. Its contracts preserve business fields and duplicate deliveries, normalize the absent v1 browser field to null, and append `_source_dataset_version`, `_source_manifest_sha256`, `_source_file`, `_ingestion_run_id` and `_ingested_at`. Contract/product/source versions remain independent. Labels retain their availability cutoff and feature-leakage restrictions.
+`bronze-payments` version `2.0.0` exposes `bronze.raw_payment_events` and `bronze.raw_fraud_labels` Iceberg ports. Current event schema 3 preserves enriched AttemptStarted context; label schema 1 retains availability and feature-leakage restrictions. Ingestion appends `_source_dataset_version`, `_source_manifest_sha256`, `_source_file`, `_ingestion_run_id` and `_ingested_at`, preserving identical deliveries.
 
-Source publication still uses the unchanged Data Contract CLI/DuckDB commands above. DP1 exports the bronze ODCS rules with Data Contract CLI 1.2.7 and imports them into GX 1.24 on Spark 4.1.3; exporting a suite does not validate data or translate DuckDB SQL. Each bronze quality block contains Spark unexpected-row SQL with its source semantic rule ID. Preparation rejects missing/unsupported rules; generated conditional checks cover nested required fields and array items, and recursive physical checks enforce the exact normalized schema. The native top-level column-set expectation permits GX's nested Spark column listing because the recursive check separately rejects extra columns.
+Git bronze contracts define StarRocks COUNT-of-violations SQL and conditional nested requirements. The official version-matched OpenMetadata ingestion image discovers tables and executes native quality rules; Argo performs explicit product/contract/lineage writes and verifies complete results. Spark performs source-integrity checks, ingestion and bidirectional duplicate-aware source/output reconciliation against recorded snapshots. Native per-day counts alone do not establish content equality.
 
-After integrating the generator inventory change, run the locked fixtures and contract lint from the repository devenv. An isolated checkout can set `DP1_GENERATOR_ROOT` to the integrated `src/data-pipeline/simulator` dependency:
-
-```bash
-UV_PROJECT_ENVIRONMENT="$PWD/src/data-pipeline/bronze-ingestion/.venv" \
-UV_PYTHON_PREFERENCE=managed UV_PYTHON_DOWNLOADS=automatic \
-  uv run --project src/data-pipeline/bronze-ingestion --locked pytest src/data-pipeline/bronze-ingestion/tests
-bash scripts/ci-checks.sh contracts
-```
-
-Run `dp1 validate` in the Spark image against a recorded snapshot pair; `dp1 publish` is the separate metadata command. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and replay. OpenMetadata consumes metadata/results and does not replace either validation engine.
+Use the published v16 manifest and its complete inventory, including lifecycle and label tails. V16 development acceptance is separate from source/live checks and later full-scale/coursework acceptance. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and metadata-only recovery.

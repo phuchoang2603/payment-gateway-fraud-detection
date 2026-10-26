@@ -4,8 +4,8 @@ from uuid import uuid4
 
 from data_platform.products import PORTS
 
-VALIDATION_POLICY = "bronze-starrocks-v1"
-SUPERSEDES = {"gate": "dp1-spark-gx", "policy": VALIDATION_POLICY, "engine": "starrocks", "fallback": None}
+VALIDATION_POLICY = "bronze-starrocks-v2"
+EXECUTION = {"gate": "dp1-starrocks-openmetadata", "policy": VALIDATION_POLICY, "engine": "starrocks"}
 
 
 def validation_key(contracts):
@@ -34,7 +34,7 @@ def open_run(store, version, digest, contracts, image, workflow, source_validati
     }
     if source_validation:
         run["source_validation"] = source_validation
-        run["validation_supersedes"] = SUPERSEDES
+        run["validation_execution"] = EXECUTION
     store.put(key, run, create=True)
     return run
 
@@ -53,7 +53,15 @@ def accept(store, run, contracts, problems, gaps):
     expected = store.get(evidence_key(run, contracts, "expected"))
     if expected is None or expected["snapshots"] != run["snapshots"] or expected["run_id"] != run["run_id"]:
         raise ValueError("acceptance requires the prepared native rule set for this run")
+    conservation = run.get("conservation", {})
+    if (
+        conservation.get("outcome") != "passed"
+        or conservation.get("snapshots") != run["snapshots"]
+        or conservation.get("manifest_sha256") != run["manifest_sha256"]
+    ):
+        raise ValueError("acceptance requires matching persisted content conservation")
     outcome = {
+        "conservation": conservation,
         "validation_policy": VALIDATION_POLICY,
         "run_id": run["run_id"],
         "manifest_sha256": run["manifest_sha256"],

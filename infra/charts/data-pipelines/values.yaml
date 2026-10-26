@@ -12,9 +12,9 @@ spark:
 native:
   activeDeadlineSeconds: 1800
 config:
-  SOURCE_ROOT: s3://synthetic-source/historical/v11
-  DATASET_VERSION: v11
-  EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence/starrocks-v1
+  SOURCE_ROOT: s3://synthetic-source/historical/v16
+  DATASET_VERSION: v16
+  EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence/starrocks-v2
   ICEBERG_REST_URI: https://minio.home.phuchoang.sbs/iceberg
   ICEBERG_WAREHOUSE: fraud-lakehouse-prod
   ICEBERG_SIGV4_ENABLED: "true"

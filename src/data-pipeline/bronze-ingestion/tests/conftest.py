@@ -19,7 +19,6 @@ def dataset(tmp_path_factory):
     config = yaml.safe_load((GENERATOR / "tests/small-config.yaml").read_text())
     config["duration_days"] = 2
     config["counts"]["customers"] = 8
-    config["data_problems"]["schema_cutover_date"] = "2026-07-02"
     root = tmp_path_factory.mktemp("source")
     manifest = generate(
         HistoricalConfig.model_validate(config), fs.LocalFileSystem(), str(root), allow_small_dataset=True
