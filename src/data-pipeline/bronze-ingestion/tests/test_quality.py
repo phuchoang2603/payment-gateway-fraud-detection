@@ -70,6 +70,11 @@ def test_only_fresh_matching_success_results_pass():
     bad[names[3]]["testCaseResult"]["timestamp"] = 5
     bad[names[4]]["parameterValues"][0]["value"] += " "
     bad[names[5]]["testCaseResult"]["testResultValue"][0]["value"] = "7"
+    bad[names[6]]["testCaseResult"] = {
+        "timestamp": 20,
+        "testCaseStatus": "Aborted",
+        "testResultValue": [{"name": "resultRowCount"}],
+    }
     assert readback.verify(expected, bad, 10) == {
         names[0]: "missing",
         names[1]: "Failed",
@@ -77,6 +82,7 @@ def test_only_fresh_matching_success_results_pass():
         names[3]: "stale result",
         names[4]: "stale definition",
         names[5]: "nonzero violations",
+        names[6]: "Aborted",
     }
 
 
@@ -90,4 +96,4 @@ def test_governance_requests_carry_original_contract_provenance():
     assert {f"sha256={digest}" for digest in hashes().values()} <= {
         part for c in contracts for part in c["description"].split() if part.startswith("sha256=")
     }
-    assert any(r["path"] == "/v1/lineage" for r in requests)
+    assert len(requests) == 8 and requests[-1]["path"] == "/v1/lineage"

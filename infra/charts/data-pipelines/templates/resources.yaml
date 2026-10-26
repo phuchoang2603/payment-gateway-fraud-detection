@@ -27,6 +27,15 @@ metadata:
   namespace: {{ $.Values.namespace }}
 ---
 {{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dp1-workflow.service-account-token
+  namespace: {{ .Values.namespace }}
+  annotations:
+    kubernetes.io/service-account.name: dp1-workflow
+type: kubernetes.io/service-account-token
+---
 {{- range .Values.externalSecrets }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -98,6 +107,10 @@ rules:
   - apiGroups: [argoproj.io]
     resources: [workflowtaskresults]
     verbs: [create, patch]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [dp1-openmetadata]
+    verbs: [get]
   - apiGroups: [argoproj.io]
     resources: [workflowtasksets]
     verbs: [list, watch]

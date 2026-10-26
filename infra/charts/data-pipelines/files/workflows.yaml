@@ -20,7 +20,7 @@ spec:
     labels:
       dp1-product: bronze-payments
   podGC:
-    strategy: OnWorkflowCompletion
+    strategy: OnWorkflowSuccess
   templates:
     - name: historical
       steps:
@@ -103,19 +103,66 @@ spec:
               parameters:
                 - {name: stage, value: accept}
     - name: write-in-order
-      parallelism: 1
       inputs:
         parameters:
           - name: requests
       steps:
-        - - name: write
+        - - name: write-0
             template: openmetadata-write
-            withParam: "{{inputs.parameters.requests}}"
             arguments:
               parameters:
-                - {name: method, value: "{{item.method}}"}
-                - {name: path, value: "{{item.path}}"}
-                - {name: body, value: "{{item.body}}"}
+                - {name: method, value: "{{=jsonpath(inputs.parameters.requests, '$[0].method')}}"}
+                - {name: path, value: "{{=jsonpath(inputs.parameters.requests, '$[0].path')}}"}
+                - {name: body, value: "{{=jsonpath(inputs.parameters.requests, '$[0].body')}}"}
+        - - name: write-1
+            template: openmetadata-write
+            arguments:
+              parameters:
+                - {name: method, value: "{{=jsonpath(inputs.parameters.requests, '$[1].method')}}"}
+                - {name: path, value: "{{=jsonpath(inputs.parameters.requests, '$[1].path')}}"}
+                - {name: body, value: "{{=jsonpath(inputs.parameters.requests, '$[1].body')}}"}
+        - - name: write-2
+            template: openmetadata-write
+            arguments:
+              parameters:
+                - {name: method, value: "{{=jsonpath(inputs.parameters.requests, '$[2].method')}}"}
+                - {name: path, value: "{{=jsonpath(inputs.parameters.requests, '$[2].path')}}"}
+                - {name: body, value: "{{=jsonpath(inputs.parameters.requests, '$[2].body')}}"}
+        - - name: write-3
+            template: openmetadata-write
+            arguments:
+              parameters:
+                - {name: method, value: "{{=jsonpath(inputs.parameters.requests, '$[3].method')}}"}
+                - {name: path, value: "{{=jsonpath(inputs.parameters.requests, '$[3].path')}}"}
+                - {name: body, value: "{{=jsonpath(inputs.parameters.requests, '$[3].body')}}"}
+        - - name: write-4
+            template: openmetadata-write
+            arguments:
+              parameters:
+                - {name: method, value: "{{=jsonpath(inputs.parameters.requests, '$[4].method')}}"}
+                - {name: path, value: "{{=jsonpath(inputs.parameters.requests, '$[4].path')}}"}
+                - {name: body, value: "{{=jsonpath(inputs.parameters.requests, '$[4].body')}}"}
+        - - name: write-5
+            template: openmetadata-write
+            arguments:
+              parameters:
+                - {name: method, value: "{{=jsonpath(inputs.parameters.requests, '$[5].method')}}"}
+                - {name: path, value: "{{=jsonpath(inputs.parameters.requests, '$[5].path')}}"}
+                - {name: body, value: "{{=jsonpath(inputs.parameters.requests, '$[5].body')}}"}
+        - - name: write-6
+            template: openmetadata-write
+            arguments:
+              parameters:
+                - {name: method, value: "{{=jsonpath(inputs.parameters.requests, '$[6].method')}}"}
+                - {name: path, value: "{{=jsonpath(inputs.parameters.requests, '$[6].path')}}"}
+                - {name: body, value: "{{=jsonpath(inputs.parameters.requests, '$[6].body')}}"}
+        - - name: write-7
+            template: openmetadata-write
+            arguments:
+              parameters:
+                - {name: method, value: "{{=jsonpath(inputs.parameters.requests, '$[7].method')}}"}
+                - {name: path, value: "{{=jsonpath(inputs.parameters.requests, '$[7].path')}}"}
+                - {name: body, value: "{{=jsonpath(inputs.parameters.requests, '$[7].body')}}"}
     - name: prepare
       container:
         image: __SPARK_IMAGE__
@@ -369,7 +416,7 @@ spec:
       activeDeadlineSeconds: __NATIVE_DEADLINE__
       retryStrategy:
         limit: "1"
-        backoff: {duration: 15s, factor: 2, maxDuration: 1m}
+        backoff: {duration: 15s, factor: 2}
       container:
         image: __OPENMETADATA_IMAGE__
         command: [bash, -c]

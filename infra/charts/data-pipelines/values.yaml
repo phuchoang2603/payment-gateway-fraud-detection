@@ -14,7 +14,7 @@ native:
 config:
   SOURCE_ROOT: s3://synthetic-source/historical/v11
   DATASET_VERSION: v11
-  EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence
+  EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence/starrocks-v1
   ICEBERG_REST_URI: https://minio.home.phuchoang.sbs/iceberg
   ICEBERG_WAREHOUSE: fraud-lakehouse-prod
   ICEBERG_SIGV4_ENABLED: "true"

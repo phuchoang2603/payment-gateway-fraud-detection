@@ -43,7 +43,7 @@ def verify(expected, found, prepared_at):
             continue
         sql = next((p["value"] for p in case.get("parameterValues", []) if p["name"] == "sqlExpression"), None)
         result = case.get("testCaseResult") or {}
-        values = {v["name"]: v["value"] for v in result.get("testResultValue", [])}
+        values = {v["name"]: v.get("value") for v in result.get("testResultValue", [])}
         if sql is None or sha256(sql.encode()).hexdigest() != rule["sql_sha256"]:
             problems[fqn] = "stale definition"
         elif result.get("timestamp", 0) < prepared_at:
