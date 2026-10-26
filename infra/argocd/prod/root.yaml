@@ -44,6 +44,7 @@ spec:
             syncRetry: *retry
           live-traffic:
             enabled: true
+            allowEmpty: true
             chartTargetRevision: t3/live-simulator-streaming
             valuesTargetRevision: t3/live-simulator-streaming
             destinationNamespace: payment-gateway
