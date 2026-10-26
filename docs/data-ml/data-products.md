@@ -32,13 +32,13 @@ The fraud-labels linkage rule reads `payment_events`, so validate labels in a da
 
 `historical/v12` is an immutable one-off -365-day calendar shift of v8, with the same entities/content and no regeneration. Its manifest SHA-256 is `66aa2af7fecb1177e0d3891ea86054ff9c076ff6e8743b35b6bec0bd351511ce`; 2,851 files received full row/remote readback checks and 22,131 received upload-integrity/HEAD checks. Spark/GX acceptance remains pending. Live decoded Parquet lands separately under `streaming/`; see the [landing interface](data-pipeline.md#live-simulation-and-landing).
 
-The command runs from the devenv shell. The generation-only publication path below does not establish a completed migration or validation of `v8`:
+The maintained Python configuration publishes `historical/v13` as a six-day, 100,000-customer smoke dataset starting July 1, 2025, with no minimum physical-size gate or accepted-dataset protection. Published v13 contains 20 files / 60,930,749 physical bytes, 510,017 payment events and 102,826 labels; its manifest SHA-256 is `8495a20d524a487b4960e715f7542cf1e6018d16ecbd44861dc8c67fe255d3f0`. Lifecycle tails extend into July 7 and delayed labels into July 27. Source integrity/publication checks passed; downstream acceptance remains deferred. The stopped partial full-scale v13 was deleted before reuse. Full-volume generation moves to a separate distributed Spark job; the local full-scale configuration is removed. Run generation from the devenv shell:
 
 ```bash
 cd src/data-pipeline/simulator
 doppler run -p payment-gateway-fraud-detection -c prd -- sh -c \
   'AWS_ACCESS_KEY_ID="$HISTORICAL_RUSTFS_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$HISTORICAL_RUSTFS_SECRET_KEY" \
-   uv run --locked simulator historical --config configs/historical-scale.yaml'
+   uv run --locked simulator historical --config configs/historical-smoke.yaml'
 ```
 
 Bump `dataset_version` in the config for every new dataset. Pass `--output <dir>` to generate locally without credentials.
@@ -61,4 +61,4 @@ The maintained generator starts fresh with a US-only electronics calibration pro
 
 Distribution/scenario/skew counters are informational diagnostics, not source publication gates. Amount/context/time/activity counters use payments, missingness/risk counters use attempts, and purchase-weighted activity is not a population census. Chargeback reporting probability and availability beyond the configured history end are explicit; absent chargebacks are not confirmed negatives. Oracle scenario/truth and postdecision outcomes must be excluded from features. Use forward-time evaluation with mature labels plus entity/campaign holdouts; public payment context does not establish a representative checkout fraud distribution.
 
-The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai-1 (50%)`, cell B5: offline simulation of at least 100 GB. Compression accounting is unspecified there. This project conservatively requires at least **100,000,000,000 physical bytes** across inventory-listed raw event and label Parquet files for the new path, counted once, excluding `_run`, reports, streaming data, replicas and downstream copies. The manifest separately records uncompressed Parquet column-chunk bytes and decimal GB/GiB. A fixed plan below the byte gate cannot publish; changing logical inputs requires a new dataset version.
+The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai-1 (50%)`, cell B5: offline simulation of at least 100 GB. Compression accounting is unspecified there. Full-scale coursework evidence requires at least **100,000,000,000 physical bytes** across inventory-listed raw event and label Parquet files, counted once, excluding `_run`, reports, streaming data, replicas and downstream copies. The v13 smoke export does not satisfy this target. The manifest separately records uncompressed Parquet column-chunk bytes and decimal GB/GiB. A configured full-scale byte gate still prevents undersized publication. Changing logical inputs requires a new dataset version after publication.

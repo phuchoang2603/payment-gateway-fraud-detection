@@ -9,7 +9,7 @@ The platform needs a realistic, reproducible synthetic payment dataset for model
 - Fix moving account creation dates and unrealistic device/network assignments. Include legitimate sharing, changes and missing signals using existing observable fields.
 - Generate overlapping legitimate/fraud behavior and multi-attempt campaigns so a single artificial field does not reveal the target. Keep truth/scenario information outside features.
 - Keep complete payment lifecycles and delayed labels consistent, with reporting probability and maturity made explicit. Preserve deterministic IDs, seeded reproducibility, resumability and immutable Parquet publication.
-- Use a small, versioned set of public calibration references and documented assumptions. Provide a concise dataset report covering distributions, label maturity, quality results and training split guidance.
+- Use a small, versioned set of public calibration references and documented assumptions. Publish v13 only as a small smoke/reference export with a concise report covering distributions, label maturity and training limitations; full-volume Spark generation is a separate follow-up.
 - **BREAKING:** publish a new algorithm/profile identity under an unused dataset version, without a legacy generator compatibility path. Preserve v8/v11/v12 and their evidence unchanged.
 
 ## Capabilities
@@ -26,5 +26,5 @@ None.
 
 - Primarily `src/data-pipeline/simulator`: configuration, profiles, schedules, behavior, historical generation and manifest/report metadata. Reuse existing helpers rather than creating another simulator implementation.
 - Keep existing HTTP/protobuf/Parquet business schemas, archiver and deployments. No new browser timezone fields, gateway response changes, live lifecycle redesign or mandatory vault remapping in this slice. Any later live selection must independently satisfy its existing manifest/identity checks.
-- Measure the current machine and generation throughput before a full run; retain bounded resources, the existing physical-volume requirement and downstream DP1 Spark/GX acceptance.
+- Retain measured resource evidence and bounded smoke execution. Remove the unpublished partial full-scale v13 before its smoke reuse and remove the local full-scale config. The project physical-volume requirement moves to the separate Spark generation follow-up; downstream DP1 acceptance remains separate.
 - Out of scope: Flink/Feast integration, feature pipelines, model training, DP1 multi-source implementation, new services and production rollout. The completed streaming slice remains intact.

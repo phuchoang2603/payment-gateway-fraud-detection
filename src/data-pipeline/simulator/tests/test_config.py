@@ -57,17 +57,3 @@ def test_generation_identity_separates_logical_inputs_from_execution():
     assert small_config(seed=8).generation_identity({"contract": "v1"}, "revision") != base
     assert small_config().generation_identity({"contract": "v2"}, "revision") != base
     assert small_config().generation_identity({"contract": "v1"}, "another revision") != base
-
-
-def test_smoke_uses_same_algorithm_and_layout_as_scale():
-    from pathlib import Path
-
-    from simulator.config import load_config
-
-    directory = Path(__file__).resolve().parents[1] / "configs"
-    scale, smoke = (load_config(directory / name) for name in ("historical-scale.yaml", "historical-smoke.yaml"))
-    assert smoke.storage == scale.storage and smoke.label_delays == scale.label_delays
-    assert smoke.customer_block_size == scale.customer_block_size
-    assert smoke.dataset_version != scale.dataset_version
-    assert scale.minimum_source_parquet_bytes == 100000000000
-    assert smoke.minimum_source_parquet_bytes == 0

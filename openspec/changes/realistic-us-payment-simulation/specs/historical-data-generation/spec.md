@@ -30,12 +30,13 @@ Generated device/network/browser/address fields SHALL follow existing collection
 
 ### Requirement: Reproducible training source and report
 
-The improved algorithm SHALL publish under an unused immutable dataset version, preserving v8/v11/v12 and all prior evidence. Existing reproducibility, bounded resource, resume, integrity, row accounting and manifest-last publication requirements SHALL remain enforced. Before full generation, measured machine/throughput evidence SHALL inform resource and time/storage estimates. A concise dataset report SHALL record lineage, seed/calibration identity, rows/bytes, date ranges, distributions, label maturity, explicit rate denominators and recommended temporal/entity/campaign evaluation boundaries. Distribution/shortcut reports SHALL remain diagnostics. Source publication SHALL NOT establish downstream DP1 quality acceptance.
+The improved algorithm SHALL publish v13 as a small smoke/reference dataset after the stopped unpublished full-scale v13 is entirely removed, preserving v8/v11/v12 and all prior evidence. Existing reproducibility, bounded resource, resume, integrity, row accounting and manifest-last publication requirements SHALL remain enforced. Measured machine/throughput evidence SHALL inform bounded smoke resource settings. Full-volume distributed Spark generation and its physical-size target SHALL remain a separate follow-up. A concise dataset report SHALL record lineage, seed/calibration identity, rows/bytes, date ranges, distributions, label maturity, explicit rate denominators and recommended temporal/entity/campaign evaluation boundaries. Distribution/shortcut reports SHALL remain diagnostics. Source publication SHALL NOT establish downstream DP1 quality acceptance.
 
 #### Scenario: Published dataset already exists
 
 - **WHEN** the improved logical plan encounters an existing published version
 - **THEN** it refuses modification and uses an unused version
+- **AND** only the explicitly user-authorized deletion of unpublished partial v13 permits v13 smoke reuse
 
 #### Scenario: Training handoff
 

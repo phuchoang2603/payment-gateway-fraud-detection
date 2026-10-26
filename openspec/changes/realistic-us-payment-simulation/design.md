@@ -46,9 +46,9 @@ Produce one concise report of activity/amount/time patterns, device/network shar
 
 Use the current physical schema for the realism baseline. Forced schema cutovers and injected duplicate exports remain optional, explicitly named data-problem experiments rather than natural-traffic claims. Preserve deliveries and label linkage regardless of mode.
 
-Reserve an unused dataset version and record seed, algorithm/calibration identity and logical date/scale plan. Measure current CPU/RAM/scratch and bounded generation/upload throughput to estimate full-run resources. Keep the existing physical-volume target without padding or duplicate inflation. Generate using existing resumable, immutable manifest-last publication; do not overwrite v8/v11/v12 or weaken the existing source checks.
+Use `historical/v13` only for a six-day, 100,000-customer smoke/reference export from July 1, 2025. Delete the stopped unpublished full-scale v13, including raw files and run metadata, before creating the smoke source. Remove the local full-scale configuration. The smoke configuration has no physical-byte floor and does not request accepted-object tagging; preserve schema/integrity checks and immutable manifest-last publication. Preserve v8/v11/v12 unchanged. Do not run local automated smoke tests; dataset generation is an operational publication task, while tests remain in CI.
 
-The fixed full-run plan is `historical/v13`, seed 2603, July 1, 2025 through July 1, 2026 (exclusive), with the maintained 3-million-customer scale and no duplicate inflation. An authenticated listing on October 26 found only v8/v11/v12; recheck v13 immediately before starting. The machine has 4 CPUs, 11.6 GiB RAM and 31 GiB free disk. Two bounded six-day, 100,000-customer prepare-only runs uploaded about 61.5 MB / 618,000 rows with full remote checksums: three workers took 51.4 seconds; four took 47.0 seconds and about 804 MB aggregate RSS at progress samples. Calendar/customer-day extrapolation estimates 118 GB and 25 hours; allow 24–36 hours for full-scale compression, compromise warmup and machine contention. Use four workers/in-flight tasks/transfers, single-threaded Arrow/BLAS and an 8 GiB scratch cap. Keep the 100 GB publication gate authoritative. Raw logs, exact configs and sizing receipts are outside the repo at `/home/felix/.local/state/dataset-fixes/us-electronics-v1/`; sizing prefixes have no completion manifest and are not accepted sources.
+The measured workstation evidence remains in `/home/felix/.local/state/dataset-fixes/us-electronics-v1/`: a six-day 100,000-customer export produced about 61.5 MB / 618,000 rows in 47 seconds with four workers and about 804 MB aggregate RSS at progress samples. Use four workers/in-flight tasks/transfers, single-threaded Arrow/BLAS and an 8 GiB scratch cap. The superseded full-scale estimate was about 118 GB / 24–36 hours; its stopped run is not source acceptance evidence. Full-volume generation and the project >=100 GB requirement move to a separate distributed Spark generation job coordinated with the StarRocks-native DP1 thread, without changing that ingestion architecture in this slice.
 
 Source publication and downstream DP1 Spark/GX quality acceptance remain separate. Enforce schema, integrity, conservation, lifecycle, linkage and leakage checks; keep generator distribution bands diagnostic under DP1's implemented policy. Reuse focused existing CI coverage, adding only meaningful missing cases; no local tests, config/getter tests, new proto-check script or new CI infrastructure.
 
@@ -57,11 +57,11 @@ Source publication and downstream DP1 Spark/GX quality acceptance remain separat
 - Public data cannot certify a real checkout's joint fraud distribution -> describe the source as plausible synthetic data, with explicit calibration limits.
 - Artificially easy scenarios inflate model performance -> include legitimate/fraud overlap, inspect shortcuts and recommend temporal/grouped evaluation.
 - Delayed reporting makes recent labels incomplete -> publish maturity information and keep oracle truth distinguishable from observed chargebacks.
-- Regeneration can exceed workstation resources -> measure throughput and set bounded worker/scratch budgets before the full run.
+- Regeneration can exceed workstation resources -> retain measured throughput and bounded smoke worker/scratch budgets; distribute the later full run separately.
 
 ## Migration Plan
 
 1. Implement the generator improvements and obtain focused CI results, leaving live deployments unchanged.
-2. Record calibration assumptions, resource estimates and the fixed new-version generation plan.
-3. Generate/publish the new immutable source and its dataset report; record downstream quality acceptance separately.
+2. Record calibration assumptions and smoke resource budgets; remove partial full-scale v13.
+3. Generate/publish the immutable v13 smoke source and its report; do not claim full-volume training acceptance.
 4. Hand the manifest/hash, date ranges, row totals and training limitations to DP1. Any live source switch is separate work under the existing identity/manifest checks.
