@@ -17,7 +17,7 @@
 
 - [x] 3.1 Rewrite bronze ODCS execution rules as StarRocks SQL/native OpenMetadata tests with stable semantic IDs and complete nested schema coverage; verify contract lint and focused valid/invalid cases through existing CI.
 - [x] 3.2 Implement snapshot-specific COUNT-of-violations SQL for schema, duplicate consistency, lifecycle, amounts, label linkage/availability and context; verify pinned event/label snapshots remain isolated from later commits.
-- [ ] 3.3 Preserve native per-day counts and add bidirectional duplicate-aware persisted/source reconciliation inside ingestion; require matching manifest/snapshot evidence before acceptance.
+- [x] 3.3 Preserve native per-day counts and add bidirectional duplicate-aware persisted/source reconciliation inside ingestion; require matching manifest/snapshot evidence before acceptance.
 - [ ] 3.4 Pin the current native gate, source contracts/product and feature-definition hashes in fresh v16 evidence; reject legacy schemas/gates and keep distribution bands diagnostic.
 - [x] 3.5 Read back the complete expected native result set with run/source/contract/snapshot correlation; verify Failed, Aborted, stale, missing or incomplete results refuse acceptance even when the ingestion container exits zero.
 - [x] 3.6 Persist bounded validation/governance evidence before failure and implement metadata-only recovery; verify no ingestion/revalidation, changed outcomes or duplicate catalog identities on replay.
@@ -32,8 +32,8 @@
 
 ## 5. Focused verification and native acceptance
 
-- [ ] 5.1 Adapt existing CI behavioral coverage for SQL semantics, snapshot isolation, result completeness, replay and cleanup; remove obsolete tests and verify existing independent CI jobs pass without new config suites, matrices or credentialed CI checks.
-- [ ] 5.2 Verify current schema-3 contracts and source/feature identity checks with existing behavioral CI fixtures and a CI-built image.
+- [x] 5.1 Adapt existing CI behavioral coverage for SQL semantics, snapshot isolation, result completeness, replay and cleanup; remove obsolete tests and verify existing independent CI jobs pass without new config suites, matrices or credentialed CI checks.
+- [x] 5.2 Verify current schema-3 contracts and source/feature identity checks with existing behavioral CI fixtures and a CI-built image.
 - [ ] 5.3 Verify deliberate SQL failure and metadata outage/recovery on isolated candidates; demonstrate failure visibility, unchanged previous acceptance and metadata-only replay.
 - [ ] 5.4 Adapt current schema-3 bronze contracts/runtime and run published v16 development acceptance now: manifest `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`, all 1,954 files / 139,597,476 bytes / 795,718 events / 161,967 labels including complete tails. Verify context, conservation, native SQL, canonical discovery and governance, then replay/recovery; source checks alone cannot complete this task.
 - [ ] 5.5 Record v16 persisted-bronze/governance evidence separately from source/live and historical GX/native evidence; update affected pipeline/product guidance with pinned contracts/features/snapshots and measured limits.
@@ -54,5 +54,7 @@ Producer source/live smoke and landing/recovery prerequisites are recorded in th
 - [ ] 7.2 During later DP2 planning, define mart grain/keys, SCD2/as-of joins, accepted upstream versions, refresh freshness and late-data recovery; verify a fixed-query correctness/performance baseline before choosing materialization or native serving loads. This task is a planning handoff, not implementation of gold in DP1.
 
 ## Fresh-start acceptance status
+
+Code validation passed on `41ad675`: Python behavioral tests, contract checks, Helm checks and the Spark image build succeeded in the existing CI jobs. Deployment and live testing are deferred at the user’s request; this does not establish v16 persisted-bronze acceptance.
 
 V16 is the only current development selector. Remove legacy DP1 tables/catalog registrations/run-evidence state before fresh ingestion; do not migrate old schemas, import earlier acceptance records or relabel failed attempts. The immutable v16 source and unrelated shared services/assets remain unchanged. Source/live smoke evidence is upstream only. Persisted-bronze, native quality, replay/recovery and governance acceptance remain pending until executed by this change. Full-scale/coursework acceptance follows later and cannot be claimed from v16.
