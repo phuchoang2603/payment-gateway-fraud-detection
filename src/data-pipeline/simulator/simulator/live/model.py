@@ -22,7 +22,11 @@ from simulator.profiles import (
 
 class HistoricalModel:
     def __init__(self, manifest):
-        configuration = {k: v for k, v in manifest["configuration"].items() if k != "validation_gate"}
+        configuration = {
+            key: value
+            for key, value in manifest["configuration"].items()
+            if key not in {"validation_gate", "execution", "storage"}
+        }
         self.config = HistoricalConfig.model_validate(configuration)
         self.profiles = profiles_from_manifest({**manifest, "configuration": configuration})
         if self.config.counts.payment_methods > 3900000:

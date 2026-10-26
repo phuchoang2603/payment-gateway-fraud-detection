@@ -33,6 +33,8 @@ def test_live_profiles_and_card_identity_across_calendar_gap(monkeypatch):
         "configuration": config.model_dump(mode="json"),
         "profile_sha256": profiles.digest(),
     }
+    manifest["configuration"]["execution"]["duckdb_memory_limit_mb"] = 512
+    manifest["configuration"]["storage"]["target_file_mb"] = 64
     model = HistoricalModel(manifest)
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
     order, signals, index, *_ = model.purchase(2603, 0, now)
