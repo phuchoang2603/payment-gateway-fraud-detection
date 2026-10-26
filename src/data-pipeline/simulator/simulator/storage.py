@@ -291,7 +291,7 @@ def _observations(stats, inventory):
     for item in inventory:
         if item["table"] == EVENTS.name:
             counts[str(item["schema_version"])] += item["rows"]
-    observed["schema_version_rows"] = {version: counts[version] for version in ("3",)}
+    observed["schema_version_rows"] = {"3": counts["3"]}
     rows = sum(counts.values())
     observed["schema_version_shares"] = {
         version: count / rows if rows else 0 for version, count in observed["schema_version_rows"].items()

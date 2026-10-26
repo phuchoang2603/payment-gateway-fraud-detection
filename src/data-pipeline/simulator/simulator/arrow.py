@@ -34,6 +34,7 @@ CHECKOUT = pa.struct(
         ("shipping", SHIPPING),
     ]
 )
+ATTEMPT_CONTEXT = pa.struct([("merchant", MERCHANT), ("customer", CUSTOMER), ("snapshot", CHECKOUT)])
 PAYMENT_METHOD = pa.struct([("type", pa.string()), ("fingerprint", pa.string())])
 ASSESSMENT = pa.struct(
     [
@@ -56,8 +57,8 @@ def event_schema(version: int) -> pa.Schema:
         ("device_fingerprint", pa.string()),
         ("ip_country", pa.string()),
         ("ip_network_fingerprint", pa.string()),
+        ("user_agent_family", pa.string()),
     ]
-    signals.append(("user_agent_family", pa.string()))
     return pa.schema(
         [
             pa.field("event_id", pa.string(), nullable=False),
@@ -68,17 +69,14 @@ def event_schema(version: int) -> pa.Schema:
             pa.field("recorded_at", TIMESTAMP, nullable=False),
             pa.field("schema_version", pa.uint32(), nullable=False),
             pa.field("correlation_id", pa.string(), nullable=False),
-            ("payment_created", pa.struct([("merchant", MERCHANT), ("customer", CUSTOMER), ("snapshot", CHECKOUT)])),
+            ("payment_created", ATTEMPT_CONTEXT),
             (
                 "attempt_started",
                 pa.struct(
                     [
                         ("attempt_id", pa.string()),
                         ("signals", pa.struct(signals)),
-                        (
-                            "context",
-                            pa.struct([("merchant", MERCHANT), ("customer", CUSTOMER), ("snapshot", CHECKOUT)]),
-                        ),
+                        ("context", ATTEMPT_CONTEXT),
                     ]
                 ),
             ),

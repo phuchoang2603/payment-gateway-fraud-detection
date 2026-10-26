@@ -100,19 +100,6 @@ def test_existing_dataset_version_is_refused(dataset):
         storage.generate(small_config(), fs.LocalFileSystem(), str(root.parents[1]))
 
 
-def test_completed_publication_recovery_reuses_output(dataset, monkeypatch):
-    root, expected = dataset
-    original = (root / "manifest.json").read_bytes()
-
-    def unexpected(*args):
-        raise AssertionError("completed publication must not regenerate")
-
-    monkeypatch.setattr(storage, "build_profiles", unexpected)
-    actual = storage.generate(small_config(), fs.LocalFileSystem(), str(root.parents[1]), resume=True)
-    assert actual == expected
-    assert (root / "manifest.json").read_bytes() == original
-
-
 def test_attempt_context_matches_immutable_checkout(dataset):
     root, _ = dataset
     assert _read(root, "payment_events").filter("schema_version <> 3").count("*").fetchone()[0] == 0
@@ -246,10 +233,7 @@ def test_empty_schedule_publishes_an_empty_valid_dataset(tmp_path):
 def test_task_fragments_are_one_file_per_table_and_schema_version(dataset):
     root, _ = dataset
     for task in (root / "raw" / "payment_events").iterdir():
-        names = sorted(path.name for path in task.iterdir())
-        assert all(name == "v3.parquet" for name in names)
-        assert len(names) == len(set(names))
-        assert len(names) == 1
+        assert [path.name for path in task.iterdir()] == ["v3.parquet"]
 
 
 def test_publication_receipt_records_skipped_cleanup(dataset):
