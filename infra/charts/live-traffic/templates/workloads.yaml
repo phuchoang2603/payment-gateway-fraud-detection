@@ -22,6 +22,9 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: {{ $name }}
+{{- if eq $name "live-simulator" }}
+        istio.io/dataplane-mode: ambient
+{{- end }}
       annotations:
         checksum/config: {{ toJson $.Values | sha256sum }}
     spec:
