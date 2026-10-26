@@ -1,6 +1,5 @@
 import os
 import sys
-from urllib.parse import urlsplit
 
 from pyspark.sql import SparkSession
 
@@ -39,30 +38,31 @@ def session(local_warehouse=None):
             .config("spark.sql.catalog.lake.warehouse", str(local_warehouse))
         )
     else:
+        access_key = os.environ["AWS_ACCESS_KEY_ID"]
+        secret_key = os.environ["AWS_SECRET_ACCESS_KEY"]
         prefix = "spark.sql.catalog.lake."
         options = {
             "type": "rest",
             "uri": os.environ["ICEBERG_REST_URI"],
             "warehouse": os.environ.get("ICEBERG_WAREHOUSE", "fraud-lakehouse-prod"),
             "io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
-            "rest.access-key-id": os.environ["LAKE_ACCESS_KEY_ID"],
-            "rest.secret-access-key": os.environ["LAKE_SECRET_ACCESS_KEY"],
+            "rest.access-key-id": access_key,
+            "rest.secret-access-key": secret_key,
             "rest.auth.type": "sigv4" if os.environ.get("ICEBERG_SIGV4_ENABLED", "true").lower() == "true" else "none",
             "rest.signing-region": os.environ.get("AWS_REGION", "us-east-1"),
             "rest.signing-name": os.environ.get("ICEBERG_SIGNING_NAME", "s3"),
             "s3.endpoint": os.environ.get("S3_ENDPOINT", "https://minio.home.phuchoang.sbs"),
             "s3.path-style-access": "true",
-            "s3.access-key-id": os.environ["LAKE_ACCESS_KEY_ID"],
-            "s3.secret-access-key": os.environ["LAKE_SECRET_ACCESS_KEY"],
+            "s3.access-key-id": access_key,
+            "s3.secret-access-key": secret_key,
             "client.region": os.environ.get("AWS_REGION", "us-east-1"),
         }
         for key, value in options.items():
             builder = builder.config(prefix + key, value)
-        source_bucket = urlsplit(os.environ.get("SOURCE_ROOT", "s3://synthetic-source/historical/v11")).netloc
-        hadoop = f"spark.hadoop.fs.s3a.bucket.{source_bucket}."
+        hadoop = "spark.hadoop.fs.s3a."
         for key, value in {
-            "access.key": os.environ["SOURCE_ACCESS_KEY_ID"],
-            "secret.key": os.environ["SOURCE_SECRET_ACCESS_KEY"],
+            "access.key": access_key,
+            "secret.key": secret_key,
             "endpoint": os.environ.get("S3_ENDPOINT", "https://minio.home.phuchoang.sbs"),
             "path.style.access": "true",
             "bucket.probe": "0",

@@ -16,7 +16,7 @@ from data_platform.storage import Store
 
 
 def read_manifest(root):
-    body = Store(root, "source").read("manifest.json", max_bytes=64 * 1024 * 1024)
+    body = Store(root).read("manifest.json", max_bytes=64 * 1024 * 1024)
     manifest = json.loads(body)
     version = manifest.get("dataset_version", "")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", version):
@@ -124,8 +124,8 @@ def source_filesystem(root):
         import os
 
         return fs.S3FileSystem(
-            access_key=os.environ["SOURCE_ACCESS_KEY_ID"],
-            secret_key=os.environ["SOURCE_SECRET_ACCESS_KEY"],
+            access_key=os.environ["AWS_ACCESS_KEY_ID"],
+            secret_key=os.environ["AWS_SECRET_ACCESS_KEY"],
             endpoint_override=os.environ.get("S3_ENDPOINT", "https://minio.home.phuchoang.sbs"),
             region=os.environ.get("AWS_REGION", "us-east-1"),
             force_virtual_addressing=False,

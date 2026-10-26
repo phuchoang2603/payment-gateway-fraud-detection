@@ -23,13 +23,11 @@ config:
   AWS_REGION: us-east-1
   OPENMETADATA_URL: http://openmetadata.openmetadata.svc.cluster.local:8585/api
 externalSecrets:
-  - name: dp1-lake
+  - name: lakehouse-rustfs
     store: fraud-doppler
     data:
-      SOURCE_ACCESS_KEY_ID: DP1_LAKE_RUSTFS_ACCESS_KEY
-      SOURCE_SECRET_ACCESS_KEY: DP1_LAKE_RUSTFS_SECRET_KEY
-      LAKE_ACCESS_KEY_ID: DP1_LAKE_RUSTFS_ACCESS_KEY
-      LAKE_SECRET_ACCESS_KEY: DP1_LAKE_RUSTFS_SECRET_KEY
+      AWS_ACCESS_KEY_ID: LAKEHOUSE_RUSTFS_ACCESS_KEY
+      AWS_SECRET_ACCESS_KEY: LAKEHOUSE_RUSTFS_SECRET_KEY
   - name: dp1-openmetadata
     store: fraud-doppler
     data:

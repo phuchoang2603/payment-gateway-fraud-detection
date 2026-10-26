@@ -9,13 +9,12 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 
-def s3_client(identity):
-    prefix = identity.upper()
+def s3_client():
     return boto3.client(
         "s3",
         endpoint_url=os.environ.get("S3_ENDPOINT", "https://minio.home.phuchoang.sbs"),
-        aws_access_key_id=os.environ[f"{prefix}_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ[f"{prefix}_SECRET_ACCESS_KEY"],
+        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
         region_name=os.environ.get("AWS_REGION", "us-east-1"),
         config=Config(
             connect_timeout=10, read_timeout=30, retries={"max_attempts": 3}, s3={"addressing_style": "path"}
@@ -24,7 +23,7 @@ def s3_client(identity):
 
 
 class Store:
-    def __init__(self, root, identity="lake"):
+    def __init__(self, root):
         parsed = urlsplit(root)
         if parsed.query or parsed.fragment or parsed.username or parsed.password:
             raise ValueError("storage location cannot contain credentials or query parameters")
@@ -33,7 +32,7 @@ class Store:
         if parsed.scheme not in ("s3", "", "file"):
             raise ValueError("only local or S3 storage is supported")
         self.prefix = parsed.path.strip("/") if self.bucket else parsed.path
-        self.client = s3_client(identity) if self.bucket else None
+        self.client = s3_client() if self.bucket else None
 
     def key(self, relative):
         path = PurePosixPath(relative)

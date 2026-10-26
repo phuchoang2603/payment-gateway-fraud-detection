@@ -16,7 +16,7 @@ def check_deadline(deadline):
 
 
 def source_listing(root, manifest, max_files=MAX_FILES, max_bytes=MAX_BYTES, deadline=None):
-    store = Store(root, "source")
+    store = Store(root)
     deadline = deadline if deadline is not None else time.monotonic() + 900
     files = {}
     total_bytes = 0

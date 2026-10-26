@@ -170,7 +170,7 @@ spec:
         args: [prepare]
         envFrom:
           - configMapRef: {name: dp1-config}
-          - secretRef: {name: dp1-lake}
+          - secretRef: {name: lakehouse-rustfs}
         env:
           - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
           - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
@@ -296,7 +296,7 @@ spec:
                     - name: spark-kubernetes-driver
                       envFrom:
                         - configMapRef: {name: dp1-config}
-                        - secretRef: {name: dp1-lake}
+                        - secretRef: {name: lakehouse-rustfs}
                       env:
                         - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
                         - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
@@ -317,7 +317,7 @@ spec:
                     - name: spark-kubernetes-executor
                       envFrom:
                         - configMapRef: {name: dp1-config}
-                        - secretRef: {name: dp1-lake}
+                        - secretRef: {name: lakehouse-rustfs}
     - name: recover-previous
       steps:
         - - name: workflow-pods
@@ -401,7 +401,7 @@ spec:
         args: ["{{inputs.parameters.stage}}"]
         envFrom:
           - configMapRef: {name: dp1-config}
-          - secretRef: {name: dp1-lake}
+          - secretRef: {name: lakehouse-rustfs}
           - secretRef: {name: dp1-openmetadata}
         env:
           - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
