@@ -20,7 +20,7 @@ The rules runtime is implemented as an independently deployable Go service at `s
 
 ## Current implementation order
 
-1. Finalize self-contained attempt events and the shared fraud feature contract; generate and exercise the new 90-day/10,000-customer development source and its current-time live landing. See [the change](../../openspec/changes/finalize-feature-contract-and-90-day-smoke/proposal.md). Source publication, live acceptance and downstream quality acceptance have separate evidence.
+1. Finalize self-contained attempt events and the shared fraud feature contract; generate and exercise the new 90-day/10,000-customer development source and its current-time live landing. See [the change](../../openspec/changes/archive/2026-10-26-finalize-feature-contract-and-90-day-smoke/proposal.md). Source publication, live acceptance and downstream quality acceptance have separate evidence.
 2. Build continuous Kafka/Flink assessed-history features and Feast online serving against the pinned definitions. Bounded state does not imply bounded input; Kafka remains unbounded.
 3. Build/exercise Spark ingestion, curation, offline features and maturity-aware training datasets on the development source. Existing DP1 work continues; this and the streaming work can overlap after the contract is fixed.
 4. Add Kubeflow training, evaluation and model registration, then KServe integration through Go Fraud with feature compatibility, latency/freshness and served-vector evidence.

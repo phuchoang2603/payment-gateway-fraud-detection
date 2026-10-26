@@ -38,7 +38,7 @@ The first schema-3 candidate v15 failed its declared risk-assessment rule becaus
 
 The enriched attempt context matches gateway scoring inputs. The manifest pins [baseline feature definitions](../../contracts/features/fraud-baseline-v1.yaml); it does not contain computed feature snapshots or certify downstream ingestion. Use a seven-day history warmup, chronological splits and label maturity at each training cutoff. Absent chargebacks are not confirmed negatives. Report class/cohort counts and temporal/entity/campaign overlap before interpreting model results.
 
-The [manifest-bound development report](../../openspec/changes/finalize-feature-contract-and-90-day-smoke/evidence/v16-development-report.json) records events through September 29 00:58:24 UTC and label availability through October 19 22:17:57.008 UTC. It measures 9,118 positive and 148,084 negative simulation-truth attempts. Friendly-dispute simulation truth remains negative while its chargeback label is positive; choose a label-source/target policy rather than merging those targets implicitly.
+The [manifest-bound development report](../../openspec/changes/archive/2026-10-26-finalize-feature-contract-and-90-day-smoke/evidence/v16-development-report.json) records events through September 29 00:58:24 UTC and label availability through October 19 22:17:57.008 UTC. It measures 9,118 positive and 148,084 negative simulation-truth attempts. Friendly-dispute simulation truth remains negative while its chargeback label is positive; choose a label-source/target policy rather than merging those targets implicitly.
 
 After seven days of warmup, one conservative evaluation schedule is:
 
