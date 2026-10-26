@@ -11,7 +11,7 @@
 - [x] 2.1 Add platform-owned StarRocks through Argo CD and the official operator/Helm chart in `talos-proxmox`; pin versions, scope RBAC, size FE/BE/PVCs and verify reconciliation/persistence without installing an app-owned engine.
 - [x] 2.2 Configure native RustFS REST SigV4 signing service/region and separate scoped S3 access; verify catalog listing, nested schemas and exact event/label snapshot SQL without proxy/catalog replacement or full dataset import.
 - [x] 2.3 Verify native OpenMetadata metadata/profiler/test connections select the external Iceberg catalog using supported configuration; prove canonical identities, schema fidelity and one passing/failing SQL test. Resolve upstream support gaps explicitly, without custom discovery or a copied internal table fallback.
-- [ ] 2.4 Measure combined Spark, StarRocks and OpenMetadata scheduling/memory/storage; record bounded resource and deadline settings before scale submission.
+- [ ] 2.4 Record bounded recurring-ingestion resources, deadlines and observed usage; preserve the recovered historical OOM limitation. Full resource/scale benchmarking follows whole-pipeline completion.
 
 ## 3. Native contracts, SQL and acceptance
 
@@ -34,18 +34,18 @@
 
 - [x] 5.1 Adapt existing CI behavioral coverage for SQL semantics, snapshot isolation, result completeness, replay and cleanup; remove obsolete tests and verify existing independent CI jobs pass without new config suites, matrices or credentialed CI checks.
 - [x] 5.2 Verify current schema-3 contracts and source/feature identity checks with existing behavioral CI fixtures and a CI-built image.
-- [ ] 5.3 Verify deliberate SQL failure and metadata outage/recovery on isolated candidates; demonstrate failure visibility, unchanged previous acceptance and metadata-only replay.
+Deliberate isolated SQL/data-failure and metadata-outage exercises are removed at the user’s request. Existing genuine failures and CI behavioral coverage remain evidence.
 - [x] 5.4 Adapt current schema-3 bronze contracts/runtime and run published v16 development acceptance now: manifest `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`, all 1,954 files / 139,597,476 bytes / 795,718 events / 161,967 labels including complete tails. Verify context, conservation, native SQL, canonical discovery and governance, then replay/recovery; source checks alone cannot complete this task.
 - [x] 5.5 Record v16 persisted-bronze/governance evidence separately from source/live and historical GX/native evidence; update affected pipeline/product guidance with pinned contracts/features/snapshots and measured limits.
-- [ ] 5.6 Later, after the end-to-end development path is exercised and an immutable current-contract full source is published, measure >=100,000,000,000 physical Parquet bytes and separate scale/coursework pipeline acceptance. Do not generate or wait for scale input during v16 implementation.
+Scale/coursework acceptance (>=100,000,000,000 physical Parquet bytes) is deferred until the whole pipeline is finished; it is not a completion gate for this change. No scale generation is authorized.
 
-## 6. Recurring completed-file ingestion (deferred)
+## 6. Recurring completed-file ingestion
 
-Producer source/live smoke and landing/recovery prerequisites are recorded in the archived v16 change, including the clean epoch `v16-20261026` and group `payments-parquet-landing-v16-20261026`. Review those exact receipts before recurring DP1 selection. Complete historical v16 persisted-bronze acceptance first; it does not establish recurring readiness. Do not reset producer offsets, combine faulty deliveries as independent business events, duplicate simulator work or assume in-memory delayed labels survive shutdown.
+Producer source/live smoke and landing/recovery prerequisites are recorded in the archived v16 change, including the clean epoch `v16-20261026` and group `payments-parquet-landing-v16-20261026`. Review those exact receipts before recurring DP1 selection. Historical v16 persisted-bronze acceptance passed; it does not establish recurring readiness. Do not reset producer offsets, combine faulty deliveries as independent business events, duplicate simulator work or assume in-memory delayed labels survive shutdown.
 
 - [ ] 6.1 Agree immutable landing completion/inventory and durable progress interfaces with the live-streaming change; verify late files in older date folders are discoverable without an event-date cutoff.
 - [ ] 6.2 Implement common input selection, independent event/label batches and content-preserving incremental commits with pinned changed/unchanged ports; verify no-input, changed-content rejection and uncertain-commit recovery using existing behavioral CI coverage.
-- [ ] 6.3 Apply contextual native SQL checks with pinned history and label maturity, retaining origin/offset/batch provenance and informational generator diagnostics; verify incomplete context never becomes an invented pass or a requirement for same-batch labels.
+- [ ] 6.3 Establish the raw/silver validation boundary: retain lossless schema, file integrity, transport provenance and exact batch conservation in DP1; defer lifecycle reconstruction, duplicate consistency, business amounts/risk/context, cross-table linkage and as-of/maturity checks to DP2. Bundle native schema checks to avoid a scan per field; no same-batch labels or terminal events are required.
 - [ ] 6.4 Add opt-in CronWorkflow/progress/landing permissions and demonstrate repeated live batches plus metadata-only recovery with exact accounting; historical acceptance does not establish recurring readiness.
 
 ## 7. Analytical roadmap alignment
@@ -55,6 +55,6 @@ Producer source/live smoke and landing/recovery prerequisites are recorded in th
 
 ## Fresh-start acceptance status
 
-Code validation passed on `1da4a5c` in the existing CI jobs. V16 persisted-bronze, all 146 native quality results, profiling, snapshot reuse and governance-only recovery passed. The accepted record is `s3://fraud-lakehouse-prod/dp1-evidence/starrocks-v2/accepted/v16.json`; bounded receipts are in `evidence/`. The first SQL abort and subsequent stale-provenance rejection remain recorded. One recovered executor OOM means scale resource sizing remains open; isolated deliberate-violation and metadata-outage exercises remain pending under task 5.3.
+Code validation passed on `1da4a5c` in the existing CI jobs. V16 persisted-bronze, all 146 native quality results, profiling, snapshot reuse and governance-only recovery passed. The accepted record is `s3://fraud-lakehouse-prod/dp1-evidence/starrocks-v2/accepted/v16.json`; bounded receipts are in `evidence/`. The first SQL abort and subsequent stale-provenance rejection remain recorded. One recovered executor OOM means scale resource sizing remains open; deliberate failure exercises are no longer requested.
 
 V16 is the current development selector and was ingested into an empty bronze namespace without schema migration or imported acceptance records. The immutable source and unrelated shared services/assets remain unchanged. Its persisted-bronze/native/governance evidence is distinct from upstream source/live smoke. Full-scale/coursework acceptance, recurring ingestion and downstream feature/training/serving acceptance remain separate later gates.

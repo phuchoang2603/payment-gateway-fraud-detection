@@ -15,6 +15,14 @@ def test_preprovisioned_namespace_does_not_request_namespace_creation(tmp_path, 
     class Session:
         catalog = Catalog()
 
+        def table(self, name):
+            from data_platform.contracts import prepare
+
+            class Table:
+                schema = prepare("payment_events" if name.endswith("payment_events") else "fraud_labels").schema
+
+            return Table()
+
         def sql(self, query):
             if query.startswith("SHOW CREATE TABLE lake.bronze.raw_"):
                 column = "occurred_at" if query.endswith("payment_events") else "label_available_at"

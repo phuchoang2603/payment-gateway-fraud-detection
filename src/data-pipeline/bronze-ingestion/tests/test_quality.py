@@ -24,13 +24,14 @@ def rendered():
 
 def test_every_contract_rule_is_rendered_against_independently_pinned_snapshots():
     cases = rendered()
-    linkage = cases[f"{quality.entity('fraud_labels')}.label_attempt_linkage"].sql
-    assert "FOR VERSION AS OF 222" in linkage and "FOR VERSION AS OF 111" in linkage
-    assert "_source_dataset_version = 'v11'" in linkage
     names = {case.name for case in cases.values()}
-    assert {"payment_lifecycle", "label_availability", quality.CONSERVATION} <= names
-    assert any(name.startswith("schema_type__payment_created") for name in names)
-    assert any("_items__" in name for name in names if name.startswith("schema_required__"))
+    assert names == {"schema_types", "schema_required", quality.CONSERVATION}
+    for table, snapshot in RUN["snapshots"].items():
+        checks = [c.sql for c in cases.values() if c.table == table]
+        assert any(f"FOR VERSION AS OF {snapshot}" in sql for sql in checks)
+        assert any("_source_dataset_version = 'v11'" in sql for sql in checks)
+    required = cases[f"{quality.entity('payment_events')}.schema_required"].sql
+    assert "ANY_MATCH" in required and " IS NOT NULL" in required
     assert not any("{" in case.sql or "}" in case.sql for case in cases.values())
     assert "('2026-07-01', 3)" in cases[f"{quality.entity('payment_events')}.{quality.CONSERVATION}"].sql
 
@@ -70,7 +71,7 @@ def test_only_fresh_matching_success_results_pass():
     bad[names[3]]["testCaseResult"]["timestamp"] = 5
     bad[names[4]]["parameterValues"][0]["value"] += " "
     bad[names[5]]["testCaseResult"]["testResultValue"][0]["value"] = "7"
-    bad[names[6]]["testCaseResult"] = {
+    bad[names[2]]["testCaseResult"] = {
         "timestamp": 20,
         "testCaseStatus": "Aborted",
         "testResultValue": [{"name": "resultRowCount"}],
@@ -82,7 +83,6 @@ def test_only_fresh_matching_success_results_pass():
         names[3]: "stale result",
         names[4]: "stale definition",
         names[5]: "nonzero violations",
-        names[6]: "Aborted",
     }
 
 

@@ -116,3 +116,5 @@ Argo SHALL schedule version-matched official OpenMetadata metadata/profiler/test
 
 - **WHEN** a native quality job exits successfully but a required result is Failed, Aborted, stale or absent
 - **THEN** DP1 refuses acceptance and persists the actual quality or execution outcome
+
+Recurring execution SHALL use immutable pending selections and accepted progress, a daily UTC CronWorkflow, shared writer serialization and bounded selection resources. No-input runs SHALL skip Spark and native checks; profiling SHALL be optional.

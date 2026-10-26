@@ -10,6 +10,9 @@ spec:
     parameters:
       - {name: source-root, value: __SOURCE_ROOT__}
       - {name: dataset-version, value: __DATASET_VERSION__}
+      - {name: input-mode, value: historical}
+      - {name: source-epoch, value: __SOURCE_EPOCH__}
+      - {name: profile, value: "true"}
       - {name: openmetadata-url, value: __OPENMETADATA_URL__}
   onExit: finalizer
   activeDeadlineSeconds: __WORKFLOW_DEADLINE__
@@ -22,6 +25,34 @@ spec:
   podGC:
     strategy: OnWorkflowSuccess
   templates:
+    - name: recurring
+      steps:
+        - - name: recover-previous
+            template: recover-previous
+        - - name: select
+            template: select
+        - - name: ingest-selected
+            template: historical
+            when: "{{steps.select.outputs.parameters.version}} != none"
+    - name: select
+      container:
+        image: __SPARK_IMAGE__
+        command: [dp1]
+        args: [select]
+        envFrom:
+          - configMapRef: {name: dp1-config}
+          - secretRef: {name: lakehouse-rustfs}
+        env:
+          - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
+          - {name: SOURCE_EPOCH, value: "{{workflow.parameters.source-epoch}}"}
+        resources:
+          requests: {cpu: 100m, memory: 256Mi}
+          limits: {cpu: "1", memory: 512Mi}
+      outputs:
+        parameters:
+          - name: version
+            globalName: selected-version
+            valueFrom: {path: /tmp/out/version}
     - name: historical
       steps:
         - - name: recover-previous
@@ -54,6 +85,7 @@ spec:
                 - {name: command, value: test}
                 - {name: config, value: "{{steps.prepare.outputs.parameters.fraud-labels}}"}
         - - name: profile
+            when: "{{workflow.parameters.profile}} == true"
             template: openmetadata
             arguments:
               parameters:
@@ -121,7 +153,9 @@ __GOVERNANCE_WRITES__
           - secretRef: {name: lakehouse-rustfs}
         env:
           - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
-          - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
+          - {name: INPUT_MODE, value: "{{workflow.parameters.input-mode}}"}
+          - {name: SOURCE_EPOCH, value: "{{workflow.parameters.source-epoch}}"}
+          - {name: DATASET_VERSION, value: "{{=workflow.parameters['input-mode'] == 'landing' ? workflow.outputs.parameters['selected-version'] : workflow.parameters['dataset-version']}}"}
           - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
         resources:
           requests: {cpu: 100m, memory: 512Mi}
@@ -244,7 +278,9 @@ __GOVERNANCE_WRITES__
                         - secretRef: {name: lakehouse-rustfs}
                       env:
                         - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
-                        - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
+                        - {name: INPUT_MODE, value: "{{workflow.parameters.input-mode}}"}
+                        - {name: SOURCE_EPOCH, value: "{{workflow.parameters.source-epoch}}"}
+                        - {name: DATASET_VERSION, value: "{{=workflow.parameters['input-mode'] == 'landing' ? workflow.outputs.parameters['selected-version'] : workflow.parameters['dataset-version']}}"}
                         - {name: SPARK_SHUFFLE_PARTITIONS, value: "__SHUFFLE_PARTITIONS__"}
                         - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
                         - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
@@ -350,7 +386,9 @@ __GOVERNANCE_WRITES__
           - secretRef: {name: openmetadata}
         env:
           - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
-          - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
+          - {name: INPUT_MODE, value: "{{workflow.parameters.input-mode}}"}
+          - {name: SOURCE_EPOCH, value: "{{workflow.parameters.source-epoch}}"}
+          - {name: DATASET_VERSION, value: "{{=workflow.parameters['input-mode'] == 'landing' ? workflow.outputs.parameters['selected-version'] : workflow.parameters['dataset-version']}}"}
           - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
           - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
           - {name: TABLE_IDS, value: "{{inputs.parameters.table-ids}}"}

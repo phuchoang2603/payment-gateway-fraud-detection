@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from pathlib import Path
 
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
@@ -24,12 +25,31 @@ def source_frames(spark, root, manifest, run):
         paths = [root.rstrip("/") + "/" + entry["key"] for entry in manifest["inventory"] if entry["table"] == table]
         if paths:
             frame = spark.read.option("mergeSchema", "true").parquet(*[p.replace("s3://", "s3a://", 1) for p in paths])
-            check_physical(frame.schema, T.StructType([f for f in prepared.schema if f.name not in AUDIT]))
-            frame = frame.select(*prepared.business_columns)
+            columns = prepared.business_columns + (["_transport"] if manifest.get("input_mode") == "landing" else [])
+            check_physical(frame.schema, T.StructType([prepared.schema[c] for c in columns]))
+            frame = frame.select(*columns)
             frame = frame.withColumn("_source_file", F.regexp_replace(F.input_file_name(), "^s3a://", "s3://"))
         else:
             frame = spark.createDataFrame([], T.StructType([f for f in prepared.schema if f.name not in AUDIT]))
             frame = frame.withColumn("_source_file", F.lit("").cast("string"))
+        if manifest.get("input_mode") == "landing":
+            files = {
+                root.rstrip("/") + "/" + e["key"]: e["batch"] for e in manifest["inventory"] if e["table"] == table
+            }
+            files = {
+                key if key.startswith("s3://") else Path(key.removeprefix("file://")).absolute().as_uri(): value
+                for key, value in files.items()
+            }
+            batch_map = F.create_map(*[F.lit(v) for pair in files.items() for v in pair]) if files else None
+            frame = frame.withColumn("_source_epoch", F.lit(manifest["source_epoch"]))
+            frame = frame.withColumn(
+                "_source_batch", batch_map[F.col("_source_file")] if files else F.lit(None).cast("string")
+            )
+            if "_transport" not in frame.columns:
+                frame = frame.withColumn("_transport", F.lit(None).cast(prepared.schema["_transport"].dataType))
+        else:
+            for column in ("_source_epoch", "_source_batch", "_transport"):
+                frame = frame.withColumn(column, F.lit(None).cast(prepared.schema[column].dataType))
         frame = (
             frame.withColumn("_source_dataset_version", F.lit(run["dataset_version"]))
             .withColumn("_source_manifest_sha256", F.lit(run["manifest_sha256"]))
@@ -77,6 +97,8 @@ def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=N
         return run
     verify_files(spark, root, manifest)
     frames = source_frames(spark, root, manifest, run)
+    if manifest.get("input_mode") == "landing":
+        verify_transport(frames, manifest)
     if not spark.catalog.databaseExists(f"lake.{namespace}"):
         spark.sql(f"CREATE NAMESPACE lake.{namespace}")
     for table, frame in frames.items():
@@ -97,7 +119,17 @@ def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=N
                 .tableProperty("history.expire.max-snapshot-age-ms", "9223372036854775807")
                 .create()
             )
+        existing = spark.table(name).schema
+        for column in ("_source_epoch", "_source_batch", "_transport"):
+            if column not in existing.fieldNames():
+                spark.sql(f"ALTER TABLE {name} ADD COLUMN `{column}` {frame.schema[column].dataType.simpleString()}")
         check_date_partition(spark, name, table)
+        if manifest.get("input_mode") == "landing" and not any(e["table"] == table for e in manifest["inventory"]):
+            run["snapshots"][table] = (
+                spark.table(name + ".snapshots").orderBy(F.col("committed_at").desc()).first().snapshot_id
+            )
+            save_run(store, run)
+            continue
         snapshot = committed_snapshot(spark, name, run)
         if snapshot is None:
             (
@@ -142,3 +174,29 @@ def selected_snapshots(spark, run, namespace="bronze"):
         .where(F.col("_source_dataset_version") == run["dataset_version"])
         for table, snapshot in run["snapshots"].items()
     }
+
+
+def verify_transport(frames, manifest):
+    for table, frame in frames.items():
+        entries = [e for e in manifest["inventory"] if e["table"] == table]
+        if not entries:
+            continue
+        valid = F.lit(False)
+        for entry in entries:
+            topic, partition, first, last = entry["range"]
+            valid = valid | (
+                (F.col("_source_batch") == entry["batch"])
+                & (F.col("_transport.topic") == topic)
+                & (F.col("_transport.partition") == partition)
+                & F.col("_transport.offset").between(first, last)
+            )
+        if frame.where(~F.coalesce(valid, F.lit(False)) | F.col("_transport.value").isNull()).limit(1).count():
+            raise ValueError("landing transport provenance differs from completion manifest")
+        if (
+            frame.groupBy("_source_epoch", "_transport.topic", "_transport.partition", "_transport.offset")
+            .count()
+            .where("count > 1")
+            .limit(1)
+            .count()
+        ):
+            raise ValueError("landing repeats transport positions")

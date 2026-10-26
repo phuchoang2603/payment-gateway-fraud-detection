@@ -26,7 +26,7 @@ Bounded CI fixtures SHALL protect the distinct behavioral risks: source integrit
 
 ### Requirement: Live historical and governance acceptance
 
-Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain historical evidence; production workflows SHALL NOT repeat disposable-table rollout probes. Live acceptance SHALL separately exercise current-contract native v16 development ingestion now, with later separate full-scale/coursework acceptance, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. It SHALL prove failed-quality visibility and metadata-outage recovery with isolated candidates. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
+Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain historical evidence; production workflows SHALL NOT repeat disposable-table rollout probes. Live acceptance SHALL separately exercise current-contract native v16 development ingestion now, with later separate full-scale/coursework acceptance, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. Deliberate isolated failure/outage exercises are not required; existing failed outcomes remain unchanged. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
 
 #### Scenario: Complete v16 development acceptance
 

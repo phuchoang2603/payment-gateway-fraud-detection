@@ -14,7 +14,7 @@ from data_platform.products import hashes
 from data_platform.runs import VALIDATION_POLICY, accept, evidence_key, open_run, save_run
 from data_platform.storage import Store
 
-STAGES = ["preflight", "ingest", "prepare", "governance", "accept", "verify-source"]
+STAGES = ["preflight", "ingest", "prepare", "governance", "accept", "verify-source", "select"]
 
 
 def prepare(store, run, contracts, manifest, out):
@@ -47,6 +47,11 @@ def main(argv=None):
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--local-warehouse")
     parser.add_argument("--out", default="/tmp/out")
+    parser.add_argument(
+        "--input-mode", choices=["historical", "landing"], default=os.environ.get("INPUT_MODE", "historical")
+    )
+    parser.add_argument("--epoch", default=os.environ.get("SOURCE_EPOCH", "v16-20261026"))
+    parser.add_argument("--max-batches", type=int, default=int(os.environ.get("LANDING_MAX_BATCHES", "100")))
     parser.add_argument("--table-ids", default=os.environ.get("TABLE_IDS", "{}"))
     args = parser.parse_args(argv)
     spark = None
@@ -62,8 +67,26 @@ def main(argv=None):
             return 0
         store = Store(args.evidence)
         contracts = hashes()
+        if args.stage == "select":
+            from data_platform.landing import select
+
+            if args.max_batches < 1:
+                raise ValueError("landing batch limit must be positive")
+            manifest = select(Store(args.source), store, args.epoch, args.max_batches)
+            out = Path(args.out)
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "version").write_text(manifest["dataset_version"] if manifest else "none")
+            print(json.dumps({"input": bool(manifest), "version": manifest["dataset_version"] if manifest else None}))
+            return 0
         if args.stage in ("preflight", "ingest"):
-            manifest, digest = selected_manifest(args.source)
+            if args.input_mode == "landing":
+                from data_platform.landing import selection
+
+                manifest, digest = selection(store, args.version)
+                if manifest["source_root"] != args.source or manifest["source_epoch"] != args.epoch:
+                    raise ValueError("landing selection source/epoch differs")
+            else:
+                manifest, digest = selected_manifest(args.source)
             if manifest["dataset_version"] != args.version:
                 raise ValueError("selected manifest differs from requested version")
             image = os.environ.get("IMAGE_DIGEST", "")
@@ -77,10 +100,16 @@ def main(argv=None):
                 image,
                 args.workflow,
                 source_validation=manifest["validation"]
-                if manifest["validation"].get("result") == "skipped"
+                if manifest.get("validation", {}).get("result") == "skipped"
                 else None,
             )
-            run["source_product"] = manifest["data_product"]
+            if args.input_mode == "landing":
+                run["input_mode"] = "landing"
+                run["source_epoch"] = manifest["source_epoch"]
+                run["changed_ports"] = [t for t, rows in manifest["totals"].items() if rows]
+                run["batches"] = [{k: b[k] for k in ("key", "sha256", "range")} for b in manifest["batches"]]
+            else:
+                run["source_product"] = manifest["data_product"]
             run["source_root"] = args.source
             save_run(store, run)
             if args.stage == "preflight":
@@ -103,7 +132,12 @@ def main(argv=None):
             spark = session(args.local_warehouse)
             ingest(spark, args.source, manifest, store, run)
         elif args.stage == "prepare":
-            manifest, digest = selected_manifest(run["source_root"])
+            if run.get("input_mode") == "landing":
+                from data_platform.landing import selection
+
+                manifest, digest = selection(store, args.version)
+            else:
+                manifest, digest = selected_manifest(run["source_root"])
             if digest != run["manifest_sha256"]:
                 raise ValueError("source manifest changed since ingestion")
             prepare(store, run, contracts, manifest, Path(args.out))

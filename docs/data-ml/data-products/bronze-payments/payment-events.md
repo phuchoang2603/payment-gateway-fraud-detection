@@ -1,20 +1,20 @@
 # urn:datacontract:fraud:bronze-payment-events
 ## Info
-*Complete synthetic payment lifecycle histories for reproducible pipeline development.*
+*Raw delivered payment events for historical and recurring ingestion.*
 - **name:** Bronze payment-events
-- **version:** 2.0.0
+- **version:** 3.0.0
 - **status:** active
 - **team:** Fraud data platform
 
 ## Terms of Use
 ### Usage
-Validate source datasets before publication and ingestion. Deduplicate identical event deliveries before interpreting lifecycle transitions.
+Preserve every delivery and its provenance. DP2 owns deduplication and business-quality validation.
 
 ### Purpose
-Complete synthetic payment lifecycle histories for reproducible pipeline development.
+Raw delivered payment events for historical and recurring ingestion.
 
 ### Limitations
-Synthetic data only. Histories are complete across all date partitions. Empty configured schedules are valid.
+Synthetic data only. Recurring batches may contain incomplete lifecycles. Label availability and as-of joins are enforced in DP2.
 
 ## Servers
 | Name | Type | Attributes |
@@ -131,5 +131,18 @@ Synthetic data only. Histories are complete across all date partitions. Empty co
 |  _source_file | string | *Exact manifest-selected input object URI.*<br />• `required` |
 |  _ingestion_run_id | string | *Stable logical ingestion identity, reused after driver retries.*<br />• `required` |
 |  _ingested_at | timestamp | *Stable UTC microsecond ingestion time, distinct from source recorded_at.*<br />• `required` |
+|  _source_epoch | string | *Immutable landing epoch; null for historical exports.* |
+|  _source_batch | string | *Exact completion-manifest key for this source file; null for historical exports.* |
+|  _transport | object | *Original Kafka envelope, including ordered headers; null for historical sources.* |
+| &#x2007;&#x21b3; topic | string | *No description.*<br />• `required` |
+| &#x2007;&#x21b3; partition | integer | *No description.*<br />• `required` |
+| &#x2007;&#x21b3; offset | integer | *No description.*<br />• `required` |
+| &#x2007;&#x21b3; timestamp | timestamp | *No description.* |
+| &#x2007;&#x21b3; key | string | *No description.* |
+| &#x2007;&#x21b3; value | string | *No description.*<br />• `required` |
+| &#x2007;&#x21b3; headers | array | *No description.* |
+| &#x2007;&#x2007;&#x21b3; items | object | *No description.* |
+| &#x2007;&#x2007;&#x2007;&#x21b3; key | string | *No description.*<br />• `required` |
+| &#x2007;&#x2007;&#x2007;&#x21b3; value | string | *No description.* |
 
 ## SLA Properties

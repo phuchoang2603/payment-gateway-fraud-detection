@@ -55,12 +55,12 @@ DP1 SHALL serialize writes to its bronze product and persist run identity before
 
 ### Requirement: Persisted snapshot validation
 
-For historical exports, validation SHALL read the recorded event and label snapshots for the selected source version. It SHALL execute StarRocks SQL through native OpenMetadata against both explicit snapshot IDs, cover complete histories and delayed labels, and compare persisted per-day row counts with the immutable manifest. Ingestion SHALL verify each source file's checksum and rows before writing and reconcile the selected source frames against recorded persisted snapshots bidirectionally with duplicate multiplicity preserved. A missing, failed or mismatched conservation receipt SHALL prevent acceptance; per-day counts alone SHALL NOT establish content equality.
+For historical exports, validation SHALL read the recorded event and label snapshots for the selected source version. It SHALL execute StarRocks SQL through native OpenMetadata against both explicit snapshot IDs, preserve complete selected deliveries and delayed labels, and compare persisted per-day row counts with the immutable manifest. Ingestion SHALL verify each source file's checksum and rows before writing and reconcile the selected source frames against recorded persisted snapshots bidirectionally with duplicate multiplicity preserved. A missing, failed or mismatched conservation receipt SHALL prevent acceptance; per-day counts alone SHALL NOT establish content equality.
 
 #### Scenario: History spans source dates
 
 - **WHEN** a payment starts on one date and its lifecycle or label continues on later dates
-- **THEN** validation evaluates the complete selected history and correct event-label linkage rather than rejecting an isolated daily slice
+- **THEN** DP1 preserves every selected delivery and availability timestamp; DP2 validates full-history lifecycle and linkage
 
 #### Scenario: A later writer changes a table
 
@@ -106,17 +106,17 @@ DP1 SHALL ingest completed immutable landing batches through the same versioned 
 
 ### Requirement: Context-aware recurring validation
 
-Recurring validation SHALL reconcile the selected delivered content with recorded output snapshots and evaluate history-dependent rules using explicitly pinned prior context and declared completeness boundaries. Event and label inputs MAY arrive independently; missing same-batch labels or terminal lifecycle events SHALL NOT alone be a quality failure. Unavailable required context SHALL be reported as incomplete evidence and SHALL NOT satisfy acceptance. Historical integrity, conservation and executable contract checks SHALL remain enforced. Full-history rules SHALL respect input completeness. Generator cardinality/distribution/scenario bands SHALL be informational diagnostics rather than bronze acceptance gates for historical or recurring input.
+Recurring DP1 validation SHALL reconcile the selected delivered content with recorded output snapshots. History-dependent rules using pinned prior context and declared completeness boundaries belong to DP2 silver. Event and label inputs MAY arrive independently; missing same-batch labels or terminal lifecycle events SHALL NOT alone be a quality failure. DP2 SHALL report unavailable context as incomplete evidence without blocking raw preservation. Raw file integrity, conservation and schema checks SHALL remain enforced; raw acceptance SHALL NOT imply business-quality acceptance. Generator cardinality/distribution/scenario bands SHALL be informational diagnostics rather than bronze acceptance gates for historical or recurring input.
 
 #### Scenario: Delayed real label
 
 - **WHEN** a label arrives in a later batch than its payment event
-- **THEN** validation uses the referenced event history and label-availability time without requiring a synthetic label or duplicating the payment delivery
+- **THEN** DP1 preserves the label independently without requiring a synthetic label or duplicating the payment delivery; DP2 owns referenced-history and availability checks
 
 #### Scenario: Incomplete payment history
 
 - **WHEN** a bounded batch ends before a payment has reached a terminal state
-- **THEN** validation respects the declared history boundary and distinguishes incomplete context from a violated lifecycle rule
+- **THEN** DP1 preserves the incomplete history; DP2 respects the declared history boundary and distinguishes incomplete context from a violated lifecycle rule
 
 ### Requirement: Dataset diagnostics are distinct from ingestion validity
 
@@ -126,3 +126,15 @@ Generator cardinality, duplicate-rate, skew, schema-share and scenario distribut
 
 - **WHEN** a dataset passes required integrity, conservation and contract checks but a generator distribution band is exceeded
 - **THEN** the report records the diagnostic finding without failing ingestion solely for that band, and acceptance still requires all other gates including governance readback
+
+### Requirement: Raw-ingestion boundary and recurring delivery acceptance
+
+DP1 SHALL preserve supported raw deliveries, immutable file/batch identities, epoch and Kafka bytes/key/ordered headers/positions. It SHALL verify file hashes/sizes/rows, lossless physical schema, independently pinned snapshots and exact duplicate-aware batch conservation. Native schema/required-field checks SHALL be bundled per table; recurring acceptance SHALL NOT require whole-history lifecycle reconstruction, duplicate business consistency, business amounts/risk/context validation, cross-table linkage or label maturity/as-of joins. These belong to DP2 silver and SHALL NOT be reported as passed by raw acceptance. Profiling SHALL be optional for recurring runs. Earlier v16 `bronze-starrocks-v2` outcomes remain unchanged; new raw acceptance uses a distinct policy.
+
+Completed clean landing manifests are discovered across the configured epoch, independently of event dates. Immutable pending selections and an accepted manifest ledger SHALL prevent repeated delivery ingestion, reject changed identities and overlapping transport ranges, preserve delayed independent ports and resume uncertain commits before accepting new inputs. No-input runs SHALL avoid Spark and native quality work. A daily UTC CronWorkflow SHALL use the existing writer mutex and lifecycle cleanup; it SHALL NOT alter producer offsets or enable the simulator. Deliberate isolated failure/outage exercises are removed at the user’s request. Full-scale benchmarking and coursework acceptance follow completion of the whole pipeline.
+
+#### Scenario: Raw recurring batch without complete history
+
+- **WHEN** a completed clean landing batch includes independent labels or incomplete payment lifecycles
+- **THEN** DP1 preserves and accounts for every delivery and transport envelope without claiming silver business/as-of validity
+- **AND** an already accepted input is skipped and no-input execution launches no Spark or native tests

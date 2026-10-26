@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from data_platform.products import PORTS
 
-VALIDATION_POLICY = "bronze-starrocks-v2"
+VALIDATION_POLICY = "bronze-raw-v3"
 EXECUTION = {"gate": "dp1-starrocks-openmetadata", "policy": VALIDATION_POLICY, "engine": "starrocks"}
 
 
@@ -80,4 +80,8 @@ def accept(store, run, contracts, problems, gaps):
         raise ValueError("native results are not a complete passing set")
     record = {**run, "validation_policy": VALIDATION_POLICY, "contracts": contracts, "result": outcome}
     store.put(f"accepted/{run['dataset_version']}.json", record)
+    if run.get("input_mode") == "landing":
+        from data_platform.landing import advance
+
+        advance(store, run)
     return record

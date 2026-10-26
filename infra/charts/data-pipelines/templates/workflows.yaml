@@ -11,6 +11,7 @@
   | replace "__OPENMETADATA_IMAGE__" .Values.images.openmetadata
   | replace "__OPENMETADATA_URL__" (.Values.config.OPENMETADATA_URL | quote)
   | replace "__SOURCE_ROOT__" (.Values.config.SOURCE_ROOT | quote)
+  | replace "__SOURCE_EPOCH__" (.Values.recurring.sourceEpoch | quote)
   | replace "__DATASET_VERSION__" (.Values.config.DATASET_VERSION | quote)
 }}
 {{- end }}

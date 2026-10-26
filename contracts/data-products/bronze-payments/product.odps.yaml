@@ -2,12 +2,12 @@ apiVersion: v1.1.0
 kind: DataProduct
 id: urn:dataproduct:fraud:bronze-payments
 name: Bronze payments
-version: 2.0.0
+version: 3.0.0
 status: active
 domain: fraud-detection
 type: sourceAligned
 description:
-  purpose: Source-preserving historical Iceberg snapshots with contract validation and reproducible governance.
+  purpose: Raw historical and recurring Iceberg deliveries with integrity, provenance and reproducible governance.
   usage: Read the accepted record snapshot pair filtered by source dataset version. Preserve identical duplicate deliveries.
   limitations: Synthetic source only. Labels are usable only after label_available_at; exclude scenario from features. Latest
     table state may contain failed candidates.
@@ -30,10 +30,10 @@ customProperties:
     never reuse the generator writer.
 outputPorts:
 - name: payment-events
-  version: 2.0.0
+  version: 3.0.0
   type: table
   contractId: urn:datacontract:fraud:bronze-payment-events
-  description: Complete payment lifecycle histories in daily occurred_date partitions of sorted Zstandard Parquet.
+  description: Delivered payment events, including incomplete lifecycle batches in daily occurred_date partitions of sorted Zstandard Parquet.
   customProperties:
   - property: table
     value: bronze.raw_payment_events
@@ -44,7 +44,7 @@ outputPorts:
   - id: urn:datacontract:fraud:historical-payment-events
     version: 4.0.1
 - name: fraud-labels
-  version: 1.0.0
+  version: 2.0.0
   type: table
   contractId: urn:datacontract:fraud:bronze-fraud-labels
   description: Simulation truth and delayed chargebacks in daily label_available_date partitions of sorted Zstandard Parquet.
@@ -52,7 +52,7 @@ outputPorts:
   - id: urn:datacontract:fraud:historical-fraud-labels
     version: 1.0.0
   - id: urn:datacontract:fraud:bronze-payment-events
-    version: 2.0.0
+    version: 3.0.0
   customProperties:
   - property: table
     value: bronze.raw_fraud_labels

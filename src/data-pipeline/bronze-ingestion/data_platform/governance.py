@@ -34,7 +34,12 @@ def requests(run, ids, report_uri):
     """Named OpenMetadata writes for the ordered Argo HTTP steps."""
     bronze = product_document(PRODUCT)
     source = product_document(SOURCE_PRODUCT)
-    manifest = f"{run['source_root'].rstrip('/')}/manifest.json"
+    source_name = "payment-event-landing" if run.get("input_mode") == "landing" else SOURCE_PRODUCT
+    manifest = (
+        f"{run['source_root']}/streaming/_batches/epoch={run['source_epoch']}/"
+        if run.get("input_mode") == "landing"
+        else f"{run['source_root'].rstrip('/')}/manifest.json"
+    )
     description = (
         f"workflow={run['workflow']} run_id={run['run_id']} manifest_sha256={run['manifest_sha256']} "
         f"snapshots={run['snapshots']} evidence={report_uri}"
@@ -55,10 +60,9 @@ def requests(run, ids, report_uri):
             "method": "PUT",
             "path": "/v1/dataProducts",
             "body": {
-                "name": SOURCE_PRODUCT,
-                "displayName": source["name"],
-                "description": f"{source['description']['purpose']} Immutable source manifest {manifest} "
-                f"(sha256 {run['manifest_sha256']}).",
+                "name": source_name,
+                "displayName": "Payment event landing" if run.get("input_mode") == "landing" else source["name"],
+                "description": f"Immutable source completion manifests {manifest} (sha256 {run['manifest_sha256']}).",
                 "domains": [DOMAIN],
             },
         },
@@ -94,7 +98,7 @@ def requests(run, ids, report_uri):
                 "fromEntity": table("payment_events"),
                 "toEntity": table("fraud_labels"),
                 "lineageDetails": {
-                    "description": "label validation depends on payment events; " + description,
+                    "description": "Raw payment and label ports; business linkage belongs to silver; " + description,
                     "pipeline": {"id": ids["pipeline"], "type": "pipeline"},
                 },
             }

@@ -65,15 +65,15 @@ Bronze validation SHALL derive native OpenMetadata test definitions and schema c
 #### Scenario: Duplicate comparison includes provenance
 
 - **WHEN** repeated business events carry different file or ingestion provenance
-- **THEN** their duplicate-consistency check compares business content and does not fail solely because audit fields differ
+- **THEN** DP1 preserves both deliveries; DP2 duplicate-consistency compares business content independently of audit fields
 
 ### Requirement: Source and bronze semantic agreement
 
-Equivalent source and bronze business checks SHALL retain traceable semantic rule identities and agree on shared valid/invalid fixtures under the current source schema. Engine-specific SQL SHALL use its execution dialect; preparing test definitions SHALL NOT be treated as SQL translation or data validation.
+Source business checks and the planned silver SQL SHALL retain traceable semantic rule identities. Bronze SHALL enforce raw schema/integrity/conservation rather than duplicate the source business rule suite. Engine-specific SQL SHALL use its execution dialect; preparing test definitions SHALL NOT be treated as SQL translation or data validation.
 
 #### Scenario: Scalar violation count
 
-- **WHEN** a source count-of-violations rule is implemented as a native bronze custom SQL check
+- **WHEN** a raw-schema count-of-violations rule is implemented as a native bronze custom SQL check
 - **THEN** valid data returns zero, invalid data returns a positive violation count and both engines agree on pass/fail
 
 #### Scenario: Conditional nested requirement
@@ -89,3 +89,5 @@ Versioned bronze contracts SHALL distinguish historical-manifest provenance from
 
 - **WHEN** a landing batch without a historical manifest is selected
 - **THEN** its provenance resolves to actual landing/batch identities rather than fabricated historical dataset versions or manifest hashes
+
+Raw contracts SHALL retain optional epoch/batch and original Kafka envelope provenance. Native schema constraints SHALL be bundled per table without dropping nested requirements. Business-quality SQL transferred to `contracts/quality/silver-payments.yaml` remains planned DP2 work, not a raw acceptance assertion.

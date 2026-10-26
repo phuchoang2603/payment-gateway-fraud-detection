@@ -14,7 +14,7 @@ native:
 config:
   SOURCE_ROOT: s3://synthetic-source/historical/v16
   DATASET_VERSION: v16
-  EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence/starrocks-v2
+  EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence/raw-v3
   ICEBERG_REST_URI: https://minio.home.phuchoang.sbs/iceberg
   ICEBERG_WAREHOUSE: fraud-lakehouse-prod
   ICEBERG_SIGV4_ENABLED: "true"
@@ -39,3 +39,9 @@ externalSecrets:
     store: doppler
     data:
       STARROCKS_PASSWORD: STARROCKS_OPENMETADATA_PASSWORD
+recurring:
+  enabled: false
+  schedule: "0 0 * * *"
+  sourceRoot: s3://synthetic-source
+  sourceEpoch: v16-20261026
+  maxBatches: 100

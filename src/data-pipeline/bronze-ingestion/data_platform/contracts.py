@@ -8,6 +8,7 @@ from data_platform.products import AUDIT, contract_path
 
 SPARK_TYPES = {
     "string": T.StringType,
+    "binary": T.BinaryType,
     "long": T.LongType,
     "int": T.IntegerType,
     "double": T.DoubleType,
@@ -16,6 +17,7 @@ SPARK_TYPES = {
 }
 STARROCKS_TYPES = {
     "string": "varchar(1073741824)",
+    "binary": "varbinary(1048576)",
     "long": "bigint(20)",
     "int": "int(11)",
     "double": "double",

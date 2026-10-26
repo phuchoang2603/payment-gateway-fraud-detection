@@ -2,7 +2,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: urn:datacontract:fraud:bronze-fraud-labels
 name: Bronze fraud-labels
-version: 1.0.0
+version: 2.0.0
 status: active
 domain: fraud-detection
 description:
@@ -119,31 +119,51 @@ schema:
     physicalType: timestamp
     required: true
     description: Stable UTC microsecond ingestion time, distinct from source recorded_at.
-  quality:
-  - id: label_availability
-    name: label_availability
-    type: sql
-    description: Labels cannot be available before their occurrence and carry a recognized source.
-    query: |
-      SELECT COUNT(*) FROM {labels} AS l
-      WHERE l.label_available_at < l.occurred_at
-        OR l.source NOT IN ('LABEL_SOURCE_SIMULATION_TRUTH', 'LABEL_SOURCE_CHARGEBACK')
-        OR (l.source = 'LABEL_SOURCE_SIMULATION_TRUTH' AND COALESCE(l.scenario, '') = '')
-        OR (l.source = 'LABEL_SOURCE_CHARGEBACK' AND (NOT l.is_fraud OR l.scenario IS NOT NULL))
-    mustBe: 0
-  - id: label_attempt_linkage
-    name: label_attempt_linkage
-    type: sql
-    description: Every label references a started attempt in the same integration and payment; chargebacks require that attempt to succeed.
-    query: |
-      SELECT COUNT(*) FROM {labels} AS l
-      WHERE NOT EXISTS (
-        SELECT 1 FROM {events} AS e
-        WHERE e.integration_id = l.integration_id AND e.payment_id = l.payment_id
-          AND e.attempt_started.attempt_id = l.attempt_id
-      ) OR (l.source = 'LABEL_SOURCE_CHARGEBACK' AND NOT EXISTS (
-        SELECT 1 FROM {events} AS e
-        WHERE e.integration_id = l.integration_id AND e.payment_id = l.payment_id
-          AND e.payment_succeeded.attempt_id = l.attempt_id
-      ))
-    mustBe: 0
+  - name: _source_epoch
+    logicalType: string
+    physicalType: string
+    description: Immutable landing epoch; null for historical exports.
+  - name: _source_batch
+    logicalType: string
+    physicalType: string
+    description: Exact completion-manifest key for this source file; null for historical
+      exports.
+  - name: _transport
+    logicalType: object
+    description: Original Kafka envelope, including ordered headers; null for historical
+      sources.
+    properties:
+    - name: topic
+      logicalType: string
+      physicalType: string
+      required: true
+    - name: partition
+      logicalType: integer
+      physicalType: int
+      required: true
+    - name: offset
+      logicalType: integer
+      physicalType: long
+      required: true
+    - name: timestamp
+      logicalType: timestamp
+      physicalType: timestamp
+    - name: key
+      logicalType: string
+      physicalType: binary
+    - name: value
+      logicalType: string
+      physicalType: binary
+      required: true
+    - name: headers
+      logicalType: array
+      items:
+        logicalType: object
+        properties:
+        - name: key
+          logicalType: string
+          physicalType: string
+          required: true
+        - name: value
+          logicalType: string
+          physicalType: binary

@@ -40,6 +40,8 @@ def relation(table, run):
 
 
 def conservation(table, manifest, rel):
+    if manifest.get("input_mode") == "landing":
+        return f"SELECT COUNT(*) FROM (SELECT COUNT(*) AS n FROM {rel} AS e) AS actual WHERE n <> {manifest['totals'][table]}"
     expected = ", ".join(f"('{day}', {rows})" for day, rows in sorted(manifest["partitions"][table].items()))
     column = TIME_COLUMN[table]
     return (
@@ -62,14 +64,39 @@ def cases(run, manifest):
     for table in PORTS:
         tokens["table"] = physical_table(table)
         tokens["relation"] = tokens[{"payment_events": "events", "fraud_labels": "labels"}[table]]
-        for rule in prepare(table).rules:
-            sql = rule.sql.format(**tokens)
-            result.append(Case(table, rule.id, rule.description, marker(run) + sql))
+        rules = prepare(table).rules
+        type_queries = [r.sql.format(**tokens) for r in rules if r.id.startswith("schema_type__")]
+        result.append(
+            Case(
+                table,
+                "schema_types",
+                "All persisted physical types match the raw contract.",
+                marker(run)
+                + "SELECT COUNT(*) FROM (SELECT 1) AS anchor WHERE "
+                + " OR ".join("(" + query + ") <> 0" for query in type_queries),
+            )
+        )
+        required = [
+            r.sql.format(**tokens).split(" AS e WHERE ", 1)[1] for r in rules if r.id.startswith("schema_required__")
+        ]
+        result.append(
+            Case(
+                table,
+                "schema_required",
+                "Required fields are present when their enclosing values are present.",
+                marker(run)
+                + f"SELECT COUNT(*) FROM {tokens['relation']} AS e WHERE "
+                + " OR ".join(f"({predicate})" for predicate in required),
+            )
+        )
+        for rule in rules:
+            if not rule.id.startswith("schema_"):
+                result.append(Case(table, rule.id, rule.description, marker(run) + rule.sql.format(**tokens)))
         result.append(
             Case(
                 table,
                 CONSERVATION,
-                "Per-day persisted row counts equal the immutable source manifest.",
+                "Persisted selected delivery counts equal the immutable input inventory.",
                 marker(run) + conservation(table, manifest, tokens["relation"]),
             )
         )

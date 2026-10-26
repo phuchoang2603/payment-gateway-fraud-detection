@@ -62,6 +62,17 @@ class Store:
                 return None
             raise
 
+    def list(self, prefix):
+        if self.client:
+            for page in self.client.get_paginator("list_objects_v2").paginate(
+                Bucket=self.bucket, Prefix=self.key(prefix)
+            ):
+                for item in page.get("Contents", []):
+                    yield item["Key"][len(self.prefix) + 1 :] if self.prefix else item["Key"]
+        else:
+            root = Path(self.prefix)
+            yield from (str(p.relative_to(root)) for p in sorted((root / prefix).rglob("*")) if p.is_file())
+
     def put(self, relative, value, create=False):
         body = json.dumps(value, sort_keys=True, indent=2, default=str).encode()
         key = self.key(relative)
