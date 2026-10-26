@@ -1,0 +1,113 @@
+{
+  "event": "clean_landing_readback",
+  "source_epoch": "v16-20261026",
+  "group": "payments-parquet-landing-v16-20261026",
+  "initial_offsets": [
+    {
+      "topic": "payments.events.v1",
+      "partition": 0,
+      "offset": 1353
+    },
+    {
+      "topic": "payments.events.v1",
+      "partition": 1,
+      "offset": 1465
+    },
+    {
+      "topic": "payments.events.v1",
+      "partition": 2,
+      "offset": 1294
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 0,
+      "offset": 278
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 1,
+      "offset": 244
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 2,
+      "offset": 286
+    }
+  ],
+  "target_offsets": [
+    {
+      "topic": "payments.events.v1",
+      "partition": 0,
+      "offset": 1762
+    },
+    {
+      "topic": "payments.events.v1",
+      "partition": 1,
+      "offset": 1855
+    },
+    {
+      "topic": "payments.events.v1",
+      "partition": 2,
+      "offset": 1694
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 0,
+      "offset": 345
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 1,
+      "offset": 338
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 2,
+      "offset": 366
+    }
+  ],
+  "committed_offsets": [
+    {
+      "topic": "payments.events.v1",
+      "partition": 0,
+      "offset": 1762
+    },
+    {
+      "topic": "payments.events.v1",
+      "partition": 1,
+      "offset": 1855
+    },
+    {
+      "topic": "payments.events.v1",
+      "partition": 2,
+      "offset": 1694
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 0,
+      "offset": 345
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 1,
+      "offset": 338
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 2,
+      "offset": 366
+    }
+  ],
+  "manifests_verified": 6,
+  "files_verified": 6,
+  "selected_positions": 1440,
+  "distinct_payment_events": 1199,
+  "label_deliveries": {
+    "LABEL_SOURCE_SIMULATION_TRUTH": 240,
+    "LABEL_SOURCE_CHARGEBACK": 1
+  },
+  "all_selected_positions_landed": true,
+  "replayed_positions": 0,
+  "full_business_projection_and_raw_key_value_ordered_headers_equal": true,
+  "at": "2026-10-26T20:41:32.771105+00:00"
+}

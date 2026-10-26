@@ -30,7 +30,7 @@ All tests and image builds run in CI; smoke/acceptance validation runs in CI or 
 
 ## 5. Current-time live and archival exercise
 
-- [ ] 5.1 Deploy matched CI-built gateway/simulator/archiver revisions; where cutover requires it, quiesce owned writers and record frozen offsets/new epoch/group before restarting. Verify shutdown/rollout and explicit epoch selection, preserving shared Kafka history, old objects and unrelated consumers.
+- [x] 5.1 Deploy matched CI-built gateway/simulator/archiver revisions; where cutover requires it, quiesce owned writers and record frozen offsets/new epoch/group before restarting. Verify shutdown/rollout and explicit epoch selection, preserving shared Kafka history, old objects and unrelated consumers.
 - [x] 5.2 Run a bounded CI-driven Kubernetes live exercise pinned to the new manifest/profile/contract identity; cover checkout context, nullable signals and actual label availability. Verify gateway-produced events and historical-compatible Parquet fields/provenance; update current live instructions with run/epoch evidence and keep historical/live payment IDs distinct.
 - [x] 5.3 Exercise configured delay/duplicate/burst transport and archiver recovery after publication before offset acknowledgment. Verify immutable completed objects, Kafka position recovery and reported overlap in deployed acceptance evidence; reuse current fault/landing harnesses rather than adding another service.
 
@@ -38,7 +38,7 @@ All tests and image builds run in CI; smoke/acceptance validation runs in CI or 
 
 - [x] 6.1 Update affected README entry links, overview requirements/architecture/roadmap and data/ML pipeline guidance to order contract/smoke -> Flink/Feast -> Spark offline -> Kubeflow -> KServe -> later scale generation. Verify consistent stage dependencies and truthful implemented/planned/pending statuses; reconcile the owning DP1 storage direction without changing historical evidence or removing coursework targets.
 - [x] 6.2 Reconcile remaining affected current docs/config/code references and delta specs, including retired sorted/compacted-source guidance, hard-coded legacy card counts and instructions to start scale now. Verify targeted reference search/diff review; preserve archived records, research and published manifests rather than rewriting their results.
-- [ ] 6.3 Verify the exact new source and streaming evidence inventory, CI results, documentation links and explicit pending downstream gates. Deliver manifest/hash, rows/bytes/date ranges, source epoch/offsets, feature-definition identity and acceptance limits for subsequent pipeline work; do not start scale or claim a model was trained.
+- [x] 6.3 Verify the exact new source and streaming evidence inventory, CI results, documentation links and explicit pending downstream gates. Deliver manifest/hash, rows/bytes/date ranges, source epoch/offsets, feature-definition identity and acceptance limits for subsequent pipeline work; do not start scale or claim a model was trained.
 
 ## Workflow follow-up
 
