@@ -9,7 +9,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:01Z",
       "recordedAt": "2026-01-01T10:00:01Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "6d6dc906-9485-539a-95f7-c9dffdf1e6b9",
       "paymentCreated": {
         "merchant": {
@@ -56,7 +56,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:02Z",
       "recordedAt": "2026-01-01T10:00:02Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "6d6dc906-9485-539a-95f7-c9dffdf1e6b9",
       "attemptStarted": {
         "attemptId": "de5a0eb0-ce47-5d49-9c6f-3a433829ceb5",
@@ -70,6 +70,43 @@
           "ipCountry": "US",
           "ipNetworkFingerprint": "cb67edbe05e7d95ff6abc00b5b7721eadb7f73326599a73f83bee60bd4678c72",
           "userAgentFamily": "Chromium"
+        },
+        "context": {
+          "merchant": {
+            "merchantId": "0a1da25b-c927-5084-8f10-f33b3eced9b4",
+            "externalSellerId": "seller-01"
+          },
+          "customer": {
+            "customerId": "87d92bde-0bc7-5d3d-be21-113c6bbebd1e",
+            "externalBuyerId": "buyer-01"
+          },
+          "snapshot": {
+            "externalOrderId": "order-risk_decline_then_second_attempt_success",
+            "total": {
+              "minorUnits": "20000",
+              "currency": "USD"
+            },
+            "items": [
+              {
+                "productId": "sku-phone-001",
+                "category": "phone",
+                "condition": "good",
+                "quantity": 2,
+                "unitPrice": {
+                  "minorUnits": "10000",
+                  "currency": "USD"
+                }
+              }
+            ],
+            "merchantAccountCreatedAt": "2025-06-01T00:00:00Z",
+            "customerAccountCreatedAt": "2025-09-01T00:00:00Z",
+            "shipping": {
+              "country": "US",
+              "region": "CA",
+              "postalCode": "94105",
+              "addressFingerprint": "3e749dce5096ba78de0bd0faebbd401473ce860f9810c7f6571377c8ff8643a6"
+            }
+          }
         }
       }
     },
@@ -80,7 +117,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:03Z",
       "recordedAt": "2026-01-01T10:00:03Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "6d6dc906-9485-539a-95f7-c9dffdf1e6b9",
       "riskDecisionRecorded": {
         "attemptId": "de5a0eb0-ce47-5d49-9c6f-3a433829ceb5",
@@ -100,7 +137,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:04Z",
       "recordedAt": "2026-01-01T10:00:04Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "6d6dc906-9485-539a-95f7-c9dffdf1e6b9",
       "attemptDeclined": {
         "attemptId": "de5a0eb0-ce47-5d49-9c6f-3a433829ceb5",
@@ -115,7 +152,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:05Z",
       "recordedAt": "2026-01-01T10:00:05Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "6d6dc906-9485-539a-95f7-c9dffdf1e6b9",
       "attemptStarted": {
         "attemptId": "a0ae4f3a-4775-5575-a825-b9616c5c9382",
@@ -129,6 +166,43 @@
           "ipCountry": "US",
           "ipNetworkFingerprint": "cb67edbe05e7d95ff6abc00b5b7721eadb7f73326599a73f83bee60bd4678c72",
           "userAgentFamily": "Chromium"
+        },
+        "context": {
+          "merchant": {
+            "merchantId": "0a1da25b-c927-5084-8f10-f33b3eced9b4",
+            "externalSellerId": "seller-01"
+          },
+          "customer": {
+            "customerId": "87d92bde-0bc7-5d3d-be21-113c6bbebd1e",
+            "externalBuyerId": "buyer-01"
+          },
+          "snapshot": {
+            "externalOrderId": "order-risk_decline_then_second_attempt_success",
+            "total": {
+              "minorUnits": "20000",
+              "currency": "USD"
+            },
+            "items": [
+              {
+                "productId": "sku-phone-001",
+                "category": "phone",
+                "condition": "good",
+                "quantity": 2,
+                "unitPrice": {
+                  "minorUnits": "10000",
+                  "currency": "USD"
+                }
+              }
+            ],
+            "merchantAccountCreatedAt": "2025-06-01T00:00:00Z",
+            "customerAccountCreatedAt": "2025-09-01T00:00:00Z",
+            "shipping": {
+              "country": "US",
+              "region": "CA",
+              "postalCode": "94105",
+              "addressFingerprint": "3e749dce5096ba78de0bd0faebbd401473ce860f9810c7f6571377c8ff8643a6"
+            }
+          }
         }
       }
     },
@@ -139,7 +213,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:06Z",
       "recordedAt": "2026-01-01T10:00:06Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "6d6dc906-9485-539a-95f7-c9dffdf1e6b9",
       "riskDecisionRecorded": {
         "attemptId": "a0ae4f3a-4775-5575-a825-b9616c5c9382",
@@ -159,7 +233,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:07Z",
       "recordedAt": "2026-01-01T10:00:07Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "6d6dc906-9485-539a-95f7-c9dffdf1e6b9",
       "processorOperationRequested": {
         "attemptId": "a0ae4f3a-4775-5575-a825-b9616c5c9382",
@@ -173,7 +247,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:08Z",
       "recordedAt": "2026-01-01T10:00:08Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "6d6dc906-9485-539a-95f7-c9dffdf1e6b9",
       "paymentSucceeded": {
         "attemptId": "a0ae4f3a-4775-5575-a825-b9616c5c9382",

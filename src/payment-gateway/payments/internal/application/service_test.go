@@ -235,6 +235,18 @@ func TestStartAttemptSuccessRecordsTheFullLifecycle(t *testing.T) {
 	}
 	wantKinds(t, kinds(t, stack, payment), "created", "started", "risk", "requested", "succeeded")
 	events := stack.DB.Events(t, payment.GetPaymentId())
+	created := events[0].GetPaymentCreated()
+	started := events[1].GetAttemptStarted()
+	attemptContext := started.GetContext()
+	requests := stack.Fraud.Requests()
+	if events[1].GetSchemaVersion() != 3 || attemptContext == nil || len(requests) != 1 ||
+		!proto.Equal(attemptContext.GetMerchant(), created.GetMerchant()) ||
+		!proto.Equal(attemptContext.GetCustomer(), created.GetCustomer()) ||
+		!proto.Equal(attemptContext.GetSnapshot(), created.GetSnapshot()) ||
+		!proto.Equal(attemptContext.GetSnapshot(), requests[0].GetSnapshot()) ||
+		!proto.Equal(started.GetSignals(), requests[0].GetSignals()) {
+		t.Fatalf("attempt scoring context differs from checkout/Fraud input: %v", started)
+	}
 	for i, event := range events {
 		if event.GetAggregateVersion() != uint64(i+1) || event.GetCorrelationId() == "" || event.GetCorrelationId() != events[0].GetCorrelationId() ||
 			event.GetIntegrationId() != testsupport.IntegrationID.String() {

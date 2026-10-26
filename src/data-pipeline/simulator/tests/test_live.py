@@ -30,6 +30,7 @@ def test_live_profiles_and_card_identity_across_calendar_gap(monkeypatch):
     profiles = build_profiles(config)
     manifest = {
         "algorithm_version": ALGORITHM_VERSION,
+        "schema_versions": {"payment_events": [3]},
         "configuration": config.model_dump(mode="json"),
         "profile_sha256": profiles.digest(),
     }
@@ -40,7 +41,9 @@ def test_live_profiles_and_card_identity_across_calendar_gap(monkeypatch):
     assert datetime.fromisoformat(order["buyer"]["account_created_at"]) < model.anchor
     assert profiles.method_pool[index]
     assert "scenario" not in signals and "is_fraud" not in order
-    assert card_number(3899999, "ok") == "4111000038999999"
+    assert len(card_number(10**11 - 1, "ok")) == 16
+    with pytest.raises(ValueError, match="outside synthetic encoding"):
+        card_number(10**11, "ok")
     monkeypatch.setattr(
         "simulator.live.source.boto3.client",
         lambda *a, **kw: SimpleNamespace(get_object=lambda **kw: {"Body": io.BytesIO(json.dumps(manifest).encode())}),

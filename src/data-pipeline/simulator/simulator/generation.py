@@ -83,7 +83,7 @@ def build_history(
                 "payment_id": payment_id,
                 "aggregate_version": len(events) + 1,
                 "integration_id": integration_id,
-                "schema_version": config.schema_version_on(clock.date()),
+                "schema_version": 3,
                 "correlation_id": payment_id,
                 "occurred_at": clock,
                 "recorded_at": clock,
@@ -140,9 +140,8 @@ def build_history(
             "ip_country": context.ip_country,
             "ip_network_fingerprint": context.network,
         }
-        if config.schema_version_on(clock.date()) == 2:
-            signals["user_agent_family"] = context.browser
-        append("attempt_started", attempt_id=attempt_id, signals=signals)
+        signals["user_agent_family"] = context.browser
+        append("attempt_started", attempt_id=attempt_id, signals=signals, context=events[0]["payment_created"])
 
         clock += timedelta(milliseconds=int(random.integers(50, 400)))
         reasons = risk_reasons(

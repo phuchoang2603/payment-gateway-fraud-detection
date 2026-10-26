@@ -457,6 +457,66 @@ func (x *CheckoutSnapshot) GetShipping() *ShippingLocation {
 	return nil
 }
 
+type AttemptContext struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Merchant      *MerchantRef           `protobuf:"bytes,1,opt,name=merchant,proto3" json:"merchant,omitempty"`
+	Customer      *CustomerRef           `protobuf:"bytes,2,opt,name=customer,proto3" json:"customer,omitempty"`
+	Snapshot      *CheckoutSnapshot      `protobuf:"bytes,3,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AttemptContext) Reset() {
+	*x = AttemptContext{}
+	mi := &file_payments_v1_types_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AttemptContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AttemptContext) ProtoMessage() {}
+
+func (x *AttemptContext) ProtoReflect() protoreflect.Message {
+	mi := &file_payments_v1_types_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AttemptContext.ProtoReflect.Descriptor instead.
+func (*AttemptContext) Descriptor() ([]byte, []int) {
+	return file_payments_v1_types_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *AttemptContext) GetMerchant() *MerchantRef {
+	if x != nil {
+		return x.Merchant
+	}
+	return nil
+}
+
+func (x *AttemptContext) GetCustomer() *CustomerRef {
+	if x != nil {
+		return x.Customer
+	}
+	return nil
+}
+
+func (x *AttemptContext) GetSnapshot() *CheckoutSnapshot {
+	if x != nil {
+		return x.Snapshot
+	}
+	return nil
+}
+
 type PaymentMethod struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
@@ -467,7 +527,7 @@ type PaymentMethod struct {
 
 func (x *PaymentMethod) Reset() {
 	*x = PaymentMethod{}
-	mi := &file_payments_v1_types_proto_msgTypes[6]
+	mi := &file_payments_v1_types_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -479,7 +539,7 @@ func (x *PaymentMethod) String() string {
 func (*PaymentMethod) ProtoMessage() {}
 
 func (x *PaymentMethod) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_types_proto_msgTypes[6]
+	mi := &file_payments_v1_types_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -492,7 +552,7 @@ func (x *PaymentMethod) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PaymentMethod.ProtoReflect.Descriptor instead.
 func (*PaymentMethod) Descriptor() ([]byte, []int) {
-	return file_payments_v1_types_proto_rawDescGZIP(), []int{6}
+	return file_payments_v1_types_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PaymentMethod) GetType() string {
@@ -524,7 +584,7 @@ type AttemptSignals struct {
 
 func (x *AttemptSignals) Reset() {
 	*x = AttemptSignals{}
-	mi := &file_payments_v1_types_proto_msgTypes[7]
+	mi := &file_payments_v1_types_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -536,7 +596,7 @@ func (x *AttemptSignals) String() string {
 func (*AttemptSignals) ProtoMessage() {}
 
 func (x *AttemptSignals) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_types_proto_msgTypes[7]
+	mi := &file_payments_v1_types_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -549,7 +609,7 @@ func (x *AttemptSignals) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttemptSignals.ProtoReflect.Descriptor instead.
 func (*AttemptSignals) Descriptor() ([]byte, []int) {
-	return file_payments_v1_types_proto_rawDescGZIP(), []int{7}
+	return file_payments_v1_types_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *AttemptSignals) GetAttemptedAt() *timestamppb.Timestamp {
@@ -609,7 +669,7 @@ type RiskAssessment struct {
 
 func (x *RiskAssessment) Reset() {
 	*x = RiskAssessment{}
-	mi := &file_payments_v1_types_proto_msgTypes[8]
+	mi := &file_payments_v1_types_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -621,7 +681,7 @@ func (x *RiskAssessment) String() string {
 func (*RiskAssessment) ProtoMessage() {}
 
 func (x *RiskAssessment) ProtoReflect() protoreflect.Message {
-	mi := &file_payments_v1_types_proto_msgTypes[8]
+	mi := &file_payments_v1_types_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -634,7 +694,7 @@ func (x *RiskAssessment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RiskAssessment.ProtoReflect.Descriptor instead.
 func (*RiskAssessment) Descriptor() ([]byte, []int) {
-	return file_payments_v1_types_proto_rawDescGZIP(), []int{8}
+	return file_payments_v1_types_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RiskAssessment) GetOutcome() RiskOutcome {
@@ -716,7 +776,11 @@ const file_payments_v1_types_proto_rawDesc = "" +
 	"\x05items\x18\x03 \x03(\v2\x15.payments.v1.LineItemR\x05items\x12Y\n" +
 	"\x1bmerchant_account_created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x18merchantAccountCreatedAt\x12Y\n" +
 	"\x1bcustomer_account_created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x18customerAccountCreatedAt\x129\n" +
-	"\bshipping\x18\x06 \x01(\v2\x1d.payments.v1.ShippingLocationR\bshipping\"E\n" +
+	"\bshipping\x18\x06 \x01(\v2\x1d.payments.v1.ShippingLocationR\bshipping\"\xb7\x01\n" +
+	"\x0eAttemptContext\x124\n" +
+	"\bmerchant\x18\x01 \x01(\v2\x18.payments.v1.MerchantRefR\bmerchant\x124\n" +
+	"\bcustomer\x18\x02 \x01(\v2\x18.payments.v1.CustomerRefR\bcustomer\x129\n" +
+	"\bsnapshot\x18\x03 \x01(\v2\x1d.payments.v1.CheckoutSnapshotR\bsnapshot\"E\n" +
 	"\rPaymentMethod\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12 \n" +
 	"\vfingerprint\x18\x02 \x01(\tR\vfingerprint\"\xad\x03\n" +
@@ -761,7 +825,7 @@ func file_payments_v1_types_proto_rawDescGZIP() []byte {
 }
 
 var file_payments_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_payments_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_payments_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_payments_v1_types_proto_goTypes = []any{
 	(RiskOutcome)(0),              // 0: payments.v1.RiskOutcome
 	(*Money)(nil),                 // 1: payments.v1.Money
@@ -770,26 +834,30 @@ var file_payments_v1_types_proto_goTypes = []any{
 	(*LineItem)(nil),              // 4: payments.v1.LineItem
 	(*ShippingLocation)(nil),      // 5: payments.v1.ShippingLocation
 	(*CheckoutSnapshot)(nil),      // 6: payments.v1.CheckoutSnapshot
-	(*PaymentMethod)(nil),         // 7: payments.v1.PaymentMethod
-	(*AttemptSignals)(nil),        // 8: payments.v1.AttemptSignals
-	(*RiskAssessment)(nil),        // 9: payments.v1.RiskAssessment
-	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
+	(*AttemptContext)(nil),        // 7: payments.v1.AttemptContext
+	(*PaymentMethod)(nil),         // 8: payments.v1.PaymentMethod
+	(*AttemptSignals)(nil),        // 9: payments.v1.AttemptSignals
+	(*RiskAssessment)(nil),        // 10: payments.v1.RiskAssessment
+	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
 }
 var file_payments_v1_types_proto_depIdxs = []int32{
 	1,  // 0: payments.v1.LineItem.unit_price:type_name -> payments.v1.Money
 	1,  // 1: payments.v1.CheckoutSnapshot.total:type_name -> payments.v1.Money
 	4,  // 2: payments.v1.CheckoutSnapshot.items:type_name -> payments.v1.LineItem
-	10, // 3: payments.v1.CheckoutSnapshot.merchant_account_created_at:type_name -> google.protobuf.Timestamp
-	10, // 4: payments.v1.CheckoutSnapshot.customer_account_created_at:type_name -> google.protobuf.Timestamp
+	11, // 3: payments.v1.CheckoutSnapshot.merchant_account_created_at:type_name -> google.protobuf.Timestamp
+	11, // 4: payments.v1.CheckoutSnapshot.customer_account_created_at:type_name -> google.protobuf.Timestamp
 	5,  // 5: payments.v1.CheckoutSnapshot.shipping:type_name -> payments.v1.ShippingLocation
-	10, // 6: payments.v1.AttemptSignals.attempted_at:type_name -> google.protobuf.Timestamp
-	7,  // 7: payments.v1.AttemptSignals.payment_method:type_name -> payments.v1.PaymentMethod
-	0,  // 8: payments.v1.RiskAssessment.outcome:type_name -> payments.v1.RiskOutcome
-	9,  // [9:9] is the sub-list for method output_type
-	9,  // [9:9] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	2,  // 6: payments.v1.AttemptContext.merchant:type_name -> payments.v1.MerchantRef
+	3,  // 7: payments.v1.AttemptContext.customer:type_name -> payments.v1.CustomerRef
+	6,  // 8: payments.v1.AttemptContext.snapshot:type_name -> payments.v1.CheckoutSnapshot
+	11, // 9: payments.v1.AttemptSignals.attempted_at:type_name -> google.protobuf.Timestamp
+	8,  // 10: payments.v1.AttemptSignals.payment_method:type_name -> payments.v1.PaymentMethod
+	0,  // 11: payments.v1.RiskAssessment.outcome:type_name -> payments.v1.RiskOutcome
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_payments_v1_types_proto_init() }
@@ -797,15 +865,15 @@ func file_payments_v1_types_proto_init() {
 	if File_payments_v1_types_proto != nil {
 		return
 	}
-	file_payments_v1_types_proto_msgTypes[7].OneofWrappers = []any{}
 	file_payments_v1_types_proto_msgTypes[8].OneofWrappers = []any{}
+	file_payments_v1_types_proto_msgTypes[9].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_payments_v1_types_proto_rawDesc), len(file_payments_v1_types_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -77,7 +77,13 @@ def _descriptor() -> dict:
             "version": contract["version"],
             "sha256": sha256(content).hexdigest(),
         }
-    return {"id": product["id"], "version": product["version"], "contracts": contracts}
+    definition = PRODUCT_DIR.parents[1] / "features" / "fraud-baseline-v1.yaml"
+    return {
+        "id": product["id"],
+        "version": product["version"],
+        "contracts": contracts,
+        "feature_definition": {"version": "fraud-baseline-v1", "sha256": sha256(definition.read_bytes()).hexdigest()},
+    }
 
 
 def _generator_revision() -> str:
@@ -285,7 +291,7 @@ def _observations(stats, inventory):
     for item in inventory:
         if item["table"] == EVENTS.name:
             counts[str(item["schema_version"])] += item["rows"]
-    observed["schema_version_rows"] = {version: counts[version] for version in ("1", "2")}
+    observed["schema_version_rows"] = {"3": counts["3"]}
     rows = sum(counts.values())
     observed["schema_version_shares"] = {
         version: count / rows if rows else 0 for version, count in observed["schema_version_rows"].items()
@@ -323,6 +329,7 @@ def _manifest(config, run, stats, inventory, partitions, observed, descriptor):
             for table in (EVENTS, LABELS)
         },
         "calibration": provenance(),
+        "feature_definition": descriptor["feature_definition"],
         "training_guidance": {
             "feature_exclusions": [
                 "scenario",
@@ -352,16 +359,13 @@ def _manifest(config, run, stats, inventory, partitions, observed, descriptor):
         "inventory": inventory,
         "validation": {
             "result": "skipped",
-            "gate": "dp1-spark-gx",
-            "reason": "validation deferred to dp1-spark-gx; the downstream pipeline is the contract gate",
+            "gate": "dp1-starrocks-openmetadata",
+            "reason": "validation deferred to dp1-starrocks-openmetadata; the downstream pipeline is the contract gate",
         },
         "deferred_observations": ["cardinality"],
         "execution_attempts": run.state["attempts"],
         "configured": {
             "duplicate_rate": config.data_problems.duplicate_rate,
-            "schema_cutover_date": config.data_problems.schema_cutover_date.isoformat()
-            if config.data_problems.schema_cutover_date
-            else None,
             "merchant_zipf_exponent": config.behavior.merchant_zipf_exponent,
             "category_zipf_exponent": config.behavior.category_zipf_exponent,
             "cardinality": config.counts.model_dump(),

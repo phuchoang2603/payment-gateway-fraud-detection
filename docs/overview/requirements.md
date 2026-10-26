@@ -21,6 +21,8 @@ These requirements describe the planned system, not delivered behavior. **First 
 
 Automated reconciliation, bank settlement-file ingestion, settlement verification, real card custody, live money movement, payouts and FX are outside the revised project scope. Operation-status recovery remains necessary even in simulation; processor success is not a claim of bank settlement.
 
+Current data development uses self-contained attempt context and a shared versioned feature definition, proven on a 90-day small source before scale generation. [Roadmap](roadmap.md#current-implementation-order) orders Flink/Feast, Spark offline processing and Kubeflow/KServe work. This development source does not fulfill the later 100 GB scale target or establish production model quality.
+
 ## Non-functional requirements
 
 The numerical targets below are initial acceptance goals for the synthetic gateway. Record hardware, dataset, configured simulator latency and injected faults with each run; no target is an observed result or a PCI certification claim.

@@ -78,7 +78,14 @@ const (
 	DeclineSourceProcessor DeclineSource = 2
 )
 
+type AttemptContext struct {
+	Merchant *MerchantRef
+	Customer *CustomerRef
+	Snapshot *CheckoutSnapshot
+}
+
 type Event struct {
+	Context       *AttemptContext
 	ID            string
 	PaymentID     string
 	IntegrationID string

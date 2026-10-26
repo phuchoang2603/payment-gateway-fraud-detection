@@ -56,3 +56,7 @@ The API-driven first slice includes the isolated vault simulator and Redis resul
 
 - [Requirements](../overview/requirements.md): functional and non-functional requirements by delivery stage.
 - [Implementation roadmap](../overview/roadmap.md): build order, acceptance stages and deferred decisions.
+
+## Feature-contract boundary
+
+The current attempt event carries the immutable checkout context in payload schema 3. See [payment flows](payment-flows.md) and the [shared feature definitions](../../contracts/features/fraud-baseline-v1.yaml). This enrichment does not introduce a feature-store dependency into rules-only Fraud. Later Go Fraud calls the supported Feast feature-server API and KServe directly; no additional decision coordinator is needed.

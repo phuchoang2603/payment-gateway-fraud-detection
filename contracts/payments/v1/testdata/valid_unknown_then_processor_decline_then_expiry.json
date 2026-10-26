@@ -9,7 +9,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:01Z",
       "recordedAt": "2026-01-01T10:00:01Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "b9e5a80d-4d68-5aed-aba1-e9074704885b",
       "paymentCreated": {
         "merchant": {
@@ -56,7 +56,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:02Z",
       "recordedAt": "2026-01-01T10:00:02Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "b9e5a80d-4d68-5aed-aba1-e9074704885b",
       "attemptStarted": {
         "attemptId": "821aa3fb-8a05-5eed-b0b2-cc3d08bd771b",
@@ -70,6 +70,43 @@
           "ipCountry": "US",
           "ipNetworkFingerprint": "cb67edbe05e7d95ff6abc00b5b7721eadb7f73326599a73f83bee60bd4678c72",
           "userAgentFamily": "Chromium"
+        },
+        "context": {
+          "merchant": {
+            "merchantId": "0a1da25b-c927-5084-8f10-f33b3eced9b4",
+            "externalSellerId": "seller-01"
+          },
+          "customer": {
+            "customerId": "87d92bde-0bc7-5d3d-be21-113c6bbebd1e",
+            "externalBuyerId": "buyer-01"
+          },
+          "snapshot": {
+            "externalOrderId": "order-unknown_then_processor_decline_then_expiry",
+            "total": {
+              "minorUnits": "20000",
+              "currency": "USD"
+            },
+            "items": [
+              {
+                "productId": "sku-phone-001",
+                "category": "phone",
+                "condition": "good",
+                "quantity": 2,
+                "unitPrice": {
+                  "minorUnits": "10000",
+                  "currency": "USD"
+                }
+              }
+            ],
+            "merchantAccountCreatedAt": "2025-06-01T00:00:00Z",
+            "customerAccountCreatedAt": "2025-09-01T00:00:00Z",
+            "shipping": {
+              "country": "US",
+              "region": "CA",
+              "postalCode": "94105",
+              "addressFingerprint": "3e749dce5096ba78de0bd0faebbd401473ce860f9810c7f6571377c8ff8643a6"
+            }
+          }
         }
       }
     },
@@ -80,7 +117,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:03Z",
       "recordedAt": "2026-01-01T10:00:03Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "b9e5a80d-4d68-5aed-aba1-e9074704885b",
       "riskDecisionRecorded": {
         "attemptId": "821aa3fb-8a05-5eed-b0b2-cc3d08bd771b",
@@ -100,7 +137,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:04Z",
       "recordedAt": "2026-01-01T10:00:04Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "b9e5a80d-4d68-5aed-aba1-e9074704885b",
       "processorOperationRequested": {
         "attemptId": "821aa3fb-8a05-5eed-b0b2-cc3d08bd771b",
@@ -114,7 +151,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:05Z",
       "recordedAt": "2026-01-01T10:00:05Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "b9e5a80d-4d68-5aed-aba1-e9074704885b",
       "processorOutcomeUnknown": {
         "attemptId": "821aa3fb-8a05-5eed-b0b2-cc3d08bd771b"
@@ -127,7 +164,7 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:06Z",
       "recordedAt": "2026-01-01T10:00:06Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "b9e5a80d-4d68-5aed-aba1-e9074704885b",
       "attemptDeclined": {
         "attemptId": "821aa3fb-8a05-5eed-b0b2-cc3d08bd771b",
@@ -142,9 +179,11 @@
       "integrationId": "01234567-89ab-4cde-8fab-0123456789ab",
       "occurredAt": "2026-01-01T10:00:07Z",
       "recordedAt": "2026-01-01T10:00:07Z",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "correlationId": "b9e5a80d-4d68-5aed-aba1-e9074704885b",
-      "paymentExpired": {"_present": true}
+      "paymentExpired": {
+        "_present": true
+      }
     }
   ]
 }

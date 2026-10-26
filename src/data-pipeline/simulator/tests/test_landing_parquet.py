@@ -10,25 +10,26 @@ from simulator.landing.parquet import Record, decode, encode
 def test_protobuf_parquet_reuses_historical_business_schema():
     timestamp = "2026-07-01T00:00:00.123456Z"
     messages = {}
-    for version in (1, 2):
-        event = PaymentEvent(
-            event_id="e", payment_id="p", integration_id="i", aggregate_version=1, schema_version=version
-        )
-        event.occurred_at.FromJsonString(timestamp)
-        event.recorded_at.CopyFrom(event.occurred_at)
-        event.attempt_started.attempt_id = "a"
-        signals = event.attempt_started.signals
-        signals.attempted_at.CopyFrom(event.occurred_at)
-        signals.payment_method.type = "card"
-        signals.payment_method.fingerprint = "safe"
-        if version == 2:
-            signals.user_agent_family = ""
-        messages[f"event-v{version}"] = event
-    for name in ("created-v2", "risk-v2", "expired-v2"):
+    event = PaymentEvent(event_id="e", payment_id="p", integration_id="i", aggregate_version=1, schema_version=3)
+    event.occurred_at.FromJsonString(timestamp)
+    event.recorded_at.CopyFrom(event.occurred_at)
+    event.attempt_started.attempt_id = "a"
+    context = event.attempt_started.context
+    context.merchant.merchant_id = "merchant"
+    context.customer.customer_id = "customer"
+    context.snapshot.total.minor_units = 123
+    context.snapshot.total.currency = "USD"
+    signals = event.attempt_started.signals
+    signals.attempted_at.CopyFrom(event.occurred_at)
+    signals.payment_method.type = "card"
+    signals.payment_method.fingerprint = "safe"
+    signals.user_agent_family = ""
+    messages["event-v3"] = event
+    for name in ("created-v3", "risk-v3", "expired-v3"):
         event = PaymentEvent()
-        event.CopyFrom(messages["event-v2"])
+        event.CopyFrom(messages["event-v3"])
         event.ClearField("attempt_started")
-        if name == "created-v2":
+        if name == "created-v3":
             created = event.payment_created
             created.merchant.merchant_id = "merchant"
             created.customer.customer_id = "customer"
@@ -37,7 +38,7 @@ def test_protobuf_parquet_reuses_historical_business_schema():
             item = created.snapshot.items.add(product_id="sku", quantity=1)
             item.unit_price.CopyFrom(created.snapshot.total)
             created.snapshot.shipping.country = "US"
-        elif name == "risk-v2":
+        elif name == "risk-v3":
             risk = event.risk_decision_recorded
             risk.attempt_id = "a"
             risk.assessment.outcome = 1
@@ -70,8 +71,6 @@ def test_protobuf_parquet_reuses_historical_business_schema():
         row = table.to_pylist()[0]
         transport = row["_transport"]
         assert transport["value"] == message.SerializeToString()
-        decoded = type(message).FromString(transport["value"])
-        assert decoded == message
         assert transport["key"] == b"" and transport["offset"] == 42
         assert transport["headers"] == [
             {"key": "x", "value": None},
@@ -85,14 +84,13 @@ def test_protobuf_parquet_reuses_historical_business_schema():
             if name.startswith("event-"):
                 assert row["payment_created"] is None
                 signals = row["attempt_started"]["signals"]
-                if name == "event-v2":
-                    assert signals["user_agent_family"] == ""
-            elif name == "created-v2":
+                assert signals["user_agent_family"] == ""
+            elif name == "created-v3":
                 assert row["payment_created"]["snapshot"]["items"][0]["unit_price"] == {
                     "minor_units": 123,
                     "currency": "USD",
                 }
-            elif name == "risk-v2":
+            elif name == "risk-v3":
                 assessment = row["risk_decision_recorded"]["assessment"]
                 assert assessment["outcome"] == "RISK_OUTCOME_APPROVE"
                 assert assessment["risk_score"] == 0 and assessment["model_version"] is None

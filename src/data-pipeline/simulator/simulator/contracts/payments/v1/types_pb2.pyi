@@ -85,6 +85,16 @@ class CheckoutSnapshot(_message.Message):
     shipping: ShippingLocation
     def __init__(self, external_order_id: _Optional[str] = ..., total: _Optional[_Union[Money, _Mapping]] = ..., items: _Optional[_Iterable[_Union[LineItem, _Mapping]]] = ..., merchant_account_created_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., customer_account_created_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., shipping: _Optional[_Union[ShippingLocation, _Mapping]] = ...) -> None: ...
 
+class AttemptContext(_message.Message):
+    __slots__ = ("merchant", "customer", "snapshot")
+    MERCHANT_FIELD_NUMBER: _ClassVar[int]
+    CUSTOMER_FIELD_NUMBER: _ClassVar[int]
+    SNAPSHOT_FIELD_NUMBER: _ClassVar[int]
+    merchant: MerchantRef
+    customer: CustomerRef
+    snapshot: CheckoutSnapshot
+    def __init__(self, merchant: _Optional[_Union[MerchantRef, _Mapping]] = ..., customer: _Optional[_Union[CustomerRef, _Mapping]] = ..., snapshot: _Optional[_Union[CheckoutSnapshot, _Mapping]] = ...) -> None: ...
+
 class PaymentMethod(_message.Message):
     __slots__ = ("type", "fingerprint")
     TYPE_FIELD_NUMBER: _ClassVar[int]

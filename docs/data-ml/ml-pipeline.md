@@ -12,6 +12,12 @@ Feast feature serving and KServe inference are separate later deployments, not p
 
 Authoritative risk decisions and effect intents stay in the Payments transaction history. Send monitoring and prediction logging asynchronously from committed records, since an unavailable or awaited logging sink must never become a durable payment audit trail or an unconditional latency guarantee for the payment path itself.
 
+## Shared feature semantics
+
+The canonical [fraud-baseline-v1 definition](../../contracts/features/fraud-baseline-v1.yaml) and [conformance examples](../../contracts/features/fraud-baseline-v1.examples.json) define request inputs and prior assessed-attempt windows. The pure Python reference in `src/data-pipeline/features/` has no Spark/Flink dependency; later native implementations must match its cases before claiming parity. Keys include integration identity, windows use `[t-window,t)`, and a historical attempt contributes only after its start context and committed risk decision are available at the read cutoff. Declines count; the current attempt and undecided concurrent starts do not. Missing/stale history is not zero, missing IP is not shipping geography, and labels/scenario/oracle or future outcome fields never enter features.
+
+Kafka/Flink continuously refresh history; Fraud never waits for the current attempt to traverse that pipeline. Historical replay using `recorded_at` is idealized and cannot reconstruct live pipeline lag. ML integration must retain actual served values or an immutable snapshot reference, cutoffs, freshness/missingness and feature/model/policy identities. Batch and online feature writers need independent progress and retry-safe versioned writes. Strict concurrent velocity reservations remain separate scope.
+
 ## Training and drift
 
 Training grain is one scored attempt/decision, not one payment event. Joins use scoped identity plus decision/attempt IDs; labels remain separate with `label_available_at`. Features use only information available at decision time, including ingestion/availability timestamps when events arrive late. Future outcomes, fraud truth and the decision itself must not leak into its features. Temporal evaluation splits, cold starts and late-label cases require explicit proof. Label cutoffs, chronological splits and dataset-version recording are all explicit and derived from the gateway's own dataset; maturity and warmup periods, keys and thresholds come from the gateway's own currency and scenario design, not from an external dataset's constants. The gateway training grain remains one attempt with strictly earlier features and labels available at its cutoff.
@@ -23,3 +29,7 @@ The prod-only Kubeflow Profile has GitOps configuration, not verified end-to-end
 Use the existing Argo/Kubeflow platform, registry and GitHub Actions for orchestration, training and promotion rather than adding a separate Compose stack, Airflow, Jenkins, MLflow or another Kubernetes cluster.
 
 The later [fraud investigation agent](../rag/fraud-investigation.md) reads recorded payment and fraud evidence; it never sits in the payment decision path.
+
+## Development sequence
+
+Use the new 90-day source for ingestion, feature and training development before scale generation. Build continuous Flink/Feast and Spark offline paths against the same pinned contract, then Kubeflow training/evaluation/registration and KServe serving. Full-scale Python generation and scale acceptance follow the exercised end-to-end path. A small source supports development but does not establish model quality; report warmup, mature label counts and chronological split limitations. Current rules-only Fraud has no deployed feature/model lookup or measured ML latency guarantee.

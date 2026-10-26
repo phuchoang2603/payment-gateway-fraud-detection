@@ -1,0 +1,38 @@
+{
+  "event": "landing_epoch_initialized",
+  "at": "2026-10-26T20:33:47.264958+00:00",
+  "source_epoch": "v16-20261026",
+  "group": "payments-parquet-landing-v16-20261026",
+  "offsets": [
+    {
+      "topic": "payments.events.v1",
+      "partition": 0,
+      "offset": 1353
+    },
+    {
+      "topic": "payments.events.v1",
+      "partition": 1,
+      "offset": 1465
+    },
+    {
+      "topic": "payments.events.v1",
+      "partition": 2,
+      "offset": 1294
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 0,
+      "offset": 278
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 1,
+      "offset": 244
+    },
+    {
+      "topic": "fraud.labels.v1",
+      "partition": 2,
+      "offset": 286
+    }
+  ]
+}

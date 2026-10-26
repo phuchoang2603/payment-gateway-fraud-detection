@@ -65,7 +65,11 @@ func TestAllowListMatchesIdentityVectors(t *testing.T) {
 
 func TestLookupCardRejectsOutsideDomain(t *testing.T) {
 	for _, r := range generatedRanges {
-		if _, ok := LookupCard(generatedNumber(r.prefix, HistoricalCardCount)); ok {
+		card, ok := LookupCard(generatedNumber(r.prefix, CardSerialLimit-1))
+		if !ok || card.Ref != "card-99999999999" || card.Behavior != r.behavior {
+			t.Fatalf("encoding boundary rejected or mapped incorrectly: %+v", card)
+		}
+		if _, ok := LookupCard(generatedNumber(r.prefix, CardSerialLimit)); ok {
 			t.Fatal("out-of-domain card accepted")
 		}
 	}

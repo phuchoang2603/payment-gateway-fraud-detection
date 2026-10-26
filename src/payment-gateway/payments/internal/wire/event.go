@@ -11,7 +11,7 @@ func Event(value *domain.Event) *paymentsv1.PaymentEvent {
 	case domain.CreatePayment:
 		event.Payload = &paymentsv1.PaymentEvent_PaymentCreated{PaymentCreated: &paymentsv1.PaymentCreated{Merchant: MerchantProto(cmd.Merchant), Customer: CustomerProto(cmd.Customer), Snapshot: SnapshotProto(cmd.Snapshot)}}
 	case domain.StartAttempt:
-		event.Payload = &paymentsv1.PaymentEvent_AttemptStarted{AttemptStarted: &paymentsv1.AttemptStarted{AttemptId: cmd.AttemptID, Signals: signalsProto(cmd.Signals)}}
+		event.Payload = &paymentsv1.PaymentEvent_AttemptStarted{AttemptStarted: &paymentsv1.AttemptStarted{AttemptId: cmd.AttemptID, Signals: signalsProto(cmd.Signals), Context: &paymentsv1.AttemptContext{Merchant: MerchantProto(value.Context.Merchant), Customer: CustomerProto(value.Context.Customer), Snapshot: SnapshotProto(value.Context.Snapshot)}}}
 	case domain.RecordRiskDecision:
 		event.Payload = &paymentsv1.PaymentEvent_RiskDecisionRecorded{RiskDecisionRecorded: &paymentsv1.RiskDecisionRecorded{AttemptId: cmd.AttemptID, Assessment: assessmentProto(cmd.Assessment)}}
 	case domain.RequestProcessorOperation:

@@ -4,6 +4,8 @@ This is the **planned target** for an ecommerce payment gateway with fraud decis
 
 The [marketplace gateway note](https://github.com/phuchoang2603/refurbished-marketplace/blob/main/docs/ecommerce-fraud-gateway.md) supplies commerce context. Marketplace owns buyers, sellers, catalog/prices, carts, orders, shipping choices, and inventory reservation/commit/release. Gateway stores scoped references and immutable checkout snapshots; it does not become their system of record. Shared cluster provisioning, networking, storage operators, secret operators, Argo CD and ClickStack/OTel infrastructure belong to [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox/tree/main/docs/architecture); this repository owns its application deployments and service policies, with application telemetry integration deferred.
 
+The next data slice establishes schema-3 self-contained attempts and the [baseline feature definitions](../../contracts/features/fraud-baseline-v1.yaml), exercised with a 90-day small source. Continuous Flink/Feast, Spark offline features and Kubeflow/KServe follow; scale generation waits for the exercised end-to-end path. [Roadmap](roadmap.md#current-implementation-order) tracks this order. Rules-only Fraud remains independent of Kafka and future feature/model services.
+
 ## How the platform is organized
 
 - [Payment gateway architecture](../payment-gateway/architecture.md): checkout, fraud decisioning, simulated processing and durable outcomes.
