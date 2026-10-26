@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -26,19 +28,19 @@ func isolate(t *testing.T) {
 		otel.SetMeterProvider(meter)
 		otel.SetTextMapPropagator(propagator)
 	})
-	for _, key := range []string{"TRACING_ENABLED", "METRICS_ENABLED", "OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_TRACES_SAMPLER_ARG", "OTEL_METRIC_EXPORT_INTERVAL"} {
+	for _, key := range []string{"TRACING_ENABLED", "METRICS_ENABLED", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "OTEL_TRACES_SAMPLER_ARG", "OTEL_METRIC_EXPORT_INTERVAL"} {
 		t.Setenv(key, "")
 	}
 }
 
 func TestConfigurationRejectsInvalidEnabledExport(t *testing.T) {
 	for _, tc := range []struct{ key, value string }{
-		{"TRACING_ENABLED", "invalid"}, {"OTEL_EXPORTER_OTLP_ENDPOINT", "http://agent:4317"}, {"OTEL_EXPORTER_OTLP_ENDPOINT", "agent:bad"}, {"TRACING_ENABLED", "true"}, {"METRICS_ENABLED", "true"}, {"OTEL_TRACES_SAMPLER_ARG", "NaN"}, {"OTEL_TRACES_SAMPLER_ARG", "1.1"}, {"OTEL_METRIC_EXPORT_INTERVAL", "0"},
+		{"TRACING_ENABLED", "invalid"}, {"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "agent:4317"}, {"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://agent:bad"}, {"TRACING_ENABLED", "true"}, {"METRICS_ENABLED", "true"}, {"OTEL_TRACES_SAMPLER_ARG", "NaN"}, {"OTEL_TRACES_SAMPLER_ARG", "1.1"}, {"OTEL_METRIC_EXPORT_INTERVAL", "0"},
 	} {
 		t.Run(tc.key+tc.value, func(t *testing.T) {
 			isolate(t)
 			t.Setenv(tc.key, tc.value)
-			if tc.key == "OTEL_EXPORTER_OTLP_ENDPOINT" {
+			if tc.key == "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT" {
 				t.Setenv("TRACING_ENABLED", "true")
 			}
 			if stop, err := Init(context.Background(), "unit"); err == nil {
@@ -57,7 +59,8 @@ func TestExportDisabledAndUnreachableBackendShutdown(t *testing.T) {
 			t.Setenv("METRICS_ENABLED", enabled)
 			t.Setenv("OTEL_TRACES_SAMPLER_ARG", "1")
 			if enabled == "true" {
-				t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "127.0.0.1:1")
+				t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://127.0.0.1:1/v1/traces")
+				t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "http://127.0.0.1:1/v1/metrics")
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			stop, err := Init(ctx, "unit")
@@ -123,6 +126,43 @@ func TestPropertiesRoundTripAndMalformedContext(t *testing.T) {
 	for _, v := range []*string{nil, new("traceparent=broken\nbaggage=secret\n")} {
 		if trace.SpanContextFromContext(RestoreContext(context.Background(), v)).IsValid() {
 			t.Fatal("fabricated remote parent")
+		}
+	}
+}
+
+func TestExportToSeparateHTTPEndpoints(t *testing.T) {
+	isolate(t)
+	requests := make(chan string, 8)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- r.Method + " " + r.URL.Path
+		w.Header().Set("Content-Type", "application/x-protobuf")
+	}))
+	defer server.Close()
+	t.Setenv("TRACING_ENABLED", "true")
+	t.Setenv("METRICS_ENABLED", "true")
+	t.Setenv("OTEL_TRACES_SAMPLER_ARG", "1")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", server.URL+"/insert/opentelemetry/v1/traces")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", server.URL+"/opentelemetry/v1/metrics")
+	stop, err := Init(context.Background(), "test-service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, span := otel.Tracer("test").Start(context.Background(), "request")
+	Counter("test.calls", "{call}").Add(ctx, 1)
+	span.End()
+	stop()
+	got := map[string]bool{}
+	for range 2 {
+		select {
+		case request := <-requests:
+			got[request] = true
+		default:
+			t.Fatal("missing HTTP signal export")
+		}
+	}
+	for _, request := range []string{"POST /insert/opentelemetry/v1/traces", "POST /opentelemetry/v1/metrics"} {
+		if !got[request] {
+			t.Fatalf("missing %s; requests: %v", request, got)
 		}
 	}
 }
