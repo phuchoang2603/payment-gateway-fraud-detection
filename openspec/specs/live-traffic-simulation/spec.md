@@ -1,8 +1,10 @@
+# live-traffic-simulation Specification
+
 ## Purpose
 
 Generate current-time payment traffic through gateway APIs using historical entities and behavior, publish independent labels, and define the immutable landing boundary for reusable DP1 ingestion.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Historical identities with current-time traffic
 
@@ -70,7 +72,7 @@ The platform SHALL use one current environment, codebase, common runtime configu
 
 ### Requirement: Immutable raw landing
 
-The Python archiver SHALL write decoded payment events and labels as historical-compatible Parquet under s3://synthetic-source/streaming/. It SHALL retain original payload/key bytes, ordered headers and Kafka positions in reserved transport metadata, preserve duplicate deliveries and leave completed objects unchanged across retries.
+The Python archiver SHALL write decoded payment events and labels as historical-compatible Parquet under s3://synthetic-source/streaming/. It SHALL retain original payload/key bytes, ordered headers and Kafka positions in reserved transport metadata, preserve duplicate deliveries and leave completed objects unchanged across retries. Batch manifests and object paths SHALL identify a source epoch, with run logs pinning the reference manifest and generation/calibration identities. A source reset SHALL initialize fresh consumer progress from explicit frozen Kafka offsets after affected writers are stopped; it SHALL NOT reuse stale progress or purge shared Kafka assets.
 
 #### Scenario: Typed Parquet and exact replay
 

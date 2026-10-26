@@ -25,14 +25,30 @@ The Kafka application SHALL retain payments.events.v1 and declare payments.event
 
 ### Requirement: Runtime credentials and image delivery
 
-The simulator SHALL receive only its gateway/Kafka/dataset runtime credentials and SHALL NOT access vault/database internals. The archiver SHALL reuse the existing synthetic-source identity with streaming-prefix policy access, preserving historical protection, no-delete/artifact restrictions and CDC/Secret API limits. The simulator and archiver SHALL use the same Python package/image with separate entry points and SHALL follow shared PR/main build and production-pin policies.
+The simulator SHALL receive only its gateway/Kafka/dataset runtime credentials and SHALL NOT access vault/database internals. The archiver SHALL reuse the existing synthetic-source identity with streaming-prefix policy access, preserving completed historical source immutability without object tags, streaming no-delete/artifact restrictions and CDC/Secret API limits. The simulator and archiver SHALL use the same Python package/image with separate entry points and SHALL follow shared PR/main build and production-pin policies.
 
 #### Scenario: Archiver permissions
 
 - **WHEN** the Python archiver is configured
-- **THEN** it receives the existing synthetic-source runtime credential, streaming-prefix access and object-store egress while historical protection and CDC access remain constrained and the simulator gains no vault/database access
+- **THEN** it receives the existing synthetic-source runtime credential, streaming-prefix access and object-store egress while historical immutability and CDC access remain constrained and the simulator gains no vault/database access
 
 #### Scenario: Image publication
 
 - **WHEN** CI builds same-repository PR, fork PR and main images
 - **THEN** same-repository PRs publish disposable PR tags, fork PRs build without publication and main images follow the existing production selection policy
+
+## MODIFIED Requirements
+
+### Requirement: Production image pinning
+
+Only after every main service image has published successfully, one CI job SHALL pin the gateway, Kafka and live-traffic production chart tags to that commit's `main-<full-sha>`. PR and feature-branch runs SHALL NOT update production pins. The pin commit SHALL use `[skip ci]` so its image-only production-values update does not trigger rebuilds. Manual production-values changes SHALL trigger image builds normally. No image-updater controller SHALL be required.
+
+#### Scenario: New main image
+
+- **WHEN** every service image for a main commit has published successfully
+- **THEN** one CI job commits the same main tag to all three production charts, with the gateway pin covering all six Go service images and Argo CD reconciles them
+
+#### Scenario: PR image is newer
+
+- **WHEN** a PR image is newer than the latest main image
+- **THEN** production pins remain unchanged

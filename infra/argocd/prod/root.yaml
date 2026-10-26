@@ -9,7 +9,7 @@ spec:
   project: payment-gateway-fraud-detection
   source:
     repoURL: https://github.com/phuchoang2603/payment-gateway-fraud-detection.git
-    targetRevision: t3/live-simulator-streaming
+    targetRevision: main
     path: infra/argocd/app-of-apps
     helm:
       releaseName: payment-gateway-prod
@@ -21,8 +21,8 @@ spec:
         applications:
           payment-gateway:
             enabled: true
-            chartTargetRevision: t3/live-simulator-streaming
-            valuesTargetRevision: t3/live-simulator-streaming
+            chartTargetRevision: main
+            valuesTargetRevision: main
             destinationNamespace: payment-gateway
             path: infra/charts/payment-gateway
             valuesFile:
@@ -35,8 +35,8 @@ spec:
                 maxDuration: 3m
           kafka:
             enabled: true
-            chartTargetRevision: t3/live-simulator-streaming
-            valuesTargetRevision: t3/live-simulator-streaming
+            chartTargetRevision: main
+            valuesTargetRevision: main
             destinationNamespace: payment-gateway
             path: infra/charts/kafka
             valuesFile:
@@ -45,8 +45,8 @@ spec:
           live-traffic:
             enabled: true
             allowEmpty: true
-            chartTargetRevision: t3/live-simulator-streaming
-            valuesTargetRevision: t3/live-simulator-streaming
+            chartTargetRevision: main
+            valuesTargetRevision: main
             destinationNamespace: payment-gateway
             path: infra/charts/live-traffic
             valuesFile:

@@ -34,4 +34,4 @@ Verification SHALL preserve source datasets, published contracts/bands and prior
 #### Scenario: Citing historical evidence
 
 - **WHEN** an accepted v11 run or published v12 rewrite is cited during rollout
-- **THEN** it remains separate from still-pending live recovery, landing and DP1 acceptance evidence
+- **THEN** it remains separate from separately measured live recovery/landing and still-pending DP1 acceptance evidence
