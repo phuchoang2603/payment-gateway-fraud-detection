@@ -9,10 +9,3 @@ simulator:
     faults:
       enabled: true
       group: simulator-pr89-evidence
-      duplicate_rate: 0.5
-      duplicate_delay_seconds: 0.2
-      late_rate: 0.5
-      late_min_seconds: 1
-      late_max_seconds: 3
-      hold_interval_seconds: 10
-      hold_seconds: 2
