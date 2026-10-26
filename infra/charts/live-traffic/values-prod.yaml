@@ -1,11 +1,3 @@
 imageTag: pr-89-2ecbf516083d8f92461d7f6e8f2213cf7eddb82f
 simulator:
-  enabled: true
-  config:
-    duration_seconds: 30
-    payments_per_second: 0.5
-    concurrency: 2
-    label_time_scale: 86400
-    faults:
-      enabled: true
-      group: simulator-pr89-evidence
+  enabled: false
