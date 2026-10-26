@@ -192,7 +192,7 @@ func TestTokenizeIssuesOpaqueTokensWithStableFingerprint(t *testing.T) {
 func TestTokenizeRejectsNumbersOutsideAllowList(t *testing.T) {
 	h := newHarness(t)
 	edge := h.vault
-	for _, number := range []string{"4111111111111111", "5555555555554444", "4242424242424243", "", "4242 4242 4242 4242", "4111000000000000000"} {
+	for _, number := range []string{"4242424242424242", "5555555555554444", "4242424242424243", "", "4242 4242 4242 4242", "4111000000000000000"} {
 		_, err := tokenize(t, edge, integrationA, number)
 		if status.Code(err) != codes.InvalidArgument {
 			t.Fatalf("%q: got %v, want InvalidArgument", number, err)
@@ -281,7 +281,7 @@ func TestNoPlaintextFixtureOrCardNumberInStorageOrLogs(t *testing.T) {
 	if _, err := processor.ResolveForProcessing(ctx, &vaultv1.ResolveRequest{IntegrationId: integrationA.String(), Token: issued.GetToken()}); err != nil {
 		t.Fatal(err)
 	}
-	_, _ = tokenize(t, edge, integrationA, "4111111111111111")
+	_, _ = tokenize(t, edge, integrationA, "4242424242424242")
 	_, _ = edge.DescribeMethod(ctx, &vaultv1.DescribeMethodRequest{IntegrationId: integrationB.String(), Token: issued.GetToken()})
 
 	pool, err := pgxpool.New(ctx, h.databaseURL)
@@ -311,12 +311,12 @@ func TestNoPlaintextFixtureOrCardNumberInStorageOrLogs(t *testing.T) {
 	if rowCount != 1 {
 		t.Fatalf("got %d rows", rowCount)
 	}
-	for _, forbidden := range []string{number, "card-000000", "card_reference", "behavior", "nsf", issued.GetToken(), strings.TrimPrefix(issued.GetToken(), "vt_"), "4111111111111111"} {
+	for _, forbidden := range []string{number, "card-000000", "card_reference", "behavior", "nsf", issued.GetToken(), strings.TrimPrefix(issued.GetToken(), "vt_"), "4242424242424242"} {
 		if strings.Contains(stored.String(), forbidden) {
 			t.Fatalf("storage contains %q", forbidden)
 		}
 	}
-	for _, forbidden := range []string{number, "4111111111111111", issued.GetToken(), strings.TrimPrefix(issued.GetToken(), "vt_"), "card-000000"} {
+	for _, forbidden := range []string{number, "4242424242424242", issued.GetToken(), strings.TrimPrefix(issued.GetToken(), "vt_"), "card-000000"} {
 		if strings.Contains(h.logs.String(), forbidden) {
 			t.Fatalf("logs contain %q", forbidden)
 		}
