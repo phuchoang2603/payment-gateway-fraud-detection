@@ -137,6 +137,22 @@ def metadata_workflow():
     }
 
 
+def profiler_workflow():
+    workflow = metadata_workflow()
+    workflow["source"]["sourceConfig"]["config"] = {
+        "type": "Profiler",
+        "schemaFilterPattern": {"includes": [f"^{SCHEMA}$"]},
+        "tableFilterPattern": {"includes": [f"^{physical_table(table)}$" for table in PORTS]},
+        "computeColumnMetrics": False,
+        "metrics": ["rowCount", "columnCount"],
+        "threadCount": 2,
+        "timeoutSeconds": 600,
+        "useStatistics": False,
+    }
+    workflow["processor"] = {"type": "orm-profiler", "config": {}}
+    return workflow
+
+
 def test_workflow(table, case_list):
     return {
         "source": {

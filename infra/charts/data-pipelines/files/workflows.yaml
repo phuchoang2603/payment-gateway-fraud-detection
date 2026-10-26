@@ -53,6 +53,12 @@ spec:
               parameters:
                 - {name: command, value: test}
                 - {name: config, value: "{{steps.prepare.outputs.parameters.fraud-labels}}"}
+        - - name: profile
+            template: openmetadata
+            arguments:
+              parameters:
+                - {name: command, value: profile}
+                - {name: config, value: "{{steps.prepare.outputs.parameters.profiler}}"}
         - - name: govern
             template: govern-and-accept
     - name: govern-and-accept
@@ -124,6 +130,8 @@ __GOVERNANCE_WRITES__
         parameters:
           - name: metadata
             valueFrom: {path: /tmp/out/metadata.json}
+          - name: profiler
+            valueFrom: {path: /tmp/out/profiler.json}
           - name: payment-events
             valueFrom: {path: /tmp/out/payment_events.json}
           - name: fraud-labels

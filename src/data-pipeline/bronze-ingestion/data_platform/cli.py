@@ -28,6 +28,7 @@ def prepare(store, run, contracts, manifest, out):
         raise ValueError("prepared native rule set differs from the contracts for this run")
     out.mkdir(parents=True, exist_ok=True)
     (out / "metadata.json").write_text(quality.dumps(quality.metadata_workflow()))
+    (out / "profiler.json").write_text(quality.dumps(quality.profiler_workflow()))
     for table in ("payment_events", "fraud_labels"):
         (out / f"{table}.json").write_text(quality.dumps(quality.test_workflow(table, cases)))
     return prepared
