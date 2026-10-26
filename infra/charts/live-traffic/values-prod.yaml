@@ -1,5 +1,5 @@
-imageTag: pr-89-2ecbf516083d8f92461d7f6e8f2213cf7eddb82f
+imageTag: pr-89-8c30ea5dbba18acd742df40d6036c3d4bd27b2f3
 simulator:
   enabled: false
 archiver:
-  enabled: false
+  enabled: true
