@@ -5,7 +5,7 @@ WORKDIR /app
 COPY src/data-pipeline/simulator/pyproject.toml src/data-pipeline/simulator/uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 COPY src/data-pipeline/simulator/simulator ./simulator
-RUN uv sync --locked --no-dev
+RUN uv sync --locked --no-dev && .venv/bin/simulator --help > /dev/null
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 USER 65532:65532
 ENTRYPOINT ["simulator"]
