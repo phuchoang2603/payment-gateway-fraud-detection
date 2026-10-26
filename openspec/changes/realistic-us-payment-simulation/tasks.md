@@ -14,7 +14,7 @@
 
 ## 3. Verify and generate
 
-- [ ] 3.1 Obtain relevant CI results and run only non-test lint/format/schema checks locally; verify no new config/getter tests, proto-check script, broker CI infrastructure or image builds are run locally.
+- [x] 3.1 Obtain relevant CI results and run only non-test lint/format/schema checks locally; verify no new config/getter tests, proto-check script, broker CI infrastructure or image builds are run locally. All 29 checks passed on `9b0c8fa` (image pin skipped).
 - [x] 3.2 Record measured generation/upload throughput and bounded smoke worker/scratch settings; retain superseded full-run estimates as evidence, with full-volume Spark generation outside this slice.
 - [x] 3.3 Delete the unpublished partial v13 entirely, remove the local full-scale config and publish v13 as a small smoke/reference dataset through immutable manifest-last publication; verify deletion, receipts, manifest URI/hash and file/row/byte/date totals without modifying v8/v11/v12.
 - [x] 3.4 Deliver the concise smoke report and DP1 handoff with diagnostics, source limitations and label maturity; explicitly exclude full-volume training acceptance, defer distributed Spark generation and downstream acceptance, and leave live deployments unchanged.
