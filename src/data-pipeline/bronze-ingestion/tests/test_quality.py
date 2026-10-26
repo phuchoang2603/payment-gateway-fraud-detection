@@ -93,6 +93,11 @@ def test_governance_requests_carry_original_contract_provenance():
     assert {c["entity"]["id"] for c in contracts} == {"id-events", "id-labels"}
     for contract in contracts:
         assert "```yaml" in contract["description"]
+    for request in requests.values():
+        if request["path"] == "/v1/dataContracts":
+            assert request["provenance"] == [
+                {"op": "replace", "path": "/description", "value": request["body"]["description"]}
+            ]
     assert {f"sha256={digest}" for digest in hashes().values()} <= {
         part for c in contracts for part in c["description"].split() if part.startswith("sha256=")
     }

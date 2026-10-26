@@ -414,7 +414,7 @@ __GOVERNANCE_WRITES__
           - name: Authorization
             valueFrom: {secretKeyRef: {name: openmetadata, key: authorization}}
           - name: Content-Type
-            value: application/json
+            value: "{{=inputs.parameters.method == 'PATCH' ? 'application/json-patch+json' : 'application/json'}}"
         body: "{{inputs.parameters.body}}"
     - name: finalizer
       steps:

@@ -79,7 +79,13 @@ def requests(run, ids, report_uri):
         },
     }
     for port, name in (("payment_events", "events_contract"), ("fraud_labels", "labels_contract")):
-        out[name] = {"method": "PUT", "path": "/v1/dataContracts", "body": contract_body(port, ids[port])}
+        body = contract_body(port, ids[port])
+        out[name] = {
+            "method": "PUT",
+            "path": "/v1/dataContracts",
+            "body": body,
+            "provenance": [{"op": "replace", "path": "/description", "value": body["description"]}],
+        }
     out["lineage"] = {
         "method": "PUT",
         "path": "/v1/lineage",
