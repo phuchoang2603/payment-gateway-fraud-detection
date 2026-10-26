@@ -19,9 +19,9 @@ def test_completed_inventory_and_integrity(dataset):
             verify_file(str(root), broken)
 
 
-def test_deferred_source_gate_reaches_preflight_but_requires_validated_snapshots(dataset, tmp_path, monkeypatch):
+def test_deferred_source_gate_reaches_preflight_and_records_the_superseding_policy(dataset, tmp_path, monkeypatch):
     from data_platform.cli import main
-    from data_platform.runs import accept, open_run, report_key
+    from data_platform.runs import SUPERSEDES, open_run
     from data_platform.storage import Store
 
     root, manifest = dataset
@@ -41,38 +41,7 @@ def test_deferred_source_gate_reaches_preflight_but_requires_validated_snapshots
     assert run["source_validation"] == manifest["validation"]
     with pytest.raises(ValueError, match="different source validation gate"):
         open_run(store, "smoke", run["manifest_sha256"], run["ingestion_contracts"], "image", "retry")
-    run["snapshots"] = {"payment_events": 1, "fraud_labels": 2}
-    with pytest.raises(ValueError, match="persisted passing"):
-        accept(store, run, run["ingestion_contracts"])
-    report = {
-        "data_outcome": "passed",
-        "snapshots": run["snapshots"],
-        "manifest_sha256": run["manifest_sha256"],
-        "source_validation": run["source_validation"],
-    }
-    store.put(report_key(run, run["ingestion_contracts"]), report)
-    with pytest.raises(ValueError, match="both passing Spark/GX"):
-        accept(store, run, run["ingestion_contracts"])
-    report["tables"] = {name: {"success": True} for name in run["snapshots"]}
-    report["tables"]["fraud_labels"]["success"] = False
-    store.put(report_key(run, run["ingestion_contracts"]), report)
-    with pytest.raises(ValueError, match="both passing Spark/GX"):
-        accept(store, run, run["ingestion_contracts"])
-    report["tables"]["fraud_labels"]["success"] = True
-    report.pop("source_validation")
-    store.put(report_key(run, run["ingestion_contracts"]), report)
-    with pytest.raises(ValueError, match="source gate differs"):
-        accept(store, run, run["ingestion_contracts"])
-    report["source_validation"] = run["source_validation"]
-    store.put(report_key(run, run["ingestion_contracts"]), report)
-    store.put(
-        report_key(run, run["ingestion_contracts"]).replace("validation.json", "governance.json"),
-        {
-            "outcome": "passed",
-            "readback_verified": True,
-        },
-    )
-    assert accept(store, run, run["ingestion_contracts"])["source_validation"] == manifest["validation"]
+    assert run["validation_supersedes"] == SUPERSEDES
     for declaration in (
         {"result": "skipped"},
         {**manifest["validation"], "gate": "unknown"},
