@@ -7,7 +7,6 @@ from urllib.parse import urlsplit
 import pyarrow.fs as fs
 
 from simulator.config import load_config
-from simulator.storage import generate
 
 S3_ENDPOINT = "minio.home.phuchoang.sbs"
 
@@ -79,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.exit(2, f"live simulation failed: {type(error).__name__}\n")
         return 0
     try:
+        from simulator.storage import generate
+
         config = load_config(args.config)
         filesystem, root = destination(args.output or config.output)
         manifest = generate(
