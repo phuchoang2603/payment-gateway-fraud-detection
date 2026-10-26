@@ -235,8 +235,12 @@ spec:
           - name: stage
           - name: attempt
       activeDeadlineSeconds: __SPARK_DEADLINE__
+      retryStrategy:
+        limit: "6"
+        retryPolicy: OnFailure
+        backoff: {duration: 30s, factor: 2, cap: 4m}
       resource:
-        action: create
+        action: apply
         setOwnerReference: true
         successCondition: status.currentState.currentStateSummary == ResourceReleased
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
