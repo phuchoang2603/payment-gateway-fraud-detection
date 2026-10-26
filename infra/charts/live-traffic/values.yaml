@@ -10,7 +10,7 @@ simulator:
     limits: {cpu: '1', memory: 2Gi}
   config:
     manifest: s3://synthetic-source/historical/v16/manifest.json
-    manifest_sha256: 0000000000000000000000000000000000000000000000000000000000000000
+    manifest_sha256: 719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e
     gateway_url: http://edge.payment-gateway.svc:8080
     return_url: https://example.com/checkout/complete
     duration_seconds: 300

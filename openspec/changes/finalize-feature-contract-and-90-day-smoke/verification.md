@@ -27,3 +27,11 @@ The Kubernetes job verified every inventory file checksum, byte/row count, Arrow
 Argo CD now selects this branch for the gateway and live-traffic applications. The old archiver was pruned and zero archiver pods remained before the current-contract cutover. Gateway image rollout uses the verified CI merge-SHA tag above. Both live traffic and archiving remain disabled while the replacement source is pending. No shared Kafka history or source objects were deleted.
 
 The [manifest-bound v15 report](evidence/v15-failed-development-report.json) preserves the failed check, measured time ranges, class/split counts and overlap limits. Labels extend through 2025-10-19; all nine source SQL rules completed, with only the risk-assessment rule failing. The next candidate prefix `historical/v16/` was confirmed empty before generation; the next run remains gated on corrected-contract CI.
+
+## V16 replacement publication
+
+All 29 checks passed at `5eed19ec287b368baccc656a37d41b5034c2e984`, including the generated-decision contract regression. The CI merge-image tag is `pr-90-b905998d1cf304f7ecae4db8bead3e0aa59a9447`.
+
+V16 was generated from a frozen copy of that revision. Its published manifest is `s3://synthetic-source/historical/v16/manifest.json`, byte SHA-256 `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`. It contains 795,718 event rows and 161,967 label rows across 1,954 files / 139,597,476 physical bytes. The publication receipt confirms cleanup and canonical JSON hash `83d94df53eca351e275d684286fe4da5c6419a64fdf83f1fbbc9a50b2fad61a9`. The feature definition remains `fraud-baseline-v1` / SHA-256 `2ee2a5153a248bdc98df3b2643e10a65bc5693ea111129b6c65a67352aa4ec0b`.
+
+The CI-image Kubernetes job `feature-contract-v16-validation` is checking the exact inventory and corrected source contract. This publication is not yet source or DP1 acceptance. Gateway images and the disabled live/archiver configurations are staged to the matched current CI tag.
