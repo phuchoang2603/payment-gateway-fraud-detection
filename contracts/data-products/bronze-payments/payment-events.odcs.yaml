@@ -43,8 +43,8 @@ schema:
   physicalName: bronze.raw_payment_events
   logicalType: object
   physicalType: table
-  description: One authoritative transition per event_id; repeated identical deliveries are permitted. Histories are complete
-    across all date partitions.
+  description: One delivered event; repeated and conflicting business identities are preserved for silver curation. Recurring
+    batches may contain incomplete histories.
   dataGranularityDescription: One delivered payment lifecycle event.
   customProperties:
   - property: schemaVersions

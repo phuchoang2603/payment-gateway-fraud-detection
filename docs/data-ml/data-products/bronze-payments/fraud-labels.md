@@ -1,6 +1,6 @@
 # urn:datacontract:fraud:bronze-fraud-labels
 ## Info
-*Separately delivered simulation truth and delayed chargebacks for the historical payment events.*
+*Separately delivered simulation truth and delayed chargebacks for historical and recurring payment deliveries.*
 - **name:** Bronze fraud-labels
 - **version:** 2.0.0
 - **status:** active
@@ -8,10 +8,10 @@
 
 ## Terms of Use
 ### Usage
-Join labels to payment attempts only after label_available_at. Validate together with the payment events they reference.
+Join labels to payment attempts only after label_available_at. DP2 validates linkage and maturity using referenced payment history.
 
 ### Purpose
-Separately delivered simulation truth and delayed chargebacks for the historical payment events.
+Separately delivered simulation truth and delayed chargebacks for historical and recurring payment deliveries.
 
 ### Limitations
 Synthetic data only. Scenario truth and future outcomes must never become decision inputs. Labels may only be used after label_available_at.

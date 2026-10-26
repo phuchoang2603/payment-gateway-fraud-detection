@@ -23,7 +23,7 @@ Synthetic data only. Recurring batches may contain incomplete lifecycles. Label 
 
 ## Schema
 ### payment_events
-*One authoritative transition per event_id; repeated identical deliveries are permitted. Histories are complete across all date partitions.*
+*One delivered event; repeated and conflicting business identities are preserved for silver curation. Recurring batches may contain incomplete histories.*
 
 | Field | Type | Attributes |
 | ----- | ---- | ---------- |

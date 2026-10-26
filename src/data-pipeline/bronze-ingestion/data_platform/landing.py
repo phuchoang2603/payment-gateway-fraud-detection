@@ -56,10 +56,10 @@ def state_key(epoch):
 
 
 def selection(store, version):
-    manifest = store.get(f"selections/{version}.json")
-    if not manifest or manifest.get("dataset_version") != version:
+    encoded = store.read(f"selections/{version}.json", max_bytes=64 * 1024 * 1024)
+    manifest = json.loads(encoded)
+    if manifest.get("dataset_version") != version:
         raise ValueError("immutable landing selection is missing")
-    encoded = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
     return manifest, sha256(encoded).hexdigest()
 
 

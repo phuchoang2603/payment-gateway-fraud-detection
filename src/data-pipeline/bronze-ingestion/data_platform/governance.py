@@ -36,7 +36,7 @@ def requests(run, ids, report_uri):
     source = product_document(SOURCE_PRODUCT)
     source_name = "payment-event-landing" if run.get("input_mode") == "landing" else SOURCE_PRODUCT
     manifest = (
-        f"{run['source_root']}/streaming/_batches/epoch={run['source_epoch']}/"
+        run["selection_uri"]
         if run.get("input_mode") == "landing"
         else f"{run['source_root'].rstrip('/')}/manifest.json"
     )

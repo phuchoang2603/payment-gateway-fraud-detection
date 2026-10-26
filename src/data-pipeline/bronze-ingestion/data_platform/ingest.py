@@ -37,13 +37,16 @@ def source_frames(spark, root, manifest, run):
                 root.rstrip("/") + "/" + e["key"]: e["batch"] for e in manifest["inventory"] if e["table"] == table
             }
             files = {
-                key if key.startswith("s3://") else Path(key.removeprefix("file://")).absolute().as_uri(): value
+                key if key.startswith("s3://") else str(Path(key.removeprefix("file://")).absolute()): value
                 for key, value in files.items()
             }
             batch_map = F.create_map(*[F.lit(v) for pair in files.items() for v in pair]) if files else None
             frame = frame.withColumn("_source_epoch", F.lit(manifest["source_epoch"]))
             frame = frame.withColumn(
-                "_source_batch", batch_map[F.col("_source_file")] if files else F.lit(None).cast("string")
+                "_source_batch",
+                batch_map[F.regexp_replace(F.url_decode(F.col("_source_file")), "^file:/+", "/")]
+                if files
+                else F.lit(None).cast("string"),
             )
             if "_transport" not in frame.columns:
                 frame = frame.withColumn("_transport", F.lit(None).cast(prepared.schema["_transport"].dataType))

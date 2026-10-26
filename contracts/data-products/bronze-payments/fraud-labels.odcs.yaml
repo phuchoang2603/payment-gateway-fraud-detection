@@ -6,8 +6,8 @@ version: 2.0.0
 status: active
 domain: fraud-detection
 description:
-  purpose: Separately delivered simulation truth and delayed chargebacks for the historical payment events.
-  usage: Join labels to payment attempts only after label_available_at. Validate together with the payment events they reference.
+  purpose: Separately delivered simulation truth and delayed chargebacks for historical and recurring payment deliveries.
+  usage: Join labels to payment attempts only after label_available_at. DP2 validates linkage and maturity using referenced payment history.
   limitations: Synthetic data only. Scenario truth and future outcomes must never become decision inputs. Labels may only
     be used after label_available_at.
 team:

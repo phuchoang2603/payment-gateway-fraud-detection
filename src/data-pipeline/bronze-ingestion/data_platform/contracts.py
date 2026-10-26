@@ -17,7 +17,7 @@ SPARK_TYPES = {
 }
 STARROCKS_TYPES = {
     "string": "varchar(1073741824)",
-    "binary": "varbinary(1048576)",
+    "binary": "varbinary",
     "long": "bigint(20)",
     "int": "int(11)",
     "double": "double",

@@ -105,6 +105,7 @@ def main(argv=None):
             )
             if args.input_mode == "landing":
                 run["input_mode"] = "landing"
+                run["selection_uri"] = f"{store.root}/selections/{args.version}.json"
                 run["source_epoch"] = manifest["source_epoch"]
                 run["changed_ports"] = [t for t, rows in manifest["totals"].items() if rows]
                 run["batches"] = [{k: b[k] for k in ("key", "sha256", "range")} for b in manifest["batches"]]
