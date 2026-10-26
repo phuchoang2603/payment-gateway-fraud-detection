@@ -43,7 +43,6 @@
 
   tasks."codegen:proto" = {
     exec = ''bash "${config.git.root}/scripts/codegen-proto.sh"'';
-    before = [ "devenv:enterShell" ];
     execIfModified = [
       "contracts/**/*.proto"
       "scripts/codegen-proto.sh"
@@ -54,7 +53,6 @@
 
   tasks."codegen:sqlc" = {
     exec = ''bash "${config.git.root}/scripts/codegen-sqlc.sh"'';
-    before = [ "devenv:enterShell" ];
     execIfModified = [
       "src/payment-gateway/*/sqlc.yaml"
       "src/payment-gateway/*/db/migrations/*.sql"
