@@ -24,4 +24,4 @@ ingress:
     enabled: true
     clusterTunnel: talos-proxmox
     hostname: pay-gateway.phuchoang.sbs
-imageTag: pr-90-b905998d1cf304f7ecae4db8bead3e0aa59a9447
+imageTag: pr-90-f8b81eacdc5b237baea98ad84d6e1b8001c027a3
