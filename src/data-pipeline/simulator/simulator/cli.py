@@ -57,7 +57,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     live = commands.add_parser("live", help="Drive current-time gateway traffic and optional delivery faults")
     live.add_argument("--config", type=Path, required=True)
+    commands.add_parser("archive", help="Land committed Kafka protobuf as immutable historical-compatible Parquet")
     args = parser.parse_args(argv)
+    if args.command == "archive":
+        from simulator.landing.runtime import main as archive
+
+        try:
+            archive()
+        except Exception as error:
+            parser.exit(2, f"stream archiver failed: {type(error).__name__}\n")
+        return 0
     if args.command == "live":
         import asyncio
 

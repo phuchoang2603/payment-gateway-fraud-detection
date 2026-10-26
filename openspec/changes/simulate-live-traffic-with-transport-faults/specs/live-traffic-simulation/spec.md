@@ -70,7 +70,7 @@ The platform SHALL use one current environment, codebase, common runtime configu
 
 ### Requirement: Immutable raw landing
 
-The Go archiver SHALL write decoded payment events and labels as historical-compatible Parquet under s3://synthetic-source/streaming/. It SHALL retain original payload/key bytes, ordered headers and Kafka positions in reserved transport metadata, preserve duplicate deliveries and leave completed objects unchanged across retries.
+The Python archiver SHALL write decoded payment events and labels as historical-compatible Parquet under s3://synthetic-source/streaming/. It SHALL retain original payload/key bytes, ordered headers and Kafka positions in reserved transport metadata, preserve duplicate deliveries and leave completed objects unchanged across retries.
 
 #### Scenario: Typed Parquet and exact replay
 

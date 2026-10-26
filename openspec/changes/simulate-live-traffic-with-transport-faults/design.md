@@ -6,7 +6,7 @@ V12 is a completed immutable -365-day calendar rewrite of v8, preserving its ide
 
 ## Goals / Non-Goals
 
-**Goals:** one Python live workload; current-time gateway traffic using the historical entities; unchanged committed-event delivery faults; Go-owned immutable Parquet landing; one common configuration and reusable DP1 interface.
+**Goals:** one Python live workload; current-time gateway traffic using the historical entities; unchanged committed-event delivery faults; Python immutable Parquet landing; one common configuration and reusable DP1 interface.
 
 **Non-Goals:** historical regeneration, gap filling, virtual gateway time, Avro/registry, a Go simulator, a separate fault deployment, actual-production isolation, and a durable cross-restart chargeback scheduler. This remains a bounded single-replica evidence workload.
 
@@ -34,7 +34,7 @@ Historical manifest -> shared Python profiles -> live traffic -> gateway APIs
                                               payments.events.v1.faulty
 
 Simulator labels -> fraud.labels.v1
-Selected payment topic + labels -> Go protobuf-to-Parquet archiver -> RustFS
+Selected payment topic + labels -> Python protobuf-to-Parquet archiver -> RustFS
 Historical exports + completed raw objects -> DP1 bronze -> DP2 -> DP3
 ```
 
@@ -50,9 +50,9 @@ The HTTP client creates payments and attempts with unique run-scoped idempotency
 
 ### Protobuf shared with Go, without a registry
 
-Root `contracts/` remains the source of truth. Extend existing codegen to generate importable Python event/label modules alongside Go, and package the generated Python bindings and compatible protobuf runtime in the image. Build/CI verify generated output and cross-language encode/decode behavior. No independent Python schemas, registry framing, Avro serializers or gateway event-format migration are introduced.
+Root `contracts/` remains the source of truth. Extend existing codegen to generate importable Python event/label modules alongside Go, and package the generated Python bindings and compatible protobuf runtime in the image. Root-contract generation remains part of development/build integration; no separate generated-Python CI check is required. CI verifies representative decoding and Parquet behavior using the packaged bindings. No independent Python schemas, registry framing, Avro serializers or gateway event-format migration are introduced.
 
-HTTP/JSON gateway calls need no protobuf binding. Label publishing uses generated `FraudLabel`; the fault loop decodes `PaymentEvent` for deterministic event-ID selection but forwards original bytes without reserialization. The Go archiver uses the same root contracts to decode landed business columns; retained protobuf bytes support replay. DP1 reads the decoded Parquet projection.
+HTTP/JSON gateway calls need no protobuf binding. Label publishing uses generated `FraudLabel`; the fault loop decodes `PaymentEvent` for deterministic event-ID selection but forwards original bytes without reserialization. The Python archiver uses the same root contracts to decode landed business columns; retained protobuf bytes support replay. DP1 reads the decoded Parquet projection.
 
 ### Post-commit delivery faults within the process
 
@@ -70,11 +70,11 @@ Publish simulation truth after the attempt response with the versioned `FraudLab
 
 Label schedules are in memory for bounded runs. Report interrupted schedules and do not claim crash-safe label completeness; delivery-fault offset recovery does not make the label heap durable. Simulation truth is a valid training target. Scenario/oracle-only fields stay out of payment decision inputs and features, and training joins enforce as-of availability.
 
-### Go protobuf-to-Parquet archiver
+### Python protobuf-to-Parquet archiver
 
-Use one small Go workload consuming selected payment topics and `fraud.labels.v1`. Existing Kafka Connect continues authoritative CDC unchanged. Aiven's timed multi-record files could overwrite previously visible data on replay; Confluent's conditional protection excludes native key/header sidecars; adding a custom Connect transformation is rejected in favor of a direct Go adapter. Flink can coordinate source/sink checkpoints but is unnecessary infrastructure solely for landing.
+Use one Python entry point in the existing simulator package/image consuming selected payment topics and `fraud.labels.v1`. Existing Kafka Connect continues authoritative CDC unchanged. Aiven's timed multi-record files could overwrite previously visible data on replay; Confluent's conditional protection excludes native key/header sidecars; adding a custom Connect transformation is rejected in favor of a direct Python adapter. Flink can coordinate source/sink checkpoints but is unnecessary infrastructure solely for landing.
 
-Decode using existing root-contract Go bindings and explicitly map to the historical Parquet business schemas, including nested payloads, enum names, absent optional fields, microsecond UTC timestamps and physical schema versions. Keep payment events and labels in separate table paths. Do not deduplicate, sort by event time, fabricate lifecycle transitions or otherwise curate business content. Reject unsupported schemas, malformed input and unrepresentable values visibly before committing their offsets.
+Decode using existing root-contract Python bindings and project directly through the existing historical Arrow schemas, including nested payloads, enum names, absent optional fields, microsecond UTC timestamps and physical schema versions. Keep payment events and labels in separate table paths. Do not deduplicate, sort by event time, fabricate lifecycle transitions or otherwise curate business content. Reject unsupported schemas, malformed input and unrepresentable values visibly before committing their offsets.
 
 Add a reserved `_transport` structure for source topic/partition/offset/timestamp, raw key/value and ordered binary headers. Retaining original protobuf supports exact replay and future decoding without making DP1 decode protobuf during ordinary ingestion. Historical exports remain unchanged and lack Kafka metadata; business columns are compatible, not physically identical entire schemas. Publish a machine-readable landing contract and bounded batch manifest containing file identity/checksum/size/count/schema and actual consumed Kafka offset bounds. Topic origin is not synonymous with real-versus-simulator identity; retain integration identity and supplied provenance without inventing real-world origin.
 
@@ -92,7 +92,7 @@ Bronze enforces integrity/conservation/schema/contract/identity-content/lifecycl
 
 ### Deployment and evidence
 
-One simulator image and opt-in single-replica `Recreate` Deployment under the configured prod root, using existing Kafka, plus one independently enabled Go archiver Deployment. Do not create separate fault-injector Deployments, a second source-specific environment or a dev root. Declare `payments.events.v1.faulty` and `fraud.labels.v1`; keep the existing clean topic and notifier behavior. Use the shared PR/main image policy and extend existing docs only where behavior/config changes.
+One simulator image and opt-in single-replica `Recreate` Deployment under the configured prod root, using existing Kafka, plus one independently enabled Python archiver Deployment using the same package and image (`simulator archive`). This isolates landing restarts from traffic without another language, serializer or image build. Do not create separate fault-injector Deployments, a second source-specific environment or a dev root. Declare `payments.events.v1.faulty` and `fraud.labels.v1`; keep the existing clean topic and notifier behavior. Use the shared PR/main image policy and extend existing docs only where behavior/config changes.
 
 Retain accepted v11 historical evidence separately from live/v12 acceptance. The completed v12 manifest is `s3://synthetic-source/historical/v12/manifest.json`, SHA-256 `66aa2af7fecb1177e0d3891ea86054ff9c076ff6e8743b35b6bec0bd351511ce`. Its mixed verification policy and pending DP1 Spark/GX validation must not be relabeled by a simulator rollout. No rewrite/rescheduling of that completed one-off job is part of this change.
 
@@ -111,12 +111,12 @@ Do not add dedicated config-validation, default/getter, logging-shape or repetit
 ## Migration Plan
 
 1. Add Python codegen/runtime packaging and implement the v8/v12 card mapping and profile reuse, with focused CI verification.
-2. Add the live workload and in-process fault module, common config and topics; validate byte-preserving behavior and restart recovery in CI.
-3. Build the Go archiver, extend only streaming-prefix access and agree the completed-object/Parquet interface before rollout.
+2. Add the live workload and in-process fault module, common config and topics; validate byte-preserving behavior in CI and restart recovery against an explicitly supplied integration broker.
+3. Build the Python archiver, extend only streaming-prefix access and agree the completed-object/Parquet interface before rollout.
 4. Exercise bounded current-time gateway traffic, historical identities and labels through GitOps with the archiver disabled; then exercise each delivery fault and the combined configuration. This simulator-only session does not depend on streaming-write policy access.
 5. Exercise Parquet landing and recovery after its policy/image prerequisites pass. Review the live evidence before starting the subsequent DP1 multi-source ingestion slice. An interface handoff alone is not a start signal. Preserve source datasets and historical results.
 
-Rollback disables the simulator and Go archiver while leaving gateway publication, notifier, Kafka source history and already completed objects intact. Do not delete datasets, rewrite old records or retain obsolete simulator deployment/config paths for compatibility.
+Rollback disables the simulator and Python archiver while leaving gateway publication, notifier, Kafka source history and already completed objects intact. Do not delete datasets, rewrite old records or retain obsolete simulator deployment/config paths for compatibility.
 
 ## Open Questions
 

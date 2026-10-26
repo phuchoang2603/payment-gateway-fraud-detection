@@ -1,17 +1,13 @@
-import os
-import subprocess
-from pathlib import Path
-
+import pyarrow as pa
 import pyarrow.parquet as pq
-import pytest
 
 from simulator.arrow import LABEL_SCHEMA, event_schema
 from simulator.contracts.payments.v1.events_pb2 import PaymentEvent
 from simulator.contracts.payments.v1.labels_pb2 import LABEL_SOURCE_SIMULATION_TRUTH, FraudLabel
+from simulator.landing.parquet import Record, decode, encode
 
 
-@pytest.mark.skipif(os.environ.get("LANDING_INTEROP") != "1", reason="cross-language contract runs in CI")
-def test_python_protobuf_go_parquet_historical_business_schema(tmp_path):
+def test_protobuf_parquet_reuses_historical_business_schema():
     timestamp = "2026-07-01T00:00:00.123456Z"
     messages = {}
     for version in (1, 2):
@@ -57,25 +53,17 @@ def test_python_protobuf_go_parquet_historical_business_schema(tmp_path):
     label.label_available_at.CopyFrom(label.occurred_at)
     messages["label"] = label
     for name, message in messages.items():
-        (tmp_path / f"{name}.pb").write_bytes(message.SerializeToString())
-    root = Path(__file__).resolve().parents[4]
-    subprocess.run(
-        [
-            "go",
-            "test",
-            "./internal/landing",
-            "./cmd/stream-archiver",
-            "-run",
-            "^(TestCrossLanguageFixtures|TestArchiverKafkaPublicationRecovery)$",
-            "-count=1",
-        ],
-        cwd=root / "src/data-pipeline/stream-archiver",
-        env={**os.environ, "GOWORK": "off", "LANDING_FIXTURES_DIR": str(tmp_path)},
-        check=True,
-    )
-    for name, message in messages.items():
-        assert type(message).FromString((tmp_path / f"{name}.go.pb").read_bytes()) == message
-        table = pq.read_table(tmp_path / f"{name}.parquet")
+        record = Record(
+            "labels" if name == "label" else "events",
+            0,
+            42,
+            None,
+            b"",
+            message.SerializeToString(),
+            [("x", None), ("x", b""), ("x", b"\x00\xff")],
+        )
+        name_table, version, decoded_row = decode(record, "labels")
+        table = pq.read_table(pa.BufferReader(encode(name_table, version, [decoded_row])))
         expected = LABEL_SCHEMA if name == "label" else event_schema(int(name[-1]))
         actual = table.select(expected.names)
         assert actual.schema.equals(expected, check_metadata=False), (actual.schema, expected)

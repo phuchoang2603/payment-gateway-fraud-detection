@@ -65,10 +65,11 @@ def run_faults(config, stop):
     heap, failures = [], []
     count = size = sequence = published = consumed = duplicates = delayed = held = 0
     paused = False
+    closing = False
     last_report = time.monotonic()
 
     def revoke(client, assignment):
-        if count:
+        if count and not closing:
             raise RuntimeError("fault assignment revoked with unfinished work; replay required")
 
     def acknowledge(pending, error, message):
@@ -182,6 +183,7 @@ def run_faults(config, stop):
             held += int(due != scheduled)
     finally:
         producer.flush(10)
+        closing = True
         consumer.close()
         print(
             json.dumps(

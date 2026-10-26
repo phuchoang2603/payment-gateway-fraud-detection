@@ -37,7 +37,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: {{ $name }}
-          image: {{ printf "%s/%s:%s" $.Values.imageRepository $name $.Values.imageTag | quote }}
+          image: {{ printf "%s/%s:%s" $.Values.imageRepository "live-simulator" $.Values.imageTag | quote }}
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
@@ -82,6 +82,7 @@ spec:
               value: {{ $settings.maxBytes | quote }}
             - name: LANDING_FLUSH_INTERVAL
               value: {{ $settings.flushInterval | quote }}
+          args: [archive]
 {{- end }}
 {{- if eq $name "live-simulator" }}
       volumes:

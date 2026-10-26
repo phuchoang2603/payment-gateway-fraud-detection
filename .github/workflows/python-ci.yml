@@ -21,15 +21,9 @@ jobs:
       - uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.14"
-      - uses: actions/setup-go@v6.5.0
-        with:
-          go-version-file: src/data-pipeline/stream-archiver/go.mod
-          cache-dependency-path: src/data-pipeline/stream-archiver/go.sum
       - uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
           cache-dependency-glob: src/**/uv.lock
       - name: Python lint, format and tests
-        env:
-          LANDING_INTEROP: "1"
         run: bash scripts/ci-checks.sh python

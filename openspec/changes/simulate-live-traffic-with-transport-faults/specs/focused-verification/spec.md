@@ -2,20 +2,20 @@
 
 ### Requirement: Cross-language simulation contracts
 
-CI SHALL reuse coverage and add only distinct wire/identity/retry checks: generated Python contracts, cross-language encoding, profile mismatch, current-time starts, historical mapping and idempotency. It SHALL verify tokens/card numbers stay out of logs/Kafka. Dedicated config/default/getter tests, exhaustive per-card tests and exact wall-clock assertions SHALL NOT be required.
+CI SHALL reuse coverage and add only distinct wire/identity/retry checks: packaged generated protobuf contracts, historical-compatible Parquet decoding, profile mismatch, current-time starts, historical mapping and idempotency. It SHALL verify tokens/card numbers stay out of logs/Kafka. Dedicated config/default/getter tests, exhaustive per-card tests and exact wall-clock assertions SHALL NOT be required.
 
-#### Scenario: Go event and Python label
+#### Scenario: Protobuf events and labels
 
-- **WHEN** CI exchanges representative contracted events/labels between Go and Python
-- **THEN** both decode the expected identities and fields without independent schemas or registry framing
+- **WHEN** CI decodes representative contracted protobuf events/labels through the Python landing adapter
+- **THEN** their Parquet business columns match the existing historical Arrow schemas while original wire bytes remain available without registry framing
 
 ### Requirement: Delivery-fault runtime verification
 
-CI SHALL reuse focused scenarios for deterministic selection, no-fault pass-through, bounded backlog and acknowledged-prefix recovery across shared-process restart. It SHALL NOT add redundant logging-shape or render-only tests. Evidence SHALL distinguish deliberately injected duplicates from possible restart replay and SHALL NOT claim exactly-once recovery.
+Verification SHALL reuse focused scenarios for deterministic selection, no-fault pass-through, bounded backlog and acknowledged-prefix recovery across shared-process restart. Broker-backed recovery tests SHALL remain opt-in against an explicitly supplied integration broker; default Python CI SHALL NOT start Kafka or require Testcontainers. It SHALL NOT add redundant logging-shape or render-only tests. Evidence SHALL distinguish deliberately injected duplicates from possible restart replay and SHALL NOT claim exactly-once recovery.
 
 #### Scenario: Workload restarted with pending publications
 
-- **WHEN** CI restarts the workload while events are held or awaiting acknowledgments
+- **WHEN** the integration recovery check restarts the workload while events are held or awaiting acknowledgments
 - **THEN** every clean record is eventually forwarded and no committed position skips unfinished work
 
 ### Requirement: Immutable landing and DP1 interface evidence
