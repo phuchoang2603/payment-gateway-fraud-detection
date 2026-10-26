@@ -67,7 +67,13 @@ def check_date_partition(spark, name, table):
 
 
 def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=None):
-    if set(run["snapshots"]) == set(PORTS) and run.get("conservation", {}).get("outcome") == "passed":
+    conservation = run.get("conservation", {})
+    if (
+        set(run["snapshots"]) == set(PORTS)
+        and conservation.get("outcome") == "passed"
+        and conservation.get("snapshots") == run["snapshots"]
+        and conservation.get("manifest_sha256") == run["manifest_sha256"]
+    ):
         return run
     verify_files(spark, root, manifest)
     frames = source_frames(spark, root, manifest, run)

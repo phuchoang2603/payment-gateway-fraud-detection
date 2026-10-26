@@ -88,7 +88,7 @@ schema:
     description: Source recording time, at or after occurred_at; not ingestion time.
   - name: schema_version
     logicalType: integer
-    physicalType: UINTEGER
+    physicalType: long
     required: true
     description: Current physical event schema three includes immutable attempt scoring context.
   - name: correlation_id
