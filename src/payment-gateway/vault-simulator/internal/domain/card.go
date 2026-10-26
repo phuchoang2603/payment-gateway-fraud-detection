@@ -18,9 +18,9 @@ const (
 )
 
 const (
-	MethodTypeCard      = "card"
-	HistoricalCardCount = 3900000
-	cardNumberLength    = 16
+	MethodTypeCard   = "card"
+	CardSerialLimit  = 100_000_000_000
+	cardNumberLength = 16
 )
 
 type Card struct {
@@ -47,7 +47,7 @@ func LookupCard(number string) (Card, bool) {
 			continue
 		}
 		serial, err := strconv.Atoi(number[4 : cardNumberLength-1])
-		if err != nil || serial >= HistoricalCardCount {
+		if err != nil || serial >= CardSerialLimit {
 			return Card{}, false
 		}
 		return Card{

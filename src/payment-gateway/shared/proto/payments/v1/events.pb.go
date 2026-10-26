@@ -380,6 +380,7 @@ type AttemptStarted struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AttemptId     string                 `protobuf:"bytes,1,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
 	Signals       *AttemptSignals        `protobuf:"bytes,2,opt,name=signals,proto3" json:"signals,omitempty"`
+	Context       *AttemptContext        `protobuf:"bytes,3,opt,name=context,proto3" json:"context,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -424,6 +425,13 @@ func (x *AttemptStarted) GetAttemptId() string {
 func (x *AttemptStarted) GetSignals() *AttemptSignals {
 	if x != nil {
 		return x.Signals
+	}
+	return nil
+}
+
+func (x *AttemptStarted) GetContext() *AttemptContext {
+	if x != nil {
+		return x.Context
 	}
 	return nil
 }
@@ -767,11 +775,12 @@ const file_payments_v1_events_proto_rawDesc = "" +
 	"\x0ePaymentCreated\x124\n" +
 	"\bmerchant\x18\x01 \x01(\v2\x18.payments.v1.MerchantRefR\bmerchant\x124\n" +
 	"\bcustomer\x18\x02 \x01(\v2\x18.payments.v1.CustomerRefR\bcustomer\x129\n" +
-	"\bsnapshot\x18\x03 \x01(\v2\x1d.payments.v1.CheckoutSnapshotR\bsnapshot\"f\n" +
+	"\bsnapshot\x18\x03 \x01(\v2\x1d.payments.v1.CheckoutSnapshotR\bsnapshot\"\x9d\x01\n" +
 	"\x0eAttemptStarted\x12\x1d\n" +
 	"\n" +
 	"attempt_id\x18\x01 \x01(\tR\tattemptId\x125\n" +
-	"\asignals\x18\x02 \x01(\v2\x1b.payments.v1.AttemptSignalsR\asignals\"r\n" +
+	"\asignals\x18\x02 \x01(\v2\x1b.payments.v1.AttemptSignalsR\asignals\x125\n" +
+	"\acontext\x18\x03 \x01(\v2\x1b.payments.v1.AttemptContextR\acontext\"r\n" +
 	"\x14RiskDecisionRecorded\x12\x1d\n" +
 	"\n" +
 	"attempt_id\x18\x01 \x01(\tR\tattemptId\x12;\n" +
@@ -831,7 +840,8 @@ var file_payments_v1_events_proto_goTypes = []any{
 	(*CustomerRef)(nil),                 // 12: payments.v1.CustomerRef
 	(*CheckoutSnapshot)(nil),            // 13: payments.v1.CheckoutSnapshot
 	(*AttemptSignals)(nil),              // 14: payments.v1.AttemptSignals
-	(*RiskAssessment)(nil),              // 15: payments.v1.RiskAssessment
+	(*AttemptContext)(nil),              // 15: payments.v1.AttemptContext
+	(*RiskAssessment)(nil),              // 16: payments.v1.RiskAssessment
 }
 var file_payments_v1_events_proto_depIdxs = []int32{
 	10, // 0: payments.v1.PaymentEvent.occurred_at:type_name -> google.protobuf.Timestamp
@@ -848,13 +858,14 @@ var file_payments_v1_events_proto_depIdxs = []int32{
 	12, // 11: payments.v1.PaymentCreated.customer:type_name -> payments.v1.CustomerRef
 	13, // 12: payments.v1.PaymentCreated.snapshot:type_name -> payments.v1.CheckoutSnapshot
 	14, // 13: payments.v1.AttemptStarted.signals:type_name -> payments.v1.AttemptSignals
-	15, // 14: payments.v1.RiskDecisionRecorded.assessment:type_name -> payments.v1.RiskAssessment
-	0,  // 15: payments.v1.AttemptDeclined.source:type_name -> payments.v1.DeclineSource
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	15, // 14: payments.v1.AttemptStarted.context:type_name -> payments.v1.AttemptContext
+	16, // 15: payments.v1.RiskDecisionRecorded.assessment:type_name -> payments.v1.RiskAssessment
+	0,  // 16: payments.v1.AttemptDeclined.source:type_name -> payments.v1.DeclineSource
+	17, // [17:17] is the sub-list for method output_type
+	17, // [17:17] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_payments_v1_events_proto_init() }

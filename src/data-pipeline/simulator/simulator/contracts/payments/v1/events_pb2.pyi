@@ -66,12 +66,14 @@ class PaymentCreated(_message.Message):
     def __init__(self, merchant: _Optional[_Union[_types_pb2.MerchantRef, _Mapping]] = ..., customer: _Optional[_Union[_types_pb2.CustomerRef, _Mapping]] = ..., snapshot: _Optional[_Union[_types_pb2.CheckoutSnapshot, _Mapping]] = ...) -> None: ...
 
 class AttemptStarted(_message.Message):
-    __slots__ = ("attempt_id", "signals")
+    __slots__ = ("attempt_id", "signals", "context")
     ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
     SIGNALS_FIELD_NUMBER: _ClassVar[int]
+    CONTEXT_FIELD_NUMBER: _ClassVar[int]
     attempt_id: str
     signals: _types_pb2.AttemptSignals
-    def __init__(self, attempt_id: _Optional[str] = ..., signals: _Optional[_Union[_types_pb2.AttemptSignals, _Mapping]] = ...) -> None: ...
+    context: _types_pb2.AttemptContext
+    def __init__(self, attempt_id: _Optional[str] = ..., signals: _Optional[_Union[_types_pb2.AttemptSignals, _Mapping]] = ..., context: _Optional[_Union[_types_pb2.AttemptContext, _Mapping]] = ...) -> None: ...
 
 class RiskDecisionRecorded(_message.Message):
     __slots__ = ("attempt_id", "assessment")

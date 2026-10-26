@@ -78,7 +78,6 @@ class Scenarios(StrictModel):
 
 class DataProblems(StrictModel):
     duplicate_rate: float = Field(ge=0, lt=1)
-    schema_cutover_date: date | None = None
     experiment: bool = False
 
 
@@ -98,7 +97,7 @@ class StorageLayout(StrictModel):
     row_group_rows: int = Field(default=131072, gt=0)
 
 
-ALGORITHM_VERSION = "us-electronics-v1"
+ALGORITHM_VERSION = "us-electronics-v2"
 RUN_STATE_VERSION = 2
 
 
@@ -177,18 +176,12 @@ class HistoricalConfig(StrictModel):
     def end_date(self) -> date:
         return self.start_date + timedelta(days=self.duration_days)
 
-    def schema_version_on(self, day: date) -> int:
-        return 1 if self.data_problems.schema_cutover_date and day < self.data_problems.schema_cutover_date else 2
-
     @model_validator(mode="after")
     def validate_dates(self) -> Self:
         if self.calibration_sha256 != provenance()["sha256"]:
             raise ValueError("calibration identity differs from installed inputs")
-        cutover = self.data_problems.schema_cutover_date
-        if cutover and not self.start_date < cutover < self.end_date:
-            raise ValueError("data_problems.schema_cutover_date must fall strictly inside the dataset")
-        if (cutover or self.data_problems.duplicate_rate) and not self.data_problems.experiment:
-            raise ValueError("schema cutover and duplicate exports require data_problems.experiment")
+        if self.data_problems.duplicate_rate and not self.data_problems.experiment:
+            raise ValueError("duplicate exports require data_problems.experiment")
         parsed = urlsplit(self.output)
         if parsed.scheme and parsed.scheme != "s3":
             raise ValueError("output must be a local directory or s3:// bucket")

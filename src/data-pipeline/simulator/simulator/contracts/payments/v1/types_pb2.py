@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x17payments/v1/types.proto\x12\x0bpayments.v1\x1a\x1fgoogle/protobuf/timestamp.proto\".\n\x05Money\x12\x13\n\x0bminor_units\x18\x01 \x01(\x03\x12\x10\n\x08\x63urrency\x18\x02 \x01(\t\">\n\x0bMerchantRef\x12\x13\n\x0bmerchant_id\x18\x01 \x01(\t\x12\x1a\n\x12\x65xternal_seller_id\x18\x02 \x01(\t\"=\n\x0b\x43ustomerRef\x12\x13\n\x0b\x63ustomer_id\x18\x01 \x01(\t\x12\x19\n\x11\x65xternal_buyer_id\x18\x02 \x01(\t\"}\n\x08LineItem\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x02 \x01(\t\x12\x11\n\tcondition\x18\x03 \x01(\t\x12\x10\n\x08quantity\x18\x04 \x01(\x05\x12&\n\nunit_price\x18\x05 \x01(\x0b\x32\x12.payments.v1.Money\"e\n\x10ShippingLocation\x12\x0f\n\x07\x63ountry\x18\x01 \x01(\t\x12\x0e\n\x06region\x18\x02 \x01(\t\x12\x13\n\x0bpostal_code\x18\x03 \x01(\t\x12\x1b\n\x13\x61\x64\x64ress_fingerprint\x18\x04 \x01(\t\"\xa9\x02\n\x10\x43heckoutSnapshot\x12\x19\n\x11\x65xternal_order_id\x18\x01 \x01(\t\x12!\n\x05total\x18\x02 \x01(\x0b\x32\x12.payments.v1.Money\x12$\n\x05items\x18\x03 \x03(\x0b\x32\x15.payments.v1.LineItem\x12?\n\x1bmerchant_account_created_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12?\n\x1b\x63ustomer_account_created_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12/\n\x08shipping\x18\x06 \x01(\x0b\x32\x1d.payments.v1.ShippingLocation\"2\n\rPaymentMethod\x12\x0c\n\x04type\x18\x01 \x01(\t\x12\x13\n\x0b\x66ingerprint\x18\x02 \x01(\t\"\xcc\x02\n\x0e\x41ttemptSignals\x12\x30\n\x0c\x61ttempted_at\x18\x01 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x32\n\x0epayment_method\x18\x02 \x01(\x0b\x32\x1a.payments.v1.PaymentMethod\x12\x1f\n\x12\x64\x65vice_fingerprint\x18\x03 \x01(\tH\x00\x88\x01\x01\x12\x17\n\nip_country\x18\x04 \x01(\tH\x01\x88\x01\x01\x12#\n\x16ip_network_fingerprint\x18\x05 \x01(\tH\x02\x88\x01\x01\x12\x1e\n\x11user_agent_family\x18\x06 \x01(\tH\x03\x88\x01\x01\x42\x15\n\x13_device_fingerprintB\r\n\x0b_ip_countryB\x19\n\x17_ip_network_fingerprintB\x14\n\x12_user_agent_family\"\xf9\x01\n\x0eRiskAssessment\x12)\n\x07outcome\x18\x01 \x01(\x0e\x32\x18.payments.v1.RiskOutcome\x12\x14\n\x0creason_codes\x18\x02 \x03(\t\x12\x16\n\x0epolicy_version\x18\x03 \x01(\t\x12\x1a\n\rmodel_version\x18\x04 \x01(\tH\x00\x88\x01\x01\x12 \n\x13\x66\x65\x61ture_set_version\x18\x05 \x01(\tH\x01\x88\x01\x01\x12\x17\n\nrisk_score\x18\x06 \x01(\x01H\x02\x88\x01\x01\x42\x10\n\x0e_model_versionB\x16\n\x14_feature_set_versionB\r\n\x0b_risk_score*_\n\x0bRiskOutcome\x12\x1c\n\x18RISK_OUTCOME_UNSPECIFIED\x10\x00\x12\x18\n\x14RISK_OUTCOME_APPROVE\x10\x01\x12\x18\n\x14RISK_OUTCOME_DECLINE\x10\x02\x42^Z\\github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1;paymentsv1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x17payments/v1/types.proto\x12\x0bpayments.v1\x1a\x1fgoogle/protobuf/timestamp.proto\".\n\x05Money\x12\x13\n\x0bminor_units\x18\x01 \x01(\x03\x12\x10\n\x08\x63urrency\x18\x02 \x01(\t\">\n\x0bMerchantRef\x12\x13\n\x0bmerchant_id\x18\x01 \x01(\t\x12\x1a\n\x12\x65xternal_seller_id\x18\x02 \x01(\t\"=\n\x0b\x43ustomerRef\x12\x13\n\x0b\x63ustomer_id\x18\x01 \x01(\t\x12\x19\n\x11\x65xternal_buyer_id\x18\x02 \x01(\t\"}\n\x08LineItem\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x02 \x01(\t\x12\x11\n\tcondition\x18\x03 \x01(\t\x12\x10\n\x08quantity\x18\x04 \x01(\x05\x12&\n\nunit_price\x18\x05 \x01(\x0b\x32\x12.payments.v1.Money\"e\n\x10ShippingLocation\x12\x0f\n\x07\x63ountry\x18\x01 \x01(\t\x12\x0e\n\x06region\x18\x02 \x01(\t\x12\x13\n\x0bpostal_code\x18\x03 \x01(\t\x12\x1b\n\x13\x61\x64\x64ress_fingerprint\x18\x04 \x01(\t\"\xa9\x02\n\x10\x43heckoutSnapshot\x12\x19\n\x11\x65xternal_order_id\x18\x01 \x01(\t\x12!\n\x05total\x18\x02 \x01(\x0b\x32\x12.payments.v1.Money\x12$\n\x05items\x18\x03 \x03(\x0b\x32\x15.payments.v1.LineItem\x12?\n\x1bmerchant_account_created_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12?\n\x1b\x63ustomer_account_created_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12/\n\x08shipping\x18\x06 \x01(\x0b\x32\x1d.payments.v1.ShippingLocation\"\x99\x01\n\x0e\x41ttemptContext\x12*\n\x08merchant\x18\x01 \x01(\x0b\x32\x18.payments.v1.MerchantRef\x12*\n\x08\x63ustomer\x18\x02 \x01(\x0b\x32\x18.payments.v1.CustomerRef\x12/\n\x08snapshot\x18\x03 \x01(\x0b\x32\x1d.payments.v1.CheckoutSnapshot\"2\n\rPaymentMethod\x12\x0c\n\x04type\x18\x01 \x01(\t\x12\x13\n\x0b\x66ingerprint\x18\x02 \x01(\t\"\xcc\x02\n\x0e\x41ttemptSignals\x12\x30\n\x0c\x61ttempted_at\x18\x01 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x32\n\x0epayment_method\x18\x02 \x01(\x0b\x32\x1a.payments.v1.PaymentMethod\x12\x1f\n\x12\x64\x65vice_fingerprint\x18\x03 \x01(\tH\x00\x88\x01\x01\x12\x17\n\nip_country\x18\x04 \x01(\tH\x01\x88\x01\x01\x12#\n\x16ip_network_fingerprint\x18\x05 \x01(\tH\x02\x88\x01\x01\x12\x1e\n\x11user_agent_family\x18\x06 \x01(\tH\x03\x88\x01\x01\x42\x15\n\x13_device_fingerprintB\r\n\x0b_ip_countryB\x19\n\x17_ip_network_fingerprintB\x14\n\x12_user_agent_family\"\xf9\x01\n\x0eRiskAssessment\x12)\n\x07outcome\x18\x01 \x01(\x0e\x32\x18.payments.v1.RiskOutcome\x12\x14\n\x0creason_codes\x18\x02 \x03(\t\x12\x16\n\x0epolicy_version\x18\x03 \x01(\t\x12\x1a\n\rmodel_version\x18\x04 \x01(\tH\x00\x88\x01\x01\x12 \n\x13\x66\x65\x61ture_set_version\x18\x05 \x01(\tH\x01\x88\x01\x01\x12\x17\n\nrisk_score\x18\x06 \x01(\x01H\x02\x88\x01\x01\x42\x10\n\x0e_model_versionB\x16\n\x14_feature_set_versionB\r\n\x0b_risk_score*_\n\x0bRiskOutcome\x12\x1c\n\x18RISK_OUTCOME_UNSPECIFIED\x10\x00\x12\x18\n\x14RISK_OUTCOME_APPROVE\x10\x01\x12\x18\n\x14RISK_OUTCOME_DECLINE\x10\x02\x42^Z\\github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1;paymentsv1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,8 +33,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'simulator.contracts.payment
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z\\github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1;paymentsv1'
-  _globals['_RISKOUTCOME']._serialized_start=1417
-  _globals['_RISKOUTCOME']._serialized_end=1512
+  _globals['_RISKOUTCOME']._serialized_start=1573
+  _globals['_RISKOUTCOME']._serialized_end=1668
   _globals['_MONEY']._serialized_start=73
   _globals['_MONEY']._serialized_end=119
   _globals['_MERCHANTREF']._serialized_start=121
@@ -47,10 +47,12 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_SHIPPINGLOCATION']._serialized_end=476
   _globals['_CHECKOUTSNAPSHOT']._serialized_start=479
   _globals['_CHECKOUTSNAPSHOT']._serialized_end=776
-  _globals['_PAYMENTMETHOD']._serialized_start=778
-  _globals['_PAYMENTMETHOD']._serialized_end=828
-  _globals['_ATTEMPTSIGNALS']._serialized_start=831
-  _globals['_ATTEMPTSIGNALS']._serialized_end=1163
-  _globals['_RISKASSESSMENT']._serialized_start=1166
-  _globals['_RISKASSESSMENT']._serialized_end=1415
+  _globals['_ATTEMPTCONTEXT']._serialized_start=779
+  _globals['_ATTEMPTCONTEXT']._serialized_end=932
+  _globals['_PAYMENTMETHOD']._serialized_start=934
+  _globals['_PAYMENTMETHOD']._serialized_end=984
+  _globals['_ATTEMPTSIGNALS']._serialized_start=987
+  _globals['_ATTEMPTSIGNALS']._serialized_end=1319
+  _globals['_RISKASSESSMENT']._serialized_start=1322
+  _globals['_RISKASSESSMENT']._serialized_end=1571
 # @@protoc_insertion_point(module_scope)

@@ -15,6 +15,6 @@ scenarios:
   account_takeover: {rate: 0.01, window_days: 2, attempts_per_day: 2, amount_multiplier: 3}
   card_testing: {rate: 1, burst_size: 10, burst_minutes: 5, decline_rate: 0.8}
   friendly_fraud: {rate: 0.05}
-data_problems: {experiment: true, duplicate_rate: 0.05, schema_cutover_date: 2026-07-04}
+data_problems: {experiment: true, duplicate_rate: 0.05}
 label_delays: {reporting_probability: 1, min_days: 1, max_days: 3}
 output: unused

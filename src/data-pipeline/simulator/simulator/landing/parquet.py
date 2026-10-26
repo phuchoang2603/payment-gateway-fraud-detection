@@ -117,8 +117,20 @@ def decode(record, label_topic):
             raise ValueError("incomplete payment event")
         version = message.schema_version
         schema = event_schema(version)
-        if version == 1 and message.attempt_started.signals.HasField("user_agent_family"):
-            raise ValueError("v1 contains v2 signal")
+        if message.WhichOneof("payload") == "attempt_started":
+            attempt = message.attempt_started
+            context = attempt.context
+            if not (
+                attempt.attempt_id
+                and attempt.HasField("signals")
+                and context.HasField("merchant")
+                and context.HasField("customer")
+                and context.HasField("snapshot")
+                and context.merchant.merchant_id
+                and context.customer.customer_id
+                and context.snapshot.HasField("total")
+            ):
+                raise ValueError("incomplete attempt scoring context")
         table = "payment_events"
     row = project(message, schema)
     row["_transport"] = {

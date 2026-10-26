@@ -49,7 +49,7 @@ def _strip_required(fields: dict | None) -> dict | None:
     return None if fields is None else {name: _strip_required(nested) for name, (_, nested) in fields.items()}
 
 
-@pytest.mark.parametrize(("contract", "schema"), [("payment-events", event_schema(2)), ("fraud-labels", LABEL_SCHEMA)])
+@pytest.mark.parametrize(("contract", "schema"), [("payment-events", event_schema(3)), ("fraud-labels", LABEL_SCHEMA)])
 def test_arrow_schema_matches_contract(contract, schema):
     declared = _odcs_fields(
         yaml.safe_load((storage.PRODUCT_DIR / f"{contract}.odcs.yaml").read_text())["schema"][0]["properties"]
@@ -65,8 +65,8 @@ def test_published_dataset_records_deferred_validation(dataset):
     root, manifest = dataset
     assert manifest["validation"] == {
         "result": "skipped",
-        "gate": "dp1-spark-gx",
-        "reason": "validation deferred to dp1-spark-gx; the downstream pipeline is the contract gate",
+        "gate": "dp1-starrocks-openmetadata",
+        "reason": "validation deferred to dp1-starrocks-openmetadata; the downstream pipeline is the contract gate",
     }
     assert (root / "manifest.json").exists()
     assert not (root / "validation").exists()
@@ -113,22 +113,17 @@ def test_completed_publication_recovery_reuses_output(dataset, monkeypatch):
     assert (root / "manifest.json").read_bytes() == original
 
 
-def test_schema_cutover_is_physical(dataset):
+def test_attempt_context_matches_immutable_checkout(dataset):
     root, _ = dataset
-    cutover = small_config().data_problems.schema_cutover_date
-    for path in _paths(root, "payment_events"):
-        signals = pq.ParquetFile(path).schema_arrow.field("attempt_started").type.field("signals").type
-        assert (signals.get_field_index("user_agent_family") >= 0) == (Path(path).stem == "v2")
-    nulls = (
-        _read(root, "payment_events")
-        .filter("attempt_started IS NOT NULL")
-        .aggregate(
-            "min(occurred_at) FILTER (schema_version = 2) AS first_present, "
-            "max(occurred_at) FILTER (schema_version = 1) AS last_missing"
-        )
-        .fetchone()
-    )
-    assert nulls[1] < datetime.combine(cutover, datetime.min.time(), timezone.utc) <= nulls[0]
+    assert _read(root, "payment_events").filter("schema_version <> 3").count("*").fetchone()[0] == 0
+    mismatches = duckdb.sql(f"""
+        WITH e AS (SELECT DISTINCT * FROM read_parquet({_paths(root, "payment_events")!r})),
+        created AS (SELECT integration_id, payment_id, payment_created FROM e WHERE payment_created IS NOT NULL)
+        SELECT count(*) FROM e JOIN created c USING (integration_id, payment_id)
+        WHERE attempt_started IS NOT NULL AND
+          to_json(e.attempt_started.context) IS DISTINCT FROM to_json(c.payment_created)
+    """).fetchone()[0]
+    assert mismatches == 0
 
 
 def test_duplicates_repeat_identical_events_beside_their_originals(dataset):
@@ -206,7 +201,6 @@ def test_row_groups_respect_the_configured_size(tmp_path):
     config = small_config(
         duration_days=2,
         **{
-            "data_problems.schema_cutover_date": "2026-07-02",
             "storage.row_group_rows": 2048,
             "counts.customers": 3000,
         },
@@ -244,9 +238,9 @@ def test_task_fragments_are_one_file_per_table_and_schema_version(dataset):
     root, _ = dataset
     for task in (root / "raw" / "payment_events").iterdir():
         names = sorted(path.name for path in task.iterdir())
-        assert all(name in ("v1.parquet", "v2.parquet") for name in names)
+        assert all(name == "v3.parquet" for name in names)
         assert len(names) == len(set(names))
-        assert len(names) <= 2
+        assert len(names) == 1
 
 
 def test_publication_receipt_records_skipped_cleanup(dataset):

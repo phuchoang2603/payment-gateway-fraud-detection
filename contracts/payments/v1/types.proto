@@ -30,6 +30,11 @@ message CheckoutSnapshot {
   google.protobuf.Timestamp customer_account_created_at = 5;
   ShippingLocation shipping = 6;
 }
+message AttemptContext {
+  MerchantRef merchant = 1;
+  CustomerRef customer = 2;
+  CheckoutSnapshot snapshot = 3;
+}
 message PaymentMethod { string type = 1; string fingerprint = 2; }
 // Unobserved optional signals remain absent, not empty or zero.
 message AttemptSignals {

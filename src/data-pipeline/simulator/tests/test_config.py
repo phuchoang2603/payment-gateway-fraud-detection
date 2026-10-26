@@ -15,11 +15,6 @@ def test_credential_fields_are_rejected():
         small_config(aws_secret_access_key="secret")
 
 
-def test_cutover_must_fall_inside_the_dataset():
-    with pytest.raises(ValidationError, match="schema_cutover_date"):
-        small_config(**{"data_problems.schema_cutover_date": "2027-01-01"})
-
-
 def test_output_url_must_not_carry_credentials():
     with pytest.raises(ValueError, match="without credentials"):
         destination("s3://key:secret@synthetic-source")

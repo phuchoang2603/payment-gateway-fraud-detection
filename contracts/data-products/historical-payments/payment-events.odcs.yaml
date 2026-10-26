@@ -2,7 +2,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: urn:datacontract:fraud:historical-payment-events
 name: Historical synthetic payment events
-version: 3.1.0
+version: 4.0.0
 status: active
 domain: fraud-detection
 description:
@@ -37,7 +37,7 @@ schema:
     dataGranularityDescription: One delivered payment lifecycle event.
     customProperties:
       - property: schemaVersions
-        value: [1, 2]
+        value: [3]
     properties:
       - name: event_id
         logicalType: string
@@ -77,7 +77,7 @@ schema:
         logicalType: integer
         physicalType: UINTEGER
         required: true
-        description: Physical event schema. Version one omits user_agent_family; version two permits it.
+        description: Current physical event schema three includes immutable attempt scoring context.
       - name: correlation_id
         logicalType: string
         physicalType: VARCHAR
@@ -166,9 +166,69 @@ schema:
               - name: user_agent_family
                 logicalType: string
                 physicalType: VARCHAR
-                description: Optional browser family introduced in physical schema two.
+                description: Optional observed browser family.
                 customProperties:
                   - {property: sinceSchemaVersion, value: 2}
+          - name: context
+            logicalType: object
+            required: true
+            description: Immutable scoring context matching PaymentCreated and the Fraud request.
+            properties:
+              - name: merchant
+                logicalType: object
+                required: true
+                description: Integration-scoped merchant references.
+                properties:
+                  - {name: merchant_id, logicalType: string, physicalType: VARCHAR, required: true, description: Gateway merchant identity.}
+                  - {name: external_seller_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration seller identity.}
+              - name: customer
+                logicalType: object
+                required: true
+                description: Integration-scoped customer references.
+                properties:
+                  - {name: customer_id, logicalType: string, physicalType: VARCHAR, required: true, description: Gateway customer identity.}
+                  - {name: external_buyer_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration buyer identity.}
+              - name: snapshot
+                logicalType: object
+                required: true
+                description: Checkout facts captured at creation; raw personal and payment credentials are excluded.
+                properties:
+                  - {name: external_order_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration order reference.}
+                  - name: total
+                    logicalType: object
+                    required: true
+                    description: Total in integer minor units; must equal the item sum.
+                    properties: &attempt_money_fields
+                      - {name: minor_units, logicalType: integer, physicalType: BIGINT, required: true, description: Nonnegative integer amount in currency minor units.}
+                      - {name: currency, logicalType: string, physicalType: VARCHAR, required: true, description: Three-letter uppercase currency code shared by all items.}
+                  - name: items
+                    logicalType: array
+                    required: true
+                    description: Nonempty checkout line items.
+                    items:
+                      logicalType: object
+                      required: true
+                      properties:
+                        - {name: product_id, logicalType: string, physicalType: VARCHAR, required: true, description: Product reference.}
+                        - {name: category, logicalType: string, physicalType: VARCHAR, required: true, description: "Refurbished electronics product type, such as phone, laptop or accessory."}
+                        - {name: condition, logicalType: string, physicalType: VARCHAR, required: true, description: "Refurbished condition grade: excellent, good or fair."}
+                        - {name: quantity, logicalType: integer, physicalType: INTEGER, required: true, description: Positive item quantity.}
+                        - name: unit_price
+                          logicalType: object
+                          required: true
+                          description: Price for one item in checkout currency.
+                          properties: *attempt_money_fields
+                  - {name: merchant_account_created_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, logicalTypeOptions: *utc_timestamp, required: true, description: Merchant account creation time.}
+                  - {name: customer_account_created_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, logicalTypeOptions: *utc_timestamp, required: true, description: Customer account creation time.}
+                  - name: shipping
+                    logicalType: object
+                    required: true
+                    description: Coarse shipping geography and synthetic address fingerprint.
+                    properties:
+                      - {name: country, logicalType: string, physicalType: VARCHAR, required: true, description: Shipping country code.}
+                      - {name: region, logicalType: string, physicalType: VARCHAR, required: true, description: Shipping region.}
+                      - {name: postal_code, logicalType: string, physicalType: VARCHAR, required: true, description: Shipping postal code.}
+                      - {name: address_fingerprint, logicalType: string, physicalType: VARCHAR, required: true, description: Normalized keyed synthetic address fingerprint; no street lines.}
       - name: risk_decision_recorded
         logicalType: object
         description: Exactly one assessment for the active attempt before any processor request.
@@ -235,7 +295,7 @@ schema:
           SELECT count(*) FROM {object}
           WHERE event_id = '' OR payment_id = '' OR integration_id = ''
             OR correlation_id = ''
-            OR schema_version NOT IN (1, 2) OR aggregate_version < 1
+            OR schema_version <> 3 OR aggregate_version < 1
             OR recorded_at < occurred_at
             OR (CAST(payment_created IS NOT NULL AS INTEGER)
               + CAST(attempt_started IS NOT NULL AS INTEGER)
@@ -347,5 +407,21 @@ schema:
               WHERE item.quantity <= 0 OR item.unit_price.minor_units < 0
                 OR item.unit_price.currency IS DISTINCT FROM e.payment_created.snapshot.total.currency
             )
+          )
+        mustBe: 0
+      - id: attempt_context_consistency
+        type: sql
+        description: Each attempt carries the immutable checkout context from its payment creation.
+        query: |
+          WITH created AS (
+            SELECT DISTINCT integration_id, payment_id, payment_created FROM {object}
+            WHERE payment_created IS NOT NULL
+          )
+          SELECT count(*) FROM {object} e
+          LEFT JOIN created c USING (integration_id, payment_id)
+          WHERE e.attempt_started IS NOT NULL AND (
+            e.attempt_started.context IS NULL
+            OR c.payment_created IS NULL
+            OR to_json(e.attempt_started.context) IS DISTINCT FROM to_json(c.payment_created)
           )
         mustBe: 0

@@ -33,3 +33,5 @@ The repository implements six Go services, including the independent fraud decis
 ## Documentation
 
 Browse the [project wiki](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki) for architecture, the implementation roadmap, deployment and verification guidance; see [CONTRIBUTING](CONTRIBUTING.md) to work in the repository.
+
+Current data work starts with the [90-day development source and shared feature contract](openspec/changes/finalize-feature-contract-and-90-day-smoke/proposal.md); the [roadmap](docs/overview/roadmap.md#current-implementation-order) defers scale generation until the pipeline is exercised.

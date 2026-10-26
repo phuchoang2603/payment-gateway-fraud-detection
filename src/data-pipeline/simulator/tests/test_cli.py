@@ -12,7 +12,7 @@ def test_normal_command_resumes_cleans_and_retries_publication(tmp_path, monkeyp
     config = small_config(
         duration_days=2,
         customer_block_size=20,
-        **{"counts.customers": 20, "data_problems.schema_cutover_date": "2026-07-02"},
+        **{"counts.customers": 20},
     )
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(config.model_dump(mode="json")))

@@ -1,0 +1,124 @@
+{
+  "id": "fraud-baseline-v1",
+  "version": 1,
+  "event_schema": 3,
+  "grain": [
+    "integration_id",
+    "payment_id",
+    "attempt_id"
+  ],
+  "entity_keys": {
+    "customer": [
+      "integration_id",
+      "context.customer.customer_id"
+    ],
+    "method": [
+      "integration_id",
+      "signals.payment_method.fingerprint"
+    ]
+  },
+  "time": {
+    "anchor": "current AttemptStarted.occurred_at, gateway-owned UTC",
+    "availability_cutoff": "q: supplied decision/read cutoff, at or after anchor",
+    "window": "[t-window,t)",
+    "eligibility": "start context AND committed RiskDecisionRecorded available at q; exclude current scoped attempt; deduplicate event_id; declines contribute",
+    "observed_availability": "max(recorded_at, observed availability) for both events when known; missing observed mapping fails",
+    "freshness": "caller supplies available/missing/stale from measured pipeline coverage; unknown is not zero; online retrieval must retain snapshot anchor and actual served evidence",
+    "late_data": "future or late facts do not revise past serving evidence"
+  },
+  "features": [
+    {
+      "name": "amount_minor",
+      "type": "int64",
+      "units": "USD minor units",
+      "formula": "current.context.snapshot.total.minor_units",
+      "window_seconds": null,
+      "missing": "required current checkout context; invalid or absent context fails"
+    },
+    {
+      "name": "customer_account_age_hours",
+      "type": "int64",
+      "units": "hours",
+      "formula": "floor((t - customer_account_created_at) / 3600 seconds)",
+      "window_seconds": null,
+      "missing": "required current checkout context; invalid or absent context fails"
+    },
+    {
+      "name": "ip_shipping_country_mismatch",
+      "type": "nullable_boolean",
+      "units": "boolean",
+      "formula": "observed ip_country != shipping.country; null when IP country is absent",
+      "window_seconds": null,
+      "missing": "null when observed IP country is absent"
+    },
+    {
+      "name": "customer_assessed_count_1h",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "count eligible customer attempts in window",
+      "window_seconds": 3600,
+      "missing": "null when history is missing/stale; known empty counts/sums are zero; last-assessed time is null when none"
+    },
+    {
+      "name": "customer_assessed_count_24h",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "count eligible customer attempts in window",
+      "window_seconds": 86400,
+      "missing": "null when history is missing/stale; known empty counts/sums are zero; last-assessed time is null when none"
+    },
+    {
+      "name": "method_assessed_count_1h",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "count eligible method attempts in window",
+      "window_seconds": 3600,
+      "missing": "null when history is missing/stale; known empty counts/sums are zero; last-assessed time is null when none"
+    },
+    {
+      "name": "method_assessed_count_24h",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "count eligible method attempts in window",
+      "window_seconds": 86400,
+      "missing": "null when history is missing/stale; known empty counts/sums are zero; last-assessed time is null when none"
+    },
+    {
+      "name": "customer_assessed_amount_minor_24h",
+      "type": "nullable_int64",
+      "units": "USD minor units",
+      "formula": "sum eligible customer attempt amounts",
+      "window_seconds": 86400,
+      "missing": "null when history is missing/stale; known empty counts/sums are zero; last-assessed time is null when none"
+    },
+    {
+      "name": "customer_distinct_devices_7d",
+      "type": "nullable_int64",
+      "units": "devices",
+      "formula": "exact count of distinct non-null observed devices in eligible customer attempts",
+      "window_seconds": 604800,
+      "missing": "null when history is missing/stale; known empty counts/sums are zero; last-assessed time is null when none"
+    },
+    {
+      "name": "customer_seconds_since_last_assessed_7d",
+      "type": "nullable_int64",
+      "units": "seconds",
+      "formula": "floor(t - latest eligible customer attempt in window); null when none",
+      "window_seconds": 604800,
+      "missing": "null when history is missing/stale; known empty counts/sums are zero; last-assessed time is null when none"
+    }
+  ],
+  "excluded": [
+    "scenario",
+    "is_fraud",
+    "simulation_truth",
+    "chargebacks",
+    "risk_outcome",
+    "risk_score",
+    "reason_codes",
+    "future_processor_results",
+    "hidden_profile_timezone"
+  ],
+  "hash": "SHA256 of exact definition file bytes",
+  "conformance": "fraud-baseline-v1.examples.json"
+}

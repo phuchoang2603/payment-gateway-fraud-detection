@@ -21,11 +21,13 @@ from simulator.profiles import (
 
 class HistoricalModel:
     def __init__(self, manifest):
+        if manifest.get("schema_versions", {}).get("payment_events") != [3]:
+            raise ValueError("live reference requires payment event schema 3")
         self.manifest = manifest
         self.config = HistoricalConfig.from_manifest(manifest)
         self.profiles = profiles_from_manifest(manifest)
-        if self.config.counts.payment_methods > 3900000:
-            raise ValueError("historical card pool exceeds vault mapping")
+        if self.config.counts.payment_methods > 10**11:
+            raise ValueError("payment-method pool exceeds synthetic card encoding")
         self.merchant_cdf = np.cumsum(
             zipf_weights(self.config.counts.merchants, self.config.behavior.merchant_zipf_exponent)
         )
@@ -112,8 +114,8 @@ class HistoricalModel:
 
 
 def card_number(index, behavior):
-    if not 0 <= index < 3900000:
-        raise ValueError("card index outside historical domain")
+    if not 0 <= index < 10**11:
+        raise ValueError("card index outside synthetic encoding")
     prefix = {"ok": "4111", "nsf": "4112", "issuer": "4113", "invalid": "4114"}[behavior]
     body = f"{prefix}{index:011d}"
     total = 0

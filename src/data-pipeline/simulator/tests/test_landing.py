@@ -33,7 +33,7 @@ class MemoryStore:
 
 def record(offset=1):
     event = PaymentEvent(
-        event_id="same-event", payment_id="p", integration_id="i", aggregate_version=1, schema_version=2
+        event_id="same-event", payment_id="p", integration_id="i", aggregate_version=1, schema_version=3
     )
     event.occurred_at.FromJsonString("2026-07-01T00:00:00Z")
     event.recorded_at.CopyFrom(event.occurred_at)
@@ -67,16 +67,17 @@ def test_malformed_record_cannot_publish(raw):
     assert not store.objects
 
 
-def test_unknown_schema_and_v1_v2_field_refused():
+def test_unsupported_schema_and_missing_context_refused():
     source = record()
     event = PaymentEvent.FromString(source.value)
-    event.schema_version = 3
+    event.schema_version = 2
     with pytest.raises(ValueError, match="unsupported"):
         decode(replace(source, value=event.SerializeToString()), "labels")
-    event.schema_version = 1
+    event.schema_version = 3
     event.ClearField("payment_expired")
-    event.attempt_started.signals.user_agent_family = ""
-    with pytest.raises(ValueError, match="v2 signal"):
+    event.attempt_started.attempt_id = "a"
+    event.attempt_started.signals.user_agent_family = "browser"
+    with pytest.raises(ValueError, match="scoring context"):
         decode(replace(source, value=event.SerializeToString()), "labels")
 
 

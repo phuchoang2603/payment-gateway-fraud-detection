@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 type Status string
 
@@ -256,6 +256,7 @@ func Transition(state State, command Command) (State, *Event, error) {
 		next.Snapshot = cmd.Snapshot
 
 	case StartAttempt:
+		event.Context = &AttemptContext{Merchant: state.Merchant, Customer: state.Customer, Snapshot: state.Snapshot}
 		if cmd.AttemptID == "" {
 			return State{}, nil, violation(RuleInvalidCommand, "attempt id is empty")
 		}

@@ -15,8 +15,6 @@ class DatasetStatistics:
     labels: int = 0
     chargebacks: int = 0
     history_end: datetime | None = None
-    field_present_before_cutover: int = 0
-    field_present_after_cutover: int = 0
     diagnostics: Counter = field(default_factory=Counter)
     scenarios: Counter = field(default_factory=Counter)
     merchants: Counter = field(default_factory=Counter)
@@ -46,11 +44,6 @@ class DatasetStatistics:
                 signals = started["signals"]
                 for name in ("device_fingerprint", "ip_network_fingerprint", "user_agent_family"):
                     self.diagnostics[f"missing_attempts.{name}"] += signals.get(name) is None
-                present = signals.get("user_agent_family") is not None
-                if event["schema_version"] == 1:
-                    self.field_present_before_cutover += present
-                else:
-                    self.field_present_after_cutover += present
 
     def observed(self) -> dict:
         exported = self.unique_events + self.duplicate_events
@@ -75,8 +68,6 @@ class DatasetStatistics:
             "merchant_top_10_share": sum(sorted(self.merchants.values(), reverse=True)[:10]) / self.payments
             if self.payments
             else 0,
-            "user_agent_family_present_before_cutover": self.field_present_before_cutover,
-            "user_agent_family_present_after_cutover": self.field_present_after_cutover,
         }
 
     def to_dict(self) -> dict:
@@ -101,8 +92,6 @@ class DatasetStatistics:
             "duplicate_events",
             "labels",
             "chargebacks",
-            "field_present_before_cutover",
-            "field_present_after_cutover",
         ):
             setattr(self, name, getattr(self, name) + getattr(other, name))
         for name in ("scenarios", "merchants", "categories", "attempts", "diagnostics"):

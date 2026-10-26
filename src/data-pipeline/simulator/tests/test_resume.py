@@ -12,9 +12,7 @@ from tests.conftest import small_config
 
 
 def configuration(**overrides):
-    return small_config(
-        duration_days=2, customer_block_size=50, **{"data_problems.schema_cutover_date": "2026-07-02", **overrides}
-    )
+    return small_config(duration_days=2, customer_block_size=50, **{**overrides})
 
 
 def final_rows(root):

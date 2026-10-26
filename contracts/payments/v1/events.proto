@@ -33,7 +33,7 @@ message PaymentCreated {
   CheckoutSnapshot snapshot = 3;
 }
 // Only while OPEN with no active attempt; another attempt follows a decline.
-message AttemptStarted { string attempt_id = 1; AttemptSignals signals = 2; }
+message AttemptStarted { string attempt_id = 1; AttemptSignals signals = 2; AttemptContext context = 3; }
 // Risk decline -> AttemptDeclined(RISK); approval -> processor request ->
 // success, AttemptDeclined(PROCESSOR), or unknown outcome.
 message RiskDecisionRecorded { string attempt_id = 1; RiskAssessment assessment = 2; }
