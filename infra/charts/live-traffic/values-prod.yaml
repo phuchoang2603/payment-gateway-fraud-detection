@@ -1,6 +1,6 @@
-imageTag: pr-89-3bd6c4f8700c59263222b7df9036265a01b383a6
+imageTag: pr-89-2ecbf516083d8f92461d7f6e8f2213cf7eddb82f
 simulator:
-  enabled: false
+  enabled: true
   config:
     duration_seconds: 90
     payments_per_second: 0.5
