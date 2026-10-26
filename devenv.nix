@@ -5,7 +5,6 @@
   packages = with pkgs; [
     kubernetes-helm
     kubectl
-    jdk17
 
     ruff
     gofumpt
