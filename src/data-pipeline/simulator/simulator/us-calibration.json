@@ -1,0 +1,181 @@
+{
+  "id": "us-electronics-v1",
+  "market": "US electronics ecommerce, USD; illustrative synthetic population",
+  "sources": [
+    {
+      "url": "https://www.frbservices.org/news/research/2025-findings-from-the-diary-of-consumer-payment-choice",
+      "publisher": "Federal Reserve Financial Services",
+      "reference_period": "October 2024 survey, 2025 findings",
+      "retrieved_at": "2026-10-26",
+      "source_sha256": "d8739c852d18625f484be4e7fe2bd45d986f0ab932da6be274a631d7b9d8b57b",
+      "reuse": "Attributed factual summary; no customer records or source text redistributed",
+      "observed_facts": {
+        "all_payments_per_consumer_month": 48,
+        "remote_purchase_and_p2p_share": 0.23
+      },
+      "use": "Broad payment context only; neither figure sets electronics checkout frequency or fraud prevalence"
+    },
+    {
+      "url": "https://www.iana.org/time-zones",
+      "publisher": "IANA",
+      "reference_period": "Rules supplied by pinned pytz package",
+      "retrieved_at": "2026-10-26",
+      "source_sha256": "82bf47985a233e63e1ac0ba825d57785664e8f1be542c026d27575d431986ebd",
+      "reuse": "Timezone rule data; public domain",
+      "use": "US timezone/DST rules, not customer location inference"
+    }
+  ],
+  "assumptions": "All behavioral distributions below, config fraud/reporting rates, region weights and electronics prices are modeling assumptions, not estimated from a representative checkout sample.",
+  "regions": [
+    [
+      "NY",
+      "10001",
+      "New York",
+      "America/New_York",
+      0.22
+    ],
+    [
+      "IL",
+      "60601",
+      "Chicago",
+      "America/Chicago",
+      0.19
+    ],
+    [
+      "TX",
+      "75201",
+      "Dallas",
+      "America/Chicago",
+      0.16
+    ],
+    [
+      "CO",
+      "80202",
+      "Denver",
+      "America/Denver",
+      0.1
+    ],
+    [
+      "AZ",
+      "85001",
+      "Phoenix",
+      "America/Phoenix",
+      0.05
+    ],
+    [
+      "CA",
+      "90001",
+      "Los Angeles",
+      "America/Los_Angeles",
+      0.23
+    ],
+    [
+      "HI",
+      "96813",
+      "Honolulu",
+      "Pacific/Honolulu",
+      0.02
+    ],
+    [
+      "AK",
+      "99501",
+      "Anchorage",
+      "America/Anchorage",
+      0.03
+    ]
+  ],
+  "category_prices_minor": [
+    35000,
+    65000,
+    3000,
+    30000,
+    12000,
+    18000,
+    28000,
+    45000
+  ],
+  "condition_weights": [
+    0.4,
+    0.4,
+    0.2
+  ],
+  "condition_price_factors": [
+    1.0,
+    0.88,
+    0.75
+  ],
+  "local_hour_weights": [
+    0.12,
+    0.07,
+    0.04,
+    0.03,
+    0.03,
+    0.06,
+    0.14,
+    0.3,
+    0.55,
+    0.8,
+    1,
+    1.1,
+    1.2,
+    1.1,
+    1,
+    1,
+    1.1,
+    1.4,
+    1.8,
+    2.1,
+    2.2,
+    1.8,
+    1.1,
+    0.5
+  ],
+  "weekday_multipliers": [
+    0.95,
+    0.95,
+    0.95,
+    1.0,
+    1.05,
+    1.1,
+    1.0
+  ],
+  "month_multipliers": [
+    0.85,
+    0.8,
+    0.95,
+    0.95,
+    0.95,
+    0.9,
+    0.95,
+    0.95,
+    1,
+    1,
+    1.35,
+    1.35
+  ],
+  "activity_log_sigma": 1.0,
+  "spend_log_sigma": 0.45,
+  "purchase_log_sigma": 0.5,
+  "session_jitter_seconds": 900,
+  "device_missing_probability": 0.04,
+  "network_missing_probability": 0.02,
+  "browser_missing_probability": 0.03,
+  "browser_families": [
+    "chrome",
+    "safari",
+    "edge",
+    "firefox",
+    "other"
+  ],
+  "browser_weights": [
+    0.5,
+    0.3,
+    0.1,
+    0.08,
+    0.02
+  ],
+  "compromise_new_context_probability": 0.65,
+  "compromise_address_change_probability": 0.35,
+  "device_rotation_days": 120,
+  "network_rotation_probability": 0.15
+}

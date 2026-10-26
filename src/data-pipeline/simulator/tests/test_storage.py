@@ -123,8 +123,8 @@ def test_schema_cutover_is_physical(dataset):
         _read(root, "payment_events")
         .filter("attempt_started IS NOT NULL")
         .aggregate(
-            "min(occurred_at) FILTER (attempt_started.signals.user_agent_family IS NOT NULL) AS first_present, "
-            "max(occurred_at) FILTER (attempt_started.signals.user_agent_family IS NULL) AS last_missing"
+            "min(occurred_at) FILTER (schema_version = 2) AS first_present, "
+            "max(occurred_at) FILTER (schema_version = 1) AS last_missing"
         )
         .fetchone()
     )

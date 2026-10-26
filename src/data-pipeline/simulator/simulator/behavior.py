@@ -2,8 +2,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from simulator.calibration import CALIBRATION
 from simulator.config import HistoricalConfig
-from simulator.identity import fingerprint
 from simulator.profiles import (
     ACCESSORY,
     ACCOUNT_TAKEOVER,
@@ -12,11 +12,12 @@ from simulator.profiles import (
     CONDITION_PRICE_FACTORS,
     CONDITION_WEIGHTS,
     CONDITIONS,
-    COUNTRIES,
     OBVIOUS_HIGH_VALUE,
     STOLEN_CARD_NEW_DEVICE,
     Profiles,
     Schedule,
+    address_parts,
+    stage_rng,
 )
 
 
@@ -26,15 +27,19 @@ class PurchaseContext:
     condition: int
     quantity: int
     unit_price: int
-    device: str
-    network: str
-    ip_country: str
+    device: str | None
+    network: str | None
+    ip_country: str | None
     address: str
     shipping_country: str
     method: str
     new_device: bool
-    network_address: str
+    network_address: str | None
     address_value: str
+    city: str
+    region: str
+    postal_code: str
+    browser: str | None
 
 
 def purchase_context(
@@ -46,7 +51,6 @@ def purchase_context(
     ordinal: int,
     random: np.random.Generator,
 ) -> PurchaseContext:
-    key = config.synthetic_key
     customer = int(schedule.customers[index])
     kind = int(schedule.scenarios[index])
     group = int(schedule.groups[index])
@@ -55,51 +59,56 @@ def purchase_context(
         category = ACCESSORY
     condition = int(random.choice(len(CONDITIONS), p=CONDITION_WEIGHTS))
     quantity = int(random.integers(1, 4)) if category == ACCESSORY else 1
-    typical = CATEGORY_PRICES[category] * CONDITION_PRICE_FACTORS[condition]
-    unit_price = max(50, round(float(random.lognormal(np.log(typical), 0.3))))
-    home_country = COUNTRIES[profiles.customer_countries[customer]]
-    device = profiles.device_pool[profiles.familiar_devices[customer, int(random.integers(0, 2))]]
+    typical = CATEGORY_PRICES[category] * CONDITION_PRICE_FACTORS[condition] * profiles.spend_milli[customer] / 1000
+    unit_price = max(50, round(float(random.lognormal(np.log(typical), CALIBRATION["purchase_log_sigma"]))))
+    if category == ACCESSORY and random.random() < 0.1:
+        unit_price = int(random.integers(50, 1501))
+    device_index = int(profiles.familiar_devices[customer, int(random.integers(0, 2))])
     network_index = int(profiles.home_networks[customer])
-    network_address = f"10.{network_index // 256}.{network_index % 256}.1"
-    network = profiles.network_pool[network_index]
-    address_value = f"{int(profiles.addresses[customer])} Market Street, Example City"
-    address = profiles.address_pool[profiles.addresses[customer]]
-    method = profiles.method_pool[profiles.payment_methods[customer, 0]]
-    ip_country = home_country
-    new_device = False
-    if random.random() >= config.behavior.familiar_context_probability:
-        device = fingerprint(key, "device", f"new-{customer}-{offset}-{ordinal}")
-        new_device = True
-    if random.random() < config.behavior.foreign_ip_probability:
-        ip_country = COUNTRIES[(COUNTRIES.index(home_country) + 1) % len(COUNTRIES)]
-
-    foreign = COUNTRIES[(COUNTRIES.index(home_country) + 1 + int(random.integers(0, 2))) % len(COUNTRIES)]
+    address_index = int(profiles.addresses[customer])
+    method_index = int(profiles.payment_methods[customer, int(random.integers(0, 2))])
+    new_device = random.random() >= config.behavior.familiar_context_probability
+    compromised = kind in (STOLEN_CARD_NEW_DEVICE, ACCOUNT_TAKEOVER)
+    if compromised:
+        new_device = random.random() < CALIBRATION["compromise_new_context_probability"]
+    campaign = stage_rng(config.seed, 41, kind, customer, max(group, 0)) if compromised else random
+    if new_device:
+        device_index = int(campaign.integers(0, len(profiles.device_pool)))
+    elif offset >= CALIBRATION["device_rotation_days"]:
+        device_index = (device_index + offset // CALIBRATION["device_rotation_days"]) % len(profiles.device_pool)
+    if random.random() < CALIBRATION["network_rotation_probability"] or (compromised and new_device):
+        network_index = int(campaign.integers(0, len(profiles.network_pool)))
+    if random.random() < (CALIBRATION["compromise_address_change_probability"] if compromised else 0.02):
+        address_index = int(random.integers(0, len(profiles.address_pool)))
+    missing = random
     if kind == OBVIOUS_HIGH_VALUE:
         unit_price = round(unit_price * config.scenarios.obvious_high_value.amount_multiplier)
-    elif kind == STOLEN_CARD_NEW_DEVICE:
-        unit_price = round(unit_price * config.scenarios.stolen_card_new_device.amount_multiplier)
-        device = fingerprint(key, "device", f"stolen-{customer}-{group}")
-        network_address = f"10.250.{(customer + group) % 256}.1"
-        network = fingerprint(key, "ip_network", network_address)
-        ip_country = foreign if random.random() < 0.5 else home_country
-        new_device = True
-    elif kind == ACCOUNT_TAKEOVER:
-        unit_price = round(unit_price * config.scenarios.account_takeover.amount_multiplier)
-        device = fingerprint(key, "device", f"takeover-{customer}-{group}")
-        network_address = f"10.252.{(customer + group) % 256}.1"
-        network = fingerprint(key, "ip_network", network_address)
-        address_value = f"takeover-{customer}-{group}"
-        address = fingerprint(key, "address", address_value)
-        ip_country = foreign
-        new_device = True
+    elif compromised:
+        settings = (
+            config.scenarios.stolen_card_new_device
+            if kind == STOLEN_CARD_NEW_DEVICE
+            else config.scenarios.account_takeover
+        )
+        unit_price = round(unit_price * settings.amount_multiplier)
     elif kind == CARD_TESTING:
+        campaign = stage_rng(config.seed, 40, offset, group)
         quantity = 1
         unit_price = int(random.integers(50, 501))
-        device = fingerprint(key, "device", f"card-testing-{offset}-{group}")
-        network_address = f"10.251.{(offset + group) % 256}.1"
-        network = fingerprint(key, "ip_network", network_address)
-        method = fingerprint(key, "payment_method", f"tok_card-test-{offset}-{ordinal}_ok")
-        new_device = True
+        device_index = int(campaign.integers(0, len(profiles.device_pool)))
+        network_index = int(campaign.integers(0, len(profiles.network_pool)))
+        method_index = (int(campaign.integers(0, len(profiles.method_pool))) + ordinal) % len(profiles.method_pool)
+        missing = campaign
+    device = (
+        profiles.device_pool[device_index] if missing.random() >= CALIBRATION["device_missing_probability"] else None
+    )
+    network_address = f"10.{network_index // 256}.{network_index % 256}.1"
+    network = profiles.network_pool[network_index]
+    if missing.random() < CALIBRATION["network_missing_probability"]:
+        network, network_address = None, None
+    browser = str(random.choice(CALIBRATION["browser_families"], p=CALIBRATION["browser_weights"]))
+    if random.random() < CALIBRATION["browser_missing_probability"]:
+        browser = None
+    line, city, region, postal = address_parts(address_index)
     return PurchaseContext(
         category,
         condition,
@@ -107,11 +116,15 @@ def purchase_context(
         unit_price,
         device,
         network,
-        ip_country,
-        address,
-        home_country,
-        method,
+        None,
+        profiles.address_pool[address_index],
+        "US",
+        profiles.method_pool[method_index],
         new_device,
         network_address,
-        address_value,
+        line,
+        city,
+        region,
+        postal,
+        browser,
     )

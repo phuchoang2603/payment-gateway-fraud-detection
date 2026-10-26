@@ -11,7 +11,6 @@ from simulator.profiles import (
     CONDITIONS,
     LEGITIMATE,
     OBVIOUS_HIGH_VALUE,
-    REGIONS,
     STOLEN_CARD_NEW_DEVICE,
     Schedule,
     profiles_from_manifest,
@@ -22,11 +21,7 @@ from simulator.profiles import (
 
 class HistoricalModel:
     def __init__(self, manifest):
-        configuration = {
-            key: value
-            for key, value in manifest["configuration"].items()
-            if key not in {"validation_gate", "execution", "storage"}
-        }
+        configuration = manifest["configuration"]
         self.config = HistoricalConfig.model_validate(configuration)
         self.profiles = profiles_from_manifest({**manifest, "configuration": configuration})
         if self.config.counts.payment_methods > 3900000:
@@ -77,7 +72,6 @@ class HistoricalModel:
         )
         if scenario == CARD_TESTING and random.random() < cfg.scenarios.card_testing.decline_rate:
             behavior = "invalid"
-        region, postal = REGIONS[context.shipping_country]
         order = {
             "seller": {
                 "external_id": p.merchant_external_ids[merchant],
@@ -100,15 +94,15 @@ class HistoricalModel:
             "shipping_address": {
                 "name": "Synthetic buyer",
                 "line1": context.address_value,
-                "city": "Example City",
+                "city": context.city,
                 "country": context.shipping_country,
-                "region": region,
-                "postal_code": postal,
+                "region": context.region,
+                "postal_code": context.postal_code,
             },
         }
         signals = {
             "device_fingerprint": context.device,
-            "user_agent_family": "browser",
+            "user_agent_family": context.browser,
             "simulated_client": {"ip_country": context.ip_country, "ip_network": context.network_address},
         }
         fraud = scenario != LEGITIMATE

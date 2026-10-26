@@ -1,6 +1,6 @@
 ## 1. Calibration and behavior
 
-- [ ] 1.1 Add a compact versioned US calibration profile with source references and explicit assumptions; verify the profile/provenance distinguishes population measurements from approximations and participates in generation identity.
+- [x] 1.1 Add a compact versioned US calibration profile with source references and explicit assumptions; verify the profile/provenance distinguishes population measurements from approximations and participates in generation identity.
 - [ ] 1.2 Fix entity birth timestamps and improve repeat purchasing, activity/spend variation and baskets in the existing generator; verify fixed identities, money conservation and reproducibility through focused existing CI coverage.
 - [ ] 1.3 Schedule plausible regional/local-hour/weekend patterns using IANA rules while storing UTC; verify a meaningful DST boundary in existing generation CI coverage without adding checkout fields or changing gateway APIs.
 - [ ] 1.4 Improve device/network sharing, changes and missingness using existing collection semantics, removing scenario-specific visible shortcuts; verify diagnostic samples and affected existing identity/generation CI cases.

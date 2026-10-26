@@ -17,12 +17,14 @@ class DatasetStatistics:
     history_end: datetime | None = None
     field_present_before_cutover: int = 0
     field_present_after_cutover: int = 0
+    diagnostics: Counter = field(default_factory=Counter)
     scenarios: Counter = field(default_factory=Counter)
     merchants: Counter = field(default_factory=Counter)
     categories: Counter = field(default_factory=Counter)
     attempts: Counter = field(default_factory=Counter)
 
     def observe(self, history: GeneratedHistory, duplicates: int) -> None:
+        self.diagnostics.update(history.diagnostics)
         self.payments += 1
         self.duplicate_events += duplicates
         self.scenarios[history.truth] += 1
@@ -30,6 +32,10 @@ class DatasetStatistics:
         self.chargebacks += sum(label["source"] == "LABEL_SOURCE_CHARGEBACK" for label in history.labels)
         for event in history.events:
             self.unique_events += 1
+            if "risk_decision_recorded" in event:
+                self.diagnostics["risk_declined_attempts"] += (
+                    event["risk_decision_recorded"]["assessment"]["outcome"] == "RISK_OUTCOME_DECLINE"
+                )
             occurred = event["occurred_at"]
             self.history_end = occurred if self.history_end is None else max(self.history_end, occurred)
             if (created := event.get("payment_created")) is not None:
@@ -38,6 +44,8 @@ class DatasetStatistics:
             elif (started := event.get("attempt_started")) is not None:
                 self.attempts[history.truth] += 1
                 signals = started["signals"]
+                for name in ("device_fingerprint", "ip_network_fingerprint", "user_agent_family"):
+                    self.diagnostics[f"missing_attempts.{name}"] += signals.get(name) is None
                 present = signals.get("user_agent_family") is not None
                 if event["schema_version"] == 1:
                     self.field_present_before_cutover += present
@@ -47,6 +55,8 @@ class DatasetStatistics:
     def observed(self) -> dict:
         exported = self.unique_events + self.duplicate_events
         return {
+            "diagnostics": dict(sorted(self.diagnostics.items())),
+            "diagnostic_policy": "Informational; amounts/context/activity/time use payments; missingness and risk outcomes use attempts. Activity is purchase-weighted, not a population census. No chargeback is not a confirmed negative.",
             "payments": self.payments,
             "unique_events": self.unique_events,
             "duplicate_events": self.duplicate_events,
@@ -71,7 +81,7 @@ class DatasetStatistics:
 
     def to_dict(self) -> dict:
         result = asdict(self)
-        for name in ("scenarios", "merchants", "categories", "attempts"):
+        for name in ("scenarios", "merchants", "categories", "attempts", "diagnostics"):
             result[name] = dict(getattr(self, name))
         result["history_end"] = self.history_end.isoformat() if self.history_end else None
         return result
@@ -80,7 +90,7 @@ class DatasetStatistics:
     def from_dict(cls, values: dict):
         values = values.copy()
         values["history_end"] = datetime.fromisoformat(values["history_end"]) if values["history_end"] else None
-        for name in ("scenarios", "merchants", "categories", "attempts"):
+        for name in ("scenarios", "merchants", "categories", "attempts", "diagnostics"):
             values[name] = Counter(values[name])
         return cls(**values)
 
@@ -95,7 +105,7 @@ class DatasetStatistics:
             "field_present_after_cutover",
         ):
             setattr(self, name, getattr(self, name) + getattr(other, name))
-        for name in ("scenarios", "merchants", "categories", "attempts"):
+        for name in ("scenarios", "merchants", "categories", "attempts", "diagnostics"):
             getattr(self, name).update(getattr(other, name))
         if other.history_end:
             self.history_end = max(self.history_end, other.history_end) if self.history_end else other.history_end

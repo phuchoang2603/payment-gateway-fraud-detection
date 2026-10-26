@@ -126,3 +126,79 @@ def test_continuation_refuses_unsupported_algorithm_and_profile_mismatch():
         profiles_from_manifest({**manifest, "algorithm_version": "old"})
     with pytest.raises(ValueError, match="digest mismatch"):
         profiles_from_manifest({**manifest, "profile_sha256": "changed"})
+
+
+def test_entity_births_remain_fixed_across_purchases_and_days():
+    from datetime import timedelta
+
+    births = {}
+    config = small_config(**{"behavior.purchases_per_customer_day": 2})
+    for offset in (0, 2):
+        _, histories = _histories(config, config.start_date + timedelta(days=offset))
+        for history in histories:
+            created = history.events[0]["payment_created"]
+            for entity, field in (
+                ("customer", "customer_account_created_at"),
+                ("merchant", "merchant_account_created_at"),
+            ):
+                key = entity, created[entity][f"{entity}_id"]
+                birth = created["snapshot"][field]
+                assert births.setdefault(key, birth) == birth
+    assert births
+
+
+def test_us_dst_uses_real_instants_without_inventing_spring_hour():
+    from datetime import UTC, datetime
+
+    from simulator.calibration import hourly_weights, zone
+
+    before = datetime(2026, 3, 8, 6, 30, tzinfo=UTC)
+    after = datetime(2026, 3, 8, 7, 30, tzinfo=UTC)
+    assert (before.astimezone(zone(0)).hour, after.astimezone(zone(0)).hour) == (1, 3)
+    assert before.astimezone(zone(4)).utcoffset() == after.astimezone(zone(4)).utcoffset()
+    weights, _ = hourly_weights(before.date(), 0)
+    assert weights[7] < weights[6]
+
+
+def test_historical_risk_matches_gateway_rule_boundaries():
+    from datetime import UTC, datetime, timedelta
+
+    from simulator.generation import risk_reasons
+
+    now = datetime(2026, 7, 1, tzinfo=UTC)
+    created = now - timedelta(days=1)
+    assert risk_reasons(200000, created, now, "US", None) == []
+    assert risk_reasons(200001, created, now, "US", None) == ["HIGH_AMOUNT"]
+    assert risk_reasons(200001, created, now, "US", "CA") == ["HIGH_AMOUNT", "NEW_ACCOUNT_GEO_MISMATCH"]
+    assert risk_reasons(20001, now - timedelta(days=7), now, "US", "CA") == []
+    assert risk_reasons(20000, created, now, "US", "CA") == []
+
+
+def test_unreported_success_retains_oracle_truth_without_observed_negative():
+    config = small_config(**{"label_delays.reporting_probability": 0, "scenarios.friendly_fraud.rate": 1})
+    _, histories = _histories(config, config.start_date)
+    assert any(history.diagnostics["unreported_eligible_dispute_payments"] for history in histories)
+    for history in histories:
+        assert all(label["source"] == "LABEL_SOURCE_SIMULATION_TRUTH" for label in history.labels)
+        assert all(label["occurred_at"] <= label["label_available_at"] for label in history.labels)
+
+
+def test_fraud_and_legitimate_contexts_use_the_same_pools_and_overlap():
+    config = small_config(**{"scenarios.stolen_card_new_device.rate": 0.5})
+    profiles = build_profiles(config)
+    _, histories = _histories(config, config.start_date)
+    device_pool, network_pool = set(profiles.device_pool), set(profiles.network_pool)
+    amounts, contexts = {}, {}
+    for history in histories:
+        signals = history.events[1]["attempt_started"]["signals"]
+        assert signals["device_fingerprint"] is None or signals["device_fingerprint"] in device_pool
+        assert signals["ip_network_fingerprint"] is None or signals["ip_network_fingerprint"] in network_pool
+        assert signals["ip_country"] is None
+        amount = history.events[0]["payment_created"]["snapshot"]["total"]["minor_units"]
+        amounts.setdefault(history.truth, []).append(amount)
+        for key in history.diagnostics:
+            if key.startswith("context."):
+                contexts[key] = contexts.get(key, 0) + 1
+    legitimate, stolen = amounts["legitimate"], amounts["stolen_card_new_device"]
+    assert max(min(legitimate), min(stolen)) < min(max(legitimate), max(stolen))
+    assert contexts["context.legitimate.new"] and contexts["context.stolen_card_new_device.familiar"]
