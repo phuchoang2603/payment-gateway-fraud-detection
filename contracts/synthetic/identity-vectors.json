@@ -2,28 +2,135 @@
   "uuid_namespace": "71088b85-53a3-5ed5-bf27-8ea372bf796d",
   "integration_id": "01234567-89ab-4cde-8fab-0123456789ab",
   "ids": [
-    {"kind": "merchant", "external_id": "seller-01", "expected": "0a1da25b-c927-5084-8f10-f33b3eced9b4"},
-    {"kind": "customer", "external_id": "buyer-01", "expected": "87d92bde-0bc7-5d3d-be21-113c6bbebd1e"}
+    {
+      "kind": "merchant",
+      "external_id": "seller-01",
+      "expected": "0a1da25b-c927-5084-8f10-f33b3eced9b4"
+    },
+    {
+      "kind": "customer",
+      "external_id": "buyer-01",
+      "expected": "87d92bde-0bc7-5d3d-be21-113c6bbebd1e"
+    }
   ],
   "synthetic_key": "synthetic-fingerprint-v1",
   "synthetic_key_version": "v1",
   "fingerprints": [
-    {"kind": "address", "input": "  42  MAIN St   Apt 5 ", "normalized": "42 main st apt 5", "expected": "3e749dce5096ba78de0bd0faebbd401473ce860f9810c7f6571377c8ff8643a6"},
-    {"kind": "ip_network", "input": "203.0.113.77", "normalized": "203.0.113.0/24", "expected": "cb67edbe05e7d95ff6abc00b5b7721eadb7f73326599a73f83bee60bd4678c72"},
-    {"kind": "payment_method", "input": "tok_card-0001_ok", "normalized": "card-0001", "expected": "b1da4f34aef8ad201aacc913ded9afaecf07632414b82c70bdfbcdcc78f40b7a"}
+    {
+      "kind": "address",
+      "input": "  42  MAIN St   Apt 5 ",
+      "normalized": "42 main st apt 5",
+      "expected": "3e749dce5096ba78de0bd0faebbd401473ce860f9810c7f6571377c8ff8643a6"
+    },
+    {
+      "kind": "ip_network",
+      "input": "203.0.113.77",
+      "normalized": "203.0.113.0/24",
+      "expected": "cb67edbe05e7d95ff6abc00b5b7721eadb7f73326599a73f83bee60bd4678c72"
+    },
+    {
+      "kind": "payment_method",
+      "input": "tok_card-0001_ok",
+      "normalized": "card-0001",
+      "expected": "b1da4f34aef8ad201aacc913ded9afaecf07632414b82c70bdfbcdcc78f40b7a"
+    }
   ],
   "test_cards": [
-    {"number": "4242424242424242", "card_ref": "card-0001", "behavior": "ok", "expected": "b1da4f34aef8ad201aacc913ded9afaecf07632414b82c70bdfbcdcc78f40b7a"},
-    {"number": "4000000000009995", "card_ref": "card-0002", "behavior": "nsf", "expected": "47f305aeac931129e1e392d4b184488328cfc36d21e37924b7a722fefcb8c943"},
-    {"number": "4000000000000002", "card_ref": "card-0003", "behavior": "issuer", "expected": "4ed14a9ffab7b30205e18b48238caab63333f928216d8712840601d5dd85aee3"},
-    {"number": "4000000000000069", "card_ref": "card-0004", "behavior": "invalid", "expected": "87a3141a588ad1bfcd4dbadc9dbcf9a6f785031d298683d91849bcf4ed7ee37d"},
-    {"number": "4111000000000008", "card_ref": "card-0005", "behavior": "ok", "expected": "dbdb53fc875dc11e86a7ef290931bdb4e5e964db13c8b0e7d64723d999c21a87"},
-    {"number": "4111000000019990", "card_ref": "card-2004", "behavior": "ok", "expected": "ac5b4b61012700a4df288734bdbd216ff324568207e7d5a7b57f6a0d2b77f8e0"},
-    {"number": "4112000000000007", "card_ref": "card-2005", "behavior": "nsf", "expected": "46d2f0315eb21f953c97525a5a891c2dca5e1234f972c3fd438ef3baca10ae7d"},
-    {"number": "4112000000019999", "card_ref": "card-4004", "behavior": "nsf", "expected": "c4cc40de39ae3579a70feba741848bc9682fd65e1784e640a8cece84d88eed68"},
-    {"number": "4113000000000006", "card_ref": "card-4005", "behavior": "issuer", "expected": "79aeff77df7cd6c3f62d5dfbee50a757fa3bfe5fcd29624ae9632f961cd5e6a2"},
-    {"number": "4113000000019998", "card_ref": "card-6004", "behavior": "issuer", "expected": "3ca49990144e72322780f2dadc316eb958255002500518a15cac693d2dd1e589"},
-    {"number": "4114000000000005", "card_ref": "card-6005", "behavior": "invalid", "expected": "4b748ec965951955e29a04855bf762765b5f923a2a19d3fef6f0683e7bf0adec"},
-    {"number": "4114000000019997", "card_ref": "card-8004", "behavior": "invalid", "expected": "c78ca9f323d61299132277bdbd1b739a0f09e4e52d6cb6d33872331a678288ac"}
+    {
+      "number": "4111000000000008",
+      "card_ref": "card-000000",
+      "behavior": "ok",
+      "expected": "7f4ea7c5144e52ad1c2a489e7f1b03c0160af93ad9f7ac0feedebca6ebb2d95b"
+    },
+    {
+      "number": "4111000009999994",
+      "card_ref": "card-999999",
+      "behavior": "ok",
+      "expected": "ce8666f702170517c27a841b7f9b8007ef62a7f95d3e77c80ae241406e8e5b2a"
+    },
+    {
+      "number": "4111000010000006",
+      "card_ref": "card-1000000",
+      "behavior": "ok",
+      "expected": "9c4ca3b4844f28c31804f7e10e47e9bdcd73fc78f4beb80e6a5e8882908a24fb"
+    },
+    {
+      "number": "4111000038999999",
+      "card_ref": "card-3899999",
+      "behavior": "ok",
+      "expected": "96fc2c04730b4d9d7d2f02690dc66b40e23ab5108fc8017e270704137987a5ab"
+    },
+    {
+      "number": "4112000000000007",
+      "card_ref": "card-000000",
+      "behavior": "nsf",
+      "expected": "7f4ea7c5144e52ad1c2a489e7f1b03c0160af93ad9f7ac0feedebca6ebb2d95b"
+    },
+    {
+      "number": "4112000009999993",
+      "card_ref": "card-999999",
+      "behavior": "nsf",
+      "expected": "ce8666f702170517c27a841b7f9b8007ef62a7f95d3e77c80ae241406e8e5b2a"
+    },
+    {
+      "number": "4112000010000005",
+      "card_ref": "card-1000000",
+      "behavior": "nsf",
+      "expected": "9c4ca3b4844f28c31804f7e10e47e9bdcd73fc78f4beb80e6a5e8882908a24fb"
+    },
+    {
+      "number": "4112000038999998",
+      "card_ref": "card-3899999",
+      "behavior": "nsf",
+      "expected": "96fc2c04730b4d9d7d2f02690dc66b40e23ab5108fc8017e270704137987a5ab"
+    },
+    {
+      "number": "4113000000000006",
+      "card_ref": "card-000000",
+      "behavior": "issuer",
+      "expected": "7f4ea7c5144e52ad1c2a489e7f1b03c0160af93ad9f7ac0feedebca6ebb2d95b"
+    },
+    {
+      "number": "4113000009999992",
+      "card_ref": "card-999999",
+      "behavior": "issuer",
+      "expected": "ce8666f702170517c27a841b7f9b8007ef62a7f95d3e77c80ae241406e8e5b2a"
+    },
+    {
+      "number": "4113000010000004",
+      "card_ref": "card-1000000",
+      "behavior": "issuer",
+      "expected": "9c4ca3b4844f28c31804f7e10e47e9bdcd73fc78f4beb80e6a5e8882908a24fb"
+    },
+    {
+      "number": "4113000038999997",
+      "card_ref": "card-3899999",
+      "behavior": "issuer",
+      "expected": "96fc2c04730b4d9d7d2f02690dc66b40e23ab5108fc8017e270704137987a5ab"
+    },
+    {
+      "number": "4114000000000005",
+      "card_ref": "card-000000",
+      "behavior": "invalid",
+      "expected": "7f4ea7c5144e52ad1c2a489e7f1b03c0160af93ad9f7ac0feedebca6ebb2d95b"
+    },
+    {
+      "number": "4114000009999991",
+      "card_ref": "card-999999",
+      "behavior": "invalid",
+      "expected": "ce8666f702170517c27a841b7f9b8007ef62a7f95d3e77c80ae241406e8e5b2a"
+    },
+    {
+      "number": "4114000010000003",
+      "card_ref": "card-1000000",
+      "behavior": "invalid",
+      "expected": "9c4ca3b4844f28c31804f7e10e47e9bdcd73fc78f4beb80e6a5e8882908a24fb"
+    },
+    {
+      "number": "4114000038999996",
+      "card_ref": "card-3899999",
+      "behavior": "invalid",
+      "expected": "96fc2c04730b4d9d7d2f02690dc66b40e23ab5108fc8017e270704137987a5ab"
+    }
   ]
 }

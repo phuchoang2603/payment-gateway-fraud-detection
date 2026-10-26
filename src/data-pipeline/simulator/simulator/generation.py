@@ -5,23 +5,16 @@ from uuid import uuid5
 
 import numpy as np
 
+from simulator.behavior import PurchaseContext, purchase_context
 from simulator.config import HistoricalConfig
 from simulator.identity import IDENTITY_NAMESPACE, fingerprint
 from simulator.profiles import (
-    ACCESSORY,
-    ACCOUNT_TAKEOVER,
     CARD_TESTING,
     CATEGORIES,
-    CATEGORY_PRICES,
-    CONDITION_PRICE_FACTORS,
-    CONDITION_WEIGHTS,
     CONDITIONS,
-    COUNTRIES,
     LEGITIMATE,
-    OBVIOUS_HIGH_VALUE,
     REGIONS,
     SCENARIO_NAMES,
-    STOLEN_CARD_NEW_DEVICE,
     Profiles,
     Schedule,
 )
@@ -39,93 +32,7 @@ class GeneratedHistory:
     truth: str
 
 
-@dataclass(frozen=True)
-class _Context:
-    category: int
-    condition: int
-    quantity: int
-    unit_price: int
-    device: str
-    network: str
-    ip_country: str
-    address: str
-    shipping_country: str
-    method: str
-    new_device: bool
-
-
-def _context(
-    config: HistoricalConfig,
-    profiles: Profiles,
-    schedule: Schedule,
-    index: int,
-    offset: int,
-    ordinal: int,
-    random: np.random.Generator,
-) -> _Context:
-    key = config.synthetic_key
-    customer = int(schedule.customers[index])
-    kind = int(schedule.scenarios[index])
-    group = int(schedule.groups[index])
-    category = int(profiles.merchant_categories[schedule.merchants[index]])
-    if kind == CARD_TESTING:
-        category = ACCESSORY
-    condition = int(random.choice(len(CONDITIONS), p=CONDITION_WEIGHTS))
-    quantity = int(random.integers(1, 4)) if category == ACCESSORY else 1
-    typical = CATEGORY_PRICES[category] * CONDITION_PRICE_FACTORS[condition]
-    unit_price = max(50, round(float(random.lognormal(np.log(typical), 0.3))))
-    home_country = COUNTRIES[profiles.customer_countries[customer]]
-    device = profiles.device_pool[profiles.familiar_devices[customer, int(random.integers(0, 2))]]
-    network = profiles.network_pool[profiles.home_networks[customer]]
-    address = profiles.address_pool[profiles.addresses[customer]]
-    method = profiles.method_pool[profiles.payment_methods[customer, 0]]
-    ip_country = home_country
-    new_device = False
-    if random.random() >= config.behavior.familiar_context_probability:
-        device = fingerprint(key, "device", f"new-{customer}-{offset}-{ordinal}")
-        new_device = True
-    if random.random() < config.behavior.foreign_ip_probability:
-        ip_country = COUNTRIES[(COUNTRIES.index(home_country) + 1) % len(COUNTRIES)]
-
-    foreign = COUNTRIES[(COUNTRIES.index(home_country) + 1 + int(random.integers(0, 2))) % len(COUNTRIES)]
-    if kind == OBVIOUS_HIGH_VALUE:
-        unit_price = round(unit_price * config.scenarios.obvious_high_value.amount_multiplier)
-    elif kind == STOLEN_CARD_NEW_DEVICE:
-        unit_price = round(unit_price * config.scenarios.stolen_card_new_device.amount_multiplier)
-        device = fingerprint(key, "device", f"stolen-{customer}-{group}")
-        network = fingerprint(key, "ip_network", f"10.250.{(customer + group) % 256}.1")
-        ip_country = foreign if random.random() < 0.5 else home_country
-        new_device = True
-    elif kind == ACCOUNT_TAKEOVER:
-        unit_price = round(unit_price * config.scenarios.account_takeover.amount_multiplier)
-        device = fingerprint(key, "device", f"takeover-{customer}-{group}")
-        network = fingerprint(key, "ip_network", f"10.252.{(customer + group) % 256}.1")
-        address = fingerprint(key, "address", f"takeover-{customer}-{group}")
-        ip_country = foreign
-        new_device = True
-    elif kind == CARD_TESTING:
-        quantity = 1
-        unit_price = int(random.integers(50, 501))
-        device = fingerprint(key, "device", f"card-testing-{offset}-{group}")
-        network = fingerprint(key, "ip_network", f"10.251.{(offset + group) % 256}.1")
-        method = fingerprint(key, "payment_method", f"tok_card-test-{offset}-{ordinal}_ok")
-        new_device = True
-    return _Context(
-        category,
-        condition,
-        quantity,
-        unit_price,
-        device,
-        network,
-        ip_country,
-        address,
-        home_country,
-        method,
-        new_device,
-    )
-
-
-def _risk_decision(context: _Context, random: np.random.Generator) -> str | None:
+def _risk_decision(context: PurchaseContext, random: np.random.Generator) -> str | None:
     if context.unit_price * context.quantity >= HIGH_VALUE_MINOR_UNITS and random.random() < 0.8:
         return "HIGH_VALUE"
     if context.new_device and context.ip_country != context.shipping_country and random.random() < 0.3:
@@ -151,7 +58,7 @@ def build_history(
     integration_id = str(config.integration_id)
     payment_id = str(uuid5(IDENTITY_NAMESPACE, f"{config.dataset_version}:{day}:{ordinal}:payment"))
     started_at = datetime.combine(day, time.min, tzinfo=timezone.utc) + timedelta(seconds=int(schedule.seconds[index]))
-    context = _context(config, profiles, schedule, index, offset, ordinal, random)
+    context = purchase_context(config, profiles, schedule, index, offset, ordinal, random)
     category = CATEGORIES[context.category]
     region, postal_code = REGIONS[context.shipping_country]
     quantity = context.quantity

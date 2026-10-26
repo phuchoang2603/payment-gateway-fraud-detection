@@ -1,0 +1,46 @@
+{{- if .Values.simulator.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: live-simulator
+data:
+  live.yaml: |
+    {{- mergeOverwrite (deepCopy .Values.simulator.config) (dict "kafka_brokers" .Values.kafkaBrokers) | toYaml | nindent 4 }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: live-gateway
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.secretStore }}
+  target:
+    name: live-gateway
+  data:
+    - secretKey: api-key
+      remoteRef:
+        key: GATEWAY_SYNTHETIC_API_KEY
+{{- end }}
+{{- if or .Values.simulator.enabled .Values.archiver.enabled }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: live-source
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.secretStore }}
+  target:
+    name: live-source
+  data:
+    - secretKey: AWS_ACCESS_KEY_ID
+      remoteRef:
+        key: HISTORICAL_RUSTFS_ACCESS_KEY
+    - secretKey: AWS_SECRET_ACCESS_KEY
+      remoteRef:
+        key: HISTORICAL_RUSTFS_SECRET_KEY
+{{- end }}

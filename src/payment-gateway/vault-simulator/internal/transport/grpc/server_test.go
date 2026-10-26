@@ -141,10 +141,10 @@ func TestTokenizeIssuesOpaqueTokensWithStableFingerprint(t *testing.T) {
 		number, ref string
 		behavior    vaultv1.Behavior
 	}{
-		{"4242424242424242", "card-0001", vaultv1.Behavior_BEHAVIOR_APPROVE},
-		{"4000000000009995", "card-0002", vaultv1.Behavior_BEHAVIOR_INSUFFICIENT_FUNDS},
-		{"4000000000000002", "card-0003", vaultv1.Behavior_BEHAVIOR_ISSUER_DECLINE},
-		{"4000000000000069", "card-0004", vaultv1.Behavior_BEHAVIOR_INVALID},
+		{"4111000000000008", "card-000000", vaultv1.Behavior_BEHAVIOR_APPROVE},
+		{"4112000000000007", "card-000000", vaultv1.Behavior_BEHAVIOR_INSUFFICIENT_FUNDS},
+		{"4113000000000006", "card-000000", vaultv1.Behavior_BEHAVIOR_ISSUER_DECLINE},
+		{"4114000000000005", "card-000000", vaultv1.Behavior_BEHAVIOR_INVALID},
 	}
 	processor := h.processing
 	for _, card := range cards {
@@ -198,13 +198,13 @@ func TestTokenizeRejectsNumbersOutsideAllowList(t *testing.T) {
 			t.Fatalf("%q: got %v, want InvalidArgument", number, err)
 		}
 	}
-	_, err := tokenize(t, edge, integrationA, "4242424242424242")
+	_, err := tokenize(t, edge, integrationA, "4111000000000008")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := rpcContext()
 	defer cancel()
-	_, err = edge.TokenizeCard(ctx, &vaultv1.TokenizeCardRequest{IntegrationId: "not-a-uuid", CardNumber: "4242424242424242"})
+	_, err = edge.TokenizeCard(ctx, &vaultv1.TokenizeCardRequest{IntegrationId: "not-a-uuid", CardNumber: "4111000000000008"})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("bad integration: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestForeignIntegrationTokenIsNotFound(t *testing.T) {
 	h := newHarness(t)
 	edge := h.vault
 	processor := h.processing
-	issued, err := tokenize(t, edge, integrationA, "4242424242424242")
+	issued, err := tokenize(t, edge, integrationA, "4111000000000008")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestForeignIntegrationTokenIsNotFound(t *testing.T) {
 func TestInactiveTokenIsNotFound(t *testing.T) {
 	h := newHarness(t)
 	edge := h.vault
-	issued, err := tokenize(t, edge, integrationA, "4242424242424242")
+	issued, err := tokenize(t, edge, integrationA, "4111000000000008")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func TestNoPlaintextFixtureOrCardNumberInStorageOrLogs(t *testing.T) {
 	h := newHarness(t)
 	edge := h.vault
 	processor := h.processing
-	number := "4000000000009995"
+	number := "4112000000000007"
 	issued, err := tokenize(t, edge, integrationA, number)
 	if err != nil {
 		t.Fatal(err)
@@ -311,12 +311,12 @@ func TestNoPlaintextFixtureOrCardNumberInStorageOrLogs(t *testing.T) {
 	if rowCount != 1 {
 		t.Fatalf("got %d rows", rowCount)
 	}
-	for _, forbidden := range []string{number, "card-0002", "card_reference", "behavior", "nsf", issued.GetToken(), strings.TrimPrefix(issued.GetToken(), "vt_"), "4111111111111111"} {
+	for _, forbidden := range []string{number, "card-000000", "card_reference", "behavior", "nsf", issued.GetToken(), strings.TrimPrefix(issued.GetToken(), "vt_"), "4111111111111111"} {
 		if strings.Contains(stored.String(), forbidden) {
 			t.Fatalf("storage contains %q", forbidden)
 		}
 	}
-	for _, forbidden := range []string{number, "4111111111111111", issued.GetToken(), strings.TrimPrefix(issued.GetToken(), "vt_"), "card-0002"} {
+	for _, forbidden := range []string{number, "4111111111111111", issued.GetToken(), strings.TrimPrefix(issued.GetToken(), "vt_"), "card-000000"} {
 		if strings.Contains(h.logs.String(), forbidden) {
 			t.Fatalf("logs contain %q", forbidden)
 		}

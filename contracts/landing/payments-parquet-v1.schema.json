@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Completed Kafka payment Parquet batch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "topic", "partition", "first_offset", "last_offset", "rows", "files"],
+  "properties": {
+    "format": {"const": "decoded-payments-parquet-v1"},
+    "topic": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+    "partition": {"type": "integer", "minimum": 0},
+    "first_offset": {"type": "integer", "minimum": 0},
+    "last_offset": {"type": "integer", "minimum": 0},
+    "rows": {"type": "integer", "minimum": 1},
+    "files": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/file"}}
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "sha256", "bytes", "rows", "table", "schema_version"],
+      "properties": {
+        "key": {"type": "string", "pattern": "^streaming/(payment_events|fraud_labels)/.*[.]parquet$"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "rows": {"type": "integer", "minimum": 1},
+        "table": {"enum": ["payment_events", "fraud_labels"]},
+        "schema_version": {"type": "integer", "enum": [1, 2]}
+      }
+    }
+  },
+  "description": "Manifest published last at streaming/_batches/topic=<topic>/partition=<n>/<first>-<last>-<manifest-sha256>.json. File SHA256 and manifest-key digest cover exact object bytes. Kafka commits follow publication. Overlapping replay batches and duplicate business events are valid. Business columns follow simulator.arrow.event_schema(version) or LABEL_SCHEMA. Each row additionally has required _transport: topic UTF8, partition INT32, offset INT64, nullable timestamp TIMESTAMP(us,UTC), nullable key BINARY, required value BINARY, ordered headers LIST<STRUCT<key UTF8,value nullable BINARY>>. Historical exports have no _transport. Consumers discover completed manifests, freeze an inventory and preserve Kafka positions and manifest identity; event dates are not discovery checkpoints. No DP1 multi-source implementation or cross-system exactly-once guarantee is supplied by this contract."
+}

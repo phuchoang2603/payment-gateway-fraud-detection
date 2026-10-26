@@ -55,7 +55,20 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Publish a dataset smaller than one customer block, for contract probes only",
     )
+    live = commands.add_parser("live", help="Drive current-time gateway traffic and optional delivery faults")
+    live.add_argument("--config", type=Path, required=True)
     args = parser.parse_args(argv)
+    if args.command == "live":
+        import asyncio
+
+        from simulator.live.config import load_live_config
+        from simulator.live.runtime import run_live
+
+        try:
+            asyncio.run(run_live(load_live_config(args.config)))
+        except Exception as error:
+            parser.exit(2, f"live simulation failed: {type(error).__name__}\n")
+        return 0
     try:
         config = load_config(args.config)
         filesystem, root = destination(args.output or config.output)

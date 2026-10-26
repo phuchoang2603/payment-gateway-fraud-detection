@@ -1,9 +1,9 @@
-dataset_version: v8
+dataset_version: v12
 seed: 2603
 integration_id: 01234567-89ab-4cde-8fab-0123456789ab
 synthetic_key: synthetic-fingerprint-v1
 synthetic_key_version: v1
-start_date: 2026-07-01
+start_date: 2025-07-01
 duration_days: 365
 counts:
   customers: 3000000
@@ -48,7 +48,7 @@ scenarios:
     rate: 0.003
 data_problems:
   duplicate_rate: 0.02
-  schema_cutover_date: '2026-12-30'
+  schema_cutover_date: '2025-12-30'
 label_delays:
   min_days: 7
   max_days: 21

@@ -38,6 +38,13 @@ spec:
             valuesFile:
               - infra/charts/kafka/values-prod.yaml
             syncRetry: *retry
+          live-traffic:
+            enabled: true
+            destinationNamespace: payment-gateway
+            path: infra/charts/live-traffic
+            valuesFile:
+              - infra/charts/live-traffic/values-prod.yaml
+            syncRetry: *retry
           secret-store:
             enabled: true
             destinationNamespace: argo-cd

@@ -28,7 +28,9 @@ The fraud-labels linkage rule reads `payment_events`, so validate labels in a da
 
 ### Published version
 
-`historical/v8` is the published full-scale source, generated from [`historical-scale.yaml`](../../src/data-pipeline/simulator/configs/historical-scale.yaml) (seed 2603): 24,982 raw files, 123,286,939,620 physical and 243,759,611,982 uncompressed Parquet bytes, with validation deferred to the `dp1-spark-gx` gate. `historical/v10` is a small smoke export from [`historical-smoke.yaml`](../../src/data-pipeline/simulator/configs/historical-smoke.yaml) (100,000 customers, six days) using the same manifest format. Each `manifest.json` records the configuration hash, generator revision, contract hashes, per-file inventory, per-partition row counts and storage metrics. [`historical-sanity.ipynb`](../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb) reads a published manifest for distribution, skew, cutover and duplicate checks.
+`historical/v8` is the original published full-scale source, generated from [`historical-scale.yaml`](../../src/data-pipeline/simulator/configs/historical-scale.yaml) (seed 2603): 24,982 raw files, 123,286,939,620 physical and 243,759,611,982 uncompressed Parquet bytes, with validation deferred to the `dp1-spark-gx` gate. `historical/v10` is a small smoke export from [`historical-smoke.yaml`](../../src/data-pipeline/simulator/configs/historical-smoke.yaml) (100,000 customers, six days) using the same manifest format. Each `manifest.json` records the configuration hash, generator revision, contract hashes, per-file inventory, per-partition row counts and storage metrics. [`historical-sanity.ipynb`](../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb) reads a published manifest for distribution, skew, cutover and duplicate checks.
+
+The current full-scale configuration selects `historical/v12`, an immutable one-off -365-day calendar shift of v8, with the same entities/content and no regeneration. Its manifest SHA-256 is `66aa2af7fecb1177e0d3891ea86054ff9c076ff6e8743b35b6bec0bd351511ce`; 2,851 files received full row/remote readback checks and 22,131 received upload-integrity/HEAD checks. Spark/GX acceptance remains pending. Live decoded Parquet lands separately under `streaming/`; see the [landing interface](data-pipeline.md#live-simulation-and-landing).
 
 The command runs from the devenv shell. The generation-only publication path below does not establish a completed migration or validation of `v8`:
 
@@ -51,7 +53,7 @@ After durable publication and successful protection, cleanup retains `_run/publi
 
 `--prepare-only` leaves generated raw inventory ready, without sorting or a completion manifest. The normal command continues publication under the same generation identity. Normal shutdown releases ownership. After a crash, stop the former writer first and pass `--takeover-stopped-writer`; elapsed time never authorizes takeover. Small remote publication still requires `--allow-small-dataset` below one customer block; probes normally use local `--output`.
 
-The simulator is generation-only: it has no migration command or old-configuration compatibility path.
+The historical command is generation-only: it has no migration command or old-configuration compatibility path. The separate `live` entry point drives current-time gateway commands.
 
 The historical 2026-10-22 RustFS probe confirmed create-if-absent, ETag-conditional update and streamed transfer; HEAD returned no SHA-256 checksum, so integrity verification streams each object. Unsupported conditional operations fail rather than falling back to unsafe writes. New execution controls cover workers, in-flight reservations, scratch and transfers, without DuckDB sort/validation budgets. Logical customer blocks, burst groups, layout, scenarios, contracts and minimum source bytes form the generation identity.
 

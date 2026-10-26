@@ -1,65 +1,56 @@
 ## Purpose
 
-Apply configurable, reproducible delivery faults between the clean committed event topic and a faulty copy, so streaming jobs can be tested against burst, late and duplicate delivery while the authoritative history stays unchanged.
+Apply deterministic delay, duplication and burst holds to already committed payment events within the live simulator workload, preserving authoritative history and supporting at-least-once recovery.
 
 ## ADDED Requirements
 
-### Requirement: Faults only in the faulty copy
+### Requirement: Post-commit faults within the live workload
 
-The fault injector SHALL consume `payments.events.v1` and publish to `payments.events.v1.faulty`. It SHALL forward each record's key and value byte-for-byte, so no event content, identity, `occurred_at` or `recorded_at` changes. It SHALL NOT write to the clean topic or to payment storage. With every fault disabled, the faulty topic SHALL contain each clean record exactly once.
+The optional delivery-fault loop SHALL run within the live Python workload and consume committed events from payments.events.v1 in its own durable consumer group. It SHALL publish only to payments.events.v1.faulty, preserving key, payload and existing headers byte-for-byte. It SHALL NOT alter payment storage, authoritative events or label delivery.
 
-#### Scenario: All faults disabled
+#### Scenario: Faulty delivery
 
-- **WHEN** every fault rate and burst interval is zero
-- **THEN** the faulty topic contains the same records as the clean topic, once each, in the same per-payment order
+- **WHEN** a committed event is delayed, duplicated or burst-held
+- **THEN** only delivery timing/count changes; event identity, embedded timestamps, payload bytes and authoritative history remain unchanged
 
-### Requirement: Configurable delivery faults
+### Requirement: Independently configured delivery faults
 
-The injector SHALL support three independently configured faults: duplicate delivery, late delivery and burst hold.
+The loop SHALL support seeded duplicate and late selection/delays by event ID, plus periodic wall-clock burst holds. A zero rate or disabled hold SHALL disable the corresponding fault. Faulty Kafka timestamps SHALL reflect publication time. Late delivery is permitted to reorder events; labels SHALL retain their independent scheduling path.
 
-#### Scenario: Complete configurable delivery faults contract
+#### Scenario: Repeated event selection
 
-- **WHEN** the `Configurable delivery faults` capability is configured or exercised
-- **THEN** The injector SHALL support three independently configured faults:
-  - duplicate delivery publishes the record a second time after a delay within a configured range;
-  - late delivery holds the record for a delay within a configured range before publishing it;
-  - burst hold buffers all records during a configured hold period that repeats at a configured interval, then publishes them together.
-
-  Setting a rate or interval to zero SHALL disable that fault. Late delivery MAY reorder one payment's records in the faulty topic.
-
-#### Scenario: Late event
-
-- **WHEN** an event is selected for late delivery with a 10-minute delay
-- **THEN** it appears in the faulty topic about 10 minutes after it was consumed, with its original `occurred_at`
+- **WHEN** the same event IDs are processed with the same fault configuration
+- **THEN** duplicate/late choices and selected delays are the same regardless of arrival order
 
 #### Scenario: Burst hold
 
-- **WHEN** the burst interval is 60 seconds and the hold is 15 seconds
-- **THEN** records consumed during each hold appear in the faulty topic together when the hold ends
+- **WHEN** records become due during a configured hold period
+- **THEN** they are buffered until release without changing their embedded event time or payment content
 
-### Requirement: Deterministic selection
+### Requirement: Bounded backlog and acknowledged recovery
 
-Selection for duplicate and late delivery, and the chosen delay, SHALL be derived from the configured fault seed, the fault name and the `event_id`. The same configuration SHALL affect the same events with the same delays on every run, regardless of arrival timing.
+Held records SHALL have count and byte limits. The consumer SHALL pause admission at those limits while maintaining required group polling. A partition's committed next offset SHALL advance only through a contiguous prefix whose required publications are acknowledged. Restart SHALL replay unfinished work without loss within source retention; extra duplicates are permitted.
 
-#### Scenario: Rerun on the same events
+#### Scenario: Restart with held records
 
-- **WHEN** the injector processes the same clean events twice with the same configuration
-- **THEN** the same `event_id`s are duplicated and delayed by the same amounts
+- **WHEN** the shared workload restarts while records are held or unacknowledged
+- **THEN** the durable group position replays unfinished records and every source record is eventually forwarded at least once
 
-### Requirement: No loss on restart
+#### Scenario: Backlog capacity reached
 
-The injector SHALL commit a consumer position only after every earlier record in that partition has been published, including held and delayed records. A restart MAY publish additional duplicates and SHALL NOT drop any record.
+- **WHEN** the configured count or byte bound is reached
+- **THEN** admission pauses rather than growing memory without bound or dropping queued records
 
-#### Scenario: Restart while records are delayed
+### Requirement: Pass-through and visible failures
 
-- **WHEN** the injector stops while late records are held
-- **THEN** after restart every held record still appears in the faulty topic
+With faults disabled, an uninterrupted pass SHALL forward each consumed record once in partition order. Recovery SHALL remain at least once. Malformed input, fatal loop failure and unfinished shutdown work SHALL be reported visibly rather than silently discarded. The runner SHALL report configured settings, consumed/published/duplicate/delayed/held counts, observed rates and backlog.
 
-### Requirement: Configured and observed rates
+#### Scenario: All faults disabled
 
-The injector SHALL periodically report the configured settings with counts of records consumed, published, duplicated, delayed and held by bursts, the observed duplicate and late rates, and the maximum applied delay.
+- **WHEN** a pass completes without restart and all faults are disabled
+- **THEN** forwarded keys, headers and values match the source sequence within each partition exactly once
 
-#### Scenario: Duplicate rate evidence
+#### Scenario: Malformed committed payload
 
-- **WHEN** the configured duplicate rate is 5% and 10,000 records have been consumed
-- **THEN** the report shows about 500 duplicated records and an observed rate near 5%
+- **WHEN** the loop cannot decode the required event identity
+- **THEN** the workload reports failure without committing past or silently dropping that record

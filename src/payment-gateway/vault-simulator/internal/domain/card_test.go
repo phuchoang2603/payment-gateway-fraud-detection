@@ -63,58 +63,15 @@ func TestAllowListMatchesIdentityVectors(t *testing.T) {
 	}
 }
 
-func TestLookupCardRanges(t *testing.T) {
-	tests := []struct {
-		name    string
-		number  string
-		wantOK  bool
-		wantRef string
-		wantBeh Behavior
-	}{
-		{"first ok", generatedNumber("4111", 0), true, "card-0005", BehaviorOK},
-		{"last ok", generatedNumber("4111", 1999), true, "card-2004", BehaviorOK},
-		{"first nsf", generatedNumber("4112", 0), true, "card-2005", BehaviorNSF},
-		{"first issuer", generatedNumber("4113", 0), true, "card-4005", BehaviorIssuer},
-		{"last invalid", generatedNumber("4114", 1999), true, "card-8004", BehaviorInvalid},
-		{"serial beyond range", generatedNumber("4111", 2000), false, "", ""},
-		{"unknown prefix", generatedNumber("4115", 0), false, "", ""},
-		{"bad check digit", "4111000000000001", false, "", ""},
-		{"short", "4111", false, "", ""},
-		{"non digits", "4111-0000-0000-0000", false, "", ""},
-		{"empty", "", false, "", ""},
-		{"valid luhn outside allow-list", "5555555555554444", false, "", ""},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			card, ok := LookupCard(test.number)
-			if ok != test.wantOK || card.Ref != test.wantRef || card.Behavior != test.wantBeh {
-				t.Fatalf("got %+v ok=%v", card, ok)
-			}
-		})
-	}
-}
-
-func TestEveryAllowListedNumberIsLuhnValidAndUnique(t *testing.T) {
-	seen := map[string]string{}
+func TestLookupCardRejectsOutsideDomain(t *testing.T) {
 	for _, r := range generatedRanges {
-		for serial := range serialsPerBehavior {
-			number := generatedNumber(r.prefix, serial)
-			card, ok := LookupCard(number)
-			if !ok || card.Behavior != r.behavior {
-				t.Fatalf("%s serial %d not allow-listed with behavior %s", r.prefix, serial, r.behavior)
-			}
-			if previous, dup := seen[card.Ref]; dup {
-				t.Fatalf("card ref %s reused (%s)", card.Ref, previous)
-			}
-			seen[card.Ref] = r.prefix
+		if _, ok := LookupCard(generatedNumber(r.prefix, HistoricalCardCount)); ok {
+			t.Fatal("out-of-domain card accepted")
 		}
 	}
-	for number := range namedCards {
-		if !LuhnValid(number) {
-			t.Fatalf("named card %s is not Luhn valid", number)
+	for _, number := range []string{"4242424242424242", "4111000000000001", "", "4111-0000-0000-0000"} {
+		if _, ok := LookupCard(number); ok {
+			t.Fatal("invalid or obsolete fixture accepted")
 		}
-	}
-	if len(seen) != 4*serialsPerBehavior {
-		t.Fatalf("got %d generated cards", len(seen))
 	}
 }

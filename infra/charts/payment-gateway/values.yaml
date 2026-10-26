@@ -63,6 +63,7 @@ services:
     mesh:
       callers:
       - payment-gateway-ingress-istio
+      - live-simulator
       callerNamespaces:
       - ecommerce
     ports:
@@ -104,6 +105,9 @@ services:
       - podSelector:
           matchLabels:
             gateway.networking.k8s.io/gateway-name: payment-gateway-ingress
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: live-simulator
     httpRoute:
       enabled: true
       hostnames:

@@ -1,0 +1,35 @@
+imageRepository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection
+imageTag: latest
+secretStore: fraud-doppler
+kafkaBrokers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092
+s3Endpoint: https://minio.home.phuchoang.sbs
+simulator:
+  enabled: false
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {cpu: '1', memory: 2Gi}
+  config:
+    manifest: s3://synthetic-source/historical/v12/manifest.json
+    manifest_sha256: 66aa2af7fecb1177e0d3891ea86054ff9c076ff6e8743b35b6bec0bd351511ce
+    gateway_url: http://edge.payment-gateway.svc:8080
+    return_url: https://example.com/checkout/complete
+    duration_seconds: 300
+    payments_per_second: 1
+    concurrency: 4
+    label_time_scale: 1
+    faults:
+      enabled: false
+      duplicate_rate: 0
+      late_rate: 0
+      hold_seconds: 0
+archiver:
+  enabled: false
+  topics: payments.events.v1,fraud.labels.v1
+  group: payments-parquet-landing-v1
+  bucket: synthetic-source
+  maxRecords: 10000
+  maxBytes: 33554432
+  flushInterval: 10s
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: '1', memory: 1Gi}

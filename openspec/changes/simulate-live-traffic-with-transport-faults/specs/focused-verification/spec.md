@@ -1,10 +1,37 @@
 ## ADDED Requirements
 
-### Requirement: Streaming transport tests
+### Requirement: Cross-language simulation contracts
 
-Simulator tests SHALL cover deterministic fault selection, unchanged pass-through when all faults are disabled, no loss across an injector restart with held records against a CI Kafka broker, refusal to continue a dataset whose profile digest does not match, and stable method fingerprints after token reissuance. Evidence SHALL demonstrate that token values and card numbers do not appear on the faulty or labels topics or in simulator logs. Tests SHALL NOT assert exact wall-clock timings.
+CI SHALL reuse coverage and add only distinct wire/identity/retry checks: generated Python contracts, cross-language encoding, profile mismatch, current-time starts, historical mapping and idempotency. It SHALL verify tokens/card numbers stay out of logs/Kafka. Dedicated config/default/getter tests, exhaustive per-card tests and exact wall-clock assertions SHALL NOT be required.
 
-#### Scenario: Injector restart in CI
+#### Scenario: Go event and Python label
 
-- **WHEN** the restart test stops the injector while records are held and starts it again
-- **THEN** every clean record appears in the faulty topic at least once
+- **WHEN** CI exchanges representative contracted events/labels between Go and Python
+- **THEN** both decode the expected identities and fields without independent schemas or registry framing
+
+### Requirement: Delivery-fault runtime verification
+
+CI SHALL reuse focused scenarios for deterministic selection, no-fault pass-through, bounded backlog and acknowledged-prefix recovery across shared-process restart. It SHALL NOT add redundant logging-shape or render-only tests. Evidence SHALL distinguish deliberately injected duplicates from possible restart replay and SHALL NOT claim exactly-once recovery.
+
+#### Scenario: Workload restarted with pending publications
+
+- **WHEN** CI restarts the workload while events are held or awaiting acknowledgments
+- **THEN** every clean record is eventually forwarded and no committed position skips unfinished work
+
+### Requirement: Immutable landing and DP1 interface evidence
+
+Archiver verification SHALL demonstrate historical-compatible Parquet business schemas and byte/provenance preservation, duplicate conservation, low-traffic rotation, completed-object visibility and stable selected objects across retries. The written DP1 handoff SHALL specify late-file discovery, immutable batch retry/readback, contextual history and label maturity; implementation/evidence of DP1 multi-source ingestion is deferred to its next slice. A failed prerequisite SHALL block rollout.
+
+#### Scenario: Archiver restart after publication
+
+- **WHEN** archival restarts after writing a completed object selected by ingestion
+- **THEN** that object remains unchanged and records/provenance remain recoverable with any replay duplicates identified
+
+### Requirement: Historical and runtime evidence boundaries
+
+Verification SHALL preserve source datasets, published contracts/bands and prior passed/failed results. Generator diagnostics SHALL remain distinct from enforced checks under the implemented DP1 policy. Historical acceptance and one-off publication SHALL NOT imply live or v12 DP1 acceptance. Tests/builds SHALL run in CI; local verification SHALL use non-test checks.
+
+#### Scenario: Citing historical evidence
+
+- **WHEN** an accepted v11 run or published v12 rewrite is cited during rollout
+- **THEN** it remains separate from still-pending live recovery, landing and DP1 acceptance evidence

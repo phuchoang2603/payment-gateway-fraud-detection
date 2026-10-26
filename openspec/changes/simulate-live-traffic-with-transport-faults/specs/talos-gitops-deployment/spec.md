@@ -1,20 +1,38 @@
 ## ADDED Requirements
 
-### Requirement: Streaming workload deployment
+### Requirement: Single simulator workload
 
-The gateway's Kafka application SHALL additionally declare `payments.events.v1.faulty` and `fraud.labels.v1` with configured partitions and retention, without restoring a dev root.
+Deployment SHALL provide one opt-in single-replica simulator workload running traffic, labels and optional delivery faults from one image/configuration. It SHALL use the shared current environment and configured prod root without a dev root or duplicate source-specific topology. Delivery faults SHALL remain embedded; an independently enabled Go archiver SHALL provide landing.
 
-#### Scenario: Complete streaming workload deployment contract
+#### Scenario: Render live workload
 
-- **WHEN** the `Streaming workload deployment` capability is configured or exercised
-- **THEN** The gateway's Kafka application SHALL additionally declare `payments.events.v1.faulty` and `fraud.labels.v1` with configured partitions and retention, without restoring a dev root. Live simulator and fault injector SHALL use one image as separate single-replica workloads, disabled by default and explicitly enabled for controlled synthetic runs. Only the live workload SHALL receive the synthetic integration's API key, from External Secrets, and network access to Edge; neither workload SHALL reach the vault. The fault injector SHALL NOT write to `payments.events.v1`. The simulator image SHALL reuse the shared image workflow and PR/main tag policy: same-repository PRs publish disposable PR tags, fork PRs build without publication, and main pushes publish main tags eligible for production selection.
+- **WHEN** simulation is enabled in the configured prod target
+- **THEN** exactly one simulator workload is rendered using a strategy that prevents overlapping replicas, without a separate injector workload or new public route
 
-#### Scenario: Render streaming target
+#### Scenario: Simulation disabled
 
-- **WHEN** the configured prod target is rendered with simulation disabled and then explicitly enabled
-- **THEN** the three topics remain configured, simulator workloads appear only when enabled, and no dev root, ingress or public route is created
+- **WHEN** simulation is disabled
+- **THEN** the simulator workload is absent while existing gateway/Kafka services and completed data remain intact
 
-#### Scenario: Fault injector isolation
+### Requirement: Shared topics and Go Parquet landing
 
-- **WHEN** the fault injector workload is rendered
-- **THEN** it has no gateway credentials or vault access, and its producer targets only the faulty topic
+The Kafka application SHALL retain payments.events.v1 and declare payments.events.v1.faulty and fraud.labels.v1 with configured partitions/retention. S3/RustFS archival SHALL run as a Go workload producing historical-compatible decoded Parquet with transport metadata, preserving the authoritative event publisher, CDC Connect worker and notifier. Protobuf payloads SHALL NOT require Avro conversion or a registry.
+
+#### Scenario: Render landing archiver
+
+- **WHEN** landing is enabled
+- **THEN** one Go archiver workload consumes selected payment topics and labels, with no S3 Connect plugin, Flink deployment or registry
+
+### Requirement: Runtime credentials and image delivery
+
+The simulator SHALL receive only its gateway/Kafka/dataset runtime credentials and SHALL NOT access vault/database internals. The archiver SHALL reuse the existing synthetic-source identity with streaming-prefix policy access, preserving historical protection, no-delete/artifact restrictions and CDC/Secret API limits. Simulator and archiver images SHALL follow shared PR/main build and production-pin policies.
+
+#### Scenario: Archiver permissions
+
+- **WHEN** the Go archiver is configured
+- **THEN** it receives the existing synthetic-source runtime credential, streaming-prefix access and object-store egress while historical protection and CDC access remain constrained and the simulator gains no vault/database access
+
+#### Scenario: Image publication
+
+- **WHEN** CI builds same-repository PR, fork PR and main images
+- **THEN** same-repository PRs publish disposable PR tags, fork PRs build without publication and main images follow the existing production selection policy

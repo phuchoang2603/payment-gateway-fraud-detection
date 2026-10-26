@@ -47,6 +47,19 @@
       "image-suffix": "/connect-debezium",
       "context": ".",
       "dockerfile": "infra/docker/connect-debezium.Dockerfile"
+    },
+    {
+      "service": "live-simulator",
+      "image-suffix": "/live-simulator",
+      "context": ".",
+      "dockerfile": "infra/docker/live-simulator.Dockerfile"
+    },
+    {
+      "service": "stream-archiver",
+      "image-suffix": "/stream-archiver",
+      "context": ".",
+      "dockerfile": "infra/docker/go-service.Dockerfile",
+      "build-args": "SERVICE_PATH=src/data-pipeline/stream-archiver\nBUILD_PKG=./cmd/stream-archiver\nBUILD_BIN=stream-archiver\n"
     }
   ]
 }

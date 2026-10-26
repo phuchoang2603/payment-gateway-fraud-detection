@@ -1,57 +1,125 @@
 ## Purpose
 
-Generate seeded live checkout traffic through the gateway that continues a historical dataset's customers, merchants, devices, payment methods and fraud scenarios, and deliver its labels separately.
+Generate current-time payment traffic through gateway APIs using historical entities and behavior, publish independent labels, and define the immutable landing boundary for reusable DP1 ingestion.
 
 ## ADDED Requirements
 
-### Requirement: Continue a historical dataset
+### Requirement: Historical identities with current-time traffic
 
-The live simulator SHALL take a historical dataset version and rebuild that dataset's profiles and scenario schedule from its manifest configuration and seed, without reading its event files. It SHALL refuse to start when the rebuilt profiles do not match the manifest's profile digest, when the current time is before the dataset's history end, or when the gap after history end exceeds the configured maximum. Simulated days SHALL continue the historical calendar on wall-clock time.
+The live runner SHALL reuse historical profile/identity and behavior logic from the selected manifest and verify the profile digest before sending traffic. New commands SHALL use current machine time and gateway-owned event timestamps. A gap after historical history SHALL NOT require regeneration, catch-up, or a maximum-gap startup check.
 
-#### Scenario: Generator logic changed since the dataset
+#### Scenario: Historical history ends months before startup
 
-- **WHEN** the rebuilt profile digest differs from the manifest
-- **THEN** the simulator exits nonzero before sending any request
+- **WHEN** the selected history ends in July and the runner starts in October
+- **THEN** it generates current-time commands using the historical entities without fabricating the intervening months or rejecting the calendar gap
 
-#### Scenario: Same customer across the handoff
+#### Scenario: Profile mismatch
 
-- **WHEN** a customer from the historical dataset purchases live
-- **THEN** the gateway records the same `customer_id`, device fingerprint, address fingerprint and payment-method fingerprints as in the historical events
+- **WHEN** rebuilt profiles do not match the manifest digest
+- **THEN** startup fails before any gateway command is sent
 
-### Requirement: Clean gateway commands only
+### Requirement: Exact historical payment-method mapping
 
-The simulator SHALL create payment traffic only through the checkout API of a synthetic integration: test-card tokenization, payment creation with the full snapshot, and attempt submission with simulated client context and the returned opaque tokens.
+The gateway's synthetic card mapping SHALL cover all 3.9 million v8 card identities preserved in v12 with the same method fingerprints and behavior assignments. The runner SHALL obtain opaque tokens through the public gateway API. Obsolete fixture compatibility SHALL NOT be retained, and source datasets SHALL NOT be rewritten to accommodate the mapping.
 
-#### Scenario: Complete clean gateway commands only contract
+#### Scenario: Token reissuance
 
-- **WHEN** the `Clean gateway commands only` capability is configured or exercised
-- **THEN** The simulator SHALL create payment traffic only through the checkout API of a synthetic integration: test-card tokenization, payment creation with the full snapshot, and attempt submission with simulated client context and the returned opaque tokens. It SHALL NOT call the vault, Payments, Fraud or processor internal APIs directly. Token values SHALL NOT be seeded, logged, published or placed in dataset manifests. Each payment creation and attempt SHALL carry a unique `Idempotency-Key`; transport or 503/504 retries SHALL reuse the same key, token and request content. The simulator SHALL NOT write events or inject delivery faults. Arrivals SHALL follow the configured rate, and purchase and scenario choices SHALL be seeded.
+- **WHEN** the runner tokenizes the same historical card again and receives a new token
+- **THEN** gateway events retain the historical method fingerprint without exposing the token or card number in logs, events or labels
 
-#### Scenario: Edge timeout
+### Requirement: Idempotent gateway commands
 
-- **WHEN** an attempt request times out
-- **THEN** the simulator retries it with the same `Idempotency-Key` and the gateway records at most one attempt
+Traffic generation SHALL use gateway HTTP/JSON APIs for tokenization, payment creation and attempts. It SHALL NOT call internal services or fabricate authoritative payment events. Each command SHALL use a run-scoped idempotency key; retries SHALL preserve key, token and request content. Concurrency SHALL be bounded and arrival lag reported.
 
-#### Scenario: Opaque tokens preserve dataset continuation
+#### Scenario: Attempt response timeout
 
-- **WHEN** the simulator tokenizes a historical card's test card number and receives a new opaque token
-- **THEN** its live method fingerprint equals the historical fingerprint, without exposing token behavior to Fraud
+- **WHEN** an attempt response times out and the runner retries
+- **THEN** the same request and idempotency key are reused and at most one attempt is recorded
 
-### Requirement: Live labels
+### Requirement: Shared generated protobuf contracts
 
-The simulator SHALL publish a simulation-truth label for every attempt to `fraud.labels.v1` once its response is received.
+Python components that encode labels or decode payment events SHALL use bindings generated from the same root protobuf contracts as Go. Those bindings and their runtime SHALL be included in the consumer/simulator build. Kafka payloads SHALL remain protobuf without a schema registry or Avro migration; the HTTP client SHALL continue using gateway JSON APIs.
 
-#### Scenario: Complete live labels contract
+#### Scenario: Cross-language event decoding
 
-- **WHEN** the `Live labels` capability is configured or exercised
-- **THEN** The simulator SHALL publish a simulation-truth label for every attempt to `fraud.labels.v1` once its response is received. For fraudulent attempts and for `friendly_fraud`, it SHALL schedule a chargeback label with the configured delay multiplied by the configured time scale. When the chargeback is due, the simulator SHALL publish it only if the payment status shows that attempt succeeded. Labels SHALL use the `payments.v1.FraudLabel` contract with `label_available_at` set to the publication time. Scenario names SHALL appear only in labels.
+- **WHEN** Go emits a contracted payment event
+- **THEN** the Python binding decodes its event identity and payload and the fault loop forwards the original bytes unchanged
 
-#### Scenario: Pending attempt at chargeback time
+### Requirement: Live labels with actual availability
 
-- **WHEN** a chargeback becomes due for an attempt whose payment is still pending
-- **THEN** no chargeback label is published for it
+The runner SHALL publish simulation-truth labels after attempt responses using the versioned FraudLabel contract. Chargebacks SHALL be delayed by the configured schedule/time scale and published only for succeeded attempts when due. Label availability SHALL equal actual publication time. Delayed labels SHALL remain independent of payment ingestion.
 
-#### Scenario: Compressed chargeback delay
+#### Scenario: Pending attempt when chargeback is due
 
-- **WHEN** the configured delay is 7 days and the time scale is 1/1440
-- **THEN** the chargeback label is published about 7 minutes after the attempt succeeded
+- **WHEN** the scheduled attempt has not succeeded when its chargeback becomes due
+- **THEN** the runner does not publish a chargeback label for that attempt
+
+#### Scenario: Interrupted label schedule
+
+- **WHEN** the bounded run ends or fails with pending in-memory chargebacks
+- **THEN** evidence reports the unfinished schedule without claiming crash-safe label completeness
+
+### Requirement: One shared current flow
+
+The platform SHALL use one current environment, codebase, common runtime configuration and reusable topic/landing/bronze flow. Historical and live synthetic truth SHALL be valid analytics/training inputs with source provenance. Actual-production isolation SHALL remain future scope. Historical exports and backfills SHALL remain another DP1 input mode.
+
+#### Scenario: Historical and live inputs
+
+- **WHEN** DP1 ingests historical files and completed live landing objects
+- **THEN** both use the shared bronze ingestion architecture with identifiable origins, without duplicate source-specific deployments
+
+### Requirement: Immutable raw landing
+
+The Go archiver SHALL write decoded payment events and labels as historical-compatible Parquet under s3://synthetic-source/streaming/. It SHALL retain original payload/key bytes, ordered headers and Kafka positions in reserved transport metadata, preserve duplicate deliveries and leave completed objects unchanged across retries.
+
+#### Scenario: Typed Parquet and exact replay
+
+- **WHEN** a supported record is archived
+- **THEN** Spark can read its historical-compatible business fields directly and original payload bytes and provenance remain recoverable without protobuf decoding in DP1
+
+#### Scenario: Retry after object publication
+
+- **WHEN** archival restarts after an object becomes visible to ingestion
+- **THEN** the selected object's content remains unchanged and source records remain recoverable, with replay duplicates reported honestly
+
+### Requirement: Completed-file batches and retry-safe DP1
+
+The later DP1 integration slice SHALL select an immutable set of completed objects with durable discovery and batch identity, including late files in older date folders. It SHALL preserve source origin, IDs, schema versions and event/label-availability times, use retry-safe Iceberg commits and validate/read back each batch. Event-date maxima SHALL NOT define completeness; cross-system exactly-once SHALL NOT be claimed.
+
+#### Scenario: Late file below an observed date maximum
+
+- **WHEN** a new completed object arrives in an older date folder
+- **THEN** durable discovery includes it in a subsequent batch rather than skipping it based on event date
+
+#### Scenario: Batch retry after commit interruption
+
+- **WHEN** a batch retries after its Iceberg commit or progress update was interrupted
+- **THEN** recovery uses the same input identity and verifies the committed result without an unsafe duplicate commit
+
+### Requirement: Contextual validation and generator diagnostics
+
+Bronze SHALL enforce integrity/conservation/schema/contract/identity-content/lifecycle-context/linkage/leakage checks while preserving deliveries. Context SHALL include prior history and label maturity, without treating incomplete live batches as complete histories. Generator distribution/cardinality bands SHALL be informational diagnostics; curation/dedup SHALL remain in silver.
+
+#### Scenario: Payment and labels span batches
+
+- **WHEN** a batch contains part of a lifecycle and labels arrive later
+- **THEN** validation consults prior history and maturity context rather than requiring a self-contained history or premature labels
+
+#### Scenario: Generator band outside expectations
+
+- **WHEN** a batch falls outside a generator distribution/cardinality band
+- **THEN** the band is reported diagnostically while enforced checks determine acceptance under DP1's implemented runtime policy
+
+### Requirement: Training truth without leakage
+
+Synthetic truth SHALL be a valid training target. Scenario/oracle-only fields SHALL remain excluded from features and payment decision inputs, and joins SHALL respect as-of label availability. Published manifests/config bands, source contracts and previous evidence SHALL remain unchanged; new policy SHALL NOT relabel prior failures.
+
+#### Scenario: Label available after feature time
+
+- **WHEN** a label becomes available after the feature's as-of time
+- **THEN** it is not exposed at the earlier time and oracle/scenario fields remain excluded from features
+
+#### Scenario: Prior failed evidence
+
+- **WHEN** DP1 implements its revised diagnostic policy
+- **THEN** previous failed and passed results keep their original status and published source contracts and bands remain unchanged
