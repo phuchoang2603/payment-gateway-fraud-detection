@@ -46,7 +46,7 @@ Produce one concise report of activity/amount/time patterns, device/network shar
 
 Use the current physical schema for the realism baseline. Forced schema cutovers and injected duplicate exports remain optional, explicitly named data-problem experiments rather than natural-traffic claims. Preserve deliveries and label linkage regardless of mode.
 
-Use `historical/v13` only for a six-day, 100,000-customer smoke/reference export from July 1, 2025. Delete the stopped unpublished full-scale v13, including raw files and run metadata, before creating the smoke source. Remove the local full-scale configuration. The smoke configuration has no physical-byte floor and does not request accepted-object tagging; preserve schema/integrity checks and immutable manifest-last publication. Preserve v8/v11/v12 unchanged. Do not run local automated smoke tests; dataset generation is an operational publication task, while tests remain in CI.
+Use `historical/v13` only for a six-day, 100,000-customer smoke/reference export from July 1, 2025. Delete the stopped unpublished full-scale v13, including raw files and run metadata, before creating the smoke source. Remove the local full-scale configuration. The smoke configuration has no physical-byte floor and uses no object tags; preserve schema/integrity checks and immutable manifest-last publication. Preserve v8/v11/v12 unchanged. Do not run local automated smoke tests; dataset generation is an operational publication task, while tests remain in CI.
 
 The measured workstation evidence remains in `/home/felix/.local/state/dataset-fixes/us-electronics-v1/`: a six-day 100,000-customer export produced about 61.5 MB / 618,000 rows in 47 seconds with four workers and about 804 MB aggregate RSS at progress samples. Use four workers/in-flight tasks/transfers, single-threaded Arrow/BLAS and an 8 GiB scratch cap. The superseded full-scale estimate was about 118 GB / 24–36 hours; its stopped run is not source acceptance evidence. Full-volume generation and the project >=100 GB requirement move to a separate distributed Spark generation job coordinated with the StarRocks-native DP1 thread, without changing that ingestion architecture in this slice.
 
@@ -65,3 +65,11 @@ Source publication and downstream DP1 Spark/GX quality acceptance remain separat
 2. Record calibration assumptions and smoke resource budgets; remove partial full-scale v13.
 3. Generate/publish the immutable v13 smoke source and its report; do not claim full-volume training acceptance.
 4. Hand the manifest/hash, date ranges, row totals and training limitations to DP1. Any live source switch is separate work under the existing identity/manifest checks.
+
+## Authorized smoke exercise and source reset
+
+Remove accepted-version configuration and all tag operations; keep completed-manifest/configuration/inventory integrity checks and manifest-last publication. Published manifests remain unchanged; runtime models project the supported configuration fields from immutable manifest snapshots. Preserve historical v8/v11/v12/v13.
+
+Quiesce simulator/archiver through GitOps and confirm no affected writer is running before an admin-only deletion of the inventoried synthetic-source/streaming/ objects, versions and multipart uploads. Freeze Kafka high watermarks; use a new landing group and source epoch initialized explicitly at those offsets, with fault progress similarly bounded. Retain Kafka/shared assets. The writer receives no delete permission.
+
+Exercise the published v13 reference model with current UTC gateway traffic, distinct live payment IDs and run provenance. Landing batches retain source epoch, schema versions, Kafka positions and exact transport bytes; retries preserve immutable files. Capture historical integrity/linkage/lifecycle/as-of/leakage evidence and live delivery/landing/recovery results before distributed Spark generation starts. Source checks do not establish downstream DP1 or full-volume training acceptance.

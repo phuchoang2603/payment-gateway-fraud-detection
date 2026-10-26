@@ -21,9 +21,9 @@ from simulator.profiles import (
 
 class HistoricalModel:
     def __init__(self, manifest):
-        configuration = manifest["configuration"]
-        self.config = HistoricalConfig.model_validate(configuration)
-        self.profiles = profiles_from_manifest({**manifest, "configuration": configuration})
+        self.manifest = manifest
+        self.config = HistoricalConfig.from_manifest(manifest)
+        self.profiles = profiles_from_manifest(manifest)
         if self.config.counts.payment_methods > 3900000:
             raise ValueError("historical card pool exceeds vault mapping")
         self.merchant_cdf = np.cumsum(

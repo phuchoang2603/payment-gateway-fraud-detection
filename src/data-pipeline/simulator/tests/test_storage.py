@@ -253,7 +253,6 @@ def test_publication_receipt_records_skipped_cleanup(dataset):
     root, _ = dataset
     publication = json.loads((root / "_run" / "publication.json").read_text())
     assert publication["cleanup"] == "skipped"
-    assert publication["tagging"] == "skipped"
     assert (root / "raw").is_dir()
 
 
@@ -277,14 +276,6 @@ def test_publication_refuses_probe_scale_without_opt_in(tmp_path):
     prefix = tmp_path / "historical" / "guard"
     assert not (prefix / "manifest.json").exists()
     assert (prefix / "_run" / "prepared.json").exists()
-
-
-def test_publication_receipt_records_accepted_version_flag(tmp_path):
-    config = small_config(dataset_version="unprotected", accepted_version=True)
-    storage.generate(config, fs.LocalFileSystem(), str(tmp_path))
-    publication = json.loads((tmp_path / "historical" / "unprotected" / "_run" / "publication.json").read_text())
-    assert publication["accepted_version"] is True
-    assert publication["tagging"] == "skipped"
 
 
 def test_resource_samples_do_not_change_publication_receipt(tmp_path):

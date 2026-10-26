@@ -137,7 +137,9 @@ def main():
     try:
         run_archiver(
             consumer,
-            LandingStore(client, os.environ.get("LANDING_BUCKET", "synthetic-source")),
+            LandingStore(
+                client, os.environ.get("LANDING_BUCKET", "synthetic-source"), os.environ["LANDING_SOURCE_EPOCH"]
+            ),
             topics,
             os.environ.get("LABEL_TOPIC", "fraud.labels.v1"),
             stop,

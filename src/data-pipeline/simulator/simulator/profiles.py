@@ -358,7 +358,7 @@ def schedule_for_task(config: HistoricalConfig, task: GenerationTask, profiles: 
 def profiles_from_manifest(manifest: dict, directory: Path | None = None) -> Profiles:
     if manifest.get("algorithm_version") != ALGORITHM_VERSION:
         raise ValueError("unsupported historical generation algorithm for continuation")
-    profiles = build_profiles(HistoricalConfig.model_validate(manifest["configuration"]), directory)
+    profiles = build_profiles(HistoricalConfig.from_manifest(manifest), directory)
     if profiles.digest() != manifest["profile_sha256"]:
         raise ValueError("historical profile digest mismatch for continuation")
     return profiles

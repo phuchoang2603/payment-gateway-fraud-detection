@@ -1,5 +1,6 @@
 import base64
 import json
+import re
 from collections import defaultdict
 from hashlib import sha256
 
@@ -15,7 +16,10 @@ def digest(body):
 
 
 class LandingStore:
-    def __init__(self, client, bucket):
+    def __init__(self, client, bucket, source_epoch):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", source_epoch):
+            raise ValueError("invalid streaming source epoch")
+        self.source_epoch = source_epoch
         self.client = client
         self.bucket = bucket
 
@@ -63,6 +67,7 @@ def publish(store, records, label_topic):
             groups[table, version].append(row)
         manifest = {
             "format": FORMAT,
+            "source_epoch": store.source_epoch,
             "topic": topic,
             "partition": partition,
             "first_offset": first,
@@ -73,7 +78,7 @@ def publish(store, records, label_topic):
         for (table, version), rows in sorted(groups.items()):
             body = encode(table, version, rows)
             checksum = digest(body)
-            key = f"streaming/{table}/topic={topic}/partition={partition}/{first:020d}-{last:020d}-v{version}-{checksum}.parquet"
+            key = f"streaming/{table}/epoch={store.source_epoch}/topic={topic}/partition={partition}/{first:020d}-{last:020d}-v{version}-{checksum}.parquet"
             store.create(key, body)
             manifest["files"].append(
                 {
@@ -86,7 +91,7 @@ def publish(store, records, label_topic):
                 }
             )
         body = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
-        key = f"streaming/_batches/topic={topic}/partition={partition}/{first:020d}-{last:020d}-{digest(body)}.json"
+        key = f"streaming/_batches/epoch={store.source_epoch}/topic={topic}/partition={partition}/{first:020d}-{last:020d}-{digest(body)}.json"
         store.create(key, body)
         manifests.append(key)
     return manifests

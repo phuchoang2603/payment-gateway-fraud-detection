@@ -46,7 +46,6 @@ def test_generation_identity_separates_logical_inputs_from_execution():
     changed = small_config(
         output="/another/location",
         chunk_purchases=13,
-        accepted_version=True,
         **{
             "execution.workers": 2,
             "execution.max_in_flight": 2,

@@ -67,12 +67,12 @@ Simulator tests SHALL protect reproducibility for a small fixed configuration, i
 #### Scenario: Normal command lifecycle
 
 - **WHEN** the same command is run against prepared or completed output
-- **THEN** it automatically resumes compatible preparation or finishes protection and cleanup without additional mode flags
+- **THEN** it automatically resumes compatible preparation or finishes cleanup without additional mode flags
 - **AND** prepare-only leaves generated inventory ready without sorting, and completion declares skipped source checks with the DP1 gate
 
 #### Scenario: Publication failure and retry
 
-- **WHEN** accepted-object tagging loses its acknowledgement or cleanup partially fails
+- **WHEN** post-publication cleanup partially fails
 - **THEN** tests verify a visible failure, accurate successful-delete accounting and recovery by rerunning the same command without rewriting completed output
 - **AND** cleanup removes only transient `_run/` objects and retains every listed raw source file
 

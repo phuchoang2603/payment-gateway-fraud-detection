@@ -18,3 +18,11 @@
 - [x] 3.2 Record measured generation/upload throughput and bounded smoke worker/scratch settings; retain superseded full-run estimates as evidence, with full-volume Spark generation outside this slice.
 - [x] 3.3 Delete the unpublished partial v13 entirely, remove the local full-scale config and publish v13 as a small smoke/reference dataset through immutable manifest-last publication; verify deletion, receipts, manifest URI/hash and file/row/byte/date totals without modifying v8/v11/v12.
 - [x] 3.4 Deliver the concise smoke report and DP1 handoff with diagnostics, source limitations and label maturity; explicitly exclude full-volume training acceptance, defer distributed Spark generation and downstream acceptance, and leave live deployments unchanged.
+
+
+## 4. Tag-free publication and fresh streaming smoke
+
+- [ ] 4.1 Remove accepted-version/tag operations and affected config/tests/docs while retaining immutable publication and source integrity; obtain CI results without local tests/builds.
+- [ ] 4.2 Quiesce affected writers; inventory and delete only the owned streaming source, versions and multipart uploads; freeze/reset progress without deleting Kafka/shared assets or historical datasets.
+- [ ] 4.3 Exercise v13 historical integrity/linkage/lifecycle/as-of/leakage and current-time live behavior, delivery faults, landing and restart/recovery with explicit epoch/model provenance; report concrete results and limits.
+- [ ] 4.4 Push PR #89 evidence and hand off readiness to the StarRocks-native DP1 thread before any full-scale distributed generation.

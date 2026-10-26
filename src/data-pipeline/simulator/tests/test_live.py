@@ -126,6 +126,8 @@ def test_fault_selection_is_order_independent_and_holds_delivery():
 
 def test_traffic_failure_is_visible_and_reports_unfinished(capsys):
     class Model:
+        manifest = {"generation_identity": "model"}
+        config = SimpleNamespace(calibration_sha256="calibration")
         profiles = SimpleNamespace(method_pool=["expected"])
 
         def purchase(self, *args):

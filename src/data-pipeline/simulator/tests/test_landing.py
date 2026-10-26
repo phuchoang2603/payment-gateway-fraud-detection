@@ -15,6 +15,8 @@ from simulator.landing.runtime import run_archiver
 
 
 class MemoryStore:
+    source_epoch = "smoke-run"
+
     def __init__(self):
         self.objects = {}
         self.order = []
@@ -46,6 +48,8 @@ def test_manifest_last_preserves_deliveries_and_replay_identity():
     assert store.order[-1] == manifests[0]
     manifest = json.loads(store.objects[manifests[0]])
     assert (manifest["rows"], manifest["first_offset"], manifest["last_offset"]) == (2, 1, 2)
+    assert manifest["source_epoch"] == "smoke-run"
+    assert "/epoch=smoke-run/" in manifest["files"][0]["key"]
     body = store.objects[manifest["files"][0]["key"]]
     rows = pq.read_table(pa.BufferReader(body)).to_pylist()
     assert [row["event_id"] for row in rows] == ["same-event", "same-event"]
@@ -83,7 +87,7 @@ def test_conditional_create_replay_requires_matching_metadata():
         "ContentLength": len(body),
         "Metadata": {"Sha256": digest(body), "Landing-Format": FORMAT},
     }
-    store = LandingStore(client, "synthetic-source")
+    store = LandingStore(client, "synthetic-source", "smoke-run")
     store.create("streaming/file", body)
     assert client.put_object.call_args.kwargs["IfNoneMatch"] == "*"
     client.put_object.side_effect = ClientError({"Error": {"Code": "PreconditionFailed"}}, "PutObject")

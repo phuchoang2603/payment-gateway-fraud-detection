@@ -133,7 +133,6 @@ class HistoricalConfig(StrictModel):
     customer_block_size: int = Field(default=1000, gt=0)
     card_testing_bursts_per_task: int = Field(default=16, gt=0)
     minimum_source_parquet_bytes: int = Field(default=0, ge=0)
-    accepted_version: bool = False
     execution: Execution = Field(default_factory=Execution)
     calibration_sha256: str = Field(default_factory=lambda: provenance()["sha256"])
     counts: EntityCounts
@@ -144,6 +143,11 @@ class HistoricalConfig(StrictModel):
     storage: StorageLayout = Field(default_factory=StorageLayout)
     output: str = Field(min_length=1)
 
+    @classmethod
+    def from_manifest(cls, manifest):
+        configuration = manifest["configuration"]
+        return cls.model_validate({name: value for name, value in configuration.items() if name in cls.model_fields})
+
     @property
     def logical_configuration(self) -> dict:
         values = self.model_dump(
@@ -152,7 +156,6 @@ class HistoricalConfig(StrictModel):
                 "execution",
                 "output",
                 "chunk_purchases",
-                "accepted_version",
             },
         )
         return values

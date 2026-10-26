@@ -77,6 +77,8 @@ spec:
               value: {{ $settings.topics | quote }}
             - name: LANDING_GROUP
               value: {{ $settings.group | quote }}
+            - name: LANDING_SOURCE_EPOCH
+              value: {{ $settings.sourceEpoch | quote }}
             - name: LANDING_BUCKET
               value: {{ $settings.bucket | quote }}
             - name: LANDING_MAX_RECORDS

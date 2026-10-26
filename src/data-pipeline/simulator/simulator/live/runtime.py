@@ -121,6 +121,15 @@ class Labels:
 
 async def traffic(config, model, gateway, labels, stop):
     run_id = uuid4().hex
+    report(
+        "traffic_start",
+        run_id=run_id,
+        manifest=config.manifest,
+        manifest_sha256=config.manifest_sha256,
+        generation_identity=model.manifest["generation_identity"],
+        calibration_sha256=model.config.calibration_sha256,
+        clock="UTC-wall-clock",
+    )
     slots = asyncio.Semaphore(config.concurrency)
     pending = set()
     failures = []

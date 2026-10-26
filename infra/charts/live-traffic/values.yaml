@@ -9,8 +9,8 @@ simulator:
     requests: {cpu: 100m, memory: 512Mi}
     limits: {cpu: '1', memory: 2Gi}
   config:
-    manifest: s3://synthetic-source/historical/v12/manifest.json
-    manifest_sha256: 66aa2af7fecb1177e0d3891ea86054ff9c076ff6e8743b35b6bec0bd351511ce
+    manifest: s3://synthetic-source/historical/v13/manifest.json
+    manifest_sha256: 8495a20d524a487b4960e715f7542cf1e6018d16ecbd44861dc8c67fe255d3f0
     gateway_url: http://edge.payment-gateway.svc:8080
     return_url: https://example.com/checkout/complete
     duration_seconds: 300
@@ -25,7 +25,8 @@ simulator:
 archiver:
   enabled: false
   topics: payments.events.v1,fraud.labels.v1
-  group: payments-parquet-landing-v1
+  group: payments-parquet-landing-v13-smoke-20261026
+  sourceEpoch: v13-smoke-20261026
   bucket: synthetic-source
   maxRecords: 10000
   maxBytes: 33554432

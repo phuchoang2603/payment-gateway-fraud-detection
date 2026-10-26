@@ -209,31 +209,23 @@ Each generation task SHALL write at most one persistent raw object per table and
 - **WHEN** a task spans several purchase batches
 - **THEN** its events and labels are written as one raw fragment per table and physical schema version
 
-### Requirement: Accepted-version protection
+### Requirement: Completed-source immutability
 
-When the configuration declares the accepted version, publication SHALL tag the completion manifest and every listed raw object as accepted, so a storage policy can deny writes and deletes for that version.
+Publication SHALL use no object tags or accepted-version configuration. A completed manifest and its inventory SHALL remain immutable: incompatible configuration or corrupt source content SHALL fail recovery without rewriting published files. Cleanup SHALL remain restricted to transient run metadata.
 
-#### Scenario: Recover interrupted protection
+#### Scenario: Completed source recovery
 
-- **WHEN** tagging fails or its acknowledgement is lost after the manifest is durable
-- **THEN** the command exits nonzero and retains a manifest-bound publication receipt
-- **AND** rerunning the same command verifies raw object integrity and the logical configuration, skips already protected tags and retries without rewriting completed objects or the manifest
-- **AND** regeneration and overwriting of that completed version remain refused
-
-#### Scenario: Accepted version is tagged
-
-- **WHEN** the configuration declares the accepted version and the manifest is written
-- **THEN** the manifest and every listed raw object carry the accepted tag
-- **AND** candidate and pilot versions are published untagged and remain removable
-- **AND** a policy denying writes and deletes on tagged objects cannot alter the accepted dataset
+- **WHEN** a completed dataset is opened for publication recovery
+- **THEN** the command verifies its logical configuration and every inventory checksum before retrying cleanup
+- **AND** it does not regenerate, overwrite or tag completed source files or the manifest
 
 ### Requirement: Post-publication cleanup
 
-The normal command SHALL clean only transient `_run/` objects after durable publication and required protection, retaining raw files and a manifest-bound publication receipt. It SHALL count only successful deletions, report failures without withdrawing publication and automatically retry cleanup on a compatible completed version without regeneration.
+The normal command SHALL clean only transient `_run/` objects after durable publication, retaining raw files and a manifest-bound publication receipt. It SHALL count only successful deletions, report failures without withdrawing publication and automatically retry cleanup on a compatible completed version without regeneration.
 
 #### Scenario: Transient objects removed after publication
 
-- **WHEN** the normal command completes the manifest write and required protection
+- **WHEN** the normal command completes the manifest write
 - **THEN** transient `_run/` fragments and receipts are removed
 - **AND** the retained publication receipt records the removed objects and bytes while all listed raw files remain
 
