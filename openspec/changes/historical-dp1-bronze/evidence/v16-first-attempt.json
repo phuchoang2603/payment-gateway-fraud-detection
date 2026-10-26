@@ -1,0 +1,68 @@
+{
+  "workflow": "historical-dp1-bronze-vh8qh",
+  "phase": "Failed",
+  "started_at": "2026-10-26T22:28:14Z",
+  "finished_at": "2026-10-26T22:57:46Z",
+  "source": "s3://synthetic-source/historical/v16/manifest.json",
+  "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+  "files": 1954,
+  "physical_bytes": 139597476,
+  "rows": {
+    "payment_events": 795718,
+    "fraud_labels": 161967
+  },
+  "ingestion_image": "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark@sha256:155632613151d5f1a5b2dcf79f84fbec85fbb5c4c25161b149a7778dc154b275",
+  "run_id": "301b3be8-3cda-4aa9-abec-73b291ed405e",
+  "snapshots": {
+    "fraud_labels": 5152445850499535440,
+    "payment_events": 7824267020900509388
+  },
+  "result": {
+    "conservation": {
+      "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+      "method": "spark-exceptAll-bidirectional",
+      "outcome": "passed",
+      "snapshots": {
+        "fraud_labels": 5152445850499535440,
+        "payment_events": 7824267020900509388
+      }
+    },
+    "contracts": {
+      "fraud_labels": "c9baf04b2360fd0a7336b6df03e57972220d104fb78e3a0c672546412df06b7e",
+      "payment_events": "6d6b582fabe68f8be1db37698a63303514f290666a835d19173422d8f4daccaa"
+    },
+    "expected_cases": 146,
+    "governance_gaps": [],
+    "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+    "outcome": "failed",
+    "problem_count": 1,
+    "problems": {
+      "starrocks.lakehouse.bronze.raw_payment_events.attempt_context_consistency": "Aborted"
+    },
+    "run_id": "301b3be8-3cda-4aa9-abec-73b291ed405e",
+    "snapshots": {
+      "fraud_labels": 5152445850499535440,
+      "payment_events": 7824267020900509388
+    },
+    "validation_policy": "bronze-starrocks-v2"
+  },
+  "native_statuses": {
+    "Success": 145,
+    "Aborted": 1
+  },
+  "resource_incidents": [
+    {
+      "executor": 1,
+      "reason": "OOMKilled",
+      "exit_code": 137,
+      "recovered": true
+    }
+  ],
+  "sql_fix_commit": "7a61a67",
+  "fixed_query_diagnostic_violations": 0,
+  "limits": [
+    "Development dataset only; no scale or model-quality acceptance.",
+    "Exact source/output reconciliation passed after Spark recovered an executor OOM.",
+    "No accepted v16 record was created by this failed attempt."
+  ]
+}

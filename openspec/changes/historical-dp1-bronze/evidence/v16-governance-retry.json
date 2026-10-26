@@ -1,0 +1,40 @@
+{
+  "workflow": "historical-dp1-bronze-6kwlj",
+  "image": "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark@sha256:3c67e1ff86e90947fea8cd3ae0acdd6b33b9dbfdd79817d2f909e91aebd65abd",
+  "result": {
+    "conservation": {
+      "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+      "method": "spark-exceptAll-bidirectional",
+      "outcome": "passed",
+      "snapshots": {
+        "fraud_labels": 5152445850499535440,
+        "payment_events": 7824267020900509388
+      }
+    },
+    "contracts": {
+      "fraud_labels": "c9baf04b2360fd0a7336b6df03e57972220d104fb78e3a0c672546412df06b7e",
+      "payment_events": "f11cdfa3d7472dd977f48f2027dd67c26bfd4376f062a0b95a0d40c659388b77"
+    },
+    "expected_cases": 146,
+    "governance_gaps": [
+      "contract:payment_events"
+    ],
+    "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+    "outcome": "failed",
+    "problem_count": 0,
+    "problems": {},
+    "run_id": "301b3be8-3cda-4aa9-abec-73b291ed405e",
+    "snapshots": {
+      "fraud_labels": 5152445850499535440,
+      "payment_events": 7824267020900509388
+    },
+    "validation_policy": "bronze-starrocks-v2"
+  },
+  "native_statuses": {
+    "Success": 146
+  },
+  "canonical_test_ids_preserved": true,
+  "snapshot_pair_reused": true,
+  "cause": "OpenMetadata bot PUT preserves the existing nonempty description; authoritative contract provenance remained stale.",
+  "recovery": "Supported JSON Patch through Argo HTTP, followed by governance-only readback; data and native results are reused."
+}
