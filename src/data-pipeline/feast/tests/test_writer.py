@@ -1,3 +1,4 @@
+import base64
 import secrets
 import subprocess
 import threading
@@ -6,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from feast import FeatureStore
+from feast.feature_server_utils import convert_response_to_dict
 from feast.repo_config import RepoConfig
 from redis import Redis
 from redis.exceptions import ConnectionError
@@ -29,8 +31,9 @@ def redis_address():
             "-d",
             "-p",
             "127.0.0.1::6379",
-            "quay.io/opstree/redis:v7.2.16",
+            "--entrypoint",
             "redis-server",
+            "quay.io/opstree/redis:v7.2.16",
             "--save",
             "",
             "--appendonly",
@@ -119,6 +122,27 @@ def test_sdk_readback_replay_and_monotonic_timestamps(store):
     original = update(unknown=True)
     write(writer, original)
     assert writer.current(original, "customer") == original
+    response = store.get_online_features(
+        features=[
+            f"customer_snapshot:{name}"
+            for name in (*schema.FIELDS["customer"], "snapshot_metadata")
+        ],
+        entity_rows=[
+            {
+                "snapshot_key": schema.entity_key(
+                    EPOCH, "customer", original.integration_id, original.entity_id
+                )
+            }
+        ],
+        full_feature_names=True,
+    )
+    served = convert_response_to_dict(response.proto)
+    columns = dict(zip(served["metadata"]["feature_names"], served["results"], strict=True))
+    assert columns["customer_snapshot__assessed_count_1h"]["values"] == [None]
+    assert columns["customer_snapshot__assessed_amount_minor_24h"]["values"] == [2**53 + 1]
+    packet = base64.b64decode(columns["customer_snapshot__snapshot_metadata"]["values"][0])
+    metadata = wire.SnapshotUpdate.FromString(packet)
+    assert metadata.snapshot_id == original.snapshot_id and not metadata.HasField("values")
     corrected = wire.SnapshotUpdate()
     corrected.CopyFrom(original)
     corrected.revision = 2

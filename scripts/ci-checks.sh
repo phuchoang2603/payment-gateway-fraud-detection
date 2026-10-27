@@ -50,6 +50,10 @@ check_chart() {
   local chart="$1" values
   helm lint "$chart"
   helm template check "$chart" > /dev/null
+  if [[ "$chart" == "infra/charts/payment-gateway" ]]; then
+    helm lint "$chart" --set features.enabled=true
+    helm template check "$chart" --set features.enabled=true > /dev/null
+  fi
   for values in "$chart"/values-*.yaml; do
     [[ -f "$values" ]] || continue
     helm lint "$chart" -f "$values"
