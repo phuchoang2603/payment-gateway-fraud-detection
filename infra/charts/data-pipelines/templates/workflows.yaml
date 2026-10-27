@@ -1,6 +1,5 @@
 {{- if .Values.enabled }}
 {{ .Files.Get "files/workflows.yaml"
-  | replace "__GOVERNANCE_WRITES__" (include "data-pipelines.governance-writes" . | indent 8)
   | replace "__WORKFLOW_DEADLINE__" (.Values.workflow.activeDeadlineSeconds | toString)
   | replace "__SPARK_DEADLINE__" (.Values.spark.activeDeadlineSeconds | toString)
   | replace "__NATIVE_DEADLINE__" (.Values.native.activeDeadlineSeconds | toString)
@@ -9,7 +8,6 @@
   | replace "__NAMESPACE__" .Values.namespace
   | replace "__SPARK_IMAGE__" .Values.images.spark
   | replace "__OPENMETADATA_IMAGE__" .Values.images.openmetadata
-  | replace "__OPENMETADATA_URL__" (.Values.config.OPENMETADATA_URL | quote)
   | replace "__SOURCE_ROOT__" (.Values.config.SOURCE_ROOT | quote)
   | replace "__SOURCE_EPOCH__" (.Values.recurring.sourceEpoch | quote)
   | replace "__DATASET_VERSION__" (.Values.config.DATASET_VERSION | quote)

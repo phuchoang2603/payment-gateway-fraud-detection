@@ -1,20 +1,11 @@
 import re
 from dataclasses import dataclass
+from functools import cached_property
 
 import yaml
-from pyspark.sql import types as T
 
 from data_platform.products import AUDIT, contract_path
 
-SPARK_TYPES = {
-    "string": T.StringType,
-    "binary": T.BinaryType,
-    "long": T.LongType,
-    "int": T.IntegerType,
-    "double": T.DoubleType,
-    "boolean": T.BooleanType,
-    "timestamp": T.TimestampType,
-}
 STARROCKS_TYPES = {
     "string": "varchar(1073741824)",
     "binary": "varbinary",
@@ -26,17 +17,31 @@ STARROCKS_TYPES = {
 
 
 def data_type(prop):
+    from pyspark.sql import types as T
+
+    spark_types = {
+        "string": T.StringType,
+        "binary": T.BinaryType,
+        "long": T.LongType,
+        "int": T.IntegerType,
+        "double": T.DoubleType,
+        "boolean": T.BooleanType,
+        "timestamp": T.TimestampType,
+    }
+
     if prop["logicalType"] == "object":
         return physical_schema(prop["properties"])
     if prop["logicalType"] == "array":
         return T.ArrayType(data_type(prop["items"]), containsNull=not prop["items"].get("required", False))
     try:
-        return SPARK_TYPES[prop["physicalType"]]()
+        return spark_types[prop["physicalType"]]()
     except KeyError as error:
         raise ValueError(f"unsupported physical type: {prop}") from error
 
 
 def physical_schema(properties):
+    from pyspark.sql import types as T
+
     return T.StructType([T.StructField(p["name"], data_type(p), not p.get("required", False)) for p in properties])
 
 
@@ -91,8 +96,11 @@ class Rule:
 @dataclass
 class PreparedContract:
     document: dict
-    schema: T.StructType
     rules: list
+
+    @cached_property
+    def schema(self):
+        return physical_schema(self.document["schema"][0]["properties"])
 
     @property
     def business_columns(self):
@@ -137,10 +145,12 @@ def prepare(table, path=None):
         rules.append(Rule(quality["id"], quality["description"], count_query(quality["id"], quality["query"])))
     if len(declared) != len(set(declared)) or len({r.id for r in rules}) != len(rules):
         raise ValueError("duplicate quality rule ID")
-    return PreparedContract(doc, physical_schema(schema["properties"]), rules)
+    return PreparedContract(doc, rules)
 
 
 def check_physical(actual, expected, path=""):
+    from pyspark.sql import types as T
+
     if isinstance(expected, T.StructType):
         if not isinstance(actual, T.StructType) or actual.fieldNames() != expected.fieldNames():
             raise ValueError(f"schema columns differ at {path}")

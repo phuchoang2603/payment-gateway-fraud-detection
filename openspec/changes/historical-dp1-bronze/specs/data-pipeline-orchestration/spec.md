@@ -117,7 +117,7 @@ Argo SHALL schedule native OpenMetadata metadata/profiler/test-suite workflows f
 - **WHEN** a native quality job exits successfully but a required result is Failed, Aborted, stale or absent
 - **THEN** DP1 refuses acceptance and persists the actual quality or execution outcome
 
-Recurring execution SHALL use immutable pending selections and accepted progress, a daily UTC CronWorkflow, shared writer serialization and bounded selection resources. No-input runs SHALL skip Spark and native checks; profiling SHALL follow an explicit bounded cadence with visible skipped/not-due status.
+Recurring execution SHALL use immutable pending selections and accepted progress, a daily UTC CronWorkflow, shared writer serialization and bounded selection resources. No-input runs SHALL skip Spark and native checks; daily ingestion SHALL skip profiling explicitly, with bounded profiling available through a separate on-demand Argo entrypoint.
 
 ### Requirement: Readable stage dependencies
 
@@ -126,7 +126,7 @@ The Argo graph SHALL expose select, ingest, discover, validate, profile and publ
 #### Scenario: Inspect the stage graph
 
 - **WHEN** a user opens a normal DP1 run
-- **THEN** the graph shows the stage dependencies and parallel validate/profile branch without expanding individual metadata API requests
+- **THEN** the graph shows the stage dependencies and parallel validate/profile for historical runs (recurring runs skip profiling) branch without expanding individual metadata API requests
 
 #### Scenario: Profile and validation overlap
 

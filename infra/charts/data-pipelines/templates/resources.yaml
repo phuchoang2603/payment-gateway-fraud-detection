@@ -108,16 +108,6 @@ rules:
   - apiGroups: [argoproj.io]
     resources: [workflowtaskresults]
     verbs: [create, patch]
-  - apiGroups: [""]
-    resources: [secrets]
-    resourceNames: [openmetadata]
-    verbs: [get]
-  - apiGroups: [argoproj.io]
-    resources: [workflowtasksets]
-    verbs: [list, watch]
-  - apiGroups: [argoproj.io]
-    resources: [workflowtasksets/status]
-    verbs: [patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

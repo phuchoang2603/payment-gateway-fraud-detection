@@ -1,107 +1,175 @@
+import os
+from datetime import datetime
 from hashlib import sha256
 
 import yaml
 
 from data_platform.products import PORTS, PRODUCTS, contract_path
-from data_platform.readback import PRODUCT
+from data_platform.quality import entity
 
 DOMAIN = "fraud-detection"
-SOURCE_PRODUCT = "historical-payments"
+PRODUCT = "bronze-payments"
+PIPELINE = "argo.historical-dp1-bronze"
+STORAGE = "rustfs"
+TASKS = {
+    "select": ["ingest"],
+    "ingest": ["discover"],
+    "discover": ["validate", "profile"],
+    "validate": ["publish"],
+    "profile": ["publish"],
+    "publish": [],
+}
+TYPES = {
+    "string": "STRING",
+    "binary": "BINARY",
+    "long": "BIGINT",
+    "int": "INT",
+    "double": "DOUBLE",
+    "boolean": "BOOLEAN",
+    "timestamp": "TIMESTAMP",
+}
 
 
-def product_document(product):
+def product_document(product=PRODUCT):
     return yaml.safe_load((PRODUCTS / product / "product.odps.yaml").read_text())
 
 
-def contract_body(table, entity_id):
+def columns(properties):
+    result = []
+    for prop in properties:
+        logical = prop["logicalType"]
+        dtype = "STRUCT" if logical == "object" else "ARRAY" if logical == "array" else TYPES[prop["physicalType"]]
+        col = {"name": prop["name"], "dataType": dtype, "description": prop.get("description", prop["name"])}
+        if prop.get("required"):
+            col["constraint"] = "NOT_NULL"
+        if logical == "object":
+            col["children"] = columns(prop["properties"])
+        elif logical == "array":
+            item = prop["items"]
+            if item["logicalType"] == "array":
+                raise ValueError("nested array contract mapping is unsupported")
+            col["arrayDataType"] = "STRUCT" if item["logicalType"] == "object" else TYPES[item["physicalType"]]
+            if item["logicalType"] == "object":
+                col["children"] = columns(item["properties"])
+        result.append(col)
+    return result
+
+
+def contract_body(table, entity_id, owners, tests):
     artifact = contract_path(table)
     original = artifact.read_bytes()
     contract = yaml.safe_load(original)
-    provenance = (
-        f"ODCS id={contract['id']} version={contract['version']} sha256={sha256(original).hexdigest()} "
-        f"artifact=contracts/data-products/{PRODUCT}/{artifact.name}"
-    )
-    return {
+    if not owners or not tests:
+        raise ValueError("native contract requires resolved ownership and active quality references")
+    body = {
         "name": contract["id"],
         "displayName": contract["name"],
-        "description": provenance + "\n\n```yaml\n" + original.decode() + "\n```",
+        "description": f"ODCS id={contract['id']} version={contract['version']} sha256={sha256(original).hexdigest()}\n\n```yaml\n{original.decode()}\n```",
         "entity": {"id": entity_id, "type": "table"},
-        "termsOfUse": contract["description"]["usage"],
+        "schema": columns(contract["schema"][0]["properties"]),
+        "qualityExpectations": tests,
+        "owners": owners,
+        "sourceUrl": f"{os.environ.get('GIT_SOURCE_URL', 'https://github.com/phuchoang2603/payment-gateway-fraud-detection/blob/t3/historical-dp1-bronze')}/contracts/data-products/{PRODUCT}/{artifact.name}",
+        "termsOfUse": "\n\n".join(contract["description"].values()),
     }
+    classification = next(
+        (p["value"] for p in contract.get("customProperties", []) if p["property"] == "classification"), None
+    )
+    if classification:
+        body["security"] = {"dataClassification": classification}
+    if contract.get("team") != product_document()["team"]:
+        raise ValueError("contract requires separately resolved declared ownership")
+    for field in ("semantics", "security", "sla"):
+        if field in contract:
+            body[field] = contract[field]
+    if "slaProperties" in contract:
+        raise ValueError("ODCS slaProperties require an explicit supported native SLA mapping")
+    body["termsOfUse"] = contract.get("termsOfUse", body["termsOfUse"])
+    return body
 
 
-def requests(run, ids, report_uri):
-    """Named OpenMetadata writes for the ordered Argo HTTP steps."""
-    bronze = product_document(PRODUCT)
-    source = product_document(SOURCE_PRODUCT)
-    source_name = "payment-event-landing" if run.get("input_mode") == "landing" else SOURCE_PRODUCT
-    manifest = (
-        run["selection_uri"]
-        if run.get("input_mode") == "landing"
-        else f"{run['source_root'].rstrip('/')}/manifest.json"
-    )
-    description = (
-        f"workflow={run['workflow']} run_id={run['run_id']} manifest_sha256={run['manifest_sha256']} "
-        f"snapshots={run['snapshots']} evidence={report_uri}"
-    )
-    table = lambda name: {"id": ids[name], "type": "table"}  # noqa: E731
-    out = {
-        "domain": {
-            "method": "PUT",
-            "path": "/v1/domains",
-            "body": {"name": DOMAIN, "domainType": "Aggregate", "description": "Fraud detection data platform"},
-        },
-        "domain_assets": {
-            "method": "PUT",
-            "path": f"/v1/domains/{DOMAIN}/assets/add",
-            "body": {"assets": [table(name) for name in PORTS]},
-        },
-        "source_product": {
-            "method": "PUT",
-            "path": "/v1/dataProducts",
-            "body": {
-                "name": source_name,
-                "displayName": "Payment event landing" if run.get("input_mode") == "landing" else source["name"],
-                "description": f"Immutable source completion manifests {manifest} (sha256 {run['manifest_sha256']}).",
-                "domains": [DOMAIN],
-            },
-        },
-        "bronze_product": {
-            "method": "PUT",
-            "path": "/v1/dataProducts",
-            "body": {
-                "name": PRODUCT,
-                "displayName": bronze["name"],
-                "description": f"{bronze['description']['purpose']} ODPS {bronze['id']} version {bronze['version']}.",
-                "domains": [DOMAIN],
-            },
-        },
-        "product_assets": {
-            "method": "PUT",
-            "path": f"/v1/dataProducts/{PRODUCT}/assets/add",
-            "body": {"assets": [table(name) for name in PORTS]},
-        },
-    }
-    for port, name in (("payment_events", "events_contract"), ("fraud_labels", "labels_contract")):
-        body = contract_body(port, ids[port])
-        out[name] = {
-            "method": "PUT",
-            "path": "/v1/dataContracts",
-            "body": body,
-            "provenance": [{"op": "replace", "path": "/description", "value": body["description"]}],
+def source_paths(run, manifest):
+    from urllib.parse import urlsplit
+
+    root = urlsplit(run["source_root"])
+    if root.scheme != "s3" or not root.netloc:
+        raise ValueError("catalog source assets require actual S3 source locations")
+    result = {}
+    for table in PORTS:
+        files = [f for f in manifest["inventory"] if f["table"] == table]
+        if not files:
+            continue
+        relative = f"streaming/{table}/" if run.get("input_mode") == "landing" else f"raw/{table}/"
+        if any(not f["key"].startswith(relative) for f in files):
+            raise ValueError("source files do not belong to the declared port path")
+        prefix = root.path.strip("/")
+        prefix = f"{prefix}/{relative}" if prefix else relative
+        name = "source_" + sha256(f"{root.netloc}/{prefix}".encode()).hexdigest()[:20]
+        result[table] = {
+            "name": name,
+            "fullPath": f"s3://{root.netloc}/{prefix}",
+            "prefix": prefix,
+            "rows": sum(f["rows"] for f in files),
+            "bytes": sum(f["bytes"] for f in files),
+            "files": len(files),
         }
-    out["lineage"] = {
-        "method": "PUT",
-        "path": "/v1/lineage",
-        "body": {
-            "edge": {
-                "fromEntity": table("payment_events"),
-                "toEntity": table("fraud_labels"),
-                "lineageDetails": {
-                    "description": "Raw payment and label ports; business linkage belongs to silver; " + description,
-                    "pipeline": {"id": ids["pipeline"], "type": "pipeline"},
-                },
-            }
+    return result
+
+
+def execution(run, manifest, sources, stages, outcome):
+    started = int(datetime.fromisoformat(run["ingested_at"]).timestamp() * 1000)
+    inputs = [
+        {
+            "datasetFQN": f"{STORAGE}.{s['name']}",
+            "version": run["manifest_sha256"],
+            "rowCount": s["rows"],
+            "sizeBytes": s["bytes"],
+        }
+        for s in sources.values()
+    ]
+    outputs = [
+        {
+            "datasetFQN": entity(t),
+            "version": str(snapshot),
+            "mode": "append" if run.get("input_mode") == "landing" else "overwrite",
+            "rowCount": sum(f["rows"] for f in manifest["inventory"] if f["table"] == t),
+        }
+        for t, snapshot in run["snapshots"].items()
+    ]
+    task_status = []
+    for name in TASKS:
+        if name in ("select", "ingest"):
+            state = run.get("stages", {}).get(name, {"outcome": "missing"})
+        elif name == "publish":
+            state = {**stages.get("publish", {}), "outcome": outcome}
+        else:
+            state = stages.get(name, {"outcome": "missing"})
+        status = {
+            "name": name,
+            "executionStatus": {"passed": "Successful", "skipped": "Skipped", "pending": "Pending"}.get(
+                state["outcome"], "Failed"
+            ),
+            **({"startTime": state["started_at"]} if "started_at" in state else {}),
+            **({"endTime": state["ended_at"]} if "ended_at" in state else {}),
+        }
+        if name == "ingest":
+            status.update(inputs=inputs, outputs=outputs)
+        task_status.append(status)
+    return {
+        "timestamp": started,
+        "executionId": run["run_id"],
+        "executionStatus": {"passed": "Successful", "pending": "Pending"}.get(outcome, "Failed"),
+        "taskStatus": task_status,
+        "endTime": max(s.get("endTime", started) for s in task_status),
+        "inputs": inputs,
+        "outputs": outputs,
+        "parameters": {
+            "manifest_sha256": run["manifest_sha256"],
+            "snapshots": run["snapshots"],
+            "workflow": run["workflow"],
+        },
+        "metrics": {
+            "totalRowsProcessed": sum(s["rows"] for s in sources.values()),
+            "totalBytesProcessed": sum(s["bytes"] for s in sources.values()),
         },
     }
-    return out

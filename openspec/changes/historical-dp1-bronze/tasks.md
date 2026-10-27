@@ -12,7 +12,7 @@ These checked items describe retained implementation, not acceptance of the rewr
 
 ## 2. Metadata runtime rewrite
 
-- [ ] 2.1 Build a thin server-matched official OpenMetadata ingestion image with the official SDK, isolated from Spark/JVM imports; verify its native workflow and synchronization entrypoints through the existing CI/image workflow.
+- [ ] 2.1 Build a thin server-matched official OpenMetadata ingestion image with the official SDK, isolated from Spark/JVM imports, with shared SDK/runner plumbing and product-specific publication mapping; verify its native workflow and synchronization entrypoints through the existing CI/image workflow.
 - [ ] 2.2 Replace HTTP request-generation/templates with one idempotent SDK synchronization path; remove obsolete publisher glue, unused RBAC/config/dependencies and tests, and verify no parallel publisher or custom discovery/results remains.
 - [ ] 2.3 Map native nested contract schema, active raw test references, declared terms/semantics/security/SLA fields and resolvable owners while retaining Git identity/hash/YAML; existing behavioral CI must reject unsupported required mapping or unresolved owners.
 - [ ] 2.4 Synchronize product/domain/assets and entity-side membership, owners and pipeline membership; verify complete forward/reverse API readback without treating a UI drawer as proof of API absence.
@@ -21,8 +21,8 @@ These checked items describe retained implementation, not acceptance of the rewr
 
 ## 3. Argo and profiling
 
-- [ ] 3.1 Replace nested request-level workflow wrappers with a readable stage DAG and isolated parallel validate/profile configuration; verify rendered dependencies, replay/no-input short circuits and existing lifecycle behavior in CI.
-- [ ] 3.2 Enable meaningful supported scalar-column profiling with bounded sample/row scope, excluded binary fields, timeout/resources and explicit recurring cadence; verify profile coverage and truthful latest-state versus snapshot labeling.
+- [ ] 3.1 Replace nested request-level workflow wrappers with a readable stage DAG with isolated parallel historical validation/profiling and recurring profiling skipped; verify rendered dependencies, replay/no-input short circuits and existing lifecycle behavior in CI.
+- [ ] 3.2 Enable meaningful supported scalar-column profiling with bounded sample/row scope, excluded binary fields, timeout/resources and on-demand execution outside the daily ingestion path; verify profile coverage and truthful latest-state versus snapshot labeling.
 - [ ] 3.3 Identify/bound run-owned StarRocks queries and verify quiescence along with Spark cleanup before writer handoff; behavioral CI must keep unresolved cleanup blocking the next writer.
 - [ ] 3.4 Strengthen readback for native contract fields, owners, both product directions, source edges, current execution I/O/status and declared profile coverage; stale/incomplete metadata must refuse acceptance despite successful native process exit.
 

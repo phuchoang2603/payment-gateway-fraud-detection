@@ -8,30 +8,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from data_platform import quality
 from data_platform.manifest import selected_manifest
 from data_platform.products import hashes
-from data_platform.runs import VALIDATION_POLICY, accept, evidence_key, open_run, save_run
+from data_platform.runs import VALIDATION_POLICY, evidence_key, open_run, save_run
 from data_platform.storage import Store
 
-STAGES = ["preflight", "ingest", "prepare", "governance", "accept", "verify-source", "select"]
-
-
-def prepare(store, run, contracts, manifest, out):
-    key = evidence_key(run, contracts, "expected")
-    cases = quality.cases(run, manifest)
-    prepared = store.get(key)
-    if prepared is None:
-        prepared = {**quality.expected(run, contracts, cases), "prepared_at": int(time.time() * 1000)}
-        store.put(key, prepared, create=True)
-    elif prepared["cases"] != quality.expected(run, contracts, cases)["cases"]:
-        raise ValueError("prepared native rule set differs from the contracts for this run")
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "metadata.json").write_text(quality.dumps(quality.metadata_workflow()))
-    (out / "profiler.json").write_text(quality.dumps(quality.profiler_workflow()))
-    for table in ("payment_events", "fraud_labels"):
-        (out / f"{table}.json").write_text(quality.dumps(quality.test_workflow(table, cases)))
-    return prepared
+STAGES = ["preflight", "ingest", "verify-source", "select"]
 
 
 def main(argv=None):
@@ -40,7 +22,7 @@ def main(argv=None):
     parser.add_argument("stage", choices=STAGES)
     parser.add_argument("--source", default=os.environ.get("SOURCE_ROOT", "s3://synthetic-source/historical/v16"))
     parser.add_argument(
-        "--evidence", default=os.environ.get("EVIDENCE_ROOT", "s3://fraud-lakehouse-prod/dp1-evidence")
+        "--evidence", default=os.environ.get("EVIDENCE_ROOT", "s3://fraud-lakehouse-prod/dp1-evidence/catalog-v4")
     )
     parser.add_argument("--version", default=os.environ.get("DATASET_VERSION", "v16"))
     parser.add_argument("--workflow", default=os.environ.get("WORKFLOW_ID", "local"))
@@ -52,9 +34,9 @@ def main(argv=None):
     )
     parser.add_argument("--epoch", default=os.environ.get("SOURCE_EPOCH", "v16-20261026"))
     parser.add_argument("--max-batches", type=int, default=int(os.environ.get("LANDING_MAX_BATCHES", "100")))
-    parser.add_argument("--table-ids", default=os.environ.get("TABLE_IDS", "{}"))
     args = parser.parse_args(argv)
     spark = None
+    started_at = int(time.time() * 1000)
     try:
         if args.stage == "verify-source":
             from data_platform.inventory import verify_source
@@ -67,18 +49,20 @@ def main(argv=None):
             return 0
         store = Store(args.evidence)
         contracts = hashes()
-        if args.stage == "select":
+        if args.stage == "select" and args.input_mode == "landing":
             from data_platform.landing import select
 
             if args.max_batches < 1:
                 raise ValueError("landing batch limit must be positive")
             manifest = select(Store(args.source), store, args.epoch, args.max_batches)
-            out = Path(args.out)
-            out.mkdir(parents=True, exist_ok=True)
-            (out / "version").write_text(manifest["dataset_version"] if manifest else "none")
-            print(json.dumps({"input": bool(manifest), "version": manifest["dataset_version"] if manifest else None}))
-            return 0
-        if args.stage in ("preflight", "ingest"):
+            if manifest is None:
+                out = Path(args.out)
+                out.mkdir(parents=True, exist_ok=True)
+                for name, value in {"version": "none", "ingest": "false", "native": "false"}.items():
+                    (out / name).write_text(value)
+                return 0
+            args.version = manifest["dataset_version"]
+        if args.stage in ("preflight", "ingest", "select"):
             if args.input_mode == "landing":
                 from data_platform.landing import selection
 
@@ -112,8 +96,33 @@ def main(argv=None):
             else:
                 run["source_product"] = manifest["data_product"]
             run["source_root"] = args.source
+            if args.stage == "select":
+                run.setdefault("stages", {}).setdefault(
+                    "select", {"outcome": "passed", "started_at": started_at, "ended_at": int(time.time() * 1000)}
+                )
             save_run(store, run)
-            if args.stage == "preflight":
+            if args.stage in ("preflight", "select"):
+                out = Path(args.out)
+                out.mkdir(parents=True, exist_ok=True)
+                conservation = run.get("conservation", {})
+                ingested = (
+                    set(run["snapshots"]) == set(contracts)
+                    and conservation.get("outcome") == "passed"
+                    and conservation.get("snapshots") == run["snapshots"]
+                    and conservation.get("manifest_sha256") == run["manifest_sha256"]
+                )
+                from data_platform.bronze_metadata import stage_matches
+
+                native = ingested and all(
+                    stage_matches(store.get(evidence_key(run, contracts, stage)), run)
+                    for stage in ("discover", "validate", "profile")
+                )
+                for name, value in {
+                    "version": args.version,
+                    "ingest": str(not ingested).lower(),
+                    "native": str(not native).lower(),
+                }.items():
+                    (out / name).write_text(value)
                 print(json.dumps({"run_id": run["run_id"], "state": run["state"]}))
                 return 0
         else:
@@ -132,35 +141,13 @@ def main(argv=None):
 
             spark = session(args.local_warehouse)
             ingest(spark, args.source, manifest, store, run)
-        elif args.stage == "prepare":
-            if run.get("input_mode") == "landing":
-                from data_platform.landing import selection
-
-                manifest, digest = selection(store, args.version)
-            else:
-                manifest, digest = selected_manifest(run["source_root"])
-            if digest != run["manifest_sha256"]:
-                raise ValueError("source manifest changed since ingestion")
-            prepare(store, run, contracts, manifest, Path(args.out))
-        elif args.stage == "governance":
-            from data_platform.governance import requests
-
-            report = f"{store.root}/{evidence_key(run, contracts, 'result')}"
-            writes = requests(run, json.loads(args.table_ids), report)
-            print(json.dumps({name: {**write, "body": json.dumps(write["body"])} for name, write in writes.items()}))
-        elif args.stage == "accept":
-            from data_platform import readback
-
-            expected = store.get(evidence_key(run, contracts, "expected"))
-            found = {}
-            for table in ("payment_events", "fraud_labels"):
-                found.update(readback.observed(table))
-            problems = readback.verify(expected, found, expected["prepared_at"])
-            gaps = readback.governance_gaps(("payment_events", "fraud_labels"), contracts)
-            accept(store, run, contracts, problems, gaps)
+            run.setdefault("stages", {}).setdefault(
+                "ingest", {"outcome": "passed", "started_at": started_at, "ended_at": int(time.time() * 1000)}
+            )
+            save_run(store, run)
         return 0
     except Exception as error:
-        if args.stage in ("preflight", "ingest", "prepare", "accept") and "run" in locals():
+        if args.stage in ("preflight", "ingest", "select") and "run" in locals():
             failure = {
                 "validation_policy": VALIDATION_POLICY,
                 "run_id": run["run_id"],
@@ -172,8 +159,7 @@ def main(argv=None):
                 "run_time": datetime.now(timezone.utc).isoformat(),
                 "execution_errors": [{"stage": args.stage, "type": type(error).__name__}],
             }
-            if args.stage != "accept" or not isinstance(error, ValueError):
-                store.put(evidence_key(run, contracts, f"error-{args.stage}"), failure)
+            store.put(evidence_key(run, contracts, f"error-{args.stage}"), failure)
         print(
             json.dumps({"stage": args.stage, "error_type": type(error).__name__, "outcome": "error"}), file=sys.stderr
         )

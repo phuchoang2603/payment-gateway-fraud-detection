@@ -134,7 +134,7 @@ The catalog SHALL expose pipeline tasks/dependencies, owners, product membership
 
 ### Requirement: Meaningful scoped native profiling
 
-Native profiling SHALL expose supported useful scalar-column statistics beyond table row/column counts, with explicit eligible columns, sample/row bounds, cadence, timeout, collection time and sampled/full coverage. V16 development acceptance SHALL exercise meaningful column profiling. Recurring runs SHALL declare a bounded profiling cadence and distinguish not-due/skipped from collected results. Unsupported nested/binary metrics SHALL be excluded explicitly. Latest-state profiles SHALL NOT be reported as snapshot-specific acceptance or business/distribution validity.
+Native profiling SHALL expose supported useful scalar-column statistics beyond table row/column counts, with explicit eligible columns, sample/row bounds, execution policy, timeout, collection time and sampled/full coverage. V16 development acceptance SHALL exercise meaningful column profiling. Daily recurring ingestion SHALL skip profiling explicitly; a separate on-demand Argo entrypoint SHALL collect bounded profiles when requested. Unsupported nested/binary metrics SHALL be excluded explicitly. Latest-state profiles SHALL NOT be reported as snapshot-specific acceptance or business/distribution validity.
 
 #### Scenario: Inspect a development profile
 

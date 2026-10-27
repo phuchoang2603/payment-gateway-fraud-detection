@@ -14,13 +14,15 @@ native:
 config:
   SOURCE_ROOT: s3://synthetic-source/historical/v16
   DATASET_VERSION: v16
-  EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence/raw-v3
+  EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence/catalog-v4
   ICEBERG_REST_URI: https://minio.home.phuchoang.sbs/iceberg
   ICEBERG_WAREHOUSE: fraud-lakehouse-prod
   ICEBERG_SIGV4_ENABLED: "true"
   ICEBERG_SIGNING_NAME: s3
   S3_ENDPOINT: https://minio.home.phuchoang.sbs
   AWS_REGION: us-east-1
+  ARGO_WORKFLOWS_URL: https://workflows.phuchoang.sbs
+  PROFILE_MAX_ROWS: "100000"
   OPENMETADATA_URL: http://openmetadata.openmetadata.svc.cluster.local:8585/api
 externalSecrets:
   - name: lakehouse-rustfs
@@ -32,9 +34,6 @@ externalSecrets:
     store: fraud-doppler
     data:
       OPENMETADATA_TOKEN: OPENMETADATA_TOKEN
-    template:
-      OPENMETADATA_TOKEN: "{{ .OPENMETADATA_TOKEN }}"
-      authorization: "Bearer {{ .OPENMETADATA_TOKEN }}"
   - name: dp1-starrocks
     store: doppler
     data:

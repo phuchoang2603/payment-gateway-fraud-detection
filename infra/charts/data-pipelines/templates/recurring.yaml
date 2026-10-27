@@ -14,11 +14,9 @@ spec:
   workflowSpec:
     workflowTemplateRef:
       name: historical-dp1-bronze
-    entrypoint: recurring
     arguments:
       parameters:
         - {name: input-mode, value: landing}
         - {name: source-root, value: {{ .Values.recurring.sourceRoot | quote }}}
         - {name: source-epoch, value: {{ .Values.recurring.sourceEpoch | quote }}}
-        - {name: profile, value: "false"}
 {{- end }}

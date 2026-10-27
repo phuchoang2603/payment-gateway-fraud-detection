@@ -22,7 +22,7 @@ Platform-owned StarRocks reads the existing RustFS REST catalog with native SigV
 
 ### 2. One thin metadata image with clear responsibility
 
-Build on the exact official OpenMetadata ingestion version matched to the server, initially 2.0.6, pinning the final image digest. Keep native StarRocks metadata, profiler and test-suite workflows and their native results. Use the official SDK for explicit product/contract mapping, ownership, source lineage, pipeline task/execution publication and readback. Keep this runtime free of Spark/JVM dependencies; separate pure contract mapping from modules importing PySpark.
+Build on the exact official OpenMetadata ingestion version matched to the server, initially 2.0.6, pinning the final image digest. Keep native StarRocks metadata, profiler and test-suite workflows and their native results. Use the official SDK for explicit product/contract mapping, ownership, source lineage, pipeline task/execution publication and readback. Keep this reusable data-platform metadata runtime free of Spark/JVM dependencies. Share the official SDK client, secret-safe configuration and native workflow runner across product-specific publication modules; keep DP1 contract/run/acceptance mapping in its own module. DP2/DP3 can add their publication modules to this image and invoke them through Argo without duplicating SDK plumbing. Separate pure contract mapping from modules importing PySpark.
 
 Replace individual HTTP nodes and request-generation glue with one idempotent SDK synchronization path. Do not keep a second HTTP publisher or compatibility wrapper. Retain native discovery as the sole table identity authority and native workflows as the sole test/profile result authority. If supported external-catalog selection, nested schemas or a required API field fail, report incomplete integration; do not invent entities or fall back to custom discovery/results.
 
@@ -40,7 +40,7 @@ Publish pipeline task definitions and dependencies matching the visible Argo sta
 
 ### 5. Compact Argo graph with bounded parallelism
 
-Use a top-level DAG with select -> ingest -> discover -> validate/profile in parallel -> publish/readback/accept. Express dependencies directly, reuse stage templates and provide readable supported display names. Keep API-level details in container logs instead of separate graph nodes. Preparation may return replay or no-input; no-input skips Spark, discovery, validation and profiling, while metadata-only recovery reuses original snapshots/results without ingesting or validating again.
+Use a top-level DAG with select -> ingest -> discover -> validate/profile in parallel for historical runs -> publish/readback/accept. Express dependencies directly, reuse stage templates and provide readable supported display names. Keep API-level details in container logs instead of separate graph nodes. Preparation may return replay or no-input; no-input skips Spark, discovery, validation and profiling, while metadata-only recovery reuses original snapshots/results without ingesting or validating again.
 
 Validation and profiling use isolated per-run configurations, native work directories and bounded resources/connections, sharing immutable candidate context. Join their declared outcomes before acceptance; a required profile failure is visible and cannot be hidden by SQL success. No concurrent mutation of test definitions or snapshot selection. If resource measurements require serialization, preserve the same stage dependencies and record the capacity limit.
 
@@ -48,7 +48,7 @@ Keep bounded Argo retry authority and Spark restart policy Never, the writer mut
 
 ### 6. Meaningful bounded profiling
 
-Enable native scalar-column metrics supported by the selected StarRocks connector, including useful null/distinct/range statistics where supported; exclude binary Kafka payloads and unsupported nested metrics. For v16, request bounded meaningful column profiling rather than only row/column counts. Declare sampled versus full coverage, eligible columns, row/sample limits, timeout, threads, cadence and observed cost. No-input runs do not profile; recurring profiling has an explicit bounded cadence and records skipped/not-due status.
+Enable native scalar-column metrics supported by the selected StarRocks connector, including useful null/distinct/range statistics where supported; exclude binary Kafka payloads and unsupported nested metrics. For v16, request bounded meaningful column profiling rather than only row/column counts. Declare sampled versus full coverage, eligible columns, row/sample limits, timeout, threads and observed cost. Daily recurring ingestion skips profiling explicitly. A separate on-demand Argo entrypoint collects bounded profiles when requested; no-input runs do not profile.
 
 Record whether a profile describes latest catalog state or an explicitly supported snapshot scope, its collection time and sampling. Do not attach unscoped latest-state statistics as proof about the candidate snapshot. Native profiling supplements raw acceptance; it does not move expensive business-quality checks into DP1 or imply distribution/model-quality acceptance.
 

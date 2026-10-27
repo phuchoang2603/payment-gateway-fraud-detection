@@ -1,7 +1,8 @@
-import json
+import time
 from dataclasses import dataclass
 from hashlib import sha256
 
+from data_platform.catalog import server
 from data_platform.contracts import prepare
 from data_platform.products import PORTS
 
@@ -137,14 +138,6 @@ def connection():
     }
 
 
-def server():
-    return {
-        "hostPort": "${OPENMETADATA_URL}",
-        "authProvider": "openmetadata",
-        "securityConfig": {"jwtToken": "${OPENMETADATA_TOKEN}"},
-    }
-
-
 def metadata_workflow():
     return {
         "source": {
@@ -170,8 +163,8 @@ def profiler_workflow():
         "type": "Profiler",
         "schemaFilterPattern": {"includes": [f"^{SCHEMA}$"]},
         "tableFilterPattern": {"includes": [f"^{physical_table(table)}$" for table in PORTS]},
-        "computeColumnMetrics": False,
-        "metrics": ["rowCount", "columnCount"],
+        "computeColumnMetrics": True,
+        "metrics": ["rowCount", "columnCount", "nullCount", "distinctCount", "min", "max"],
         "threadCount": 2,
         "timeoutSeconds": 600,
         "useStatistics": False,
@@ -214,5 +207,15 @@ def test_workflow(table, case_list):
     }
 
 
-def dumps(value):
-    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+def prepare_run(store, run, contracts, manifest):
+    from data_platform.runs import evidence_key
+
+    key = evidence_key(run, contracts, "expected")
+    rendered = expected(run, contracts, cases(run, manifest))
+    prepared = store.get(key)
+    if prepared is None:
+        prepared = {**rendered, "prepared_at": int(time.time() * 1000)}
+        store.put(key, prepared, create=True)
+    elif prepared["cases"] != rendered["cases"]:
+        raise ValueError("prepared native rule set differs from the contracts for this run")
+    return prepared
