@@ -189,7 +189,15 @@ class Entity:
             self.expirations[window][0][0] for window in windows if self.expirations[window]
         )
         self.next_timer = min(boundaries, default=None)
-        signature = json.dumps([list(coverage.values()), values], sort_keys=True)
+        signature = json.dumps(
+            [
+                list(coverage.values()),
+                values,
+                [self.counts[window] for window in windows],
+                [(progress.partition, progress.consumed) for progress in self.progress],
+            ],
+            sort_keys=True,
+        )
         if signature == self.previous:
             return None
         self.previous = signature

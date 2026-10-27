@@ -89,6 +89,10 @@ def test_bootstrap_coverage_unknown_then_empty_zero_and_bounded_state():
     coverage, values = state.advance(ANCHOR)
     assert coverage == {HOUR: False, DAY: False} and values == {}
     assert state.next_timer == ANCHOR + 1
+    coverage, values = state.advance(ANCHOR + 1)
+    assert coverage == {HOUR: False, DAY: False} and values == {}
+    assert state.revision == 2
+    assert state.advance(ANCHOR + 2) is None
     coverage, values = state.advance(ANCHOR + HOUR)
     assert coverage == {HOUR: True, DAY: False}
     assert values == {"assessed_count_1h": 1}
@@ -212,7 +216,7 @@ def test_protobuf_context_and_finalized_decision_validation():
     event.attempt_started.context.snapshot.total.currency = "USD"
     event.attempt_started.context.snapshot.total.minor_units = 100
     event.attempt_started.signals.payment_method.fingerprint = "method"
-    event.attempt_started.signals.attempted_at.CopyFrom(event.occurred_at)
+    event.attempt_started.signals.attempted_at.FromMicroseconds(ANCHOR - 76_000)
     fact, recorded_at = decode(event.SerializeToString())
     assert fact.device is None and fact.amount == 100
     assert fact.started_at == ANCHOR and recorded_at == ANCHOR

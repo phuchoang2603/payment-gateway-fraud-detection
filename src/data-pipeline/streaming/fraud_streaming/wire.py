@@ -51,10 +51,10 @@ def decode(raw):
             or total.currency != "USD"
             or total.minor_units < 0
             or not body.signals.HasField("attempted_at")
-            or body.signals.attempted_at != event.occurred_at
             or (body.signals.HasField("device_fingerprint") and not body.signals.device_fingerprint)
         ):
             raise ValueError("invalid self-contained attempt context")
+        body.signals.attempted_at.ToDatetime()
         context = dict(
             customer=body.context.customer.customer_id,
             method=body.signals.payment_method.fingerprint,
