@@ -73,6 +73,8 @@ spec:
               value: _schemas
             - name: KARAPACE_REPLICATION_FACTOR
               value: {{ .Values.kafka.replicationFactor | quote }}
+            - name: KARAPACE_PRODUCER_ACKS
+              value: all
             - name: KARAPACE_COMPATIBILITY
               value: BACKWARD_TRANSITIVE
             - name: KARAPACE_CONSUMER_REQUEST_MAX_BYTES
