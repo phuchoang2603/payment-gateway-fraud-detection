@@ -80,11 +80,7 @@ func serve(ctx context.Context) error {
 	if err := cfg.ValidateServe(); err != nil {
 		return err
 	}
-	raw, err := os.ReadFile(cfg.IntegrationsFile)
-	if err != nil {
-		return fmt.Errorf("read integrations file: %w", err)
-	}
-	integrations, err := domain.ParseIntegrations(raw)
+	integrations, err := domain.ParseIntegrations([]byte(cfg.IntegrationsJSON))
 	if err != nil {
 		return err
 	}

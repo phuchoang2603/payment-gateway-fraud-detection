@@ -4,8 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -21,11 +19,7 @@ func TestKeysResolveOnlyThroughTheirHash(t *testing.T) {
 	raw := fmt.Sprintf(`[
 	{"integration_id":"int-a","name":"a","api_key_sha256":%q,"synthetic":true,"webhook":{"url":"https://hook","secret":"s","events":["payment.succeeded"]}},
 	{"integration_id":"int-b","name":"b","api_key_sha256":%q,"synthetic":false}]`, digest("key-a"), digest("key-b"))
-	path := filepath.Join(t.TempDir(), "integrations.json")
-	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	registry, err := integrations.Load(path)
+	registry, err := integrations.Parse([]byte(raw))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +44,7 @@ func TestKeysResolveOnlyThroughTheirHash(t *testing.T) {
 	}
 }
 
-func TestInvalidIntegrationFilesAreRejected(t *testing.T) {
+func TestInvalidIntegrationsAreRejected(t *testing.T) {
 	good := digest("k")
 	tests := map[string]string{
 		"empty list":     `[]`,
@@ -67,8 +61,5 @@ func TestInvalidIntegrationFilesAreRejected(t *testing.T) {
 				t.Fatal("expected an error")
 			}
 		})
-	}
-	if _, err := integrations.Load(filepath.Join(t.TempDir(), "missing.json")); err == nil {
-		t.Fatal("a missing file must fail")
 	}
 }

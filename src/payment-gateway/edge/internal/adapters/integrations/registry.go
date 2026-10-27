@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/edge/internal/domain"
 )
@@ -24,14 +23,6 @@ type Registry struct {
 	byID      map[string]domain.Integration
 }
 
-func Load(path string) (*Registry, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read integrations file: %w", err)
-	}
-	return Parse(raw)
-}
-
 // Parse reads only the identity and credential fields; webhook settings belong to the notifier.
 func Parse(raw []byte) (*Registry, error) {
 	var entries []entry
@@ -39,7 +30,7 @@ func Parse(raw []byte) (*Registry, error) {
 		return nil, fmt.Errorf("parse integrations: %w", err)
 	}
 	if len(entries) == 0 {
-		return nil, errors.New("integrations file must list at least one integration")
+		return nil, errors.New("integrations must list at least one integration")
 	}
 	registry := &Registry{
 		byKeyHash: make(map[[sha256.Size]byte]domain.Integration, len(entries)),

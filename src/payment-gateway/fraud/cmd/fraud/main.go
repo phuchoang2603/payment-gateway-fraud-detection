@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -92,9 +91,9 @@ func run() error {
 	store := postgres.New(pool)
 	var guard application.VelocityReader
 	if address := os.Getenv("FRAUD_AUTH_REDIS_ADDR"); address != "" {
-		password, err := os.ReadFile(os.Getenv("FRAUD_AUTH_REDIS_PASSWORD_FILE"))
-		if err != nil {
-			return fmt.Errorf("read authorization Redis password: %w", err)
+		password := os.Getenv("FRAUD_AUTH_REDIS_PASSWORD")
+		if password == "" {
+			return errors.New("FRAUD_AUTH_REDIS_PASSWORD is required")
 		}
 		short, err := strconv.ParseInt(os.Getenv("FRAUD_VELOCITY_THRESHOLD_10S"), 10, 64)
 		if err != nil {
@@ -104,7 +103,7 @@ func run() error {
 		if err != nil {
 			return errors.New("FRAUD_VELOCITY_THRESHOLD_60S must be a positive integer")
 		}
-		observer, err := velocity.New(velocity.Config{Address: address, Password: strings.TrimSpace(string(password)), Epoch: os.Getenv("FRAUD_VELOCITY_EPOCH"), PolicyVersion: "velocity-observe-v1", RetryHorizon: config.RetryHorizon, Timeout: config.GuardTimeout, Threshold10s: short, Threshold60s: long})
+		observer, err := velocity.New(velocity.Config{Address: address, Password: password, Epoch: os.Getenv("FRAUD_VELOCITY_EPOCH"), PolicyVersion: "velocity-observe-v1", RetryHorizon: config.RetryHorizon, Timeout: config.GuardTimeout, Threshold10s: short, Threshold60s: long})
 		if err != nil {
 			return err
 		}

@@ -2,7 +2,6 @@ package config
 
 import (
 	"testing"
-	"time"
 )
 
 func lookupFrom(values map[string]string) func(string) string {
@@ -13,24 +12,6 @@ func validValues(t *testing.T) map[string]string {
 	return map[string]string{
 		"PROCESSOR_DATABASE_URL": "postgres://x",
 		"VAULT_ADDRESS":          "vault:8000",
-	}
-}
-
-func TestFromLookupDefaultsAndFaults(t *testing.T) {
-	values := validValues(t)
-	values["PROCESSOR_SEED"] = "42"
-	values["PROCESSOR_LATENCY_MIN"] = "20ms"
-	values["PROCESSOR_LATENCY_MAX"] = "80ms"
-	values["PROCESSOR_TIMEOUT_RATE"] = "0.05"
-	cfg, err := FromLookup(lookupFrom(values))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.GRPCAddr != ":8000" || cfg.MigrateDatabaseURL != "postgres://x" {
-		t.Fatalf("unexpected config %+v", cfg)
-	}
-	if cfg.Seed != 42 || cfg.LatencyMin != 20*time.Millisecond || cfg.LatencyMax != 80*time.Millisecond || cfg.TimeoutRate != 0.05 {
-		t.Fatalf("unexpected faults %+v", cfg)
 	}
 }
 

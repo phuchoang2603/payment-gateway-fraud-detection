@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -16,7 +15,7 @@ const (
 	defaultShutdownTimeout = 10 * time.Second
 )
 
-// Environment variables (each secret also accepts <NAME>_FILE with a mounted file path):
+// Environment variables:
 //
 //	VAULT_GRPC_ADDR (VaultService), VAULT_PROCESSING_ADDR (ProcessingService), VAULT_SHUTDOWN_TIMEOUT
 //	VAULT_DATABASE_URL, VAULT_MIGRATE_DATABASE_URL (owner role, falls back to VAULT_DATABASE_URL)
@@ -57,30 +56,20 @@ func FromLookup(lookup func(string) string) (Config, error) {
 		}
 		cfg.ShutdownTimeout = duration
 	}
-	var err error
-	if cfg.DatabaseURL, err = secret(lookup, "VAULT_DATABASE_URL"); err != nil {
-		return Config{}, err
-	}
-	if cfg.MigrateDatabaseURL, err = secret(lookup, "VAULT_MIGRATE_DATABASE_URL"); err != nil {
-		return Config{}, err
-	}
+	cfg.DatabaseURL = lookup("VAULT_DATABASE_URL")
+	cfg.MigrateDatabaseURL = lookup("VAULT_MIGRATE_DATABASE_URL")
 	if cfg.MigrateDatabaseURL == "" {
 		cfg.MigrateDatabaseURL = cfg.DatabaseURL
 	}
-	encoded, err := secret(lookup, "VAULT_ENCRYPTION_KEY")
-	if err != nil {
-		return Config{}, err
-	}
+	encoded := lookup("VAULT_ENCRYPTION_KEY")
 	if encoded != "" {
-		if cfg.EncryptionKey, err = base64.StdEncoding.DecodeString(encoded); err != nil {
+		key, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
 			return Config{}, fmt.Errorf("VAULT_ENCRYPTION_KEY must be base64: %w", err)
 		}
+		cfg.EncryptionKey = key
 	}
-	fingerprintKey, err := secret(lookup, "VAULT_FINGERPRINT_KEY")
-	if err != nil {
-		return Config{}, err
-	}
-	cfg.FingerprintKey = []byte(fingerprintKey)
+	cfg.FingerprintKey = []byte(lookup("VAULT_FINGERPRINT_KEY"))
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -110,30 +99,14 @@ func (c Config) Validate() error {
 }
 
 func MigrateURL(lookup func(string) string) (string, error) {
-	url, err := secret(lookup, "VAULT_MIGRATE_DATABASE_URL")
-	if err != nil {
-		return "", err
-	}
+	url := lookup("VAULT_MIGRATE_DATABASE_URL")
 	if url == "" {
-		if url, err = secret(lookup, "VAULT_DATABASE_URL"); err != nil {
-			return "", err
-		}
+		url = lookup("VAULT_DATABASE_URL")
 	}
 	if url == "" {
 		return "", fmt.Errorf("VAULT_MIGRATE_DATABASE_URL or VAULT_DATABASE_URL is required")
 	}
 	return url, nil
-}
-
-func secret(lookup func(string) string, name string) (string, error) {
-	if path := lookup(name + "_FILE"); path != "" {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return "", fmt.Errorf("read %s_FILE: %w", name, err)
-		}
-		return strings.TrimSpace(string(raw)), nil
-	}
-	return lookup(name), nil
 }
 
 func validateAddr(name, addr string) error {
