@@ -1,8 +1,11 @@
 import hashlib
 import pickle
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+from random import Random
 
 import pytest
+from features.reference import snapshot as reference_snapshot
 
 from fraud_streaming.model import DAY, HOUR, RETENTION, Attempt, Contribution, Entity, Fact, Packet
 from fraud_streaming.wire import PaymentEvent, SnapshotUpdate, decode, snapshot
@@ -116,6 +119,82 @@ def test_snapshot_identity_and_same_anchor_late_correction():
     assert identity == hashlib.sha256(second.SerializeToString(deterministic=True)).hexdigest()
 
 
+@pytest.mark.parametrize("view", ["customer", "method"])
+def test_rolling_state_matches_reference_after_late_input_and_restore(view):
+    random = Random(42)
+    state = Entity(view, "integration", view, ANCHOR - 8 * DAY)
+    history = []
+    observed = {}
+
+    def instant(microseconds):
+        return datetime(1970, 1, 1, tzinfo=UTC) + timedelta(microseconds=microseconds)
+
+    def event(value):
+        return {
+            "integration_id": value.integration,
+            "payment_id": value.payment,
+            "occurred_at": instant(value.started_at),
+            "attempt_started": {
+                "attempt_id": value.attempt,
+                "context": {
+                    "customer": {"customer_id": value.customer},
+                    "snapshot": {"total": {"minor_units": value.amount, "currency": "USD"}},
+                },
+                "signals": {
+                    "payment_method": {"fingerprint": value.method},
+                    "device_fingerprint": value.device,
+                },
+            },
+        }
+
+    def compare(now):
+        result = state.advance(now)
+        if result is not None:
+            observed.clear()
+            observed.update(result[1])
+        current = event(start("current", when=now))
+        expected = reference_snapshot(
+            current,
+            history,
+            scope=view,
+            anchor=instant(now),
+            cutoff=instant(now),
+            coverage={
+                window: "complete"
+                for window in ("1h", "24h", "7d")[: 3 if view == "customer" else 2]
+            },
+            status="available",
+        )
+        values = {
+            name.removeprefix(f"{view}_snapshot_"): value
+            for name, value in expected["values"].items()
+        }
+        if view == "customer":
+            last = expected["last_assessed_at"]
+            values["last_assessed_start_at"] = (
+                (datetime.fromisoformat(last) - instant(0)) // timedelta(microseconds=1)
+                if last is not None
+                else None
+            )
+        assert observed == values
+
+    for index in range(128):
+        now = ANCHOR + index * HOUR // 8
+        value = start(
+            str(index),
+            when=now - random.choice((0, HOUR, DAY, 7 * DAY, random.randrange(7 * DAY))),
+            device=random.choice((None, "one", "two")),
+            amount=random.randrange(10_000),
+        )
+        state.add(contribution(value, now=now))
+        state.add(contribution(value, now=now))
+        history.append(event(value))
+        if index == 64:
+            state = pickle.loads(pickle.dumps(state))
+        compare(now)
+    compare(now + 7 * DAY + 1)
+
+
 def test_protobuf_context_and_finalized_decision_validation():
     event = PaymentEvent(
         event_id="event",
@@ -132,7 +211,7 @@ def test_protobuf_context_and_finalized_decision_validation():
     event.attempt_started.context.snapshot.total.minor_units = 100
     event.attempt_started.signals.payment_method.fingerprint = "method"
     event.attempt_started.signals.attempted_at.CopyFrom(event.occurred_at)
-    fact = decode(event.SerializeToString())
+    fact, _ = decode(event.SerializeToString())
     assert fact.device is None and fact.amount == 100
     event.attempt_started.context.snapshot.total.currency = "EUR"
     with pytest.raises(ValueError, match="context"):

@@ -27,6 +27,14 @@ def register(ctx, timestamp, logical):
         service.register_processing_time_timer(timer_at(timestamp))
 
 
+def delete_timer(ctx, timestamp, logical):
+    service = ctx.timer_service()
+    if logical:
+        service.delete_event_time_timer(timer_at(timestamp))
+    else:
+        service.delete_processing_time_timer(timer_at(timestamp))
+
+
 class Clock(TimestampAssigner):
     def extract_timestamp(self, value, record_timestamp):
         return value.now // 1000
@@ -71,11 +79,9 @@ class ObserveSource(KeyedProcessFunction):
                 raise ValueError("clock controls are forbidden in live mode")
             observed = int(json.loads(bytes(raw))["clock_us"])
         elif topic == self.topic:
-            fact = decode(raw)
+            fact, recorded_at = decode(raw)
             if self.logical:
-                from fraud_streaming.wire import PaymentEvent
-
-                observed = PaymentEvent.FromString(bytes(raw)).recorded_at.ToMicroseconds()
+                observed = recorded_at
             else:
                 observed = micros()
         else:
@@ -124,17 +130,17 @@ class Deduplicate(KeyedProcessFunction):
 
     def open(self, runtime_context):
         self.state = runtime_context.get_state(
-            ValueStateDescriptor("event-identity-v1", Types.PICKLED_BYTE_ARRAY())
+            ValueStateDescriptor("event-identity-v2", Types.STRING())
         )
 
     def process_element(self, packet, ctx):
         prior = self.state.value()
         if prior is not None:
-            if prior[0] != packet.fact.digest:
+            if prior != packet.fact.digest:
                 raise ValueError("conflicting event identity/content")
             return
         expires = packet.now + RETENTION
-        self.state.update((packet.fact.digest, expires))
+        self.state.update(packet.fact.digest)
         register(ctx, expires, self.logical)
         yield packet
 
@@ -154,9 +160,13 @@ class MatchAttempts(KeyedProcessFunction):
 
     def process_element(self, packet, ctx):
         state = self.state.value() or Attempt()
+        previous_expiry = state.expires_at
         contribution = state.accept(packet)
         self.state.update(state)
-        register(ctx, state.expires_at, self.logical)
+        if state.expires_at != previous_expiry:
+            if previous_expiry:
+                delete_timer(ctx, previous_expiry, self.logical)
+            register(ctx, state.expires_at, self.logical)
         if contribution is not None:
             yield contribution
 
@@ -177,19 +187,15 @@ class Aggregate(KeyedProcessFunction):
 
     def open(self, runtime_context):
         self.state = runtime_context.get_state(
-            ValueStateDescriptor(f"{self.view}-snapshot-v1", Types.PICKLED_BYTE_ARRAY())
+            ValueStateDescriptor(f"{self.view}-snapshot-v2", Types.PICKLED_BYTE_ARRAY())
         )
 
     def emit(self, state, now, ctx):
         previous_timer = state.next_timer
         values = state.advance(now)
         if previous_timer is not None and previous_timer != state.next_timer:
-            service = ctx.timer_service()
-            if self.logical:
-                service.delete_event_time_timer(timer_at(previous_timer))
-            else:
-                service.delete_processing_time_timer(timer_at(previous_timer))
-        if state.next_timer is not None:
+            delete_timer(ctx, previous_timer, self.logical)
+        if state.next_timer is not None and state.next_timer != previous_timer:
             register(ctx, state.next_timer, self.logical)
         self.state.update(state)
         if values is not None:

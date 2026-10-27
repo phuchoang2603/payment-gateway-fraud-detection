@@ -105,7 +105,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                 ]
             )
             flink = (
-                DockerContainer(os.environ["FLINK_IMAGE"])
+                DockerContainer(os.environ["TEST_IMAGE"])
                 .with_network(network)
                 .with_exposed_ports(8081)
                 .waiting_for(HttpWaitStrategy(8081, "/overview").with_startup_timeout(120))

@@ -318,14 +318,7 @@ func (c *Client) evaluate(update *featuresv1.SnapshotUpdate, writeAt time.Time, 
 	}
 	observation.Status = "available"
 	for window, coverage := range windows {
-		if coverage != featuresv1.Coverage_COVERAGE_COMPLETE && coverage != featuresv1.Coverage_COVERAGE_UNKNOWN {
-			observation.Status = "incompatible"
-			observation.Values = application.SnapshotValues{}
-			return observation
-		}
-		observed.Coverage[window] = "unknown"
 		if coverage == featuresv1.Coverage_COVERAGE_COMPLETE {
-			observed.Coverage[window] = "complete"
 			switch window {
 			case "1h":
 				if values.AssessedCount_1H == nil {
@@ -350,7 +343,7 @@ func (c *Client) evaluate(update *featuresv1.SnapshotUpdate, writeAt time.Time, 
 					observation.Status = "partial"
 				}
 				observation.Values.LastAssessedAt = observed.Values.LastAssessedAt
-				if last := observed.Values.LastAssessedAt; last != nil && !last.After(request.Input.AttemptedAt) && request.Input.AttemptedAt.Sub(*last) <= 7*24*time.Hour && last.Before(request.Input.AttemptedAt) {
+				if last := observed.Values.LastAssessedAt; last != nil && request.Input.AttemptedAt.Sub(*last) <= 7*24*time.Hour && last.Before(request.Input.AttemptedAt) {
 					seconds := int64(request.Input.AttemptedAt.Sub(*last) / time.Second)
 					observation.ElapsedSeconds = &seconds
 				}

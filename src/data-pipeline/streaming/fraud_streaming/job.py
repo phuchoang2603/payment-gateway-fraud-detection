@@ -21,7 +21,7 @@ def build_updates(packets, *, epoch, logical, max_entries):
         packets.filter(lambda packet: packet.fact is not None)
         .key_by(lambda packet: packet.fact.event_id)
         .process(Deduplicate(logical))
-        .uid("event-deduplication-v1")
+        .uid("event-deduplication-v2")
         .key_by(lambda packet: json.dumps(packet.fact.identity))
         .process(MatchAttempts(logical))
         .uid("attempt-matching-v1")
@@ -50,7 +50,7 @@ def build_updates(packets, *, epoch, logical, max_entries):
                 ),
                 output_type=row_type,
             )
-            .uid(f"{view}-aggregation-v1")
+            .uid(f"{view}-aggregation-v2")
         )
         branches.append(branch)
     return branches[0].union(branches[1])

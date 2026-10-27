@@ -38,8 +38,9 @@ def decode(raw):
         if timestamp.nanos % 1000:
             raise ValueError("payment timestamp exceeds microsecond precision")
     payload = event.WhichOneof("payload")
+    recorded_at = event.recorded_at.ToMicroseconds()
     if payload not in ("attempt_started", "risk_decision_recorded"):
-        return None
+        return None, recorded_at
     body = getattr(event, payload)
     if not body.attempt_id:
         raise ValueError("missing lifecycle attempt identity")
@@ -74,9 +75,9 @@ def decode(raw):
         attempt=body.attempt_id,
         kind="start" if payload == "attempt_started" else "decision",
         started_at=event.occurred_at.ToMicroseconds(),
-        recorded_at=event.recorded_at.ToMicroseconds(),
+        recorded_at=recorded_at,
         **context,
-    )
+    ), recorded_at
 
 
 def snapshot(entity, quantities, *, epoch, now):
