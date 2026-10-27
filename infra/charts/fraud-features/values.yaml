@@ -54,7 +54,7 @@ streaming:
   sourcePartitions: 3
   maxEntityEntries: 50000
   storageHostname: minio.home.phuchoang.sbs
-  haStorage: s3://fraud-flink-prod/checkpoints/ha/live-v1
+  storageRoot: s3://fraud-flink-prod
   jobManager:
     resources:
       requests: {cpu: '1', memory: 1536Mi}

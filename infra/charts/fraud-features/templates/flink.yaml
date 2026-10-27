@@ -47,11 +47,14 @@ spec:
     python.executable: /app/.venv/bin/python
     python.client.executable: /app/.venv/bin/python
     execution.checkpointing.interval: 10s
+    execution.checkpointing.storage: filesystem
+    execution.checkpointing.dir: {{ printf "%s/checkpoints/%s" .Values.streaming.storageRoot .Values.epoch | quote }}
+    execution.checkpointing.savepoint-dir: {{ printf "%s/savepoints/%s" .Values.streaming.storageRoot .Values.epoch | quote }}
     execution.checkpointing.timeout: 2min
     execution.checkpointing.num-retained: '3'
     execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
     high-availability.type: kubernetes
-    high-availability.storageDir: {{ .Values.streaming.haStorage | quote }}
+    high-availability.storageDir: {{ printf "%s/checkpoints/ha/%s" .Values.streaming.storageRoot .Values.epoch | quote }}
     restart-strategy.type: exponential-delay
   jobManager:
     resources:
