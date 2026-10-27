@@ -1,0 +1,116 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:silver-label-delivery-provenance
+name: Silver label delivery provenance
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Preserve exact source-delivery provenance for accepted Silver data.
+  usage: Read only snapshots referenced by an accepted Silver receipt.
+  limitations: Historical duplicate deliveries in one file are represented with multiplicity.
+team:
+  name: Fraud data platform
+  members:
+  - username: phuchoang2603
+    role: owner
+schema:
+- name: label_delivery_provenance
+  physicalName: silver.label_delivery_provenance
+  logicalType: object
+  physicalType: table
+  description: Delivery metadata and exact multiplicity for each label observation.
+  properties:
+  - name: observation_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: SHA-256 identity of the normalized label observation.
+  - name: _source_dataset_version
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Immutable source dataset version, independent of contract and product versions.
+  - name: _source_manifest_sha256
+    logicalType: string
+    physicalType: string
+    required: true
+    description: SHA-256 of exact completed source manifest bytes.
+  - name: _source_file
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Exact manifest-selected input object URI.
+  - name: _source_schema_version
+    logicalType: integer
+    physicalType: int
+    required: true
+    description: Physical schema version of the selected label source file.
+  - name: _ingestion_run_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Stable logical ingestion identity, reused after driver retries.
+  - name: _ingested_at
+    logicalType: timestamp
+    physicalType: timestamp
+    required: true
+    description: Stable UTC microsecond ingestion time, distinct from source recorded_at.
+  - name: _source_epoch
+    logicalType: string
+    physicalType: string
+    description: Immutable landing epoch; null for historical exports.
+  - name: _source_batch
+    logicalType: string
+    physicalType: string
+    description: Exact completion-manifest key for this source file; null for historical
+      exports.
+  - name: _transport
+    logicalType: object
+    description: Original Kafka envelope, including ordered headers; null for historical
+      sources.
+    properties:
+    - name: topic
+      logicalType: string
+      physicalType: string
+      required: true
+    - name: partition
+      logicalType: integer
+      physicalType: int
+      required: true
+    - name: offset
+      logicalType: integer
+      physicalType: long
+      required: true
+    - name: timestamp
+      logicalType: timestamp
+      physicalType: timestamp
+    - name: key
+      logicalType: string
+      physicalType: binary
+    - name: value
+      logicalType: string
+      physicalType: binary
+      required: true
+    - name: headers
+      logicalType: array
+      items:
+        logicalType: object
+        properties:
+        - name: key
+          logicalType: string
+          physicalType: string
+          required: true
+        - name: value
+          logicalType: string
+          physicalType: binary
+  - name: deliveries
+    logicalType: integer
+    physicalType: long
+    required: true
+    description: Number of identical observation deliveries with this provenance.
+  - name: _candidate_id
+    logicalType: string
+    physicalType: string
+    required: true
+    description: Candidate identity.

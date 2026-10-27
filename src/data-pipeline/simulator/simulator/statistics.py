@@ -58,6 +58,9 @@ class DatasetStatistics:
             "chargebacks": self.chargebacks,
             "scenario_payments": dict(sorted(self.scenarios.items())),
             "category_payments": dict(sorted(self.categories.items())),
+            "category_payment_shares": {name: count / self.payments for name, count in sorted(self.categories.items())}
+            if self.payments
+            else {},
             "merchant_count": len(self.merchants),
             "merchant_max_share": max(self.merchants.values()) / self.payments if self.payments else 0,
             "scenario_attempts": dict(sorted(self.attempts.items())),
@@ -68,6 +71,11 @@ class DatasetStatistics:
             "merchant_top_10_share": sum(sorted(self.merchants.values(), reverse=True)[:10]) / self.payments
             if self.payments
             else 0,
+            "share_denominators": {
+                "merchant_and_category": "payment_created events before duplicate delivery injection",
+                "duplicate_rate": "total event deliveries after duplicate injection",
+                "scenario_attempt_shares": "attempt_started events before duplicate delivery injection",
+            },
         }
 
     def to_dict(self) -> dict:

@@ -7,14 +7,8 @@ tables:
   - id: payment_delivery_consistency
     name: payment_delivery_consistency
     type: sql
-    description: Repeated event identities must carry identical content.
-    query: "SELECT COUNT(*) FROM (\n  SELECT e.event_id FROM {events} AS e GROUP BY e.event_id\n  HAVING COUNT(DISTINCT MD5(CAST(TO_JSON(NAMED_STRUCT('event_id',\
-      \ e.event_id, 'payment_id', e.payment_id, 'aggregate_version', e.aggregate_version, 'integration_id', e.integration_id,\
-      \ 'occurred_at', e.occurred_at, 'recorded_at', e.recorded_at, 'schema_version', e.schema_version, 'correlation_id',\
-      \ e.correlation_id, 'payment_created', e.payment_created, 'attempt_started', e.attempt_started, 'risk_decision_recorded',\
-      \ e.risk_decision_recorded, 'processor_operation_requested', e.processor_operation_requested, 'processor_outcome_unknown',\
-      \ e.processor_outcome_unknown, 'attempt_declined', e.attempt_declined, 'payment_succeeded', e.payment_succeeded, 'payment_expired',\
-      \ e.payment_expired)) AS VARCHAR))) > 1\n) AS violations\n"
+    description: Canonical event identities are unique within their integration; conflicting raw content is separately rejected by delivery accounting.
+    query: "SELECT COUNT(*) FROM (\n  SELECT e.integration_id, e.event_id FROM {events} AS e GROUP BY e.integration_id, e.event_id\n  HAVING COUNT(*) > 1\n) AS violations\n"
     mustBe: 0
   - id: payment_envelope
     name: payment_envelope
@@ -33,8 +27,7 @@ tables:
     type: sql
     description: Complete canonical histories have consecutive versions, legal transitions, consistent attempt identities
       and correlation. Causation is implied by aggregate_version order.
-    query: "WITH canonical AS (\n  SELECT * FROM (\n    SELECT e.*, ROW_NUMBER() OVER (PARTITION BY e.event_id ORDER BY e.recorded_at)\
-      \ AS delivery\n    FROM {events} AS e\n  ) AS deliveries WHERE delivery = 1\n),\ntyped AS (\n  SELECT c.*,\n    CASE\n\
+    query: "WITH canonical AS (\n  SELECT * FROM {events}\n),\ntyped AS (\n  SELECT c.*,\n    CASE\n\
       \      WHEN c.payment_created IS NOT NULL THEN 'created'\n      WHEN c.attempt_started IS NOT NULL THEN 'started'\n\
       \      WHEN c.risk_decision_recorded IS NOT NULL THEN 'decision'\n      WHEN c.processor_operation_requested IS NOT\
       \ NULL THEN 'requested'\n      WHEN c.processor_outcome_unknown IS NOT NULL THEN 'unknown'\n      WHEN c.attempt_declined\
@@ -66,8 +59,7 @@ tables:
     name: payment_attempt_identity
     type: sql
     description: Each canonical attempt identity starts once within its scoped payment.
-    query: "WITH canonical AS (\n  SELECT * FROM (\n    SELECT e.*, ROW_NUMBER() OVER (PARTITION BY e.event_id ORDER BY e.recorded_at)\
-      \ AS delivery\n    FROM {events} AS e\n  ) AS deliveries WHERE delivery = 1\n)\nSELECT COUNT(*) FROM (\n  SELECT c.integration_id,\
+    query: "WITH canonical AS (\n  SELECT * FROM {events}\n)\nSELECT COUNT(*) FROM (\n  SELECT c.integration_id,\
       \ c.payment_id, c.attempt_started.attempt_id AS attempt_id\n  FROM canonical AS c\n  WHERE c.attempt_started IS NOT\
       \ NULL\n  GROUP BY c.integration_id, c.payment_id, c.attempt_started.attempt_id\n  HAVING COUNT(*) > 1\n) AS violations\n"
     mustBe: 0

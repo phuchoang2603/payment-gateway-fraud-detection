@@ -2,7 +2,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: urn:datacontract:fraud:bronze-fraud-labels
 name: Bronze fraud-labels
-version: 2.0.0
+version: 3.0.0
 status: active
 domain: fraud-detection
 description:
@@ -109,6 +109,11 @@ schema:
     physicalType: string
     required: true
     description: Exact manifest-selected input object URI.
+  - name: _source_schema_version
+    logicalType: integer
+    physicalType: int
+    required: true
+    description: Physical schema version of the selected label source file.
   - name: _ingestion_run_id
     logicalType: string
     physicalType: string

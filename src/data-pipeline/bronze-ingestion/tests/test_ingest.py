@@ -1,4 +1,5 @@
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 from pyspark.sql import functions as F
@@ -18,6 +19,7 @@ def test_raw_chunks_ingest_directly_into_date_partitioned_bronze(spark, dataset,
     store = Store(str(tmp_path / "evidence"))
     run = open_run(store, "smoke", "a" * 64, hashes(), "image", "workflow")
     source = source_frames(spark, str(root), manifest, run)
+    assert source["payment_events"].where(F.col("_source_schema_version") != 3).count() == 0
     spark.sql("CREATE NAMESPACE lake.raw_chunks")
     ingest(spark, str(root), manifest, store, run, namespace="raw_chunks")
     snapshots = selected_snapshots(spark, run, namespace="raw_chunks")
@@ -41,6 +43,38 @@ def test_raw_chunks_ingest_directly_into_date_partitioned_bronze(spark, dataset,
     )
     with pytest.raises(ValueError, match="persisted content differs"):
         verify_content(spark, source, changed, "raw_chunks")
+
+
+def test_mixed_physical_schemas_normalize_without_relabeling_envelopes(spark, tmp_path, bounded_shuffle):
+    import pyarrow.fs as fs
+    import yaml
+    from simulator.config import HistoricalConfig
+    from simulator.storage import generate
+
+    from data_platform.ingest import source_frames
+
+    generator = Path(__file__).resolve().parents[4] / "src/data-pipeline/simulator"
+    config = yaml.safe_load((generator / "tests/small-config.yaml").read_text())
+    config.update(dataset_version="mixed", duration_days=2)
+    config["counts"]["customers"] = 100
+    config["schema_schedule"] = {
+        "initial_version": 3,
+        "changes": [{"effective_at": "2026-07-02T00:00:00Z", "version": 4}],
+    }
+    manifest = generate(HistoricalConfig.model_validate(config), fs.LocalFileSystem(), str(tmp_path))
+    root = tmp_path / "historical/mixed"
+    run = open_run(Store(str(tmp_path / "evidence")), "mixed", "a" * 64, hashes(), "image", "workflow")
+    events = source_frames(spark, str(root), manifest, run)["payment_events"]
+    assert {row[0] for row in events.select("_source_schema_version").distinct().collect()} == {3, 4}
+    assert events.where(F.col("schema_version") != 3).count() == 0
+    assessments = events.where(F.col("risk_decision_recorded").isNotNull())
+    reference = F.col("risk_decision_recorded.assessment.assessment_id")
+    digest = F.col("risk_decision_recorded.assessment.evidence_sha256")
+    assert assessments.where((F.col("_source_schema_version") == 3) & reference.isNull() & digest.isNull()).count() > 0
+    assert (
+        assessments.where((F.col("_source_schema_version") == 4) & reference.isNotNull() & digest.isNotNull()).count()
+        > 0
+    )
 
 
 def test_snapshot_recovery_isolation_and_replay(spark, dataset, tmp_path):

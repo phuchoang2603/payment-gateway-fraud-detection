@@ -2,7 +2,7 @@
 ## Info
 *Raw delivered payment events for historical and recurring ingestion.*
 - **name:** Bronze payment-events
-- **version:** 3.0.0
+- **version:** 4.0.0
 - **status:** active
 - **team:** Fraud data platform
 
@@ -33,7 +33,7 @@ Synthetic data only. Recurring batches may contain incomplete lifecycles. Label 
 |  integration_id | string | *Dedicated synthetic integration namespace; never share it with a real integration.*<br />• `required` |
 |  occurred_at | timestamp | *Business occurrence time in UTC at microsecond precision.*<br />• **logicalTypeOptions:** {'timezone': True, 'defaultTimezone': 'UTC'}<br />• `required` |
 |  recorded_at | timestamp | *Source recording time, at or after occurred_at; not ingestion time.*<br />• **logicalTypeOptions:** {'timezone': True, 'defaultTimezone': 'UTC'}<br />• `required` |
-|  schema_version | integer | *Current physical event schema three includes immutable attempt scoring context.*<br />• `required` |
+|  schema_version | integer | *Original event-envelope version, independent of the physical source schema.*<br />• `required` |
 |  correlation_id | string | *Correlation identity shared across one payment history.*<br />• `required` |
 |  payment_created | object | *Initial immutable checkout snapshot. Exactly one lifecycle payload is present per event.* |
 | &#x2007;&#x21b3; merchant | object | *Integration-scoped merchant references.*<br />• `required` |
@@ -106,12 +106,14 @@ Synthetic data only. Recurring batches may contain incomplete lifecycles. Label 
 | &#x2007;&#x21b3; attempt_id | string | *Active attempt identity.*<br />• `required` |
 | &#x2007;&#x21b3; assessment | object | *Decision evidence. Optional model and feature versions are absent for rules-only decisions.*<br />• `required` |
 | &#x2007;&#x2007;&#x21b3; outcome | string | *RISK_OUTCOME_APPROVE or RISK_OUTCOME_DECLINE.*<br />• `required` |
-| &#x2007;&#x2007;&#x21b3; reason_codes | array | *Nonempty policy reason codes.*<br />• `required` |
+| &#x2007;&#x2007;&#x21b3; reason_codes | array | *Policy reason codes; declines require at least one.*<br />• `required` |
 | &#x2007;&#x2007;&#x2007;&#x21b3; items | string | *No description.*<br />• `required` |
 | &#x2007;&#x2007;&#x21b3; policy_version | string | *Evaluated policy version.*<br />• `required` |
 | &#x2007;&#x2007;&#x21b3; model_version | string | *Evaluated model version if a model was used.* |
 | &#x2007;&#x2007;&#x21b3; feature_set_version | string | *Evaluated feature-set version if features were used.* |
 | &#x2007;&#x2007;&#x21b3; risk_score | number | *Optional model risk score.* |
+| &#x2007;&#x2007;&#x21b3; assessment_id | string | *Optional assessment reference; synthetic references do not identify a persisted Fraud document.* |
+| &#x2007;&#x2007;&#x21b3; evidence_sha256 | string | *Optional evidence hash; historical synthetic evidence follows the source contract serialization.* |
 |  processor_operation_requested | object | *Processor authorization request after risk approval.* |
 | &#x2007;&#x21b3; attempt_id | string | *Active approved attempt identity.*<br />• `required` |
 | &#x2007;&#x21b3; operation_key | string | *Idempotent processor operation identity.*<br />• `required` |
@@ -129,6 +131,7 @@ Synthetic data only. Recurring batches may contain incomplete lifecycles. Label 
 |  _source_dataset_version | string | *Immutable source dataset version, independent of contract and product versions.*<br />• `required` |
 |  _source_manifest_sha256 | string | *SHA-256 of exact completed source manifest bytes.*<br />• `required` |
 |  _source_file | string | *Exact manifest-selected input object URI.*<br />• `required` |
+|  _source_schema_version | integer | *Physical schema version of the selected source file, independent of the original event envelope.*<br />• `required` |
 |  _ingestion_run_id | string | *Stable logical ingestion identity, reused after driver retries.*<br />• `required` |
 |  _ingested_at | timestamp | *Stable UTC microsecond ingestion time, distinct from source recorded_at.*<br />• `required` |
 |  _source_epoch | string | *Immutable landing epoch; null for historical exports.* |

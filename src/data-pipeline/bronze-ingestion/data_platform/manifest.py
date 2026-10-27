@@ -3,6 +3,7 @@ import re
 import time
 from collections import Counter
 from datetime import date
+from functools import lru_cache
 from hashlib import sha256
 from pathlib import PurePosixPath
 
@@ -11,8 +12,59 @@ import pyarrow.fs as fs
 import pyarrow.parquet as pq
 import yaml
 
-from data_platform.products import PORTS, PRODUCTS, contract_path
+from data_platform.products import PORTS, PRODUCTS
 from data_platform.storage import Store
+
+
+def source_contracts(product_version):
+    source = PRODUCTS / "historical-payments"
+    products = [source / "product.odps.yaml", *sorted((source / "versions").glob("product-*.odps.yaml"))]
+    for product_path in products:
+        product = yaml.safe_load(product_path.read_text())
+        if product["version"] == product_version:
+            ports = {port["name"]: port for port in product["outputPorts"]}
+            paths = {}
+            for table, port in PORTS.items():
+                candidates = [source / f"{port}.odcs.yaml", *sorted((source / "versions").glob(f"{port}-*.odcs.yaml"))]
+                matches = [
+                    path
+                    for path in candidates
+                    if (document := yaml.safe_load(path.read_text()))["id"] == ports[port]["contractId"]
+                    and document["version"] == ports[port]["version"]
+                ]
+                if len(matches) != 1:
+                    raise ValueError(f"ambiguous or unsupported source contract: {port}")
+                paths[table] = matches[0]
+            return product, paths
+    raise ValueError("unsupported source product identity")
+
+
+def declared_versions(contract):
+    return next(
+        item["value"]
+        for item in contract["schema"][0].get("customProperties", [])
+        if item["property"] == "schemaVersions"
+    )
+
+
+def physical_schemas():
+    product = yaml.safe_load((PRODUCTS / "historical-payments/product.odps.yaml").read_text())
+    path = next(
+        item["value"] for item in product["customProperties"] if item["property"] == "physicalSchemaDefinitions"
+    )
+    return yaml.safe_load((PRODUCTS / path).read_text())
+
+
+@lru_cache(maxsize=None)
+def supported_versions(table):
+    versions = set()
+    source = PRODUCTS / "historical-payments"
+    products = [source / "product.odps.yaml", *sorted((source / "versions").glob("product-*.odps.yaml"))]
+    for path in products:
+        product = yaml.safe_load(path.read_text())
+        _, contracts = source_contracts(product["version"])
+        versions.update(declared_versions(yaml.safe_load(contracts[table].read_text())))
+    return versions.intersection(physical_schemas()[table])
 
 
 def read_manifest(root):
@@ -21,10 +73,24 @@ def read_manifest(root):
     version = manifest.get("dataset_version", "")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", version):
         raise ValueError("invalid dataset version")
-    product = yaml.safe_load((PRODUCTS / "historical-payments/product.odps.yaml").read_text())
     declared = manifest.get("data_product", {})
+    product, contracts = source_contracts(declared.get("version"))
     if declared.get("id") != product["id"] or declared.get("version") != product["version"]:
         raise ValueError("unsupported source product identity")
+    schema_path = next(
+        (
+            entry["value"]
+            for entry in product.get("customProperties", [])
+            if entry["property"] == "physicalSchemaDefinitions"
+        ),
+        None,
+    )
+    if schema_path is not None:
+        expected = {"sha256": sha256((PRODUCTS / schema_path).read_bytes()).hexdigest()}
+        if declared.get("physical_schema_definitions") != expected:
+            raise ValueError("unsupported physical schema definition identity")
+    elif "physical_schema_definitions" in declared:
+        raise ValueError("unexpected physical schema definition identity")
     if manifest.get("source_layout") != "task-fragments-v1" or manifest.get("manifest_version") != 3:
         raise ValueError("unsupported source layout")
     definition = PRODUCTS.parent / "features/fraud-snapshot-v1.yaml"
@@ -50,7 +116,7 @@ def read_manifest(root):
     if "result" in validation and not deferred:
         raise ValueError("source contract validation has no supported downstream gate")
     for table, port in PORTS.items():
-        contract_bytes = contract_path(table, "historical-payments").read_bytes()
+        contract_bytes = contracts[table].read_bytes()
         contract = yaml.safe_load(contract_bytes)
         if declared.get("contracts", {}).get(port) != {
             "id": contract["id"],
@@ -60,7 +126,7 @@ def read_manifest(root):
             raise ValueError(f"unsupported source contract identity: {port}")
         if validation.get(port) != "passed" and not deferred:
             raise ValueError(f"source contract validation is incomplete: {port}")
-        supported = [3] if table == "payment_events" else [1]
+        supported = set(declared_versions(contract)).intersection(physical_schemas()[table])
         versions = manifest.get("schema_versions", {}).get(table, [])
         if not versions or any(v not in supported for v in versions):
             raise ValueError(f"unsupported source schemas: {table}")
@@ -101,6 +167,8 @@ def validate_inventory(manifest):
         version = int(path.stem.removeprefix("v"))
         if type(entry.get("schema_version")) is not int or entry["schema_version"] != version:
             raise ValueError("inventory schema version differs from its key")
+        if version not in manifest.get("schema_versions", {}).get(table, []):
+            raise ValueError("inventory schema version is not declared by the manifest")
         if "partition" in entry or not isinstance(counts, dict) or not counts:
             raise ValueError("raw inventory requires per-date counts")
         for partition, rows in counts.items():
@@ -123,9 +191,9 @@ def validate_inventory(manifest):
 
 def inventory_location(key):
     match = re.fullmatch(
-        r"raw/(payment_events|fraud_labels)/day-[0-9]{5}-kind-[01]-block-[0-9]{8}/v([13])\.parquet", key
+        r"raw/(payment_events|fraud_labels)/day-[0-9]{5}-kind-[01]-block-[0-9]{8}/v([1-9][0-9]*)\.parquet", key
     )
-    if not match or match[2] != ("3" if match[1] == "payment_events" else "1"):
+    if not match or int(match[2]) not in supported_versions(match[1]):
         raise ValueError("raw inventory path escapes the declared layout")
     return match[1]
 

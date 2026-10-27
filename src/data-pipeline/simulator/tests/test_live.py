@@ -44,6 +44,13 @@ def test_live_profiles_and_card_identity_across_calendar_gap(monkeypatch):
     assert datetime.fromisoformat(order["buyer"]["account_created_at"]) < model.anchor
     assert profiles.method_pool[index]
     assert "scenario" not in signals and "is_fraud" not in order
+    manifest["schema_versions"]["payment_events"] = [3, 4]
+    evolved = HistoricalModel(manifest)
+    assert evolved.purchase(2603, 0, now)[0] == order
+    manifest["schema_versions"]["payment_events"] = [3, 5]
+    with pytest.raises(ValueError, match="declared payment event schemas"):
+        HistoricalModel(manifest)
+    manifest["schema_versions"]["payment_events"] = [3]
     assert len(card_number(10**11 - 1, "ok")) == 16
     with pytest.raises(ValueError, match="outside synthetic encoding"):
         card_number(10**11, "ok")

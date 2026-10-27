@@ -5,7 +5,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from google.protobuf.descriptor import FieldDescriptor
 
-from simulator.arrow import LABEL_SCHEMA, TIMESTAMP, event_schema
+from simulator.arrow import LABEL_SCHEMA, PHYSICAL_SCHEMAS, TIMESTAMP, event_schema
 from simulator.contracts.payments.v1.events_pb2 import PaymentEvent
 from simulator.contracts.payments.v1.labels_pb2 import (
     LABEL_SOURCE_CHARGEBACK,
@@ -84,6 +84,8 @@ def project(message, fields):
             value = value.ToDatetime(tzinfo=UTC)
         elif descriptor.type == FieldDescriptor.TYPE_ENUM:
             value = descriptor.enum_type.values_by_number[value].name
+        elif field.name in ("assessment_id", "evidence_sha256") and value == "":
+            value = None
         result[field.name] = value
     return result
 
@@ -115,7 +117,9 @@ def decode(record, label_topic):
             or message.WhichOneof("payload") is None
         ):
             raise ValueError("incomplete payment event")
-        version = message.schema_version
+        if message.schema_version not in PHYSICAL_SCHEMAS["event_envelope_versions"]:
+            raise ValueError(f"unsupported payment event envelope version: {message.schema_version}")
+        version = PHYSICAL_SCHEMAS["payment_events_output"]
         schema = event_schema(version)
         if message.WhichOneof("payload") == "attempt_started":
             attempt = message.attempt_started

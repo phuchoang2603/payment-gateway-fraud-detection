@@ -2,6 +2,7 @@ from datetime import datetime, time, timedelta, timezone
 
 import numpy as np
 
+from simulator.arrow import PHYSICAL_SCHEMAS
 from simulator.behavior import purchase_context
 from simulator.config import HistoricalConfig
 from simulator.profiles import (
@@ -21,8 +22,9 @@ from simulator.profiles import (
 
 class HistoricalModel:
     def __init__(self, manifest):
-        if manifest.get("schema_versions", {}).get("payment_events") != [3]:
-            raise ValueError("live reference requires payment event schema 3")
+        versions = manifest.get("schema_versions", {}).get("payment_events", [])
+        if not versions or any(version not in PHYSICAL_SCHEMAS["payment_events"] for version in versions):
+            raise ValueError("live reference requires declared payment event schemas")
         self.manifest = manifest
         self.config = HistoricalConfig.from_manifest(manifest)
         self.profiles = profiles_from_manifest(manifest)

@@ -1,10 +1,13 @@
+import json
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
+from hashlib import sha256
 from typing import Any
 from uuid import uuid5
 
 import numpy as np
 
+from simulator.arrow import ASSESSMENTS
 from simulator.behavior import purchase_context
 from simulator.calibration import zone
 from simulator.config import HistoricalConfig
@@ -22,6 +25,23 @@ from simulator.profiles import (
 Record = dict[str, Any]
 POLICY_VERSION = "rules-v1"
 MAX_ATTEMPTS = 3
+
+
+def synthetic_assessment_reference(integration_id, payment_id, attempt_id, signals, assessment):
+    evidence = {
+        "format": "synthetic-assessment-v1",
+        "integration_id": integration_id,
+        "payment_id": payment_id,
+        "attempt_id": attempt_id,
+        "signals": {
+            **signals,
+            "attempted_at": signals["attempted_at"].astimezone(timezone.utc).isoformat(timespec="microseconds"),
+        },
+        "assessment": assessment,
+    }
+    encoded = json.dumps(evidence, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    identity = uuid5(IDENTITY_NAMESPACE, f"synthetic-assessment-v1:{integration_id}:{payment_id}:{attempt_id}")
+    return str(identity), sha256(encoded).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -148,15 +168,21 @@ def build_history(
             unit_price * quantity, customer_created, attempt_started, context.shipping_country, context.ip_country
         )
         risk_reason = reasons[0] if reasons else None
-        append(
-            "risk_decision_recorded",
-            attempt_id=attempt_id,
-            assessment={
-                "outcome": "RISK_OUTCOME_DECLINE" if risk_reason else "RISK_OUTCOME_APPROVE",
-                "reason_codes": reasons,
-                "policy_version": POLICY_VERSION,
-            },
-        )
+        assessment = {
+            "outcome": "RISK_OUTCOME_DECLINE" if risk_reason else "RISK_OUTCOME_APPROVE",
+            "reason_codes": reasons,
+            "policy_version": POLICY_VERSION,
+            "model_version": None,
+            "feature_set_version": None,
+            "risk_score": None,
+        }
+        physical_version = config.schema_schedule.version_at(clock)
+        if {"assessment_id", "evidence_sha256"}.issubset(ASSESSMENTS[physical_version].names):
+            assessment_id, evidence_sha256 = synthetic_assessment_reference(
+                integration_id, payment_id, attempt_id, signals, assessment
+            )
+            assessment.update(assessment_id=assessment_id, evidence_sha256=evidence_sha256)
+        append("risk_decision_recorded", attempt_id=attempt_id, assessment=assessment)
         succeeded = False
         clock += timedelta(milliseconds=int(random.integers(10, 100)))
         if risk_reason:

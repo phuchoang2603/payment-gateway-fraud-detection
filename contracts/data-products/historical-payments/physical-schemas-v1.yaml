@@ -1,0 +1,9 @@
+event_envelope_versions: [3]
+payment_events_output: 4
+payment_events:
+  3:
+    assessment_fields: [outcome, reason_codes, policy_version, model_version, feature_set_version, risk_score]
+  4:
+    assessment_fields: [outcome, reason_codes, policy_version, model_version, feature_set_version, risk_score, assessment_id, evidence_sha256]
+fraud_labels:
+  1: {}

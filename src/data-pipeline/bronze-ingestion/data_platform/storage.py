@@ -1,3 +1,4 @@
+import fcntl
 import json
 import os
 import tempfile
@@ -102,3 +103,44 @@ class Store:
                     os.replace(temporary, target)
                 finally:
                     Path(temporary).unlink(missing_ok=True)
+
+    def compare_and_swap(self, relative, expected, value):
+        key = self.key(relative)
+        body = json.dumps(value, sort_keys=True, indent=2, default=str).encode()
+        if self.client:
+            try:
+                response = self.client.get_object(Bucket=self.bucket, Key=key)
+                with response["Body"] as stream:
+                    current = json.loads(stream.read())
+                condition = {"IfMatch": response["ETag"]}
+            except ClientError as error:
+                if error.response["Error"]["Code"] not in ("NoSuchKey", "404"):
+                    raise
+                current, condition = None, {"IfNoneMatch": "*"}
+            if current != expected:
+                return False
+            try:
+                self.client.put_object(
+                    Bucket=self.bucket, Key=key, Body=body, ContentType="application/json", **condition
+                )
+            except ClientError as error:
+                if error.response["Error"]["Code"] in (
+                    "PreconditionFailed",
+                    "ConditionalRequestConflict",
+                    "409",
+                    "412",
+                ):
+                    return False
+                raise
+            return True
+        target = Path(key)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.with_name(target.name + ".lock").open("a+b") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                if self.get(relative) != expected:
+                    return False
+                self.put(relative, value)
+                return True
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)

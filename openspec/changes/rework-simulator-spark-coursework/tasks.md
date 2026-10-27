@@ -28,6 +28,6 @@
 
 ## 5. Domain documentation and cleanup
 
-- [ ] 5.1 Create `docs/data-ml/data-generator.md` covering implemented configuration, schema definitions/schedules, supported/breaking changes, seeds/entity continuity, immutable publication/resume, label tails and diagnostics; verify examples match implemented CLI/config and document how a declared later version or skipped intermediate version uses the same path.
-- [ ] 5.2 Move maintained generator instructions from `data-products.md` into the guide, retain dataset receipts/product descriptions, and minimally link from `data-pipeline.md` and existing navigation; verify links resolve and no instructions or generated field references are duplicated.
+- [x] 5.1 Create `docs/data-ml/data-generator.md` covering implemented configuration, schema definitions/schedules, supported/breaking changes, seeds/entity continuity, immutable publication/resume, label tails and diagnostics; verify examples match implemented CLI/config and document how a declared later version or skipped intermediate version uses the same path.
+- [x] 5.2 Move maintained generator instructions from `data-products.md` into the guide, retain dataset receipts/product descriptions, and minimally link from `data-pipeline.md` and existing navigation; verify links resolve and no instructions or generated field references are duplicated.
 - [ ] 5.3 Remove superseded changed-area branches/references and redundant coverage, run local non-test lint/schema/diff checks and inspect required CI tests/builds; verify all changes stay within data scope and no local tests/builds or unrelated optimization work is performed.

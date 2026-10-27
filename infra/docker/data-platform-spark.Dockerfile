@@ -41,9 +41,11 @@ COPY --from=jars /jars/ /opt/spark/jars/
 COPY src/data-pipeline/bronze-ingestion/config/log4j2.properties /opt/dp1/log4j2.properties
 COPY contracts/data-products /contracts/data-products
 COPY contracts/features /contracts/features
+COPY contracts/quality /contracts/quality
 ENV PATH="/opt/data-pipeline/bronze-ingestion/.venv/bin:$PATH" \
     PYSPARK_PYTHON="/opt/data-pipeline/bronze-ingestion/.venv/bin/python" \
     DATA_PRODUCTS_ROOT="/contracts/data-products" \
+    DATA_QUALITY_ROOT="/contracts/quality" \
     DP1_BUNDLED_JARS="true"
 WORKDIR /opt/spark/work-dir
 RUN chown 185:185 /opt/data-pipeline/bronze-ingestion /opt/spark/work-dir

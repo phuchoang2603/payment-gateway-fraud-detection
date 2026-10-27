@@ -15,6 +15,7 @@
 **Data and ML**
 
 - [Data pipeline](data-ml/data-pipeline.md)
+- [Data generator](data-ml/data-generator.md)
 - [ML pipeline](data-ml/ml-pipeline.md)
 - [Data products](data-ml/data-products.md)
 

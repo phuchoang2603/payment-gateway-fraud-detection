@@ -1,10 +1,14 @@
 import json
 import shutil
 from copy import deepcopy
+from hashlib import sha256
 
 import pytest
+import yaml
 
-from data_platform.manifest import selected_manifest, verify_file
+import data_platform.manifest as source_manifest
+from data_platform.manifest import selected_manifest, source_contracts, verify_file
+from data_platform.products import PRODUCTS
 
 
 def test_completed_inventory_and_integrity(dataset, tmp_path):
@@ -26,6 +30,54 @@ def test_completed_inventory_and_integrity(dataset, tmp_path):
     (tmp_path / "manifest.json").write_text(json.dumps(historical))
     selected, historical_digest = selected_manifest(str(tmp_path))
     assert selected == historical and historical_digest != digest
+
+
+def test_prior_source_contract_identity_remains_selectable(dataset, tmp_path):
+    _, manifest = dataset
+    manifest = deepcopy(manifest)
+    product, paths = source_contracts("6.0.1")
+    contract = paths["payment_events"].read_bytes()
+    manifest["data_product"]["version"] = product["version"]
+    del manifest["data_product"]["physical_schema_definitions"]
+    manifest["data_product"]["contracts"]["payment-events"] = {
+        "id": "urn:datacontract:fraud:historical-payment-events",
+        "version": "4.0.1",
+        "sha256": sha256(contract).hexdigest(),
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    selected, _ = selected_manifest(str(tmp_path))
+    assert selected == manifest
+    manifest["schema_versions"]["payment_events"] = [4]
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="unsupported source schemas"):
+        selected_manifest(str(tmp_path))
+
+
+def test_inventory_accepts_only_a_fully_declared_later_physical_version(tmp_path, monkeypatch):
+    products = tmp_path / "data-products"
+    shutil.copytree(PRODUCTS, products)
+    source = products / "historical-payments"
+    contract_path = source / "payment-events.odcs.yaml"
+    contract = yaml.safe_load(contract_path.read_text())
+    versions = next(item for item in contract["schema"][0]["customProperties"] if item["property"] == "schemaVersions")
+    versions["value"].append(5)
+    contract_path.write_text(yaml.safe_dump(contract))
+    definitions_path = source / "physical-schemas-v1.yaml"
+    definitions = yaml.safe_load(definitions_path.read_text())
+    definitions["payment_events"][5] = definitions["payment_events"][4]
+    definitions_path.write_text(yaml.safe_dump(definitions))
+    monkeypatch.setattr(source_manifest, "PRODUCTS", products)
+    source_manifest.supported_versions.cache_clear()
+    key = "raw/payment_events/day-00000-kind-0-block-00000000/v5.parquet"
+    try:
+        assert source_manifest.inventory_location(key) == "payment_events"
+        del definitions["payment_events"][5]
+        definitions_path.write_text(yaml.safe_dump(definitions))
+        source_manifest.supported_versions.cache_clear()
+        with pytest.raises(ValueError, match="escapes the declared layout"):
+            source_manifest.inventory_location(key)
+    finally:
+        source_manifest.supported_versions.cache_clear()
 
 
 def test_deferred_source_gate_reaches_preflight_and_records_the_native_policy(dataset, tmp_path, monkeypatch):

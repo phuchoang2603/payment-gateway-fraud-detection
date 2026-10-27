@@ -1,0 +1,27 @@
+apiVersion: v1.1.0
+kind: DataProduct
+id: urn:dataproduct:fraud:silver-payments
+name: Silver payments
+version: 1.0.0
+status: active
+domain: fraud-detection
+type: sourceAligned
+description:
+  purpose: Reproducible scoped payment histories and independent label observations from accepted Bronze inputs.
+  usage: Resolve every table through the accepted Silver receipt and its independently pinned snapshots.
+  limitations: Synthetic source only. Pending context and label availability must be respected; no field is a predecision feature by default.
+team:
+  name: Fraud data platform
+  members:
+  - username: phuchoang2603
+    role: owner
+outputPorts:
+- {name: payment-events, version: 1.0.0, type: table, contractId: 'urn:datacontract:fraud:silver-payment-events', description: Scoped canonical payment events.}
+- {name: event-delivery-provenance, version: 1.0.0, type: table, contractId: 'urn:datacontract:fraud:silver-event-delivery-provenance', description: Exact event delivery provenance.}
+- {name: attempt-histories, version: 1.0.0, type: table, contractId: 'urn:datacontract:fraud:silver-attempt-histories', description: Scoped attempt histories and pending context.}
+- {name: label-observations, version: 1.0.0, type: table, contractId: 'urn:datacontract:fraud:silver-label-observations', description: Independent label observations with availability times.}
+- {name: label-delivery-provenance, version: 1.0.0, type: table, contractId: 'urn:datacontract:fraud:silver-label-delivery-provenance', description: Exact label delivery provenance.}
+support:
+- channel: GitHub maintainer
+  url: https://github.com/phuchoang2603
+  scope: support

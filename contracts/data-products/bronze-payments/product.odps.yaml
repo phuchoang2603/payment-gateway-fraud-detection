@@ -2,7 +2,7 @@ apiVersion: v1.1.0
 kind: DataProduct
 id: urn:dataproduct:fraud:bronze-payments
 name: Bronze payments
-version: 3.0.0
+version: 4.0.0
 status: active
 domain: fraud-detection
 type: sourceAligned
@@ -30,7 +30,7 @@ customProperties:
     never reuse the generator writer.
 outputPorts:
 - name: payment-events
-  version: 3.0.0
+  version: 4.0.0
   type: table
   contractId: urn:datacontract:fraud:bronze-payment-events
   description: Delivered payment events, including incomplete lifecycle batches in daily occurred_date partitions of sorted Zstandard Parquet.
@@ -42,9 +42,9 @@ outputPorts:
       from features.
   inputContracts:
   - id: urn:datacontract:fraud:historical-payment-events
-    version: 4.0.1
+    version: 5.0.0
 - name: fraud-labels
-  version: 2.0.0
+  version: 3.0.0
   type: table
   contractId: urn:datacontract:fraud:bronze-fraud-labels
   description: Simulation truth and delayed chargebacks in daily label_available_date partitions of sorted Zstandard Parquet.
@@ -52,7 +52,7 @@ outputPorts:
   - id: urn:datacontract:fraud:historical-fraud-labels
     version: 1.0.0
   - id: urn:datacontract:fraud:bronze-payment-events
-    version: 3.0.0
+    version: 4.0.0
   customProperties:
   - property: table
     value: bronze.raw_fraud_labels

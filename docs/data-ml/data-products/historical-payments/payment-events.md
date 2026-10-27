@@ -2,7 +2,7 @@
 ## Info
 *Complete synthetic payment lifecycle histories for reproducible pipeline development.*
 - **name:** Historical synthetic payment events
-- **version:** 4.0.1
+- **version:** 5.0.0
 - **status:** active
 - **team:** Fraud data platform
 
@@ -33,7 +33,7 @@ Synthetic data only. Histories are complete across all date partitions. Empty co
 |  integration_id | string | *Dedicated synthetic integration namespace; never share it with a real integration.*<br />• `required` |
 |  occurred_at | timestamp | *Business occurrence time in UTC at microsecond precision.*<br />• **logicalTypeOptions:** {'timezone': True, 'defaultTimezone': 'UTC'}<br />• `required` |
 |  recorded_at | timestamp | *Source recording time, at or after occurred_at; not ingestion time.*<br />• **logicalTypeOptions:** {'timezone': True, 'defaultTimezone': 'UTC'}<br />• `required` |
-|  schema_version | integer | *Current physical event schema three includes immutable attempt scoring context.*<br />• `required` |
+|  schema_version | integer | *Original event-envelope version, independent of the physical file schema recorded in the inventory.*<br />• `required` |
 |  correlation_id | string | *Correlation identity shared across one payment history.*<br />• `required` |
 |  payment_created | object | *Initial immutable checkout snapshot. Exactly one lifecycle payload is present per event.* |
 | &#x2007;&#x21b3; merchant | object | *Integration-scoped merchant references.*<br />• `required` |
@@ -106,12 +106,14 @@ Synthetic data only. Histories are complete across all date partitions. Empty co
 | &#x2007;&#x21b3; attempt_id | string | *Active attempt identity.*<br />• `required` |
 | &#x2007;&#x21b3; assessment | object | *Decision evidence. Optional model and feature versions are absent for rules-only decisions.*<br />• `required` |
 | &#x2007;&#x2007;&#x21b3; outcome | string | *RISK_OUTCOME_APPROVE or RISK_OUTCOME_DECLINE.*<br />• `required` |
-| &#x2007;&#x2007;&#x21b3; reason_codes | array | *Nonempty policy reason codes.*<br />• `required` |
+| &#x2007;&#x2007;&#x21b3; reason_codes | array | *Policy reason codes; declines require at least one.*<br />• `required` |
 | &#x2007;&#x2007;&#x2007;&#x21b3; items | string | *No description.*<br />• `required` |
 | &#x2007;&#x2007;&#x21b3; policy_version | string | *Evaluated policy version.*<br />• `required` |
 | &#x2007;&#x2007;&#x21b3; model_version | string | *Evaluated model version if a model was used.* |
 | &#x2007;&#x2007;&#x21b3; feature_set_version | string | *Evaluated feature-set version if features were used.* |
 | &#x2007;&#x2007;&#x21b3; risk_score | number | *Optional model risk score.* |
+| &#x2007;&#x2007;&#x21b3; assessment_id | string | *Optional synthetic reference, not a persisted Fraud document. UUIDv5 namespace 71088b85-53a3-5ed5-bf27-8ea372bf796d uses the UTF-8 name synthetic-assessment-v1:<integration_id>:<payment_id>:<attempt_id>.* |
+| &#x2007;&#x2007;&#x21b3; evidence_sha256 | string | *Optional lowercase SHA-256 of UTF-8 JSON synthetic-assessment-v1 evidence with sorted keys, no insignificant whitespace and unescaped Unicode. The object contains format, integration_id, payment_id, attempt_id, all retained attempt signals, and all assessment fields except references; unavailable assessment fields are JSON null. The signals attempted_at timestamp uses UTC ISO 8601 with six fractional digits and +00:00 offset. This is synthetic evidence, not a live served-vector export.* |
 |  processor_operation_requested | object | *Processor authorization request after risk approval.* |
 | &#x2007;&#x21b3; attempt_id | string | *Active approved attempt identity.*<br />• `required` |
 | &#x2007;&#x21b3; operation_key | string | *Idempotent processor operation identity.*<br />• `required` |

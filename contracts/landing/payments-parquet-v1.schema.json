@@ -25,9 +25,9 @@
         "bytes": {"type": "integer", "minimum": 1},
         "rows": {"type": "integer", "minimum": 1},
         "table": {"enum": ["payment_events", "fraud_labels"]},
-        "schema_version": {"type": "integer", "enum": [1, 2]}
+        "schema_version": {"type": "integer", "minimum": 1}
       }
     }
   },
-  "description": "Manifest published last at streaming/_batches/epoch=<source-epoch>/topic=<topic>/partition=<n>/<first>-<last>-<manifest-sha256>.json. File SHA256 and manifest-key digest cover exact object bytes. Kafka commits follow publication. Overlapping replay batches and duplicate business events are valid. Business columns follow simulator.arrow.event_schema(version) or LABEL_SCHEMA. Each row additionally has required _transport: topic UTF8, partition INT32, offset INT64, nullable timestamp TIMESTAMP(us,UTC), nullable key BINARY, required value BINARY, ordered headers LIST<STRUCT<key UTF8,value nullable BINARY>>. Historical exports have no _transport. Consumers discover completed manifests, freeze an inventory and preserve Kafka positions and manifest identity; event dates are not discovery checkpoints. No DP1 multi-source implementation or cross-system exactly-once guarantee is supplied by this contract."
+  "description": "Manifest published last at streaming/_batches/epoch=<source-epoch>/topic=<topic>/partition=<n>/<first>-<last>-<manifest-sha256>.json. File SHA256 and manifest-key digest cover exact object bytes. Kafka commits follow publication. Overlapping replay batches and duplicate business events are valid. The file schema_version identifies the physical schema and is validated against declared definitions; it is independent of the original event-envelope schema_version. Business columns follow simulator.arrow.event_schema(version) or LABEL_SCHEMA. Each row additionally has required _transport: topic UTF8, partition INT32, offset INT64, nullable timestamp TIMESTAMP(us,UTC), nullable key BINARY, required value BINARY, ordered headers LIST<STRUCT<key UTF8,value nullable BINARY>>. Historical exports have no _transport. Consumers discover completed manifests, freeze an inventory and preserve Kafka positions and manifest identity; event dates are not discovery checkpoints. This contract does not guarantee cross-system exactly-once delivery."
 }

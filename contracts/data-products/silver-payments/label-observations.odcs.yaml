@@ -1,0 +1,36 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:silver-label-observations
+name: Silver label observations
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Independent simulation-truth and chargeback observations with availability times.
+  usage: Read accepted snapshots and use labels only at or after label_available_at.
+  limitations: Missing chargebacks are unknown; scenario and future outcomes are not predecision features.
+team:
+  name: Fraud data platform
+  members:
+  - username: phuchoang2603
+    role: owner
+schema:
+- name: label_observations
+  physicalName: silver.label_observations
+  logicalType: object
+  physicalType: table
+  description: One normalized distinct source observation per scoped attempt and canonical observation hash.
+  properties:
+  - {name: integration_id, logicalType: string, physicalType: string, required: true, description: Integration identity.}
+  - {name: payment_id, logicalType: string, physicalType: string, required: true, description: Scoped payment identity.}
+  - {name: attempt_id, logicalType: string, physicalType: string, required: true, description: Scoped attempt identity.}
+  - {name: observation_id, logicalType: string, physicalType: string, required: true, description: "SHA-256 of UTF-8 Spark JSON with null fields included and UTC timestamps formatted yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX; struct fields are ordered integration_id, payment_id, attempt_id, is_fraud, occurred_at, label_available_at, source, scenario."}
+  - {name: is_fraud, logicalType: boolean, physicalType: boolean, required: true, description: Truth according to the declared source.}
+  - {name: occurred_at, logicalType: timestamp, physicalType: timestamp, required: true, description: Labeled business occurrence time.}
+  - {name: label_available_at, logicalType: timestamp, physicalType: timestamp, required: true, description: Earliest time the observation may be used.}
+  - {name: source, logicalType: string, physicalType: string, required: true, description: Simulation truth or chargeback source.}
+  - {name: scenario, logicalType: string, physicalType: string, description: Synthetic scenario on simulation truth only and never a predecision feature.}
+  - {name: attempt_started_at, logicalType: timestamp, physicalType: timestamp, description: Start time when linked attempt context is complete.}
+  - {name: payment_succeeded_at, logicalType: timestamp, physicalType: timestamp, description: Success time when the linked attempt succeeded.}
+  - {name: pending_context, logicalType: boolean, physicalType: boolean, required: true, description: True while required attempt or success context is missing.}
+  - {name: _candidate_id, logicalType: string, physicalType: string, required: true, description: Candidate identity.}

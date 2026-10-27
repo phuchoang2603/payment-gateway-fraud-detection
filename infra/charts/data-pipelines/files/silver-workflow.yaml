@@ -1,0 +1,302 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: historical-dp1-dp2
+  namespace: __NAMESPACE__
+spec:
+  serviceAccountName: dp1-workflow
+  entrypoint: composed
+  onExit: finalizer
+  activeDeadlineSeconds: __WORKFLOW_DEADLINE__
+  synchronization:
+    mutexes:
+      - name: bronze-payments-writer
+  arguments:
+    parameters:
+      - {name: run-dp1, value: "false"}
+      - {name: source-root, value: __SOURCE_ROOT__}
+      - {name: dataset-version, value: __DATASET_VERSION__}
+      - {name: input-mode, value: historical}
+      - {name: source-epoch, value: __SOURCE_EPOCH__}
+      - {name: accepted-versions, value: ""}
+      - {name: candidate-id, value: ""}
+      - {name: merge-current, value: "false"}
+      - {name: completeness, value: complete}
+      - {name: run-benchmark, value: "true"}
+      - {name: backfill-start, value: ""}
+      - {name: backfill-end, value: ""}
+  podGC:
+    strategy: OnWorkflowSuccess
+  templates:
+    - name: composed
+      dag:
+        tasks:
+          - name: dp1
+            when: "{{workflow.parameters.run-dp1}} == true"
+            templateRef: {name: historical-dp1-bronze, template: historical}
+          - name: plan-after-dp1
+            depends: dp1.Succeeded
+            template: plan
+            arguments:
+              parameters:
+                - {name: selected-version, value: "{{workflow.outputs.parameters.selected-version}}"}
+                - {name: require-input, value: "false"}
+          - name: plan-accepted
+            depends: dp1.Skipped
+            template: plan
+            arguments:
+              parameters:
+                - {name: selected-version, value: none}
+                - {name: require-input, value: "true"}
+          - name: dp2-transform
+            depends: plan-after-dp1.Succeeded || plan-accepted.Succeeded
+            when: "{{workflow.outputs.parameters.silver-run}} == true"
+            template: spark
+            arguments:
+              parameters:
+                - {name: mode, value: transform}
+                - {name: script, value: silver_cli.py}
+          - name: dp2-benchmark
+            depends: dp2-transform.Succeeded
+            when: "{{workflow.parameters.run-benchmark}} == true"
+            template: spark
+            arguments:
+              parameters:
+                - {name: mode, value: benchmark}
+                - {name: script, value: silver_benchmark.py}
+          - name: dp2-discover
+            depends: dp2-transform.Succeeded && (dp2-benchmark.Succeeded || dp2-benchmark.Skipped)
+            template: native
+            arguments:
+              parameters:
+                - {name: stage, value: discover}
+                - {name: candidate-id, value: "{{workflow.outputs.parameters.silver-candidate-id}}"}
+          - name: dp2-validate
+            depends: dp2-discover.Succeeded
+            template: native
+            arguments:
+              parameters:
+                - {name: stage, value: validate}
+                - {name: candidate-id, value: "{{workflow.outputs.parameters.silver-candidate-id}}"}
+          - name: dp2-publish
+            depends: dp2-validate.Succeeded
+            template: native
+            arguments:
+              parameters:
+                - {name: stage, value: publish}
+                - {name: candidate-id, value: "{{workflow.outputs.parameters.silver-candidate-id}}"}
+    - name: publish-only
+      steps:
+        - - name: dp2-publish
+            template: native
+            arguments:
+              parameters:
+                - {name: stage, value: publish}
+                - {name: candidate-id, value: "{{workflow.parameters.candidate-id}}"}
+    - name: plan
+      inputs:
+        parameters:
+          - name: selected-version
+          - name: require-input
+      container:
+        image: __OPENMETADATA_IMAGE__
+        command: [python, -m, data_platform.silver_plan]
+        args:
+          - "--accepted-versions={{workflow.parameters.accepted-versions}}"
+          - "--selected-version={{inputs.parameters.selected-version}}"
+          - "--require-input={{inputs.parameters.require-input}}"
+          - "--merge-current={{workflow.parameters.merge-current}}"
+          - "--completeness={{workflow.parameters.completeness}}"
+          - "--backfill-start={{workflow.parameters.backfill-start}}"
+          - "--backfill-end={{workflow.parameters.backfill-end}}"
+        envFrom:
+          - configMapRef: {name: dp1-config}
+          - secretRef: {name: lakehouse-rustfs}
+        env:
+          - {name: BRONZE_EVIDENCE_ROOT, value: __BRONZE_EVIDENCE__}
+          - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
+        resources:
+          requests: {cpu: 100m, memory: 256Mi}
+          limits: {cpu: "1", memory: 512Mi}
+      outputs:
+        parameters:
+          - name: candidate-id
+            globalName: silver-candidate-id
+            valueFrom: {path: /tmp/out/candidate-id}
+          - name: run
+            globalName: silver-run
+            valueFrom: {path: /tmp/out/run}
+    - name: spark
+      inputs:
+        parameters:
+          - name: mode
+          - name: script
+      retryStrategy:
+        limit: "2"
+        retryPolicy: OnFailure
+        backoff: {duration: 15s, factor: 2, cap: 2m}
+      steps:
+        - - name: prepare-creators
+            templateRef: {name: historical-dp1-bronze, template: delete-pods}
+            arguments:
+              parameters:
+                - {name: selector, value: "workflows.argoproj.io/workflow={{workflow.name}},dp2-application-stage={{inputs.parameters.mode}}"}
+        - - name: prepare
+            templateRef: {name: historical-dp1-bronze, template: cleanup-spark}
+            arguments:
+              parameters:
+                - {name: selector, value: "dp2-workflow={{workflow.name}},dp2-stage={{inputs.parameters.mode}}"}
+        - - name: application
+            template: spark-application
+            continueOn: {failed: true, error: true}
+            arguments:
+              parameters:
+                - {name: attempt, value: "{{retries}}"}
+                - {name: mode, value: "{{inputs.parameters.mode}}"}
+                - {name: script, value: "{{inputs.parameters.script}}"}
+        - - name: cleanup
+            templateRef: {name: historical-dp1-bronze, template: cleanup-spark}
+            arguments:
+              parameters:
+                - {name: selector, value: "dp2-workflow={{workflow.name}},dp2-stage={{inputs.parameters.mode}}"}
+        - - name: outcome
+            templateRef: {name: historical-dp1-bronze, template: spark-outcome}
+            arguments:
+              parameters:
+                - {name: status, value: "{{steps.application.status}}"}
+    - name: spark-application
+      metadata:
+        labels:
+          dp2-application-stage: "{{inputs.parameters.mode}}"
+      inputs:
+        parameters:
+          - name: attempt
+          - name: mode
+          - name: script
+      activeDeadlineSeconds: __SPARK_DEADLINE__
+      retryStrategy:
+        limit: "2"
+        retryPolicy: OnFailure
+        backoff: {duration: 30s, factor: 2, cap: 4m}
+      resource:
+        action: apply
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          apiVersion: spark.apache.org/v1
+          kind: SparkApplication
+          metadata:
+            name: dp2-{{workflow.uid}}-{{inputs.parameters.mode}}-{{inputs.parameters.attempt}}
+            namespace: __NAMESPACE__
+            labels:
+              dp2-workflow: "{{workflow.name}}"
+              dp2-stage: "{{inputs.parameters.mode}}"
+          spec:
+            pyFiles: local:///opt/data-pipeline/bronze-ingestion/.venv/lib/python3.12/site-packages/data_platform/{{inputs.parameters.script}}
+            driverArgs: ["--completeness={{workflow.parameters.completeness}}"]
+            runtimeVersions:
+              sparkVersion: "4.1.3"
+            sparkConf:
+              spark.kubernetes.container.image: __SPARK_IMAGE__
+              spark.kubernetes.authenticate.driver.serviceAccountName: dp1-spark
+              spark.driver.memory: 2g
+              spark.driver.memoryOverhead: 512m
+              spark.kubernetes.driver.request.cores: 500m
+              spark.kubernetes.driver.limit.cores: "2"
+              spark.executor.instances: "__EXECUTORS__"
+              spark.executor.cores: "1"
+              spark.kubernetes.executor.request.cores: 500m
+              spark.executor.memory: 2g
+              spark.executor.memoryOverhead: 1g
+              spark.driver.extraJavaOptions: -Dlog4j.configurationFile=file:/opt/dp1/log4j2.properties
+              spark.executor.extraJavaOptions: -Dlog4j.configurationFile=file:/opt/dp1/log4j2.properties
+              spark.kubernetes.executor.deleteOnTermination: "true"
+              spark.sql.shuffle.partitions: "__SHUFFLE_PARTITIONS__"
+              spark.eventLog.enabled: "true"
+              spark.eventLog.dir: __SILVER_EVENT_LOG_ROOT__
+              spark.eventLog.compress: "true"
+              spark.pyspark.python: /opt/data-pipeline/bronze-ingestion/.venv/bin/python
+            applicationTolerations:
+              restartConfig: {restartPolicy: Never}
+              resourceRetainPolicy: OnFailure
+              resourceRetainDurationMillis: 300000
+              ttlAfterStopMillis: 3600000
+            driverSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    dp2-workflow: "{{workflow.name}}"
+                    dp2-stage: "{{inputs.parameters.mode}}"
+                spec:
+                  activeDeadlineSeconds: __SPARK_DEADLINE__
+                  terminationGracePeriodSeconds: 30
+                  containers:
+                    - name: spark-kubernetes-driver
+                      envFrom:
+                        - configMapRef: {name: dp1-config}
+                        - secretRef: {name: lakehouse-rustfs}
+                      env:
+                        - {name: BRONZE_EVIDENCE_ROOT, value: __BRONZE_EVIDENCE__}
+                        - {name: SILVER_CANDIDATE_ID, value: "{{workflow.outputs.parameters.silver-candidate-id}}"}
+                        - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
+                        - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
+                        - {name: SPARK_SHUFFLE_PARTITIONS, value: "__SHUFFLE_PARTITIONS__"}
+                        - {name: SPARK_APPLICATION_NAME, value: "dp2-{{workflow.uid}}-{{inputs.parameters.mode}}-{{inputs.parameters.attempt}}"}
+            executorSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    dp2-workflow: "{{workflow.name}}"
+                    dp2-stage: "{{inputs.parameters.mode}}"
+                spec:
+                  terminationGracePeriodSeconds: 30
+                  containers:
+                    - name: spark-kubernetes-executor
+                      envFrom:
+                        - configMapRef: {name: dp1-config}
+                        - secretRef: {name: lakehouse-rustfs}
+    - name: native
+      inputs:
+        parameters:
+          - name: stage
+          - name: candidate-id
+      activeDeadlineSeconds: __NATIVE_DEADLINE__
+      retryStrategy:
+        limit: "1"
+        retryPolicy: OnFailure
+        backoff: {duration: 15s, factor: 2}
+      container:
+        image: __OPENMETADATA_IMAGE__
+        command: [python, -m, data_platform.silver_native]
+        args: ["{{inputs.parameters.stage}}"]
+        envFrom:
+          - configMapRef: {name: dp1-config}
+          - secretRef: {name: lakehouse-rustfs}
+          - configMapRef: {name: metadata-client}
+          - secretRef: {name: openmetadata}
+          - secretRef: {name: metadata-starrocks}
+        env:
+          - {name: SILVER_CANDIDATE_ID, value: "{{inputs.parameters.candidate-id}}"}
+          - {name: WORKFLOW_NAMESPACE, value: "{{workflow.namespace}}"}
+          - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
+        volumeMounts:
+          - name: connectors
+            mountPath: /etc/metadata
+            readOnly: true
+        resources:
+          requests: {cpu: 250m, memory: 1Gi}
+          limits: {cpu: "2", memory: 2Gi}
+      volumes:
+        - name: connectors
+          configMap:
+            name: metadata-connectors
+    - name: finalizer
+      steps:
+        - - name: cleanup-silver
+            templateRef: {name: historical-dp1-bronze, template: cleanup-spark}
+            arguments:
+              parameters:
+                - {name: selector, value: "dp2-workflow={{workflow.name}}"}
+        - - name: cleanup-bronze
+            templateRef: {name: historical-dp1-bronze, template: finalizer}

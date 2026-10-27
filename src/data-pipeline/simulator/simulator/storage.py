@@ -35,7 +35,10 @@ from simulator.resources import CapacityExceeded, LimitedWriter, ResourceMonitor
 from simulator.run_state import RunState
 from simulator.statistics import DatasetStatistics
 
-PRODUCT_DIR = Path(__file__).resolve().parents[4] / "contracts" / "data-products" / "historical-payments"
+PRODUCT_ROOT = Path(
+    os.environ.get("DATA_PRODUCTS_ROOT") or Path(__file__).resolve().parents[4] / "contracts/data-products"
+)
+PRODUCT_DIR = PRODUCT_ROOT / "historical-payments"
 COMPRESSION = "zstd"
 COMPRESSION_LEVEL = 3
 
@@ -68,6 +71,9 @@ def _duplicates(events: tuple[Record, ...], rate: float, random: np.random.Gener
 
 def _descriptor() -> dict:
     product = yaml.safe_load((PRODUCT_DIR / "product.odps.yaml").read_text())
+    physical_definition = next(
+        item["value"] for item in product["customProperties"] if item["property"] == "physicalSchemaDefinitions"
+    )
     contracts = {}
     for path in sorted(PRODUCT_DIR.glob("*.odcs.yaml")):
         content = path.read_bytes()
@@ -82,8 +88,76 @@ def _descriptor() -> dict:
         "id": product["id"],
         "version": product["version"],
         "contracts": contracts,
+        "physical_schema_definitions": {
+            "sha256": sha256((PRODUCT_DIR.parent / physical_definition).read_bytes()).hexdigest()
+        },
         "feature_definition": {"version": "fraud-snapshot-v1", "sha256": sha256(definition.read_bytes()).hexdigest()},
     }
+
+
+def _check_declared_type(field_type, prop, path):
+    logical = prop["logicalType"]
+    if logical == "object":
+        if not pa.types.is_struct(field_type):
+            raise ValueError(f"physical type differs from source contract: {path}")
+        _check_declared_fields(field_type, prop.get("properties", []), path)
+    elif logical == "array":
+        if not pa.types.is_list(field_type):
+            raise ValueError(f"physical type differs from source contract: {path}")
+        _check_declared_type(field_type.value_type, prop["items"], path + "[]")
+    else:
+        types = {
+            "VARCHAR": (pa.string(),),
+            "string": (pa.string(),),
+            "BIGINT": (pa.int64(),),
+            "long": (pa.int64(), pa.uint32()),
+            "INTEGER": (pa.int32(),),
+            "int": (pa.int32(),),
+            "UINTEGER": (pa.uint32(),),
+            "DOUBLE": (pa.float64(),),
+            "double": (pa.float64(),),
+            "BOOLEAN": (pa.bool_(),),
+            "boolean": (pa.bool_(),),
+            "TIMESTAMPTZ": (pa.timestamp("us", tz="UTC"),),
+            "timestamp": (pa.timestamp("us", tz="UTC"),),
+        }
+        if field_type not in types.get(prop.get("physicalType"), ()):
+            raise ValueError(f"physical type differs from source contract: {path}")
+
+
+def _check_declared_fields(fields, properties, path=""):
+    declared = {prop["name"]: prop for prop in properties}
+    actual = {field.name for field in fields}
+    for prop in properties:
+        if prop.get("required") and prop["name"] not in actual:
+            raise ValueError(f"required field is missing from physical schema: {path}.{prop['name']}")
+    for field in fields:
+        name = f"{path}.{field.name}" if path else field.name
+        if field.name not in declared:
+            raise ValueError(f"physical field is not declared by source contract: {name}")
+        _check_declared_type(field.type, declared[field.name], name)
+
+
+def _check_scheduled_contract(config):
+    contracts = [
+        yaml.safe_load(path.read_text())
+        for path in (
+            PRODUCT_DIR / "payment-events.odcs.yaml",
+            PRODUCT_DIR.parent / "bronze-payments/payment-events.odcs.yaml",
+        )
+    ]
+    versions = {config.schema_schedule.initial_version, *(change.version for change in config.schema_schedule.changes)}
+    for version in versions:
+        for contract in contracts:
+            declared = next(
+                item["value"]
+                for item in contract["schema"][0].get("customProperties", [])
+                if item["property"] == "schemaVersions"
+            )
+            if version not in declared:
+                raise ValueError(f"physical schema version is not declared by the contract: {version}")
+            properties = [prop for prop in contract["schema"][0]["properties"] if not prop["name"].startswith("_")]
+            _check_declared_fields(event_schema(version), properties)
 
 
 def _generator_revision() -> str:
@@ -128,6 +202,7 @@ def _generate_task(config, profiles, task, directory):
     writers = {}
     partitions = defaultdict(Counter)
     bounds = {}
+    label_occurrence_bounds = {}
     accounting = [0]
     try:
         for start in range(0, len(schedule), config.chunk_purchases):
@@ -143,7 +218,9 @@ def _generate_task(config, profiles, task, directory):
             for table, records in ((EVENTS, events), (LABELS, labels)):
                 groups = defaultdict(list)
                 for record in records:
-                    groups[record["schema_version"] if table is EVENTS else 1].append(record)
+                    groups[config.schema_schedule.version_at(record["occurred_at"]) if table is EVENTS else 1].append(
+                        record
+                    )
                 for version, rows in groups.items():
                     name = (table.name, version)
                     if name not in writers:
@@ -174,6 +251,18 @@ def _generate_task(config, profiles, task, directory):
                         low if previous is None else min(previous[0], low),
                         high if previous is None else max(previous[1], high),
                     )
+                    if table is LABELS:
+                        occurrence_low = min(row["occurred_at"] for row in rows)
+                        occurrence_high = max(row["occurred_at"] for row in rows)
+                        occurrence_previous = label_occurrence_bounds.get(name)
+                        label_occurrence_bounds[name] = (
+                            occurrence_low
+                            if occurrence_previous is None
+                            else min(occurrence_previous[0], occurrence_low),
+                            occurrence_high
+                            if occurrence_previous is None
+                            else max(occurrence_previous[1], occurrence_high),
+                        )
     finally:
         for writer, output, _, _, _ in writers.values():
             writer.close()
@@ -190,6 +279,14 @@ def _generate_task(config, profiles, task, directory):
                 partitions=dict(sorted(partitions[name].items())),
                 min_time=bounds[name][0].isoformat(),
                 max_time=bounds[name][1].isoformat(),
+                **(
+                    {
+                        "min_occurrence_time": label_occurrence_bounds[name][0].isoformat(),
+                        "max_occurrence_time": label_occurrence_bounds[name][1].isoformat(),
+                    }
+                    if table is LABELS
+                    else {}
+                ),
                 local_path=str(path),
             )
         )
@@ -285,13 +382,14 @@ def _generate(config, profiles, scratch, store, run, monitor, transfers, index):
     return stats
 
 
-def _observations(stats, inventory):
+def _observations(stats, inventory, config):
     observed = stats.observed()
+    observed["configured_entity_pools"] = config.counts.model_dump()
     counts = Counter()
     for item in inventory:
         if item["table"] == EVENTS.name:
             counts[str(item["schema_version"])] += item["rows"]
-    observed["schema_version_rows"] = {"3": counts["3"]}
+    observed["schema_version_rows"] = dict(sorted(counts.items()))
     rows = sum(counts.values())
     observed["schema_version_shares"] = {
         version: count / rows if rows else 0 for version, count in observed["schema_version_rows"].items()
@@ -309,6 +407,16 @@ def _manifest(config, run, stats, inventory, partitions, observed, descriptor):
             for name in ("bytes", "rows", "row_groups", "uncompressed_parquet_bytes")
         }
         storage[table.name].update(files=len(files))
+        storage[table.name].update(
+            time_column=table.time_column,
+            min_time=min((item["min_time"] for item in files), default=None),
+            max_time=max((item["max_time"] for item in files), default=None),
+        )
+        if table is LABELS:
+            storage[table.name].update(
+                min_occurrence_time=min((item["min_occurrence_time"] for item in files), default=None),
+                max_occurrence_time=max((item["max_occurrence_time"] for item in files), default=None),
+            )
     physical = sum(item["bytes"] for item in inventory)
     return {
         "manifest_version": 3,
@@ -387,6 +495,7 @@ def generate(
     allow_small_dataset=False,
     store=None,
 ) -> dict:
+    _check_scheduled_contract(config)
     prefix = f"{root.rstrip('/')}/historical/{config.dataset_version}"
     store = store or ObjectStore(prefix, remote=not isinstance(filesystem, fs.LocalFileSystem))
     if store.exists("manifest.json"):
@@ -532,7 +641,7 @@ def publish_inventory(
             f"publication refused: {config.counts.customers} customers is below one "
             f"{config.customer_block_size}-customer block; enable execution.allow_small_dataset for a contract probe"
         )
-    observed = _observations(stats, inventory)
+    observed = _observations(stats, inventory, config)
     physical = sum(item["bytes"] for item in inventory)
     if physical < config.minimum_source_parquet_bytes:
         raise ValueError(

@@ -1,8 +1,10 @@
-from datetime import date
+from datetime import UTC, date, datetime
+from hashlib import sha256
+from uuid import UUID, uuid5
 
 import pytest
 
-from simulator.generation import build_history
+from simulator.generation import build_history, synthetic_assessment_reference
 from simulator.profiles import (
     CARD_TESTING,
     HISTORY_STAGE,
@@ -14,6 +16,38 @@ from simulator.profiles import (
     tasks_for_day,
 )
 from tests.conftest import small_config
+
+
+def test_synthetic_assessment_reference_uses_declared_canonical_bytes():
+    signals = {
+        "attempted_at": datetime(2025, 7, 1, 12, 0, tzinfo=UTC),
+        "payment_method": {"type": "card", "fingerprint": "safe"},
+        "device_fingerprint": "device",
+        "ip_country": "US",
+        "ip_network_fingerprint": "network",
+        "user_agent_family": "é",
+    }
+    assessment = {
+        "outcome": "RISK_OUTCOME_APPROVE",
+        "reason_codes": [],
+        "policy_version": "rules-v1",
+        "model_version": None,
+        "feature_set_version": None,
+        "risk_score": None,
+    }
+    reference, digest = synthetic_assessment_reference("integration", "payment", "attempt", signals, assessment)
+    expected = (
+        '{"assessment":{"feature_set_version":null,"model_version":null,"outcome":"RISK_OUTCOME_APPROVE",'
+        '"policy_version":"rules-v1","reason_codes":[],"risk_score":null},"attempt_id":"attempt",'
+        '"format":"synthetic-assessment-v1","integration_id":"integration","payment_id":"payment",'
+        '"signals":{"attempted_at":"2025-07-01T12:00:00.000000+00:00","device_fingerprint":"device",'
+        '"ip_country":"US","ip_network_fingerprint":"network","payment_method":{"fingerprint":"safe",'
+        '"type":"card"},"user_agent_family":"é"}}'
+    ).encode("utf-8")
+    assert digest == sha256(expected).hexdigest()
+    assert reference == str(
+        uuid5(UUID("71088b85-53a3-5ed5-bf27-8ea372bf796d"), "synthetic-assessment-v1:integration:payment:attempt")
+    )
 
 
 def _histories(config, day):

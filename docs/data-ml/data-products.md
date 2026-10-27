@@ -50,42 +50,18 @@ After seven days of warmup, one conservative evaluation schedule is:
 
 Fit after training maturity, select after validation maturity, then evaluate the untouched test interval. The excluded intervals allow the configured 21-day chargeback tail; always enforce actual availability. Customer/method overlap is substantial (4,874 customers and 5,346 methods shared between training and test), so this is temporal evaluation, not an entity holdout. Stable campaign IDs are not exported; campaign overlap is unmeasured and customer/method overlap is only a proxy. These counts support pipeline experiments, not a model-quality claim.
 
-Generate only the development profile now. Full-volume Python generation is deferred until ingestion, features, training and serving have been exercised; no Spark simulator is required. Run generation from the devenv shell:
+For configuration, schema schedules, immutable publication and diagnostic interpretation, see the [data generator guide](data-generator.md).
 
-```bash
-cd src/data-pipeline/simulator
-doppler run -p payment-gateway-fraud-detection -c dev -- sh -c \
-  'AWS_ACCESS_KEY_ID="$OBJECT_GATEWAY_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$OBJECT_GATEWAY_SECRET_ACCESS_KEY" \
-   S3_ENDPOINT=https://minio.home.phuchoang.sbs S3_PATH_STYLE=true AWS_REGION=us-east-1 \
-   SIMULATOR_CONFIG=configs/historical-smoke.yaml uv run --locked simulator'
-```
-
-Bump `dataset_version` in the config for every new dataset. Set `output` in the selected YAML to a local directory to generate without credentials.
-
-The historical runtime generates and uploads raw task Parquet, verifies checksums, row-count accounting and the physical-byte gate, and writes the completion manifest last. It then cleans only `_run/`, retaining persistent `raw/` files. It resumes compatible unfinished work or repairs cleanup on a completed inventory without rewriting files or the manifest. Completed versions cannot be regenerated or overwritten; recovery verifies the stored logical configuration.
-
-The manifest uses `manifest_version: 3`, `source_layout: task-fragments-v1` and an exact inventory of `raw/{table}/{task.key}/v{schema_version}.parquet` files beneath the dataset root. Each file records `schema_version`, checksum, bytes, rows and `partitions: {date: rows}`; those dates summarize occurrence dates for events and availability dates for labels. A task file can cover several dates. Source files carry no sorting or compaction guarantee. The current context contract versions the historical-payments product to `6.0.1` and the payment-events contract to `4.0.1`; current files use event schema 3.
-
-New generation-time contract checks are recorded as `result: skipped`, gate `dp1-starrocks-openmetadata` and a reason. Older manifest gate names remain historical provenance. Python/DuckDB finalization and remote analytical scans are removed from the new path. DP1 validates exactly the listed raw files, preserves duplicate deliveries and delayed labels, derives Bronze partitions from timestamp columns and requires the owning DP1 snapshot-pinned SQL checks on both persisted tables plus verified native OpenMetadata governance before Bronze quality acceptance. Source publication alone does not establish quality acceptance. Reports use cheap additive row/scenario/duplicate/schema and bounded skew counters; observed cardinality validation is marked downstream, with configured pools kept separate from measurements.
-
-After durable publication, cleanup retains `_run/publication.json` with successful delete counts and never deletes inventory-listed raw files. Cleanup failures exit nonzero; rerunning verifies file integrity and retries. Publication uses no object tags. Source immutability is enforced by completed-manifest/configuration/inventory checks; runtime credentials cannot delete streaming sources, and historical delete scope is limited to `historical/*/_run/*`.
-
-`execution.prepare_only: true` leaves generated raw inventory ready, without sorting or a completion manifest. The normal command continues publication under the same generation identity. Normal shutdown releases ownership. After a crash, stop the former writer first and set `execution.takeover_stopped_writer: true`; elapsed time never authorizes takeover. Small remote publication still requires `execution.allow_small_dataset: true` below one customer block; probes normally use a local YAML `output`.
-
-The historical command is generation-only: it has no migration command or old-configuration compatibility path. The separate `python -m simulator.live.runtime` entry point drives current-time gateway commands.
-
-The historical 2026-10-22 RustFS probe confirmed create-if-absent, ETag-conditional update and streamed transfer; HEAD returned no SHA-256 checksum, so integrity verification streams each object. Unsupported conditional operations fail rather than falling back to unsafe writes. New execution controls cover workers, in-flight reservations, scratch and transfers, without DuckDB sort/validation budgets. Logical customer blocks, burst groups, layout, scenarios, contracts and minimum source bytes form the generation identity.
-
-The maintained generator starts fresh with a US-only electronics calibration profile, fixed entity birth dates, regional IANA/DST scheduling and UTC storage. Calibration references and explicit behavioral assumptions are hashed into generation identity. The candidate configurations use current event schema three, no injected duplicates and overlapping fraud/legitimate contexts. Schema-cutover branches are removed; duplicate-delivery experiments require `data_problems.experiment: true`. Prior-version evidence is historical; old source versions are not supported inputs to the current algorithm. Live source selection is separate.
-
-Distribution/scenario/skew counters are informational diagnostics, not source publication gates. Amount/context/time/activity counters use payments, missingness/risk counters use attempts, and purchase-weighted activity is not a population census. Chargeback reporting probability and availability beyond the configured history end are explicit; absent chargebacks are not confirmed negatives. Oracle scenario/truth and postdecision outcomes must be excluded from features. Use forward-time evaluation with mature labels plus entity/campaign holdouts; public payment context does not establish a representative checkout fraud distribution.
-
-The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai-1 (50%)`, cell B5: offline simulation of at least 100 GB. Compression accounting is unspecified there. Full-scale coursework evidence requires at least **100,000,000,000 physical bytes** across inventory-listed raw event and label Parquet files, counted once, excluding `_run`, reports, streaming data, replicas and downstream copies. The v13 smoke export does not satisfy this target. The manifest separately records uncompressed Parquet column-chunk bytes and decimal GB/GiB. A configured full-scale byte gate still prevents undersized publication. Changing logical inputs requires a new dataset version after publication.
+The v13 smoke export does not satisfy the deferred full-scale coursework target. See the [data generator guide](data-generator.md) for source-size accounting and publication controls.
 
 ## Bronze payments
 
-`bronze-payments` version `2.0.0` exposes `bronze.raw_payment_events` and `bronze.raw_fraud_labels` Iceberg ports. Current event schema 3 preserves enriched AttemptStarted context; label schema 1 retains availability and feature-leakage restrictions. Ingestion appends `_source_dataset_version`, `_source_manifest_sha256`, `_source_file`, `_ingestion_run_id` and `_ingested_at`, preserving identical deliveries.
+`bronze-payments` version `4.0.0` defines `bronze.raw_payment_events` and `bronze.raw_fraud_labels` Iceberg ports. Physical event schemas 3 and 4 preserve enriched AttemptStarted context; schema 4 adds optional assessment references. Label schema 1 retains availability and feature-leakage restrictions. Ingestion preserves source and transport provenance, including physical schema version separately from the event envelope, and preserves identical deliveries. The revised contract is pending development acceptance.
 
 Git bronze contracts define StarRocks COUNT-of-violations SQL and conditional nested requirements. The official version-matched OpenMetadata ingestion image discovers tables and executes native quality rules; Argo performs explicit product/contract/lineage writes and verifies complete results. Spark performs source-integrity checks, ingestion and bidirectional duplicate-aware source/output reconciliation against recorded snapshots. Native per-day counts alone do not establish content equality.
 
 The fresh platform migration selects v17, which must be generated and validated before ingestion. The v16 observations and manifest below are historical evidence. V16 development acceptance is separate from source/live checks and later full-scale/coursework acceptance. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and metadata-only recovery.
+
+## Silver payments
+
+[`silver-payments`](../../contracts/data-products/silver-payments) defines canonical events, exact event and label delivery provenance, attempt histories and independent label observations. Its [generated contract references](data-products/silver-payments) describe the ports. Candidate snapshots are not accepted until data quality and native governance succeed; the new product remains pending development acceptance.

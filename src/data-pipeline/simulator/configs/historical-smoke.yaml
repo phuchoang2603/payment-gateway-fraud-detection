@@ -46,7 +46,13 @@ scenarios:
   friendly_fraud:
     rate: 0.003
 data_problems:
-  duplicate_rate: 0
+  experiment: true
+  duplicate_rate: 0.02
+schema_schedule:
+  initial_version: 3
+  changes:
+    - effective_at: 2025-08-15T00:00:00Z
+      version: 4
 label_delays:
   min_days: 7
   max_days: 21

@@ -1,5 +1,5 @@
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from typing import Self
@@ -9,6 +9,7 @@ from uuid import UUID
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from simulator.arrow import event_schema
 from simulator.calibration import provenance
 
 
@@ -81,6 +82,40 @@ class DataProblems(StrictModel):
     experiment: bool = False
 
 
+class SchemaChange(StrictModel):
+    effective_at: datetime
+    version: int
+
+    @model_validator(mode="after")
+    def validate_time(self) -> Self:
+        if self.effective_at.tzinfo is None or self.effective_at.utcoffset() is None:
+            raise ValueError("schema effective time must include a timezone")
+        return self
+
+
+class SchemaSchedule(StrictModel):
+    initial_version: int = 3
+    changes: tuple[SchemaChange, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_schedule(self) -> Self:
+        for version in (self.initial_version, *(change.version for change in self.changes)):
+            event_schema(version)
+        if any(left.effective_at >= right.effective_at for left, right in zip(self.changes, self.changes[1:])):
+            raise ValueError("schema effective times must be strictly increasing")
+        return self
+
+    def version_at(self, occurred_at: datetime) -> int:
+        if occurred_at.tzinfo is None or occurred_at.utcoffset() is None:
+            raise ValueError("event occurrence time must include a timezone")
+        version = self.initial_version
+        for change in self.changes:
+            if occurred_at < change.effective_at:
+                break
+            version = change.version
+        return version
+
+
 class LabelDelays(StrictModel):
     reporting_probability: float = Field(default=0.85, ge=0, le=1)
     min_days: int = Field(ge=0)
@@ -141,6 +176,7 @@ class HistoricalConfig(StrictModel):
     behavior: PurchaseBehavior
     scenarios: Scenarios
     data_problems: DataProblems
+    schema_schedule: SchemaSchedule = Field(default_factory=SchemaSchedule)
     label_delays: LabelDelays
     storage: StorageLayout = Field(default_factory=StorageLayout)
     output: str = Field(min_length=1)
@@ -181,6 +217,8 @@ class HistoricalConfig(StrictModel):
 
     @model_validator(mode="after")
     def validate_dates(self) -> Self:
+        if self.dataset_version == "SET_UNUSED_DATASET_VERSION":
+            raise ValueError("choose an unused dataset version before generation")
         if self.calibration_sha256 != provenance()["sha256"]:
             raise ValueError("calibration identity differs from installed inputs")
         if self.data_problems.duplicate_rate and not self.data_problems.experiment:
@@ -197,5 +235,8 @@ class HistoricalConfig(StrictModel):
         return self
 
 
-def load_config(path: Path) -> HistoricalConfig:
-    return HistoricalConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+def load_config(path: Path, dataset_version: str | None = None) -> HistoricalConfig:
+    configuration = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if dataset_version is not None:
+        configuration["dataset_version"] = dataset_version
+    return HistoricalConfig.model_validate(configuration)

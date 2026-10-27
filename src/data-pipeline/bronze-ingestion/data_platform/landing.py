@@ -3,6 +3,7 @@ import re
 from hashlib import sha256
 from itertools import zip_longest
 
+from data_platform.manifest import supported_versions
 from data_platform.products import PORTS
 
 FORMAT = "decoded-payments-parquet-v1"
@@ -34,8 +35,8 @@ def validate_batch(key, body, epoch):
         raise ValueError("landing manifest identity changed")
     seen = set()
     for entry in batch["files"]:
-        table, version = TOPICS[topic], 3 if TOPICS[topic] == "payment_events" else 1
-        if entry.get("table") != table or entry.get("schema_version") != version:
+        table, version = TOPICS[topic], entry.get("schema_version")
+        if entry.get("table") != table or type(version) is not int or version not in supported_versions(table):
             raise ValueError("unsupported landing table/schema")
         if not re.fullmatch("[0-9a-f]{64}", entry.get("sha256", "")):
             raise ValueError("landing file requires SHA-256")

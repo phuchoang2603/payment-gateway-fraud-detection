@@ -3,13 +3,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import duckdb
+import pyarrow as pa
 import pyarrow.fs as fs
 import pyarrow.parquet as pq
 import pytest
 import yaml
 
 import simulator.storage as storage
-from simulator.arrow import LABEL_SCHEMA, event_schema
+from simulator.arrow import ASSESSMENTS, LABEL_SCHEMA, event_schema
+from simulator.generation import synthetic_assessment_reference
 from simulator.object_store import ObjectStore
 from simulator.profiles import build_profiles, schedule_for_task, tasks_for_day
 from simulator.publication import publication_receipt
@@ -49,7 +51,7 @@ def _strip_required(fields: dict | None) -> dict | None:
     return None if fields is None else {name: _strip_required(nested) for name, (_, nested) in fields.items()}
 
 
-@pytest.mark.parametrize(("contract", "schema"), [("payment-events", event_schema(3)), ("fraud-labels", LABEL_SCHEMA)])
+@pytest.mark.parametrize(("contract", "schema"), [("payment-events", event_schema(4)), ("fraud-labels", LABEL_SCHEMA)])
 def test_arrow_schema_matches_contract(contract, schema):
     declared = _odcs_fields(
         yaml.safe_load((storage.PRODUCT_DIR / f"{contract}.odcs.yaml").read_text())["schema"][0]["properties"]
@@ -70,6 +72,24 @@ def test_published_dataset_records_deferred_validation(dataset):
     }
     assert (root / "manifest.json").exists()
     assert not (root / "validation").exists()
+
+
+def test_manifest_records_actual_event_and_label_time_ranges(dataset):
+    root, manifest = dataset
+    event_range = _read(root, "payment_events").aggregate("min(occurred_at), max(occurred_at)").fetchone()
+    label_range = (
+        _read(root, "fraud_labels")
+        .aggregate("min(occurred_at), max(occurred_at), min(label_available_at), max(label_available_at)")
+        .fetchone()
+    )
+    events, labels = manifest["storage"]["payment_events"], manifest["storage"]["fraud_labels"]
+    assert (events["min_time"], events["max_time"]) == tuple(value.isoformat() for value in event_range)
+    assert (
+        labels["min_occurrence_time"],
+        labels["max_occurrence_time"],
+        labels["min_time"],
+        labels["max_time"],
+    ) == tuple(value.isoformat() for value in label_range)
 
 
 def test_rebuilt_profiles_match_the_manifest_digest(dataset):
@@ -98,6 +118,68 @@ def test_existing_dataset_version_is_refused(dataset):
     root, _ = dataset
     with pytest.raises(FileExistsError, match="already published"):
         storage.generate(small_config(), fs.LocalFileSystem(), str(root.parents[1]))
+
+
+def test_undeclared_physical_fields_fail_before_publication(tmp_path, monkeypatch):
+    monkeypatch.setitem(ASSESSMENTS, 4, pa.struct([*ASSESSMENTS[4], pa.field("undeclared", pa.string())]))
+    config = small_config(schema_schedule={"initial_version": 4})
+    with pytest.raises(ValueError, match="physical field is not declared by source contract"):
+        storage.generate(config, fs.LocalFileSystem(), str(tmp_path))
+    assert not list(tmp_path.iterdir())
+
+
+def test_incompatible_physical_type_fails_before_publication(tmp_path, monkeypatch):
+    fields = [pa.field(field.name, pa.string()) if field.name == "risk_score" else field for field in ASSESSMENTS[4]]
+    monkeypatch.setitem(ASSESSMENTS, 4, pa.struct(fields))
+    config = small_config(schema_schedule={"initial_version": 4})
+    with pytest.raises(ValueError, match="physical type differs from source contract"):
+        storage.generate(config, fs.LocalFileSystem(), str(tmp_path))
+    assert not list(tmp_path.iterdir())
+
+
+def test_schema_number_without_a_contract_declaration_fails_before_publication(tmp_path, monkeypatch):
+    monkeypatch.setitem(ASSESSMENTS, 5, ASSESSMENTS[4])
+    config = small_config(schema_schedule={"initial_version": 5})
+    with pytest.raises(ValueError, match="physical schema version is not declared"):
+        storage.generate(config, fs.LocalFileSystem(), str(tmp_path))
+    assert not list(tmp_path.iterdir())
+
+
+def test_fragment_schema_schedule_does_not_relabel_event_envelopes(tmp_path):
+    boundary = datetime(2026, 7, 1, 12, tzinfo=timezone.utc)
+    config = small_config(
+        schema_schedule={"initial_version": 3, "changes": [{"effective_at": boundary.isoformat(), "version": 4}]}
+    )
+    task = next(iter(tasks_for_day(config, 0)))
+    receipt = storage._generate_task(config, build_profiles(config), task, tmp_path / "fragments")
+    events = [entry for entry in receipt["files"] if entry["table"] == "payment_events"]
+    assert {entry["schema_version"] for entry in events} == {3, 4}
+    all_rows = []
+    for entry in events:
+        rows = pq.read_table(entry["local_path"]).to_pylist()
+        assert all(row["schema_version"] == 3 for row in rows)
+        assert all((row["occurred_at"] >= boundary) == (entry["schema_version"] == 4) for row in rows)
+        all_rows.extend(rows)
+    attempts = {
+        row["attempt_started"]["attempt_id"]: row["attempt_started"]["signals"]
+        for row in all_rows
+        if row["attempt_started"] is not None
+    }
+    decisions = [
+        row for row in all_rows if row["risk_decision_recorded"] is not None and row["occurred_at"] >= boundary
+    ]
+    assert decisions
+    for row in decisions:
+        decision = row["risk_decision_recorded"]
+        assessment = decision["assessment"]
+        expected = synthetic_assessment_reference(
+            row["integration_id"],
+            row["payment_id"],
+            decision["attempt_id"],
+            attempts[decision["attempt_id"]],
+            {name: value for name, value in assessment.items() if name not in ("assessment_id", "evidence_sha256")},
+        )
+        assert (assessment["assessment_id"], assessment["evidence_sha256"]) == expected
 
 
 def test_attempt_context_matches_immutable_checkout(dataset):

@@ -2,7 +2,7 @@
 ## Info
 *Separately delivered simulation truth and delayed chargebacks for historical and recurring payment deliveries.*
 - **name:** Bronze fraud-labels
-- **version:** 2.0.0
+- **version:** 3.0.0
 - **status:** active
 - **team:** Fraud data platform
 
@@ -38,6 +38,7 @@ Synthetic data only. Scenario truth and future outcomes must never become decisi
 |  _source_dataset_version | string | *Immutable source dataset version, independent of contract and product versions.*<br />• `required` |
 |  _source_manifest_sha256 | string | *SHA-256 of exact completed source manifest bytes.*<br />• `required` |
 |  _source_file | string | *Exact manifest-selected input object URI.*<br />• `required` |
+|  _source_schema_version | integer | *Physical schema version of the selected label source file.*<br />• `required` |
 |  _ingestion_run_id | string | *Stable logical ingestion identity, reused after driver retries.*<br />• `required` |
 |  _ingested_at | timestamp | *Stable UTC microsecond ingestion time, distinct from source recorded_at.*<br />• `required` |
 |  _source_epoch | string | *Immutable landing epoch; null for historical exports.* |

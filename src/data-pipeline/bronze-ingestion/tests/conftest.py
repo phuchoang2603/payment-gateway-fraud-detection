@@ -38,6 +38,14 @@ def spark(tmp_path_factory):
     instance.stop()
 
 
+@pytest.fixture
+def bounded_shuffle(spark):
+    original = spark.conf.get("spark.sql.shuffle.partitions")
+    spark.conf.set("spark.sql.shuffle.partitions", "4")
+    yield
+    spark.conf.set("spark.sql.shuffle.partitions", original)
+
+
 @pytest.fixture(autouse=True)
 def shared_connectors(tmp_path, monkeypatch):
     values = yaml.safe_load((ROOT / "infra/charts/metadata-integrations/values.yaml").read_text())

@@ -7,7 +7,7 @@ from pyspark.sql import types as T
 from pyspark.sql.functions import partitioning
 
 from data_platform.contracts import check_physical, prepare
-from data_platform.manifest import verify_files
+from data_platform.manifest import physical_schemas, verify_files
 from data_platform.products import AUDIT, PORTS
 from data_platform.runs import save_run
 
@@ -18,20 +18,75 @@ def table_name(table, namespace="bronze"):
     return f"lake.{namespace}.raw_{table}"
 
 
+def event_input_schema(expected, version):
+    try:
+        fields = physical_schemas()["payment_events"][version]["assessment_fields"]
+    except KeyError as error:
+        raise ValueError(f"unsupported physical event schema: {version}") from error
+    risk = expected["risk_decision_recorded"].dataType
+    assessment = risk["assessment"].dataType
+    available = {field.name: field for field in assessment}
+    if len(fields) != len(set(fields)) or any(name not in available for name in fields):
+        raise ValueError(f"unsupported assessment fields in physical schema: {version}")
+    if any(not field.nullable and field.name not in fields for field in assessment):
+        raise ValueError(f"physical schema removes required assessment fields: {version}")
+    selected = T.StructType([available[name] for name in fields])
+    risk_fields = [
+        T.StructField(field.name, selected, field.nullable) if field.name == "assessment" else field for field in risk
+    ]
+    source_risk = T.StructType(risk_fields)
+    return T.StructType(
+        [
+            T.StructField(field.name, source_risk, field.nullable) if field.name == "risk_decision_recorded" else field
+            for field in expected
+        ]
+    )
+
+
+def normalize_events(frame, source_schema, target_schema):
+    source_assessment = source_schema["risk_decision_recorded"].dataType["assessment"].dataType
+    target_assessment = target_schema["risk_decision_recorded"].dataType["assessment"].dataType
+    assessment = F.col("risk_decision_recorded.assessment")
+    for field in target_assessment:
+        if field.name not in source_assessment.fieldNames():
+            assessment = assessment.withField(field.name, F.lit(None).cast(field.dataType))
+    risk = F.col("risk_decision_recorded").withField("assessment", assessment)
+    return frame.withColumn("risk_decision_recorded", risk)
+
+
 def source_frames(spark, root, manifest, run):
     result = {}
     for table in PORTS:
         prepared = prepare(table)
-        paths = [root.rstrip("/") + "/" + entry["key"] for entry in manifest["inventory"] if entry["table"] == table]
-        if paths:
-            frame = spark.read.option("mergeSchema", "true").parquet(*[p.replace("s3://", "s3a://", 1) for p in paths])
+        entries = [entry for entry in manifest["inventory"] if entry["table"] == table]
+        if entries:
             columns = prepared.business_columns + (["_transport"] if manifest.get("input_mode") == "landing" else [])
-            check_physical(frame.schema, T.StructType([prepared.schema[c] for c in columns]))
-            frame = frame.select(*columns)
-            frame = frame.withColumn("_source_file", F.regexp_replace(F.input_file_name(), "^s3a://", "s3://"))
+            target_schema = T.StructType([prepared.schema[column] for column in columns])
+            parts = []
+            for version in sorted({entry["schema_version"] for entry in entries}):
+                paths = [
+                    (root.rstrip("/") + "/" + entry["key"]).replace("s3://", "s3a://", 1)
+                    for entry in entries
+                    if entry["schema_version"] == version
+                ]
+                part = spark.read.parquet(*paths)
+                source_schema = (
+                    event_input_schema(target_schema, version) if table == "payment_events" else target_schema
+                )
+                check_physical(part.schema, source_schema)
+                if table == "payment_events":
+                    part = normalize_events(part, source_schema, target_schema)
+                part = part.select(*columns).withColumn("_source_schema_version", F.lit(version).cast("int"))
+                parts.append(
+                    part.withColumn("_source_file", F.regexp_replace(F.input_file_name(), "^s3a://", "s3://"))
+                )
+            frame = parts[0]
+            for part in parts[1:]:
+                frame = frame.unionByName(part)
         else:
             frame = spark.createDataFrame([], T.StructType([f for f in prepared.schema if f.name not in AUDIT]))
             frame = frame.withColumn("_source_file", F.lit("").cast("string"))
+            frame = frame.withColumn("_source_schema_version", F.lit(None).cast("int"))
         if manifest.get("input_mode") == "landing":
             files = {
                 root.rstrip("/") + "/" + e["key"]: e["batch"] for e in manifest["inventory"] if e["table"] == table
@@ -89,6 +144,30 @@ def check_date_partition(spark, name, table):
         raise ValueError(f"table lacks the required date partition: {name}")
 
 
+def ensure_contract_columns(spark, name, expected):
+    def check(actual, target, path=()):
+        if not isinstance(actual, T.StructType):
+            raise ValueError(f"existing table schema is not a struct: {'.'.join(path)}")
+        extra = set(actual.fieldNames()).difference(target.fieldNames())
+        if extra:
+            raise ValueError(f"existing table has undeclared columns at {'.'.join(path)}: {sorted(extra)}")
+        for field in target:
+            field_path = (*path, field.name)
+            if field.name not in actual.fieldNames():
+                if not field.nullable and field.name != "_source_schema_version":
+                    raise ValueError(f"existing table lacks required field: {'.'.join(field_path)}")
+                if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", item) for item in field_path):
+                    raise ValueError("invalid contract field name")
+                escaped = ".".join(f"`{item}`" for item in field_path)
+                spark.sql(f"ALTER TABLE {name} ADD COLUMN {escaped} {field.dataType.simpleString()}")
+            elif isinstance(field.dataType, T.StructType):
+                check(actual[field.name].dataType, field.dataType, field_path)
+            else:
+                check_physical(actual[field.name].dataType, field.dataType, ".".join(field_path))
+
+    check(spark.table(name).schema, expected)
+
+
 def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=None):
     conservation = run.get("conservation", {})
     if (
@@ -122,10 +201,7 @@ def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=N
                 .tableProperty("history.expire.max-snapshot-age-ms", "9223372036854775807")
                 .create()
             )
-        existing = spark.table(name).schema
-        for column in ("_source_epoch", "_source_batch", "_transport"):
-            if column not in existing.fieldNames():
-                spark.sql(f"ALTER TABLE {name} ADD COLUMN `{column}` {frame.schema[column].dataType.simpleString()}")
+        ensure_contract_columns(spark, name, frame.schema)
         check_date_partition(spark, name, table)
         if manifest.get("input_mode") == "landing" and not any(e["table"] == table for e in manifest["inventory"]):
             run["snapshots"][table] = (

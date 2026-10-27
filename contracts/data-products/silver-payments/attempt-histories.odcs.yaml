@@ -1,0 +1,45 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:silver-attempt-histories
+name: Silver payment attempt histories
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Scoped attempt histories and explicit incomplete payment context.
+  usage: Resolve event identities through canonical events and filter pending context where complete history is required.
+  limitations: The history is not a predecision feature vector.
+team:
+  name: Fraud data platform
+  members:
+  - username: phuchoang2603
+    role: owner
+schema:
+- name: attempt_histories
+  physicalName: silver.attempt_histories
+  logicalType: object
+  physicalType: table
+  description: One scoped payment attempt with ordered canonical event references.
+  properties:
+  - {name: integration_id, logicalType: string, physicalType: string, required: true, description: Integration identity.}
+  - {name: payment_id, logicalType: string, physicalType: string, required: true, description: Scoped payment identity.}
+  - {name: attempt_id, logicalType: string, physicalType: string, required: true, description: Scoped attempt identity.}
+  - name: events
+    logicalType: array
+    required: true
+    description: Event references ordered by aggregate version and event identity.
+    items:
+      logicalType: object
+      properties:
+      - {name: sequence, logicalType: integer, physicalType: long, required: true, description: Aggregate version.}
+      - {name: event_id, logicalType: string, physicalType: string, required: true, description: Canonical event identity.}
+      - {name: occurred_at, logicalType: timestamp, physicalType: timestamp, required: true, description: Event occurrence time.}
+  - {name: started_events, logicalType: integer, physicalType: long, required: true, description: Number of attempt start events.}
+  - {name: attempt_started_at, logicalType: timestamp, physicalType: timestamp, description: Attempt start when available.}
+  - {name: created_events, logicalType: integer, physicalType: long, required: true, description: Number of payment creation events.}
+  - {name: terminal_events, logicalType: integer, physicalType: long, required: true, description: Number of terminal payment events.}
+  - {name: payment_first_version, logicalType: integer, physicalType: long, required: true, description: Earliest selected aggregate version.}
+  - {name: payment_last_version, logicalType: integer, physicalType: long, required: true, description: Latest selected aggregate version.}
+  - {name: payment_event_count, logicalType: integer, physicalType: long, required: true, description: Number of selected canonical payment events.}
+  - {name: pending_context, logicalType: boolean, physicalType: boolean, required: true, description: True when required payment or attempt context has not arrived.}
+  - {name: _candidate_id, logicalType: string, physicalType: string, required: true, description: Candidate identity.}

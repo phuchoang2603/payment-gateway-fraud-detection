@@ -25,6 +25,7 @@ config:
   ICEBERG_REST_URI: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
   ICEBERG_WAREHOUSE: lakehouse
   ICEBERG_CLIENT_ID: platform
+  SILVER_EVIDENCE_ROOT: s3://platform-dev/runs/payment-gateway/dp2
   S3_ENDPOINT: https://minio.home.phuchoang.sbs
   AWS_REGION: us-east-1
   ARGO_WORKFLOWS_URL: https://workflows-dev.phuchoang.sbs

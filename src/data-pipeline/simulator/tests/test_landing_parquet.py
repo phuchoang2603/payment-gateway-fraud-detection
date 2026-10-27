@@ -49,10 +49,9 @@ def test_protobuf_parquet_reuses_historical_business_schema():
         messages[name] = event
     event = PaymentEvent()
     event.CopyFrom(messages["risk-v3"])
-    event.schema_version = 4
     event.risk_decision_recorded.assessment.assessment_id = "assessment-1"
     event.risk_decision_recorded.assessment.evidence_sha256 = "a" * 64
-    messages["risk-v4"] = event
+    messages["risk-ref-v3"] = event
     label = FraudLabel(
         integration_id="i", payment_id="p", attempt_id="a", is_fraud=False, source=LABEL_SOURCE_SIMULATION_TRUTH
     )
@@ -71,7 +70,7 @@ def test_protobuf_parquet_reuses_historical_business_schema():
         )
         name_table, version, decoded_row = decode(record, "labels")
         table = pq.read_table(pa.BufferReader(encode(name_table, version, [decoded_row])))
-        expected = LABEL_SCHEMA if name == "label" else event_schema(int(name[-1]))
+        expected = LABEL_SCHEMA if name == "label" else event_schema(version)
         actual = table.select(expected.names)
         assert actual.schema.equals(expected, check_metadata=False), (actual.schema, expected)
         row = table.to_pylist()[0]
@@ -86,6 +85,7 @@ def test_protobuf_parquet_reuses_historical_business_schema():
         if name == "label":
             assert row["is_fraud"] is False and row["scenario"] is None
         else:
+            assert version == 4 and row["schema_version"] == 3
             assert row["occurred_at"].microsecond == 123456
             if name.startswith("event-"):
                 assert row["payment_created"] is None
@@ -100,10 +100,10 @@ def test_protobuf_parquet_reuses_historical_business_schema():
                 assessment = row["risk_decision_recorded"]["assessment"]
                 assert assessment["outcome"] == "RISK_OUTCOME_APPROVE"
                 assert assessment["risk_score"] == 0 and assessment["model_version"] is None
-                if name == "risk-v4":
+                if name == "risk-ref-v3":
                     assert assessment["assessment_id"] == "assessment-1"
                     assert assessment["evidence_sha256"] == "a" * 64
                 else:
-                    assert "assessment_id" not in assessment and "evidence_sha256" not in assessment
+                    assert assessment["assessment_id"] is None and assessment["evidence_sha256"] is None
             else:
                 assert row["payment_expired"]["_present"] is True

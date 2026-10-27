@@ -1,6 +1,9 @@
+import os
+from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
+import yaml
 
 Record = dict[str, Any]
 TIMESTAMP = pa.timestamp("us", tz="UTC")
@@ -36,17 +39,24 @@ CHECKOUT = pa.struct(
 )
 ATTEMPT_CONTEXT = pa.struct([("merchant", MERCHANT), ("customer", CUSTOMER), ("snapshot", CHECKOUT)])
 PAYMENT_METHOD = pa.struct([("type", pa.string()), ("fingerprint", pa.string())])
-ASSESSMENT_FIELDS = [
-    ("outcome", pa.string()),
-    ("reason_codes", pa.list_(pa.string())),
-    ("policy_version", pa.string()),
-    ("model_version", pa.string()),
-    ("feature_set_version", pa.string()),
-    ("risk_score", pa.float64()),
-]
+ASSESSMENT_FIELDS = {
+    "outcome": pa.string(),
+    "reason_codes": pa.list_(pa.string()),
+    "policy_version": pa.string(),
+    "model_version": pa.string(),
+    "feature_set_version": pa.string(),
+    "risk_score": pa.float64(),
+    "assessment_id": pa.string(),
+    "evidence_sha256": pa.string(),
+}
+SCHEMA_DEFINITIONS = Path(
+    os.environ.get("PAYMENT_PHYSICAL_SCHEMAS_PATH")
+    or Path(__file__).resolve().parents[4] / "contracts/data-products/historical-payments/physical-schemas-v1.yaml"
+)
+PHYSICAL_SCHEMAS = yaml.safe_load(SCHEMA_DEFINITIONS.read_text())
 ASSESSMENTS = {
-    3: pa.struct(ASSESSMENT_FIELDS),
-    4: pa.struct(ASSESSMENT_FIELDS + [("assessment_id", pa.string()), ("evidence_sha256", pa.string())]),
+    version: pa.struct([(name, ASSESSMENT_FIELDS[name]) for name in definition["assessment_fields"]])
+    for version, definition in PHYSICAL_SCHEMAS["payment_events"].items()
 }
 
 
