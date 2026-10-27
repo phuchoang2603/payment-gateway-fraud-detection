@@ -1,9 +1,9 @@
 enabled: true
 images:
-  spark: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark@sha256:58ed9b7145549d0220b2674cd8b56e002bf62b658a42917b3d8e903b1f0f161a
-  openmetadata: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata@sha256:52aa98f8509ffe8f6e4c58a5744e920a53bfc02d9d474e6ded6e33bf35a572f0
+  spark: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark@sha256:a509addf5357cae7d26f4c9539550e790c433dd333b2bf4aceb47356c249ba68
+  openmetadata: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata@sha256:4e721003d46482f56cca4a10324ef1a47ac49cd0a7ffd29c3c621e2fe0f534c9
 config:
-  GIT_REVISION: 8e78dcf25e45c8c77cbdb85a6b35a6a25cd2a675
+  GIT_REVISION: 13ac0b9add31a1113d7dceda3406fe3473655acd
   OPENMETADATA_OWNER_MAP: '{"phuchoang2603":"xuanphuc.a1gv"}'
 recurring:
   enabled: true

@@ -1,2 +1,2 @@
 enabled: true
-image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata@sha256:52aa98f8509ffe8f6e4c58a5744e920a53bfc02d9d474e6ded6e33bf35a572f0
+image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata@sha256:4e721003d46482f56cca4a10324ef1a47ac49cd0a7ffd29c3c621e2fe0f534c9

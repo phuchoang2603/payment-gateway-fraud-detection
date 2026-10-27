@@ -45,12 +45,35 @@ fi
 if inputs_changed infra/docker/schema-register.Dockerfile scripts/schema_registry.py contracts; then
   pin infra/charts/kafka/values-prod.yaml '^    imageTag: .*$' "    imageTag: ${tag}"
 fi
+published_image() {
+  local service="$1" suffix digest repository
+  suffix=$(jq -er --arg service "$service" '.include[] | select(.service == $service) | .["image-suffix"]' .github/service-images.json)
+  repository="ghcr.io/${GITHUB_REPOSITORY,,}${suffix}"
+  digest=$(docker buildx imagetools inspect "${repository}:${tag}" --format '{{json .Manifest}}' | jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))')
+  printf '%s@%s' "$repository" "$digest"
+}
+
+pipeline_changed=false
+if inputs_changed infra/docker/data-platform-spark.Dockerfile src/data-pipeline/bronze-ingestion contracts/data-products contracts/features; then
+  image=$(published_image data-platform-spark)
+  pin infra/charts/data-pipelines/values-prod.yaml '^  spark: .*$' "  spark: ${image}"
+  pipeline_changed=true
+fi
+if inputs_changed infra/docker/data-platform-metadata.Dockerfile src/data-pipeline/bronze-ingestion/data_platform contracts/data-products contracts/features; then
+  image=$(published_image data-platform-metadata)
+  pin infra/charts/data-pipelines/values-prod.yaml '^  openmetadata: .*$' "  openmetadata: ${image}"
+  pin infra/charts/metadata-integrations/values-prod.yaml '^image: .*$' "image: ${image}"
+  pipeline_changed=true
+fi
+if "$pipeline_changed"; then
+  pin infra/charts/data-pipelines/values-prod.yaml '^  GIT_REVISION: .*$' "  GIT_REVISION: ${GITHUB_SHA}"
+fi
 if git diff --quiet; then
   echo "image tags already at ${tag}"
   exit 0
 fi
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-git add infra/charts/payment-gateway/values-prod.yaml infra/charts/kafka/values-prod.yaml infra/charts/live-traffic/values-prod.yaml
+git add infra/charts/payment-gateway/values-prod.yaml infra/charts/kafka/values-prod.yaml infra/charts/live-traffic/values-prod.yaml infra/charts/data-pipelines/values-prod.yaml infra/charts/metadata-integrations/values-prod.yaml
 git commit -m "chore(infra): track service images ${tag} [skip ci]"
 git push
