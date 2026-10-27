@@ -27,9 +27,16 @@ def read_manifest(root):
         raise ValueError("unsupported source product identity")
     if manifest.get("source_layout") != "task-fragments-v1" or manifest.get("manifest_version") != 3:
         raise ValueError("unsupported source layout")
-    definition = PRODUCTS.parent / "features/fraud-baseline-v1.yaml"
-    feature = {"version": "fraud-baseline-v1", "sha256": sha256(definition.read_bytes()).hexdigest()}
-    if declared.get("feature_definition") != feature or manifest.get("feature_definition") != feature:
+    definition = PRODUCTS.parent / "features/fraud-snapshot-v1.yaml"
+    supported_features = [
+        {
+            "version": "fraud-baseline-v1",
+            "sha256": "2ee2a5153a248bdc98df3b2643e10a65bc5693ea111129b6c65a67352aa4ec0b",
+        },
+        {"version": "fraud-snapshot-v1", "sha256": sha256(definition.read_bytes()).hexdigest()},
+    ]
+    feature = manifest.get("feature_definition")
+    if feature not in supported_features or declared.get("feature_definition") != feature:
         raise ValueError("unsupported source feature definition")
     validation = manifest.get("validation", {})
     deferred = (
