@@ -120,7 +120,7 @@ connectors:
         config:
           type: MessagingMetadata
           topicFilterPattern:
-            includes: ["^payments\\.events\\.v1$", "^fraud\\.labels\\.v1$", "^payments\\.events\\.v1\\.faulty$", "^gateway\\.payments\\..*$"]
+            includes: ["^payments\\.events\\.v1$", "^fraud\\.labels\\.v1$", "^payments\\.events\\.v1\\.faulty$"]
           generateSampleData: false
           markDeletedTopics: false
           overrideMetadata: false

@@ -6,4 +6,4 @@
 - [x] 4. Adapt existing behavioral fixtures, update affected operation docs and validate lint/schema/rendering locally; run tests/builds in existing CI only.
 - [ ] 5. Inspect CI images/checks and report explicit rollout prerequisites without rerunning DP1 or claiming unperformed live discovery.
 
-Local verification: Nix devenv, Ruff, Helm lint/rendering and strict OpenSpec validation passed. Reader passwords, the new CI image digest and live connector readback remain rollout prerequisites. No local tests/builds or pipeline runs were performed.
+Local verification: Nix devenv, Ruff, Helm lint/rendering and strict OpenSpec validation passed. The two reader password keys were generated directly into consumer Doppler without changing existing keys. The new CI image digest and live connector readback remain rollout prerequisites. No local tests/builds or pipeline runs were performed.
