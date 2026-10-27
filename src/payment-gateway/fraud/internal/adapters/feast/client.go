@@ -128,10 +128,7 @@ func (c *Client) read(ctx context.Context, request application.Request, scope, e
 	call.Header.Set("Content-Type", "application/json")
 	result, err := c.http.Do(call)
 	if err != nil {
-		var timeout net.Error
-		if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &timeout) && timeout.Timeout() {
-			observation.Status = "timeout"
-		}
+		observation.Status = failureStatus(ctx, err)
 		return observation
 	}
 	defer func() { _ = result.Body.Close() }()
@@ -139,7 +136,11 @@ func (c *Client) read(ctx context.Context, request application.Request, scope, e
 		return observation
 	}
 	content, err := io.ReadAll(io.LimitReader(result.Body, 256*1024+1))
-	if err != nil || len(content) > 256*1024 {
+	if err != nil {
+		observation.Status = failureStatus(ctx, err)
+		return observation
+	}
+	if len(content) > 256*1024 {
 		return observation
 	}
 	var decoded response
@@ -359,4 +360,12 @@ func (c *Client) evaluate(update *featuresv1.SnapshotUpdate, writeAt time.Time, 
 		}
 	}
 	return observation
+}
+
+func failureStatus(ctx context.Context, err error) string {
+	var timeout net.Error
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) || errors.As(err, &timeout) && timeout.Timeout() {
+		return "timeout"
+	}
+	return "error"
 }

@@ -182,26 +182,34 @@ func TestUnavailableViewsNeverSupplyQuantities(t *testing.T) {
 }
 
 func TestTimeoutAndMalformedResponseRemainIndependent(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Features []string `json:"features"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		if strings.HasPrefix(body.Features[0], "customer_snapshot:") {
-			<-r.Context().Done()
-			return
-		}
-		_, _ = w.Write([]byte(`{"metadata":{"feature_names":["method_snapshot__snapshot_metadata"]},"results":[]}`))
-	}))
-	defer server.Close()
-	client, err := New(Config{URL: server.URL, Epoch: "live-v1", DefinitionHash: testHash, Timeout: 30 * time.Millisecond, MaxAnchorAge: time.Minute, MaxProgressAge: time.Minute})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close()
-	customer, method := client.Read(context.Background(), request())
-	if customer.Status != "timeout" || method.Status != "error" {
-		t.Fatalf("customer=%s method=%s", customer.Status, method.Status)
+	for _, phase := range []string{"response headers", "response body"} {
+		t.Run(phase, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Features []string `json:"features"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&body)
+				if strings.HasPrefix(body.Features[0], "customer_snapshot:") {
+					if phase == "response body" {
+						_, _ = w.Write([]byte(`{"results":`))
+						w.(http.Flusher).Flush()
+					}
+					<-r.Context().Done()
+					return
+				}
+				_, _ = w.Write([]byte(`{"metadata":{"feature_names":["method_snapshot__snapshot_metadata"]},"results":[]}`))
+			}))
+			defer server.Close()
+			client, err := New(Config{URL: server.URL, Epoch: "live-v1", DefinitionHash: testHash, Timeout: 100 * time.Millisecond, MaxAnchorAge: time.Minute, MaxProgressAge: time.Minute})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			customer, method := client.Read(context.Background(), request())
+			if customer.Status != "timeout" || method.Status != "error" {
+				t.Fatalf("customer=%s method=%s", customer.Status, method.Status)
+			}
+		})
 	}
 }
 
