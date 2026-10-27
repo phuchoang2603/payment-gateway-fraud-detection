@@ -74,6 +74,8 @@ class Attempt:
         self.expires_at = max(self.expires_at, packet.now + RETENTION)
         if self.start is None or self.decision is None or self.emitted:
             return None
+        if self.decision.started_at < self.start.started_at:
+            raise ValueError("decision precedes attempt start")
         self.emitted = True
         return Contribution(self.start, packet.now, packet.bootstrap, packet.progress)
 

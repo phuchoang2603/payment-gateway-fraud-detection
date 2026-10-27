@@ -400,3 +400,19 @@ features:
   resources:
     requests: {cpu: 100m, memory: 512Mi}
     limits: {cpu: '1', memory: 1Gi}
+
+streaming:
+  enabled: false
+  sourceTopic: payments.events.v1
+  sourcePartitions: 3
+  maxEntityEntries: 50000
+  storageHostname: minio.home.phuchoang.sbs
+  haStorage: s3://fraud-flink-prod/checkpoints/ha/live-v1
+  jobManager:
+    resources:
+      requests: {cpu: '1', memory: 1536Mi}
+      limits: {memory: 1536Mi}
+  taskManager:
+    resources:
+      requests: {cpu: '1', memory: 3Gi}
+      limits: {memory: 3Gi}

@@ -1,0 +1,159 @@
+{{- if .Values.streaming.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fraud-streaming
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fraud-streaming
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, configmaps]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fraud-streaming
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: fraud-streaming
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: fraud-streaming
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: fraud-streaming
+  namespace: {{ .Release.Namespace }}
+spec:
+  image: {{ printf "%s/streaming:%s" .Values.imageRepository .Values.imageTag | quote }}
+  imagePullPolicy: IfNotPresent
+  flinkVersion: v2_2
+  serviceAccount: fraud-streaming
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: '1'
+    taskmanager.rpc.port: '6122'
+    taskmanager.data.port: '6121'
+    blob.server.port: '6124'
+    python.executable: /app/.venv/bin/python
+    python.client.executable: /app/.venv/bin/python
+    execution.checkpointing.interval: 10s
+    execution.checkpointing.timeout: 2min
+    execution.checkpointing.num-retained: '3'
+    execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+    high-availability.type: kubernetes
+    high-availability.storageDir: {{ .Values.streaming.haStorage | quote }}
+    restart-strategy.type: exponential-delay
+  jobManager:
+    resources:
+      {{- toYaml .Values.streaming.jobManager.resources | nindent 6 }}
+  taskManager:
+    resources:
+      {{- toYaml .Values.streaming.taskManager.resources | nindent 6 }}
+  podTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fraud-streaming
+        istio.io/dataplane-mode: none
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 9999
+        runAsGroup: 9999
+        fsGroup: 9999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: flink-main-container
+          env:
+            - name: KAFKA_BROKERS
+              value: {{ .Values.features.kafkaBrokers | quote }}
+            - name: FEATURE_EPOCH
+              value: {{ .Values.features.epoch | quote }}
+            - name: FEATURE_TOPIC
+              value: {{ .Values.features.topic | quote }}
+            - name: SOURCE_TOPIC
+              value: {{ .Values.streaming.sourceTopic | quote }}
+            - name: SOURCE_PARTITIONS
+              value: {{ .Values.streaming.sourcePartitions | quote }}
+            - name: MAX_ENTITY_ENTRIES
+              value: {{ .Values.streaming.maxEntityEntries | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+  job:
+    jarURI: local:///opt/flink/opt/flink-python-2.2.1.jar
+    entryClass: org.apache.flink.client.python.PythonDriver
+    args: [-pym, fraud_streaming.job]
+    parallelism: 1
+    upgradeMode: last-state
+    state: running
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: fraud-streaming
+  namespace: {{ .Release.Namespace }}
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: fraud-streaming
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: fraud-streaming
+      toPorts:
+        - ports:
+            - {port: '6121', protocol: TCP}
+            - {port: '6122', protocol: TCP}
+            - {port: '6123', protocol: TCP}
+            - {port: '6124', protocol: TCP}
+            - {port: '8081', protocol: TCP}
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: operators
+            app.kubernetes.io/name: flink-kubernetes-operator
+      toPorts:
+        - ports: [{port: '8081', protocol: TCP}]
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: fraud-streaming
+      toPorts:
+        - ports:
+            - {port: '6121', protocol: TCP}
+            - {port: '6122', protocol: TCP}
+            - {port: '6123', protocol: TCP}
+            - {port: '6124', protocol: TCP}
+            - {port: '8081', protocol: TCP}
+    - toEndpoints:
+        - matchLabels:
+            strimzi.io/cluster: payment-gateway-kafka
+      toPorts:
+        - ports: [{port: '9092', protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports: [{port: '53', protocol: ANY}]
+          rules:
+            dns: [{matchPattern: '*'}]
+    - toEntities: [kube-apiserver]
+      toPorts:
+        - ports: [{port: '443', protocol: TCP}, {port: '6443', protocol: TCP}]
+    - toFQDNs:
+        - matchName: {{ .Values.streaming.storageHostname | quote }}
+      toPorts:
+        - ports: [{port: '443', protocol: TCP}]
+{{- end }}

@@ -85,6 +85,10 @@ def update(*, view=wire.ENTITY_VIEW_CUSTOMER, revision=1, write_delta=0, unknown
         topic="payments.events.v1", partition=0, consumed_offset=3, observed_high_watermark=4
     )
     progress.observed_at.FromDatetime(anchor)
+    empty = value.source_progress.add(
+        topic="payments.events.v1", partition=1, consumed_offset=-1, observed_high_watermark=0
+    )
+    empty.observed_at.FromDatetime(anchor)
     value.snapshot_id = schema.snapshot_id(value)
     return value
 

@@ -92,7 +92,13 @@ class ObserveSource(KeyedProcessFunction):
             if offset <= state["offsets"][partition]:
                 raise ValueError("source offset regressed within checkpoint state")
             state["offsets"][partition] = offset
-        if not self.watermarks or time.monotonic() - self.last_poll >= 1:
+        if (
+            not self.watermarks
+            or time.monotonic() - self.last_poll >= 1
+            or any(
+                consumed >= self.watermarks[index] for index, consumed in state["offsets"].items()
+            )
+        ):
             for index in range(self.partitions):
                 _, high = self.reader.get_watermark_offsets(
                     TopicPartition(self.topic, index), timeout=5, cached=False

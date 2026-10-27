@@ -43,6 +43,8 @@ def test_reordered_matching_conflicts_and_expired_unmatched_facts():
     with pytest.raises(ValueError, match="conflicting lifecycle"):
         state.accept(replace(packet, fact=replace(decision, digest="changed")))
     state.expire()
+    with pytest.raises(ValueError, match="decision precedes"):
+        Attempt(start=value).accept(replace(packet, fact=replace(decision, started_at=ANCHOR - 1)))
     with pytest.raises(ValueError, match="unmatched lifecycle"):
         Attempt(start=value).expire()
     with pytest.raises(ValueError, match="retained correction"):
