@@ -233,10 +233,13 @@ def test_readback_rejects_incomplete_contracts_ports_lineage_execution_and_profi
     }
 
 
-def test_pipeline_records_independent_source_ports_and_preserves_run_identity():
+def test_pipeline_records_independent_source_ports_and_preserves_run_identity(monkeypatch):
+    monkeypatch.setenv("WORKFLOW_ID", "metadata-recovery")
     published, _, _ = publication_fixture()
     status = published["status"]
     assert status["executionId"] == RUN["run_id"]
+    assert status["parameters"]["workflow"] == RUN["workflow"]
+    assert status["parameters"]["publication_workflow"] == "metadata-recovery"
     assert {s["version"] for s in status["outputs"]} == {"111", "222"}
     assert [s["rowCount"] for s in status["inputs"]] == [3, 2]
     landing = {**RUN, "input_mode": "landing", "source_root": "s3://source"}

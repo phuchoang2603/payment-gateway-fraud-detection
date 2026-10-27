@@ -340,6 +340,7 @@ spec:
         env:
           - {name: DATASET_VERSION, value: "{{inputs.parameters.version}}"}
           - {name: WORKFLOW_NAMESPACE, value: "{{workflow.namespace}}"}
+          - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
         resources:
           requests: {cpu: 250m, memory: 1Gi}
           limits: {cpu: "2", memory: 2Gi}

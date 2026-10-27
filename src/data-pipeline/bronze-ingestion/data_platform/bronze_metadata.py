@@ -158,7 +158,7 @@ def synchronize(sdk, run, manifest, expected, stages, report_uri, outcome):
     sdk.create_or_update(CreatePipelineServiceRequest(name="argo", serviceType="CustomPipeline"))
     link = (
         os.environ["ARGO_WORKFLOWS_URL"].rstrip("/")
-        + f"/workflows/{os.environ.get('WORKFLOW_NAMESPACE', 'fraud-data-prod')}/{run['workflow']}"
+        + f"/workflows/{os.environ.get('WORKFLOW_NAMESPACE', 'fraud-data-prod')}/{os.environ.get('WORKFLOW_ID', run['workflow'])}"
     )
     pipeline = sdk.create_or_update(
         CreatePipelineRequest(
@@ -318,7 +318,7 @@ def publish(store, run, contracts, manifest):
             time.sleep(2**attempt)
         receipt.update(
             outcome="failed" if problems or gaps else "passed",
-            ended_at=receipt.get("ended_at", int(time.time() * 1000)),
+            ended_at=int(time.time() * 1000),
         )
         published["status"] = governance.execution(
             run, manifest, governance.source_paths(run, manifest), stages, receipt["outcome"]

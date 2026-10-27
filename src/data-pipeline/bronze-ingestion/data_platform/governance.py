@@ -167,6 +167,7 @@ def execution(run, manifest, sources, stages, outcome):
             "manifest_sha256": run["manifest_sha256"],
             "snapshots": run["snapshots"],
             "workflow": run["workflow"],
+            "publication_workflow": os.environ.get("WORKFLOW_ID", run["workflow"]),
         },
         "metrics": {
             "totalRowsProcessed": sum(s["rows"] for s in sources.values()),

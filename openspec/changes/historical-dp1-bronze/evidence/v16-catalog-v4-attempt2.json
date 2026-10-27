@@ -1,0 +1,47 @@
+{
+  "workflow": "historical-dp1-bronze-dh6wk",
+  "run_id": "76c3ffb0-d45c-4b7b-9dd0-cb073b37c88f",
+  "revision": "97e84bfe905f6a358ea58d15b5eeda8c6950c0b6",
+  "policy": "bronze-catalog-v4",
+  "outcome": "failed",
+  "accepted": false,
+  "source": {
+    "uri": "s3://synthetic-source/historical/v16/manifest.json",
+    "sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+    "inventory_files": 1954,
+    "manifest_reverified_after_stop": true
+  },
+  "snapshots": {
+    "payment_events": 2927027453886299314,
+    "fraud_labels": 2234014266444181928
+  },
+  "completed": [
+    "both prior snapshot commits reused",
+    "exact bidirectional duplicate-preserving source/output conservation",
+    "native discovery",
+    "six fresh native raw SQL Success results with zero violations"
+  ],
+  "failure": {
+    "stages": {
+      "profile": "Native sample wrapper referenced columns omitted by scalar-only query projection",
+      "publish": "SDK patch allowed_fields received a list instead of a field-selection dictionary"
+    }
+  },
+  "conservation": "passed",
+  "native_validation": "passed",
+  "profiling": "failed",
+  "governance": "failed",
+  "cleanup": {
+    "shutdown": "workflow finalizer",
+    "finished_at": "2026-10-27T03:05:21Z",
+    "spark_applications_and_pods_absent": true,
+    "query_quiescence": "passed",
+    "daily_schedule": "suspended"
+  },
+  "recovery": "Retry native profiling and SDK synchronization with CI-passed 3c9fbc4 metadata image; preserve snapshots and original native result timestamps.",
+  "operational_evidence": "/home/felix/.local/state/dp1/catalog-v4-v16/",
+  "images": {
+    "spark": "sha256:58ed9b7145549d0220b2674cd8b56e002bf62b658a42917b3d8e903b1f0f161a",
+    "metadata": "sha256:cb66ffae9c31a93ef7749db1d00ed843d919d3fa139f8b851475a472669dfd95"
+  }
+}
