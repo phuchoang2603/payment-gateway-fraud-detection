@@ -2,6 +2,8 @@ package testsupport
 
 import (
 	"context"
+	"crypto/rand"
+	"fmt"
 	"net/url"
 	"testing"
 
@@ -9,6 +11,8 @@ import (
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/adapters/postgres"
 	testpostgres "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/testutil/postgres"
 )
+
+var runtimePassword = rand.Text()
 
 func Database(t testing.TB) (*postgres.Store, *pgxpool.Pool) {
 	t.Helper()
@@ -19,11 +23,11 @@ func Database(t testing.TB) (*postgres.Store, *pgxpool.Pool) {
 		t.Fatal(err)
 	}
 	t.Cleanup(admin.Close)
-	_, err = admin.Exec(ctx, `DO $$ BEGIN
+	_, err = admin.Exec(ctx, fmt.Sprintf(`DO $$ BEGIN
  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='fraud_app') THEN
- CREATE ROLE fraud_app LOGIN PASSWORD 'fraud-test';
+ CREATE ROLE fraud_app LOGIN PASSWORD '%s';
  END IF;
- END $$;`)
+ END $$;`, runtimePassword))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +38,7 @@ func Database(t testing.TB) (*postgres.Store, *pgxpool.Pool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parsed.User = url.UserPassword("fraud_app", "fraud-test")
+	parsed.User = url.UserPassword("fraud_app", runtimePassword)
 	runtime, err := pgxpool.New(ctx, parsed.String())
 	if err != nil {
 		t.Fatal(err)
