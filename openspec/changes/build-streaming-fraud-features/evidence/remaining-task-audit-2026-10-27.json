@@ -1,0 +1,40 @@
+{
+  "basis": {
+    "deployed_commit": "41afcee",
+    "prior_ci": "resource_verification.ci in live-rollout-2026-10-27.json",
+    "method": "Read implementation and existing behavior coverage; no tests or image builds run locally."
+  },
+  "accepted_existing_coverage": {
+    "3.2": [
+      "streaming/tests/test_state.py: rolling reference parity, seven-day repeated-device expiration, state limit, empty-state timer exhaustion",
+      "streaming/tests/test_runtime.py: keyed customer/method branches and quiet expiration"
+    ],
+    "4.2": [
+      "fraud/internal/adapters/feast/client_test.go: independent partial views, stale/future/incompatible snapshots, header/body timeout, request-horizon elapsed derivation"
+    ],
+    "5.1": [
+      "fraud/internal/adapters/velocity/redis_test.go: 16 concurrent atomic registrations, retry registration time, content conflicts, expired retry, partial success, recovery warmup"
+    ]
+  },
+  "changes_awaiting_ci": {
+    "1.1": "Bind actual serialized streaming definition identity to the canonical definition hash in the existing snapshot test; reuse shared hand-checkable simulator conformance cases.",
+    "1.3": "Exercise unsupported snapshot schema rejection without overwriting accepted online state; assert assessment evidence survives the actual gRPC response.",
+    "5.3": "Strengthen the existing degradation/observe-only case with a dependency rendezvous so sequential calls cannot pass.",
+    "5.4": "Inject loss of a successful risk-decision commit response, recover the same request and assert one decision, retained evidence linkage and one processor effect.",
+    "6.3": "Replace stale roadmap deployment status and clarify streaming resources are enabled by default; existing data-pipeline/payment/ML guides retain shadow-only and pending acceptance limits."
+  },
+  "acceptance_gaps": {
+    "6.1": "CI-managed immutable v16 90-day historical-clock replay, isolated output epoch, parity/readback/recovery and source immutability evidence still required.",
+    "6.2": "CI-managed current-time concurrent submission/expiration/outage/load exercise and measured latency/lag/resource evidence still required; bounded manual smoke does not satisfy this.",
+    "6.4": "Inspect the new PR CI and final cleanup before completion."
+  },
+  "deployment_target": {
+    "branch": "improve/flink-recovery",
+    "requested_targets": [
+      "payment-gateway-prod-root",
+      "payment-gateway-prod-fraud-features",
+      "payment-gateway-prod-payment-gateway"
+    ],
+    "other_applications": "Keep existing main revisions, including independently owned DP1."
+  }
+}

@@ -158,23 +158,36 @@ func TestAssessmentResponseLossReplaysOriginalEvidenceAndRejectsExpiredRecovery(
 	}
 }
 
-type timedOutHistory struct{}
+type timedOutHistory struct{ historyStarted, guardStarted chan struct{} }
 
-func (timedOutHistory) Read(ctx context.Context, _ application.Request) (application.ViewObservation, application.ViewObservation) {
+func (h timedOutHistory) Read(ctx context.Context, _ application.Request) (application.ViewObservation, application.ViewObservation) {
+	close(h.historyStarted)
+	select {
+	case <-h.guardStarted:
+	case <-ctx.Done():
+		return application.ViewObservation{Status: "error"}, application.ViewObservation{Status: "error"}
+	}
 	<-ctx.Done()
 	return application.ViewObservation{Status: "timeout"}, application.ViewObservation{Status: "timeout"}
 }
 
-type partialGuard struct{}
+type partialGuard struct{ historyStarted, guardStarted chan struct{} }
 
-func (partialGuard) Register(context.Context, application.Request, time.Time) (application.GuardObservation, application.GuardObservation) {
+func (g partialGuard) Register(ctx context.Context, _ application.Request, _ time.Time) (application.GuardObservation, application.GuardObservation) {
+	close(g.guardStarted)
+	select {
+	case <-g.historyStarted:
+	case <-ctx.Done():
+		return application.GuardObservation{Status: "timeout"}, application.GuardObservation{Status: "timeout"}
+	}
 	count := int64(100)
 	return application.GuardObservation{Status: "registered", Count10s: &count, ThresholdExceeded: true}, application.GuardObservation{Status: "error"}
 }
 
 func TestObservationFailuresAndThresholdsPreserveRulesAndDurableEvidence(t *testing.T) {
 	store, _ := testsupport.Database(t)
-	service, err := application.New(store, timedOutHistory{}, partialGuard{}, application.Config{Deadline: time.Second, Lease: 2 * time.Second, RetryHorizon: time.Hour, ErrorBackoff: time.Millisecond, HistoryTimeout: 20 * time.Millisecond, GuardTimeout: 20 * time.Millisecond})
+	historyStarted, guardStarted := make(chan struct{}), make(chan struct{})
+	service, err := application.New(store, timedOutHistory{historyStarted, guardStarted}, partialGuard{historyStarted, guardStarted}, application.Config{Deadline: time.Second, Lease: 2 * time.Second, RetryHorizon: time.Hour, ErrorBackoff: time.Millisecond, HistoryTimeout: 20 * time.Millisecond, GuardTimeout: 20 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}

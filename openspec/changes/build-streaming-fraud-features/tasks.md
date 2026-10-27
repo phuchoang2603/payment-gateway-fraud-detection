@@ -13,17 +13,17 @@
 ## 3. Continuous assessed-history snapshots
 
 - [x] 3.1 Implement protobuf decoding and bounded, conflict-aware event/attempt matching with observed availability; verify duplicate, reordered, undecided and expired-unmatched cases through focused CI coverage.
-- [ ] 3.2 Implement customer/method keyed state and hybrid live/logical-clock timers with exact seven-day device expiration; verify reference parity and quiet-entity expiration in CI, recording bounded state/timer behavior.
+- [x] 3.2 Implement customer/method keyed state and hybrid live/logical-clock timers with exact seven-day device expiration; verify reference parity and quiet-entity expiration in CI, recording bounded state/timer behavior.
 - [x] 3.3 Publish checkpoint-recoverable snapshot updates with stable identities, revisions, provenance and coverage; verify CI restart/replay and late-correction cases without cross-system exactly-once claims.
 
 ## 4. Feast writing and retrieval
 
 - [x] 4.1 Add two scoped Feast views and an ordered SDK writer that commits Kafka progress after accepted writes, preserves monotonic write timestamps and isolates epochs; verify CI crash-after-write, older/equal update and incompatible-definition cases against the pinned Redis adapter.
-- [ ] 4.2 Add a bounded Go Feast adapter behind the existing Fraud boundary with independent customer/method statuses, coverage/freshness evaluation and shadow evidence; verify timeout, future/stale/partial views and request-time elapsed derivation in focused CI cases.
+- [x] 4.2 Add a bounded Go Feast adapter behind the existing Fraud boundary with independent customer/method statuses, coverage/freshness evaluation and shadow evidence; verify timeout, future/stale/partial views and request-time elapsed derivation in focused CI cases.
 
 ## 5. Synchronous velocity and durable assessment
 
-- [ ] 5.1 Implement atomic per-entity 10s/60s registration/count scripts with stable attempt binding, server time, bounded dedup retention and observe-only thresholds; verify CI concurrency, partial success, lost response, expired retry and degraded Redis recovery behavior.
+- [x] 5.1 Implement atomic per-entity 10s/60s registration/count scripts with stable attempt binding, server time, bounded dedup retention and observe-only thresholds; verify CI concurrency, partial success, lost response, expired retry and degraded Redis recovery behavior.
 - [x] 5.2 Add durable Fraud assessment claims, digest conflicts, fenced recovery and completed-result/evidence replay; verify CI response-loss, concurrent replica and stale-owner cases reuse results despite changed counters/snapshots.
 - [ ] 5.3 Integrate parallel guard/shadow feature reads under bounded deadlines while preserving pure rules; verify existing healthy outcomes and distinct per-dependency failure statuses in CI, with no additional model features or implicit enforcement.
 - [ ] 5.4 Replace Payments' fabricated unavailability-decline fallback with operational assessment status and same-identity recovery/expiry; atomically link finalized evidence to the existing decision ledger/outbox, and verify CI timeout, lost-commit response, late result after expiry and downstream duplicate-delivery behavior without a second assessment event.

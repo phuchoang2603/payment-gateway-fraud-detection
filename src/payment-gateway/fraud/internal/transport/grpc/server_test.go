@@ -137,6 +137,10 @@ func TestDeclineSucceedsAndCountsDecisionOnce(t *testing.T) {
 	if !connected {
 		t.Fatal("Payments-to-fraud trace context was lost")
 	}
+	evidence := res.GetEvidence()
+	if evidence.GetSchemaVersion() != 1 || evidence.GetAssessmentId() != res.GetAssessment().GetAssessmentId() || evidence.GetAttemptId() != req.GetAttemptId() || !evidence.GetHistoricalFeaturesShadowOnly() || !evidence.GetCustomerGuard().GetObserveOnly() || evidence.GetUsedAmountMinor() != req.GetSnapshot().GetTotal().GetMinorUnits() {
+		t.Fatalf("incomplete wire evidence: %v", evidence)
+	}
 	a := res.Assessment
 	if a.Outcome != paymentsv1.RiskOutcome_RISK_OUTCOME_DECLINE || len(a.ReasonCodes) != 2 || a.PolicyVersion != "rules-v1" || a.ModelVersion != nil || a.FeatureSetVersion != nil || a.RiskScore != nil {
 		t.Fatalf("assessment: %v", a)
