@@ -9,14 +9,19 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 
-def imports(schema):
-    tokens = re.sub(
+def without_comments(schema):
+    return re.sub(
         r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/',
         lambda match: match[0] if match[0].startswith('"') else " ",
         schema,
         flags=re.DOTALL,
     )
-    return re.findall(r'\bimport\s+(?:(?:public|weak)\s+)?"([^"]+)"\s*;', tokens)
+
+
+def imports(schema):
+    return re.findall(
+        r'\bimport\s+(?:(?:public|weak)\s+)?"([^"]+)"\s*;', without_comments(schema)
+    )
 
 
 def bundle(root, subjects):
@@ -55,7 +60,7 @@ class Registry:
         self.attempts = attempts
         self.delay = delay
 
-    def request(self, method, path, body=None):
+    def request(self, method, path, body=None, *, retry_not_found=False):
         request = Request(
             self.url + path,
             data=json.dumps(body).encode() if body is not None else None,
@@ -67,7 +72,11 @@ class Registry:
                 with urlopen(request, timeout=10) as response:
                     return json.load(response)
             except HTTPError as error:
-                retry = error.code in (408, 429) or error.code >= 500
+                retry = (
+                    error.code in (408, 429)
+                    or error.code >= 500
+                    or (retry_not_found and error.code == 404)
+                )
                 code = error.code
                 error.close()
                 if not retry:
@@ -87,7 +96,8 @@ def register(registry, schemas, compatibility):
         encoded = quote(subject, safe="")
         body = {
             "schemaType": "PROTOBUF",
-            "schema": source["schema"],
+            # Karapace's Protobuf formatter does not round-trip all comment whitespace.
+            "schema": without_comments(source["schema"]),
             "references": [
                 {"name": name, "subject": name, "version": versions[name]}
                 for name in source["imports"]
@@ -95,8 +105,12 @@ def register(registry, schemas, compatibility):
         }
         registry.request("PUT", f"/config/{encoded}", {"compatibility": compatibility})
         registered = registry.request("POST", f"/subjects/{encoded}/versions", body)
-        found = registry.request("POST", f"/subjects/{encoded}", body)
-        latest = registry.request("GET", f"/subjects/{encoded}/versions/latest")
+        found = registry.request(
+            "POST", f"/subjects/{encoded}", body, retry_not_found=True
+        )
+        latest = registry.request(
+            "GET", f"/subjects/{encoded}/versions/latest", retry_not_found=True
+        )
         config = registry.request("GET", f"/config/{encoded}")
         if (
             registered["id"] != found["id"]
