@@ -212,5 +212,42 @@
       "flink": "New image deployed; REST job list empty during last-state upgrade at observation. Restoration and new completed checkpoint not yet verified.",
       "simulator": "Two container restarts since initial sample. Previous process ended with label producer failure and unfinished admitted work; current run continues producing payments."
     }
+  },
+  "offset_guard_release": {
+    "recorded_at": "2026-10-27T23:18:44.263234+00:00",
+    "source_commit": "99dce83b611cf8c11d596b92159dee4c888cd99e",
+    "ci": {
+      "checks": "all 26 passed",
+      "contracts_helm_run": 40600377663,
+      "python_run": 40600377657,
+      "go_run": 40600377921,
+      "image_run": 40600377778
+    },
+    "published_image": {
+      "repository": "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming",
+      "revision": "081d320abd79b7611d95fae54a08aa48af20584c",
+      "digest": "sha256:2d102addb7ac5c9d00991c0076214908293007a392d2ed69ba286d008ed7bbf2"
+    },
+    "deployment": "image pin prepared; deployed guard recovery/readback not yet verified",
+    "prior_image_recovery": {
+      "state": "RUNNING",
+      "tasks": {
+        "running": 7,
+        "canceling": 0,
+        "canceled": 0,
+        "total": 7,
+        "created": 0,
+        "scheduled": 0,
+        "deploying": 0,
+        "reconciling": 0,
+        "finished": 0,
+        "initializing": 0,
+        "failed": 0
+      },
+      "restored_checkpoint": 947,
+      "completed_checkpoint": 984,
+      "completed_checkpoint_state_bytes": 1500263
+    },
+    "acceptance": "live-v1 writer remains blocked by invalid durable records. Fresh live-v2 bootstrap awaits user choice; records, checkpoints and coverage have not been reset."
   }
 }
