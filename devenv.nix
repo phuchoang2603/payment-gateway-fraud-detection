@@ -1,5 +1,7 @@
 { pkgs, config, ... }:
 {
+  env.LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc pkgs.zlib ];
+
   packages = with pkgs; [
     kubernetes-helm
     kubectl

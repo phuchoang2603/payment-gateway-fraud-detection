@@ -25,5 +25,9 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: src/**/uv.lock
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
       - name: Python lint, format and tests
         run: bash scripts/ci-checks.sh python

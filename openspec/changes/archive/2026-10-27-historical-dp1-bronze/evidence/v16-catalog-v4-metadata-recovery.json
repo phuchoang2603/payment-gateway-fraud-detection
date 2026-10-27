@@ -1,0 +1,147 @@
+{
+  "policy": "bronze-catalog-v4",
+  "run_id": "76c3ffb0-d45c-4b7b-9dd0-cb073b37c88f",
+  "revision": "d2592421981362a628d9c17ea9fc09a7112ed744",
+  "accepted": true,
+  "images": {
+    "spark": "sha256:58ed9b7145549d0220b2674cd8b56e002bf62b658a42917b3d8e903b1f0f161a",
+    "metadata": "sha256:13ca646ba81a5fde4c9a6a125a44db00d8ac65394e32b6bcd931ff99103135ce"
+  },
+  "snapshots": {
+    "payment_events": 2927027453886299314,
+    "fraud_labels": 2234014266444181928
+  },
+  "native_results": {
+    "expected": 6,
+    "status": "Success",
+    "violations": 0,
+    "unchanged_on_metadata_replay": true
+  },
+  "profile": {
+    "workflow": "historical-dp1-profile-s7lhc",
+    "outcome": "passed",
+    "finished_at": "2026-10-27T04:21:36Z",
+    "native_duration_seconds": 101.158,
+    "max_rows_per_table": 100000,
+    "scope": "latest-state-bounded-query",
+    "selection": "first-rows",
+    "eligible_scalar_columns_per_table": 15,
+    "null_proportion_columns_per_table": 15,
+    "distinct_proportion_columns_per_table": 13,
+    "ui_verified": [
+      "payment_events column null/distinct percentages and value counts",
+      "fraud_labels column null/distinct percentages and value counts"
+    ],
+    "limits": [
+      "The native UI displays 100% despite the custom query LIMIT 100000. This is bounded latest-state profiling, not full or snapshot-pinned coverage.",
+      "Native uniqueness metrics are not requested. Unsupported/excluded nested and binary metrics remain blank.",
+      "Optional connector audit-query check warned; required connection checks passed."
+    ]
+  },
+  "publication_attempts": [
+    {
+      "workflow": "historical-dp1-bronze-rmqr9",
+      "outcome": "failed",
+      "reason": "Native profile retry passed; SDK TestCase read omitted required relationships. Fixed in bd94e46.",
+      "finished_at": "2026-10-27T03:59:03Z"
+    },
+    {
+      "workflow": "historical-dp1-metadata-6ldcb",
+      "outcome": "failed",
+      "reason": "Readback required explicit contract owners, native termsOfUse response mapping and unordered pipeline task-status comparison. Fixed in eedb5a9.",
+      "finished_at": "2026-10-27T04:10:00Z"
+    },
+    {
+      "workflow": "historical-dp1-metadata-8q7bz",
+      "outcome": "failed",
+      "reason": "Both contract sourceUrl fields retained the previous revision after native create-or-update. Native SQL results unchanged; SDK patch fix requires a new CI image.",
+      "finalizer": "passed",
+      "finished_at": "2026-10-27T04:27:49Z"
+    },
+    {
+      "workflow": "historical-dp1-metadata-n46pj",
+      "revision": "7bf4469b6e1dbf221b7914685ded7a285634f970",
+      "metadata_image": "sha256:2c29bb35d6675bc520db85ff83ce7bd7e9170bb6213826d6211b0b4f79938bbe",
+      "outcome": "failed",
+      "reason": "SDK sourceUrl PATCH also did not persist. The matched OpenMetadata contract updater does not track sourceUrl changes. Native SQL results and snapshots unchanged.",
+      "finalizer": "passed",
+      "finished_at": "2026-10-27T04:38:26Z"
+    },
+    {
+      "workflow": "historical-dp1-metadata-ttx7k",
+      "outcome": "passed",
+      "finished_at": "2026-10-27T05:02:32Z",
+      "finalizer": "passed",
+      "governance_gaps": [],
+      "native_result_timestamps_unchanged": true
+    }
+  ],
+  "landing_preflight": {
+    "source_epoch": "v16-20261026",
+    "completed_manifests": 21,
+    "rows": {
+      "payment_events": 1215,
+      "fraud_labels": 241
+    },
+    "objects_in_streaming_prefix": 428,
+    "consumer_partitions": 6,
+    "consumer_lag": 0,
+    "ingestion_started": false
+  },
+  "daily_schedule": "enabled at 00:00 Etc/UTC after historical, recurring, replay and no-input readiness; see v16-catalog-v4-landing.json",
+  "operational_evidence": "/home/felix/.local/state/dp1/catalog-v4-v16",
+  "decision": "Use stable canonical contract links with immutable Git revision/URL/hash provenance. Remove ineffective URL patching; replace only the two unaccepted candidate contract registrations before new publication. Shared server unchanged.",
+  "stable_contract_replacement": {
+    "removed_unaccepted_ids": [
+      "68b4bdd3-af59-41e4-b4d2-f1bd6ff7fd34",
+      "63dcf573-71d6-4e9b-9cb4-73c15ab52fbe"
+    ],
+    "current_ids": {
+      "payment_events": "9e1ef695-8d0c-4e0b-ad1d-c5abd580c02a",
+      "fraud_labels": "5a81a69c-59b4-4a53-b637-b1772dd63622"
+    },
+    "native_cases_results_unchanged": true
+  },
+  "obsolete_execution_cleanup": {
+    "deleted_timestamps": [
+      1792963177910,
+      1792958568885,
+      1792945913566,
+      1792933788611
+    ],
+    "current_execution_preserved": true
+  },
+  "governance": {
+    "readback_gaps": [],
+    "inputs": 2,
+    "outputs": 2,
+    "tasks": 6,
+    "publication_git_revision": "d2592421981362a628d9c17ea9fc09a7112ed744",
+    "source_urls": "stable blob/main paths; immutable artifact URLs and full revision retained in description"
+  },
+  "metadata_replay": {
+    "workflow": "historical-dp1-metadata-5vw8c",
+    "finished_at": "2026-10-27T05:06:40Z",
+    "outcome": "passed",
+    "execution_id_unchanged": true,
+    "contract_ids_unchanged": true,
+    "snapshots_unchanged": true,
+    "native_result_timestamps_unchanged": true,
+    "governance_gaps": []
+  },
+  "ui": {
+    "verified": [
+      "six pipeline tasks and successful current execution timings",
+      "obsolete execution rows absent after scoped deletion",
+      "event native contract nested schema, ownership, synthetic classification and three Success tests",
+      "historical product input/output ports and independent source lineage",
+      "event and label scalar-column profile percentages/value counts"
+    ],
+    "limits": [
+      "Contract status Unprocessed is distinct from native SQL result status.",
+      "Bounded custom-query profiler UI displays 100%; maximum query rows are 100000, latest-state only.",
+      "Execution inputs/outputs and immutable provenance were verified through the API; the execution list shows task status/timing.",
+      "Argo stage graph is readable; lifecycle and retry nodes still expand."
+    ]
+  }
+}

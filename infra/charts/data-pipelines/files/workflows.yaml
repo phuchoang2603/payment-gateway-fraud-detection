@@ -1,0 +1,358 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: historical-dp1-bronze
+  namespace: __NAMESPACE__
+spec:
+  serviceAccountName: dp1-workflow
+  entrypoint: historical
+  arguments:
+    parameters:
+      - {name: source-root, value: __SOURCE_ROOT__}
+      - {name: dataset-version, value: __DATASET_VERSION__}
+      - {name: input-mode, value: historical}
+      - {name: source-epoch, value: __SOURCE_EPOCH__}
+  onExit: finalizer
+  activeDeadlineSeconds: __WORKFLOW_DEADLINE__
+  synchronization:
+    mutexes:
+      - name: bronze-payments-writer
+  podMetadata:
+    labels:
+      dp1-product: bronze-payments
+  podGC:
+    strategy: OnWorkflowSuccess
+  templates:
+    - name: historical
+      dag:
+        failFast: false
+        tasks:
+          - name: recover-previous
+            template: recover-previous
+          - name: select
+            depends: recover-previous.Succeeded
+            template: select
+          - name: ingest
+            depends: select.Succeeded
+            when: "{{tasks.select.outputs.parameters.ingest}} == true"
+            template: spark
+          - name: discover
+            depends: ingest.Succeeded || ingest.Skipped
+            when: "{{tasks.select.outputs.parameters.native}} == true"
+            template: metadata
+            arguments:
+              parameters:
+                - {name: stage, value: discover}
+                - {name: version, value: "{{tasks.select.outputs.parameters.version}}"}
+          - name: validate
+            depends: discover.Succeeded || discover.Skipped
+            when: "{{tasks.select.outputs.parameters.native}} == true"
+            template: metadata
+            arguments:
+              parameters:
+                - {name: stage, value: validate}
+                - {name: version, value: "{{tasks.select.outputs.parameters.version}}"}
+          - name: profile
+            depends: discover.Succeeded || discover.Skipped
+            when: "{{=tasks.select.outputs.parameters.native == 'true' && workflow.parameters['input-mode'] == 'historical'}}"
+            template: metadata
+            arguments:
+              parameters:
+                - {name: stage, value: profile}
+                - {name: version, value: "{{tasks.select.outputs.parameters.version}}"}
+          - name: publish
+            depends: (validate.Succeeded || validate.Failed || validate.Errored || validate.Skipped) && (profile.Succeeded || profile.Failed || profile.Errored || profile.Skipped)
+            when: "{{=tasks.select.outputs.parameters.version != 'none'}}"
+            template: metadata
+            arguments:
+              parameters:
+                - {name: stage, value: publish}
+                - {name: version, value: "{{tasks.select.outputs.parameters.version}}"}
+    - name: profile-only
+      steps:
+        - - name: recover-previous
+            template: recover-previous
+        - - name: profile
+            template: metadata
+            arguments:
+              parameters:
+                - {name: stage, value: profile}
+                - {name: refresh, value: "true"}
+    - name: metadata-replay
+      steps:
+        - - name: recover-previous
+            template: recover-previous
+        - - name: publish
+            template: metadata
+            arguments:
+              parameters:
+                - {name: stage, value: publish}
+    - name: select
+      container:
+        image: __OPENMETADATA_IMAGE__
+        command: [python, -m, data_platform.cli]
+        args: [select]
+        envFrom:
+          - configMapRef: {name: dp1-config}
+          - secretRef: {name: lakehouse-rustfs}
+        env:
+          - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
+          - {name: INPUT_MODE, value: "{{workflow.parameters.input-mode}}"}
+          - {name: SOURCE_EPOCH, value: "{{workflow.parameters.source-epoch}}"}
+          - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
+          - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
+          - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
+        resources:
+          requests: {cpu: 100m, memory: 256Mi}
+          limits: {cpu: "1", memory: 512Mi}
+      outputs:
+        parameters:
+          - name: version
+            globalName: selected-version
+            valueFrom: {path: /tmp/out/version}
+          - name: ingest
+            valueFrom: {path: /tmp/out/ingest}
+          - name: native
+            valueFrom: {path: /tmp/out/native}
+    - name: spark
+      retryStrategy:
+        limit: "2"
+        retryPolicy: OnFailure
+        backoff:
+          duration: 15s
+          factor: 2
+          cap: 2m
+      steps:
+        - - name: prepare-creators
+            template: delete-pods
+            arguments:
+              parameters:
+                - name: selector
+                  value: "workflows.argoproj.io/workflow={{workflow.name}},dp1-application-stage=ingest"
+        - - name: prepare
+            template: cleanup-spark
+            arguments:
+              parameters:
+                - {name: selector, value: "dp1-workflow={{workflow.name}},dp1-stage=ingest"}
+        - - name: application
+            template: spark-application
+            continueOn: {failed: true, error: true}
+            arguments:
+              parameters:
+                - {name: attempt, value: "{{retries}}"}
+        - - name: cleanup
+            template: cleanup-spark
+            arguments:
+              parameters:
+                - {name: selector, value: "dp1-workflow={{workflow.name}},dp1-stage=ingest"}
+        - - name: outcome
+            template: spark-outcome
+            arguments:
+              parameters:
+                - {name: status, value: "{{steps.application.status}}"}
+    - name: spark-application
+      metadata:
+        labels:
+          dp1-application-stage: "ingest"
+      inputs:
+        parameters:
+          - name: attempt
+      activeDeadlineSeconds: __SPARK_DEADLINE__
+      retryStrategy:
+        limit: "6"
+        retryPolicy: OnFailure
+        expression: "lastRetry.exitCode != '64'"
+        backoff: {duration: 30s, factor: 2, cap: 4m}
+      resource:
+        action: apply
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          apiVersion: spark.apache.org/v1
+          kind: SparkApplication
+          metadata:
+            name: dp1-{{workflow.uid}}-ingest-{{inputs.parameters.attempt}}
+            namespace: __NAMESPACE__
+            labels:
+              dp1-product: bronze-payments
+              dp1-workflow: "{{workflow.name}}"
+              dp1-stage: "ingest"
+          spec:
+            pyFiles: local:///opt/data-pipeline/bronze-ingestion/.venv/lib/python3.12/site-packages/data_platform/cli.py
+            driverArgs: ["ingest"]
+            runtimeVersions:
+              sparkVersion: "4.1.3"
+            sparkConf:
+              spark.kubernetes.container.image: __SPARK_IMAGE__
+              spark.kubernetes.authenticate.driver.serviceAccountName: dp1-spark
+              spark.driver.memory: 2g
+              spark.driver.memoryOverhead: 512m
+              spark.kubernetes.driver.request.cores: 500m
+              spark.kubernetes.driver.limit.cores: "2"
+              spark.executor.instances: "__EXECUTORS__"
+              spark.executor.cores: "1"
+              spark.kubernetes.executor.request.cores: 500m
+              spark.executor.memory: 2g
+              spark.executor.memoryOverhead: 1g
+              spark.driver.extraJavaOptions: -Dlog4j.configurationFile=file:/opt/dp1/log4j2.properties
+              spark.executor.extraJavaOptions: -Dlog4j.configurationFile=file:/opt/dp1/log4j2.properties
+              spark.kubernetes.executor.deleteOnTermination: "true"
+              spark.sql.shuffle.partitions: "__SHUFFLE_PARTITIONS__"
+              spark.pyspark.python: /opt/data-pipeline/bronze-ingestion/.venv/bin/python
+            applicationTolerations:
+              restartConfig:
+                restartPolicy: Never
+              resourceRetainPolicy: OnFailure
+              resourceRetainDurationMillis: 300000
+              ttlAfterStopMillis: 3600000
+            driverSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    dp1-product: bronze-payments
+                    dp1-workflow: "{{workflow.name}}"
+                    dp1-stage: "ingest"
+                spec:
+                  activeDeadlineSeconds: __SPARK_DEADLINE__
+                  terminationGracePeriodSeconds: 30
+                  containers:
+                    - name: spark-kubernetes-driver
+                      envFrom:
+                        - configMapRef: {name: dp1-config}
+                        - secretRef: {name: lakehouse-rustfs}
+                      env:
+                        - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
+                        - {name: INPUT_MODE, value: "{{workflow.parameters.input-mode}}"}
+                        - {name: SOURCE_EPOCH, value: "{{workflow.parameters.source-epoch}}"}
+                        - {name: DATASET_VERSION, value: "{{workflow.outputs.parameters.selected-version}}"}
+                        - {name: SPARK_SHUFFLE_PARTITIONS, value: "__SHUFFLE_PARTITIONS__"}
+                        - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
+                        - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
+                        - {name: SPARK_APPLICATION_NAME, value: "dp1-{{workflow.uid}}-ingest-{{inputs.parameters.attempt}}"}
+            executorSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    dp1-product: bronze-payments
+                    dp1-workflow: "{{workflow.name}}"
+                    dp1-stage: "ingest"
+                spec:
+                  terminationGracePeriodSeconds: 30
+                  containers:
+                    - name: spark-kubernetes-executor
+                      envFrom:
+                        - configMapRef: {name: dp1-config}
+                        - secretRef: {name: lakehouse-rustfs}
+    - name: recover-previous
+      steps:
+        - - name: workflow-pods
+            template: delete-pods
+            arguments:
+              parameters:
+                - name: selector
+                  value: "dp1-product=bronze-payments,workflows.argoproj.io/workflow,workflows.argoproj.io/workflow!={{workflow.name}}"
+        - - name: spark
+            template: cleanup-spark
+            arguments:
+              parameters:
+                - name: selector
+                  value: "dp1-product=bronze-payments,dp1-workflow,dp1-workflow!={{workflow.name}}"
+        - - name: queries
+            template: metadata
+            arguments:
+              parameters:
+                - {name: stage, value: quiesce}
+    - name: cleanup-spark
+      inputs:
+        parameters:
+          - name: selector
+      steps:
+        - - name: applications
+            template: delete-spark-applications
+            arguments:
+              parameters:
+                - {name: selector, value: "{{inputs.parameters.selector}}"}
+        - - name: pods
+            template: delete-pods
+            arguments:
+              parameters:
+                - {name: selector, value: "{{inputs.parameters.selector}}"}
+    - name: delete-spark-applications
+      inputs:
+        parameters:
+          - name: selector
+      activeDeadlineSeconds: 180
+      resource:
+        action: delete
+        flags:
+          - sparkapplications.spark.apache.org
+          - --namespace=__NAMESPACE__
+          - --selector={{inputs.parameters.selector}}
+          - --cascade=foreground
+          - --wait=true
+          - --timeout=120s
+    - name: delete-pods
+      inputs:
+        parameters:
+          - name: selector
+      activeDeadlineSeconds: 180
+      resource:
+        action: delete
+        flags:
+          - pods
+          - --namespace=__NAMESPACE__
+          - --selector={{inputs.parameters.selector}}
+          - --cascade=foreground
+          - --wait=true
+          - --timeout=120s
+    - name: spark-outcome
+      inputs:
+        parameters:
+          - name: status
+      container:
+        image: __SPARK_IMAGE__
+        command: [python, -c]
+        args: ["import sys; sys.exit(0 if sys.argv[1] == 'Succeeded' else 1)", "{{inputs.parameters.status}}"]
+        resources:
+          requests: {cpu: 100m, memory: 128Mi}
+          limits: {cpu: "1", memory: 256Mi}
+    - name: metadata
+      inputs:
+        parameters:
+          - name: stage
+          - {name: refresh, value: "false"}
+          - {name: version, value: "{{workflow.parameters.dataset-version}}"}
+      activeDeadlineSeconds: __NATIVE_DEADLINE__
+      retryStrategy:
+        limit: "1"
+        retryPolicy: OnFailure
+        backoff: {duration: 15s, factor: 2}
+      container:
+        image: __OPENMETADATA_IMAGE__
+        command: [python, -m, data_platform.bronze_metadata]
+        args: ["{{inputs.parameters.stage}}", "--refresh={{inputs.parameters.refresh}}"]
+        envFrom:
+          - configMapRef: {name: dp1-config}
+          - secretRef: {name: lakehouse-rustfs}
+          - secretRef: {name: openmetadata}
+          - secretRef: {name: dp1-starrocks}
+        env:
+          - {name: DATASET_VERSION, value: "{{inputs.parameters.version}}"}
+          - {name: WORKFLOW_NAMESPACE, value: "{{workflow.namespace}}"}
+          - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
+        resources:
+          requests: {cpu: 250m, memory: 1Gi}
+          limits: {cpu: "2", memory: 2Gi}
+    - name: finalizer
+      steps:
+        - - name: cleanup
+            template: cleanup-spark
+            arguments:
+              parameters:
+                - {name: selector, value: "dp1-workflow={{workflow.name}}"}
+        - - name: queries
+            template: metadata
+            arguments:
+              parameters:
+                - {name: stage, value: quiesce}
