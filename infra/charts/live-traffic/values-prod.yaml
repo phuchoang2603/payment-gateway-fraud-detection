@@ -1,7 +1,7 @@
 image:
   repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator
-  digest: sha256:d258f9e54ab352d8c2b41decd5ab4eefb2ec8f58512c40e1c5883e966832b0bd
-  revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
+  digest: sha256:002e57d34ffb5f70c884964d6236023435686ef2796f309e888b491fe1b49210
+  revision: 418e82057f981442df384b47e8886c6fd114f4a5
 simulator:
   enabled: true
   config:
