@@ -32,6 +32,10 @@ metadata:
   name: fraud-streaming
   namespace: {{ .Release.Namespace }}
 rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [fraud-streaming]
+    verbs: [get]
   - apiGroups: [""]
     resources: [pods, services, configmaps]
     verbs: [get, list, watch, create, update, patch, delete]
