@@ -1,8 +1,12 @@
 {{- if .Values.enabled }}
 {{- $registrationSecrets := list }}
-{{- range .Values.externalSecrets }}
-{{- if ne .name "openmetadata" }}
+{{- $externalSecrets := list .Values.openmetadata.externalSecret }}
+{{- $connectors := dict }}
+{{- range $name, $connector := .Values.connectors }}
+{{- $_ := set $connectors $name (omit $connector "externalSecret") }}
+{{- with $connector.externalSecret }}
 {{- $registrationSecrets = append $registrationSecrets .name }}
+{{- $externalSecrets = append $externalSecrets . }}
 {{- end }}
 {{- end }}
 {{- if not (regexMatch "@sha256:[a-f0-9]{64}$" .Values.image) }}
@@ -14,7 +18,7 @@ metadata:
   name: metadata-connectors
   namespace: {{ .Values.namespace }}
 data:
-  connectors.json: {{ .Values.connectors | toJson | quote }}
+  connectors.json: {{ $connectors | toJson | quote }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -22,7 +26,7 @@ metadata:
   name: metadata-client
   namespace: {{ .Values.namespace }}
 data:
-  OPENMETADATA_URL: {{ .Values.openmetadataURL | quote }}
+  OPENMETADATA_URL: {{ .Values.openmetadata.url | quote }}
   METADATA_CONNECTORS_FILE: /etc/metadata/connectors.json
 ---
 apiVersion: v1
@@ -54,7 +58,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: metadata-integrations
-{{- range .Values.externalSecrets }}
+{{- range $externalSecrets }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -79,7 +83,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: metadata-register-{{ printf "%s%s%s%s" (toJson .Values.connectors) .Values.image (toJson .Values.externalSecrets) .Values.openmetadataURL | sha256sum | trunc 12 }}
+  name: metadata-register-{{ printf "%s%s%s%s" (toJson .Values.connectors) .Values.image (toJson .Values.openmetadata.externalSecret) .Values.openmetadata.url | sha256sum | trunc 12 }}
   namespace: {{ .Values.namespace }}
 spec:
   backoffLimit: 2

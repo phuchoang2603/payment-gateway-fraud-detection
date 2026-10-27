@@ -12,7 +12,7 @@ The metadata integration deployment SHALL declare canonical service connections,
 - **THEN** Argo CD reconciles its configuration and registration execution and native discovery can catalog its assets independently of DP1
 
 ### Requirement: Operational service discovery
-Gateway Postgres databases, model-registry Postgres and Kafka SHALL have explicit connector configuration and scoped access. Discovery SHALL NOT require a data product, consume Kafka payloads, enable sampling/profiling or imply complete application lineage. Database-owning deployments SHALL provision reader permissions; catalog execution SHALL NOT use database-owner credentials.
+Gateway Postgres databases and Kafka SHALL have explicit connector configuration and scoped access. Discovery SHALL NOT require a data product, consume Kafka payloads, enable sampling/profiling or imply complete application lineage. Database-owning deployments SHALL provision reader permissions; catalog execution SHALL NOT use database-owner credentials.
 
 #### Scenario: Inspect operational assets
 - **WHEN** native discovery completes for an operational service

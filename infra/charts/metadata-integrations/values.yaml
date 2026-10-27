@@ -1,34 +1,22 @@
 enabled: false
 namespace: fraud-data-prod
 image: ""
-openmetadataURL: http://openmetadata.openmetadata.svc.cluster.local:8585/api
-schedule: "0 3 * * *"
-activeDeadlineSeconds: 1800
-externalSecrets:
-  - name: openmetadata
+openmetadata:
+  url: http://openmetadata.openmetadata.svc.cluster.local:8585/api
+  externalSecret:
+    name: openmetadata
     store: fraud-doppler
     data:
       OPENMETADATA_TOKEN: OPENMETADATA_TOKEN
-  - name: metadata-starrocks
-    store: doppler
-    data:
-      STARROCKS_PASSWORD: STARROCKS_OPENMETADATA_PASSWORD
-  - name: metadata-gateway-postgres
-    store: fraud-doppler
-    data:
-      GATEWAY_METADATA_PASSWORD: GATEWAY_DB_OPENMETADATA_READER_PASSWORD
-  - name: metadata-registry-postgres
-    store: fraud-doppler
-    data:
-      REGISTRY_METADATA_PASSWORD: KUBEFLOW_REGISTRY_METADATA_PASSWORD
-  - name: metadata-rustfs
-    store: doppler
-    data:
-      AWS_ACCESS_KEY_ID: STARROCKS_RUSTFS_ACCESS_KEY
-      AWS_SECRET_ACCESS_KEY: STARROCKS_RUSTFS_SECRET_KEY
+schedule: "0 3 * * *"
+activeDeadlineSeconds: 1800
 connectors:
   starrocks:
-    secretRefs: [metadata-starrocks]
+    externalSecret:
+      name: metadata-starrocks
+      store: doppler
+      data:
+        STARROCKS_PASSWORD: STARROCKS_OPENMETADATA_PASSWORD
     kind: database
     discover: true
     source:
@@ -52,7 +40,11 @@ connectors:
           includeStoredProcedures: false
           overrideMetadata: false
   gateway-postgres:
-    secretRefs: [metadata-gateway-postgres]
+    externalSecret:
+      name: metadata-gateway-postgres
+      store: fraud-doppler
+      data:
+        GATEWAY_METADATA_PASSWORD: GATEWAY_DB_OPENMETADATA_READER_PASSWORD
     kind: database
     discover: true
     source:
@@ -73,31 +65,6 @@ connectors:
           type: DatabaseMetadata
           databaseFilterPattern:
             includes: ["^payments$", "^notifier$", "^vault$", "^processor$"]
-          schemaFilterPattern:
-            includes: ["^public$"]
-          includeStoredProcedures: false
-          markDeletedTables: false
-          overrideMetadata: false
-  model-registry-postgres:
-    secretRefs: [metadata-registry-postgres]
-    kind: database
-    discover: true
-    source:
-      type: postgres
-      serviceName: model-registry-postgres
-      serviceConnection:
-        config:
-          type: Postgres
-          hostPort: model-registry-db.fraud-ml-prod.svc.cluster.local:5432
-          username: openmetadata_reader
-          authType:
-            password: ${REGISTRY_METADATA_PASSWORD}
-          database: metadb
-          ingestAllDatabases: false
-          sslMode: disable
-      sourceConfig:
-        config:
-          type: DatabaseMetadata
           schemaFilterPattern:
             includes: ["^public$"]
           includeStoredProcedures: false
@@ -125,7 +92,12 @@ connectors:
           markDeletedTopics: false
           overrideMetadata: false
   rustfs:
-    secretRefs: [metadata-rustfs]
+    externalSecret:
+      name: metadata-rustfs
+      store: doppler
+      data:
+        AWS_ACCESS_KEY_ID: STARROCKS_RUSTFS_ACCESS_KEY
+        AWS_SECRET_ACCESS_KEY: STARROCKS_RUSTFS_SECRET_KEY
     kind: storage
     discover: false
     source:

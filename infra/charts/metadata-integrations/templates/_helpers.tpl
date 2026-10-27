@@ -6,7 +6,7 @@ envFrom:
   - configMapRef:
       name: metadata-client
   - secretRef:
-      name: openmetadata
+      name: {{ .Values.openmetadata.externalSecret.name }}
   {{- range .secretRefs }}
   - secretRef:
       name: {{ . }}

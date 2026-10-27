@@ -32,7 +32,11 @@ spec:
         image: {{ $.Values.image | quote }}
         command: [python, -m, data_platform.integrations]
         args: ["{{`{{workflow.parameters.stage}}`}}", "--connector={{ $name }}"]
-        {{- include "metadata-integrations.runtime" (dict "Values" $.Values "secretRefs" $connector.secretRefs) | nindent 8 }}
+        {{- $secretRefs := list }}
+        {{- with $connector.externalSecret }}
+        {{- $secretRefs = append $secretRefs .name }}
+        {{- end }}
+        {{- include "metadata-integrations.runtime" (dict "Values" $.Values "secretRefs" $secretRefs) | nindent 8 }}
       volumes:
         - name: connectors
           configMap:
