@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from pathlib import Path
@@ -35,3 +36,11 @@ def spark(tmp_path_factory):
     instance = session(tmp_path_factory.mktemp("warehouse"))
     yield instance
     instance.stop()
+
+
+@pytest.fixture(autouse=True)
+def shared_connectors(tmp_path, monkeypatch):
+    values = yaml.safe_load((ROOT / "infra/charts/metadata-integrations/values.yaml").read_text())
+    path = tmp_path / "connectors.json"
+    path.write_text(json.dumps(values["connectors"]))
+    monkeypatch.setenv("METADATA_CONNECTORS_FILE", str(path))

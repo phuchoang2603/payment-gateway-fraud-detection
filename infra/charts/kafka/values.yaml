@@ -10,6 +10,7 @@ kafka:
   replicationFactor: 1
   minInsyncReplicas: 1
   clientNamespace: payment-gateway
+  metadataNamespace: ""
   storage:
     size: 5Gi
   jvmOptions:

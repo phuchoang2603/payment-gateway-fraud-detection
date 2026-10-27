@@ -1,0 +1,150 @@
+enabled: false
+namespace: fraud-data-prod
+image: ""
+openmetadataURL: http://openmetadata.openmetadata.svc.cluster.local:8585/api
+schedule: "0 3 * * *"
+activeDeadlineSeconds: 1800
+externalSecrets:
+  - name: openmetadata
+    store: fraud-doppler
+    data:
+      OPENMETADATA_TOKEN: OPENMETADATA_TOKEN
+  - name: metadata-starrocks
+    store: doppler
+    data:
+      STARROCKS_PASSWORD: STARROCKS_OPENMETADATA_PASSWORD
+  - name: metadata-gateway-postgres
+    store: fraud-doppler
+    data:
+      GATEWAY_METADATA_PASSWORD: GATEWAY_DB_OPENMETADATA_READER_PASSWORD
+  - name: metadata-registry-postgres
+    store: fraud-doppler
+    data:
+      REGISTRY_METADATA_PASSWORD: KUBEFLOW_REGISTRY_METADATA_PASSWORD
+  - name: metadata-rustfs
+    store: doppler
+    data:
+      AWS_ACCESS_KEY_ID: STARROCKS_RUSTFS_ACCESS_KEY
+      AWS_SECRET_ACCESS_KEY: STARROCKS_RUSTFS_SECRET_KEY
+connectors:
+  starrocks:
+    secretRefs: [metadata-starrocks]
+    kind: database
+    discover: true
+    source:
+      type: starrocks
+      serviceName: starrocks
+      serviceConnection:
+        config:
+          type: StarRocks
+          username: openmetadata
+          password: ${STARROCKS_PASSWORD}
+          hostPort: kube-starrocks-fe-service.starrocks.svc.cluster.local:9030
+          databaseName: lakehouse
+          connectionArguments:
+            init_command: SET CATALOG lakehouse
+      sourceConfig:
+        config:
+          type: DatabaseMetadata
+          schemaFilterPattern:
+            includes: ["^bronze$", "^silver$", "^gold$"]
+          markDeletedTables: false
+          includeStoredProcedures: false
+          overrideMetadata: false
+  gateway-postgres:
+    secretRefs: [metadata-gateway-postgres]
+    kind: database
+    discover: true
+    source:
+      type: postgres
+      serviceName: gateway-postgres
+      serviceConnection:
+        config:
+          type: Postgres
+          hostPort: payment-gateway-pg-rw.payment-gateway.svc.cluster.local:5432
+          username: openmetadata_reader
+          authType:
+            password: ${GATEWAY_METADATA_PASSWORD}
+          database: payments
+          ingestAllDatabases: true
+          sslMode: require
+      sourceConfig:
+        config:
+          type: DatabaseMetadata
+          databaseFilterPattern:
+            includes: ["^payments$", "^notifier$", "^vault$", "^processor$"]
+          schemaFilterPattern:
+            includes: ["^public$"]
+          includeStoredProcedures: false
+          markDeletedTables: false
+          overrideMetadata: false
+  model-registry-postgres:
+    secretRefs: [metadata-registry-postgres]
+    kind: database
+    discover: true
+    source:
+      type: postgres
+      serviceName: model-registry-postgres
+      serviceConnection:
+        config:
+          type: Postgres
+          hostPort: model-registry-db.fraud-ml-prod.svc.cluster.local:5432
+          username: openmetadata_reader
+          authType:
+            password: ${REGISTRY_METADATA_PASSWORD}
+          database: metadb
+          ingestAllDatabases: false
+          sslMode: disable
+      sourceConfig:
+        config:
+          type: DatabaseMetadata
+          schemaFilterPattern:
+            includes: ["^public$"]
+          includeStoredProcedures: false
+          markDeletedTables: false
+          overrideMetadata: false
+  kafka:
+    kind: messaging
+    discover: true
+    source:
+      type: kafka
+      serviceName: payment-gateway-kafka
+      serviceConnection:
+        config:
+          type: Kafka
+          bootstrapServers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc.cluster.local:9092
+          securityProtocol: PLAINTEXT
+          consumerConfig:
+            enable.auto.commit: false
+      sourceConfig:
+        config:
+          type: MessagingMetadata
+          topicFilterPattern:
+            includes: ["^payments\\.events\\.v1$", "^fraud\\.labels\\.v1$", "^payments\\.events\\.v1\\.faulty$", "^gateway\\.payments\\..*$"]
+          generateSampleData: false
+          markDeletedTopics: false
+          overrideMetadata: false
+  rustfs:
+    secretRefs: [metadata-rustfs]
+    kind: storage
+    discover: false
+    source:
+      type: s3
+      serviceName: rustfs
+      serviceConnection:
+        config:
+          type: S3
+          awsConfig:
+            awsAccessKeyId: ${AWS_ACCESS_KEY_ID}
+            awsSecretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+            awsRegion: us-east-1
+            endPointURL: https://minio.home.phuchoang.sbs
+          bucketNames: [fraud-lakehouse-prod]
+  argo:
+    kind: pipeline
+    discover: false
+    source:
+      serviceName: argo
+      serviceConnection:
+        config:
+          type: CustomPipeline

@@ -37,6 +37,9 @@ capabilities:
 {{- $roles = append $roles (mergeOverwrite (dict "name" $role) $settings) -}}
 {{- end -}}
 {{- end -}}
+{{- if .Values.metadataReader.enabled -}}
+{{- $roles = append $roles (dict "name" "openmetadata_reader") -}}
+{{- end -}}
 {{- toYaml $roles -}}
 {{- end -}}
 

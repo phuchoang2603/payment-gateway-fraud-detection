@@ -24,21 +24,12 @@ config:
   AWS_REGION: us-east-1
   ARGO_WORKFLOWS_URL: https://workflows.phuchoang.sbs
   PROFILE_MAX_ROWS: "100000"
-  OPENMETADATA_URL: http://openmetadata.openmetadata.svc.cluster.local:8585/api
 externalSecrets:
   - name: lakehouse-rustfs
     store: fraud-doppler
     data:
       AWS_ACCESS_KEY_ID: LAKEHOUSE_RUSTFS_ACCESS_KEY
       AWS_SECRET_ACCESS_KEY: LAKEHOUSE_RUSTFS_SECRET_KEY
-  - name: openmetadata
-    store: fraud-doppler
-    data:
-      OPENMETADATA_TOKEN: OPENMETADATA_TOKEN
-  - name: dp1-starrocks
-    store: doppler
-    data:
-      STARROCKS_PASSWORD: STARROCKS_OPENMETADATA_PASSWORD
 recurring:
   enabled: false
   schedule: "0 0 * * *"

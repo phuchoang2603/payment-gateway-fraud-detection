@@ -1,1 +1,4 @@
 secretStoreName: fraud-doppler
+
+metadataReader:
+  enabled: true

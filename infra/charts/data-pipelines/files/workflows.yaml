@@ -335,15 +335,24 @@ spec:
         envFrom:
           - configMapRef: {name: dp1-config}
           - secretRef: {name: lakehouse-rustfs}
+          - configMapRef: {name: metadata-client}
           - secretRef: {name: openmetadata}
-          - secretRef: {name: dp1-starrocks}
+          - secretRef: {name: metadata-starrocks}
         env:
           - {name: DATASET_VERSION, value: "{{inputs.parameters.version}}"}
           - {name: WORKFLOW_NAMESPACE, value: "{{workflow.namespace}}"}
           - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
+        volumeMounts:
+          - name: connectors
+            mountPath: /etc/metadata
+            readOnly: true
         resources:
           requests: {cpu: 250m, memory: 1Gi}
           limits: {cpu: "2", memory: 2Gi}
+      volumes:
+        - name: connectors
+          configMap:
+            name: metadata-connectors
     - name: finalizer
       steps:
         - - name: cleanup

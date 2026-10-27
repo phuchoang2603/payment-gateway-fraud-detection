@@ -1,0 +1,105 @@
+{{- if .Values.enabled }}
+{{- $registrationSecrets := list }}
+{{- range .Values.externalSecrets }}
+{{- if ne .name "openmetadata" }}
+{{- $registrationSecrets = append $registrationSecrets .name }}
+{{- end }}
+{{- end }}
+{{- if not (regexMatch "@sha256:[a-f0-9]{64}$" .Values.image) }}
+{{- fail "image must use an immutable sha256 digest" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metadata-connectors
+  namespace: {{ .Values.namespace }}
+data:
+  connectors.json: {{ .Values.connectors | toJson | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metadata-client
+  namespace: {{ .Values.namespace }}
+data:
+  OPENMETADATA_URL: {{ .Values.openmetadataURL | quote }}
+  METADATA_CONNECTORS_FILE: /etc/metadata/connectors.json
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: metadata-integrations
+  namespace: {{ .Values.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: metadata-integrations
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [workflowtaskresults]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: metadata-integrations
+  namespace: {{ .Values.namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: metadata-integrations
+    namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: metadata-integrations
+{{- range .Values.externalSecrets }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .store }}
+  target:
+    name: {{ .name }}
+  data:
+    {{- range $local, $remote := .data }}
+    - secretKey: {{ $local }}
+      remoteRef:
+        key: {{ $remote }}
+    {{- end }}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: metadata-register-{{ printf "%s%s%s" (toJson .Values.connectors) .Values.image (toJson .Values.externalSecrets) | sha256sum | trunc 12 }}
+  namespace: {{ .Values.namespace }}
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: metadata-integrations
+    spec:
+      serviceAccountName: metadata-integrations
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      containers:
+        - name: register
+          image: {{ .Values.image | quote }}
+          command: [python, -m, data_platform.integrations]
+          args: [register]
+          {{- include "metadata-integrations.runtime" (dict "Values" .Values "secretRefs" $registrationSecrets) | nindent 10 }}
+      volumes:
+        - name: connectors
+          configMap:
+            name: metadata-connectors
+{{- end }}
