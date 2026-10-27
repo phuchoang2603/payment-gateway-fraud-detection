@@ -1,5 +1,16 @@
-imageRepository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection
-imageTag: latest
+images:
+  feast:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast
+    tag: latest
+    digest: ""
+    revision: ""
+    pullPolicy: IfNotPresent
+  streaming:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming
+    tag: latest
+    digest: ""
+    revision: ""
+    pullPolicy: IfNotPresent
 
 externalSecrets:
   refreshInterval: 1h

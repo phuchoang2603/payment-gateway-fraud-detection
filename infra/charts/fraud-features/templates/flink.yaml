@@ -35,8 +35,8 @@ metadata:
   name: fraud-streaming
   namespace: {{ .Release.Namespace }}
 spec:
-  image: {{ printf "%s/streaming:%s" .Values.imageRepository .Values.imageTag | quote }}
-  imagePullPolicy: IfNotPresent
+  image: {{ include "fraud-features.image" .Values.images.streaming | quote }}
+  imagePullPolicy: {{ .Values.images.streaming.pullPolicy }}
   flinkVersion: v2_2
   serviceAccount: fraud-streaming
   flinkConfiguration:

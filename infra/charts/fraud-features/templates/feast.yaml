@@ -37,7 +37,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: {{ $name }}
-          image: {{ printf "%s/feast:%s" $.Values.imageRepository $.Values.imageTag | quote }}
+          image: {{ include "fraud-features.image" $.Values.images.feast | quote }}
+          imagePullPolicy: {{ $.Values.images.feast.pullPolicy }}
           args: [{{ $mode | quote }}]
           securityContext:
             allowPrivilegeEscalation: false

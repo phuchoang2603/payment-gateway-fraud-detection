@@ -25,7 +25,7 @@ metadata:
     app.kubernetes.io/name: {{ $redis.name }}
 spec:
   kubernetesConfig:
-    image: "{{ $redis.image.repository }}:{{ $redis.image.tag }}"
+    image: {{ include "fraud-features.image" $redis.image | quote }}
     imagePullPolicy: {{ $redis.image.pullPolicy }}
     redisSecret:
       name: {{ $redis.password.secretName }}

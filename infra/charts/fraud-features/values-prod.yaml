@@ -1,1 +1,9 @@
-imageTag: main-54b91989f44d09d3588b0a3218f8731dd0fbff80
+images:
+  feast:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast
+    digest: ""
+    revision: ""
+  streaming:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming
+    digest: ""
+    revision: ""
