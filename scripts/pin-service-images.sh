@@ -26,19 +26,11 @@ inputs_changed() {
   if ! git diff --quiet "${GITHUB_SHA}^" "$GITHUB_SHA" -- "$dockerfile" "$@" .github/workflows/build-image.yml; then
     return 0
   fi
-  python3 - "$GITHUB_SHA" "$dockerfile" <<'PYTHON'
-import json
-import subprocess
-import sys
-
-revision, dockerfile = sys.argv[1:]
-
-def entries(ref):
-    manifest = json.loads(subprocess.check_output(["git", "show", f"{ref}:.github/service-images.json"]))
-    return {entry["service"]: entry for entry in manifest["include"] if entry["dockerfile"] == dockerfile}
-
-sys.exit(0 if entries(revision + "^") != entries(revision) else 1)
-PYTHON
+  jq -es --arg dockerfile "$dockerfile" '
+    map(.include | map(select(.dockerfile == $dockerfile)) | sort_by(.service))
+    | .[0] != .[1]
+  ' <(git show "${GITHUB_SHA}^:.github/service-images.json") \
+    <(git show "${GITHUB_SHA}:.github/service-images.json") >/dev/null
 }
 
 if inputs_changed infra/docker/go-service.Dockerfile src/payment-gateway contracts; then
