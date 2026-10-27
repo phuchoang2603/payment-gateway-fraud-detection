@@ -88,3 +88,16 @@ entities:
         payload: payload
         routeByField: event_type
         topic: payments.events.v1
+
+schemaRegistry:
+  enabled: true
+  image:
+    repository: ghcr.io/aiven-open/karapace
+    tag: "6.2.4"
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
