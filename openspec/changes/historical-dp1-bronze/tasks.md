@@ -22,7 +22,7 @@ These checked items describe retained implementation, not acceptance of the rewr
 ## 3. Argo and profiling
 
 - [x] 3.1 Replace nested request-level workflow wrappers with a readable stage DAG with isolated parallel historical validation/profiling and recurring profiling skipped; verify rendered dependencies, replay/no-input short circuits and existing lifecycle behavior in CI.
-- [ ] 3.2 Enable meaningful supported scalar-column profiling with bounded sample/row scope, excluded binary fields, timeout/resources and on-demand execution outside the daily ingestion path; verify profile coverage and truthful latest-state versus snapshot labeling.
+- [x] 3.2 Enable meaningful supported scalar-column profiling with bounded sample/row scope, excluded binary fields, timeout/resources and on-demand execution outside the daily ingestion path; verify profile coverage and truthful latest-state versus snapshot labeling.
 - [x] 3.3 Identify/bound run-owned StarRocks queries and verify quiescence along with Spark cleanup before writer handoff; behavioral CI must keep unresolved cleanup blocking the next writer.
 - [ ] 3.4 Strengthen readback for native contract fields, owners, both product directions, source edges, current execution I/O/status and declared profile coverage; stale/incomplete metadata must refuse acceptance despite successful native process exit.
 

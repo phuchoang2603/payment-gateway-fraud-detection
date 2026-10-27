@@ -144,7 +144,10 @@ def synchronize(sdk, run, manifest, expected, stages, report_uri, outcome):
         )
         tables[table] = found
         tests = [
-            ref(sdk.get_by_name(TestCase, fqn, nullable=False), "testCase")
+            ref(
+                sdk.get_by_name(TestCase, fqn, fields=["testDefinition", "testSuite"], nullable=False),
+                "testCase",
+            )
             for fqn, case in expected["cases"].items()
             if case["table"] == table
         ]
