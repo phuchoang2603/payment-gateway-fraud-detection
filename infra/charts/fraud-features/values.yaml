@@ -24,7 +24,7 @@ topic: fraud.feature-updates.v1.live-v1
 kafkaBrokers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc.cluster.local:9092
 
 feast:
-  enabled: false
+  enabled: true
   writerGroup: fraud-feast-writer-live-v1
   resources:
     requests: {cpu: 100m, memory: 512Mi}
@@ -49,7 +49,7 @@ redis:
   clients: [feast-writer, feast-server]
 
 streaming:
-  enabled: false
+  enabled: true
   sourceTopic: payments.events.v1
   sourcePartitions: 3
   maxEntityEntries: 50000
