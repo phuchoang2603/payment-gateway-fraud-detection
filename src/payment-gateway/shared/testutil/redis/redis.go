@@ -24,7 +24,7 @@ func SetupRedis(t testing.TB) *Redis {
 	container, err := testcontainers.Run(ctx, "quay.io/opstree/redis:v7.2.16",
 		testcontainers.WithExposedPorts("6379/tcp"),
 		testcontainers.WithEntrypoint("redis-server"),
-		testcontainers.WithCmd("--save", "", "--appendonly", "no"),
+		testcontainers.WithCmd("--save", "", "--appendonly", "no", "--protected-mode", "no"),
 		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections"), wait.ForListeningPort("6379/tcp")),
 	)
 	testcontainers.CleanupContainer(t, container)
