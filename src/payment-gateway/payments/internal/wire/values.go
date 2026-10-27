@@ -127,12 +127,12 @@ func Assessment(value *paymentsv1.RiskAssessment) *domain.RiskAssessment {
 	if value == nil {
 		return nil
 	}
-	return &domain.RiskAssessment{Outcome: domain.RiskOutcome(value.GetOutcome()), ReasonCodes: slices.Clone(value.GetReasonCodes()), PolicyVersion: value.GetPolicyVersion(), ModelVersion: value.ModelVersion, FeatureSetVersion: value.FeatureSetVersion, RiskScore: value.RiskScore}
+	return &domain.RiskAssessment{Outcome: domain.RiskOutcome(value.GetOutcome()), ReasonCodes: slices.Clone(value.GetReasonCodes()), PolicyVersion: value.GetPolicyVersion(), ModelVersion: value.ModelVersion, FeatureSetVersion: value.FeatureSetVersion, RiskScore: value.RiskScore, AssessmentID: value.GetAssessmentId(), EvidenceSHA256: value.GetEvidenceSha256()}
 }
 
 func assessmentProto(value *domain.RiskAssessment) *paymentsv1.RiskAssessment {
 	if value == nil {
 		return nil
 	}
-	return &paymentsv1.RiskAssessment{Outcome: paymentsv1.RiskOutcome(value.Outcome), ReasonCodes: slices.Clone(value.ReasonCodes), PolicyVersion: value.PolicyVersion, ModelVersion: value.ModelVersion, FeatureSetVersion: value.FeatureSetVersion, RiskScore: value.RiskScore}
+	return &paymentsv1.RiskAssessment{Outcome: paymentsv1.RiskOutcome(value.Outcome), ReasonCodes: slices.Clone(value.ReasonCodes), PolicyVersion: value.PolicyVersion, ModelVersion: value.ModelVersion, FeatureSetVersion: value.FeatureSetVersion, RiskScore: value.RiskScore, AssessmentId: value.AssessmentID, EvidenceSha256: value.EvidenceSHA256}
 }

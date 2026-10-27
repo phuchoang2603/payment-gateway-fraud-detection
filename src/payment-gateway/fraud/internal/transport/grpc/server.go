@@ -2,11 +2,15 @@ package grpctransport
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"log/slog"
 	"math"
 	"net"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/application"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/domain"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/observe"
 	fraudv1 "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/fraud/v1"
@@ -20,18 +24,21 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Server struct {
 	fraudv1.UnimplementedFraudServiceServer
+	service   *application.Service
 	decisions metric.Int64Counter
 	reasons   metric.Int64Counter
 	latency   metric.Float64Histogram
+	active    chan struct{}
 }
 
-func NewServer() *Server {
-	return &Server{decisions: observe.Counter("fraud.decisions", "{decision}"), reasons: observe.Counter("fraud.reason.matches", "{match}"), latency: observe.Histogram("fraud.policy.duration", "s")}
+func NewServer(service *application.Service) *Server {
+	return &Server{service: service, active: make(chan struct{}, 64), decisions: observe.Counter("fraud.decisions", "{decision}"), reasons: observe.Counter("fraud.reason.matches", "{match}"), latency: observe.Histogram("fraud.policy.duration", "s")}
 }
 
 func (s *Server) Decide(ctx context.Context, req *fraudv1.DecideRequest) (*fraudv1.DecideResponse, error) {
@@ -39,10 +46,37 @@ func (s *Server) Decide(ctx context.Context, req *fraudv1.DecideRequest) (*fraud
 	if err != nil {
 		return nil, err
 	}
+	select {
+	case s.active <- struct{}{}:
+		defer func() { <-s.active }()
+	default:
+		return nil, status.Error(codes.ResourceExhausted, "assessment capacity is occupied")
+	}
 	ctx, span := otel.Tracer("fraud").Start(ctx, "fraud.policy.evaluate")
 	defer span.End()
 	start := time.Now()
-	decision := domain.Evaluate(input)
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(req)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid assessment request")
+	}
+	digest := sha256.Sum256(encoded)
+	result, err := s.service.Decide(ctx, application.Request{
+		Identity: application.Identity{IntegrationID: req.IntegrationId, PaymentID: req.PaymentId, AttemptID: req.AttemptId},
+		Digest:   hex.EncodeToString(digest[:]), CustomerID: req.Customer.CustomerId, MethodFingerprint: req.Signals.PaymentMethod.Fingerprint, Input: input,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, application.ErrConflict):
+			return nil, status.Error(codes.AlreadyExists, "assessment content conflict")
+		case errors.Is(err, application.ErrExpired):
+			return nil, status.Error(codes.FailedPrecondition, "assessment recovery expired")
+		case ctx.Err() != nil:
+			return nil, status.FromContextError(ctx.Err()).Err()
+		default:
+			return nil, status.Error(codes.Unavailable, "assessment could not complete")
+		}
+	}
+	decision := result.Evidence.Decision
 	outcome := paymentsv1.RiskOutcome_RISK_OUTCOME_APPROVE
 	label := "approve"
 	if decision.Declined {
@@ -51,13 +85,18 @@ func (s *Server) Decide(ctx context.Context, req *fraudv1.DecideRequest) (*fraud
 	}
 	attrs := metric.WithAttributes(attribute.String("outcome", label), attribute.String("policy.version", decision.PolicyVersion))
 	s.latency.Record(ctx, time.Since(start).Seconds(), attrs)
-	s.decisions.Add(ctx, 1, attrs)
+	if !result.Replayed {
+		s.decisions.Add(ctx, 1, attrs)
+	}
 	for _, reason := range decision.Reasons {
+		if result.Replayed {
+			break
+		}
 		s.reasons.Add(ctx, 1, metric.WithAttributes(attribute.String("reason", reason), attribute.String("policy.version", decision.PolicyVersion)))
 	}
 	span.SetAttributes(attribute.String("fraud.outcome", label), attribute.String("fraud.policy.version", decision.PolicyVersion), attribute.StringSlice("fraud.reasons", decision.Reasons))
 	slog.InfoContext(ctx, "fraud decision", "request_id", observe.RequestID(ctx), "outcome", label, "policy_version", decision.PolicyVersion, "reasons", decision.Reasons)
-	return &fraudv1.DecideResponse{Assessment: &paymentsv1.RiskAssessment{Outcome: outcome, ReasonCodes: decision.Reasons, PolicyVersion: decision.PolicyVersion}, EvaluatedAt: timestamppb.Now()}, nil
+	return &fraudv1.DecideResponse{Assessment: &paymentsv1.RiskAssessment{Outcome: outcome, ReasonCodes: decision.Reasons, PolicyVersion: decision.PolicyVersion, AssessmentId: result.Evidence.AssessmentID, EvidenceSha256: result.EvidenceHash}, EvaluatedAt: timestamppb.New(result.Evidence.EvaluatedAt), Evidence: evidenceProto(result.Evidence)}, nil
 }
 
 func validate(req *fraudv1.DecideRequest) (domain.Input, error) {
@@ -117,7 +156,32 @@ func (s *Server) Run(ctx context.Context, listener net.Listener, timeout time.Du
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(server, healthServer)
 	healthServer.SetServingStatus("liveness", healthpb.HealthCheckResponse_SERVING)
-	healthServer.SetServingStatus("readiness", healthpb.HealthCheckResponse_SERVING)
+	monitorCtx, stopMonitor := context.WithCancel(ctx)
+	defer stopMonitor()
+	updateReady := func() {
+		check, cancel := context.WithTimeout(monitorCtx, 500*time.Millisecond)
+		defer cancel()
+		status := healthpb.HealthCheckResponse_SERVING
+		if s.service.Ready(check) != nil {
+			status = healthpb.HealthCheckResponse_NOT_SERVING
+		}
+		healthServer.SetServingStatus("readiness", status)
+	}
+	updateReady()
+	monitorStopped := make(chan struct{})
+	go func() {
+		defer close(monitorStopped)
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-monitorCtx.Done():
+				return
+			case <-ticker.C:
+				updateReady()
+			}
+		}
+	}()
 	errors := make(chan error, 1)
 	go func() { errors <- server.Serve(listener) }()
 	var err error
@@ -125,6 +189,8 @@ func (s *Server) Run(ctx context.Context, listener net.Listener, timeout time.Du
 	case <-ctx.Done():
 	case err = <-errors:
 	}
+	stopMonitor()
+	<-monitorStopped
 	healthServer.SetServingStatus("readiness", healthpb.HealthCheckResponse_NOT_SERVING)
 	stopped := make(chan struct{})
 	go func() { server.GracefulStop(); close(stopped) }()

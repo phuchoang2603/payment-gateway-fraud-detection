@@ -116,6 +116,23 @@ services:
       hostnames:
       - pay-gateway.phuchoang.sbs
   fraud-service:
+    database: fraud
+    env:
+    - name: FRAUD_AUTH_REDIS_ADDR
+      value: payment-gateway-authorization-redis.payment-gateway.svc.cluster.local:6379
+    - name: FRAUD_VELOCITY_EPOCH
+      value: live-v1
+    - name: FRAUD_VELOCITY_THRESHOLD_10S
+      value: '10'
+    - name: FRAUD_VELOCITY_THRESHOLD_60S
+      value: '30'
+    externalSecrets:
+    - name: fraud-authorization
+      data:
+      - secretKey: password
+        remoteKey: GATEWAY_AUTHORIZATION_REDIS_PASSWORD
+        env: FRAUD_AUTH_REDIS_PASSWORD_FILE
+      mountPath: /etc/fraud/authorization
     mesh:
       callers:
       - payments
@@ -302,6 +319,10 @@ database:
         payments_cdc:
           replication: true
       runtimeRole: payments_app
+    fraud:
+      roles:
+        fraud_app: {}
+      runtimeRole: fraud_app
     notifier: {}
     vault: {}
     processor: {}
@@ -327,6 +348,42 @@ redis:
     remoteKey: GATEWAY_REDIS_PASSWORD
   clients:
   - payments
+
+fraudRedis:
+  authorization:
+    name: payment-gateway-authorization-redis
+    image:
+      repository: quay.io/opstree/redis
+      tag: v7.2.16
+      pullPolicy: IfNotPresent
+    appendonly: 'yes'
+    storageSize: 2Gi
+    maxmemory: 256mb
+    resources:
+      requests: {cpu: 100m, memory: 384Mi}
+      limits: {cpu: 500m, memory: 768Mi}
+    password:
+      secretName: payment-gateway-authorization-redis
+      secretKey: password
+      remoteKey: GATEWAY_AUTHORIZATION_REDIS_PASSWORD
+    clients: [fraud-service]
+  feast:
+    name: payment-gateway-feast-redis
+    image:
+      repository: quay.io/opstree/redis
+      tag: v7.2.16
+      pullPolicy: IfNotPresent
+    appendonly: 'yes'
+    storageSize: 2Gi
+    maxmemory: 512mb
+    resources:
+      requests: {cpu: 100m, memory: 768Mi}
+      limits: {cpu: 500m, memory: 1536Mi}
+    password:
+      secretName: payment-gateway-feast-redis
+      secretKey: password
+      remoteKey: GATEWAY_FEAST_REDIS_PASSWORD
+    clients: [feast-writer, feast-server]
 
 ingress:
   enabled: true

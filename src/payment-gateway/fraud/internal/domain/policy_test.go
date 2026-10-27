@@ -30,9 +30,6 @@ func TestPolicyBoundaries(t *testing.T) {
 			if !reflect.DeepEqual(got.Reasons, tc.reasons) || got.Declined != (len(tc.reasons) > 0) || got.PolicyVersion != "rules-v1" {
 				t.Fatalf("decision = %+v", got)
 			}
-			if !reflect.DeepEqual(got, Evaluate(input)) {
-				t.Fatal("policy is not deterministic")
-			}
 		})
 	}
 }

@@ -26,7 +26,7 @@ customProperties:
   - property: accessPolicy
     value: Shared historical-source identity from Doppler prd; historical/* and streaming/* list/read/write; delete only historical/*/_run/* metadata. Completed sources are immutable by publication protocol.
   - property: featureDefinitions
-    value: contracts/features/fraud-baseline-v1.yaml
+    value: contracts/features/fraud-snapshot-v1.yaml
   - property: generator
     value: https://github.com/phuchoang2603/payment-gateway-fraud-detection/tree/main/src/data-pipeline/simulator
 outputPorts:

@@ -57,10 +57,21 @@ type ProcessorRequestRecord struct {
 }
 
 type TransitionRequest struct {
-	PaymentID        uuid.UUID
-	Command          domain.Command
-	Idempotency      *IdempotencyClaim
-	ProcessorRequest *ProcessorRequestRecord
+	PaymentID         uuid.UUID
+	Command           domain.Command
+	Idempotency       *IdempotencyClaim
+	ProcessorRequest  *ProcessorRequestRecord
+	AssessmentRequest *AssessmentRequestRecord
+	AssessmentFence   *int64
+}
+
+type AssessmentRequestRecord struct {
+	AttemptID      uuid.UUID
+	Signals        *paymentsv1.AttemptSignals
+	EncryptedToken []byte
+	Status         string
+	Fence          int64
+	RetryUntil     time.Time
 }
 
 type RecoveryCandidate struct {
@@ -75,6 +86,9 @@ type Store interface {
 	LoadPaymentBySession(ctx context.Context, sessionID uuid.UUID) (domain.State, error)
 	Idempotency(ctx context.Context, integrationID uuid.UUID, scope, key string) (IdempotencyRecord, error)
 	ProcessorRequest(ctx context.Context, attemptID uuid.UUID) (ProcessorRequestRecord, error)
+	AssessmentRequest(context.Context, uuid.UUID) (AssessmentRequestRecord, error)
+	ClaimAssessment(context.Context, uuid.UUID, time.Duration) (AssessmentRequestRecord, error)
+	FailAssessment(context.Context, uuid.UUID, int64, time.Duration) error
 	RecoveryCandidates(ctx context.Context, updatedBefore time.Time, limit int) ([]RecoveryCandidate, error)
 	ExpiryCandidates(ctx context.Context, now, staleBefore time.Time, limit int) ([]uuid.UUID, error)
 	OldestAwaitingProcessor(ctx context.Context) (time.Duration, error)
@@ -94,13 +108,14 @@ const (
 )
 
 type CacheRecord struct {
-	Digest        string     `json:"digest"`
-	State         CacheState `json:"state"`
-	ClaimedAtMs   int64      `json:"claimed_at_ms"`
-	PaymentID     string     `json:"payment_id,omitempty"`
-	AttemptID     string     `json:"attempt_id,omitempty"`
-	AttemptStatus string     `json:"attempt_status,omitempty"`
-	DeclineReason string     `json:"decline_reason,omitempty"`
+	Digest           string     `json:"digest"`
+	State            CacheState `json:"state"`
+	ClaimedAtMs      int64      `json:"claimed_at_ms"`
+	PaymentID        string     `json:"payment_id,omitempty"`
+	AttemptID        string     `json:"attempt_id,omitempty"`
+	AttemptStatus    string     `json:"attempt_status,omitempty"`
+	AssessmentStatus string     `json:"assessment_status,omitempty"`
+	DeclineReason    string     `json:"decline_reason,omitempty"`
 }
 
 type IdempotencyCache interface {

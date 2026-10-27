@@ -663,8 +663,11 @@ type RiskAssessment struct {
 	ModelVersion      *string                `protobuf:"bytes,4,opt,name=model_version,json=modelVersion,proto3,oneof" json:"model_version,omitempty"`
 	FeatureSetVersion *string                `protobuf:"bytes,5,opt,name=feature_set_version,json=featureSetVersion,proto3,oneof" json:"feature_set_version,omitempty"`
 	RiskScore         *float64               `protobuf:"fixed64,6,opt,name=risk_score,json=riskScore,proto3,oneof" json:"risk_score,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	AssessmentId      string                 `protobuf:"bytes,7,opt,name=assessment_id,json=assessmentId,proto3" json:"assessment_id,omitempty"`
+	// Hash of the immutable JSON evidence retained by Fraud, not its protobuf projection.
+	EvidenceSha256 string `protobuf:"bytes,8,opt,name=evidence_sha256,json=evidenceSha256,proto3" json:"evidence_sha256,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *RiskAssessment) Reset() {
@@ -739,6 +742,20 @@ func (x *RiskAssessment) GetRiskScore() float64 {
 	return 0
 }
 
+func (x *RiskAssessment) GetAssessmentId() string {
+	if x != nil {
+		return x.AssessmentId
+	}
+	return ""
+}
+
+func (x *RiskAssessment) GetEvidenceSha256() string {
+	if x != nil {
+		return x.EvidenceSha256
+	}
+	return ""
+}
+
 var File_payments_v1_types_proto protoreflect.FileDescriptor
 
 const file_payments_v1_types_proto_rawDesc = "" +
@@ -795,7 +812,7 @@ const file_payments_v1_types_proto_rawDesc = "" +
 	"\x13_device_fingerprintB\r\n" +
 	"\v_ip_countryB\x19\n" +
 	"\x17_ip_network_fingerprintB\x14\n" +
-	"\x12_user_agent_family\"\xca\x02\n" +
+	"\x12_user_agent_family\"\x98\x03\n" +
 	"\x0eRiskAssessment\x122\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2\x18.payments.v1.RiskOutcomeR\aoutcome\x12!\n" +
 	"\freason_codes\x18\x02 \x03(\tR\vreasonCodes\x12%\n" +
@@ -803,7 +820,9 @@ const file_payments_v1_types_proto_rawDesc = "" +
 	"\rmodel_version\x18\x04 \x01(\tH\x00R\fmodelVersion\x88\x01\x01\x123\n" +
 	"\x13feature_set_version\x18\x05 \x01(\tH\x01R\x11featureSetVersion\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"risk_score\x18\x06 \x01(\x01H\x02R\triskScore\x88\x01\x01B\x10\n" +
+	"risk_score\x18\x06 \x01(\x01H\x02R\triskScore\x88\x01\x01\x12#\n" +
+	"\rassessment_id\x18\a \x01(\tR\fassessmentId\x12'\n" +
+	"\x0fevidence_sha256\x18\b \x01(\tR\x0eevidenceSha256B\x10\n" +
 	"\x0e_model_versionB\x16\n" +
 	"\x14_feature_set_versionB\r\n" +
 	"\v_risk_score*_\n" +

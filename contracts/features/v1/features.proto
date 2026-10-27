@@ -1,0 +1,124 @@
+syntax = "proto3";
+package features.v1;
+
+option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/features/v1;featuresv1";
+import "google/protobuf/timestamp.proto";
+
+enum EntityView {
+  ENTITY_VIEW_UNSPECIFIED = 0;
+  ENTITY_VIEW_CUSTOMER = 1;
+  ENTITY_VIEW_METHOD = 2;
+}
+enum Coverage {
+  COVERAGE_UNSPECIFIED = 0;
+  COVERAGE_UNKNOWN = 1;
+  COVERAGE_COMPLETE = 2;
+}
+message WindowCoverage {
+  Coverage one_hour = 1;
+  Coverage twenty_four_hours = 2;
+  Coverage seven_days = 3;
+}
+message DefinitionIdentity {
+  string version = 1;
+  string sha256 = 2;
+}
+message SourcePartitionProgress {
+  string topic = 1;
+  int32 partition = 2;
+  int64 consumed_offset = 3;
+  int64 observed_high_watermark = 4;
+  google.protobuf.Timestamp observed_at = 5;
+  optional google.protobuf.Timestamp heartbeat_at = 6;
+}
+message SnapshotValues {
+  optional int64 assessed_count_1h = 1;
+  optional int64 assessed_count_24h = 2;
+  optional int64 assessed_amount_minor_24h = 3;
+  optional int64 distinct_devices_7d = 4;
+  optional google.protobuf.Timestamp last_assessed_start_at = 5;
+}
+message SnapshotUpdate {
+  uint32 schema_version = 1;
+  DefinitionIdentity definition = 2;
+  string epoch = 3;
+  EntityView view = 4;
+  string integration_id = 5;
+  string entity_id = 6;
+  string snapshot_id = 7;
+  uint64 revision = 8;
+  google.protobuf.Timestamp anchor = 9;
+  google.protobuf.Timestamp computed_at = 10;
+  google.protobuf.Timestamp published_at = 11;
+  google.protobuf.Timestamp source_available_at = 12;
+  google.protobuf.Timestamp online_write_at = 13;
+  WindowCoverage coverage = 14;
+  repeated SourcePartitionProgress source_progress = 15;
+  SnapshotValues values = 16;
+}
+enum ViewStatus {
+  VIEW_STATUS_UNSPECIFIED = 0;
+  VIEW_STATUS_AVAILABLE = 1;
+  VIEW_STATUS_MISSING = 2;
+  VIEW_STATUS_TIMEOUT = 3;
+  VIEW_STATUS_ERROR = 4;
+  VIEW_STATUS_STALE = 5;
+  VIEW_STATUS_FUTURE = 6;
+  VIEW_STATUS_INCOMPATIBLE = 7;
+  VIEW_STATUS_PARTIAL = 8;
+  VIEW_STATUS_DISABLED = 9;
+}
+message ViewEvidence {
+  EntityView view = 1;
+  ViewStatus status = 2;
+  optional SnapshotUpdate observed = 3;
+  google.protobuf.Timestamp read_at = 4;
+  optional google.protobuf.Timestamp online_available_at = 5;
+  SnapshotValues available_values = 6;
+  optional int64 seconds_since_last_assessed_7d = 7;
+}
+enum GuardStatus {
+  GUARD_STATUS_UNSPECIFIED = 0;
+  GUARD_STATUS_REGISTERED = 1;
+  GUARD_STATUS_TIMEOUT = 2;
+  GUARD_STATUS_ERROR = 3;
+  GUARD_STATUS_COVERAGE_UNKNOWN = 4;
+  GUARD_STATUS_EXPIRED_RETRY = 5;
+  GUARD_STATUS_CONFLICT = 6;
+  GUARD_STATUS_DISABLED = 7;
+}
+message GuardEvidence {
+  EntityView view = 1;
+  GuardStatus status = 2;
+  string recovery_epoch = 3;
+  optional google.protobuf.Timestamp registered_at = 4;
+  optional google.protobuf.Timestamp read_at = 5;
+  optional int64 submission_count_10s = 6;
+  optional int64 submission_count_60s = 7;
+  bool threshold_exceeded = 8;
+  string policy_version = 9;
+  bool observe_only = 10;
+  int64 threshold_10s = 11;
+  int64 threshold_60s = 12;
+}
+message AssessmentEvidence {
+  uint32 schema_version = 1;
+  string assessment_id = 2;
+  string request_sha256 = 3;
+  string integration_id = 4;
+  string payment_id = 5;
+  string attempt_id = 6;
+  string policy_version = 7;
+  DefinitionIdentity observed_definition = 8;
+  ViewEvidence customer = 9;
+  ViewEvidence method = 10;
+  GuardEvidence customer_guard = 11;
+  GuardEvidence method_guard = 12;
+  google.protobuf.Timestamp evaluated_at = 13;
+  int64 used_amount_minor = 14;
+  google.protobuf.Timestamp used_customer_created_at = 15;
+  google.protobuf.Timestamp used_attempted_at = 16;
+  string used_shipping_country = 17;
+  optional string used_ip_country = 18;
+  bool historical_features_shadow_only = 19;
+}

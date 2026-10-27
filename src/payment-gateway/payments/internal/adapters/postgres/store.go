@@ -98,7 +98,8 @@ func (s *Store) Transition(ctx context.Context, request application.TransitionRe
 				return err
 			}
 		}
-		if _, err := q.GetPaymentForUpdate(ctx, request.PaymentID); err != nil {
+		locked, err := q.GetPaymentForUpdate(ctx, request.PaymentID)
+		if err != nil {
 			return mapNotFound(err)
 		}
 		current, err := loadState(ctx, q, request.PaymentID)
@@ -108,6 +109,30 @@ func (s *Store) Transition(ctx context.Context, request application.TransitionRe
 		next, domainEvent, err := domain.Transition(current, request.Command)
 		if err != nil {
 			return err
+		}
+		if request.AssessmentFence != nil {
+			decision, ok := request.Command.(domain.RecordRiskDecision)
+			if !ok {
+				return errors.New("assessment fence requires a risk decision")
+			}
+			rows, err := q.CompleteAssessmentRequest(ctx, sqlcgen.CompleteAssessmentRequestParams{AttemptID: uuid.MustParse(decision.AttemptID), Fence: *request.AssessmentFence})
+			if err != nil {
+				return err
+			}
+			if rows != 1 {
+				return domain.ErrStaleVersion
+			}
+			for i := range next.Attempts {
+				if next.Attempts[i].ID == decision.AttemptID {
+					next.Attempts[i].AssessmentStatus = "COMPLETED"
+				}
+			}
+		}
+		if !locked.ExpiresAt.After(locked.CheckedAt) {
+			switch request.Command.(type) {
+			case domain.RecordRiskDecision, domain.RequestProcessorOperation:
+				return application.ErrPaymentNotOpen
+			}
 		}
 		rows, err := q.UpdatePaymentState(ctx, sqlcgen.UpdatePaymentStateParams{
 			PaymentID: request.PaymentID, Status: string(next.Status), Version: int64(next.Version),
@@ -122,6 +147,24 @@ func (s *Store) Transition(ctx context.Context, request application.TransitionRe
 		changed, err := persistAttempts(ctx, q, request.PaymentID, current, next)
 		if err != nil {
 			return err
+		}
+		if request.AssessmentRequest != nil {
+			record := request.AssessmentRequest
+			if changed == nil || changed.ID != record.AttemptID.String() || changed.Phase != domain.PhaseStarted {
+				return errors.New("assessment request requires matching durable start")
+			}
+			encoded, err := proto.Marshal(record.Signals)
+			if err != nil {
+				return err
+			}
+			if err = q.InsertAssessmentRequest(ctx, sqlcgen.InsertAssessmentRequestParams{AttemptID: record.AttemptID, Signals: encoded, EncryptedToken: record.EncryptedToken, RetryUntil: record.RetryUntil}); err != nil {
+				return err
+			}
+			for i := range next.Attempts {
+				if next.Attempts[i].ID == record.AttemptID.String() {
+					next.Attempts[i].AssessmentStatus = "PENDING"
+				}
+			}
 		}
 		if err := insertEvent(ctx, q, wire.Event(domainEvent)); err != nil {
 			return err
@@ -146,6 +189,11 @@ func (s *Store) Transition(ctx context.Context, request application.TransitionRe
 			}
 			if err := q.CompleteIdempotencyByAttempt(ctx, sqlcgen.CompleteIdempotencyByAttemptParams{AttemptID: &attemptID, CompletedAt: ptr(next.UpdatedAt)}); err != nil {
 				return fmt.Errorf("complete idempotency: %w", err)
+			}
+		}
+		if next.Status != domain.StatusOpen || (changed != nil && (!changed.Phase.Active() || changed.Phase == domain.PhaseRequested)) {
+			if err := q.ClearAssessmentToken(ctx, request.PaymentID); err != nil {
+				return err
 			}
 		}
 		result = next
@@ -321,7 +369,8 @@ func loadState(ctx context.Context, q *sqlcgen.Queries, paymentID uuid.UUID) (do
 	}
 	for _, attempt := range attempts {
 		state.Attempts = append(state.Attempts, domain.Attempt{
-			ID: attempt.AttemptID.String(), Version: uint64(attempt.Version), Phase: domain.Phase(attempt.Status),
+			AssessmentStatus: attempt.AssessmentStatus,
+			ID:               attempt.AttemptID.String(), Version: uint64(attempt.Version), Phase: domain.Phase(attempt.Status),
 			DeclineSource: domain.DeclineSource(attempt.DeclineSource), DeclineReason: attempt.DeclineReason,
 			OperationKey: attempt.OperationKey, ProcessorReference: attempt.ProcessorReference,
 			StartedAt: attempt.StartedAt.UTC(), UpdatedAt: attempt.UpdatedAt.UTC(),

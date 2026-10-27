@@ -69,12 +69,32 @@ func (q *Queries) GetPaymentBySession(ctx context.Context, sessionID uuid.UUID) 
 }
 
 const getPaymentForUpdate = `-- name: GetPaymentForUpdate :one
-SELECT payment_id, integration_id, session_id, order_reference, status, version, merchant_id, external_seller_id, customer_id, external_buyer_id, snapshot, return_url, correlation_id, expires_at, created_at, updated_at FROM payments WHERE payment_id = $1 FOR UPDATE
+SELECT payment_id, integration_id, session_id, order_reference, status, version, merchant_id, external_seller_id, customer_id, external_buyer_id, snapshot, return_url, correlation_id, expires_at, created_at, updated_at, clock_timestamp()::timestamptz AS checked_at FROM payments WHERE payment_id = $1 FOR UPDATE
 `
 
-func (q *Queries) GetPaymentForUpdate(ctx context.Context, paymentID uuid.UUID) (Payment, error) {
+type GetPaymentForUpdateRow struct {
+	PaymentID        uuid.UUID
+	IntegrationID    uuid.UUID
+	SessionID        uuid.UUID
+	OrderReference   string
+	Status           string
+	Version          int64
+	MerchantID       uuid.UUID
+	ExternalSellerID string
+	CustomerID       uuid.UUID
+	ExternalBuyerID  string
+	Snapshot         []byte
+	ReturnUrl        string
+	CorrelationID    string
+	ExpiresAt        time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	CheckedAt        time.Time
+}
+
+func (q *Queries) GetPaymentForUpdate(ctx context.Context, paymentID uuid.UUID) (GetPaymentForUpdateRow, error) {
 	row := q.db.QueryRow(ctx, getPaymentForUpdate, paymentID)
-	var i Payment
+	var i GetPaymentForUpdateRow
 	err := row.Scan(
 		&i.PaymentID,
 		&i.IntegrationID,
@@ -92,6 +112,7 @@ func (q *Queries) GetPaymentForUpdate(ctx context.Context, paymentID uuid.UUID) 
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CheckedAt,
 	)
 	return i, err
 }

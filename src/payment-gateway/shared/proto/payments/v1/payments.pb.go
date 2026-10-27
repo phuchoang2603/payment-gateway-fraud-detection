@@ -126,6 +126,64 @@ func (AttemptStatus) EnumDescriptor() ([]byte, []int) {
 	return file_payments_v1_payments_proto_rawDescGZIP(), []int{1}
 }
 
+type AssessmentStatus int32
+
+const (
+	AssessmentStatus_ASSESSMENT_STATUS_UNSPECIFIED      AssessmentStatus = 0
+	AssessmentStatus_ASSESSMENT_STATUS_PENDING          AssessmentStatus = 1
+	AssessmentStatus_ASSESSMENT_STATUS_ASSESSING        AssessmentStatus = 2
+	AssessmentStatus_ASSESSMENT_STATUS_ASSESSMENT_ERROR AssessmentStatus = 3
+	AssessmentStatus_ASSESSMENT_STATUS_COMPLETED        AssessmentStatus = 4
+	AssessmentStatus_ASSESSMENT_STATUS_EXPIRED          AssessmentStatus = 5
+)
+
+// Enum value maps for AssessmentStatus.
+var (
+	AssessmentStatus_name = map[int32]string{
+		0: "ASSESSMENT_STATUS_UNSPECIFIED",
+		1: "ASSESSMENT_STATUS_PENDING",
+		2: "ASSESSMENT_STATUS_ASSESSING",
+		3: "ASSESSMENT_STATUS_ASSESSMENT_ERROR",
+		4: "ASSESSMENT_STATUS_COMPLETED",
+		5: "ASSESSMENT_STATUS_EXPIRED",
+	}
+	AssessmentStatus_value = map[string]int32{
+		"ASSESSMENT_STATUS_UNSPECIFIED":      0,
+		"ASSESSMENT_STATUS_PENDING":          1,
+		"ASSESSMENT_STATUS_ASSESSING":        2,
+		"ASSESSMENT_STATUS_ASSESSMENT_ERROR": 3,
+		"ASSESSMENT_STATUS_COMPLETED":        4,
+		"ASSESSMENT_STATUS_EXPIRED":          5,
+	}
+)
+
+func (x AssessmentStatus) Enum() *AssessmentStatus {
+	p := new(AssessmentStatus)
+	*p = x
+	return p
+}
+
+func (x AssessmentStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AssessmentStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_payments_v1_payments_proto_enumTypes[2].Descriptor()
+}
+
+func (AssessmentStatus) Type() protoreflect.EnumType {
+	return &file_payments_v1_payments_proto_enumTypes[2]
+}
+
+func (x AssessmentStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AssessmentStatus.Descriptor instead.
+func (AssessmentStatus) EnumDescriptor() ([]byte, []int) {
+	return file_payments_v1_payments_proto_rawDescGZIP(), []int{2}
+}
+
 type CreatePaymentRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	IntegrationId    string                 `protobuf:"bytes,1,opt,name=integration_id,json=integrationId,proto3" json:"integration_id,omitempty"`
@@ -400,12 +458,13 @@ func (x *GetCheckoutSessionRequest) GetCheckoutToken() string {
 }
 
 type AttemptResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AttemptId     string                 `protobuf:"bytes,1,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
-	Status        AttemptStatus          `protobuf:"varint,2,opt,name=status,proto3,enum=payments.v1.AttemptStatus" json:"status,omitempty"`
-	DeclineReason string                 `protobuf:"bytes,3,opt,name=decline_reason,json=declineReason,proto3" json:"decline_reason,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	AttemptId        string                 `protobuf:"bytes,1,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	Status           AttemptStatus          `protobuf:"varint,2,opt,name=status,proto3,enum=payments.v1.AttemptStatus" json:"status,omitempty"`
+	DeclineReason    string                 `protobuf:"bytes,3,opt,name=decline_reason,json=declineReason,proto3" json:"decline_reason,omitempty"`
+	AssessmentStatus AssessmentStatus       `protobuf:"varint,4,opt,name=assessment_status,json=assessmentStatus,proto3,enum=payments.v1.AssessmentStatus" json:"assessment_status,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *AttemptResult) Reset() {
@@ -457,6 +516,13 @@ func (x *AttemptResult) GetDeclineReason() string {
 		return x.DeclineReason
 	}
 	return ""
+}
+
+func (x *AttemptResult) GetAssessmentStatus() AssessmentStatus {
+	if x != nil {
+		return x.AssessmentStatus
+	}
+	return AssessmentStatus_ASSESSMENT_STATUS_UNSPECIFIED
 }
 
 type Payment struct {
@@ -619,12 +685,13 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x19GetCheckoutSessionRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12%\n" +
-	"\x0echeckout_token\x18\x02 \x01(\tR\rcheckoutToken\"\x89\x01\n" +
+	"\x0echeckout_token\x18\x02 \x01(\tR\rcheckoutToken\"\xd5\x01\n" +
 	"\rAttemptResult\x12\x1d\n" +
 	"\n" +
 	"attempt_id\x18\x01 \x01(\tR\tattemptId\x122\n" +
 	"\x06status\x18\x02 \x01(\x0e2\x1a.payments.v1.AttemptStatusR\x06status\x12%\n" +
-	"\x0edecline_reason\x18\x03 \x01(\tR\rdeclineReason\"\x9c\x04\n" +
+	"\x0edecline_reason\x18\x03 \x01(\tR\rdeclineReason\x12J\n" +
+	"\x11assessment_status\x18\x04 \x01(\x0e2\x1d.payments.v1.AssessmentStatusR\x10assessmentStatus\"\x9c\x04\n" +
 	"\aPayment\x12\x1d\n" +
 	"\n" +
 	"payment_id\x18\x01 \x01(\tR\tpaymentId\x12\x1d\n" +
@@ -652,7 +719,14 @@ const file_payments_v1_payments_proto_rawDesc = "" +
 	"\x1aATTEMPT_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16ATTEMPT_STATUS_PENDING\x10\x01\x12\x1c\n" +
 	"\x18ATTEMPT_STATUS_SUCCEEDED\x10\x02\x12\x1b\n" +
-	"\x17ATTEMPT_STATUS_DECLINED\x10\x032\xc0\x02\n" +
+	"\x17ATTEMPT_STATUS_DECLINED\x10\x03*\xdd\x01\n" +
+	"\x10AssessmentStatus\x12!\n" +
+	"\x1dASSESSMENT_STATUS_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19ASSESSMENT_STATUS_PENDING\x10\x01\x12\x1f\n" +
+	"\x1bASSESSMENT_STATUS_ASSESSING\x10\x02\x12&\n" +
+	"\"ASSESSMENT_STATUS_ASSESSMENT_ERROR\x10\x03\x12\x1f\n" +
+	"\x1bASSESSMENT_STATUS_COMPLETED\x10\x04\x12\x1d\n" +
+	"\x19ASSESSMENT_STATUS_EXPIRED\x10\x052\xc0\x02\n" +
 	"\x0ePaymentService\x12H\n" +
 	"\rCreatePayment\x12!.payments.v1.CreatePaymentRequest\x1a\x14.payments.v1.Payment\x12L\n" +
 	"\fStartAttempt\x12 .payments.v1.StartAttemptRequest\x1a\x1a.payments.v1.AttemptResult\x12B\n" +
@@ -672,46 +746,48 @@ func file_payments_v1_payments_proto_rawDescGZIP() []byte {
 	return file_payments_v1_payments_proto_rawDescData
 }
 
-var file_payments_v1_payments_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_payments_v1_payments_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_payments_v1_payments_proto_goTypes = []any{
 	(PaymentStatus)(0),                // 0: payments.v1.PaymentStatus
 	(AttemptStatus)(0),                // 1: payments.v1.AttemptStatus
-	(*CreatePaymentRequest)(nil),      // 2: payments.v1.CreatePaymentRequest
-	(*StartAttemptRequest)(nil),       // 3: payments.v1.StartAttemptRequest
-	(*GetPaymentRequest)(nil),         // 4: payments.v1.GetPaymentRequest
-	(*GetCheckoutSessionRequest)(nil), // 5: payments.v1.GetCheckoutSessionRequest
-	(*AttemptResult)(nil),             // 6: payments.v1.AttemptResult
-	(*Payment)(nil),                   // 7: payments.v1.Payment
-	(*CheckoutSnapshot)(nil),          // 8: payments.v1.CheckoutSnapshot
-	(*AttemptSignals)(nil),            // 9: payments.v1.AttemptSignals
-	(*timestamppb.Timestamp)(nil),     // 10: google.protobuf.Timestamp
-	(*MerchantRef)(nil),               // 11: payments.v1.MerchantRef
-	(*CustomerRef)(nil),               // 12: payments.v1.CustomerRef
+	(AssessmentStatus)(0),             // 2: payments.v1.AssessmentStatus
+	(*CreatePaymentRequest)(nil),      // 3: payments.v1.CreatePaymentRequest
+	(*StartAttemptRequest)(nil),       // 4: payments.v1.StartAttemptRequest
+	(*GetPaymentRequest)(nil),         // 5: payments.v1.GetPaymentRequest
+	(*GetCheckoutSessionRequest)(nil), // 6: payments.v1.GetCheckoutSessionRequest
+	(*AttemptResult)(nil),             // 7: payments.v1.AttemptResult
+	(*Payment)(nil),                   // 8: payments.v1.Payment
+	(*CheckoutSnapshot)(nil),          // 9: payments.v1.CheckoutSnapshot
+	(*AttemptSignals)(nil),            // 10: payments.v1.AttemptSignals
+	(*timestamppb.Timestamp)(nil),     // 11: google.protobuf.Timestamp
+	(*MerchantRef)(nil),               // 12: payments.v1.MerchantRef
+	(*CustomerRef)(nil),               // 13: payments.v1.CustomerRef
 }
 var file_payments_v1_payments_proto_depIdxs = []int32{
-	8,  // 0: payments.v1.CreatePaymentRequest.snapshot:type_name -> payments.v1.CheckoutSnapshot
-	9,  // 1: payments.v1.StartAttemptRequest.signals:type_name -> payments.v1.AttemptSignals
+	9,  // 0: payments.v1.CreatePaymentRequest.snapshot:type_name -> payments.v1.CheckoutSnapshot
+	10, // 1: payments.v1.StartAttemptRequest.signals:type_name -> payments.v1.AttemptSignals
 	1,  // 2: payments.v1.AttemptResult.status:type_name -> payments.v1.AttemptStatus
-	10, // 3: payments.v1.Payment.expires_at:type_name -> google.protobuf.Timestamp
-	0,  // 4: payments.v1.Payment.status:type_name -> payments.v1.PaymentStatus
-	11, // 5: payments.v1.Payment.merchant:type_name -> payments.v1.MerchantRef
-	12, // 6: payments.v1.Payment.customer:type_name -> payments.v1.CustomerRef
-	8,  // 7: payments.v1.Payment.snapshot:type_name -> payments.v1.CheckoutSnapshot
-	6,  // 8: payments.v1.Payment.attempts:type_name -> payments.v1.AttemptResult
-	2,  // 9: payments.v1.PaymentService.CreatePayment:input_type -> payments.v1.CreatePaymentRequest
-	3,  // 10: payments.v1.PaymentService.StartAttempt:input_type -> payments.v1.StartAttemptRequest
-	4,  // 11: payments.v1.PaymentService.GetPayment:input_type -> payments.v1.GetPaymentRequest
-	5,  // 12: payments.v1.PaymentService.GetCheckoutSession:input_type -> payments.v1.GetCheckoutSessionRequest
-	7,  // 13: payments.v1.PaymentService.CreatePayment:output_type -> payments.v1.Payment
-	6,  // 14: payments.v1.PaymentService.StartAttempt:output_type -> payments.v1.AttemptResult
-	7,  // 15: payments.v1.PaymentService.GetPayment:output_type -> payments.v1.Payment
-	7,  // 16: payments.v1.PaymentService.GetCheckoutSession:output_type -> payments.v1.Payment
-	13, // [13:17] is the sub-list for method output_type
-	9,  // [9:13] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	2,  // 3: payments.v1.AttemptResult.assessment_status:type_name -> payments.v1.AssessmentStatus
+	11, // 4: payments.v1.Payment.expires_at:type_name -> google.protobuf.Timestamp
+	0,  // 5: payments.v1.Payment.status:type_name -> payments.v1.PaymentStatus
+	12, // 6: payments.v1.Payment.merchant:type_name -> payments.v1.MerchantRef
+	13, // 7: payments.v1.Payment.customer:type_name -> payments.v1.CustomerRef
+	9,  // 8: payments.v1.Payment.snapshot:type_name -> payments.v1.CheckoutSnapshot
+	7,  // 9: payments.v1.Payment.attempts:type_name -> payments.v1.AttemptResult
+	3,  // 10: payments.v1.PaymentService.CreatePayment:input_type -> payments.v1.CreatePaymentRequest
+	4,  // 11: payments.v1.PaymentService.StartAttempt:input_type -> payments.v1.StartAttemptRequest
+	5,  // 12: payments.v1.PaymentService.GetPayment:input_type -> payments.v1.GetPaymentRequest
+	6,  // 13: payments.v1.PaymentService.GetCheckoutSession:input_type -> payments.v1.GetCheckoutSessionRequest
+	8,  // 14: payments.v1.PaymentService.CreatePayment:output_type -> payments.v1.Payment
+	7,  // 15: payments.v1.PaymentService.StartAttempt:output_type -> payments.v1.AttemptResult
+	8,  // 16: payments.v1.PaymentService.GetPayment:output_type -> payments.v1.Payment
+	8,  // 17: payments.v1.PaymentService.GetCheckoutSession:output_type -> payments.v1.Payment
+	14, // [14:18] is the sub-list for method output_type
+	10, // [10:14] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_payments_v1_payments_proto_init() }
@@ -725,7 +801,7 @@ func file_payments_v1_payments_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_payments_v1_payments_proto_rawDesc), len(file_payments_v1_payments_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,

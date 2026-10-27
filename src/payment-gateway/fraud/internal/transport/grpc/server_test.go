@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/application"
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/testsupport"
+
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc/metadata"
 
@@ -71,7 +74,12 @@ func TestRejectsInvalidSnapshotAndSignals(t *testing.T) {
 func TestDeclineSucceedsAndCountsDecisionOnce(t *testing.T) {
 	reader := telemetry.Metrics(t)
 	provider, spans := telemetry.Traces(t)
-	server := NewServer()
+	store, _ := testsupport.Database(t)
+	assessor, err := application.New(store, nil, nil, application.Config{Deadline: time.Second, Lease: 2 * time.Second, RetryHorizon: time.Hour, ErrorBackoff: time.Millisecond, HistoryTimeout: time.Second, GuardTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := NewServer(assessor)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

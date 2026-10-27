@@ -82,6 +82,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	app.conns = append(app.conns, processorConn)
 
 	app.service = application.NewService(application.Config{
+		AssessmentRetryHorizon: cfg.AssessmentRetryHorizon, AssessmentBackoff: cfg.AssessmentBackoff,
 		PaymentExpiry: cfg.PaymentExpiry, AttemptBudget: cfg.AttemptBudget,
 		FraudTimeout: cfg.FraudTimeout, ProcessorTimeout: cfg.ProcessorTimeout,
 	}, application.Dependencies{

@@ -39,6 +39,7 @@ func testConfig(databaseURL, fraudAddr, processorAddr, redisAddr string) config.
 		EncryptionKey: []byte("0123456789abcdef0123456789abcdef"), CheckoutTokenKey: []byte("checkout-token-key-for-tests-0123456789"),
 		IdempotencyTTL: time.Hour, PaymentExpiry: 15 * time.Minute, AttemptBudget: 5 * time.Second,
 		FraudTimeout: time.Second, ProcessorTimeout: 3 * time.Second, RecoveryGrace: time.Hour, WorkerInterval: time.Hour,
+		AssessmentRetryHorizon: 5 * time.Minute, AssessmentBackoff: time.Second,
 	}
 }
 
@@ -125,8 +126,8 @@ func TestReadinessIsServingWithRedisAndFraudAndProcessorDown(t *testing.T) {
 		t.Fatalf("create with redis down: %v", err)
 	}
 	attempt, err := instance.payments.StartAttempt(context.Background(), testsupport.AttemptRequest(response, "attempt-1", "vault-token"))
-	if err != nil || attempt.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_DECLINED || attempt.GetDeclineReason() != "fraud_unavailable" {
-		t.Fatalf("attempt with fraud down = %v, %v; want a fail-closed decline", attempt, err)
+	if err != nil || attempt.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_PENDING || attempt.GetAssessmentStatus() != paymentsv1.AssessmentStatus_ASSESSMENT_STATUS_ASSESSMENT_ERROR {
+		t.Fatalf("attempt with fraud down = %v, %v; want recoverable assessment failure", attempt, err)
 	}
 }
 

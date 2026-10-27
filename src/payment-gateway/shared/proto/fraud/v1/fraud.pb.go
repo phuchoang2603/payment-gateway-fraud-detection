@@ -7,6 +7,7 @@
 package fraudv1
 
 import (
+	v11 "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/features/v1"
 	v1 "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -117,9 +118,10 @@ func (x *DecideRequest) GetSignals() *v1.AttemptSignals {
 
 // A decline is a successful response, not an error.
 type DecideResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Assessment    *v1.RiskAssessment     `protobuf:"bytes,1,opt,name=assessment,proto3" json:"assessment,omitempty"`
-	EvaluatedAt   *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=evaluated_at,json=evaluatedAt,proto3" json:"evaluated_at,omitempty"`
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Assessment    *v1.RiskAssessment      `protobuf:"bytes,1,opt,name=assessment,proto3" json:"assessment,omitempty"`
+	EvaluatedAt   *timestamppb.Timestamp  `protobuf:"bytes,2,opt,name=evaluated_at,json=evaluatedAt,proto3" json:"evaluated_at,omitempty"`
+	Evidence      *v11.AssessmentEvidence `protobuf:"bytes,3,opt,name=evidence,proto3" json:"evidence,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -168,11 +170,18 @@ func (x *DecideResponse) GetEvaluatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *DecideResponse) GetEvidence() *v11.AssessmentEvidence {
+	if x != nil {
+		return x.Evidence
+	}
+	return nil
+}
+
 var File_fraud_v1_fraud_proto protoreflect.FileDescriptor
 
 const file_fraud_v1_fraud_proto_rawDesc = "" +
 	"\n" +
-	"\x14fraud/v1/fraud.proto\x12\bfraud.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17payments/v1/types.proto\"\xd2\x02\n" +
+	"\x14fraud/v1/fraud.proto\x12\bfraud.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17payments/v1/types.proto\x1a\x1afeatures/v1/features.proto\"\xd2\x02\n" +
 	"\rDecideRequest\x12%\n" +
 	"\x0eintegration_id\x18\x01 \x01(\tR\rintegrationId\x12\x1d\n" +
 	"\n" +
@@ -182,12 +191,13 @@ const file_fraud_v1_fraud_proto_rawDesc = "" +
 	"\bmerchant\x18\x04 \x01(\v2\x18.payments.v1.MerchantRefR\bmerchant\x124\n" +
 	"\bcustomer\x18\x05 \x01(\v2\x18.payments.v1.CustomerRefR\bcustomer\x129\n" +
 	"\bsnapshot\x18\x06 \x01(\v2\x1d.payments.v1.CheckoutSnapshotR\bsnapshot\x125\n" +
-	"\asignals\x18\a \x01(\v2\x1b.payments.v1.AttemptSignalsR\asignals\"\x8c\x01\n" +
+	"\asignals\x18\a \x01(\v2\x1b.payments.v1.AttemptSignalsR\asignals\"\xc9\x01\n" +
 	"\x0eDecideResponse\x12;\n" +
 	"\n" +
 	"assessment\x18\x01 \x01(\v2\x1b.payments.v1.RiskAssessmentR\n" +
 	"assessment\x12=\n" +
-	"\fevaluated_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\vevaluatedAt2K\n" +
+	"\fevaluated_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\vevaluatedAt\x12;\n" +
+	"\bevidence\x18\x03 \x01(\v2\x1f.features.v1.AssessmentEvidenceR\bevidence2K\n" +
 	"\fFraudService\x12;\n" +
 	"\x06Decide\x12\x17.fraud.v1.DecideRequest\x1a\x18.fraud.v1.DecideResponseBXZVgithub.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/fraud/v1;fraudv1b\x06proto3"
 
@@ -205,14 +215,15 @@ func file_fraud_v1_fraud_proto_rawDescGZIP() []byte {
 
 var file_fraud_v1_fraud_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_fraud_v1_fraud_proto_goTypes = []any{
-	(*DecideRequest)(nil),         // 0: fraud.v1.DecideRequest
-	(*DecideResponse)(nil),        // 1: fraud.v1.DecideResponse
-	(*v1.MerchantRef)(nil),        // 2: payments.v1.MerchantRef
-	(*v1.CustomerRef)(nil),        // 3: payments.v1.CustomerRef
-	(*v1.CheckoutSnapshot)(nil),   // 4: payments.v1.CheckoutSnapshot
-	(*v1.AttemptSignals)(nil),     // 5: payments.v1.AttemptSignals
-	(*v1.RiskAssessment)(nil),     // 6: payments.v1.RiskAssessment
-	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
+	(*DecideRequest)(nil),          // 0: fraud.v1.DecideRequest
+	(*DecideResponse)(nil),         // 1: fraud.v1.DecideResponse
+	(*v1.MerchantRef)(nil),         // 2: payments.v1.MerchantRef
+	(*v1.CustomerRef)(nil),         // 3: payments.v1.CustomerRef
+	(*v1.CheckoutSnapshot)(nil),    // 4: payments.v1.CheckoutSnapshot
+	(*v1.AttemptSignals)(nil),      // 5: payments.v1.AttemptSignals
+	(*v1.RiskAssessment)(nil),      // 6: payments.v1.RiskAssessment
+	(*timestamppb.Timestamp)(nil),  // 7: google.protobuf.Timestamp
+	(*v11.AssessmentEvidence)(nil), // 8: features.v1.AssessmentEvidence
 }
 var file_fraud_v1_fraud_proto_depIdxs = []int32{
 	2, // 0: fraud.v1.DecideRequest.merchant:type_name -> payments.v1.MerchantRef
@@ -221,13 +232,14 @@ var file_fraud_v1_fraud_proto_depIdxs = []int32{
 	5, // 3: fraud.v1.DecideRequest.signals:type_name -> payments.v1.AttemptSignals
 	6, // 4: fraud.v1.DecideResponse.assessment:type_name -> payments.v1.RiskAssessment
 	7, // 5: fraud.v1.DecideResponse.evaluated_at:type_name -> google.protobuf.Timestamp
-	0, // 6: fraud.v1.FraudService.Decide:input_type -> fraud.v1.DecideRequest
-	1, // 7: fraud.v1.FraudService.Decide:output_type -> fraud.v1.DecideResponse
-	7, // [7:8] is the sub-list for method output_type
-	6, // [6:7] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	8, // 6: fraud.v1.DecideResponse.evidence:type_name -> features.v1.AssessmentEvidence
+	0, // 7: fraud.v1.FraudService.Decide:input_type -> fraud.v1.DecideRequest
+	1, // 8: fraud.v1.FraudService.Decide:output_type -> fraud.v1.DecideResponse
+	8, // [8:9] is the sub-list for method output_type
+	7, // [7:8] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_fraud_v1_fraud_proto_init() }

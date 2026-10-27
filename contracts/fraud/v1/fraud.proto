@@ -4,6 +4,7 @@ package fraud.v1;
 option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/fraud/v1;fraudv1";
 import "google/protobuf/timestamp.proto";
 import "payments/v1/types.proto";
+import "features/v1/features.proto";
 
 service FraudService { rpc Decide(DecideRequest) returns (DecideResponse); }
 message DecideRequest {
@@ -19,4 +20,5 @@ message DecideRequest {
 message DecideResponse {
   payments.v1.RiskAssessment assessment = 1;
   google.protobuf.Timestamp evaluated_at = 2;
+  features.v1.AssessmentEvidence evidence = 3;
 }

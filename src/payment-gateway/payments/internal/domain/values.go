@@ -63,6 +63,8 @@ const (
 )
 
 type RiskAssessment struct {
+	AssessmentID      string
+	EvidenceSHA256    string
 	Outcome           RiskOutcome
 	ReasonCodes       []string
 	PolicyVersion     string

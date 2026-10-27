@@ -9,7 +9,7 @@ INSERT INTO payments (
 SELECT * FROM payments WHERE payment_id = $1;
 
 -- name: GetPaymentForUpdate :one
-SELECT * FROM payments WHERE payment_id = $1 FOR UPDATE;
+SELECT *, clock_timestamp()::timestamptz AS checked_at FROM payments WHERE payment_id = $1 FOR UPDATE;
 
 -- name: GetPaymentBySession :one
 SELECT * FROM payments WHERE session_id = $1;

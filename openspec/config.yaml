@@ -23,15 +23,20 @@ context: |
   Keep devenv task definitions and CI workflow steps short. Move substantive shell
   logic into tracked scripts, reuse focused functions for repeated checks, and
   include devenv script paths in execIfModified so edits rerun tasks.
-  Remove obsolete code, dead paths and unnecessary compatibility layers when
-  changing an area. Preserve legacy behavior only when explicitly required.
+  Start fresh within the changed area: do not preserve legacy compatibility,
+  adapters, fallback paths or old config formats unless the user explicitly asks.
+  Remove superseded code, dead paths and stale configuration, tests and docs
+  together; preserve immutable datasets and historical acceptance evidence.
   Update affected producers, consumers, contracts and configuration together.
   Choose simple designs with a concrete benefit; avoid speculative abstractions,
   dependencies or protocol migrations just to adopt something newer.
   Keep tests small and behavior-focused. Each test should protect a distinct
   business rule, boundary, failure mode, resource lifecycle or integration contract.
-  Reuse coverage; avoid duplicate assertions across layers, getter/no-op tests,
-  implementation-mirroring tests and equivalent parameter combinations.
+  Reuse coverage; do not add config-only, config-getter, trivial getter/no-op,
+  implementation-mirroring or redundant tests, equivalent parameter combinations,
+  or config-only CI suites/jobs. Test configuration only through meaningful
+  behavior when it protects a distinct failure or security boundary. Remove
+  unnecessary tests in the changed area rather than replacing them one-for-one.
   Keep Python tests, Go lint and Helm lint in independent CI jobs without
   change-detection jobs or matrices. Discover and validate all Helm charts. Keep
   check jobs in the CI workflow and reuse one image workflow for explicit service
@@ -61,7 +66,7 @@ rules:
     - Specify observable behavior and meaningful boundaries without mirroring implementation details.
   tasks:
     - Include cleanup of superseded code and affected references in implementation tasks.
-    - Reuse existing behavioral coverage; add tests only for distinct uncovered risks.
+    - Reuse existing behavioral coverage; add tests only for distinct uncovered risks. Do not plan config-only, config-getter, trivial getter/no-op or redundant tests or config-only CI suites/jobs.
     - Run all tests through CI checks, never locally; distinguish non-test local checks from CI test execution.
     - Keep documentation work proportional; update existing guides instead of adding READMEs.
 
@@ -69,7 +74,8 @@ operations:
   apply:
     guidance:
       - Use devenv when available and Context7 for current public API guidance.
-      - Remove superseded implementations rather than retaining parallel legacy paths.
+      - Start fresh in the changed area unless the user explicitly requests legacy compatibility. Remove superseded code, compatibility adapters, dead paths and stale config, tests and docs together; preserve immutable datasets and historical evidence.
+      - Reuse behavioral coverage and remove unnecessary tests in the changed area. Do not add config-only, config-getter, trivial getter/no-op, implementation-mirroring or redundant tests or config-only CI suites/jobs; configuration coverage must protect meaningful behavior or a distinct failure/security boundary.
       - Never run tests locally; let CI checks run all unit, integration, smoke, end-to-end and acceptance tests. Use only relevant non-test checks locally and inspect CI results.
       - Report actual validation results and remaining gaps without adding low-value tests.
   archive:

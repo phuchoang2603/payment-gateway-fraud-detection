@@ -20,19 +20,19 @@ import (
 )
 
 const (
-	FallbackPolicyVersion = "payments-fallback-v1"
-	FallbackReason        = "FRAUD_UNAVAILABLE"
-	maxIdempotencyKeyLen  = 255
-	storeTimeout          = 5 * time.Second
-	maxDriveSteps         = 12
-	stalledAttemptFactor  = 2
+	maxIdempotencyKeyLen = 255
+	storeTimeout         = 5 * time.Second
+	maxDriveSteps        = 12
+	stalledAttemptFactor = 2
 )
 
 type Config struct {
-	PaymentExpiry    time.Duration
-	AttemptBudget    time.Duration
-	FraudTimeout     time.Duration
-	ProcessorTimeout time.Duration
+	AssessmentRetryHorizon time.Duration
+	AssessmentBackoff      time.Duration
+	PaymentExpiry          time.Duration
+	AttemptBudget          time.Duration
+	FraudTimeout           time.Duration
+	ProcessorTimeout       time.Duration
 }
 
 type Dependencies struct {
@@ -52,6 +52,12 @@ type Service struct {
 }
 
 func NewService(config Config, deps Dependencies) *Service {
+	if config.AssessmentRetryHorizon == 0 {
+		config.AssessmentRetryHorizon = 5 * time.Minute
+	}
+	if config.AssessmentBackoff == 0 {
+		config.AssessmentBackoff = time.Second
+	}
 	if deps.Clock == nil {
 		deps.Clock = time.Now
 	}
@@ -277,6 +283,9 @@ func paymentStatus(status domain.Status) paymentsv1.PaymentStatus {
 
 func attemptResult(attempt domain.Attempt) *paymentsv1.AttemptResult {
 	result := &paymentsv1.AttemptResult{AttemptId: attempt.ID, Status: paymentsv1.AttemptStatus_ATTEMPT_STATUS_PENDING}
+	if status, ok := paymentsv1.AssessmentStatus_value["ASSESSMENT_STATUS_"+attempt.AssessmentStatus]; ok {
+		result.AssessmentStatus = paymentsv1.AssessmentStatus(status)
+	}
 	switch attempt.Phase {
 	case domain.PhaseSucceeded:
 		result.Status = paymentsv1.AttemptStatus_ATTEMPT_STATUS_SUCCEEDED

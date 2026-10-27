@@ -336,7 +336,7 @@ func TestRiskDeclineEndsTheAttemptWithoutCallingTheProcessor(t *testing.T) {
 
 func TestApproveWithoutReasonCodesIsAcceptedAndReachesTheProcessor(t *testing.T) {
 	stack := newStack(t, false)
-	stack.Fraud.SetAssessment(&paymentsv1.RiskAssessment{Outcome: paymentsv1.RiskOutcome_RISK_OUTCOME_APPROVE, PolicyVersion: "rules-v1"})
+	stack.Fraud.SetAssessment(&paymentsv1.RiskAssessment{Outcome: paymentsv1.RiskOutcome_RISK_OUTCOME_APPROVE, PolicyVersion: "rules-v1", AssessmentId: "test-assessment", EvidenceSha256: strings.Repeat("a", 64)})
 	payment := mustCreate(t, stack, "key-1", "order-1")
 	result := mustStart(t, stack, payment, "attempt-1", "vault-token")
 	if result.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_SUCCEEDED {
@@ -353,7 +353,7 @@ func TestApproveWithoutReasonCodesIsAcceptedAndReachesTheProcessor(t *testing.T)
 
 func TestDeclineWithoutReasonCodesUsesAGenericReasonWithoutCallingTheProcessor(t *testing.T) {
 	stack := newStack(t, false)
-	stack.Fraud.SetAssessment(&paymentsv1.RiskAssessment{Outcome: paymentsv1.RiskOutcome_RISK_OUTCOME_DECLINE, PolicyVersion: "rules-v1"})
+	stack.Fraud.SetAssessment(&paymentsv1.RiskAssessment{Outcome: paymentsv1.RiskOutcome_RISK_OUTCOME_DECLINE, PolicyVersion: "rules-v1", AssessmentId: "test-assessment", EvidenceSha256: strings.Repeat("a", 64)})
 	payment := mustCreate(t, stack, "key-1", "order-1")
 	result := mustStart(t, stack, payment, "attempt-1", "vault-token")
 	if result.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_DECLINED || result.GetDeclineReason() != "risk_declined" {
@@ -364,7 +364,7 @@ func TestDeclineWithoutReasonCodesUsesAGenericReasonWithoutCallingTheProcessor(t
 	}
 }
 
-func TestFraudTimeoutFailsClosedWithARecordedFallbackDecision(t *testing.T) {
+func TestFraudTimeoutRecoversTheSameAttemptWithoutAnErrorDecline(t *testing.T) {
 	stack := newStack(t, false)
 	stack.Fraud.SetHandler(func(ctx context.Context, _ *fraudRequest) (*fraudResponse, error) {
 		<-ctx.Done()
@@ -372,29 +372,35 @@ func TestFraudTimeoutFailsClosedWithARecordedFallbackDecision(t *testing.T) {
 	})
 	payment := mustCreate(t, stack, "key-1", "order-1")
 	result := mustStart(t, stack, payment, "attempt-1", "vault-token")
-	if result.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_DECLINED || result.GetDeclineReason() != "fraud_unavailable" {
-		t.Fatalf("result = %v", result)
+	if result.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_PENDING || result.GetAssessmentStatus() != paymentsv1.AssessmentStatus_ASSESSMENT_STATUS_ASSESSMENT_ERROR || result.GetDeclineReason() != "" {
+		t.Fatalf("operational status = %v", result)
 	}
-	wantKinds(t, kinds(t, stack, payment), "created", "started", "risk", "declined")
-	assessment := stack.DB.Events(t, payment.GetPaymentId())[2].GetRiskDecisionRecorded().GetAssessment()
-	if assessment.GetOutcome() != paymentsv1.RiskOutcome_RISK_OUTCOME_DECLINE || assessment.GetPolicyVersion() != "payments-fallback-v1" ||
-		len(assessment.GetReasonCodes()) != 1 || assessment.GetReasonCodes()[0] != "FRAUD_UNAVAILABLE" {
-		t.Fatalf("assessment = %v", assessment)
-	}
+	wantKinds(t, kinds(t, stack, payment), "created", "started")
 	if stack.Processor.TotalSaleCalls() != 0 {
-		t.Fatal("processor called although fraud was unavailable")
+		t.Fatal("processor called without assessment")
 	}
-}
-
-func TestFraudErrorFailsClosedToo(t *testing.T) {
-	stack := newStack(t, false)
-	stack.Fraud.SetHandler(func(context.Context, *fraudRequest) (*fraudResponse, error) {
-		return nil, status.Error(codes.Unavailable, "down")
-	})
-	payment := mustCreate(t, stack, "key-1", "order-1")
-	result := mustStart(t, stack, payment, "attempt-1", "vault-token")
-	if result.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_DECLINED || stack.Processor.TotalSaleCalls() != 0 {
-		t.Fatalf("result = %v, sales = %d", result, stack.Processor.TotalSaleCalls())
+	if _, err := stack.DB.Owner.Exec(context.Background(), `UPDATE assessment_requests SET retry_after='epoch' WHERE attempt_id=$1`, result.GetAttemptId()); err != nil {
+		t.Fatal(err)
+	}
+	stack.Fraud.SetAssessment(testsupport.Approve())
+	candidates, err := stack.Service.RecoveryCandidates(context.Background(), 0, 10)
+	if err != nil || len(candidates) != 1 {
+		t.Fatalf("recovery candidates: %v %v", candidates, err)
+	}
+	if err = stack.Service.RecoverAttempt(context.Background(), candidates[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err = stack.Service.RecoverAttempt(context.Background(), candidates[0]); err != nil {
+		t.Fatal(err)
+	}
+	wantKinds(t, kinds(t, stack, payment), "created", "started", "risk", "requested", "succeeded")
+	requests := stack.Fraud.Requests()
+	if len(requests) != 2 || !proto.Equal(requests[0], requests[1]) || stack.Processor.TotalSaleCalls() != 1 {
+		t.Fatalf("recovery changed identity or repeated effects: %v", requests)
+	}
+	assessment := stack.DB.Events(t, payment.GetPaymentId())[2].GetRiskDecisionRecorded().GetAssessment()
+	if assessment.GetAssessmentId() != "test-assessment" || assessment.GetEvidenceSha256() != strings.Repeat("a", 64) {
+		t.Fatalf("lost evidence linkage: %v", assessment)
 	}
 }
 
@@ -459,8 +465,8 @@ func TestBudgetExhaustedBeforeTheIntentFailsClosed(t *testing.T) {
 	})
 	payment := mustCreate(t, stack, "key-1", "order-1")
 	result := mustStart(t, stack, payment, "attempt-1", "vault-token")
-	if result.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_DECLINED {
-		t.Fatalf("result = %v; a budget exhausted before the intent fails closed", result)
+	if result.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_PENDING || result.GetAssessmentStatus() != paymentsv1.AssessmentStatus_ASSESSMENT_STATUS_ASSESSMENT_ERROR {
+		t.Fatalf("result = %v; exhausted assessment budget must remain operational", result)
 	}
 	if stack.Processor.TotalSaleCalls() != 0 {
 		t.Fatal("processor called after the budget was exhausted before the intent")

@@ -1,68 +1,81 @@
+{{- range $redis := concat (list .Values.redis) (values .Values.fraudRedis) }}
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Values.redis.name }}-config
-  namespace: {{ .Release.Namespace }}
+  name: {{ $redis.name }}-config
+  namespace: {{ $.Release.Namespace }}
   labels:
-    app.kubernetes.io/name: {{ .Values.redis.name }}
+    app.kubernetes.io/name: {{ $redis.name }}
 data:
   redis-additional.conf: |
-    maxmemory {{ .Values.redis.maxmemory }}
+    maxmemory {{ $redis.maxmemory }}
     maxmemory-policy noeviction
     save ""
-    appendonly no
+    appendonly {{ $redis.appendonly | default "no" }}
+    appendfsync everysec
 ---
 apiVersion: redis.redis.opstreelabs.in/v1beta2
 kind: Redis
 metadata:
-  name: {{ .Values.redis.name }}
-  namespace: {{ .Release.Namespace }}
+  name: {{ $redis.name }}
+  namespace: {{ $.Release.Namespace }}
   labels:
-    app.kubernetes.io/name: {{ .Values.redis.name }}
+    app.kubernetes.io/name: {{ $redis.name }}
 spec:
   kubernetesConfig:
-    image: {{ include "payment-gateway.image" .Values.redis.image | quote }}
-    imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+    image: {{ include "payment-gateway.image" $redis.image | quote }}
+    imagePullPolicy: {{ $redis.image.pullPolicy }}
     redisSecret:
-      name: {{ .Values.redis.password.secretName }}
-      key: {{ .Values.redis.password.secretKey }}
+      name: {{ $redis.password.secretName }}
+      key: {{ $redis.password.secretKey }}
     resources:
-      {{- toYaml .Values.redis.resources | nindent 6 }}
+      {{- toYaml $redis.resources | nindent 6 }}
+  {{- with $redis.storageSize }}
+  storage:
+    keepAfterDelete: true
+    volumeClaimTemplate:
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: {{ . }}
+  {{- end }}
   redisConfig:
-    additionalRedisConfig: {{ .Values.redis.name }}-config
+    additionalRedisConfig: {{ $redis.name }}-config
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
-  name: {{ .Values.redis.password.secretName }}
-  namespace: {{ .Release.Namespace }}
+  name: {{ $redis.password.secretName }}
+  namespace: {{ $.Release.Namespace }}
 spec:
-  refreshInterval: {{ .Values.externalSecrets.refreshInterval }}
+  refreshInterval: {{ $.Values.externalSecrets.refreshInterval }}
   secretStoreRef:
-    kind: {{ .Values.externalSecrets.secretStoreRef.kind }}
-    name: {{ .Values.externalSecrets.secretStoreRef.name }}
+    kind: {{ $.Values.externalSecrets.secretStoreRef.kind }}
+    name: {{ $.Values.externalSecrets.secretStoreRef.name }}
   target:
-    name: {{ .Values.redis.password.secretName }}
+    name: {{ $redis.password.secretName }}
     creationPolicy: Owner
   data:
-    - secretKey: {{ .Values.redis.password.secretKey }}
+    - secretKey: {{ $redis.password.secretKey }}
       remoteRef:
-        key: {{ .Values.redis.password.remoteKey }}
+        key: {{ $redis.password.remoteKey }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ .Values.redis.name }}
-  namespace: {{ .Release.Namespace }}
+  name: {{ $redis.name }}
+  namespace: {{ $.Release.Namespace }}
 spec:
   podSelector:
     matchLabels:
-      app: {{ .Values.redis.name }}
+      app: {{ $redis.name }}
   policyTypes:
     - Ingress
   ingress:
     - from:
-        {{- range .Values.redis.clients }}
+        {{- range $redis.clients }}
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: {{ . }}
@@ -70,3 +83,4 @@ spec:
       ports:
         - port: 6379
           protocol: TCP
+{{- end }}
