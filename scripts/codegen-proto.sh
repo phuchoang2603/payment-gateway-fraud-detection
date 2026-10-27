@@ -31,3 +31,17 @@ for path in list(root.rglob("*_pb2.py")) + list(root.rglob("*_pb2.pyi")):
     text = text.replace("'payments.v1.", "'simulator.contracts.payments.v1.")
     path.write_text(text)
 PYTHON
+
+feast_out=src/data-pipeline/feast/fraud_feast/contracts
+mkdir -p "$feast_out"
+protoc -I contracts --python_out="$feast_out" --pyi_out="$feast_out" contracts/features/v1/features.proto
+python3 - "$feast_out" <<'PYTHON'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+for directory in (root, root / "features", root / "features/v1"):
+    (directory / "__init__.py").touch()
+for path in list(root.rglob("*_pb2.py")) + list(root.rglob("*_pb2.pyi")):
+    text = path.read_text().replace("'features.v1.", "'fraud_feast.contracts.features.v1.")
+    path.write_text(text)
+PYTHON

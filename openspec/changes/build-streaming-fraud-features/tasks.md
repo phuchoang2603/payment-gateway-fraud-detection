@@ -1,7 +1,7 @@
 ## 1. Shared contracts and reference
 
 - [ ] 1.1 Replace active exact-baseline definitions/examples with hashed fraud-snapshot-v1 semantics, unchanged ten quantities, scoped keys and per-window coverage; verify hand-checkable expected outputs and definition identity through focused CI conformance cases.
-- [ ] 1.2 Update the pure reference for snapshot anchors, eligibility, hybrid expiration, partial coverage and elapsed-time derivation; verify CI cases cover boundary inclusion, repeated devices, unknown history and historical logical clocks without duplicating existing assertions.
+- [x] 1.2 Update the pure reference for snapshot anchors, eligibility, hybrid expiration, partial coverage and elapsed-time derivation; verify CI cases cover boundary inclusion, repeated devices, unknown history and historical logical clocks without duplicating existing assertions.
 - [ ] 1.3 Define feature-update/evidence contracts with epoch, revision, separate anchor/write/publication/availability times and exact units; update necessary protobuf assessment/status fields and generated callers together, preserving existing source rows; verify serialization and unsupported-version behavior in existing CI coverage.
 
 ## 2. Runtime prerequisites
@@ -24,7 +24,7 @@
 ## 5. Synchronous velocity and durable assessment
 
 - [ ] 5.1 Implement atomic per-entity 10s/60s registration/count scripts with stable attempt binding, server time, bounded dedup retention and observe-only thresholds; verify CI concurrency, partial success, lost response, expired retry and degraded Redis recovery behavior.
-- [ ] 5.2 Add durable Fraud assessment claims, digest conflicts, fenced recovery and completed-result/evidence replay; verify CI response-loss, concurrent replica and stale-owner cases reuse results despite changed counters/snapshots.
+- [x] 5.2 Add durable Fraud assessment claims, digest conflicts, fenced recovery and completed-result/evidence replay; verify CI response-loss, concurrent replica and stale-owner cases reuse results despite changed counters/snapshots.
 - [ ] 5.3 Integrate parallel guard/shadow feature reads under bounded deadlines while preserving pure rules; verify existing healthy outcomes and distinct per-dependency failure statuses in CI, with no additional model features or implicit enforcement.
 - [ ] 5.4 Replace Payments' fabricated unavailability-decline fallback with operational assessment status and same-identity recovery/expiry; atomically link finalized evidence to the existing decision ledger/outbox, and verify CI timeout, lost-commit response, late result after expiry and downstream duplicate-delivery behavior without a second assessment event.
 

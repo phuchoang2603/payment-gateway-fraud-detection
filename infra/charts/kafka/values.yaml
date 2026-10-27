@@ -60,6 +60,11 @@ connect:
     failureThreshold: 12
 
 entities:
+  fraudFeatures:
+    topics:
+      - name: fraud.feature-updates.v1.live-v1
+        partitions: 3
+        retention: 1209600000
   payments:
     topics:
       - name: payments.events.v1

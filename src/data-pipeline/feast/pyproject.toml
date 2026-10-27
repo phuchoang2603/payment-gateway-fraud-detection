@@ -1,0 +1,26 @@
+[project]
+name = "fraud-feast"
+version = "0.1.0"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "feast[redis]==0.67.0",
+    "confluent-kafka==2.12.0",
+    "protobuf==7.36.1",
+]
+
+[dependency-groups]
+dev = ["pytest==9.0.2", "ruff==0.14.14"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+extend-exclude = ["fraud_feast/contracts"]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

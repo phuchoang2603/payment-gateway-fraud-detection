@@ -1,0 +1,222 @@
+import secrets
+import subprocess
+import threading
+import time
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from feast import FeatureStore
+from feast.repo_config import RepoConfig
+from redis import Redis
+from redis.exceptions import ConnectionError
+
+from fraud_feast import schema
+from fraud_feast.contracts.features.v1 import features_pb2 as wire
+from fraud_feast.writer import Writer, consume
+
+EPOCH = "ci-replay"
+DEFINITION_HASH = "8ca9a423f452f8ed7a8d1e8aa082dadb72590498cfd1e8da48f94f6c06b0e50d"
+
+
+@pytest.fixture(scope="session")
+def redis_address():
+    password = secrets.token_hex(16)
+    container = subprocess.check_output(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-d",
+            "-p",
+            "127.0.0.1::6379",
+            "quay.io/opstree/redis:v7.2.16",
+            "redis-server",
+            "--save",
+            "",
+            "--appendonly",
+            "no",
+            "--requirepass",
+            password,
+        ],
+        text=True,
+    ).strip()
+    try:
+        port = subprocess.check_output(["docker", "port", container, "6379"], text=True).strip()
+        client = Redis(host="127.0.0.1", port=int(port.rsplit(":", 1)[1]), password=password)
+        try:
+            for _ in range(100):
+                try:
+                    if client.ping():
+                        break
+                except ConnectionError:
+                    time.sleep(0.1)
+            else:
+                raise RuntimeError("selected Redis image did not become ready")
+            yield f"{port},password={password}"
+        finally:
+            client.close()
+    finally:
+        subprocess.run(["docker", "rm", "-f", container], check=True, stdout=subprocess.DEVNULL)
+
+
+@pytest.fixture
+def store(redis_address, tmp_path):
+    result = FeatureStore(
+        config=RepoConfig(
+            project="fraud_snapshots",
+            provider="local",
+            registry=str(tmp_path / "registry.db"),
+            online_store={"type": "redis", "connection_string": redis_address},
+            entity_key_serialization_version=3,
+        )
+    )
+    result.apply(schema.definitions(), partial=True)
+    return result
+
+
+def update(*, view=wire.ENTITY_VIEW_CUSTOMER, revision=1, write_delta=0, unknown=False):
+    anchor = datetime(2025, 9, 28, tzinfo=UTC)
+    value = wire.SnapshotUpdate(
+        schema_version=1,
+        definition=wire.DefinitionIdentity(version="fraud-snapshot-v1", sha256=DEFINITION_HASH),
+        epoch=EPOCH,
+        view=view,
+        integration_id="integration-π",
+        entity_id=secrets.token_hex(8),
+        revision=revision,
+        coverage=wire.WindowCoverage(
+            one_hour=wire.COVERAGE_UNKNOWN if unknown else wire.COVERAGE_COMPLETE,
+            twenty_four_hours=wire.COVERAGE_COMPLETE,
+            seven_days=wire.COVERAGE_COMPLETE,
+        ),
+        values=wire.SnapshotValues(assessed_count_24h=4),
+    )
+    if not unknown:
+        value.values.assessed_count_1h = 0
+    if view == wire.ENTITY_VIEW_CUSTOMER:
+        value.values.assessed_amount_minor_24h = 2**53 + 1
+        value.values.distinct_devices_7d = 2
+        value.values.last_assessed_start_at.FromDatetime(anchor - timedelta(hours=1))
+    for name in ("anchor", "computed_at", "published_at", "source_available_at"):
+        getattr(value, name).FromDatetime(anchor)
+    value.online_write_at.FromDatetime(anchor + timedelta(microseconds=write_delta))
+    progress = value.source_progress.add(
+        topic="payments.events.v1", partition=0, consumed_offset=3, observed_high_watermark=4
+    )
+    progress.observed_at.FromDatetime(anchor)
+    value.snapshot_id = schema.snapshot_id(value)
+    return value
+
+
+def write(writer, value):
+    view = schema.VIEWS[value.view]
+    key = schema.entity_key(value.epoch, view, value.integration_id, value.entity_id).encode()
+    writer.write(value.SerializeToString(deterministic=True), key)
+
+
+def test_sdk_readback_replay_and_monotonic_timestamps(store):
+    writer = Writer(store, epoch=EPOCH, definition_hash=DEFINITION_HASH)
+    original = update(unknown=True)
+    write(writer, original)
+    assert writer.current(original, "customer") == original
+    corrected = wire.SnapshotUpdate()
+    corrected.CopyFrom(original)
+    corrected.revision = 2
+    corrected.online_write_at.nanos += 1000
+    corrected.values.assessed_count_24h = 5
+    corrected.snapshot_id = schema.snapshot_id(corrected)
+    write(writer, corrected)
+    restarted = Writer(store, epoch=EPOCH, definition_hash=DEFINITION_HASH)
+    write(restarted, original)
+    write(restarted, corrected)
+    assert restarted.current(original, "customer") == corrected
+    store.write_to_online_store("customer_snapshot", schema.row(original))
+    equal_time = wire.SnapshotUpdate()
+    equal_time.CopyFrom(corrected)
+    equal_time.values.assessed_count_24h = 99
+    equal_time.snapshot_id = schema.snapshot_id(equal_time)
+    store.write_to_online_store("customer_snapshot", schema.row(equal_time))
+    assert restarted.current(original, "customer") == corrected
+    with pytest.raises(ValueError, match="conflicting snapshot revision"):
+        write(restarted, equal_time)
+    regressed = wire.SnapshotUpdate()
+    regressed.CopyFrom(corrected)
+    regressed.revision = 3
+    regressed.online_write_at.CopyFrom(original.online_write_at)
+    regressed.snapshot_id = schema.snapshot_id(regressed)
+    with pytest.raises(ValueError, match="must increase"):
+        write(restarted, regressed)
+
+
+def test_sdk_entity_and_epoch_isolation(store):
+    writer = Writer(store, epoch=EPOCH, definition_hash=DEFINITION_HASH)
+    customer = update()
+    method = update(view=wire.ENTITY_VIEW_METHOD)
+    method.entity_id = customer.entity_id
+    method.snapshot_id = schema.snapshot_id(method)
+    write(writer, customer)
+    write(writer, method)
+    other_integration = wire.SnapshotUpdate()
+    other_integration.CopyFrom(customer)
+    other_integration.integration_id = "other"
+    other_integration.values.assessed_count_24h = 8
+    other_integration.snapshot_id = schema.snapshot_id(other_integration)
+    write(writer, other_integration)
+    other_epoch = wire.SnapshotUpdate()
+    other_epoch.CopyFrom(customer)
+    other_epoch.epoch = "live-v1"
+    other_epoch.snapshot_id = schema.snapshot_id(other_epoch)
+    live_writer = Writer(store, epoch="live-v1", definition_hash=DEFINITION_HASH)
+    write(live_writer, other_epoch)
+    assert writer.current(customer, "customer") == customer
+    assert writer.current(method, "method") == method
+    assert writer.current(other_integration, "customer") == other_integration
+    assert live_writer.current(other_epoch, "customer") == other_epoch
+    with pytest.raises(ValueError, match="incompatible snapshot identity"):
+        write(writer, other_epoch)
+
+
+def test_response_loss_replays_before_committing_kafka(store):
+    value = update()
+    stopped = threading.Event()
+
+    class Message:
+        def value(self):
+            return value.SerializeToString(deterministic=True)
+
+        def key(self):
+            return schema.entity_key(
+                EPOCH, "customer", value.integration_id, value.entity_id
+            ).encode()
+
+        def error(self):
+            return None
+
+    class Consumer:
+        closed = False
+        committed = False
+
+        def poll(self, _):
+            return Message()
+
+        def commit(self, *, message, asynchronous):
+            assert not asynchronous
+            assert writer.current(value, "customer") == value
+            if not response_lost.is_set():
+                response_lost.set()
+                raise RuntimeError("lost commit response")
+            self.committed = True
+            stopped.set()
+
+        def close(self):
+            self.closed = True
+
+    response_lost = threading.Event()
+    writer = Writer(store, epoch=EPOCH, definition_hash=DEFINITION_HASH)
+    first = Consumer()
+    with pytest.raises(RuntimeError, match="lost commit response"):
+        consume(first, writer, stopped)
+    assert first.closed and not first.committed
+    second = Consumer()
+    consume(second, Writer(store, epoch=EPOCH, definition_hash=DEFINITION_HASH), stopped)
+    assert second.closed and second.committed

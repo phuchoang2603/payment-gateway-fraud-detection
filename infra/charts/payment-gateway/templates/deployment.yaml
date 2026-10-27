@@ -84,6 +84,18 @@ spec:
             {{- if $svc.database }}
             {{- include "payment-gateway.database-env" (dict "database" $svc.database "migrate" false) | nindent 12 }}
             {{- end }}
+            {{- if and (eq $name "fraud-service") $.Values.features.enabled }}
+            - name: FRAUD_FEAST_URL
+              value: http://feast-server:6566
+            - name: FRAUD_FEATURE_EPOCH
+              value: {{ $.Values.features.epoch | quote }}
+            - name: FRAUD_FEATURE_DEFINITION_SHA256
+              value: {{ $.Values.features.definitionHash | quote }}
+            - name: FRAUD_FEATURE_MAX_ANCHOR_AGE
+              value: {{ $.Values.features.maxAnchorAge | quote }}
+            - name: FRAUD_FEATURE_MAX_PROGRESS_AGE
+              value: {{ $.Values.features.maxProgressAge | quote }}
+            {{- end }}
             {{- range $svc.externalSecrets }}
             {{- $secretName := .name }}
             {{- range .data }}

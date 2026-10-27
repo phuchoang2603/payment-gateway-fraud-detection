@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/adapters/feast"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/adapters/postgres"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/adapters/velocity"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/application"
@@ -110,7 +111,23 @@ func run() error {
 		defer func() { _ = observer.Close() }()
 		guard = observer
 	}
-	service, err := application.New(store, nil, guard, config)
+	var history application.HistoryReader
+	if endpoint := os.Getenv("FRAUD_FEAST_URL"); endpoint != "" {
+		freshness := feast.Config{URL: endpoint, Epoch: os.Getenv("FRAUD_FEATURE_EPOCH"), DefinitionHash: os.Getenv("FRAUD_FEATURE_DEFINITION_SHA256"), Timeout: config.HistoryTimeout}
+		for name, target := range map[string]*time.Duration{"FRAUD_FEATURE_MAX_ANCHOR_AGE": &freshness.MaxAnchorAge, "FRAUD_FEATURE_MAX_PROGRESS_AGE": &freshness.MaxProgressAge} {
+			*target, err = time.ParseDuration(os.Getenv(name))
+			if err != nil {
+				return fmt.Errorf("%s must be a positive duration", name)
+			}
+		}
+		reader, err := feast.New(freshness)
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+		history = reader
+	}
+	service, err := application.New(store, history, guard, config)
 	if err != nil {
 		return err
 	}
