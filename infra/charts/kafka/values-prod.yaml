@@ -1,7 +1,7 @@
 schemaRegistry:
   registration:
     enabled: true
-    imageTag: main-e1350a506631b4d744b5dba905f0a12ed9c0cf85
+    imageTag: main-13ac0b9add31a1113d7dceda3406fe3473655acd
 
 kafka:
   metadataNamespace: fraud-data-prod
