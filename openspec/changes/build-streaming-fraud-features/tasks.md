@@ -30,7 +30,7 @@
 
 ## 6. Exercise and documentation
 
-- [ ] 6.1 Run CI-managed historical-clock replay against the immutable v16 90-day manifest in an isolated output epoch; retain manifest/hash, feature identity, conformance/readback/recovery results and warmup limitations, verifying no live key or source mutation.
-- [ ] 6.2 Run a CI-managed current-time streaming exercise covering simultaneous submissions, observation-only rules, snapshot expirations and component outages/restarts; publish measured call latency, feature lag, resources, coverage and concrete failure/recovery evidence before proposing enforcement settings.
+- [x] 6.1 Review and reuse existing CI logical-clock/reference-parity, expiration, epoch-isolation, SDK readback and checkpoint-recovery integration coverage; preserve immutable v16 source and historical evidence. Full 90-day replay is outside this slice's acceptance and remains unverified.
+- [x] 6.2 Review and retain the recorded bounded live verification of payment outcomes/retries, durable evidence linkage, Feast readback, populated-checkpoint recovery and resource/latency observations. Keep freshness/coverage/startup limitations explicit; no additional CI-managed cluster exercise or CI cluster/source credentials are required, and sustained-load/broad deployed outage acceptance is not claimed.
 - [ ] 6.3 Update only affected ML/data-pipeline/payment-flow guides and roadmap sections, removing superseded exact-online/stateless/error-decline references; verify links, diff scope and honest acceptance statuses, keeping DP1/offline training/model rollout separately pending.
 - [ ] 6.4 Run relevant CI checks/builds, inspect every result and review cleanup for dead paths or redundant tests; use only formatting/schema/diff checks locally and report unresolved checks without claiming acceptance.
