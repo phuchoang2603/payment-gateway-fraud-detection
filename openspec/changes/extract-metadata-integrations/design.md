@@ -1,6 +1,6 @@
 ## Context
 
-DP1 uses native OpenMetadata 2.0.6 discovery/tests/profiling plus a reusable Python SDK publisher. Operational databases and Kubeflow integration are outside this change. Kafka exposes internal plaintext transport and repository protobuf contracts without Schema Registry.
+DP1 uses native OpenMetadata 2.0.6 discovery/tests/profiling plus a reusable Python SDK publisher. Operational databases and Kubeflow integration are outside this change. Kafka exposes internal plaintext transport and repository protobuf contracts. Main now deploys Karapace, but producers and consumers still use raw protobuf without registry framing.
 
 ## Decisions
 
@@ -8,7 +8,7 @@ A new metadata-integrations chart owns shared service configuration, ExternalSec
 
 The shared configuration is mounted into both metadata discovery pods and pipeline native stages. Pipeline discovery explicitly runs before validation, even if scheduled discovery has not run. Existing starrocks/rustfs/argo identities remain stable. Only the shared registration path creates service connections; the product publisher resolves existing services and owns its source containers, products and executions. Native workflows own discovered tables/topics, never custom discovery.
 
-Kafka discovery uses the current broker protocol and allowlisted topics, without consuming payloads or supplying a nonexistent Schema Registry. RustFS registration remains storage-service configuration; per-run logical source containers remain with pipelines to avoid file-level asset explosion.
+Kafka discovery uses the current broker protocol and allowlisted topics, without consuming payloads. Registry-backed schema discovery is not configured by this change; deploying Karapace alone does not register schemas or change message encoding. RustFS registration remains storage-service configuration; per-run logical source containers remain with pipelines to avoid file-level asset explosion.
 
 Data products are consumer contracts, not a required wrapper around each database. Kafka topics are catalog assets first. Future Feast/Flink/Kubeflow semantic integrations require supported connectors and separately verified lineage; this change does not invent them.
 
