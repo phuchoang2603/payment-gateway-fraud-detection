@@ -1,0 +1,75 @@
+{
+  "policy": "bronze-catalog-v4",
+  "run_id": "76c3ffb0-d45c-4b7b-9dd0-cb073b37c88f",
+  "revision": "eedb5a967139eb63619ac7dca6edc7232a214569",
+  "accepted": false,
+  "images": {
+    "spark": "sha256:58ed9b7145549d0220b2674cd8b56e002bf62b658a42917b3d8e903b1f0f161a",
+    "metadata": "sha256:6b8818a7df1856467aa829a8c70d5e92a07234ccde64de5d720b7f727e9d16aa"
+  },
+  "snapshots": {
+    "payment_events": 2927027453886299314,
+    "fraud_labels": 2234014266444181928
+  },
+  "native_results": {
+    "expected": 6,
+    "status": "Success",
+    "violations": 0,
+    "unchanged_on_metadata_replay": true
+  },
+  "profile": {
+    "workflow": "historical-dp1-profile-s7lhc",
+    "outcome": "passed",
+    "finished_at": "2026-10-27T04:21:36Z",
+    "native_duration_seconds": 101.158,
+    "max_rows_per_table": 100000,
+    "scope": "latest-state-bounded-query",
+    "selection": "first-rows",
+    "eligible_scalar_columns_per_table": 15,
+    "null_proportion_columns_per_table": 15,
+    "distinct_proportion_columns_per_table": 13,
+    "ui_verified": [
+      "payment_events column null/distinct percentages and value counts",
+      "fraud_labels column null/distinct percentages and value counts"
+    ],
+    "limits": [
+      "The native UI displays 100% despite the custom query LIMIT 100000. This is bounded latest-state profiling, not full or snapshot-pinned coverage.",
+      "Native uniqueness metrics are not requested. Unsupported/excluded nested and binary metrics remain blank.",
+      "Optional connector audit-query check warned; required connection checks passed."
+    ]
+  },
+  "publication_attempts": [
+    {
+      "workflow": "historical-dp1-bronze-rmqr9",
+      "outcome": "failed",
+      "reason": "Native profile retry passed; SDK TestCase read omitted required relationships. Fixed in bd94e46.",
+      "finished_at": "2026-10-27T03:59:03Z"
+    },
+    {
+      "workflow": "historical-dp1-metadata-6ldcb",
+      "outcome": "failed",
+      "reason": "Readback required explicit contract owners, native termsOfUse response mapping and unordered pipeline task-status comparison. Fixed in eedb5a9.",
+      "finished_at": "2026-10-27T04:10:00Z"
+    },
+    {
+      "workflow": "historical-dp1-metadata-8q7bz",
+      "outcome": "failed",
+      "reason": "Both contract sourceUrl fields retained the previous revision after native create-or-update. Native SQL results unchanged; SDK patch fix requires a new CI image.",
+      "finalizer": "in progress"
+    }
+  ],
+  "landing_preflight": {
+    "source_epoch": "v16-20261026",
+    "completed_manifests": 21,
+    "rows": {
+      "payment_events": 1215,
+      "fraud_labels": 241
+    },
+    "objects_in_streaming_prefix": 428,
+    "consumer_partitions": 6,
+    "consumer_lag": 0,
+    "ingestion_started": false
+  },
+  "daily_schedule": "suspended",
+  "operational_evidence": "/home/felix/.local/state/dp1/catalog-v4-v16"
+}

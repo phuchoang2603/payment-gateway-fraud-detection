@@ -156,7 +156,16 @@ def synchronize(sdk, run, manifest, expected, stages, report_uri, outcome):
         if not readback.contains(request.model_dump(mode="json", by_alias=True, exclude_none=True), body):
             raise ValueError("contract contains an unsupported required native mapping")
         contract = sdk.create_or_update(request)
-        sdk.patch_description(type(contract), contract, body["description"], force=True, skip_on_failure=False)
+        sdk.patch(
+            type(contract),
+            contract,
+            contract.model_copy(
+                update={"description": request.description, "sourceUrl": request.sourceUrl}, deep=True
+            ),
+            allowed_fields={"description": True, "sourceUrl": True},
+            override_metadata=True,
+            skip_on_failure=False,
+        )
         contracts[table] = {"id": str(contract.id.root), "body": body}
     sdk.create_or_update(CreatePipelineServiceRequest(name="argo", serviceType="CustomPipeline"))
     link = (

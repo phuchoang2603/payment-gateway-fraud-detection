@@ -227,7 +227,13 @@ def test_readback_rejects_incomplete_contracts_ports_lineage_execution_and_profi
 
     def incomplete_contract(path, query=None):
         value = fetch(path, query)
-        return {**value, "schema": []} if path == "dataContracts/entity" else value
+        if path == "dataContracts/entity":
+            return (
+                {**value, "schema": []}
+                if query["entityId"] == "fraud_labels"
+                else {**value, "sourceUrl": "https://example.invalid/stale-contract"}
+            )
+        return value
 
     assert set(readback.governance_gaps(published, hashes(), incomplete_contract)) == {
         "product:bronze-payments:inputPorts",
