@@ -8,6 +8,8 @@ from data_platform.products import hashes
 from data_platform.runs import evidence_key
 from data_platform.storage import Store
 
+REVISION = "a" * 40
+
 RUN = {
     "run_id": "run-1",
     "dataset_version": "v16",
@@ -90,21 +92,28 @@ def test_only_fresh_matching_success_results_pass():
 def test_native_contract_mapping_requires_owners_tests_and_preserves_nested_schema(monkeypatch):
     owners = [{"id": "owner", "type": "team"}]
     tests = [{"id": "raw-check", "type": "testCase"}]
-    contract = governance.contract_body("payment_events", "events", owners, tests)
+    contract = governance.contract_body("payment_events", "events", owners, tests, REVISION)
     assert hashes()["payment_events"] in contract["description"] and "```yaml" in contract["description"]
     assert contract["qualityExpectations"] == tests and contract["owners"] == owners
     assert contract["security"]["dataClassification"] == "synthetic"
+    another_revision = governance.contract_body("payment_events", "events", owners, tests, "b" * 40)
+    assert contract["sourceUrl"] == another_revision["sourceUrl"]
+    assert "/blob/main/" in contract["sourceUrl"]
+    assert f"/blob/{REVISION}/" in contract["description"]
+    assert f"/blob/{'b' * 40}/" in another_revision["description"]
     nested = next(c for c in contract["schema"] if c["name"] == "attempt_started")
     assert nested["dataType"] == "STRUCT" and nested["children"]
     event_id = next(c for c in contract["schema"] if c["name"] == "event_id")
     assert event_id["constraint"] == "NOT_NULL"
     with pytest.raises(ValueError, match="ownership"):
-        governance.contract_body("payment_events", "events", [], tests)
+        governance.contract_body("payment_events", "events", [], tests, REVISION)
     with pytest.raises(ValueError, match="quality"):
-        governance.contract_body("payment_events", "events", owners, [])
+        governance.contract_body("payment_events", "events", owners, [], REVISION)
+    with pytest.raises(ValueError, match="full Git revision"):
+        governance.contract_body("payment_events", "events", owners, tests, "main")
     monkeypatch.setattr(governance, "product_document", lambda: {"team": {"name": "another owner"}})
     with pytest.raises(ValueError, match="separately resolved"):
-        governance.contract_body("payment_events", "events", owners, tests)
+        governance.contract_body("payment_events", "events", owners, tests, REVISION)
 
 
 def publication_fixture():
@@ -121,7 +130,7 @@ def publication_fixture():
     contracts = {
         t: {
             "id": f"contract-{t}",
-            "body": governance.contract_body(t, t, owners, [{"id": f"test-{t}", "type": "testCase"}]),
+            "body": governance.contract_body(t, t, owners, [{"id": f"test-{t}", "type": "testCase"}], REVISION),
         }
         for t in tables
     }
@@ -132,6 +141,7 @@ def publication_fixture():
         paths,
         {name: stage for name in governance.TASKS},
         "passed",
+        REVISION,
     )
     profile = {
         **stage,
@@ -254,6 +264,7 @@ def test_pipeline_records_independent_source_ports_and_preserves_run_identity(mo
     assert status["executionId"] == RUN["run_id"]
     assert status["parameters"]["workflow"] == RUN["workflow"]
     assert status["parameters"]["publication_workflow"] == "metadata-recovery"
+    assert status["parameters"]["publication_git_revision"] == REVISION
     assert {s["version"] for s in status["outputs"]} == {"111", "222"}
     assert [s["rowCount"] for s in status["inputs"]] == [3, 2]
     landing = {**RUN, "input_mode": "landing", "source_root": "s3://source"}
@@ -264,9 +275,9 @@ def test_pipeline_records_independent_source_ports_and_preserves_run_identity(mo
     }
     assert set(governance.source_paths(landing, manifest)) == {"payment_events"}
     assert (
-        governance.execution(landing, manifest, governance.source_paths(landing, manifest), {}, "failed")["outputs"][
-            1
-        ]["rowCount"]
+        governance.execution(landing, manifest, governance.source_paths(landing, manifest), {}, "failed", REVISION)[
+            "outputs"
+        ][1]["rowCount"]
         == 0
     )
 

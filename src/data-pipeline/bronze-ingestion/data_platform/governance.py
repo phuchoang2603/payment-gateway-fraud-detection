@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime
 from hashlib import sha256
 
@@ -11,6 +12,7 @@ DOMAIN = "fraud-detection"
 PRODUCT = "bronze-payments"
 PIPELINE = "argo.historical-dp1-bronze"
 STORAGE = "rustfs"
+REPOSITORY = "https://github.com/phuchoang2603/payment-gateway-fraud-detection"
 TASKS = {
     "select": ["ingest"],
     "ingest": ["discover"],
@@ -55,21 +57,25 @@ def columns(properties):
     return result
 
 
-def contract_body(table, entity_id, owners, tests):
+def contract_body(table, entity_id, owners, tests, git_revision):
     artifact = contract_path(table)
     original = artifact.read_bytes()
     contract = yaml.safe_load(original)
     if not owners or not tests:
         raise ValueError("native contract requires resolved ownership and active quality references")
+    if not re.fullmatch(r"[a-f0-9]{40}", git_revision):
+        raise ValueError("contract provenance requires a full Git revision")
+    path = f"contracts/data-products/{PRODUCT}/{artifact.name}"
+    immutable_url = f"{REPOSITORY}/blob/{git_revision}/{path}"
     body = {
         "name": contract["id"],
         "displayName": contract["name"],
-        "description": f"ODCS id={contract['id']} version={contract['version']} sha256={sha256(original).hexdigest()}\n\n```yaml\n{original.decode()}\n```",
+        "description": f"ODCS id={contract['id']} version={contract['version']} sha256={sha256(original).hexdigest()}\n\nSource revision: [{git_revision}]({immutable_url})\n\n```yaml\n{original.decode()}\n```",
         "entity": {"id": entity_id, "type": "table"},
         "schema": columns(contract["schema"][0]["properties"]),
         "qualityExpectations": tests,
         "owners": owners,
-        "sourceUrl": f"{os.environ.get('GIT_SOURCE_URL', 'https://github.com/phuchoang2603/payment-gateway-fraud-detection/blob/t3/historical-dp1-bronze')}/contracts/data-products/{PRODUCT}/{artifact.name}",
+        "sourceUrl": f"{REPOSITORY}/blob/main/{path}",
         "termsOfUse": "\n\n".join(contract["description"].values()),
     }
     classification = next(
@@ -116,7 +122,7 @@ def source_paths(run, manifest):
     return result
 
 
-def execution(run, manifest, sources, stages, outcome):
+def execution(run, manifest, sources, stages, outcome, git_revision):
     started = int(datetime.fromisoformat(run["ingested_at"]).timestamp() * 1000)
     inputs = [
         {
@@ -168,6 +174,7 @@ def execution(run, manifest, sources, stages, outcome):
             "snapshots": run["snapshots"],
             "workflow": run["workflow"],
             "publication_workflow": os.environ.get("WORKFLOW_ID", run["workflow"]),
+            "publication_git_revision": git_revision,
         },
         "metrics": {
             "totalRowsProcessed": sum(s["rows"] for s in sources.values()),

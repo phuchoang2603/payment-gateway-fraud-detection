@@ -55,7 +55,17 @@
       "workflow": "historical-dp1-metadata-8q7bz",
       "outcome": "failed",
       "reason": "Both contract sourceUrl fields retained the previous revision after native create-or-update. Native SQL results unchanged; SDK patch fix requires a new CI image.",
-      "finalizer": "in progress"
+      "finalizer": "passed",
+      "finished_at": "2026-10-27T04:27:49Z"
+    },
+    {
+      "workflow": "historical-dp1-metadata-n46pj",
+      "revision": "7bf4469b6e1dbf221b7914685ded7a285634f970",
+      "metadata_image": "sha256:2c29bb35d6675bc520db85ff83ce7bd7e9170bb6213826d6211b0b4f79938bbe",
+      "outcome": "failed",
+      "reason": "SDK sourceUrl PATCH also did not persist. The matched OpenMetadata contract updater does not track sourceUrl changes. Native SQL results and snapshots unchanged.",
+      "finalizer": "passed",
+      "finished_at": "2026-10-27T04:38:26Z"
     }
   ],
   "landing_preflight": {
@@ -71,5 +81,6 @@
     "ingestion_started": false
   },
   "daily_schedule": "suspended",
-  "operational_evidence": "/home/felix/.local/state/dp1/catalog-v4-v16"
+  "operational_evidence": "/home/felix/.local/state/dp1/catalog-v4-v16",
+  "decision": "Use stable canonical contract links with immutable Git revision/URL/hash provenance. Remove ineffective URL patching; replace only the two unaccepted candidate contract registrations before new publication. Shared server unchanged."
 }

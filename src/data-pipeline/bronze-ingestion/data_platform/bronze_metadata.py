@@ -151,21 +151,12 @@ def synchronize(sdk, run, manifest, expected, stages, report_uri, outcome):
             for fqn, case in expected["cases"].items()
             if case["table"] == table
         ]
-        body = governance.contract_body(table, str(found.id.root), owners, tests)
+        body = governance.contract_body(table, str(found.id.root), owners, tests, os.environ["GIT_REVISION"])
         request = CreateDataContractRequest.model_validate(body)
         if not readback.contains(request.model_dump(mode="json", by_alias=True, exclude_none=True), body):
             raise ValueError("contract contains an unsupported required native mapping")
         contract = sdk.create_or_update(request)
-        sdk.patch(
-            type(contract),
-            contract,
-            contract.model_copy(
-                update={"description": request.description, "sourceUrl": request.sourceUrl}, deep=True
-            ),
-            allowed_fields={"description": True, "sourceUrl": True},
-            override_metadata=True,
-            skip_on_failure=False,
-        )
+        sdk.patch_description(type(contract), contract, body["description"], force=True, skip_on_failure=False)
         contracts[table] = {"id": str(contract.id.root), "body": body}
     sdk.create_or_update(CreatePipelineServiceRequest(name="argo", serviceType="CustomPipeline"))
     link = (
@@ -211,7 +202,7 @@ def synchronize(sdk, run, manifest, expected, stages, report_uri, outcome):
                 }
             )
         )
-    status = governance.execution(run, manifest, paths, stages, outcome)
+    status = governance.execution(run, manifest, paths, stages, outcome, os.environ["GIT_REVISION"])
     sdk.add_pipeline_status(governance.PIPELINE, PipelineStatus.model_validate(status))
     return {
         "owners": owners,
@@ -333,7 +324,12 @@ def publish(store, run, contracts, manifest):
             ended_at=int(time.time() * 1000),
         )
         published["status"] = governance.execution(
-            run, manifest, governance.source_paths(run, manifest), stages, receipt["outcome"]
+            run,
+            manifest,
+            governance.source_paths(run, manifest),
+            stages,
+            receipt["outcome"],
+            os.environ["GIT_REVISION"],
         )
         client().add_pipeline_status(governance.PIPELINE, PipelineStatus.model_validate(published["status"]))
         if not problems and not gaps:
@@ -348,7 +344,14 @@ def publish(store, run, contracts, manifest):
                 client().add_pipeline_status(
                     governance.PIPELINE,
                     PipelineStatus.model_validate(
-                        governance.execution(run, manifest, governance.source_paths(run, manifest), stages, "failed")
+                        governance.execution(
+                            run,
+                            manifest,
+                            governance.source_paths(run, manifest),
+                            stages,
+                            "failed",
+                            os.environ["GIT_REVISION"],
+                        )
                     ),
                 )
             except Exception as status_error:

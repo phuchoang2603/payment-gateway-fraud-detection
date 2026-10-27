@@ -12,6 +12,7 @@ spark:
 native:
   activeDeadlineSeconds: 1800
 config:
+  GIT_REVISION: ""
   SOURCE_ROOT: s3://synthetic-source/historical/v16
   DATASET_VERSION: v16
   EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence/catalog-v4
