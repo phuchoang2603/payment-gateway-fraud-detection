@@ -140,6 +140,7 @@ class Deduplicate(KeyedProcessFunction):
 
     def on_timer(self, timestamp, ctx):
         self.state.clear()
+        return ()
 
 
 class MatchAttempts(KeyedProcessFunction):
@@ -164,6 +165,7 @@ class MatchAttempts(KeyedProcessFunction):
         if state is not None and timestamp * 1000 >= state.expires_at:
             state.expire()
             self.state.clear()
+        return ()
 
 
 class Aggregate(KeyedProcessFunction):
