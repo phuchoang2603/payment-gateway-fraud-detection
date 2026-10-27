@@ -52,12 +52,12 @@ Native StarRocks discovery, profiling, quality execution and lineage SHALL addre
 
 ### Requirement: Source pipeline and table lineage
 
-The catalog SHALL expose lineage from each historical source port through the DP1 ingest job to its bronze output. It SHALL identify the Argo workflow, validation job, cross-table label dependency and execution outcome, with run links and pinned source/snapshot references.
+The catalog SHALL expose lineage from each selected source port through the DP1 ingest job to its bronze output. It SHALL identify the Argo workflow, validation job, declared label/event contract dependency and execution outcome, with run links and pinned source/snapshot references. The declared dependency SHALL NOT imply raw cross-table business validation.
 
 #### Scenario: Trace a bronze label table
 
 - **WHEN** a user inspects its lineage and associated DP1 execution
-- **THEN** they can trace the label source, corresponding ingestion job and event-table dependency used for validation, including the recorded source version and snapshots
+- **THEN** they can trace the label source, corresponding ingestion job and declared event-contract dependency, including the recorded source version and snapshots
 
 ### Requirement: Reproducible assertion evidence
 

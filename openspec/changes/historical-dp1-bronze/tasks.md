@@ -11,7 +11,7 @@
 - [x] 2.1 Add platform-owned StarRocks through Argo CD and the official operator/Helm chart in `talos-proxmox`; pin versions, scope RBAC, size FE/BE/PVCs and verify reconciliation/persistence without installing an app-owned engine.
 - [x] 2.2 Configure native RustFS REST SigV4 signing service/region and separate scoped S3 access; verify catalog listing, nested schemas and exact event/label snapshot SQL without proxy/catalog replacement or full dataset import.
 - [x] 2.3 Verify native OpenMetadata metadata/profiler/test connections select the external Iceberg catalog using supported configuration; prove canonical identities, schema fidelity and one passing/failing SQL test. Resolve upstream support gaps explicitly, without custom discovery or a copied internal table fallback.
-- [ ] 2.4 Record bounded recurring-ingestion resources, deadlines and observed usage; preserve the recovered historical OOM limitation. Full resource/scale benchmarking follows whole-pipeline completion.
+- [x] 2.4 Record bounded recurring-ingestion resources, deadlines and observed usage; preserve the recovered historical OOM limitation. Full resource/scale benchmarking follows whole-pipeline completion.
 
 ## 3. Native contracts, SQL and acceptance
 
@@ -47,8 +47,8 @@ Producer source/live smoke and landing/recovery prerequisites are recorded in th
 
 - [x] 6.1 Agree immutable landing completion/inventory and durable progress interfaces with the live-streaming change; verify late files in older date folders are discoverable without an event-date cutoff.
 - [x] 6.2 Implement common input selection, independent event/label batches and content-preserving incremental commits with pinned changed/unchanged ports; verify no-input, changed-content rejection and uncertain-commit recovery using existing behavioral CI coverage.
-- [ ] 6.3 Establish the raw/silver validation boundary: retain lossless schema, file integrity, transport provenance and exact batch conservation in DP1; defer lifecycle reconstruction, duplicate consistency, business amounts/risk/context, cross-table linkage and as-of/maturity checks to DP2. Bundle native schema checks to avoid a scan per field; no same-batch labels or terminal events are required.
-- [ ] 6.4 Add opt-in CronWorkflow/progress/landing permissions and demonstrate repeated live batches plus metadata-only recovery with exact accounting; historical acceptance does not establish recurring readiness.
+- [x] 6.3 Establish the raw/silver validation boundary: retain lossless schema, file integrity, transport provenance and exact batch conservation in DP1; defer lifecycle reconstruction, duplicate consistency, business amounts/risk/context, cross-table linkage and as-of/maturity checks to DP2. Bundle native schema checks to avoid a scan per field; no same-batch labels or terminal events are required.
+- [x] 6.4 Add opt-in CronWorkflow/progress/landing permissions and demonstrate repeated live batches plus metadata-only recovery with exact accounting; historical acceptance does not establish recurring readiness.
 
 ## 7. Analytical roadmap alignment
 
@@ -59,4 +59,6 @@ Producer source/live smoke and landing/recovery prerequisites are recorded in th
 
 Code validation passed on `1da4a5c` in the existing CI jobs. V16 persisted-bronze, all 146 native quality results, profiling, snapshot reuse and governance-only recovery passed. The accepted record is `s3://fraud-lakehouse-prod/dp1-evidence/starrocks-v2/accepted/v16.json`; bounded receipts are in `evidence/`. The first SQL abort and subsequent stale-provenance rejection remain recorded. One recovered executor OOM means scale resource sizing remains open; deliberate failure exercises are no longer requested.
 
-V16 is the current development selector and was ingested into an empty bronze namespace without schema migration or imported acceptance records. The immutable source and unrelated shared services/assets remain unchanged. Its persisted-bronze/native/governance evidence is distinct from upstream source/live smoke. Full-scale/coursework acceptance, recurring ingestion and downstream feature/training/serving acceptance remain separate later gates.
+V16 is the current development selector and was ingested into an empty bronze namespace without schema migration or imported acceptance records. The immutable source and unrelated shared services/assets remain unchanged. Its persisted-bronze/native/governance evidence is distinct from upstream source/live smoke. Full-scale/coursework and downstream feature/training/serving acceptance remain separate later gates.
+
+Recurring `bronze-raw-v3` development acceptance passed on the clean `v16-20261026` backlog: 21 manifests, 1,215 events and 241 labels across two selections. All six bundled native assertions and governance readback passed. The event-only second batch retained the label snapshot; governance-only replay preserved native results/timestamps and progress, and no-input execution started no Spark/native jobs. `evidence/streaming-v16-accepted.json` records workflows, exact selections/snapshots, resources and cleanup. The daily 00:00 UTC CronWorkflow is explicitly enabled live with a 100-manifest bound; the chart default and root GitOps DP1 application remain disabled. Its natural daily trigger has not yet occurred. Existing CI jobs passed on runtime `ab57708` and workflow `61fed1d`; this exercise changed no sources, producer offsets or simulator state.

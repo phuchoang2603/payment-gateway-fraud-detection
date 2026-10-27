@@ -12,17 +12,18 @@ Focused checks SHALL cover explicit deferred-source preflight, preservation of i
 
 ### Requirement: Data-pipeline behavioral verification
 
-Bounded CI fixtures SHALL protect the distinct behavioral risks: source integrity/lossless normalization, duplicate-preserving ingestion, uncertain commits/replay, snapshot isolation, nested SQL/lifecycle/linkage/label semantics, native result completeness and metadata-only recovery. Existing CI entrypoints SHALL be reused; obsolete GX/custom publisher tests SHALL be removed. No configuration-only test suites, per-option/property matrices, new CI jobs or duplicate layer assertions SHALL be added. Tests and image builds SHALL run only in CI; local checks SHALL be limited to lint/format/schema/OpenSpec validation and diff review. Ordinary CI SHALL NOT require live credentials.
+Bounded CI fixtures SHALL protect the distinct behavioral risks: source integrity/lossless normalization, duplicate-preserving ingestion, uncertain commits/replay, snapshot isolation, nested raw schema/transport semantics, native result completeness and metadata-only recovery. Source business-rule coverage SHALL remain separate from raw bronze acceptance; transferred silver SQL SHALL remain planned work. Existing CI entrypoints SHALL be reused; obsolete GX/custom publisher tests SHALL be removed. No configuration-only test suites, per-option/property matrices, new CI jobs or duplicate layer assertions SHALL be added. Tests and image builds SHALL run only in CI; local checks SHALL be limited to lint/format/schema/OpenSpec validation and diff review. Ordinary CI SHALL NOT require live credentials.
 
 #### Scenario: Verify changes without infrastructure access
 
 - **WHEN** DP1 behavioral checks run in CI
 - **THEN** bounded fixtures and suitable local/fake boundaries exercise the relevant failure paths without reading live source exports or contacting production services
 
-#### Scenario: Source and bronze rule parity
+#### Scenario: Raw and business validation boundaries
 
-- **WHEN** shared valid/invalid fixtures are evaluated by source and bronze engines
-- **THEN** equivalent business checks agree, including duplicates, nested payloads, enriched attempt context, lifecycle gaps, bad amounts and label linkage/availability
+- **WHEN** supported raw deliveries include incomplete lifecycles or independently arriving labels
+- **THEN** bronze checks schema, transport and exact conservation without claiming business-rule or as-of acceptance
+- **AND** source business checks and planned silver rules retain their distinct scope and semantic identities
 
 ### Requirement: Live historical and governance acceptance
 
