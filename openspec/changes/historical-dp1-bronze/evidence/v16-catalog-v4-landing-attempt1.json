@@ -1,0 +1,55 @@
+{
+  "policy": "bronze-catalog-v4",
+  "workflow": "recurring-dp1-smoke-tb5zk",
+  "outcome": "error",
+  "finished_at": "2026-10-27T05:17:03Z",
+  "accepted": false,
+  "dataset_version": "landing-c494286c30ab009851dc4ea3fd3a4c753c0248e0e56a4c885ed77a0f28d113ae",
+  "run_id": "b4639119-3bfb-4060-9ba4-2442ee5c5db6",
+  "manifest_sha256": "5cc1622f07bce41b909e7c0ebf1bf3e7dbcc031d562d0ba2878a7c88a8f9ffbb",
+  "source_epoch": "v16-20261026",
+  "batches": 1,
+  "rows": {
+    "fraud_labels": 0,
+    "payment_events": 409
+  },
+  "snapshots": {
+    "fraud_labels": 2234014266444181928,
+    "payment_events": 4669706592881365323
+  },
+  "conservation": {
+    "manifest_sha256": "5cc1622f07bce41b909e7c0ebf1bf3e7dbcc031d562d0ba2878a7c88a8f9ffbb",
+    "method": "spark-exceptAll-bidirectional",
+    "outcome": "passed",
+    "snapshots": {
+      "fraud_labels": 2234014266444181928,
+      "payment_events": 4669706592881365323
+    }
+  },
+  "native_results": {
+    "expected": 6,
+    "status": "Success",
+    "violations": 0
+  },
+  "profile": "skipped by recurring policy; no profiler pod",
+  "publication": "not started",
+  "reason": "Argo evaluated the unquoted hyphenated landing version as subtraction in publish.when. Use the existing Argo expression syntax to compare the parameter to 'none'.",
+  "ledger": {
+    "accepted_batches": 0,
+    "pending": "landing-c494286c30ab009851dc4ea3fd3a4c753c0248e0e56a4c885ed77a0f28d113ae"
+  },
+  "cleanup": "passed: Spark resources and run-owned queries quiescent",
+  "source_readback": {
+    "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+    "streaming_inventory_objects": 428,
+    "streaming_inventory_unchanged": true
+  },
+  "resources": {
+    "scope": "intermediate working-set observation, not whole-run peaks",
+    "driver_MiB": 645,
+    "executor_MiB": [
+      497,
+      391
+    ]
+  }
+}

@@ -62,7 +62,7 @@ spec:
                 - {name: version, value: "{{tasks.select.outputs.parameters.version}}"}
           - name: publish
             depends: (validate.Succeeded || validate.Failed || validate.Errored || validate.Skipped) && (profile.Succeeded || profile.Failed || profile.Errored || profile.Skipped)
-            when: "{{tasks.select.outputs.parameters.version}} != none"
+            when: "{{=tasks.select.outputs.parameters.version != 'none'}}"
             template: metadata
             arguments:
               parameters:

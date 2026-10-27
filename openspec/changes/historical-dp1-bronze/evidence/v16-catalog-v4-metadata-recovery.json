@@ -1,11 +1,11 @@
 {
   "policy": "bronze-catalog-v4",
   "run_id": "76c3ffb0-d45c-4b7b-9dd0-cb073b37c88f",
-  "revision": "eedb5a967139eb63619ac7dca6edc7232a214569",
-  "accepted": false,
+  "revision": "d2592421981362a628d9c17ea9fc09a7112ed744",
+  "accepted": true,
   "images": {
     "spark": "sha256:58ed9b7145549d0220b2674cd8b56e002bf62b658a42917b3d8e903b1f0f161a",
-    "metadata": "sha256:6b8818a7df1856467aa829a8c70d5e92a07234ccde64de5d720b7f727e9d16aa"
+    "metadata": "sha256:13ca646ba81a5fde4c9a6a125a44db00d8ac65394e32b6bcd931ff99103135ce"
   },
   "snapshots": {
     "payment_events": 2927027453886299314,
@@ -66,6 +66,14 @@
       "reason": "SDK sourceUrl PATCH also did not persist. The matched OpenMetadata contract updater does not track sourceUrl changes. Native SQL results and snapshots unchanged.",
       "finalizer": "passed",
       "finished_at": "2026-10-27T04:38:26Z"
+    },
+    {
+      "workflow": "historical-dp1-metadata-ttx7k",
+      "outcome": "passed",
+      "finished_at": "2026-10-27T05:02:32Z",
+      "finalizer": "passed",
+      "governance_gaps": [],
+      "native_result_timestamps_unchanged": true
     }
   ],
   "landing_preflight": {
@@ -82,5 +90,58 @@
   },
   "daily_schedule": "suspended",
   "operational_evidence": "/home/felix/.local/state/dp1/catalog-v4-v16",
-  "decision": "Use stable canonical contract links with immutable Git revision/URL/hash provenance. Remove ineffective URL patching; replace only the two unaccepted candidate contract registrations before new publication. Shared server unchanged."
+  "decision": "Use stable canonical contract links with immutable Git revision/URL/hash provenance. Remove ineffective URL patching; replace only the two unaccepted candidate contract registrations before new publication. Shared server unchanged.",
+  "stable_contract_replacement": {
+    "removed_unaccepted_ids": [
+      "68b4bdd3-af59-41e4-b4d2-f1bd6ff7fd34",
+      "63dcf573-71d6-4e9b-9cb4-73c15ab52fbe"
+    ],
+    "current_ids": {
+      "payment_events": "9e1ef695-8d0c-4e0b-ad1d-c5abd580c02a",
+      "fraud_labels": "5a81a69c-59b4-4a53-b637-b1772dd63622"
+    },
+    "native_cases_results_unchanged": true
+  },
+  "obsolete_execution_cleanup": {
+    "deleted_timestamps": [
+      1792963177910,
+      1792958568885,
+      1792945913566,
+      1792933788611
+    ],
+    "current_execution_preserved": true
+  },
+  "governance": {
+    "readback_gaps": [],
+    "inputs": 2,
+    "outputs": 2,
+    "tasks": 6,
+    "publication_git_revision": "d2592421981362a628d9c17ea9fc09a7112ed744",
+    "source_urls": "stable blob/main paths; immutable artifact URLs and full revision retained in description"
+  },
+  "metadata_replay": {
+    "workflow": "historical-dp1-metadata-5vw8c",
+    "finished_at": "2026-10-27T05:06:40Z",
+    "outcome": "passed",
+    "execution_id_unchanged": true,
+    "contract_ids_unchanged": true,
+    "snapshots_unchanged": true,
+    "native_result_timestamps_unchanged": true,
+    "governance_gaps": []
+  },
+  "ui": {
+    "verified": [
+      "six pipeline tasks and successful current execution timings",
+      "obsolete execution rows absent after scoped deletion",
+      "event native contract nested schema, ownership, synthetic classification and three Success tests",
+      "historical product input/output ports and independent source lineage",
+      "event and label scalar-column profile percentages/value counts"
+    ],
+    "limits": [
+      "Contract status Unprocessed is distinct from native SQL result status.",
+      "Bounded custom-query profiler UI displays 100%; maximum query rows are 100000, latest-state only.",
+      "Execution inputs/outputs and immutable provenance were verified through the API; the execution list shows task status/timing.",
+      "Argo stage graph is readable; lifecycle and retry nodes still expand."
+    ]
+  }
 }
