@@ -62,7 +62,7 @@ connect:
 entities:
   fraudFeatures:
     topics:
-      - name: fraud.feature-updates.v1.live-v1
+      - name: fraud.feature-updates.v1.live-v2
         valueSchema: features/v1/features.proto
         partitions: 3
         retention: 1209600000
