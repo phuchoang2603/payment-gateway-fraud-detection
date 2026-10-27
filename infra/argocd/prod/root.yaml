@@ -20,7 +20,7 @@ spec:
         destinationServer: https://kubernetes.default.svc
         applications:
           data-pipelines:
-            enabled: false
+            enabled: true
             destinationNamespace: fraud-data-prod
             path: infra/charts/data-pipelines
             valuesFile:

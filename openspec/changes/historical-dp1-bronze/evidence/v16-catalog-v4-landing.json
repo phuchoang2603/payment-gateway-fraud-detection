@@ -1,0 +1,165 @@
+{
+  "policy": "bronze-catalog-v4",
+  "workflow_revision": "0a26f37144c72b8d9966553e8428a50c37baf269",
+  "metadata_revision": "d2592421981362a628d9c17ea9fc09a7112ed744",
+  "source_epoch": "v16-20261026",
+  "accepted": true,
+  "first_event_only": {
+    "workflow": "recurring-dp1-smoke-rz6gb",
+    "finished_at": "2026-10-27T05:27:55Z",
+    "outcome": "passed",
+    "dataset_version": "landing-c494286c30ab009851dc4ea3fd3a4c753c0248e0e56a4c885ed77a0f28d113ae",
+    "run_id": "b4639119-3bfb-4060-9ba4-2442ee5c5db6",
+    "rows": {
+      "fraud_labels": 0,
+      "payment_events": 409
+    },
+    "snapshots": {
+      "fraud_labels": 2234014266444181928,
+      "payment_events": 4669706592881365323
+    },
+    "conservation": {
+      "manifest_sha256": "5cc1622f07bce41b909e7c0ebf1bf3e7dbcc031d562d0ba2878a7c88a8f9ffbb",
+      "method": "spark-exceptAll-bidirectional",
+      "outcome": "passed",
+      "snapshots": {
+        "fraud_labels": 2234014266444181928,
+        "payment_events": 4669706592881365323
+      }
+    },
+    "governance_gaps": [],
+    "native_result_records_unchanged_on_recovery": true,
+    "spark_applications_on_recovery": 0,
+    "accepted_manifests": 1,
+    "profiling": "skipped"
+  },
+  "metadata_replay": {
+    "workflow": "recurring-dp1-metadata-kx9g2",
+    "finished_at": "2026-10-27T05:31:39Z",
+    "outcome": "passed",
+    "ledger_unchanged": true,
+    "native_records_unchanged": true,
+    "snapshots_unchanged": true,
+    "contract_ids_unchanged": true,
+    "execution_id_unchanged": true,
+    "governance_gaps": []
+  },
+  "remaining": {
+    "workflow": "recurring-dp1-smoke-p52fh",
+    "finished_at": "2026-10-27T05:42:56Z",
+    "outcome": "passed",
+    "dataset_version": "landing-cbe5ab302eb3048e16894c6b31da66546e2cd03c336bcfa1a022e138d21433bc",
+    "run_id": "0831d96b-5434-487e-8da3-3529c52d2c93",
+    "manifests": 20,
+    "rows": {
+      "fraud_labels": 241,
+      "payment_events": 806
+    },
+    "snapshots": {
+      "fraud_labels": 8622420730682008193,
+      "payment_events": 4083766257963050803
+    },
+    "conservation": {
+      "manifest_sha256": "ea29affbfc9c807a6d91b1468d9e3bd8f4d0a9aa6251c71176edef500a1c1656",
+      "method": "spark-exceptAll-bidirectional",
+      "outcome": "passed",
+      "snapshots": {
+        "fraud_labels": 8622420730682008193,
+        "payment_events": 4083766257963050803
+      }
+    },
+    "native_results": {
+      "expected": 6,
+      "status": "Success",
+      "violations": 0
+    },
+    "governance_gaps": [],
+    "profiling": "skipped"
+  },
+  "daily_schedule": {
+    "enabled": true,
+    "cron": "0 0 * * *",
+    "timezone": "Etc/UTC",
+    "concurrency": "Forbid",
+    "max_manifests_per_run": 100,
+    "profiling": "skipped"
+  },
+  "operational_evidence": "/home/felix/.local/state/dp1/catalog-v4-v16",
+  "ui_verified": [
+    "Argo recovery: ingest/profile skipped, publication succeeded, cleanup succeeded",
+    "OpenMetadata current recurring execution tasks successful; profile explicitly Skipped"
+  ],
+  "preservation": {
+    "historical_manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+    "streaming_objects_unchanged": 428,
+    "clean_manifests": 21,
+    "rows": {
+      "payment_events": 1215,
+      "fraud_labels": 241
+    },
+    "kafka_offsets_unchanged": {
+      "fraud.labels.v1": [
+        345,
+        338,
+        366
+      ],
+      "payments.events.v1": [
+        1770,
+        1857,
+        1700
+      ]
+    },
+    "consumer_lag": 0,
+    "profile_timestamps_unchanged": {
+      "payment_events": {
+        "timestamp": 1793074773936,
+        "unchanged": true
+      },
+      "fraud_labels": {
+        "timestamp": 1793074700507,
+        "unchanged": true
+      }
+    }
+  },
+  "no_input": {
+    "workflow": "recurring-dp1-smoke-fdnc9",
+    "finished_at": "2026-10-27T05:46:04Z",
+    "run_progress_native_governance_unchanged": true,
+    "skipped": [
+      "ingest",
+      "discover",
+      "validate",
+      "profile",
+      "publish"
+    ],
+    "outcome": "passed"
+  },
+  "resources": {
+    "spark": {
+      "driver": "2GiB heap +512MiB overhead",
+      "executors": 2,
+      "executor": "1 core,2GiB heap +1GiB overhead"
+    },
+    "observation": "2026-10-27T05:36:42.408223+00:00",
+    "scope": "cumulative metrics up to observation; not whole-run peaks",
+    "JVM_heap_bytes": {
+      "driver": 208306424,
+      "2": 590529568,
+      "1": 608390144
+    },
+    "process_RSS": "unavailable; Spark reports zero",
+    "whole_run_peak_memory": "not measured",
+    "shuffle_spill_scope": "stage counters up to observation; not final whole-run totals",
+    "observed_memory_spill_bytes": 0,
+    "observed_disk_spill_bytes": 0
+  },
+  "images": {
+    "spark": "sha256:58ed9b7145549d0220b2674cd8b56e002bf62b658a42917b3d8e903b1f0f161a",
+    "metadata": "sha256:13ca646ba81a5fde4c9a6a125a44db00d8ac65394e32b6bcd931ff99103135ce"
+  },
+  "limits": [
+    "Development/raw preservation acceptance only; no scale, silver/as-of, feature, training or serving acceptance.",
+    "Latest-state profile statistics remain from the explicit historical/on-demand collection; recurring ingestion does not refresh them.",
+    "Memory and shuffle/spill observations are partial, not final process peaks or scale sizing."
+  ]
+}

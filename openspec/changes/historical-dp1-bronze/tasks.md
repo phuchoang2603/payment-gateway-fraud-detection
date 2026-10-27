@@ -37,9 +37,9 @@ These checked items describe retained implementation, not acceptance of the rewr
 
 - [x] 5.1 Adapt existing behavioral CI for the distinct rewrite risks and inspect CI-built immutable images/check results; remove obsolete coverage without adding configuration-only suites, matrices or independent check jobs.
 - [x] 5.2 Run fresh historical v16 acceptance using manifest SHA-256 `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`, all 1,954 files / 139,597,476 bytes / 795,718 events / 161,967 labels including full tails; verify exact conservation, native raw tests and complete new metadata readback.
-- [ ] 5.3 Run fresh bounded recurring clean-landing acceptance, repeated/event-only inputs, accepted replay, metadata-only recovery and no-input behavior; verify exact delivery/transport accounting and unchanged producer offsets/source objects.
+- [x] 5.3 Run fresh bounded recurring clean-landing acceptance, repeated/event-only inputs, accepted replay, metadata-only recovery and no-input behavior; verify exact delivery/transport accounting and unchanged producer offsets/source objects.
 - [x] 5.4 Inspect Argo stage graph and OpenMetadata native contract, ownership/product, lineage, execution I/O and meaningful profile views; record API/UI discrepancies rather than claiming unverified integration.
-- [ ] 5.5 Record fresh receipts and minimal affected guidance with revisions/images/contracts/snapshots, profile scope and measured resource limits; enable the declared daily schedule only after fresh readiness and ensure superseded DP1 records are not active acceptance.
+- [x] 5.5 Record fresh receipts and minimal affected guidance with revisions/images/contracts/snapshots, profile scope and measured resource limits; enable the declared daily schedule only after fresh readiness and ensure superseded DP1 records are not active acceptance.
 
 ## Acceptance boundaries
 

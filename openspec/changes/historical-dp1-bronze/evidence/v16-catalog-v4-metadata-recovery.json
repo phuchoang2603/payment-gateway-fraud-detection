@@ -88,7 +88,7 @@
     "consumer_lag": 0,
     "ingestion_started": false
   },
-  "daily_schedule": "suspended",
+  "daily_schedule": "enabled at 00:00 Etc/UTC after historical, recurring, replay and no-input readiness; see v16-catalog-v4-landing.json",
   "operational_evidence": "/home/felix/.local/state/dp1/catalog-v4-v16",
   "decision": "Use stable canonical contract links with immutable Git revision/URL/hash provenance. Remove ineffective URL patching; replace only the two unaccepted candidate contract registrations before new publication. Shared server unchanged.",
   "stable_contract_replacement": {
