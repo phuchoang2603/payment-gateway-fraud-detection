@@ -205,14 +205,17 @@ def test_protobuf_context_and_finalized_decision_validation():
     )
     event.occurred_at.FromMicroseconds(ANCHOR)
     event.recorded_at.FromMicroseconds(ANCHOR)
+    event.occurred_at.nanos += 123
+    event.recorded_at.nanos += 999
     event.attempt_started.attempt_id = "attempt"
     event.attempt_started.context.customer.customer_id = "customer"
     event.attempt_started.context.snapshot.total.currency = "USD"
     event.attempt_started.context.snapshot.total.minor_units = 100
     event.attempt_started.signals.payment_method.fingerprint = "method"
     event.attempt_started.signals.attempted_at.CopyFrom(event.occurred_at)
-    fact, _ = decode(event.SerializeToString())
+    fact, recorded_at = decode(event.SerializeToString())
     assert fact.device is None and fact.amount == 100
+    assert fact.started_at == ANCHOR and recorded_at == ANCHOR
     event.attempt_started.context.snapshot.total.currency = "EUR"
     with pytest.raises(ValueError, match="context"):
         decode(event.SerializeToString())

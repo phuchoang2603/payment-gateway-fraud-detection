@@ -35,8 +35,6 @@ def decode(raw):
         raise ValueError("invalid or unsupported payment event")
     for timestamp in (event.occurred_at, event.recorded_at):
         timestamp.ToDatetime()
-        if timestamp.nanos % 1000:
-            raise ValueError("payment timestamp exceeds microsecond precision")
     payload = event.WhichOneof("payload")
     recorded_at = event.recorded_at.ToMicroseconds()
     if payload not in ("attempt_started", "risk_decision_recorded"):
