@@ -1,3 +1,8 @@
+schemaRegistry:
+  registration:
+    enabled: true
+    imageTag: ""
+
 kafka:
   metadataNamespace: fraud-data-prod
   replicas: 1

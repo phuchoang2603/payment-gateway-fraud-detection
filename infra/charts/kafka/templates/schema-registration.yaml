@@ -1,0 +1,85 @@
+{{- if and .Values.schemaRegistry.enabled .Values.schemaRegistry.registration.enabled }}
+{{- $registration := .Values.schemaRegistry.registration }}
+{{- $image := include "kafka.image" (list . $registration.image $registration.imageTag) }}
+{{- if not (regexMatch "(@sha256:[a-f0-9]{64}|:(main|pr-[0-9]+)-[a-f0-9]{40})$" $image) }}
+{{- fail "schemaRegistry.registration requires an image digest or a CI commit-tagged image" }}
+{{- end }}
+{{- $subjects := dict }}
+{{- range .Values.entities }}
+{{- range .topics }}
+{{- if .valueSchema }}
+{{- $_ := set $subjects (printf "%s-value" .name) .valueSchema }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if not $subjects }}
+{{- fail "schemaRegistry.registration requires at least one topic valueSchema" }}
+{{- end }}
+{{- $url := printf "http://schema-registry.%s.svc.cluster.local:%v" .Release.Namespace .Values.schemaRegistry.port }}
+{{- $identity := printf "%s%s%s%s%s" $image $url .Values.schemaRegistry.compatibility (toJson $subjects) (toJson $registration) | sha256sum | trunc 16 }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-schema-%s" (.Release.Name | trunc 38 | trimSuffix "-") $identity }}
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: {{ $registration.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: schema-register
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: register
+          image: {{ $image | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: SCHEMA_REGISTRY_URL
+              value: {{ $url | quote }}
+            - name: SCHEMA_COMPATIBILITY
+              value: {{ .Values.schemaRegistry.compatibility | quote }}
+            - name: SCHEMA_SUBJECTS
+              value: {{ $subjects | toJson | quote }}
+          resources:
+            {{- toYaml $registration.resources | nindent 12 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: schema-register
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: schema-register
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: karapace
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - port: {{ .Values.schemaRegistry.port }}
+          protocol: TCP
+{{- end }}

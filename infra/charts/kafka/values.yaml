@@ -65,12 +65,15 @@ entities:
   payments:
     topics:
       - name: payments.events.v1
+        valueSchema: payments/v1/events.proto
         partitions: 3
         retention: 604800000
       - name: payments.events.v1.faulty
+        valueSchema: payments/v1/events.proto
         partitions: 3
         retention: 604800000
       - name: fraud.labels.v1
+        valueSchema: payments/v1/labels.proto
         partitions: 3
         retention: 604800000
     connector:
@@ -92,6 +95,20 @@ entities:
 
 schemaRegistry:
   enabled: true
+  port: 8081
+  compatibility: BACKWARD_TRANSITIVE
+  registration:
+    enabled: false
+    image: schema-register
+    imageTag: ""
+    activeDeadlineSeconds: 600
+    resources:
+      requests:
+        cpu: 25m
+        memory: 32Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
   image:
     repository: ghcr.io/aiven-open/karapace
     tag: "6.2.4"

@@ -45,5 +45,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 2
       - name: Pin production charts after all main images publish
         run: bash scripts/pin-service-images.sh

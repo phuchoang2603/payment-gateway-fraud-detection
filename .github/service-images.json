@@ -49,6 +49,12 @@
       "dockerfile": "infra/docker/connect-debezium.Dockerfile"
     },
     {
+      "service": "schema-register",
+      "image-suffix": "/schema-register",
+      "context": ".",
+      "dockerfile": "infra/docker/schema-register.Dockerfile"
+    },
+    {
       "service": "live-simulator",
       "image-suffix": "/live-simulator",
       "context": ".",

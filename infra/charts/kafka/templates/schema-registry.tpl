@@ -51,7 +51,7 @@ spec:
               drop: [ALL]
           ports:
             - name: http
-              containerPort: 8081
+              containerPort: {{ .Values.schemaRegistry.port }}
           env:
             - name: KARAPACE_KARAPACE_REGISTRY
               value: "true"
@@ -62,7 +62,7 @@ spec:
             - name: KARAPACE_HOST
               value: "0.0.0.0"
             - name: KARAPACE_PORT
-              value: "8081"
+              value: {{ .Values.schemaRegistry.port | quote }}
             - name: KARAPACE_ADVERTISED_HOSTNAME
               value: {{ printf "schema-registry.%s.svc.cluster.local" .Release.Namespace | quote }}
             - name: KARAPACE_GROUP_ID
@@ -76,7 +76,7 @@ spec:
             - name: KARAPACE_PRODUCER_ACKS
               value: all
             - name: KARAPACE_COMPATIBILITY
-              value: BACKWARD_TRANSITIVE
+              value: {{ .Values.schemaRegistry.compatibility | quote }}
             - name: KARAPACE_CONSUMER_REQUEST_MAX_BYTES
               value: "1048576"
             - name: KARAPACE_LOG_LEVEL
@@ -120,6 +120,6 @@ spec:
     app.kubernetes.io/instance: {{ .Release.Name }}
   ports:
     - name: http
-      port: 8081
+      port: {{ .Values.schemaRegistry.port }}
       targetPort: http
 {{- end }}

@@ -78,6 +78,8 @@ case "${1:-}" in
     done < <(find contracts/data-products -mindepth 2 -maxdepth 2 -name product.odps.yaml -print0 | sort -z)
     ;;
   python)
+    uvx --from ruff==0.16.6 ruff check scripts/schema_registry.py
+    uvx --from ruff==0.16.6 ruff format --check scripts/schema_registry.py
     check_projects pyproject.toml check_python
     ;;
   helm)
