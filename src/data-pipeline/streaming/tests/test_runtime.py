@@ -1,9 +1,14 @@
 import sys
+from concurrent.futures import Future
 from dataclasses import replace
+from types import SimpleNamespace
+from unittest.mock import Mock
 
+import pytest
 from pyflink.common import Configuration
 from pyflink.datastream import StreamExecutionEnvironment
 
+from fraud_streaming import operators
 from fraud_streaming.job import build_updates
 from fraud_streaming.model import DAY, HOUR, Fact, Packet, Progress, entity_key
 from fraud_streaming.wire import SnapshotUpdate
@@ -90,3 +95,49 @@ def test_keyed_runtime_matching_shared_method_and_idle_expiration():
             assert history[0].values.distinct_devices_7d == 1
             assert history[-1].values.distinct_devices_7d == 0
             assert not history[-1].values.HasField("last_assessed_start_at")
+
+
+def test_source_progress_refreshes_crossed_offsets_and_rejects_partial_broker_results(monkeypatch):
+    anchor = 1_760_000_000_000_000
+    state = Mock()
+    state.value.return_value = None
+    state.update.side_effect = lambda value: setattr(state.value, "return_value", value)
+    admin = Mock()
+    admin.list_topics.return_value.topics = {
+        "source": SimpleNamespace(error=None, partitions={0: None, 1: None, 2: None})
+    }
+    high = [4, 8, 12]
+
+    def offsets(partitions, **kwargs):
+        results = {}
+        for partition in partitions:
+            result = Future()
+            if high[partition.partition] is None:
+                result.set_exception(RuntimeError("broker unavailable"))
+            else:
+                result.set_result(SimpleNamespace(offset=high[partition.partition]))
+            results[partition] = result
+        return results
+
+    admin.list_offsets.side_effect = offsets
+    monkeypatch.setattr(operators, "AdminClient", lambda config: admin)
+    monkeypatch.setattr(operators, "decode", lambda raw: (None, anchor))
+    monkeypatch.setattr(operators.time, "monotonic", lambda: 1)
+    observer = operators.ObserveSource(brokers="broker", topic="source", partitions=3, logical=True)
+    observer.open(SimpleNamespace(get_state=lambda descriptor: state))
+    first = next(observer.process_element((b"", "source", 0, 3), None))
+    assert [(p.partition, p.consumed, p.high_watermark) for p in first.progress] == [
+        (0, 3, 4),
+        (1, -1, 8),
+        (2, -1, 12),
+    ]
+    assert first.bootstrap == first.now == anchor
+    high[0] = 6
+    next(observer.process_element((b"", "source", 0, 4), None))
+    cached = next(observer.process_element((b"", "source", 0, 5), None))
+    assert cached.progress[0].high_watermark == 6
+    assert admin.list_offsets.call_count == 2
+    high[0], high[1] = 9, None
+    with pytest.raises(RuntimeError, match="broker unavailable"):
+        next(observer.process_element((b"", "source", 0, 6), None))
+    assert observer.watermarks == {0: 6, 1: 8, 2: 12}

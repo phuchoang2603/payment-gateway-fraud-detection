@@ -9,7 +9,7 @@ RUN apt-get update \
     && uv python install 3.11.16
 WORKDIR /app
 COPY src/data-pipeline/streaming/pyproject.toml src/data-pipeline/streaming/uv.lock ./
-RUN uv sync --locked --no-dev --no-install-project \
+RUN uv sync --locked --no-dev --no-install-project --no-install-package apache-flink-libraries \
     && mkdir -p /opt/flink/plugins/s3-fs-presto \
     && cp /opt/flink/opt/flink-s3-fs-presto-2.2.1.jar /opt/flink/plugins/s3-fs-presto/ \
     && wget -q -O /opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar \

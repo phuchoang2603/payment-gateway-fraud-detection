@@ -63,5 +63,5 @@ streaming:
       limits: {memory: 1536Mi}
   taskManager:
     resources:
-      requests: {cpu: '1', memory: 3Gi}
-      limits: {memory: 3Gi}
+      requests: {cpu: '1', memory: 2Gi}
+      limits: {memory: 2Gi}

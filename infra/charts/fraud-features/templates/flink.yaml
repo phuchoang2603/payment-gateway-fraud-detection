@@ -85,6 +85,8 @@ spec:
     s3.endpoint: {{ printf "https://%s" .Values.streaming.storageHostname | quote }}
     s3.path.style.access: 'true'
     restart-strategy.type: exponential-delay
+    resourcemanager.taskmanager-registration.timeout: 10min
+    slot.request.timeout: 15min
   jobManager:
     resources:
       {{- toYaml .Values.streaming.jobManager.resources | nindent 6 }}

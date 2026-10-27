@@ -1,7 +1,8 @@
 import json
 import time
 
-from confluent_kafka import Consumer, TopicPartition
+from confluent_kafka import IsolationLevel, TopicPartition
+from confluent_kafka.admin import AdminClient, OffsetSpec
 from pyflink.common import Row, Types
 from pyflink.common.watermark_strategy import TimestampAssigner
 from pyflink.datastream import KeyedProcessFunction
@@ -52,24 +53,15 @@ class ObserveSource(KeyedProcessFunction):
         self.state = runtime_context.get_state(
             ValueStateDescriptor("source-observations-v1", Types.PICKLED_BYTE_ARRAY())
         )
-        self.reader = Consumer(
-            {
-                "bootstrap.servers": self.brokers,
-                "group.id": "fraud-source-progress-observer",
-                "enable.auto.commit": False,
-                "enable.auto.offset.store": False,
-                "allow.auto.create.topics": False,
-            }
+        self.admin = AdminClient(
+            {"bootstrap.servers": self.brokers, "allow.auto.create.topics": False}
         )
-        metadata = self.reader.list_topics(self.topic, timeout=10)
+        metadata = self.admin.list_topics(self.topic, timeout=10)
         topic = metadata.topics.get(self.topic)
         if topic is None or topic.error or set(topic.partitions) != set(range(self.partitions)):
             raise ValueError("source partition layout changed; explicit bootstrap required")
         self.watermarks = {}
         self.last_poll = 0
-
-    def close(self):
-        self.reader.close()
 
     def process_element(self, row, ctx):
         raw, topic, partition, offset = row
@@ -105,11 +97,17 @@ class ObserveSource(KeyedProcessFunction):
                 consumed >= self.watermarks[index] for index, consumed in state["offsets"].items()
             )
         ):
-            for index in range(self.partitions):
-                _, high = self.reader.get_watermark_offsets(
-                    TopicPartition(self.topic, index), timeout=5, cached=False
-                )
-                self.watermarks[index] = high
+            offsets = self.admin.list_offsets(
+                {
+                    TopicPartition(self.topic, index): OffsetSpec.latest()
+                    for index in range(self.partitions)
+                },
+                isolation_level=IsolationLevel.READ_UNCOMMITTED,
+                request_timeout=5,
+            )
+            self.watermarks = {
+                partition.partition: result.result().offset for partition, result in offsets.items()
+            }
             self.last_poll = time.monotonic()
             self.progress_observed = state["now"] if self.logical else micros()
         now = state["now"] if self.logical else max(state["now"], micros())
