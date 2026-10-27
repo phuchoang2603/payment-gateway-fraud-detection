@@ -180,6 +180,15 @@ def test_sdk_entity_and_epoch_isolation(store):
     assert live_writer.current(other_epoch, "customer") == other_epoch
     with pytest.raises(ValueError, match="incompatible snapshot identity"):
         write(writer, other_epoch)
+    incompatible = wire.SnapshotUpdate()
+    incompatible.CopyFrom(customer)
+    incompatible.definition.sha256 = "0" * 64
+    incompatible.revision += 1
+    incompatible.online_write_at.nanos += 1000
+    incompatible.snapshot_id = schema.snapshot_id(incompatible)
+    with pytest.raises(ValueError, match="incompatible snapshot identity"):
+        write(writer, incompatible)
+    assert writer.current(customer, "customer") == customer
 
 
 def test_response_loss_replays_before_committing_kafka(store):
