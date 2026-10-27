@@ -28,9 +28,9 @@ These checked items describe retained implementation, not acceptance of the rewr
 
 ## 4. Scoped fresh start
 
-- [ ] 4.1 Confirm the requested deletion boundary and inventory exact DP1 catalog IDs, warehouse/table locations, evidence/progress prefixes and repository receipts; verify immutable v16, simulator sources, Kafka offsets and unrelated assets are excluded.
-- [ ] 4.2 Suspend DP1 scheduling, stop active writers gracefully and verify Spark/query quiescence under writer serialization before deletion; preserve shared services and their storage.
-- [ ] 4.3 Remove inventoried obsolete DP1 metadata, old suites/cases/results, incorrect lineage/stale executions, bronze data and run/accepted/progress records plus superseded repository receipts/references; verify scoped absence without deleting sources or shared assets.
+- [x] 4.1 Confirm the requested deletion boundary and inventory exact DP1 catalog IDs, warehouse/table locations, evidence/progress prefixes and repository receipts; verify immutable v16, simulator sources, Kafka offsets and unrelated assets are excluded.
+- [x] 4.2 Suspend DP1 scheduling, stop active writers gracefully and verify Spark/query quiescence under writer serialization before deletion; preserve shared services and their storage.
+- [x] 4.3 Remove inventoried obsolete DP1 metadata, old suites/cases/results, incorrect lineage/stale executions, bronze data and run/accepted/progress records plus superseded repository receipts/references; verify scoped absence without deleting sources or shared assets.
 - [ ] 4.4 Recreate canonical current artifacts with native discovery and the SDK path using a fresh explicit acceptance policy/namespace; verify no imported accepted state, compatibility aliases or legacy replay path.
 
 ## 5. Fresh development acceptance
@@ -43,6 +43,6 @@ These checked items describe retained implementation, not acceptance of the rewr
 
 ## Acceptance boundaries
 
-Previous v16 data checks and raw recurring checks do not accept this rewrite: the inspected catalog lacked native contract fields and current pipeline tasks/execution metadata. Fresh metadata and overall acceptance are pending. Planning edits do not perform deployment, cleanup or live verification.
+Previous v16 data checks and raw recurring checks do not accept this rewrite: the inspected catalog lacked native contract fields and current pipeline tasks/execution metadata. Fresh metadata and overall acceptance are pending. The authorized scoped reset is complete: both bronze tables, old DP1 catalog entities, 234 lake/evidence object versions and seven terminal workflow resources were removed. Empty table/entity/prefix readback and the unchanged v16 manifest hash were verified. The daily CronWorkflow is suspended. Recreating metadata/runtime assets and fresh acceptance remain pending; cleanup does not accept the rewrite.
 
 V16 remains the immutable 90-day development source, not scale/coursework evidence. Preserve its source contracts/product/feature hashes, manifest inventory and complete event/label tails. Source/live acceptance in the archived simulator change remains separately owned upstream evidence. DP2 business/as-of/features/training/serving and later >=100,000,000,000-byte acceptance remain separate. No generator, producer reset or deliberate live failure/outage exercise is requested. Tests and image builds run only in CI; local checks are lint/format/schema/OpenSpec validation and diff review.
