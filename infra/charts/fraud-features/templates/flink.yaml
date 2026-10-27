@@ -1,4 +1,25 @@
 {{- if .Values.streaming.enabled }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .Values.streaming.storageSecretName }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: {{ .Values.externalSecrets.refreshInterval }}
+  secretStoreRef:
+    kind: {{ .Values.externalSecrets.secretStoreRef.kind }}
+    name: {{ .Values.externalSecrets.secretStoreRef.name }}
+  target:
+    name: {{ .Values.streaming.storageSecretName }}
+    creationPolicy: Owner
+  data:
+    - secretKey: AWS_ACCESS_KEY_ID
+      remoteRef:
+        key: FLINK_S3_ACCESS_KEY_ID
+    - secretKey: AWS_SECRET_ACCESS_KEY
+      remoteRef:
+        key: FLINK_S3_SECRET_ACCESS_KEY
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -55,6 +76,8 @@ spec:
     execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
     high-availability.type: kubernetes
     high-availability.storageDir: {{ printf "%s/checkpoints/ha/%s" .Values.streaming.storageRoot .Values.epoch | quote }}
+    s3.endpoint: {{ printf "https://%s" .Values.streaming.storageHostname | quote }}
+    s3.path.style.access: 'true'
     restart-strategy.type: exponential-delay
   jobManager:
     resources:
@@ -78,6 +101,16 @@ spec:
       containers:
         - name: flink-main-container
           env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.streaming.storageSecretName }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.streaming.storageSecretName }}
+                  key: AWS_SECRET_ACCESS_KEY
             - name: KAFKA_BROKERS
               value: {{ .Values.kafkaBrokers | quote }}
             - name: FEATURE_EPOCH

@@ -55,6 +55,7 @@ streaming:
   maxEntityEntries: 50000
   storageHostname: minio.home.phuchoang.sbs
   storageRoot: s3://fraud-flink-prod
+  storageSecretName: fraud-flink-storage
   jobManager:
     resources:
       requests: {cpu: '1', memory: 1536Mi}
