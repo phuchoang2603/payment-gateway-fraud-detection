@@ -192,10 +192,11 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                         assert producer.flush(10) == 0
                         receive(
                             lambda values: all(
-                                value.coverage.one_hour == 2 for value in values.values()
+                                value.coverage.one_hour == 2
+                                and value.values.assessed_count_1h == 0
+                                for value in values.values()
                             )
                         )
-                        assert all(value.values.assessed_count_1h == 0 for value in latest.values())
                         second = send("two", anchor + HOUR + 3_000_000)
                         receive(
                             lambda values: all(
