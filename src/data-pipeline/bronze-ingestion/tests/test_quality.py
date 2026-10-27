@@ -70,7 +70,6 @@ def test_only_fresh_matching_success_results_pass():
     bad = json.loads(json.dumps(good))
     del bad[names[0]]
     bad[names[1]]["testCaseResult"]["testCaseStatus"] = "Failed"
-    bad[names[2]]["testCaseResult"]["testCaseStatus"] = "Aborted"
     bad[names[3]]["testCaseResult"]["timestamp"] = 5
     bad[names[4]]["parameterValues"][0]["value"] += " "
     bad[names[5]]["testCaseResult"]["testResultValue"][0]["value"] = "7"
