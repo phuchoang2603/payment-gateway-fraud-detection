@@ -1,7 +1,7 @@
 import sys
 from dataclasses import replace
 
-from pyflink.common import Configuration, Types
+from pyflink.common import Configuration
 from pyflink.datastream import StreamExecutionEnvironment
 
 from fraud_streaming.job import build_updates
@@ -53,7 +53,7 @@ def test_keyed_runtime_matching_shared_method_and_idle_expiration():
         for fact in (decision, start, start):
             packets.append(Packet(fact, anchor, anchor - 8 * DAY, progress))
     updates = build_updates(
-        env.from_collection(packets, type_info=Types.PICKLED_BYTE_ARRAY()),
+        env.from_collection(packets),
         epoch="runtime-ci",
         logical=True,
         max_entries=10,
