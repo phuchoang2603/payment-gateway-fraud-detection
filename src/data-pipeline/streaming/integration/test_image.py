@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from urllib.error import URLError
+from http.client import RemoteDisconnected
 from urllib.request import urlopen
 
 from confluent_kafka import Consumer, Producer
@@ -11,6 +11,7 @@ from fraud_feast.contracts.features.v1 import features_pb2
 from testcontainers.community.kafka import KafkaContainer
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.network import Network
+from testcontainers.core.wait_strategies import HttpWaitStrategy
 
 from fraud_streaming.model import HOUR
 from fraud_streaming.wire import DEFINITION_HASH, PaymentEvent
@@ -107,6 +108,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                 DockerContainer(os.environ["FLINK_IMAGE"])
                 .with_network(network)
                 .with_exposed_ports(8081)
+                .waiting_for(HttpWaitStrategy(8081, "/overview").with_startup_timeout(120))
                 .with_env("FLINK_PROPERTIES", properties)
                 .with_env("KAFKA_BROKERS", "kafka:9092")
                 .with_env("SOURCE_TOPIC", source)
@@ -134,7 +136,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                             try:
                                 with urlopen(base + path, timeout=5) as response:
                                     return json.load(response)
-                            except URLError:
+                            except (OSError, RemoteDisconnected):
                                 return {}
 
                         def running_job():
