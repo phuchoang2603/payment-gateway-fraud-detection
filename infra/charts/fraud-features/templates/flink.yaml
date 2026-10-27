@@ -75,6 +75,8 @@ spec:
     execution.checkpointing.num-retained: '3'
     execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
     high-availability.type: kubernetes
+    high-availability.kubernetes.leader-election.lease-duration: 60s
+    high-availability.kubernetes.leader-election.renew-deadline: 45s
     high-availability.storageDir: {{ printf "%s/checkpoints/ha/%s" .Values.streaming.storageRoot .Values.epoch | quote }}
     s3.endpoint: {{ printf "https://%s" .Values.streaming.storageHostname | quote }}
     s3.path.style.access: 'true'
