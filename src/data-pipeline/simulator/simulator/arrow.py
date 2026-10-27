@@ -36,21 +36,25 @@ CHECKOUT = pa.struct(
 )
 ATTEMPT_CONTEXT = pa.struct([("merchant", MERCHANT), ("customer", CUSTOMER), ("snapshot", CHECKOUT)])
 PAYMENT_METHOD = pa.struct([("type", pa.string()), ("fingerprint", pa.string())])
-ASSESSMENT = pa.struct(
-    [
-        ("outcome", pa.string()),
-        ("reason_codes", pa.list_(pa.string())),
-        ("policy_version", pa.string()),
-        ("model_version", pa.string()),
-        ("feature_set_version", pa.string()),
-        ("risk_score", pa.float64()),
-    ]
-)
+ASSESSMENT_FIELDS = [
+    ("outcome", pa.string()),
+    ("reason_codes", pa.list_(pa.string())),
+    ("policy_version", pa.string()),
+    ("model_version", pa.string()),
+    ("feature_set_version", pa.string()),
+    ("risk_score", pa.float64()),
+]
+ASSESSMENTS = {
+    3: pa.struct(ASSESSMENT_FIELDS),
+    4: pa.struct(ASSESSMENT_FIELDS + [("assessment_id", pa.string()), ("evidence_sha256", pa.string())]),
+}
 
 
 def event_schema(version: int) -> pa.Schema:
-    if version != 3:
-        raise ValueError(f"unsupported payment event schema version: {version}")
+    try:
+        assessment = ASSESSMENTS[version]
+    except KeyError as error:
+        raise ValueError(f"unsupported payment event schema version: {version}") from error
     signals = [
         ("attempted_at", TIMESTAMP),
         ("payment_method", PAYMENT_METHOD),
@@ -80,7 +84,7 @@ def event_schema(version: int) -> pa.Schema:
                     ]
                 ),
             ),
-            ("risk_decision_recorded", pa.struct([("attempt_id", pa.string()), ("assessment", ASSESSMENT)])),
+            ("risk_decision_recorded", pa.struct([("attempt_id", pa.string()), ("assessment", assessment)])),
             (
                 "processor_operation_requested",
                 pa.struct([("attempt_id", pa.string()), ("operation_key", pa.string())]),

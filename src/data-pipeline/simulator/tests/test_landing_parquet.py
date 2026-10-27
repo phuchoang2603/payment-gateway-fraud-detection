@@ -47,6 +47,12 @@ def test_protobuf_parquet_reuses_historical_business_schema():
         else:
             event.payment_expired.present = True
         messages[name] = event
+    event = PaymentEvent()
+    event.CopyFrom(messages["risk-v3"])
+    event.schema_version = 4
+    event.risk_decision_recorded.assessment.assessment_id = "assessment-1"
+    event.risk_decision_recorded.assessment.evidence_sha256 = "a" * 64
+    messages["risk-v4"] = event
     label = FraudLabel(
         integration_id="i", payment_id="p", attempt_id="a", is_fraud=False, source=LABEL_SOURCE_SIMULATION_TRUTH
     )
@@ -90,9 +96,14 @@ def test_protobuf_parquet_reuses_historical_business_schema():
                     "minor_units": 123,
                     "currency": "USD",
                 }
-            elif name == "risk-v3":
+            elif name.startswith("risk-"):
                 assessment = row["risk_decision_recorded"]["assessment"]
                 assert assessment["outcome"] == "RISK_OUTCOME_APPROVE"
                 assert assessment["risk_score"] == 0 and assessment["model_version"] is None
+                if name == "risk-v4":
+                    assert assessment["assessment_id"] == "assessment-1"
+                    assert assessment["evidence_sha256"] == "a" * 64
+                else:
+                    assert "assessment_id" not in assessment and "evidence_sha256" not in assessment
             else:
                 assert row["payment_expired"]["_present"] is True
