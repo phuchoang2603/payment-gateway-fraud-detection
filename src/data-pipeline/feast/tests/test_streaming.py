@@ -1,20 +1,24 @@
+import io
 import json
-import os
+import subprocess
+import tarfile
 import time
 from http.client import RemoteDisconnected
+from pathlib import Path
 from urllib.request import urlopen
 
 from confluent_kafka import Consumer, Producer
 from confluent_kafka.admin import AdminClient, NewTopic
-from fraud_feast import schema
-from fraud_feast.contracts.features.v1 import features_pb2
+from fraud_streaming.model import HOUR
+from fraud_streaming.wire import DEFINITION_HASH, PaymentEvent
 from testcontainers.community.kafka import KafkaContainer
 from testcontainers.core.container import DockerContainer
+from testcontainers.core.image import DockerImage
 from testcontainers.core.network import Network
 from testcontainers.core.wait_strategies import HttpWaitStrategy
 
-from fraud_streaming.model import HOUR
-from fraud_streaming.wire import DEFINITION_HASH, PaymentEvent
+from fraud_feast import schema
+from fraud_feast.contracts.features.v1 import features_pb2
 
 
 def await_result(read, *, timeout=120):
@@ -61,7 +65,36 @@ def test_image_kafka_journal_and_checkpoint_recovery():
     clock = "clock.image-ci"
     output = f"fraud.feature-updates.v1.{epoch}"
     anchor = 1_760_000_000_000_000
-    with Network() as network:
+    root = Path(__file__).resolve().parents[4]
+    context = io.BytesIO()
+    sources = (
+        subprocess.check_output(
+            [
+                "git",
+                "ls-files",
+                "-z",
+                "infra/docker/streaming.Dockerfile",
+                "src/data-pipeline/streaming",
+            ],
+            cwd=root,
+        )
+        .decode()
+        .split("\0")
+    )
+    with tarfile.open(fileobj=context, mode="w") as archive:
+        for source_path in filter(None, sources):
+            archive.add(root / source_path, arcname=source_path)
+    context.seek(0)
+    with (
+        context,
+        DockerImage(
+            path=root,
+            fileobj=context,
+            custom_context=True,
+            dockerfile_path="infra/docker/streaming.Dockerfile",
+        ) as image,
+        Network() as network,
+    ):
         kafka = (
             KafkaContainer("confluentinc/cp-kafka:7.8.0")
             .with_kraft()
@@ -105,7 +138,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                 ]
             )
             flink = (
-                DockerContainer(os.environ["TEST_IMAGE"])
+                DockerContainer(str(image))
                 .with_network(network)
                 .with_exposed_ports(8081)
                 .waiting_for(HttpWaitStrategy(8081, "/overview").with_startup_timeout(120))

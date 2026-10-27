@@ -1,0 +1,4 @@
+features:
+  enabled: true
+streaming:
+  enabled: true

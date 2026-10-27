@@ -50,10 +50,6 @@ check_chart() {
   local chart="$1" values
   helm lint "$chart"
   helm template check "$chart" > /dev/null
-  if [[ "$chart" == "infra/charts/payment-gateway" ]]; then
-    helm lint "$chart" --set features.enabled=true --set streaming.enabled=true
-    helm template check "$chart" --set features.enabled=true --set streaming.enabled=true > /dev/null
-  fi
   for values in "$chart"/values-*.yaml; do
     [[ -f "$values" ]] || continue
     helm lint "$chart" -f "$values"
@@ -82,8 +78,8 @@ case "${1:-}" in
     done < <(find contracts/data-products -mindepth 2 -maxdepth 2 -name product.odps.yaml -print0 | sort -z)
     ;;
   python)
-    uvx --from ruff==0.16.6 ruff check scripts/schema_registry.py
-    uvx --from ruff==0.16.6 ruff format --check scripts/schema_registry.py
+    uvx --from ruff==0.16.6 ruff check --target-version py311 scripts/schema_registry.py scripts/codegen-proto.py
+    uvx --from ruff==0.16.6 ruff format --check scripts/schema_registry.py scripts/codegen-proto.py
     check_projects pyproject.toml check_python
     ;;
   helm)
