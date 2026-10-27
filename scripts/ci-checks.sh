@@ -14,6 +14,9 @@ check_projects() {
 
 check_python() (
   cd "$1"
+  if [[ "$1" == "src/data-pipeline/streaming" && ! -f uv.lock && "${CI:-}" == "true" ]]; then
+    uv lock
+  fi
   uv run --locked ruff check .
   uv run --locked ruff format --check .
   uv run --locked pytest -q

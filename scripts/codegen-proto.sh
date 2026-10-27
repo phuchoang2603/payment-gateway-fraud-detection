@@ -32,6 +32,11 @@ for path in list(root.rglob("*_pb2.py")) + list(root.rglob("*_pb2.pyi")):
     path.write_text(text)
 PYTHON
 
+streaming_out=src/data-pipeline/streaming/fraud_streaming/contracts.pb
+mkdir -p "$(dirname "$streaming_out")"
+protoc -I contracts --include_imports --descriptor_set_out="$streaming_out" \
+  contracts/payments/v1/types.proto contracts/payments/v1/events.proto contracts/features/v1/features.proto
+
 feast_out=src/data-pipeline/feast/fraud_feast/contracts
 mkdir -p "$feast_out"
 protoc -I contracts --python_out="$feast_out" --pyi_out="$feast_out" contracts/features/v1/features.proto

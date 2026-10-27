@@ -94,7 +94,7 @@ def validate(update, *, epoch, definition_hash):
         if (
             not progress.topic
             or progress.partition < 0
-            or progress.consumed_offset < 0
+            or progress.consumed_offset < -1
             or progress.observed_high_watermark <= progress.consumed_offset
             or not progress.HasField("observed_at")
             or progress.observed_at.ToDatetime(tzinfo=UTC) > times["computed_at"]

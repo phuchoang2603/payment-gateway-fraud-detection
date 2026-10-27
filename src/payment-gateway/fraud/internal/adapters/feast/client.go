@@ -290,7 +290,7 @@ func (c *Client) evaluate(update *featuresv1.SnapshotUpdate, writeAt time.Time, 
 	now := c.now().UTC()
 	progressHealthy := len(update.SourceProgress) > 0
 	for _, progress := range update.SourceProgress {
-		if progress.Topic == "" || progress.Partition < 0 || progress.ConsumedOffset < 0 || progress.ObservedHighWatermark <= progress.ConsumedOffset || progress.ObservedAt == nil || progress.ObservedAt.CheckValid() != nil || progress.ObservedAt.AsTime().After(observed.ComputedAt) {
+		if progress.Topic == "" || progress.Partition < 0 || progress.ConsumedOffset < -1 || progress.ObservedHighWatermark <= progress.ConsumedOffset || progress.ObservedAt == nil || progress.ObservedAt.CheckValid() != nil || progress.ObservedAt.AsTime().After(observed.ComputedAt) {
 			return observation
 		}
 		record := application.SourceProgress{Topic: progress.Topic, Partition: progress.Partition, ConsumedOffset: progress.ConsumedOffset, ObservedHighWatermark: progress.ObservedHighWatermark, ObservedAt: progress.ObservedAt.AsTime()}

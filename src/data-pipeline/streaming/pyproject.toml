@@ -1,0 +1,26 @@
+[project]
+name = "fraud-streaming"
+version = "0.1.0"
+requires-python = ">=3.11,<3.12"
+dependencies = ["apache-flink==2.2.1", "protobuf==4.25.8", "confluent-kafka==2.12.0"]
+
+[dependency-groups]
+dev = ["pytest==9.0.2", "ruff==0.14.14"]
+
+[tool.uv]
+package = false
+
+[[tool.uv.dependency-metadata]]
+name = "crcmod"
+version = "1.7"
+requires-dist = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

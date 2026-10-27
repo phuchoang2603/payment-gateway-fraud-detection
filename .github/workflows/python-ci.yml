@@ -31,3 +31,8 @@ jobs:
           java-version: "17"
       - name: Python lint, format and tests
         run: bash scripts/ci-checks.sh python
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: streaming-dependency-lock
+          path: src/data-pipeline/streaming/uv.lock
