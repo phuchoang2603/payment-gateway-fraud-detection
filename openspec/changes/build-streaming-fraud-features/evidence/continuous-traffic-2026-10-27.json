@@ -149,5 +149,68 @@
     "100ms guard timeouts observed; rules remain authoritative and observations remain non-enforcing.",
     "One transient producer PID warning at startup; simulator remained running without container restarts.",
     "Bounded low-rate observation only; no sustained-load/SLO, full v16 replay or full-history coverage acceptance."
-  ]
+  ],
+  "post_fix_verification": {
+    "observed_at": "2026-10-27T23:09:17.173465+00:00",
+    "source_commit": "affc7e2d9b336c933f05e83b75072f6f8902019f",
+    "image_pin_commit": "beeed4e9aebf531417f2b4cb598dea5a090edf8b",
+    "ci": {
+      "checks": "all 26 passed",
+      "python_run": 40598639252,
+      "go_run": 40598639250,
+      "image_run": 40598640037,
+      "contracts_helm_run": 40598639271,
+      "warnings": "13 upstream PyFlink/httplib2 deprecation warnings remain"
+    },
+    "sample_after": "2026-10-27T23:07:30Z",
+    "simulator_run": "04a666db67b24df590494c3aa31d8d99",
+    "simulator_container_restarts": 2,
+    "settled_payments": 17,
+    "attempt_statuses": {
+      "declined": 6,
+      "succeeded": 11
+    },
+    "assessment_statuses": {
+      "COMPLETED": 17
+    },
+    "all_evidence_hashes_valid": true,
+    "all_shadow_and_observe_only": true,
+    "ledger": {
+      "event_counts": {
+        "payment_created": 17,
+        "attempt_started": 17,
+        "risk_decision_recorded": 17,
+        "processor_operation_requested": 17,
+        "attempt_declined": 6,
+        "payment_succeeded": 11
+      },
+      "evidence_linkages_valid": true,
+      "decisions_checked": 17
+    },
+    "processor_operations": 17,
+    "observations": {
+      "customer_status": {
+        "missing": 17
+      },
+      "method_status": {
+        "missing": 17
+      },
+      "customer_guard_status": {
+        "coverage_unknown": 14,
+        "timeout": 3
+      },
+      "method_guard_status": {
+        "coverage_unknown": 13,
+        "timeout": 3,
+        "registered": 1
+      }
+    },
+    "remaining_blockers": {
+      "writer": "Rejects invalid source progress in live-v1 journal; committed offsets observed as partition 0:99, 1:125, 2:105. Sample invalid update at partition 0 offset 100 has observed high watermark -1001 on all three source partitions.",
+      "producer_fix": "Reject invalid or trailing broker offset observations before assigning cached progress; one metadata refresh/retry, then fail visibly. Awaiting CI and deployment.",
+      "recovery": "Fresh live-v2 epoch proposed with live-v1 journal/checkpoints preserved and coverage reset to unknown; awaiting user choice. No records skipped or rewritten.",
+      "flink": "New image deployed; REST job list empty during last-state upgrade at observation. Restoration and new completed checkpoint not yet verified.",
+      "simulator": "Two container restarts since initial sample. Previous process ended with label producer failure and unfinished admitted work; current run continues producing payments."
+    }
+  }
 }

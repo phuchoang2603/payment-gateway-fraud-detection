@@ -151,3 +151,13 @@ def test_source_progress_refreshes_crossed_offsets_and_rejects_partial_broker_re
     with pytest.raises(RuntimeError, match="broker unavailable"):
         next(observer.process_element((b"", "source", 0, 9), None))
     assert observer.watermarks == {0: 9, 1: 8, 2: 12}
+
+    high[1] = 8
+    high[0] = -1001
+    with pytest.raises(RuntimeError, match="source offset observation trails consumed progress"):
+        next(observer.process_element((b"", "source", 0, 10), None))
+    assert observer.watermarks == {0: 9, 1: 8, 2: 12}
+    high[0] = 10
+    with pytest.raises(RuntimeError, match="source offset observation trails consumed progress"):
+        next(observer.process_element((b"", "source", 0, 11), None))
+    assert observer.watermarks == {0: 9, 1: 8, 2: 12}
