@@ -6,15 +6,15 @@
 
 ## 2. Runtime prerequisites
 
-- [ ] 2.1 Pin compatible Flink/PyFlink/Python/JVM/Kafka and Feast versions using current official docs/Context7 where available; deliver locked dependencies/images and verify image builds in CI, including selected Feast timestamp/nullability behavior.
+- [x] 2.1 Pin compatible Flink/PyFlink/Python/JVM/Kafka and Feast versions using current official docs/Context7 where available; deliver locked dependencies/images and verify image builds in CI, including selected Feast timestamp/nullability behavior.
 - [ ] 2.2 Add repo-owned charts/config for the streaming job, feature topic, SDK writer, Feast registry/server and separate authorization/Feast Redis; coordinate controller/checkpoint-storage prerequisites with the platform owner and verify CI Helm checks plus deployed resource separation/readiness evidence.
 - [ ] 2.3 Provision a least-privilege Fraud-owned assessment database on the existing cluster, secrets and private network access; verify migrations/permissions through CI integration coverage and render review without adding config-only test suites.
 
 ## 3. Continuous assessed-history snapshots
 
-- [ ] 3.1 Implement protobuf decoding and bounded, conflict-aware event/attempt matching with observed availability; verify duplicate, reordered, undecided and expired-unmatched cases through focused CI coverage.
+- [x] 3.1 Implement protobuf decoding and bounded, conflict-aware event/attempt matching with observed availability; verify duplicate, reordered, undecided and expired-unmatched cases through focused CI coverage.
 - [ ] 3.2 Implement customer/method keyed state and hybrid live/logical-clock timers with exact seven-day device expiration; verify reference parity and quiet-entity expiration in CI, recording bounded state/timer behavior.
-- [ ] 3.3 Publish checkpoint-recoverable snapshot updates with stable identities, revisions, provenance and coverage; verify CI restart/replay and late-correction cases without cross-system exactly-once claims.
+- [x] 3.3 Publish checkpoint-recoverable snapshot updates with stable identities, revisions, provenance and coverage; verify CI restart/replay and late-correction cases without cross-system exactly-once claims.
 
 ## 4. Feast writing and retrieval
 
