@@ -1,4 +1,4 @@
-{{- range $redis := concat (list .Values.redis) (values .Values.fraudRedis) }}
+{{- range $redis := list .Values.redis .Values.authorizationRedis }}
 ---
 apiVersion: v1
 kind: ConfigMap

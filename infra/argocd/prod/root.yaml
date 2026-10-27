@@ -45,6 +45,14 @@ spec:
                 duration: 5s
                 factor: 2
                 maxDuration: 3m
+          fraud-features:
+            enabled: true
+            allowEmpty: true
+            destinationNamespace: payment-gateway
+            path: infra/charts/fraud-features
+            valuesFile:
+              - infra/charts/fraud-features/values-prod.yaml
+            syncRetry: *retry
           kafka:
             enabled: true
             chartTargetRevision: main

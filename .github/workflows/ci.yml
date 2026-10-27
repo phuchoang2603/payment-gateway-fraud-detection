@@ -33,6 +33,6 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: azure/setup-helm@v4.3.1
+      - uses: azure/setup-helm@v5.0.1
       - name: Lint and render all charts
         run: bash scripts/ci-checks.sh helm

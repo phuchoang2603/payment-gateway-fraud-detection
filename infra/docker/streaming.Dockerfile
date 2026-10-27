@@ -2,9 +2,9 @@ FROM ghcr.io/astral-sh/uv:0.13.1 AS uv
 FROM flink:2.2.1-java17 AS build
 USER root
 COPY --from=uv /uv /usr/local/bin/uv
-ENV UV_PYTHON_INSTALL_DIR=/opt/python UV_LINK_MODE=copy
+ENV UV_PYTHON_INSTALL_DIR=/opt/python UV_PYTHON_BIN_DIR=/usr/local/bin UV_LINK_MODE=copy
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential ca-certificates \
+    && apt-get install -y --no-install-recommends gcc libc6-dev ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && uv python install 3.11.16
 WORKDIR /app

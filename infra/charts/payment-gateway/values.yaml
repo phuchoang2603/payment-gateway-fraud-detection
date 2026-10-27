@@ -343,41 +343,23 @@ redis:
   clients:
   - payments
 
-fraudRedis:
-  authorization:
-    name: payment-gateway-authorization-redis
-    image:
-      repository: quay.io/opstree/redis
-      tag: v7.2.16
-      pullPolicy: IfNotPresent
-    appendonly: 'yes'
-    storageSize: 2Gi
-    maxmemory: 256mb
-    resources:
-      requests: {cpu: 100m, memory: 384Mi}
-      limits: {cpu: 500m, memory: 768Mi}
-    password:
-      secretName: payment-gateway-authorization-redis
-      secretKey: password
-      remoteKey: GATEWAY_AUTHORIZATION_REDIS_PASSWORD
-    clients: [fraud-service]
-  feast:
-    name: payment-gateway-feast-redis
-    image:
-      repository: quay.io/opstree/redis
-      tag: v7.2.16
-      pullPolicy: IfNotPresent
-    appendonly: 'yes'
-    storageSize: 2Gi
-    maxmemory: 512mb
-    resources:
-      requests: {cpu: 100m, memory: 768Mi}
-      limits: {cpu: 500m, memory: 1536Mi}
-    password:
-      secretName: payment-gateway-feast-redis
-      secretKey: password
-      remoteKey: GATEWAY_FEAST_REDIS_PASSWORD
-    clients: [feast-writer, feast-server]
+authorizationRedis:
+  name: payment-gateway-authorization-redis
+  image:
+    repository: quay.io/opstree/redis
+    tag: v7.2.16
+    pullPolicy: IfNotPresent
+  appendonly: 'yes'
+  storageSize: 2Gi
+  maxmemory: 256mb
+  resources:
+    requests: {cpu: 100m, memory: 384Mi}
+    limits: {cpu: 500m, memory: 768Mi}
+  password:
+    secretName: payment-gateway-authorization-redis
+    secretKey: password
+    remoteKey: GATEWAY_AUTHORIZATION_REDIS_PASSWORD
+  clients: [fraud-service]
 
 ingress:
   enabled: true
@@ -390,29 +372,8 @@ ingress:
 
 features:
   enabled: false
+  url: http://feast-server:6566
   epoch: live-v1
   definitionHash: 8ca9a423f452f8ed7a8d1e8aa082dadb72590498cfd1e8da48f94f6c06b0e50d
   maxAnchorAge: 30s
   maxProgressAge: 30s
-  topic: fraud.feature-updates.v1.live-v1
-  kafkaBrokers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc.cluster.local:9092
-  writerGroup: fraud-feast-writer-live-v1
-  resources:
-    requests: {cpu: 100m, memory: 512Mi}
-    limits: {cpu: '1', memory: 1Gi}
-
-streaming:
-  enabled: false
-  sourceTopic: payments.events.v1
-  sourcePartitions: 3
-  maxEntityEntries: 50000
-  storageHostname: minio.home.phuchoang.sbs
-  haStorage: s3://fraud-flink-prod/checkpoints/ha/live-v1
-  jobManager:
-    resources:
-      requests: {cpu: '1', memory: 1536Mi}
-      limits: {memory: 1536Mi}
-  taskManager:
-    resources:
-      requests: {cpu: '1', memory: 3Gi}
-      limits: {memory: 3Gi}

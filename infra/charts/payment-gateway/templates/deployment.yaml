@@ -86,7 +86,7 @@ spec:
             {{- end }}
             {{- if and (eq $name "fraud-service") $.Values.features.enabled }}
             - name: FRAUD_FEAST_URL
-              value: http://feast-server:6566
+              value: {{ $.Values.features.url | quote }}
             - name: FRAUD_FEATURE_EPOCH
               value: {{ $.Values.features.epoch | quote }}
             - name: FRAUD_FEATURE_DEFINITION_SHA256

@@ -76,11 +76,11 @@ spec:
         - name: flink-main-container
           env:
             - name: KAFKA_BROKERS
-              value: {{ .Values.features.kafkaBrokers | quote }}
+              value: {{ .Values.kafkaBrokers | quote }}
             - name: FEATURE_EPOCH
-              value: {{ .Values.features.epoch | quote }}
+              value: {{ .Values.epoch | quote }}
             - name: FEATURE_TOPIC
-              value: {{ .Values.features.topic | quote }}
+              value: {{ .Values.topic | quote }}
             - name: SOURCE_TOPIC
               value: {{ .Values.streaming.sourceTopic | quote }}
             - name: SOURCE_PARTITIONS
