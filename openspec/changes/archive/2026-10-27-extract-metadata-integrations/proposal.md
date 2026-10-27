@@ -6,7 +6,7 @@ Shared OpenMetadata connections and discovery currently live inside DP1. Registe
 
 - Extract shared connections, credentials, declarative registrations and scheduled native discovery into a metadata-integrations chart under Argo CD.
 - Keep DP1 snapshot-specific validation, profiling and governance in data-pipelines, using the same configured connection.
-- Include shared Kafka metadata without sampling or automatic data-product creation; operational databases and Kubeflow are outside this change.
+- Include shared Kafka metadata and registered schemas through Karapace without sampling or automatic data-product creation; operational databases and Kubeflow are outside this change.
 - Preserve canonical existing lake identities and accepted DP1 evidence. No pipeline rerun or source reset.
 
 ## Capabilities

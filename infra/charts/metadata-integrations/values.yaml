@@ -50,6 +50,7 @@ connectors:
           type: Kafka
           bootstrapServers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc.cluster.local:9092
           securityProtocol: PLAINTEXT
+          schemaRegistryURL: http://schema-registry.payment-gateway.svc.cluster.local:8081
           consumerConfig:
             enable.auto.commit: false
       sourceConfig:

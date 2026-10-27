@@ -8,13 +8,9 @@ A new metadata-integrations chart owns shared service configuration, ExternalSec
 
 The shared configuration is mounted into both metadata discovery pods and pipeline native stages. Pipeline discovery explicitly runs before validation, even if scheduled discovery has not run. Existing starrocks/rustfs/argo identities remain stable. Only the shared registration path creates service connections; the product publisher resolves existing services and owns its source containers, products and executions. Native workflows own discovered tables/topics, never custom discovery.
 
-Kafka discovery uses the current broker protocol and allowlisted topics, without consuming payloads. Registry-backed schema discovery is not configured by this change; deploying Karapace alone does not register schemas or change message encoding. RustFS registration remains storage-service configuration; per-run logical source containers remain with pipelines to avoid file-level asset explosion.
+Kafka discovery uses the current broker protocol and allowlisted topics, without consuming payloads. The native Kafka connector points to Karapace at `http://schema-registry.payment-gateway.svc.cluster.local:8081` for registered topic schemas, using its default `<topic>-value` subject convention. Deploying Karapace alone does not register schemas or change message encoding. RustFS registration remains storage-service configuration; per-run logical source containers remain with pipelines to avoid file-level asset explosion.
 
 Data products are consumer contracts, not a required wrapper around each database. Kafka topics are catalog assets first. Future Feast/Flink/Kubeflow semantic integrations require supported connectors and separately verified lineage; this change does not invent them.
-
-## OpenLineage direction
-
-OpenMetadata 2.0.6 exposes `/api/v1/openlineage/lineage` for runtime lineage events. A future adoption should send Spark/Flink events directly there and use the Argo workflow job as the parent, avoiding a separate collector unless buffering or fan-out requires it. Canonical namespace/service and dataset mappings must resolve to discovered assets rather than create duplicates. Replace the SDK's manual input/output lineage edges only after equivalent mappings and readback are verified; do not run competing publishers for the same edge. Keep contract/product publication, quality acceptance and Argo task graph/status publication, which this endpoint does not replace. Argo events need explicit emission; chart extraction alone does not instrument workflows. The matched direct mapper resolves table and storage-container datasets, not Kafka topic entities; Kafka edges need a supported mapping path before they can replace SDK publication. This change does not enable OpenLineage or claim Feast/Kubeflow lineage support.
 
 ## Verification
 
