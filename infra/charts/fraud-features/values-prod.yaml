@@ -5,5 +5,5 @@ images:
     revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
   streaming:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming
-    digest: sha256:aa06a16b9c4cf780c994c5ecbc359bf332cfb4f3494339448abc8f589c9f0aef
-    revision: 52219c087a38d084261157c20241703207f9b270
+    digest: sha256:78358bbc6bde4bd50a76a0aa66fbde4bd4c853ec4ac99b7c0e023260920c8695
+    revision: fd4452c9728ceb57a5777181a763c158c72f1c5e

@@ -33,8 +33,8 @@ services:
   fraud-service:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection
-      digest: sha256:2ea665e218267d12401a110646bea6d233cfd484935322831ae5e9056d3468ae
-      revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
+      digest: sha256:114b072cdac90b4fcf19f42d084515a789ca5d00b0e64112aadfd663cafc862b
+      revision: fd4452c9728ceb57a5777181a763c158c72f1c5e
   notifier:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/notifier
