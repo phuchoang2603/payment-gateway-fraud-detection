@@ -29,7 +29,7 @@ Each historical-mode workflow submission SHALL select one completed, immutable s
 
 ### Requirement: Operator-managed Spark stages
 
-Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for each ingestion attempt. Native discovery, profiling and StarRocks SQL validation SHALL run as finite official OpenMetadata ingestion-container steps, not SparkApplications. No second Spark validation application or dedicated custom metadata image SHALL remain. The platform-owned Apache Spark Operator SHALL manage driver and executor lifecycle. Stage success SHALL require a successful terminal application status; failed applications and deadlines SHALL fail the stage with diagnostics. Operator restarts SHALL be disabled so Argo remains the bounded retry authority.
+Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for each ingestion attempt. Native discovery, profiling and StarRocks SQL validation SHALL run as finite container stages using the server-matched official ingestion runtime, not SparkApplications. A thin derived metadata image SHALL provide the single supported SDK governance path without Spark dependencies. No second Spark validation application, custom discovery or custom result publisher SHALL remain. The platform-owned Apache Spark Operator SHALL manage driver and executor lifecycle. Stage success SHALL require a successful terminal application status; failed applications and deadlines SHALL fail the stage with diagnostics. Operator restarts SHALL be disabled so Argo remains the bounded retry authority.
 
 #### Scenario: Stage fails or times out
 
@@ -38,7 +38,7 @@ Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for
 
 ### Requirement: Bounded retry and cancellation
 
-Argo SHALL own bounded stage retries with stable logical run identity and distinct execution attempts. Deterministic quality failures SHALL NOT be retried for acceptance. Graceful cancellation and deadlines SHALL delete active SparkApplications, verify driver/executor cleanup, and only then release writer serialization without deleting durable evidence. Read-only StarRocks validation queries SHALL be bounded by a per-user query timeout; unconfirmed Spark cleanup SHALL block writer handoff. A platform-owned native Kubernetes admission policy SHALL reject Workflow deletion in `fraud-data-prod` unless its recorded phase is Succeeded, Failed or Error. It SHALL reject setting `spec.shutdown: Terminate` unless the existing phase is Pending or terminal. Operators SHALL stop active Workflows gracefully and verify completed cleanup before deletion. Missing phase SHALL NOT permit deletion or hard termination. Workflows in other namespaces SHALL remain unaffected. Terminal status alone SHALL NOT be considered proof of successful Spark cleanup.
+Argo SHALL own bounded stage retries with stable logical run identity and distinct execution attempts. Deterministic quality failures SHALL NOT be retried for acceptance. Graceful cancellation and deadlines SHALL delete active SparkApplications, verify driver/executor cleanup, and only then release writer serialization without deleting durable evidence. StarRocks queries SHALL have bounded timeouts and run-owned identification. Cleanup SHALL stop or await run-owned queries and verify quiescence as well as Spark cleanup before writer handoff; elapsed timeout alone SHALL NOT establish cleanup. Unconfirmed cleanup SHALL block writer handoff. A platform-owned native Kubernetes admission policy SHALL reject Workflow deletion in `fraud-data-prod` unless its recorded phase is Succeeded, Failed or Error. It SHALL reject setting `spec.shutdown: Terminate` unless the existing phase is Pending or terminal. Operators SHALL stop active Workflows gracefully and verify completed cleanup before deletion. Missing phase SHALL NOT permit deletion or hard termination. Workflows in other namespaces SHALL remain unaffected. Terminal status alone SHALL NOT be considered proof of successful Spark cleanup.
 
 #### Scenario: Retry after transient driver failure
 
@@ -110,11 +110,25 @@ DP1 SHALL support Argo-scheduled finite runs over newly completed immutable land
 
 ### Requirement: Native metadata workflow execution
 
-Argo SHALL schedule version-matched official OpenMetadata metadata/profiler/test-suite workflows and use scoped HTTP templates for remaining explicit governance API operations and readback. Agent/WorkflowTaskSet permissions and secrets SHALL be scoped to those operations. Native ingestion process success SHALL NOT imply passing data quality. Result acceptance SHALL require the complete expected successful assertion set correlated with immutable source, contract, policy and snapshot references. Deterministic quality failures SHALL NOT be retried for a passing outcome.
+Argo SHALL schedule native OpenMetadata metadata/profiler/test-suite workflows from the server-matched runtime. Explicit governance synchronization and readback SHALL use one idempotent SDK path in the thin metadata image rather than one graph node per API operation. Credentials and permissions SHALL remain scoped to actual operations. Native ingestion process success SHALL NOT imply passing data quality. Result acceptance SHALL require the complete expected successful assertion set correlated with immutable source, contract, policy and snapshot references. Deterministic quality failures SHALL NOT be retried for a passing outcome.
 
 #### Scenario: Native job succeeds with a failed test
 
 - **WHEN** a native quality job exits successfully but a required result is Failed, Aborted, stale or absent
 - **THEN** DP1 refuses acceptance and persists the actual quality or execution outcome
 
-Recurring execution SHALL use immutable pending selections and accepted progress, a daily UTC CronWorkflow, shared writer serialization and bounded selection resources. No-input runs SHALL skip Spark and native checks; profiling SHALL be optional.
+Recurring execution SHALL use immutable pending selections and accepted progress, a daily UTC CronWorkflow, shared writer serialization and bounded selection resources. No-input runs SHALL skip Spark and native checks; profiling SHALL follow an explicit bounded cadence with visible skipped/not-due status.
+
+### Requirement: Readable stage dependencies
+
+The Argo graph SHALL expose select, ingest, discover, validate, profile and publish/readback/accept stages with direct dependencies and readable names. Validate and profile SHALL be eligible to run concurrently after discovery with isolated per-run configuration and bounded resources. Acceptance SHALL join their declared outcomes. API call details SHALL remain in stage logs, not expand into a request-per-node graph. Metadata replay and no-input paths SHALL retain their existing short-circuit behavior, writer serialization and exit cleanup.
+
+#### Scenario: Inspect the stage graph
+
+- **WHEN** a user opens a normal DP1 run
+- **THEN** the graph shows the stage dependencies and parallel validate/profile branch without expanding individual metadata API requests
+
+#### Scenario: Profile and validation overlap
+
+- **WHEN** native validation and profiling execute concurrently
+- **THEN** each uses isolated configuration and the recorded candidate context, and acceptance cannot hide a required stage failure or change the snapshot selection

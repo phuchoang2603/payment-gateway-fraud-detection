@@ -91,3 +91,12 @@ Versioned bronze contracts SHALL distinguish historical-manifest provenance from
 - **THEN** its provenance resolves to actual landing/batch identities rather than fabricated historical dataset versions or manifest hashes
 
 Raw contracts SHALL retain optional epoch/batch and original Kafka envelope provenance. Native schema constraints SHALL be bundled per table without dropping nested requirements. Business-quality SQL transferred to `contracts/quality/silver-payments.yaml` remains planned DP2 work, not a raw acceptance assertion.
+
+### Requirement: Inspectable catalog contract mapping
+
+The Git-authoritative bronze contract SHALL map to the canonical table's native contract schema, active raw quality-test references, declared ownership and supported declared terms/semantics/security/SLA fields. Unsupported required mapping SHALL be reported as incomplete governance. Original ODCS identity/version/hash/YAML SHALL remain provenance rather than substitute for native fields. Product dependencies and pipeline executions SHALL carry flow inputs/outputs; the integration SHALL NOT invent native contract fields or guarantees absent from Git.
+
+#### Scenario: Contract YAML is present but native fields are absent
+
+- **WHEN** the catalog contains the contract hash and original YAML but lacks required native schema or active quality references
+- **THEN** governance readback rejects completeness and identifies the missing mapping

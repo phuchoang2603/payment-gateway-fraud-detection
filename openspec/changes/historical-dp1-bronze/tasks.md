@@ -1,64 +1,48 @@
 ## 1. Retained ingestion and platform baseline
 
-- [x] 1.1 Implement embedded-inventory source verification, bounded normalization and duplicate-preserving historical Iceberg ingestion; current-schema CI and v16 exercise establish fresh conservation evidence.
-- [x] 1.2 Persist source/run identity, recover uncertain table commits and reuse accepted snapshots without ingestion-generated duplicates; existing recovery/replay coverage verifies these boundaries.
-- [x] 1.3 Deploy scoped Apache Spark Operator and verify Spark 4.1.3/Iceberg 1.12 native RustFS snapshot access and cleanup; retain recorded platform/operator evidence.
-- [x] 1.4 Deploy persistent authenticated OpenMetadata with private Dex access and verify anonymous API rejection; retain existing platform evidence.
-- [x] 1.5 Install native Workflow deletion/termination guard and verify graceful cleanup and failed-cleanup recovery before writer handoff.
+These checked items describe retained implementation, not acceptance of the rewritten integration or survival of old DP1 records after reset.
 
-## 2. Shared StarRocks foundation
+- [x] 1.1 Retain bounded immutable inventory verification, current-schema normalization and duplicate-preserving Iceberg writes; existing behavioral CI and prior v16 observations establish the implementation baseline.
+- [x] 1.2 Retain persisted input identity, uncertain-commit recovery, independent snapshots and exact source/output reconciliation; existing behavioral coverage exercises replay and conservation.
+- [x] 1.3 Retain platform-owned Spark Operator, StarRocks native RustFS access and shared authenticated OpenMetadata; deployed ownership and native connection behavior have been verified.
+- [x] 1.4 Retain writer serialization, native Workflow deletion/termination guard, Spark cleanup and bounded Argo retry authority; existing lifecycle coverage verifies the baseline.
+- [x] 1.5 Retain six bundled Git-derived raw assertions and the DP1/DP2 boundary; existing CI verifies native schema constraints without requiring complete lifecycles or same-batch labels.
+- [x] 1.6 Retain completed clean-landing selection, immutable pending/accepted ledgers, independent delayed ports and no-input skipping; existing CI and prior recurring observations verify the baseline.
+- [x] 1.7 Retain the StarRocks gold/MV roadmap and silver SQL handoff; review confirms grain/keys/SCD2/as-of/refresh/storage remain later DP2 work.
 
-- [x] 2.1 Add platform-owned StarRocks through Argo CD and the official operator/Helm chart in `talos-proxmox`; pin versions, scope RBAC, size FE/BE/PVCs and verify reconciliation/persistence without installing an app-owned engine.
-- [x] 2.2 Configure native RustFS REST SigV4 signing service/region and separate scoped S3 access; verify catalog listing, nested schemas and exact event/label snapshot SQL without proxy/catalog replacement or full dataset import.
-- [x] 2.3 Verify native OpenMetadata metadata/profiler/test connections select the external Iceberg catalog using supported configuration; prove canonical identities, schema fidelity and one passing/failing SQL test. Resolve upstream support gaps explicitly, without custom discovery or a copied internal table fallback.
-- [x] 2.4 Record bounded recurring-ingestion resources, deadlines and observed usage; preserve the recovered historical OOM limitation. Full resource/scale benchmarking follows whole-pipeline completion.
+## 2. Metadata runtime rewrite
 
-## 3. Native contracts, SQL and acceptance
+- [ ] 2.1 Build a thin server-matched official OpenMetadata ingestion image with the official SDK, isolated from Spark/JVM imports; verify its native workflow and synchronization entrypoints through the existing CI/image workflow.
+- [ ] 2.2 Replace HTTP request-generation/templates with one idempotent SDK synchronization path; remove obsolete publisher glue, unused RBAC/config/dependencies and tests, and verify no parallel publisher or custom discovery/results remains.
+- [ ] 2.3 Map native nested contract schema, active raw test references, declared terms/semantics/security/SLA fields and resolvable owners while retaining Git identity/hash/YAML; existing behavioral CI must reject unsupported required mapping or unresolved owners.
+- [ ] 2.4 Synchronize product/domain/assets and entity-side membership, owners and pipeline membership; verify complete forward/reverse API readback without treating a UI drawer as proof of API absence.
+- [ ] 2.5 Resolve actual historical/clean-landing storage assets and publish independent source-to-pipeline-to-output lineage; behavioral coverage must reject fabricated events-to-labels ingestion dependencies.
+- [ ] 2.6 Publish real pipeline tasks/dependencies, current execution/task I/O/status, counts/snapshots and Argo links; verify idempotent metadata-only replay preserves execution identity and original native results.
 
-- [x] 3.1 Rewrite bronze ODCS execution rules as StarRocks SQL/native OpenMetadata tests with stable semantic IDs and complete nested schema coverage; verify contract lint and focused valid/invalid cases through existing CI.
-- [x] 3.2 Implement snapshot-specific COUNT-of-violations SQL for schema, duplicate consistency, lifecycle, amounts, label linkage/availability and context; verify pinned event/label snapshots remain isolated from later commits.
-- [x] 3.3 Preserve native per-day counts and add bidirectional duplicate-aware persisted/source reconciliation inside ingestion; require matching manifest/snapshot evidence before acceptance.
-- [x] 3.4 Pin the current native gate, source contracts/product and feature-definition hashes in fresh v16 evidence; reject legacy schemas/gates and keep distribution bands diagnostic.
-- [x] 3.5 Read back the complete expected native result set with run/source/contract/snapshot correlation; verify Failed, Aborted, stale, missing or incomplete results refuse acceptance even when the ingestion container exits zero.
-- [x] 3.6 Persist bounded validation/governance evidence before failure and implement metadata-only recovery; verify no ingestion/revalidation, changed outcomes or duplicate catalog identities on replay.
+## 3. Argo and profiling
 
-## 4. Argo native ingestion and catalog cleanup
+- [ ] 3.1 Replace nested request-level workflow wrappers with a readable stage DAG and isolated parallel validate/profile configuration; verify rendered dependencies, replay/no-input short circuits and existing lifecycle behavior in CI.
+- [ ] 3.2 Enable meaningful supported scalar-column profiling with bounded sample/row scope, excluded binary fields, timeout/resources and explicit recurring cadence; verify profile coverage and truthful latest-state versus snapshot labeling.
+- [ ] 3.3 Identify/bound run-owned StarRocks queries and verify quiescence along with Spark cleanup before writer handoff; behavioral CI must keep unresolved cleanup blocking the next writer.
+- [ ] 3.4 Strengthen readback for native contract fields, owners, both product directions, source edges, current execution I/O/status and declared profile coverage; stale/incomplete metadata must refuse acceptance despite successful native process exit.
 
-- [x] 4.1 Replace the second Spark validation stage and custom metadata image with version-matched official OpenMetadata discovery/profiler/test-suite steps; verify distinct observable stages and bounded retries through existing workflow checks.
-- [x] 4.2 Use scoped Argo HTTP templates for native product/contract provenance, explicit Argo lineage and readback; configure Agent/WorkflowTaskSet RBAC and verify original ODCS IDs/hashes/artifact references and discovered table FQNs.
-- [x] 4.3 Bound StarRocks validation queries with a per-user query timeout; verify no active Spark work before writer handoff and failed cleanup blocks subsequent ingestion.
-- [x] 4.4 Remove GX suites/exporters/dependencies, custom discovery/HTTP/result publisher, metadata image/build job, validation application and obsolete config/tests; inspect imports, lockfiles, charts and CI to verify no compatibility or fallback path remains.
-- [x] 4.5 Delete obsolete DP1-owned OpenMetadata artifacts including `dp1-compatibility`, custom table/services, GX tests/results and stale products/contracts/pipelines; verify clean native discovery and unaffected unrelated assets, source/lake data and durable reports.
+## 4. Scoped fresh start
 
-## 5. Focused verification and native acceptance
+- [ ] 4.1 Confirm the requested deletion boundary and inventory exact DP1 catalog IDs, warehouse/table locations, evidence/progress prefixes and repository receipts; verify immutable v16, simulator sources, Kafka offsets and unrelated assets are excluded.
+- [ ] 4.2 Suspend DP1 scheduling, stop active writers gracefully and verify Spark/query quiescence under writer serialization before deletion; preserve shared services and their storage.
+- [ ] 4.3 Remove inventoried obsolete DP1 metadata, old suites/cases/results, incorrect lineage/stale executions, bronze data and run/accepted/progress records plus superseded repository receipts/references; verify scoped absence without deleting sources or shared assets.
+- [ ] 4.4 Recreate canonical current artifacts with native discovery and the SDK path using a fresh explicit acceptance policy/namespace; verify no imported accepted state, compatibility aliases or legacy replay path.
 
-- [x] 5.1 Adapt existing CI behavioral coverage for SQL semantics, snapshot isolation, result completeness, replay and cleanup; remove obsolete tests and verify existing independent CI jobs pass without new config suites, matrices or credentialed CI checks.
-- [x] 5.2 Verify current schema-3 contracts and source/feature identity checks with existing behavioral CI fixtures and a CI-built image.
-Deliberate isolated SQL/data-failure and metadata-outage exercises are removed at the user’s request. Existing genuine failures and CI behavioral coverage remain evidence.
+## 5. Fresh development acceptance
 
-- [x] 5.4 Adapt current schema-3 bronze contracts/runtime and run published v16 development acceptance now: manifest `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`, all 1,954 files / 139,597,476 bytes / 795,718 events / 161,967 labels including complete tails. Verify context, conservation, native SQL, canonical discovery and governance, then replay/recovery; source checks alone cannot complete this task.
-- [x] 5.5 Record v16 persisted-bronze/governance evidence separately from source/live and historical GX/native evidence; update affected pipeline/product guidance with pinned contracts/features/snapshots and measured limits.
+- [ ] 5.1 Adapt existing behavioral CI for the distinct rewrite risks and inspect CI-built immutable images/check results; remove obsolete coverage without adding configuration-only suites, matrices or independent check jobs.
+- [ ] 5.2 Run fresh historical v16 acceptance using manifest SHA-256 `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`, all 1,954 files / 139,597,476 bytes / 795,718 events / 161,967 labels including full tails; verify exact conservation, native raw tests and complete new metadata readback.
+- [ ] 5.3 Run fresh bounded recurring clean-landing acceptance, repeated/event-only inputs, accepted replay, metadata-only recovery and no-input behavior; verify exact delivery/transport accounting and unchanged producer offsets/source objects.
+- [ ] 5.4 Inspect Argo stage graph and OpenMetadata native contract, ownership/product, lineage, execution I/O and meaningful profile views; record API/UI discrepancies rather than claiming unverified integration.
+- [ ] 5.5 Record fresh receipts and minimal affected guidance with revisions/images/contracts/snapshots, profile scope and measured resource limits; enable the declared daily schedule only after fresh readiness and ensure superseded DP1 records are not active acceptance.
 
-Scale/coursework acceptance (>=100,000,000,000 physical Parquet bytes) is deferred until the whole pipeline is finished; it is not a completion gate for this change. No scale generation is authorized.
+## Acceptance boundaries
 
-## 6. Recurring completed-file ingestion
+Previous v16 data checks and raw recurring checks do not accept this rewrite: the inspected catalog lacked native contract fields and current pipeline tasks/execution metadata. Fresh metadata and overall acceptance are pending. Planning edits do not perform deployment, cleanup or live verification.
 
-Producer source/live smoke and landing/recovery prerequisites are recorded in the archived v16 change, including the clean epoch `v16-20261026` and group `payments-parquet-landing-v16-20261026`. Review those exact receipts before recurring DP1 selection. Historical v16 persisted-bronze acceptance passed; it does not establish recurring readiness. Do not reset producer offsets, combine faulty deliveries as independent business events, duplicate simulator work or assume in-memory delayed labels survive shutdown.
-
-- [x] 6.1 Agree immutable landing completion/inventory and durable progress interfaces with the live-streaming change; verify late files in older date folders are discoverable without an event-date cutoff.
-- [x] 6.2 Implement common input selection, independent event/label batches and content-preserving incremental commits with pinned changed/unchanged ports; verify no-input, changed-content rejection and uncertain-commit recovery using existing behavioral CI coverage.
-- [x] 6.3 Establish the raw/silver validation boundary: retain lossless schema, file integrity, transport provenance and exact batch conservation in DP1; defer lifecycle reconstruction, duplicate consistency, business amounts/risk/context, cross-table linkage and as-of/maturity checks to DP2. Bundle native schema checks to avoid a scan per field; no same-batch labels or terminal events are required.
-- [x] 6.4 Add opt-in CronWorkflow/progress/landing permissions and demonstrate repeated live batches plus metadata-only recovery with exact accounting; historical acceptance does not establish recurring readiness.
-
-## 7. Analytical roadmap alignment
-
-- [x] 7.1 Update the existing roadmap to select StarRocks for analytics/gold fact-dimension marts and automated materialized views, replacing planned Trino/analytical ClickHouse; review affected sections for explicit refresh, storage, SCD2 and training boundaries.
-- [x] 7.2 Record the DP2 planning handoff: mart grain/keys, SCD2/as-of joins, accepted upstream versions, refresh freshness and late-data recovery; require a future fixed-query correctness/performance baseline before selecting materialization or native serving loads. This handoff does not implement or accept gold marts.
-
-## Fresh-start acceptance status
-
-Code validation passed on `1da4a5c` in the existing CI jobs. V16 persisted-bronze, all 146 native quality results, profiling, snapshot reuse and governance-only recovery passed. The accepted record is `s3://fraud-lakehouse-prod/dp1-evidence/starrocks-v2/accepted/v16.json`; bounded receipts are in `evidence/`. The first SQL abort and subsequent stale-provenance rejection remain recorded. One recovered executor OOM means scale resource sizing remains open; deliberate failure exercises are no longer requested.
-
-V16 is the current development selector and was ingested into an empty bronze namespace without schema migration or imported acceptance records. The immutable source and unrelated shared services/assets remain unchanged. Its persisted-bronze/native/governance evidence is distinct from upstream source/live smoke. Full-scale/coursework and downstream feature/training/serving acceptance remain separate later gates.
-
-Recurring `bronze-raw-v3` development acceptance passed on the clean `v16-20261026` backlog: 21 manifests, 1,215 events and 241 labels across two selections. All six bundled native assertions and governance readback passed. The event-only second batch retained the label snapshot; governance-only replay preserved native results/timestamps and progress, and no-input execution started no Spark/native jobs. `evidence/streaming-v16-accepted.json` records workflows, exact selections/snapshots, resources and cleanup. The daily 00:00 UTC CronWorkflow is explicitly enabled live with a 100-manifest bound; the chart default and root GitOps DP1 application remain disabled. Its natural daily trigger has not yet occurred. Existing CI jobs passed on runtime `ab57708` and workflow `61fed1d`; this exercise changed no sources, producer offsets or simulator state.
+V16 remains the immutable 90-day development source, not scale/coursework evidence. Preserve its source contracts/product/feature hashes, manifest inventory and complete event/label tails. Source/live acceptance in the archived simulator change remains separately owned upstream evidence. DP2 business/as-of/features/training/serving and later >=100,000,000,000-byte acceptance remain separate. No generator, producer reset or deliberate live failure/outage exercise is requested. Tests and image builds run only in CI; local checks are lint/format/schema/OpenSpec validation and diff review.

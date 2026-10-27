@@ -12,7 +12,7 @@ Focused checks SHALL cover explicit deferred-source preflight, preservation of i
 
 ### Requirement: Data-pipeline behavioral verification
 
-Bounded CI fixtures SHALL protect the distinct behavioral risks: source integrity/lossless normalization, duplicate-preserving ingestion, uncertain commits/replay, snapshot isolation, nested raw schema/transport semantics, native result completeness and metadata-only recovery. Source business-rule coverage SHALL remain separate from raw bronze acceptance; transferred silver SQL SHALL remain planned work. Existing CI entrypoints SHALL be reused; obsolete GX/custom publisher tests SHALL be removed. No configuration-only test suites, per-option/property matrices, new CI jobs or duplicate layer assertions SHALL be added. Tests and image builds SHALL run only in CI; local checks SHALL be limited to lint/format/schema/OpenSpec validation and diff review. Ordinary CI SHALL NOT require live credentials.
+Bounded CI fixtures SHALL protect the distinct behavioral risks: source integrity/lossless normalization, duplicate-preserving ingestion, uncertain commits/replay, snapshot isolation, nested raw schema/transport semantics, native result completeness and metadata-only recovery. Source business-rule coverage SHALL remain separate from raw bronze acceptance; transferred silver SQL SHALL remain planned work. Existing CI entrypoints SHALL be reused; obsolete GX/HTTP-publisher tests SHALL be removed. Focused coverage SHALL verify native contract field mapping, unresolved required owners, actual source edges, current task/execution I/O, idempotent SDK synchronization and truthful profile scope. No configuration-only test suites, per-option/property matrices, new CI jobs or duplicate layer assertions SHALL be added. Tests and image builds SHALL run only in CI; local checks SHALL be limited to lint/format/schema/OpenSpec validation and diff review. Ordinary CI SHALL NOT require live credentials.
 
 #### Scenario: Verify changes without infrastructure access
 
@@ -27,12 +27,12 @@ Bounded CI fixtures SHALL protect the distinct behavioral risks: source integrit
 
 ### Requirement: Live historical and governance acceptance
 
-Recorded Spark 4.1/Iceberg 1.12 operator compatibility checks SHALL remain historical evidence; production workflows SHALL NOT repeat disposable-table rollout probes. Live acceptance SHALL separately exercise current-contract native v16 development ingestion now, with later separate full-scale/coursework acceptance, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. Deliberate isolated failure/outage exercises are not required; existing failed outcomes remain unchanged. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
+Production workflows SHALL NOT repeat disposable-table rollout probes. Superseded DP1 data/receipts SHALL be removed only within the inventoried fresh-start boundary; cleanup SHALL NOT relabel past observations or remove separately owned upstream evidence. Live acceptance SHALL separately exercise current-contract native v16 development ingestion now, with later separate full-scale/coursework acceptance, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. Deliberate isolated failure/outage exercises are not required; no new reset/run SHALL relabel past failed observations as successful integration. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
 
 #### Scenario: Complete v16 development acceptance
 
 - **WHEN** the configured live DP1 run over the 90-day v16 export succeeds
-- **THEN** it verifies source-to-bronze content/count conservation, safe replay and visible products, schemas, imported contracts, lineage and validation results on canonical OpenMetadata assets
+- **THEN** it verifies source-to-bronze content/count conservation, safe replay and visible owners/products, native nested contract schema and active quality references, actual source lineage, current pipeline tasks/execution I/O, meaningful scoped profiles and validation results on canonical OpenMetadata assets
 
 #### Scenario: Later full-scale source acceptance
 
@@ -56,9 +56,18 @@ CI SHALL cover no-input runs, newly completed files in older date partitions, ch
 
 ### Requirement: Native StarRocks integration evidence
 
-Implementation SHALL verify direct RustFS SigV4 access, external-catalog discovery, nested schemas, snapshot-specific SQL and native OpenMetadata passing/failing quality results with the selected versions. This SHALL be implementation acceptance rather than a per-batch disposable compatibility stage. Previous GX evidence SHALL remain historical and SHALL NOT establish StarRocks acceptance. SQL execution failure or unsupported discovery SHALL be reported without a hidden legacy fallback.
+Implementation SHALL verify direct RustFS SigV4 access, external-catalog discovery, nested schemas, snapshot-specific SQL and native OpenMetadata passing/failing quality results with the selected versions. This SHALL be implementation acceptance rather than a per-batch disposable compatibility stage. Previous GX/native acceptance SHALL NOT establish acceptance of the rewritten integration or survive as an active compatibility path. SQL execution failure or unsupported discovery SHALL be reported without a hidden legacy fallback.
 
 #### Scenario: Native external-catalog discovery is incomplete
 
 - **WHEN** StarRocks can query a table but OpenMetadata cannot natively discover or profile its external-catalog identity correctly
 - **THEN** integration readiness remains unverified and DP1 does not claim completed native acceptance
+
+### Requirement: Fresh integration acceptance
+
+The rewritten integration SHALL establish fresh v16 historical and recurring acceptance after scoped DP1 cleanup. Readback SHALL reject YAML-only contracts, empty required ownership/task/I/O, fabricated event-to-label lineage, stale executions, missing reverse product membership and falsely snapshot-scoped profiles. UI inspection SHALL verify the contract, product, lineage and pipeline/profile views separately from API correctness. Existing CI checks and the existing image workflow SHALL be reused; no redundant configuration-only suite or new independent check job SHALL be introduced.
+
+#### Scenario: Data checks pass but execution metadata is stale
+
+- **WHEN** raw checks and conservation pass while the catalog still exposes an unrelated old execution or omits required native contract fields
+- **THEN** data outcomes remain recorded but governance and overall DP1 acceptance remain incomplete

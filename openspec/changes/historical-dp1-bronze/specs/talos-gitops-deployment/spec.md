@@ -58,3 +58,12 @@ The platform SHALL provide bounded persistent StarRocks FE/BE resources for SQL 
 
 - **WHEN** a native workflow validates a candidate
 - **THEN** StarRocks reads the recorded Iceberg snapshots directly without a mandatory imported copy and acceptance checks matching native results
+
+### Requirement: Matched metadata runtime ownership
+
+The application SHALL own the thin metadata image and workflow configuration, pin its immutable digest and match its official ingestion base/SDK to the shared OpenMetadata server. Generic externally managed metadata and lakehouse credential references SHALL remain reusable across pipeline stages. Shared platform services SHALL NOT be replaced or removed to reset DP1-owned application data.
+
+#### Scenario: Deploy the rewritten metadata stages
+
+- **WHEN** application configuration selects the thin metadata runtime
+- **THEN** native workflows and SDK synchronization use the matched version through external secret references without installing a second catalog or retaining a parallel HTTP publisher
