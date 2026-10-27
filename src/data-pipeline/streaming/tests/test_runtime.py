@@ -59,22 +59,24 @@ def test_keyed_runtime_matching_shared_method_and_idle_expiration():
         max_entries=10,
     )
     with updates.execute_and_collect() as results:
-        rows = list(results)
-    snapshots = [SnapshotUpdate.FromString(bytes(row.payload)) for row in rows]
-    assert {value.entity_id for value in snapshots} == {
-        "customer-one",
-        "customer-two",
-        "shared-method",
-    }
+        # The collection bridge exposes Java byte arrays as signed integers.
+        rows = [tuple(bytes(value & 0xFF for value in field) for field in row) for row in results]
+    snapshots = []
     for key, payload in rows:
-        value = SnapshotUpdate.FromString(bytes(payload))
+        value = SnapshotUpdate.FromString(payload)
+        snapshots.append(value)
         view = "customer" if value.view == 1 else "method"
-        assert bytes(key).decode() == entity_key(
+        assert key.decode() == entity_key(
             "runtime-ci",
             view,
             value.integration_id,
             value.entity_id,
         )
+    assert {value.entity_id for value in snapshots} == {
+        "customer-one",
+        "customer-two",
+        "shared-method",
+    }
     for entity in ("customer-one", "customer-two", "shared-method"):
         history = [value for value in snapshots if value.entity_id == entity]
         assert [value.revision for value in history] == list(range(1, len(history) + 1))
