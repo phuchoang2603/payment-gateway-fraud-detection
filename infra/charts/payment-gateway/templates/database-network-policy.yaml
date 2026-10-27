@@ -45,19 +45,3 @@ spec:
       ports:
         - port: 5432
           protocol: TCP
-
-    {{- if .Values.metadataReader.enabled }}
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ .Values.metadataReader.namespace }}
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: metadata-integrations
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: metadata-reader-setup
-      ports:
-        - port: 5432
-          protocol: TCP
-    {{- end }}

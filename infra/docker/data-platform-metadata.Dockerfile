@@ -5,5 +5,5 @@ COPY contracts/features /contracts/features
 ENV PYTHONPATH=/opt/data-platform \
     DATA_PRODUCTS_ROOT=/contracts/data-products \
     PYTHONDONTWRITEBYTECODE=1
-RUN python -c 'import boto3, yaml, pymysql; from metadata.ingestion.ometa.ometa_api import OpenMetadata; import data_platform.cli, data_platform.bronze_metadata, data_platform.integrations; import psycopg2, confluent_kafka'
+RUN python -c 'import boto3, yaml, pymysql; from metadata.ingestion.ometa.ometa_api import OpenMetadata; import data_platform.cli, data_platform.bronze_metadata, data_platform.integrations; import confluent_kafka'
 ENTRYPOINT ["python"]

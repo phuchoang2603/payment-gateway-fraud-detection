@@ -39,37 +39,6 @@ connectors:
           markDeletedTables: false
           includeStoredProcedures: false
           overrideMetadata: false
-  gateway-postgres:
-    externalSecret:
-      name: metadata-gateway-postgres
-      store: fraud-doppler
-      data:
-        GATEWAY_METADATA_PASSWORD: GATEWAY_DB_OPENMETADATA_READER_PASSWORD
-    kind: database
-    discover: true
-    source:
-      type: postgres
-      serviceName: gateway-postgres
-      serviceConnection:
-        config:
-          type: Postgres
-          hostPort: payment-gateway-pg-rw.payment-gateway.svc.cluster.local:5432
-          username: openmetadata_reader
-          authType:
-            password: ${GATEWAY_METADATA_PASSWORD}
-          database: payments
-          ingestAllDatabases: true
-          sslMode: require
-      sourceConfig:
-        config:
-          type: DatabaseMetadata
-          databaseFilterPattern:
-            includes: ["^payments$", "^notifier$", "^vault$", "^processor$"]
-          schemaFilterPattern:
-            includes: ["^public$"]
-          includeStoredProcedures: false
-          markDeletedTables: false
-          overrideMetadata: false
   kafka:
     kind: messaging
     discover: true

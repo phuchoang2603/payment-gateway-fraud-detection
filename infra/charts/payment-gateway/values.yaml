@@ -271,10 +271,6 @@ services:
       mountPath: /etc/vault/keys
     database: vault
 
-metadataReader:
-  enabled: false
-  namespace: fraud-data-prod
-
 database:
   name: payment-gateway-pg
   instances: 1

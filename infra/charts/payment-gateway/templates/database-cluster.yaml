@@ -20,7 +20,7 @@ spec:
       max_wal_senders: "16"
     pg_hba:
       {{- range $name, $database := .Values.database.databases }}
-      - host {{ $name }} {{ join "," (concat (list $name) (keys ($database.roles | default dict) | sortAlpha) (ternary (list "openmetadata_reader") list $.Values.metadataReader.enabled)) }} all scram-sha-256
+      - host {{ $name }} {{ join "," (concat (list $name) (keys ($database.roles | default dict) | sortAlpha)) }} all scram-sha-256
       {{- end }}
       - host replication payments_cdc all scram-sha-256
       - host all all all reject
