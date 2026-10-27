@@ -32,7 +32,7 @@ spec:
         - - name: select
             template: select
         - - name: ingest-selected
-            template: historical
+            template: ingest-batch
             when: "{{=steps.select.outputs.parameters.version != 'none'}}"
     - name: select
       container:
@@ -57,6 +57,10 @@ spec:
       steps:
         - - name: recover-previous
             template: recover-previous
+        - - name: ingest
+            template: ingest-batch
+    - name: ingest-batch
+      steps:
         - - name: preflight
             template: python
             arguments:
@@ -155,7 +159,7 @@ __GOVERNANCE_WRITES__
           - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
           - {name: INPUT_MODE, value: "{{workflow.parameters.input-mode}}"}
           - {name: SOURCE_EPOCH, value: "{{workflow.parameters.source-epoch}}"}
-          - {name: DATASET_VERSION, value: "{{=workflow.parameters['input-mode'] == 'landing' ? workflow.outputs.parameters['selected-version'] : workflow.parameters['dataset-version']}}"}
+          - {name: DATASET_VERSION, value: "{{=workflow.mainEntrypoint == 'recurring' ? workflow.outputs.parameters['selected-version'] : workflow.parameters['dataset-version']}}"}
           - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
         resources:
           requests: {cpu: 100m, memory: 512Mi}
@@ -280,7 +284,7 @@ __GOVERNANCE_WRITES__
                         - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
                         - {name: INPUT_MODE, value: "{{workflow.parameters.input-mode}}"}
                         - {name: SOURCE_EPOCH, value: "{{workflow.parameters.source-epoch}}"}
-                        - {name: DATASET_VERSION, value: "{{=workflow.parameters['input-mode'] == 'landing' ? workflow.outputs.parameters['selected-version'] : workflow.parameters['dataset-version']}}"}
+                        - {name: DATASET_VERSION, value: "{{=workflow.mainEntrypoint == 'recurring' ? workflow.outputs.parameters['selected-version'] : workflow.parameters['dataset-version']}}"}
                         - {name: SPARK_SHUFFLE_PARTITIONS, value: "__SHUFFLE_PARTITIONS__"}
                         - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
                         - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
@@ -388,7 +392,7 @@ __GOVERNANCE_WRITES__
           - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
           - {name: INPUT_MODE, value: "{{workflow.parameters.input-mode}}"}
           - {name: SOURCE_EPOCH, value: "{{workflow.parameters.source-epoch}}"}
-          - {name: DATASET_VERSION, value: "{{=workflow.parameters['input-mode'] == 'landing' ? workflow.outputs.parameters['selected-version'] : workflow.parameters['dataset-version']}}"}
+          - {name: DATASET_VERSION, value: "{{=workflow.mainEntrypoint == 'recurring' ? workflow.outputs.parameters['selected-version'] : workflow.parameters['dataset-version']}}"}
           - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
           - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
           - {name: TABLE_IDS, value: "{{inputs.parameters.table-ids}}"}

@@ -35,23 +35,25 @@
 - [x] 5.1 Adapt existing CI behavioral coverage for SQL semantics, snapshot isolation, result completeness, replay and cleanup; remove obsolete tests and verify existing independent CI jobs pass without new config suites, matrices or credentialed CI checks.
 - [x] 5.2 Verify current schema-3 contracts and source/feature identity checks with existing behavioral CI fixtures and a CI-built image.
 Deliberate isolated SQL/data-failure and metadata-outage exercises are removed at the user’s request. Existing genuine failures and CI behavioral coverage remain evidence.
+
 - [x] 5.4 Adapt current schema-3 bronze contracts/runtime and run published v16 development acceptance now: manifest `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`, all 1,954 files / 139,597,476 bytes / 795,718 events / 161,967 labels including complete tails. Verify context, conservation, native SQL, canonical discovery and governance, then replay/recovery; source checks alone cannot complete this task.
 - [x] 5.5 Record v16 persisted-bronze/governance evidence separately from source/live and historical GX/native evidence; update affected pipeline/product guidance with pinned contracts/features/snapshots and measured limits.
+
 Scale/coursework acceptance (>=100,000,000,000 physical Parquet bytes) is deferred until the whole pipeline is finished; it is not a completion gate for this change. No scale generation is authorized.
 
 ## 6. Recurring completed-file ingestion
 
 Producer source/live smoke and landing/recovery prerequisites are recorded in the archived v16 change, including the clean epoch `v16-20261026` and group `payments-parquet-landing-v16-20261026`. Review those exact receipts before recurring DP1 selection. Historical v16 persisted-bronze acceptance passed; it does not establish recurring readiness. Do not reset producer offsets, combine faulty deliveries as independent business events, duplicate simulator work or assume in-memory delayed labels survive shutdown.
 
-- [ ] 6.1 Agree immutable landing completion/inventory and durable progress interfaces with the live-streaming change; verify late files in older date folders are discoverable without an event-date cutoff.
-- [ ] 6.2 Implement common input selection, independent event/label batches and content-preserving incremental commits with pinned changed/unchanged ports; verify no-input, changed-content rejection and uncertain-commit recovery using existing behavioral CI coverage.
+- [x] 6.1 Agree immutable landing completion/inventory and durable progress interfaces with the live-streaming change; verify late files in older date folders are discoverable without an event-date cutoff.
+- [x] 6.2 Implement common input selection, independent event/label batches and content-preserving incremental commits with pinned changed/unchanged ports; verify no-input, changed-content rejection and uncertain-commit recovery using existing behavioral CI coverage.
 - [ ] 6.3 Establish the raw/silver validation boundary: retain lossless schema, file integrity, transport provenance and exact batch conservation in DP1; defer lifecycle reconstruction, duplicate consistency, business amounts/risk/context, cross-table linkage and as-of/maturity checks to DP2. Bundle native schema checks to avoid a scan per field; no same-batch labels or terminal events are required.
 - [ ] 6.4 Add opt-in CronWorkflow/progress/landing permissions and demonstrate repeated live batches plus metadata-only recovery with exact accounting; historical acceptance does not establish recurring readiness.
 
 ## 7. Analytical roadmap alignment
 
 - [x] 7.1 Update the existing roadmap to select StarRocks for analytics/gold fact-dimension marts and automated materialized views, replacing planned Trino/analytical ClickHouse; review affected sections for explicit refresh, storage, SCD2 and training boundaries.
-- [ ] 7.2 During later DP2 planning, define mart grain/keys, SCD2/as-of joins, accepted upstream versions, refresh freshness and late-data recovery; verify a fixed-query correctness/performance baseline before choosing materialization or native serving loads. This task is a planning handoff, not implementation of gold in DP1.
+- [x] 7.2 Record the DP2 planning handoff: mart grain/keys, SCD2/as-of joins, accepted upstream versions, refresh freshness and late-data recovery; require a future fixed-query correctness/performance baseline before selecting materialization or native serving loads. This handoff does not implement or accept gold marts.
 
 ## Fresh-start acceptance status
 
