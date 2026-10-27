@@ -1,5 +1,7 @@
-imageRepository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection
-imageTag: latest
+image:
+  repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator
+  tag: latest
+  digest: ""
 secretStore: fraud-doppler
 kafkaBrokers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092
 s3Endpoint: https://minio.home.phuchoang.sbs

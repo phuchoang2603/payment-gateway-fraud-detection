@@ -29,7 +29,7 @@ spec:
         mutexes:
           - name: metadata-{{ $name }}
       container:
-        image: {{ $.Values.image | quote }}
+        image: {{ include "metadata-integrations.image" $.Values.image | quote }}
         command: [python, -m, data_platform.integrations]
         args: ["{{`{{workflow.parameters.stage}}`}}", "--connector={{ $name }}"]
         {{- $secretRefs := list }}

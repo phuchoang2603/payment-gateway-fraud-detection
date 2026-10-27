@@ -11,20 +11,13 @@
 {{- end -}}
 
 {{- define "kafka.image" -}}
-{{- $root := index . 0 -}}
-{{- $image := index . 1 -}}
-{{- $tagOverride := "" -}}
-{{- if gt (len .) 2 -}}
-{{- $tagOverride = index . 2 | default "" -}}
+{{- $repository := required "image.repository is required" .repository -}}
+{{- if .digest -}}
+{{- if not (regexMatch "^sha256:[a-f0-9]{64}$" .digest) -}}
+{{- fail "image.digest must be a sha256 digest" -}}
 {{- end -}}
-{{- if $root.Values.global.imageRegistry -}}
-{{- $tag := $tagOverride | default $root.Values.global.imageTag | default "" -}}
-{{- if $tag -}}
-{{- printf "%s/%s:%s" $root.Values.global.imageRegistry $image $tag -}}
+{{- printf "%s@%s" $repository .digest -}}
 {{- else -}}
-{{- printf "%s/%s" $root.Values.global.imageRegistry $image -}}
-{{- end -}}
-{{- else -}}
-{{- $image -}}
+{{- printf "%s:%s" $repository (.tag | default "latest") -}}
 {{- end -}}
 {{- end -}}

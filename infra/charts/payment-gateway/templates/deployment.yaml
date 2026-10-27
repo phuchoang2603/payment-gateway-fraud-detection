@@ -1,6 +1,6 @@
 {{- range $name, $svc := include "payment-gateway.services" . | fromYaml }}
 {{- $port := first $svc.ports }}
-{{- $image := include "payment-gateway.image" (dict "root" $ "name" $name "service" $svc) }}
+{{- $image := include "payment-gateway.image" $svc.image }}
 {{- $mounts := list }}
 {{- range $svc.externalSecrets }}
 {{- if .mountPath }}
@@ -86,7 +86,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.uid
             - name: SERVICE_REVISION
-              value: {{ $.Values.imageTag | quote }}
+              value: {{ $svc.image.revision | default $svc.image.digest | default $svc.image.tag | quote }}
             {{- if $svc.database }}
             {{- include "payment-gateway.database-env" (dict "database" $svc.database "migrate" false) | nindent 12 }}
             {{- end }}

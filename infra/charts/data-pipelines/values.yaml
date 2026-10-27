@@ -1,8 +1,14 @@
 enabled: false
 namespace: fraud-data-prod
 images:
-  spark: ""
-  openmetadata: ""
+  spark:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark
+    digest: ""
+    revision: ""
+  openmetadata:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
+    digest: ""
+    revision: ""
 workflow:
   activeDeadlineSeconds: 7200
 spark:
@@ -12,7 +18,6 @@ spark:
 native:
   activeDeadlineSeconds: 1800
 config:
-  GIT_REVISION: ""
   SOURCE_ROOT: s3://synthetic-source/historical/v16
   DATASET_VERSION: v16
   EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence/catalog-v4

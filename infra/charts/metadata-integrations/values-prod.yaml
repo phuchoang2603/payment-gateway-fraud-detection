@@ -1,2 +1,5 @@
 enabled: true
-image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata@sha256:4e721003d46482f56cca4a10324ef1a47ac49cd0a7ffd29c3c621e2fe0f534c9
+image:
+  repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
+  digest: sha256:4e721003d46482f56cca4a10324ef1a47ac49cd0a7ffd29c3c621e2fe0f534c9
+  revision: 13ac0b9add31a1113d7dceda3406fe3473655acd
