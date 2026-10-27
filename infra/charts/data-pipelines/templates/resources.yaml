@@ -1,6 +1,6 @@
 {{- if .Values.enabled }}
 {{- range $name, $image := .Values.images }}
-{{- if not (regexMatch "@sha256:[a-f0-9]{64}$" $image) }}
+{{- if not (regexMatch "^sha256:[a-f0-9]{64}$" $image.digest) }}
 {{- fail (printf "images.%s must use an immutable sha256 digest" $name) }}
 {{- end }}
 {{- end }}
@@ -17,6 +17,7 @@ metadata:
   name: dp1-config
   namespace: {{ .Values.namespace }}
 data:
+  GIT_REVISION: {{ required "images.spark.revision is required" .Values.images.spark.revision | quote }}
   LANDING_MAX_BATCHES: {{ .Values.recurring.maxBatches | quote }}
   {{- toYaml .Values.config | nindent 2 }}
 ---

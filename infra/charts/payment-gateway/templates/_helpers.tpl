@@ -17,11 +17,6 @@ payment-gateway/release: {{ . }}
 {{- toYaml $services -}}
 {{- end -}}
 
-{{- define "payment-gateway.image" -}}
-{{- $repository := default (printf "%s/%s" .root.Values.imageRepository .name) .service.image.repository -}}
-{{- printf "%s:%s" $repository .root.Values.imageTag -}}
-{{- end -}}
-
 {{- define "payment-gateway.container-security" -}}
 allowPrivilegeEscalation: false
 readOnlyRootFilesystem: true
@@ -46,4 +41,16 @@ capabilities:
     secretKeyRef:
       name: {{ .database }}-database
       key: {{ if .migrate }}migrate-{{ end }}database-url
+{{- end -}}
+
+{{- define "payment-gateway.image" -}}
+{{- $repository := required "image.repository is required" .repository -}}
+{{- if .digest -}}
+{{- if not (regexMatch "^sha256:[a-f0-9]{64}$" .digest) -}}
+{{- fail "image.digest must be a sha256 digest" -}}
+{{- end -}}
+{{- printf "%s@%s" $repository .digest -}}
+{{- else -}}
+{{- printf "%s:%s" $repository (.tag | default "latest") -}}
+{{- end -}}
 {{- end -}}

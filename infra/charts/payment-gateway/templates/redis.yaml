@@ -21,7 +21,7 @@ metadata:
     app.kubernetes.io/name: {{ .Values.redis.name }}
 spec:
   kubernetesConfig:
-    image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+    image: {{ include "payment-gateway.image" .Values.redis.image | quote }}
     imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
     redisSecret:
       name: {{ .Values.redis.password.secretName }}

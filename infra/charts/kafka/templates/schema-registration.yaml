@@ -1,9 +1,9 @@
 {{- $registration := .Values.schemaRegistry.registration }}
-{{- if and .Values.schemaRegistry.enabled $registration.enabled (or $registration.imageTag (contains "@sha256:" $registration.image)) }}
-{{- $image := include "kafka.image" (list . $registration.image $registration.imageTag) }}
-{{- if not (regexMatch "(@sha256:[a-f0-9]{64}|:(main|pr-[0-9]+)-[a-f0-9]{40})$" $image) }}
-{{- fail "schemaRegistry.registration requires an image digest or a CI commit-tagged image" }}
+{{- if and .Values.schemaRegistry.enabled $registration.enabled }}
+{{- if not $registration.image.digest }}
+{{- fail "schemaRegistry.registration.image.digest must reference a published image" }}
 {{- end }}
+{{- $image := include "kafka.image" $registration.image }}
 {{- $subjects := dict }}
 {{- range .Values.entities }}
 {{- range .topics }}

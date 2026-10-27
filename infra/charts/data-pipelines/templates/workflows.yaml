@@ -6,8 +6,8 @@
   | replace "__EXECUTORS__" (.Values.spark.executors | toString)
   | replace "__SHUFFLE_PARTITIONS__" (.Values.spark.shufflePartitions | toString)
   | replace "__NAMESPACE__" .Values.namespace
-  | replace "__SPARK_IMAGE__" .Values.images.spark
-  | replace "__OPENMETADATA_IMAGE__" .Values.images.openmetadata
+  | replace "__SPARK_IMAGE__" (include "data-pipelines.image" .Values.images.spark)
+  | replace "__OPENMETADATA_IMAGE__" (include "data-pipelines.image" .Values.images.openmetadata)
   | replace "__SOURCE_ROOT__" (.Values.config.SOURCE_ROOT | quote)
   | replace "__SOURCE_EPOCH__" (.Values.recurring.sourceEpoch | quote)
   | replace "__DATASET_VERSION__" (.Values.config.DATASET_VERSION | quote)

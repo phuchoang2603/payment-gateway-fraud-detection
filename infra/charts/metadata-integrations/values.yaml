@@ -1,6 +1,9 @@
 enabled: false
 namespace: fraud-data-prod
-image: ""
+image:
+  repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
+  digest: ""
+  revision: ""
 openmetadata:
   url: http://openmetadata.openmetadata.svc.cluster.local:8585/api
   externalSecret:

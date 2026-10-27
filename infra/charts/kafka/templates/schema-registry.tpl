@@ -42,7 +42,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: karapace
-          image: "{{ .Values.schemaRegistry.image.repository }}:{{ .Values.schemaRegistry.image.tag }}"
+          image: {{ include "kafka.image" .Values.schemaRegistry.image | quote }}
           command: [python3, -m, karapace]
           securityContext:
             allowPrivilegeEscalation: false

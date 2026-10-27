@@ -24,4 +24,34 @@ ingress:
     enabled: true
     clusterTunnel: talos-proxmox
     hostname: pay-gateway.phuchoang.sbs
-imageTag: main-54b91989f44d09d3588b0a3218f8731dd0fbff80
+services:
+  edge:
+    image:
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/edge
+      digest: sha256:f5cdefac4de89e47463f02777a17b24465884d7da33370481a2593b5a0bcdd32
+      revision: 54b91989f44d09d3588b0a3218f8731dd0fbff80
+  fraud-service:
+    image:
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection
+      digest: sha256:f9ce3f17c7d02b51b6de50c6b91e76a418f9c1c790656177a3d9454b6bd5684c
+      revision: 54b91989f44d09d3588b0a3218f8731dd0fbff80
+  notifier:
+    image:
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/notifier
+      digest: sha256:8db26c14074e7f962e06a984655604155361f58c14a05c6cbe253ff7877a8139
+      revision: 54b91989f44d09d3588b0a3218f8731dd0fbff80
+  payments:
+    image:
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments
+      digest: sha256:1d3914c0dd478aa384db1ef41e5ed9a6f238606c957ebe3a2756ba80e86e8d92
+      revision: 54b91989f44d09d3588b0a3218f8731dd0fbff80
+  processor-simulator:
+    image:
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/processor-simulator
+      digest: sha256:ccf79d50733f800fbe91e512c7ee64961367e4758a1b4afe05efccd0f7cc3336
+      revision: 54b91989f44d09d3588b0a3218f8731dd0fbff80
+  vault-simulator:
+    image:
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/vault-simulator
+      digest: sha256:52d3504ce41268a462e21154177451e82b6724347995ec35ac04226fdd1475e9
+      revision: 54b91989f44d09d3588b0a3218f8731dd0fbff80

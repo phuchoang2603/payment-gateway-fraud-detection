@@ -1,6 +1,3 @@
-imageRepository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection
-imageTag: latest
-
 externalSecrets:
   refreshInterval: 1h
   secretStoreRef:
@@ -12,6 +9,9 @@ defaults:
   replicaCount: 1
   image:
     pullPolicy: IfNotPresent
+    tag: latest
+    digest: ""
+    revision: ""
   telemetry:
     tracingEnabled: true
     metricsEnabled: true
@@ -61,6 +61,8 @@ defaults:
 
 services:
   edge:
+    image:
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/edge
     mesh:
       callers:
       - payment-gateway-ingress-istio
@@ -120,6 +122,8 @@ services:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection
   notifier:
+    image:
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/notifier
     env:
     - name: NOTIFIER_KAFKA_BROKERS
       value: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc.cluster.local:9092
@@ -187,6 +191,8 @@ services:
           protocol: TCP
     database: notifier
   payments:
+    image:
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments
     mesh:
       callers:
       - edge
@@ -220,6 +226,8 @@ services:
         memory: 512Mi
     database: payments
   processor-simulator:
+    image:
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/processor-simulator
     mesh:
       callers:
       - payments
@@ -238,6 +246,8 @@ services:
       value: vault-simulator.payment-gateway.svc.cluster.local:8001
     database: processor
   vault-simulator:
+    image:
+      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/vault-simulator
     mesh:
       rules:
       - callers:
