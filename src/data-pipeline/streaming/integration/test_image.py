@@ -192,8 +192,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                         assert producer.flush(10) == 0
                         receive(
                             lambda values: all(
-                                value.coverage.one_hour == 2
-                                and value.values.assessed_count_1h == 0
+                                value.coverage.one_hour == 2 and value.values.assessed_count_1h == 0
                                 for value in values.values()
                             )
                         )
