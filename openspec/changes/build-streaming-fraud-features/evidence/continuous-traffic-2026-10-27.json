@@ -1,0 +1,153 @@
+{
+  "recorded_at": "2026-10-27T22:57:05.231634+00:00",
+  "source_commit": "4b58ec56876f9bddeaa8226841c6c37968949c69",
+  "image_pin_commit": "980de99",
+  "simulator": {
+    "image_digest": "sha256:002e57d34ffb5f70c884964d6236023435686ef2796f309e888b491fe1b49210",
+    "run": "57cdbe9c9f3440a7a72515a0c15d4f1c",
+    "duration_seconds": 0,
+    "payments_per_second": 0.2,
+    "concurrency": 2,
+    "left_running": true
+  },
+  "source": {
+    "manifest": "s3://synthetic-source/historical/v16/manifest.json",
+    "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+    "clock": "UTC-wall-clock"
+  },
+  "ci": {
+    "head": "4b58ec5",
+    "checks": "all 26 passed; production pin job skipped on PR as designed",
+    "python_run": 40596879089,
+    "go_run": 40596879220,
+    "image_run": 40596879102,
+    "limits": "new missing-snapshot and leader-epoch fixes not yet CI-verified or deployed"
+  },
+  "payments": {
+    "population": {
+      "observed_at": "2026-10-27T22:53:53.059925+00:00",
+      "payments": 53,
+      "first": "2026-10-27T22:49:31.195975+00:00",
+      "last": "2026-10-27T22:53:50.619148+00:00"
+    },
+    "settled_sample": 51,
+    "outcomes": {
+      "succeeded": 46,
+      "declined": 5
+    },
+    "assessment_states": {
+      "COMPLETED": 51
+    },
+    "evidence_hashes_recomputed_valid": true,
+    "ledger": {
+      "event_counts": {
+        "payment_created": 51,
+        "attempt_started": 51,
+        "risk_decision_recorded": 51,
+        "processor_operation_requested": 51,
+        "processor_outcome_unknown": 1,
+        "payment_succeeded": 46,
+        "attempt_declined": 5
+      },
+      "evidence_linkages_valid": true,
+      "decisions_checked": 51
+    },
+    "processor_operations": 51
+  },
+  "observations": {
+    "customer_status": {
+      "error": 50,
+      "stale": 1
+    },
+    "method_status": {
+      "error": 51
+    },
+    "customer_guard_status": {
+      "timeout": 27,
+      "coverage_unknown": 23,
+      "registered": 1
+    },
+    "method_guard_status": {
+      "timeout": 27,
+      "coverage_unknown": 24
+    }
+  },
+  "feast_readback": {
+    "views_read": 6,
+    "counts_1h": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "coverage": "1h complete; 24h/7d unknown with null quantities",
+    "sdk_read_latency_ms": [
+      426.23,
+      22.58,
+      7.3,
+      3.64,
+      5.15,
+      2.43
+    ],
+    "sample_snapshots": [
+      {
+        "view": "customer",
+        "snapshot_id": "d662e9d6fdeb61efa8f8eb381bf085590b254a1b90ba0e8c34c76be96cc962b5",
+        "revision": 1,
+        "anchor": "2026-10-27T22:50:35.935653Z"
+      },
+      {
+        "view": "method",
+        "snapshot_id": "e170f69ff90469a1c0092ff33bdc6507a0a0d64c7cce305333e3897ead8e84a9",
+        "revision": 1,
+        "anchor": "2026-10-27T22:50:35.941267Z"
+      }
+    ]
+  },
+  "flink": {
+    "baseline_checkpoint": 859,
+    "latest_completed_checkpoint": 887,
+    "restored_checkpoint": 887,
+    "observed_state": "RUNNING",
+    "tasks": {
+      "running": 6,
+      "canceling": 0,
+      "canceled": 0,
+      "total": 7,
+      "created": 0,
+      "scheduled": 0,
+      "deploying": 0,
+      "reconciling": 0,
+      "finished": 0,
+      "initializing": 1,
+      "failed": 0
+    },
+    "failure": "FENCED_LEADER_EPOCH during AdminClient offset refresh triggered checkpoint recovery; checkpoint 888 suspended",
+    "pending_fix": "one metadata refresh and bounded retry for leader fencing; other errors remain visible"
+  },
+  "resources": [
+    {
+      "pod": "fraud-streaming-taskmanager-1-1",
+      "restarts": 0,
+      "memory_peak_bytes": 908980224
+    },
+    {
+      "pod": "live-simulator-7b7c47d58f-s5w7t",
+      "restarts": 0,
+      "memory_peak_bytes": 97107968
+    }
+  ],
+  "argo": {
+    "branch": "improve/flink-recovery",
+    "root_gateway_features_live": "Synced/Healthy",
+    "data_pipelines": "main, unchanged"
+  },
+  "limits": [
+    "Missing Feast entities currently recorded as error instead of missing; fix awaiting CI and rollout.",
+    "100ms guard timeouts observed; rules remain authoritative and observations remain non-enforcing.",
+    "One transient producer PID warning at startup; simulator remained running without container restarts.",
+    "Bounded low-rate observation only; no sustained-load/SLO, full v16 replay or full-history coverage acceptance."
+  ]
+}

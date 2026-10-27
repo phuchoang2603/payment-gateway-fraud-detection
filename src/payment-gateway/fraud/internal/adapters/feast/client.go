@@ -156,6 +156,7 @@ func (c *Client) read(ctx context.Context, request application.Request, scope, e
 	}
 	values := &featuresv1.SnapshotValues{}
 	var metadata []byte
+	var metadataMissing bool
 	var writeAt time.Time
 	for _, field := range fields {
 		index, exists := indices[view+"__"+field]
@@ -187,7 +188,11 @@ func (c *Client) read(ctx context.Context, request application.Request, scope, e
 			return observation
 		}
 		if field == "snapshot_metadata" {
-			if isNull || row.Statuses[0] != "PRESENT" {
+			if isNull {
+				metadataMissing = true
+				continue
+			}
+			if row.Statuses[0] != "PRESENT" {
 				return observation
 			}
 			var encoded string
@@ -219,6 +224,13 @@ func (c *Client) read(ctx context.Context, request application.Request, scope, e
 		case "last_assessed_start_us":
 			values.LastAssessedStartAt = timestamppb.New(time.UnixMicro(number).UTC())
 		}
+	}
+	// Feast 0.67 represents absent entities as PRESENT/null at the Unix epoch.
+	if metadataMissing {
+		if proto.Size(values) == 0 && writeAt.Equal(time.Unix(0, 0)) {
+			observation.Status = "missing"
+		}
+		return observation
 	}
 	var snapshot featuresv1.SnapshotUpdate
 	if proto.Unmarshal(metadata, &snapshot) != nil || snapshot.Values != nil {

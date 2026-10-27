@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from confluent_kafka import KafkaError, KafkaException
 from pyflink.common import Configuration
 from pyflink.datastream import StreamExecutionEnvironment
 
@@ -107,12 +108,17 @@ def test_source_progress_refreshes_crossed_offsets_and_rejects_partial_broker_re
         "source": SimpleNamespace(error=None, partitions={0: None, 1: None, 2: None})
     }
     high = [4, 8, 12]
+    leader_error = False
 
     def offsets(partitions, **kwargs):
+        nonlocal leader_error
         results = {}
         for partition in partitions:
             result = Future()
-            if high[partition.partition] is None:
+            if leader_error and partition.partition == 0:
+                result.set_exception(KafkaException(KafkaError(KafkaError.FENCED_LEADER_EPOCH)))
+                leader_error = False
+            elif high[partition.partition] is None:
                 result.set_exception(RuntimeError("broker unavailable"))
             else:
                 result.set_result(SimpleNamespace(offset=high[partition.partition]))
@@ -137,7 +143,11 @@ def test_source_progress_refreshes_crossed_offsets_and_rejects_partial_broker_re
     cached = next(observer.process_element((b"", "source", 0, 5), None))
     assert cached.progress[0].high_watermark == 6
     assert admin.list_offsets.call_count == 2
-    high[0], high[1] = 9, None
+    high[0], leader_error = 9, True
+    refreshed = next(observer.process_element((b"", "source", 0, 6), None))
+    assert refreshed.progress[0].high_watermark == 9
+    assert admin.list_topics.call_count == 2 and admin.list_offsets.call_count == 4
+    high[0], high[1] = 12, None
     with pytest.raises(RuntimeError, match="broker unavailable"):
-        next(observer.process_element((b"", "source", 0, 6), None))
-    assert observer.watermarks == {0: 6, 1: 8, 2: 12}
+        next(observer.process_element((b"", "source", 0, 9), None))
+    assert observer.watermarks == {0: 9, 1: 8, 2: 12}

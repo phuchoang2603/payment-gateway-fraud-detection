@@ -19,7 +19,7 @@
 ## 4. Feast writing and retrieval
 
 - [x] 4.1 Add two scoped Feast views and an ordered SDK writer that commits Kafka progress after accepted writes, preserves monotonic write timestamps and isolates epochs; verify CI crash-after-write, older/equal update and incompatible-definition cases against the pinned Redis adapter.
-- [x] 4.2 Add a bounded Go Feast adapter behind the existing Fraud boundary with independent customer/method statuses, coverage/freshness evaluation and shadow evidence; verify timeout, future/stale/partial views and request-time elapsed derivation in focused CI cases.
+- [ ] 4.2 Add a bounded Go Feast adapter behind the existing Fraud boundary with independent customer/method statuses, coverage/freshness evaluation and shadow evidence; verify timeout, future/stale/partial views and request-time elapsed derivation in focused CI cases.
 
 ## 5. Synchronous velocity and durable assessment
 

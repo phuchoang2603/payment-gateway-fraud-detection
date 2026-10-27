@@ -231,3 +231,46 @@ func TestElapsedUsesRequestHorizonWithoutErasingSnapshot(t *testing.T) {
 		t.Fatalf("elapsed/observed history=%+v", result)
 	}
 }
+
+func TestAbsentSnapshotUsesPinnedFeastNullResponseWithoutHidingIncompleteWrites(t *testing.T) {
+	for _, tc := range []struct {
+		name, expected         string
+		hasValue, hasTimestamp bool
+	}{
+		{name: "absent", expected: "missing"},
+		{name: "incomplete write", hasValue: true, expected: "error"},
+		{name: "missing metadata at real timestamp", hasTimestamp: true, expected: "error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				response := servingResponse(t, update("customer"), "customer")
+				rows := response["results"].([]map[string]any)
+				written := time.Unix(0, 0).UTC()
+				if tc.hasTimestamp {
+					written = testNow
+				}
+				for _, row := range rows[1:] {
+					row["values"] = []any{nil}
+					row["statuses"] = []string{"PRESENT"}
+					row["event_timestamps"] = []time.Time{written}
+				}
+				if tc.hasValue {
+					rows[1]["values"] = []any{int64(0)}
+				}
+				if err := json.NewEncoder(w).Encode(response); err != nil {
+					t.Error(err)
+				}
+			}))
+			defer server.Close()
+			client, err := New(Config{URL: server.URL, Epoch: "live-v1", DefinitionHash: testHash, Timeout: time.Second, MaxAnchorAge: time.Minute, MaxProgressAge: time.Minute})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			result := client.read(context.Background(), request(), "customer", "customer")
+			if result.Status != tc.expected || result.Values.Count1h != nil || result.ElapsedSeconds != nil {
+				t.Fatalf("observation=%+v", result)
+			}
+		})
+	}
+}
