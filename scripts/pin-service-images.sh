@@ -47,9 +47,9 @@ if inputs_changed infra/docker/schema-register.Dockerfile scripts/schema_registr
 fi
 published_image() {
   local service="$1" suffix digest repository
-  suffix=$(jq -er --arg service "$service" '.include[] | select(.service == $service) | .["image-suffix"]' .github/service-images.json)
+  suffix=$(jq -er --arg service "$service" '.include[] | select(.service == $service) | .["image-suffix"]' .github/service-images.json) || return
   repository="ghcr.io/${GITHUB_REPOSITORY,,}${suffix}"
-  digest=$(docker buildx imagetools inspect "${repository}:${tag}" --format '{{json .Manifest}}' | jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))')
+  digest=$(docker buildx imagetools inspect "${repository}:${tag}" --format '{{json .Manifest}}' | jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))') || return
   printf '%s@%s' "$repository" "$digest"
 }
 
