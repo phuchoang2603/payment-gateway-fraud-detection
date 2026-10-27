@@ -161,6 +161,7 @@ spec:
       retryStrategy:
         limit: "6"
         retryPolicy: OnFailure
+        expression: "lastRetry.exitCode != '64'"
         backoff: {duration: 30s, factor: 2, cap: 4m}
       resource:
         action: apply

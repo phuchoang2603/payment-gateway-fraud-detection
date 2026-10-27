@@ -1,0 +1,52 @@
+{
+  "workflow": "historical-dp1-bronze-dcdpv",
+  "run_id": "76c3ffb0-d45c-4b7b-9dd0-cb073b37c88f",
+  "revision": "c0c71c8a98259764c3663d69ab68227fae1a11d2",
+  "policy": "bronze-catalog-v4",
+  "outcome": "failed",
+  "accepted": false,
+  "source": {
+    "uri": "s3://synthetic-source/historical/v16/manifest.json",
+    "sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+    "inventory_files": 1954,
+    "manifest_reverified_after_stop": true
+  },
+  "snapshots": {
+    "payment_events": 2927027453886299314,
+    "fraud_labels": 2234014266444181928
+  },
+  "completed": [
+    "immutable source-file verification",
+    "both bronze snapshot commits"
+  ],
+  "failure": {
+    "stage": "ingest:conservation",
+    "type": "UnknownHostException",
+    "host": "minio.home.phuchoang.sbs",
+    "secondary": "Failure-receipt upload also failed with EndpointConnectionError",
+    "content_mismatch_established": false
+  },
+  "conservation": "incomplete",
+  "native_validation": "not-run",
+  "profiling": "not-run",
+  "governance": "not-run",
+  "cleanup": {
+    "shutdown": "Stop",
+    "finished_at": "2026-10-27T02:37:50Z",
+    "spark_applications_and_pods_absent": true,
+    "query_quiescence": "passed",
+    "daily_schedule": "suspended"
+  },
+  "recovery": "Reuse recorded snapshots; rerun source verification and complete exact reconciliation before native stages. Do not rewrite source or import acceptance.",
+  "operational_evidence": "/home/felix/.local/state/dp1/catalog-v4-v16/",
+  "measurements": {
+    "scope": "intermediate samples, not final peak measurements",
+    "failed_spark_tasks_before_driver_error": 0,
+    "observed_spill_bytes": 0,
+    "kubernetes_metrics": "intermittently unavailable"
+  },
+  "images": {
+    "spark": "sha256:58ed9b7145549d0220b2674cd8b56e002bf62b658a42917b3d8e903b1f0f161a",
+    "metadata": "sha256:cb66ffae9c31a93ef7749db1d00ed843d919d3fa139f8b851475a472669dfd95"
+  }
+}
