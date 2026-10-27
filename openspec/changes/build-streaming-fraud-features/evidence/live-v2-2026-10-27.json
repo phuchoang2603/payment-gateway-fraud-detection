@@ -1,0 +1,285 @@
+{
+  "recorded_at": "2026-10-27T23:51:16.948538+00:00",
+  "source_commit": "8d046cfdced99b1f9a71ccac6fc74d15371e4d07",
+  "authorization": "User requested live-v2 and removal of live-v1 runtime state. Immutable source and historical acceptance evidence remain unchanged.",
+  "bootstrap": {
+    "deployment": "fraud-streaming-live-v2",
+    "job_id": "3252203a82f8979fbe9c73e1038f0b51",
+    "epoch": "live-v2",
+    "source": "payments.events.v1",
+    "source_start": "latest-offset; clean initialization, no checkpoint restore",
+    "topic": "fraud.feature-updates.v1.live-v2",
+    "writer_group": "fraud-feast-writer-live-v2",
+    "coverage": "unknown after bootstrap; no complete-history claim"
+  },
+  "ci": {
+    "runs": [
+      {
+        "conclusion": "success",
+        "databaseId": 40603493527,
+        "workflowName": "Service images"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 40603493461,
+        "workflowName": "CI"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 40603493385,
+        "workflowName": "Go CI"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 40603493525,
+        "workflowName": "Python CI"
+      }
+    ],
+    "checks": {
+      "SUCCESS": 25,
+      "SKIPPED": 1
+    },
+    "local": "Helm lint/render review, strict OpenSpec validation and diff review only; no local tests or builds"
+  },
+  "cleanup": {
+    "old_flink_deployment": "absent",
+    "old_feature_topic": "absent from broker metadata",
+    "feast": {
+      "epochs": {
+        "live-v1": 120
+      },
+      "live_v1_keys": 120,
+      "deleted": 120
+    },
+    "minio": [
+      {
+        "prefix": "checkpoints/live-v1/",
+        "objects": 15,
+        "bytes": 7936893,
+        "deleted": 15
+      },
+      {
+        "prefix": "checkpoints/ha/live-v1/",
+        "objects": 13,
+        "bytes": 256389916,
+        "deleted": 13
+      },
+      {
+        "prefix": "savepoints/live-v1/",
+        "objects": 1,
+        "bytes": 25402,
+        "deleted": 1
+      }
+    ],
+    "empty_prefix_readback": [
+      {
+        "prefix": "checkpoints/live-v1/",
+        "objects": 0,
+        "bytes": 0,
+        "deleted": 0
+      },
+      {
+        "prefix": "checkpoints/ha/live-v1/",
+        "objects": 0,
+        "bytes": 0,
+        "deleted": 0
+      },
+      {
+        "prefix": "savepoints/live-v1/",
+        "objects": 0,
+        "bytes": 0,
+        "deleted": 0
+      }
+    ],
+    "consumer_groups": {
+      "fraud-features-live-v1": "deleted",
+      "fraud-feast-writer-live-v1": "deleted"
+    },
+    "registry_subject": {
+      "soft": [
+        1
+      ],
+      "permanent": [
+        1
+      ]
+    },
+    "authorization_counter_namespace": "Independent existing counter epoch retained to preserve retry deduplication; not historical feature state"
+  },
+  "flink": {
+    "state": "RUNNING",
+    "tasks": {
+      "running": 7,
+      "canceling": 0,
+      "canceled": 0,
+      "total": 7,
+      "created": 0,
+      "scheduled": 0,
+      "deploying": 0,
+      "reconciling": 0,
+      "finished": 0,
+      "initializing": 0,
+      "failed": 0
+    },
+    "checkpoint_counts": {
+      "restored": 0,
+      "total": 51,
+      "in_progress": 0,
+      "completed": 8,
+      "failed": 43
+    },
+    "completed_checkpoint": 8,
+    "checkpoint_state_bytes": 516715,
+    "checkpoint_path": "s3://fraud-flink-prod/checkpoints/live-v2/3252203a82f8979fbe9c73e1038f0b51/chk-8",
+    "startup_failure": "One 10-second task-deployment RPC timeout; restart then slow Python worker initialization. Startup checkpoints failed before all tasks ran.",
+    "restored_checkpoint": null
+  },
+  "journal": {
+    "feature_topics": [
+      "fraud.feature-updates.v1.live-v2"
+    ],
+    "source_latest": {
+      "0": 2991,
+      "1": 3105,
+      "2": 2803
+    },
+    "writer_committed": {
+      "0": 78,
+      "1": 63,
+      "2": 77
+    },
+    "sample_count": 6,
+    "all_sample_offsets_valid": true,
+    "first_snapshot": {
+      "epoch": "live-v2",
+      "view": 2,
+      "revision": 1,
+      "snapshot_id": "7c580ac6112859018d153bc3437c9f7190e3850c3f73830934b9b45088cafe63",
+      "anchor": "2026-10-27T23:48:14.430643Z",
+      "coverage": {
+        "one_hour": 1,
+        "twenty_four_hours": 1,
+        "seven_days": 0
+      }
+    }
+  },
+  "payments": {
+    "after_gateway_switch": {
+      "sample": 10,
+      "outcomes": {
+        "succeeded": 10
+      },
+      "evidence_linkages_valid": true
+    },
+    "after_stream_started": {
+      "sample": 7,
+      "outcomes": {
+        "succeeded": 6,
+        "declined": 1
+      },
+      "assessments": {
+        "COMPLETED": 7
+      },
+      "all_evidence_hashes_valid": true,
+      "all_shadow_observe_only": true,
+      "ledger": {
+        "event_counts": {
+          "payment_created": 7,
+          "attempt_started": 7,
+          "risk_decision_recorded": 7,
+          "processor_operation_requested": 7,
+          "payment_succeeded": 6,
+          "attempt_declined": 1
+        },
+        "evidence_linkages_valid": true,
+        "decisions_checked": 7
+      },
+      "processor_operations": 7,
+      "observations": {
+        "customer_status": {
+          "missing": 7
+        },
+        "method_status": {
+          "missing": 7
+        },
+        "customer_guard_status": {
+          "coverage_unknown": 6,
+          "timeout": 1
+        },
+        "method_guard_status": {
+          "coverage_unknown": 6,
+          "timeout": 1
+        }
+      }
+    }
+  },
+  "argo": {
+    "payment-gateway-prod-root": {
+      "sync": "Synced",
+      "health": "Healthy"
+    },
+    "payment-gateway-prod-kafka": {
+      "sync": "Synced",
+      "health": "Healthy"
+    },
+    "payment-gateway-prod-fraud-features": {
+      "sync": "Synced",
+      "health": "Healthy"
+    },
+    "payment-gateway-prod-payment-gateway": {
+      "sync": "Synced",
+      "health": "Healthy"
+    },
+    "payment-gateway-prod-live-traffic": {
+      "sync": "Synced",
+      "health": "Healthy"
+    },
+    "payment-gateway-prod-data-pipelines": {
+      "sync": "Synced",
+      "health": "Healthy"
+    }
+  },
+  "simulator": {
+    "enabled": true,
+    "duration_seconds": 0,
+    "payments_per_second": 0.2,
+    "concurrency": 2,
+    "run": "04a666db67b24df590494c3aa31d8d99",
+    "container_restarts": 2
+  },
+  "registry": "Registration initially failed forwarding writes; one Karapace restart and recreated registration job succeeded. Failed attempts retained in observations.",
+  "limits": [
+    "Fresh bootstrap has unknown coverage and null quantities.",
+    "Shadow reads may be missing or stale; guard coverage_unknown/timeouts remain non-enforcing.",
+    "Bounded low-rate verification only; no full historical replay, sustained load, broad outage exercise or SLO acceptance.",
+    "Upstream Python deprecation warnings remain."
+  ],
+  "feast_readback": {
+    "views": 6,
+    "epoch": "live-v2",
+    "coverage": "unknown across all supported windows; typed quantities remain null",
+    "sdk_read_latency_ms": [
+      733.29,
+      17.67,
+      7.43,
+      6.64,
+      5.86,
+      5.85
+    ],
+    "sample_snapshots": [
+      {
+        "view": "customer",
+        "snapshot_id": "5d995ce3a02f605d3942213999bf0a82ec32191c368d9d8aa6af9de4ed911db5",
+        "revision": 1,
+        "anchor": "2026-10-27T23:48:37.550760Z"
+      },
+      {
+        "view": "method",
+        "snapshot_id": "314f69842cae53b6ea167a8cdcd8bb40745c2d6e834b20c8797fc6edbf59bbef",
+        "revision": 1,
+        "anchor": "2026-10-27T23:48:37.555584Z"
+      }
+    ],
+    "latency_scope": "SDK diagnostic reads, not gateway latency/SLO; first read cold"
+  },
+  "acceptance": "Bounded current-time verification completed; all 19 implementation tasks complete under the agreed acceptance boundary."
+}
