@@ -7,8 +7,8 @@
 ## 2. Runtime prerequisites
 
 - [x] 2.1 Pin compatible Flink/PyFlink/Python/JVM/Kafka and Feast versions using current official docs/Context7 where available; deliver locked dependencies/images and verify image builds in CI, including selected Feast timestamp/nullability behavior.
-- [ ] 2.2 Add repo-owned charts/config for the streaming job, feature topic, SDK writer, Feast registry/server and separate authorization/Feast Redis; coordinate controller/checkpoint-storage prerequisites with the platform owner and verify CI Helm checks plus deployed resource separation/readiness evidence.
-- [ ] 2.3 Provision a least-privilege Fraud-owned assessment database on the existing cluster, secrets and private network access; verify migrations/permissions through CI integration coverage and render review without adding config-only test suites.
+- [x] 2.2 Add repo-owned charts/config for the streaming job, feature topic, SDK writer, Feast registry/server and separate authorization/Feast Redis; coordinate controller/checkpoint-storage prerequisites with the platform owner and verify CI Helm checks plus deployed resource separation/readiness evidence.
+- [x] 2.3 Provision a least-privilege Fraud-owned assessment database on the existing cluster, secrets and private network access; verify migrations/permissions through CI integration coverage and render review without adding config-only test suites.
 
 ## 3. Continuous assessed-history snapshots
 

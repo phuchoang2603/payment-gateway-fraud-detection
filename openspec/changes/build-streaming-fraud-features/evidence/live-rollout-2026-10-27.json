@@ -1,0 +1,135 @@
+{
+  "verified_at": "2026-10-27T20:15:00.443698+00:00",
+  "application_merge": "6cec4a964d76ffd6348229317fea51d50f468e6a",
+  "platform_merge": "0837879d09f0014e311ff77ca8e915471fbb3c1f",
+  "fixes": {
+    "ha": "4344341d575e3f7b689720dab379dfe4c0165c00",
+    "deployment_read_rbac": "449e2e56a480a067ab4bd284bc7cbb1405c4e076",
+    "l3_l4_policy": "670a29a33db45149d2a813842e29ab149e9c6f92",
+    "source_nanoseconds": "617857e8d23b0cea06a3619cebf7bb824776a111",
+    "attempt_clocks_and_warmup_emission": "2f1799a940c31668520988f685d0451ab1e51f13"
+  },
+  "image_pin_commit": "061ee07e28aa4b669b9b03fe139ae2a97cb6b395",
+  "streaming_image": "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming@sha256:131098021fb8a6199b183866e1dfa3f4c7572994d0a540a40ce6d3ef27acc91a",
+  "epoch": "live-v1",
+  "checks": {
+    "merged_main_ci": "passed, including service image publication",
+    "argo": "application root and feature chart synced; chart health does not establish job health",
+    "kafka_partitions": {
+      "payments.events.v1": 3,
+      "fraud.feature-updates.v1.live-v1": 3
+    },
+    "feast": "server health HTTP 200; customer_snapshot and method_snapshot registered; writer ready",
+    "redis": "separate authorization and Feast deployments ready; authenticated Feast PING passed",
+    "fraud_database": "migration 1 applied; fraud_app SELECT/INSERT and restricted column UPDATE; no Payments CONNECT or public schema CREATE",
+    "credential_handoff": "application Doppler -> fraud-flink-storage verified; old platform ESO pruned; old Doppler keys retained pending checkpoints",
+    "pre_smoke_checkpoint": {
+      "id": 5,
+      "external_path": "s3://fraud-flink-prod/checkpoints/live-v1/2c2e4bfc34c0ac9c413c4a2e52530b0a/chk-5",
+      "state_size": 17186,
+      "end_to_end_duration": 306,
+      "num_acknowledged_subtasks": 7
+    },
+    "network_policy": "Cilium policy Valid=True after replacing unsupported L7 DNS/FQDN rules with DNS L4 and storage CIDR 10.69.1.101/32 HTTPS",
+    "authorization": "first assessment: both reads timed out; second: both counters=2, coverage_unknown; rules outcomes unchanged",
+    "timestamp_fix_ci": {
+      "sha": "617857e8d23b0cea06a3619cebf7bb824776a111",
+      "python": "passed",
+      "go": "passed",
+      "contracts_and_helm": "passed",
+      "streaming_build_and_pin": "passed"
+    },
+    "image_upgrade_restore": {
+      "checkpoint": 9,
+      "path": "s3://fraud-flink-prod/checkpoints/live-v1/2c2e4bfc34c0ac9c413c4a2e52530b0a/chk-9",
+      "entity_state": "before smoke contributions; populated-state recovery still pending"
+    },
+    "latest_source_fix_ci": {
+      "sha": "2f1799a940c31668520988f685d0451ab1e51f13",
+      "python": "passed",
+      "go": "passed",
+      "contracts_and_helm": "passed",
+      "streaming_build_and_pin": "passed"
+    },
+    "feast_readback": [
+      {
+        "view": "customer",
+        "revision": 2,
+        "epoch": "live-v1",
+        "snapshot_id": "9381d82fc8705dc7c9ecc34ad9cc104aae0e0ed23847335d9e3b4942ce8d188c",
+        "anchor": "2026-10-27T20:12:29.940825Z",
+        "coverage": {
+          "one_hour": "COVERAGE_UNKNOWN",
+          "twenty_four_hours": "COVERAGE_UNKNOWN",
+          "seven_days": "COVERAGE_UNKNOWN"
+        }
+      },
+      {
+        "view": "method",
+        "revision": 2,
+        "epoch": "live-v1",
+        "snapshot_id": "3a42c6239c9e34989799db31290515d88a616703cc7a901e8f70e020a99e910a",
+        "anchor": "2026-10-27T20:12:29.977195Z",
+        "coverage": {
+          "one_hour": "COVERAGE_UNKNOWN",
+          "twenty_four_hours": "COVERAGE_UNKNOWN"
+        }
+      }
+    ],
+    "unknown_quantities_remain_null": true,
+    "savepoint": "s3://fraud-flink-prod/savepoints/live-v1/savepoint-2c2e4b-f1342e3c0b21"
+  },
+  "smoke": {
+    "run": "fraud-live-f3fcd911dd7149e9b101b07a3c74f35b",
+    "integration_id": "01234567-89ab-4cde-8fab-0123456789ab",
+    "customer_id": "998a0f34-0093-5e1e-8be0-a6fa6b7803c1",
+    "method": "f60edbc878732d7ea755e3f9820b84919267b50c15d57fb3ea4224811afda9a8",
+    "results": [
+      {
+        "payment_id": "fecd3d4e-5912-4bde-8b6e-037a98edede0",
+        "attempt_id": "3a742dbe-eda6-54b3-9006-32c52c2416ee",
+        "status": "SUCCEEDED",
+        "latency_ms": 745.38,
+        "retry_same_identity": true,
+        "assessment_id": "521d1e207a5d46c797b505e9fab25c7f118738ae51de6a1ef73d73b159dbb20e",
+        "evidence_hash": "6f2eb2b7fcf7d0c19fcdba7a2f4be661400ddc703f4230e0f34d42beb79452d6"
+      },
+      {
+        "payment_id": "a2c869cb-f919-4185-86c7-134f610c4510",
+        "attempt_id": "30b3c0f7-34d0-5c61-b1f7-30f1cdc5ce80",
+        "status": "DECLINED",
+        "latency_ms": 232.91,
+        "retry_same_identity": true,
+        "assessment_id": "51038066579c945cf146bc1b040b4cb2ebfd53085b1bdf4696245e20419c5824",
+        "evidence_hash": "11a9245106e068fadd7cd6aac0d00c00660f67c26adc574e527f0c2f05af9d77"
+      }
+    ],
+    "ledger_counts": {
+      "payment_created": 2,
+      "attempt_started": 2,
+      "risk_decision_recorded": 2,
+      "processor_operation_requested": 1,
+      "payment_succeeded": 1,
+      "attempt_declined": 1
+    },
+    "processor_operations": 1,
+    "persisted_evidence_hashes_recomputed": true,
+    "ledger_evidence_references_match": true
+  },
+  "failures": {
+    "ha": "15s Kubernetes HA renewal deadline expired during startup; Python driver retry in the same JVM failed setGatewayServer singleton precondition",
+    "source": "valid Payments protobuf timestamps carry nanoseconds; decoder rejected sub-microsecond precision; job restored checkpoint and retried same events; fix preserves event digest and converts feature time to microseconds",
+    "independent_clocks": "live Edge attempted_at preceded the Payments event occurred_at by 20-76ms; decoder incorrectly required equality; retain event time for historical windows and validate the gateway timestamp independently",
+    "warmup_emission": "null public values suppressed changes to underlying counts during unknown coverage; emission signature now includes internal window counts and source offsets without exposing unknown quantities"
+  },
+  "pending": [
+    "gateway shadow rollout and bounded verification",
+    "checkpoint recovery with populated entity state",
+    "retire old Doppler keys"
+  ],
+  "acceptance_limits": [
+    "Feast gateway reads remain disabled; rules authoritative and velocity observe-only",
+    "no historical replay or regeneration performed",
+    "seven-day coverage, load/latency, skew and broad outage acceptance remain unverified"
+  ]
+}

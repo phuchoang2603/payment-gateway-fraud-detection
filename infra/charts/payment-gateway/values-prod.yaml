@@ -55,3 +55,6 @@ services:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/vault-simulator
       digest: sha256:7b08c25f20f379b4dac85ce4e0e65786252e4abc1332a80fe335c47590d47244
       revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
+
+features:
+  enabled: true
