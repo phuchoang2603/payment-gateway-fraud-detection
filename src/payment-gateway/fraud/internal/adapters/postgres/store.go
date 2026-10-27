@@ -37,7 +37,7 @@ func (s *Store) Claim(ctx context.Context, request application.Request, lease, h
 	_, err = tx.Exec(ctx, `INSERT INTO assessments
  (assessment_id,integration_id,payment_id,attempt_id,request_digest,state,retry_until)
  VALUES ($1,$2,$3,$4,$5,'NEW',clock_timestamp()+$6*interval '1 millisecond')
- ON CONFLICT (integration_id,payment_id,attempt_id) DO NOTHING`, id, request.IntegrationID, request.PaymentID, request.AttemptID, request.Digest, horizon.Milliseconds())
+ ON CONFLICT DO NOTHING`, id, request.IntegrationID, request.PaymentID, request.AttemptID, request.Digest, horizon.Milliseconds())
 	if err != nil {
 		return result, err
 	}
@@ -47,7 +47,8 @@ func (s *Store) Claim(ctx context.Context, request application.Request, lease, h
 	err = tx.QueryRow(ctx, `SELECT assessment_id,request_digest,state,fence,first_claimed_at,
  lease_until>clock_timestamp(),retry_until<=clock_timestamp(),retry_after>clock_timestamp(),result FROM assessments
  WHERE integration_id=$1 AND payment_id=$2 AND attempt_id=$3 FOR UPDATE`, request.IntegrationID, request.PaymentID, request.AttemptID).Scan(
-		&result.ID, &binding, &state, &result.Fence, &result.FirstClaimedAt, &leaseActive, &expired, &backoffActive, &payload)
+		&result.ID, &binding, &state, &result.Fence, &result.FirstClaimedAt, &leaseActive, &expired, &backoffActive, &payload,
+	)
 	if err != nil {
 		return result, err
 	}
