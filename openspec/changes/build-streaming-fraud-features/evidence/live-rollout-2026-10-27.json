@@ -242,5 +242,146 @@
     "no historical replay or regeneration performed",
     "bounded manual live verification does not complete tasks 6.1/6.2; seven-day coverage, load/latency, backpressure and skew acceptance remain unverified"
   ],
-  "shadow_activation_commit": "88953f3ff59a088202d439ecaa9420a736ccf9f8"
+  "shadow_activation_commit": "88953f3ff59a088202d439ecaa9420a736ccf9f8",
+  "resource_verification": {
+    "verified_at": "2026-10-27T22:20:09.935845+00:00",
+    "commit": "52219c087a38d084261157c20241703207f9b270",
+    "image_pin_commit": "c841d8b",
+    "ci": "Go, Python, contracts, Helm, image build and pin passed; mutation skipped by existing policy",
+    "upstream_warnings": "13 PyFlink/httplib2 deprecations in streaming tests; Docker actions Node.js runtime warnings remain",
+    "image_compressed_layer_bytes": {
+      "before": {
+        "compressed_layer_bytes": 1221393263,
+        "layers": 17
+      },
+      "after": {
+        "compressed_layer_bytes": 908755934,
+        "layers": 17
+      }
+    },
+    "parallelism": 1,
+    "memory": [
+      {
+        "pod": "fraud-streaming-5d7d98c689-2z2cf",
+        "current_bytes": 1005731840,
+        "peak_bytes": 1026506752,
+        "limit_bytes": 1610612736,
+        "restarts": 0
+      },
+      {
+        "pod": "fraud-streaming-taskmanager-1-1",
+        "current_bytes": 849846272,
+        "peak_bytes": 908980224,
+        "limit_bytes": 2147483648,
+        "restarts": 0
+      }
+    ],
+    "restored_checkpoint": {
+      "id": 670,
+      "restore_timestamp": 1793139394494,
+      "is_savepoint": false,
+      "external_path": "s3://fraud-flink-prod/checkpoints/live-v1/2c2e4bfc34c0ac9c413c4a2e52530b0a/chk-670"
+    },
+    "completed_checkpoint": {
+      "id": 680,
+      "state_size": 42365,
+      "end_to_end_duration": 243,
+      "num_acknowledged_subtasks": 7
+    },
+    "checkpoint_counts": {
+      "restored": 1,
+      "total": 18,
+      "in_progress": 0,
+      "completed": 10,
+      "failed": 8
+    },
+    "startup": "cold JobManager image pull 52.397s; worker pull 16.055s; job loading remained slow with CPU throttling and host I/O pressure; no container restarts",
+    "smoke": {
+      "run": "fraud-live-14caf7000d01449d9a784aa614cda536",
+      "results": [
+        {
+          "payment_id": "4c57053e-963b-4201-a405-17eb444a2ccb",
+          "attempt_id": "0362a824-0e08-5b87-8e91-8131fdbaaffb",
+          "status": "SUCCEEDED",
+          "latency_ms": 720.51,
+          "retry_same_identity": true
+        },
+        {
+          "payment_id": "cbdcdf64-86ec-4c4e-b242-dd2dd27c656e",
+          "attempt_id": "d26ee360-d32e-5225-b43a-a957ebd383b2",
+          "status": "DECLINED",
+          "latency_ms": 299.66,
+          "retry_same_identity": true
+        }
+      ],
+      "ledger_counts": {
+        "payment_created": 2,
+        "attempt_started": 2,
+        "risk_decision_recorded": 2,
+        "processor_operation_requested": 1,
+        "payment_succeeded": 1,
+        "attempt_declined": 1
+      },
+      "processor_operations": 1,
+      "completed_assessments": 2,
+      "ledger_evidence_references_match": true
+    },
+    "feast_readback": [
+      {
+        "view": "customer",
+        "revision": 2,
+        "epoch": "live-v1",
+        "snapshot_id": "ce27588da616a828593cd4a524f09720fdea61a855b23baa15a5ab069e592a3a",
+        "anchor": "2026-10-27T22:18:56.576749Z",
+        "coverage": {
+          "one_hour": "COVERAGE_COMPLETE",
+          "twenty_four_hours": "COVERAGE_UNKNOWN",
+          "seven_days": "COVERAGE_UNKNOWN"
+        },
+        "values": {
+          "assessed_count_1h": [
+            2
+          ],
+          "last_assessed_start_us": [
+            null
+          ],
+          "distinct_devices_7d": [
+            null
+          ],
+          "assessed_count_24h": [
+            null
+          ],
+          "assessed_amount_minor_24h": [
+            null
+          ]
+        }
+      },
+      {
+        "view": "method",
+        "revision": 11,
+        "epoch": "live-v1",
+        "snapshot_id": "703b8cdb1176c54d79b0a048c3ab028758e3eca999336688be37f86b1772b191",
+        "anchor": "2026-10-27T22:18:56.573314Z",
+        "coverage": {
+          "one_hour": "COVERAGE_COMPLETE",
+          "twenty_four_hours": "COVERAGE_UNKNOWN"
+        },
+        "values": {
+          "assessed_count_24h": [
+            null
+          ],
+          "assessed_count_1h": [
+            2
+          ]
+        }
+      }
+    ],
+    "temporary_verification_resources_removed": true,
+    "limits": [
+      "bounded two-payment verification, not sustained state growth or load acceptance",
+      "CPU reduction not measured; startup remains slow",
+      "24h/7d coverage remains unknown; rules authoritative, history shadow-only and velocity observe-only",
+      "immutable historical source unchanged; CI-managed historical replay and broad live acceptance remain pending"
+    ]
+  }
 }
