@@ -39,7 +39,7 @@ class LiveConfig(StrictModel):
     kafka_brokers: str = "payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092"
     label_topic: str = "fraud.labels.v1"
     seed: int = Field(default=2603, ge=0)
-    duration_seconds: float = Field(default=300, gt=0)
+    duration_seconds: float = Field(default=300, ge=0)
     payments_per_second: float = Field(default=1, gt=0)
     concurrency: int = Field(default=4, gt=0, le=128)
     request_timeout_seconds: float = Field(default=15, gt=0)

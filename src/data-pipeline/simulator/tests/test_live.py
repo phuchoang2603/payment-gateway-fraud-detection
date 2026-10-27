@@ -10,6 +10,7 @@ import pytest
 
 from simulator.config import ALGORITHM_VERSION
 from simulator.contracts.payments.v1.labels_pb2 import LABEL_SOURCE_SIMULATION_TRUTH, FraudLabel
+from simulator.identity import entity_id
 from simulator.live.config import Faults, LiveConfig
 from simulator.live.faults import deliveries
 from simulator.live.model import HistoricalModel, card_number
@@ -169,3 +170,61 @@ def test_fatal_loop_stops_shared_process_and_fault_thread(monkeypatch, capsys):
         asyncio.run(run_live(live_config(faults=Faults(enabled=True))))
     assert finished.is_set()
     assert "live_stop" in capsys.readouterr().out
+
+
+def test_continuous_traffic_stops_on_shutdown_and_finishes_admitted_payments(capsys):
+    class Model:
+        manifest = {"generation_identity": "model"}
+        config = SimpleNamespace(calibration_sha256="calibration", integration_id="integration")
+        profiles = SimpleNamespace(method_pool=["expected"])
+
+        def purchase(self, *args):
+            order = {"seller": {"external_id": "seller"}, "buyer": {"external_id": "buyer"}}
+            return order, {}, 0, "ok", 0, False, False, 0
+
+    class GatewayStub:
+        async def request(self, method, path, key, body=None, bearer=None):
+            if path == "/v1/payment-methods":
+                return {"fingerprint": "expected", "payment_method_token": "token"}
+            if path == "/v1/payments":
+                return {
+                    "merchant_id": entity_id("integration", "merchant", "seller"),
+                    "customer_id": entity_id("integration", "customer", "buyer"),
+                    "payment_id": key,
+                    "session_id": "session",
+                    "checkout_token": "checkout",
+                }
+            return {"attempt_id": key}
+
+    async def run():
+        stop = asyncio.Event()
+
+        class LabelsStub:
+            published = 0
+
+            async def publish(self, *args):
+                self.published += 1
+                if self.published == 3:
+                    stop.set()
+
+            async def schedule(self, *args):
+                pass
+
+        labels = LabelsStub()
+        await asyncio.wait_for(
+            traffic(
+                live_config(duration_seconds=0, payments_per_second=1000, concurrency=1),
+                Model(),
+                GatewayStub(),
+                labels,
+                stop,
+            ),
+            timeout=2,
+        )
+        assert labels.published == 3
+
+    asyncio.run(run())
+    reports = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    stopped = next(report for report in reports if report["event"] == "traffic_stop")
+    assert stopped["admitted"] == stopped["completed"] == 3
+    assert stopped["unfinished"] == 0

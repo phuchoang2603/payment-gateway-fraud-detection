@@ -1,8 +1,8 @@
 ## 1. Shared contracts and reference
 
-- [ ] 1.1 Replace active exact-baseline definitions/examples with hashed fraud-snapshot-v1 semantics, unchanged ten quantities, scoped keys and per-window coverage; verify hand-checkable expected outputs and definition identity through focused CI conformance cases.
+- [x] 1.1 Replace active exact-baseline definitions/examples with hashed fraud-snapshot-v1 semantics, unchanged ten quantities, scoped keys and per-window coverage; verify hand-checkable expected outputs and definition identity through focused CI conformance cases.
 - [x] 1.2 Update the pure reference for snapshot anchors, eligibility, hybrid expiration, partial coverage and elapsed-time derivation; verify CI cases cover boundary inclusion, repeated devices, unknown history and historical logical clocks without duplicating existing assertions.
-- [ ] 1.3 Define feature-update/evidence contracts with epoch, revision, separate anchor/write/publication/availability times and exact units; update necessary protobuf assessment/status fields and generated callers together, preserving existing source rows; verify serialization and unsupported-version behavior in existing CI coverage.
+- [x] 1.3 Define feature-update/evidence contracts with epoch, revision, separate anchor/write/publication/availability times and exact units; update necessary protobuf assessment/status fields and generated callers together, preserving existing source rows; verify serialization and unsupported-version behavior in existing CI coverage.
 
 ## 2. Runtime prerequisites
 
@@ -25,12 +25,12 @@
 
 - [x] 5.1 Implement atomic per-entity 10s/60s registration/count scripts with stable attempt binding, server time, bounded dedup retention and observe-only thresholds; verify CI concurrency, partial success, lost response, expired retry and degraded Redis recovery behavior.
 - [x] 5.2 Add durable Fraud assessment claims, digest conflicts, fenced recovery and completed-result/evidence replay; verify CI response-loss, concurrent replica and stale-owner cases reuse results despite changed counters/snapshots.
-- [ ] 5.3 Integrate parallel guard/shadow feature reads under bounded deadlines while preserving pure rules; verify existing healthy outcomes and distinct per-dependency failure statuses in CI, with no additional model features or implicit enforcement.
-- [ ] 5.4 Replace Payments' fabricated unavailability-decline fallback with operational assessment status and same-identity recovery/expiry; atomically link finalized evidence to the existing decision ledger/outbox, and verify CI timeout, lost-commit response, late result after expiry and downstream duplicate-delivery behavior without a second assessment event.
+- [x] 5.3 Integrate parallel guard/shadow feature reads under bounded deadlines while preserving pure rules; verify existing healthy outcomes and distinct per-dependency failure statuses in CI, with no additional model features or implicit enforcement.
+- [x] 5.4 Replace Payments' fabricated unavailability-decline fallback with operational assessment status and same-identity recovery/expiry; atomically link finalized evidence to the existing decision ledger/outbox, and verify CI timeout, lost-commit response, late result after expiry and downstream duplicate-delivery behavior without a second assessment event.
 
 ## 6. Exercise and documentation
 
 - [x] 6.1 Review and reuse existing CI logical-clock/reference-parity, expiration, epoch-isolation, SDK readback and checkpoint-recovery integration coverage; preserve immutable v16 source and historical evidence. Full 90-day replay is outside this slice's acceptance and remains unverified.
-- [x] 6.2 Review and retain the recorded bounded live verification of payment outcomes/retries, durable evidence linkage, Feast readback, populated-checkpoint recovery and resource/latency observations. Keep freshness/coverage/startup limitations explicit; no additional CI-managed cluster exercise or CI cluster/source credentials are required, and sustained-load/broad deployed outage acceptance is not claimed.
-- [ ] 6.3 Update only affected ML/data-pipeline/payment-flow guides and roadmap sections, removing superseded exact-online/stateless/error-decline references; verify links, diff scope and honest acceptance statuses, keeping DP1/offline training/model rollout separately pending.
+- [ ] 6.2 Review and retain the recorded bounded live verification of payment outcomes/retries, durable evidence linkage, Feast readback, populated-checkpoint recovery and resource/latency observations. Keep freshness/coverage/startup limitations explicit; no additional CI-managed cluster exercise or CI cluster/source credentials are required, and sustained-load/broad deployed outage acceptance is not claimed. Enable the requested low-rate continuous simulator and retain deployed payment/feature/checkpoint observations.
+- [x] 6.3 Update only affected ML/data-pipeline/payment-flow guides and roadmap sections, removing superseded exact-online/stateless/error-decline references; verify links, diff scope and honest acceptance statuses, keeping DP1/offline training/model rollout separately pending.
 - [ ] 6.4 Run relevant CI checks/builds, inspect every result and review cleanup for dead paths or redundant tests; use only formatting/schema/diff checks locally and report unresolved checks without claiming acceptance.
