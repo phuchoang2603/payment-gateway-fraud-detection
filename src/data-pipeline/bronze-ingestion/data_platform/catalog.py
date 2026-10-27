@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import tempfile
 from functools import lru_cache
@@ -29,7 +30,9 @@ def expand(value):
         return {k: expand(v) for k, v in value.items()}
     if isinstance(value, list):
         return [expand(v) for v in value]
-    return os.path.expandvars(value) if isinstance(value, str) else value
+    if isinstance(value, str):
+        return re.sub(r"\$\{([A-Z_][A-Z0-9_]*)\}", lambda match: os.environ[match[1]], value)
+    return value
 
 
 def native(command, config):

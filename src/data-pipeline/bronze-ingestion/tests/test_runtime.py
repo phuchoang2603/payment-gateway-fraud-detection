@@ -1,3 +1,5 @@
+import pytest
+
 from data_platform import ingest
 from data_platform.runs import open_run
 from data_platform.storage import Store
@@ -42,3 +44,11 @@ def test_preprovisioned_namespace_does_not_request_namespace_creation(tmp_path, 
     run = open_run(store, "candidate", "digest", {}, "image", "workflow")
     ingest.ingest(Session(), "source", {}, store, run)
     assert run["snapshots"] == {"payment_events": 1, "fraud_labels": 1}
+
+
+def test_missing_native_secret_fails_before_starting_a_process(monkeypatch):
+    from data_platform.catalog import native
+
+    monkeypatch.delenv("REQUIRED_CONNECTOR_SECRET", raising=False)
+    with pytest.raises(KeyError, match="REQUIRED_CONNECTOR_SECRET"):
+        native("ingest", {"password": "${REQUIRED_CONNECTOR_SECRET}"})

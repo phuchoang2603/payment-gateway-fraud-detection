@@ -48,6 +48,14 @@ spec:
           - namespaceSelector:
               matchLabels:
                 kubernetes.io/metadata.name: {{ .Values.kafka.clientNamespace | default .Release.Namespace }}
+          {{- if .Values.kafka.metadataNamespace }}
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: {{ .Values.kafka.metadataNamespace }}
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: metadata-integrations
+          {{- end }}
       - name: tls
         port: 9093
         type: internal
@@ -56,6 +64,14 @@ spec:
           - namespaceSelector:
               matchLabels:
                 kubernetes.io/metadata.name: {{ .Values.kafka.clientNamespace | default .Release.Namespace }}
+          {{- if .Values.kafka.metadataNamespace }}
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: {{ .Values.kafka.metadataNamespace }}
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: metadata-integrations
+          {{- end }}
     config:
       auto.create.topics.enable: "false"
       offsets.topic.replication.factor: {{ .Values.kafka.replicationFactor }}
@@ -92,6 +108,14 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.kafka.clientNamespace | default .Release.Namespace }}
+        {{- if .Values.kafka.metadataNamespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.kafka.metadataNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: metadata-integrations
+        {{- end }}
       ports:
         - protocol: TCP
           port: 9092

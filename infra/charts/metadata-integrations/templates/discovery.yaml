@@ -1,0 +1,69 @@
+{{- if .Values.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: metadata-discovery
+  namespace: {{ .Values.namespace }}
+spec:
+  entrypoint: run
+  serviceAccountName: metadata-integrations
+  activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
+  arguments:
+    parameters:
+      - name: connector
+      - name: stage
+        value: discover
+  podMetadata:
+    labels:
+      app.kubernetes.io/name: metadata-integrations
+  podGC:
+    strategy: OnWorkflowSuccess
+  templates:
+    - name: run
+      steps:
+        - - name: discover
+            template: "{{`{{workflow.parameters.connector}}`}}"
+{{- range $name, $connector := .Values.connectors }}
+    - name: {{ $name }}
+      synchronization:
+        mutexes:
+          - name: metadata-{{ $name }}
+      container:
+        image: {{ $.Values.image | quote }}
+        command: [python, -m, data_platform.integrations]
+        args: ["{{`{{workflow.parameters.stage}}`}}", "--connector={{ $name }}"]
+        {{- $secretRefs := list }}
+        {{- with $connector.externalSecret }}
+        {{- $secretRefs = append $secretRefs .name }}
+        {{- end }}
+        {{- include "metadata-integrations.runtime" (dict "Values" $.Values "secretRefs" $secretRefs) | nindent 8 }}
+      volumes:
+        - name: connectors
+          configMap:
+            name: metadata-connectors
+{{- end }}
+{{- range $name, $connector := .Values.connectors }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: metadata-{{ $name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  schedules: [{{ $.Values.schedule | quote }}]
+  timezone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  workflowSpec:
+    workflowTemplateRef:
+      name: metadata-discovery
+    arguments:
+      parameters:
+        - name: connector
+          value: {{ $name }}
+        - name: stage
+          value: {{ ternary "discover" "register" $connector.discover }}
+{{- end }}
+{{- end }}

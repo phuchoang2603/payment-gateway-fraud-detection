@@ -37,7 +37,7 @@ metadata:
     kubernetes.io/service-account.name: dp1-workflow
 type: kubernetes.io/service-account-token
 ---
-{{- range .Values.externalSecrets }}
+{{- with .Values.lakehouse.externalSecret }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:

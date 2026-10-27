@@ -128,33 +128,15 @@ def parameters(case):
 
 
 def connection():
-    return {
-        "type": "StarRocks",
-        "username": "openmetadata",
-        "password": "${STARROCKS_PASSWORD}",
-        "hostPort": "kube-starrocks-fe-service.starrocks.svc.cluster.local:9030",
-        "databaseName": CATALOG,
-        "connectionArguments": {"init_command": f"SET CATALOG {CATALOG}"},
-    }
+    from data_platform.integrations import connection as shared_connection
+
+    return shared_connection(SERVICE)
 
 
 def metadata_workflow():
-    return {
-        "source": {
-            "type": "starrocks",
-            "serviceName": SERVICE,
-            "serviceConnection": {"config": connection()},
-            "sourceConfig": {
-                "config": {
-                    "type": "DatabaseMetadata",
-                    "schemaFilterPattern": {"includes": [f"^{SCHEMA}$"]},
-                    "markDeletedTables": False,
-                }
-            },
-        },
-        "sink": {"type": "metadata-rest", "config": {}},
-        "workflowConfig": {"loggerLevel": "INFO", "openMetadataServerConfig": server()},
-    }
+    from data_platform.integrations import workflow
+
+    return workflow(SERVICE)
 
 
 def profiler_workflow():

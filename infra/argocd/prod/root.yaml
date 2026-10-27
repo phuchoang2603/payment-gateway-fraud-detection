@@ -19,6 +19,12 @@ spec:
         namePrefix: payment-gateway-prod
         destinationServer: https://kubernetes.default.svc
         applications:
+          metadata-integrations:
+            enabled: true
+            destinationNamespace: fraud-data-prod
+            path: infra/charts/metadata-integrations
+            valuesFile:
+              - infra/charts/metadata-integrations/values-prod.yaml
           data-pipelines:
             enabled: true
             destinationNamespace: fraud-data-prod

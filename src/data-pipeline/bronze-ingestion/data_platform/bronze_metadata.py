@@ -77,12 +77,12 @@ def synchronize(sdk, run, manifest, expected, stages, report_uri, outcome):
     from metadata.generated.schema.api.domains.createDataProduct import CreateDataProductRequest
     from metadata.generated.schema.api.domains.createDomain import CreateDomainRequest
     from metadata.generated.schema.api.lineage.addLineage import AddLineageRequest
-    from metadata.generated.schema.api.services.createPipelineService import CreatePipelineServiceRequest
-    from metadata.generated.schema.api.services.createStorageService import CreateStorageServiceRequest
     from metadata.generated.schema.entity.data.pipeline import PipelineStatus
     from metadata.generated.schema.entity.data.table import Table
     from metadata.generated.schema.entity.domains.dataProduct import DataProduct
     from metadata.generated.schema.entity.domains.domain import Domain
+    from metadata.generated.schema.entity.services.pipelineService import PipelineService
+    from metadata.generated.schema.entity.services.storageService import StorageService
     from metadata.generated.schema.tests.testCase import TestCase
     from metadata.generated.schema.type.entityReference import EntityReference
 
@@ -101,11 +101,7 @@ def synchronize(sdk, run, manifest, expected, stages, report_uri, outcome):
         sdk.create_or_update(
             CreateDataProductRequest(name=name, description=description, domains=[governance.DOMAIN], owners=owners)
         )
-    sdk.create_or_update(
-        CreateStorageServiceRequest(
-            name=governance.STORAGE, serviceType="S3", description="RustFS source object storage"
-        )
-    )
+    sdk.get_by_name(StorageService, governance.STORAGE, nullable=False)
     paths = governance.source_paths(run, manifest)
     bronze_product = sdk.get_by_name(DataProduct, governance.PRODUCT, nullable=False)
     domain = sdk.get_by_name(Domain, governance.DOMAIN, nullable=False)
@@ -158,7 +154,7 @@ def synchronize(sdk, run, manifest, expected, stages, report_uri, outcome):
         contract = sdk.create_or_update(request)
         sdk.patch_description(type(contract), contract, body["description"], force=True, skip_on_failure=False)
         contracts[table] = {"id": str(contract.id.root), "body": body}
-    sdk.create_or_update(CreatePipelineServiceRequest(name="argo", serviceType="CustomPipeline"))
+    sdk.get_by_name(PipelineService, "argo", nullable=False)
     link = (
         os.environ["ARGO_WORKFLOWS_URL"].rstrip("/")
         + f"/workflows/{os.environ.get('WORKFLOW_NAMESPACE', 'fraud-data-prod')}/{os.environ.get('WORKFLOW_ID', run['workflow'])}"
