@@ -1,16 +1,13 @@
 import base64
 import secrets
-import subprocess
 import threading
-import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from feast import FeatureStore
 from feast.feature_server_utils import convert_response_to_dict
 from feast.repo_config import RepoConfig
-from redis import Redis
-from redis.exceptions import ConnectionError
+from testcontainers.community.redis import RedisContainer
 
 from fraud_feast import schema
 from fraud_feast.contracts.features.v1 import features_pb2 as wire
@@ -23,43 +20,24 @@ DEFINITION_HASH = "8ca9a423f452f8ed7a8d1e8aa082dadb72590498cfd1e8da48f94f6c06b0e
 @pytest.fixture(scope="session")
 def redis_address():
     password = secrets.token_hex(16)
-    container = subprocess.check_output(
-        [
-            "docker",
-            "run",
-            "--rm",
-            "-d",
-            "-p",
-            "127.0.0.1::6379",
-            "--entrypoint",
-            "redis-server",
-            "quay.io/opstree/redis:v7.2.16",
-            "--save",
-            "",
-            "--appendonly",
-            "no",
-            "--requirepass",
-            password,
-        ],
-        text=True,
-    ).strip()
-    try:
-        port = subprocess.check_output(["docker", "port", container, "6379"], text=True).strip()
-        client = Redis(host="127.0.0.1", port=int(port.rsplit(":", 1)[1]), password=password)
-        try:
-            for _ in range(100):
-                try:
-                    if client.ping():
-                        break
-                except ConnectionError:
-                    time.sleep(0.1)
-            else:
-                raise RuntimeError("selected Redis image did not become ready")
-            yield f"{port},password={password}"
-        finally:
-            client.close()
-    finally:
-        subprocess.run(["docker", "rm", "-f", container], check=True, stdout=subprocess.DEVNULL)
+    container = (
+        RedisContainer("quay.io/opstree/redis:v7.2.16", password=password)
+        .with_kwargs(entrypoint="redis-server")
+        .with_command(
+            [
+                "--save",
+                "",
+                "--appendonly",
+                "no",
+                "--requirepass",
+                password,
+            ]
+        )
+    )
+    with container:
+        host = container.get_container_host_ip()
+        port = container.get_exposed_port(6379)
+        yield f"{host}:{port},password={password}"
 
 
 @pytest.fixture

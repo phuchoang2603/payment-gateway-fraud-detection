@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest==9.0.2", "ruff==0.14.14"]
+dev = ["pytest==9.0.2", "ruff==0.14.14", "testcontainers[redis]==4.15.0"]
 
 [tool.uv]
 package = false
