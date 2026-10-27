@@ -3,8 +3,8 @@ schemaRegistry:
     enabled: true
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/schema-register
-      digest: sha256:f9fdc12994c6474dd380dc90bc6cafdfc61a7c917495a526ca560e278f4bb812
-      revision: 13ac0b9add31a1113d7dceda3406fe3473655acd
+      digest: sha256:b0f76207171b38f4ee6078aa4661cedf2ab3f7e2ae00f04058f2894065d9036a
+      revision: 1bfef36deb1e75dc3f25f7b8ff8c1d6ba26deba1
 
 kafka:
   metadataNamespace: fraud-data-prod
@@ -22,5 +22,5 @@ entities:
 connect:
   image:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/connect-debezium
-    digest: sha256:635960f7629912732bb61cac378570b0505687a356f0eac21bf515b9309a3b43
-    revision: 54b91989f44d09d3588b0a3218f8731dd0fbff80
+    digest: sha256:f5246f726d041cef2b71c5c99f9de37807cd5a5bf46c7e0048f42002f43385a1
+    revision: 1bfef36deb1e75dc3f25f7b8ff8c1d6ba26deba1
