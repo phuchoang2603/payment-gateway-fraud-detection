@@ -189,13 +189,11 @@ spec:
             k8s:k8s-app: kube-dns
       toPorts:
         - ports: [{port: '53', protocol: ANY}]
-          rules:
-            dns: [{matchPattern: '*'}]
     - toEntities: [kube-apiserver]
       toPorts:
         - ports: [{port: '443', protocol: TCP}, {port: '6443', protocol: TCP}]
-    - toFQDNs:
-        - matchName: {{ .Values.streaming.storageHostname | quote }}
+    - toCIDR:
+        - {{ .Values.streaming.storageCIDR | quote }}
       toPorts:
         - ports: [{port: '443', protocol: TCP}]
 {{- end }}

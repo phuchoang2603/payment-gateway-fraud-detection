@@ -54,6 +54,7 @@ streaming:
   sourcePartitions: 3
   maxEntityEntries: 50000
   storageHostname: minio.home.phuchoang.sbs
+  storageCIDR: 10.69.1.101/32
   storageRoot: s3://fraud-flink-prod
   storageSecretName: fraud-flink-storage
   jobManager:
