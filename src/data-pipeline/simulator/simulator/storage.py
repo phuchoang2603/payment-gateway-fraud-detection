@@ -77,12 +77,12 @@ def _descriptor() -> dict:
             "version": contract["version"],
             "sha256": sha256(content).hexdigest(),
         }
-    definition = PRODUCT_DIR.parents[1] / "features" / "fraud-baseline-v1.yaml"
+    definition = PRODUCT_DIR.parents[1] / "features" / "fraud-snapshot-v1.yaml"
     return {
         "id": product["id"],
         "version": product["version"],
         "contracts": contracts,
-        "feature_definition": {"version": "fraud-baseline-v1", "sha256": sha256(definition.read_bytes()).hexdigest()},
+        "feature_definition": {"version": "fraud-snapshot-v1", "sha256": sha256(definition.read_bytes()).hexdigest()},
     }
 
 

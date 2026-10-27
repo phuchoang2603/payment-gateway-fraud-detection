@@ -10,6 +10,17 @@ import (
 	"github.com/google/uuid"
 )
 
+type AssessmentRequest struct {
+	AttemptID      uuid.UUID
+	Signals        []byte
+	EncryptedToken []byte
+	Status         string
+	Fence          int64
+	LeaseUntil     time.Time
+	RetryAfter     time.Time
+	RetryUntil     time.Time
+}
+
 type Attempt struct {
 	AttemptID          uuid.UUID
 	PaymentID          uuid.UUID

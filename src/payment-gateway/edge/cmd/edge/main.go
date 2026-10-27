@@ -37,7 +37,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	registry, err := integrations.Load(cfg.IntegrationsFile)
+	registry, err := integrations.Parse([]byte(cfg.IntegrationsJSON))
 	if err != nil {
 		return err
 	}

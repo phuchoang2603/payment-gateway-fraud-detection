@@ -1,12 +1,6 @@
 {{- range $name, $svc := include "payment-gateway.services" . | fromYaml }}
 {{- $port := first $svc.ports }}
 {{- $image := include "payment-gateway.image" $svc.image }}
-{{- $mounts := list }}
-{{- range $svc.externalSecrets }}
-{{- if .mountPath }}
-{{- $mounts = append $mounts . }}
-{{- end }}
-{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -90,26 +84,31 @@ spec:
             {{- if $svc.database }}
             {{- include "payment-gateway.database-env" (dict "database" $svc.database "migrate" false) | nindent 12 }}
             {{- end }}
-            {{- range $mounts }}
-            {{- $mountPath := .mountPath }}
-            {{- range .data }}
-            {{- if .env }}
-            - name: {{ .env }}
-              value: {{ printf "%s/%s" $mountPath .secretKey | quote }}
+            {{- if and (eq $name "fraud-service") $.Values.features.enabled }}
+            - name: FRAUD_FEAST_URL
+              value: {{ $.Values.features.url | quote }}
+            - name: FRAUD_FEATURE_EPOCH
+              value: {{ $.Values.features.epoch | quote }}
+            - name: FRAUD_FEATURE_DEFINITION_SHA256
+              value: {{ $.Values.features.definitionHash | quote }}
+            - name: FRAUD_FEATURE_MAX_ANCHOR_AGE
+              value: {{ $.Values.features.maxAnchorAge | quote }}
+            - name: FRAUD_FEATURE_MAX_PROGRESS_AGE
+              value: {{ $.Values.features.maxProgressAge | quote }}
             {{- end }}
+            {{- range $svc.externalSecrets }}
+            {{- $secretName := .name }}
+            {{- range .data }}
+            - name: {{ .env }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ .secretKey }}
             {{- end }}
             {{- end }}
             {{- with $svc.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- with $mounts }}
-          volumeMounts:
-            {{- range . }}
-            - name: {{ .name }}
-              mountPath: {{ .mountPath }}
-              readOnly: true
-            {{- end }}
-          {{- end }}
           {{- range $probe, $path := dict "liveness" "/health" "readiness" "/ready" }}
           {{ $probe }}Probe:
             {{- if eq $port.name "http" }}
@@ -125,12 +124,4 @@ spec:
           {{- end }}
           resources:
             {{- toYaml $svc.resources | nindent 12 }}
-      {{- with $mounts }}
-      volumes:
-        {{- range . }}
-        - name: {{ .name }}
-          secret:
-            secretName: {{ .name }}
-        {{- end }}
-      {{- end }}
 {{- end }}

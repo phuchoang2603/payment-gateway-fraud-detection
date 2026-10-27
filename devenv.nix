@@ -48,6 +48,8 @@
     execIfModified = [
       "contracts/**/*.proto"
       "scripts/codegen-proto.sh"
+      "scripts/codegen-proto.py"
+      "src/**/pyproject.toml"
       "devenv.lock"
       "devenv.nix"
     ];

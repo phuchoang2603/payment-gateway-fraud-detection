@@ -74,18 +74,36 @@ func (q *Queries) InsertAttempt(ctx context.Context, arg InsertAttemptParams) er
 }
 
 const listAttempts = `-- name: ListAttempts :many
-SELECT attempt_id, payment_id, ordinal, status, version, decline_source, decline_reason, operation_key, processor_reference, started_at, updated_at FROM attempts WHERE payment_id = $1 ORDER BY ordinal
+SELECT a.attempt_id, a.payment_id, a.ordinal, a.status, a.version, a.decline_source, a.decline_reason, a.operation_key, a.processor_reference, a.started_at, a.updated_at, CASE WHEN r.status <> 'COMPLETED' AND r.retry_until <= clock_timestamp()
+THEN 'EXPIRED' ELSE coalesce(r.status, '') END::text AS assessment_status
+FROM attempts a LEFT JOIN assessment_requests r USING (attempt_id)
+WHERE payment_id = $1 ORDER BY ordinal
 `
 
-func (q *Queries) ListAttempts(ctx context.Context, paymentID uuid.UUID) ([]Attempt, error) {
+type ListAttemptsRow struct {
+	AttemptID          uuid.UUID
+	PaymentID          uuid.UUID
+	Ordinal            int32
+	Status             string
+	Version            int64
+	DeclineSource      int32
+	DeclineReason      string
+	OperationKey       string
+	ProcessorReference string
+	StartedAt          time.Time
+	UpdatedAt          time.Time
+	AssessmentStatus   string
+}
+
+func (q *Queries) ListAttempts(ctx context.Context, paymentID uuid.UUID) ([]ListAttemptsRow, error) {
 	rows, err := q.db.Query(ctx, listAttempts, paymentID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Attempt
+	var items []ListAttemptsRow
 	for rows.Next() {
-		var i Attempt
+		var i ListAttemptsRow
 		if err := rows.Scan(
 			&i.AttemptID,
 			&i.PaymentID,
@@ -98,6 +116,7 @@ func (q *Queries) ListAttempts(ctx context.Context, paymentID uuid.UUID) ([]Atte
 			&i.ProcessorReference,
 			&i.StartedAt,
 			&i.UpdatedAt,
+			&i.AssessmentStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -110,9 +129,14 @@ func (q *Queries) ListAttempts(ctx context.Context, paymentID uuid.UUID) ([]Atte
 }
 
 const listRecoveryAttempts = `-- name: ListRecoveryAttempts :many
-SELECT attempt_id, payment_id, status, updated_at FROM attempts
-WHERE status IN ('requested', 'unknown') AND updated_at <= $1
-ORDER BY updated_at
+SELECT a.attempt_id, a.payment_id, a.status, a.updated_at FROM attempts a
+JOIN payments p USING (payment_id)
+LEFT JOIN assessment_requests r USING (attempt_id)
+WHERE p.status = 'open' AND a.updated_at <= $1
+  AND (a.status IN ('requested', 'unknown', 'risk_approved', 'risk_declined')
+       OR (a.status = 'started' AND r.retry_until > clock_timestamp()
+           AND r.lease_until <= clock_timestamp() AND r.retry_after <= clock_timestamp()))
+ORDER BY a.updated_at
 LIMIT $2
 `
 

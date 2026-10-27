@@ -40,6 +40,7 @@ func (p Phase) AwaitingProcessor() bool {
 }
 
 type Attempt struct {
+	AssessmentStatus   string
 	ID                 string
 	Version            uint64
 	Phase              Phase

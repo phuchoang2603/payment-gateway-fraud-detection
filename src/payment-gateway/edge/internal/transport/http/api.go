@@ -95,9 +95,10 @@ type paymentCreatedJSON struct {
 }
 
 type attemptJSON struct {
-	AttemptID string `json:"attempt_id"`
-	Status    string `json:"status"`
-	Reason    string `json:"reason,omitempty"`
+	AssessmentStatus string `json:"assessment_status,omitempty"`
+	AttemptID        string `json:"attempt_id"`
+	Status           string `json:"status"`
+	Reason           string `json:"reason,omitempty"`
 }
 
 type paymentJSON struct {
@@ -114,7 +115,7 @@ type paymentJSON struct {
 }
 
 func attemptBody(attempt application.Attempt) attemptJSON {
-	return attemptJSON{AttemptID: attempt.ID, Status: attempt.Status, Reason: attempt.Reason}
+	return attemptJSON{AttemptID: attempt.ID, Status: attempt.Status, Reason: attempt.Reason, AssessmentStatus: attempt.AssessmentStatus}
 }
 
 func (s *Server) authenticate(r *http.Request) (domain.Integration, error) {

@@ -49,6 +49,15 @@ message AttemptResult {
   string attempt_id = 1;
   AttemptStatus status = 2;
   string decline_reason = 3;
+  AssessmentStatus assessment_status = 4;
+}
+enum AssessmentStatus {
+  ASSESSMENT_STATUS_UNSPECIFIED = 0;
+  ASSESSMENT_STATUS_PENDING = 1;
+  ASSESSMENT_STATUS_ASSESSING = 2;
+  ASSESSMENT_STATUS_ASSESSMENT_ERROR = 3;
+  ASSESSMENT_STATUS_COMPLETED = 4;
+  ASSESSMENT_STATUS_EXPIRED = 5;
 }
 message Payment {
   string payment_id = 1;

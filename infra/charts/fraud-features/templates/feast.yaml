@@ -1,0 +1,152 @@
+{{- if .Values.feast.enabled }}
+{{- range $mode, $name := dict "write" "feast-writer" "serve" "feast-server" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $name }}
+          image: {{ include "fraud-features.image" $.Values.images.feast | quote }}
+          imagePullPolicy: {{ $.Values.images.feast.pullPolicy }}
+          args: [{{ $mode | quote }}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: FEAST_REDIS_ADDR
+              value: {{ printf "%s:6379" $.Values.redis.name | quote }}
+            - name: FEAST_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.redis.password.secretName }}
+                  key: {{ $.Values.redis.password.secretKey }}
+            {{- if eq $mode "write" }}
+            - name: FEATURE_KAFKA_BROKERS
+              value: {{ $.Values.kafkaBrokers | quote }}
+            - name: FEATURE_WRITER_GROUP
+              value: {{ $.Values.feast.writerGroup | quote }}
+            - name: FEATURE_UPDATE_TOPIC
+              value: {{ $.Values.topic | quote }}
+            - name: FEATURE_EPOCH
+              value: {{ $.Values.epoch | quote }}
+            - name: FEATURE_DEFINITION_SHA256
+              value: {{ $.Values.definitionHash | quote }}
+            {{- end }}
+          {{- if eq $mode "serve" }}
+          ports:
+            - name: http
+              containerPort: 6566
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          {{- end }}
+          volumeMounts:
+            - name: runtime
+              mountPath: /tmp
+          resources:
+            {{- toYaml $.Values.feast.resources | nindent 12 }}
+      volumes:
+        - name: runtime
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  policyTypes: [Ingress, Egress]
+  {{- if eq $mode "serve" }}
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: fraud-service
+      ports:
+        - port: 6566
+          protocol: TCP
+  {{- else }}
+  ingress: []
+  {{- end }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: {{ $.Values.redis.name }}
+      ports:
+        - port: 6379
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    {{- if eq $mode "write" }}
+    - to:
+        - podSelector:
+            matchLabels:
+              strimzi.io/cluster: payment-gateway-kafka
+      ports:
+        - port: 9092
+          protocol: TCP
+    {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: feast-server
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: feast-server
+  ports:
+    - name: http
+      port: 6566
+      targetPort: http
+{{- end }}

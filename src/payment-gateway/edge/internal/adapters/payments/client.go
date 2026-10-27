@@ -2,6 +2,7 @@ package payments
 
 import (
 	"context"
+	"strings"
 
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/edge/internal/adapters/grpcerr"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/edge/internal/application"
@@ -108,6 +109,9 @@ func optional(value string) *string {
 
 func attemptFrom(result *paymentsv1.AttemptResult) application.Attempt {
 	attempt := application.Attempt{ID: result.GetAttemptId(), Reason: result.GetDeclineReason()}
+	if result.GetAssessmentStatus() != paymentsv1.AssessmentStatus_ASSESSMENT_STATUS_UNSPECIFIED {
+		attempt.AssessmentStatus = strings.TrimPrefix(result.GetAssessmentStatus().String(), "ASSESSMENT_STATUS_")
+	}
 	switch result.GetStatus() {
 	case paymentsv1.AttemptStatus_ATTEMPT_STATUS_PENDING:
 		attempt.Status = application.AttemptPending

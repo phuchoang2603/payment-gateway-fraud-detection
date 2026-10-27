@@ -19,9 +19,10 @@ const (
 )
 
 type Attempt struct {
-	ID     string
-	Status string
-	Reason string
+	AssessmentStatus string
+	ID               string
+	Status           string
+	Reason           string
 }
 
 type Payment struct {

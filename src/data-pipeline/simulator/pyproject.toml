@@ -55,3 +55,7 @@ select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.protobuf]
+python-package = "simulator.contracts"
+sources = ["payments/v1/types.proto", "payments/v1/events.proto", "payments/v1/labels.proto"]

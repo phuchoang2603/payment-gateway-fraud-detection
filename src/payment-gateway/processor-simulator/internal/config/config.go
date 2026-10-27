@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -18,7 +17,7 @@ const (
 	defaultTimeoutHold       = 30 * time.Second
 )
 
-// Environment variables (each secret also accepts <NAME>_FILE with a mounted file path):
+// Environment variables:
 //
 //	PROCESSOR_GRPC_ADDR, PROCESSOR_SHUTDOWN_TIMEOUT, PROCESSOR_READINESS_INTERVAL
 //	PROCESSOR_DATABASE_URL, PROCESSOR_MIGRATE_DATABASE_URL (owner role, falls back to PROCESSOR_DATABASE_URL)
@@ -96,13 +95,8 @@ func FromLookup(lookup func(string) string) (Config, error) {
 		}
 		cfg.TimeoutRate = rate
 	}
-	var err error
-	if cfg.DatabaseURL, err = secret(lookup, "PROCESSOR_DATABASE_URL"); err != nil {
-		return Config{}, err
-	}
-	if cfg.MigrateDatabaseURL, err = secret(lookup, "PROCESSOR_MIGRATE_DATABASE_URL"); err != nil {
-		return Config{}, err
-	}
+	cfg.DatabaseURL = lookup("PROCESSOR_DATABASE_URL")
+	cfg.MigrateDatabaseURL = lookup("PROCESSOR_MIGRATE_DATABASE_URL")
 	if cfg.MigrateDatabaseURL == "" {
 		cfg.MigrateDatabaseURL = cfg.DatabaseURL
 	}
@@ -142,30 +136,14 @@ func (c Config) Validate() error {
 }
 
 func MigrateURL(lookup func(string) string) (string, error) {
-	url, err := secret(lookup, "PROCESSOR_MIGRATE_DATABASE_URL")
-	if err != nil {
-		return "", err
-	}
+	url := lookup("PROCESSOR_MIGRATE_DATABASE_URL")
 	if url == "" {
-		if url, err = secret(lookup, "PROCESSOR_DATABASE_URL"); err != nil {
-			return "", err
-		}
+		url = lookup("PROCESSOR_DATABASE_URL")
 	}
 	if url == "" {
 		return "", fmt.Errorf("PROCESSOR_MIGRATE_DATABASE_URL or PROCESSOR_DATABASE_URL is required")
 	}
 	return url, nil
-}
-
-func secret(lookup func(string) string, name string) (string, error) {
-	if path := lookup(name + "_FILE"); path != "" {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return "", fmt.Errorf("read %s_FILE: %w", name, err)
-		}
-		return strings.TrimSpace(string(raw)), nil
-	}
-	return lookup(name), nil
 }
 
 func validateAddr(name, addr string) error {

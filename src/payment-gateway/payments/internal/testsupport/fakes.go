@@ -3,6 +3,7 @@ package testsupport
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -45,11 +46,11 @@ type FakeFraud struct {
 }
 
 func Approve() *paymentsv1.RiskAssessment {
-	return &paymentsv1.RiskAssessment{Outcome: paymentsv1.RiskOutcome_RISK_OUTCOME_APPROVE, ReasonCodes: []string{"ALLOW"}, PolicyVersion: "rules-v1"}
+	return &paymentsv1.RiskAssessment{Outcome: paymentsv1.RiskOutcome_RISK_OUTCOME_APPROVE, ReasonCodes: []string{"ALLOW"}, PolicyVersion: "rules-v1", AssessmentId: "test-assessment", EvidenceSha256: strings.Repeat("a", 64)}
 }
 
 func Decline(reason string) *paymentsv1.RiskAssessment {
-	return &paymentsv1.RiskAssessment{Outcome: paymentsv1.RiskOutcome_RISK_OUTCOME_DECLINE, ReasonCodes: []string{reason}, PolicyVersion: "rules-v1"}
+	return &paymentsv1.RiskAssessment{Outcome: paymentsv1.RiskOutcome_RISK_OUTCOME_DECLINE, ReasonCodes: []string{reason}, PolicyVersion: "rules-v1", AssessmentId: "test-assessment", EvidenceSha256: strings.Repeat("a", 64)}
 }
 
 func NewFakeFraud(t testing.TB) (*FakeFraud, *grpc.ClientConn) {

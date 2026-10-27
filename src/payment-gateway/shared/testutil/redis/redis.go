@@ -21,9 +21,10 @@ func SetupRedis(t testing.TB) *Redis {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	container, err := testcontainers.Run(ctx, "valkey/valkey:8.1.10",
+	container, err := testcontainers.Run(ctx, "quay.io/opstree/redis:v7.2.16",
 		testcontainers.WithExposedPorts("6379/tcp"),
-		testcontainers.WithCmd("valkey-server", "--save", "", "--appendonly", "no"),
+		testcontainers.WithEntrypoint("redis-server"),
+		testcontainers.WithCmd("--save", "", "--appendonly", "no", "--protected-mode", "no"),
 		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections"), wait.ForListeningPort("6379/tcp")),
 	)
 	testcontainers.CleanupContainer(t, container)

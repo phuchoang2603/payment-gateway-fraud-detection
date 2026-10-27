@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/wire"
@@ -71,9 +70,9 @@ func (s *Service) StartAttempt(ctx context.Context, request *paymentsv1.StartAtt
 		return nil, err
 	}
 	digestBytes, _ := hex.DecodeString(digest)
-	signals := proto.Clone(request.GetSignals()).(*paymentsv1.AttemptSignals)
-	if request.GetSignals() == nil {
-		signals = &paymentsv1.AttemptSignals{}
+	signals := &paymentsv1.AttemptSignals{}
+	if request.GetSignals() != nil {
+		signals = proto.Clone(request.GetSignals()).(*paymentsv1.AttemptSignals)
 	}
 	if signals.GetAttemptedAt() == nil {
 		signals.AttemptedAt = timestamppb.New(started)
@@ -118,6 +117,7 @@ func (s *Service) StartAttempt(ctx context.Context, request *paymentsv1.StartAtt
 		completion := CacheRecord{
 			Digest: digest, State: CacheCompleted, ClaimedAtMs: started.UnixMilli(), AttemptID: result.GetAttemptId(),
 			AttemptStatus: result.GetStatus().String(), DeclineReason: result.GetDeclineReason(),
+			AssessmentStatus: result.GetAssessmentStatus().String(),
 		}
 		if err := s.deps.Cache.Complete(ctx, input.cacheKey, completion); err != nil {
 			slog.WarnContext(ctx, "complete idempotency cache record", "error", err)
@@ -137,7 +137,8 @@ func cachedResult(record *CacheRecord) *paymentsv1.AttemptResult {
 	if value, ok := paymentsv1.AttemptStatus_value[record.AttemptStatus]; ok {
 		status = paymentsv1.AttemptStatus(value)
 	}
-	return &paymentsv1.AttemptResult{AttemptId: record.AttemptID, Status: status, DeclineReason: record.DeclineReason}
+	assessment := paymentsv1.AssessmentStatus(paymentsv1.AssessmentStatus_value[record.AssessmentStatus])
+	return &paymentsv1.AttemptResult{AttemptId: record.AttemptID, Status: status, DeclineReason: record.DeclineReason, AssessmentStatus: assessment}
 }
 
 func signalsWithoutTime(signals *paymentsv1.AttemptSignals) *paymentsv1.AttemptSignals {
@@ -171,8 +172,14 @@ func (s *Service) runAttempt(ctx context.Context, input attemptInput) (*payments
 			return s.replayOr(ctx, budgetCtx, input, ErrPaymentNotOpen)
 		}
 		claim := input.claim
-		state, err = s.commit(ctx, state, &claim, nil, domain.StartAttempt{
-			Envelope: s.envelope(state.Version), AttemptID: input.attemptID.String(), Signals: wire.Signals(input.signals),
+		sealed, sealErr := s.deps.Sealer.Seal([]byte(input.token), input.attemptID[:])
+		if sealErr != nil {
+			return nil, fmt.Errorf("seal assessment recovery token: %w", sealErr)
+		}
+		state, err = s.transition(ctx, TransitionRequest{
+			PaymentID: input.paymentID, Idempotency: &claim,
+			AssessmentRequest: &AssessmentRequestRecord{AttemptID: input.attemptID, Signals: input.signals, EncryptedToken: sealed, RetryUntil: minTime(state.ExpiresAt, s.now().Add(s.config.AssessmentRetryHorizon))},
+			Command:           domain.StartAttempt{Envelope: s.envelope(state.Version), AttemptID: input.attemptID.String(), Signals: wire.Signals(input.signals)},
 		})
 		switch {
 		case err == nil:
@@ -229,11 +236,13 @@ func (s *Service) resumeAttempt(ctx, budgetCtx context.Context, input attemptInp
 }
 
 func (s *Service) commit(ctx context.Context, state domain.State, claim *IdempotencyClaim, processorRequest *ProcessorRequestRecord, command domain.Command) (domain.State, error) {
+	return s.transition(ctx, TransitionRequest{PaymentID: uuid.MustParse(state.PaymentID), Command: command, Idempotency: claim, ProcessorRequest: processorRequest})
+}
+
+func (s *Service) transition(ctx context.Context, request TransitionRequest) (domain.State, error) {
 	storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storeTimeout)
 	defer cancel()
-	next, err := s.deps.Store.Transition(storeCtx, TransitionRequest{
-		PaymentID: uuid.MustParse(state.PaymentID), Command: command, Idempotency: claim, ProcessorRequest: processorRequest,
-	})
+	next, err := s.deps.Store.Transition(storeCtx, request)
 	if err != nil {
 		var ruleErr *domain.RuleError
 		if errors.As(err, &ruleErr) && !errors.Is(err, domain.ErrStaleVersion) {
@@ -265,14 +274,38 @@ func (s *Service) drive(ctx, budgetCtx context.Context, state domain.State, inpu
 		)
 		switch attempt.Phase {
 		case domain.PhaseStarted:
-			assessment := s.assess(budgetCtx, state, input)
-			next, err = s.commit(ctx, state, nil, nil, domain.RecordRiskDecision{Envelope: s.envelope(state.Version), AttemptID: attemptID, Assessment: wire.Assessment(assessment)})
-		case domain.PhaseRiskDeclined:
-			if strings.EqualFold(attempt.DeclineReason, FallbackReason) {
-				s.failure("fraud_unavailable")
-			} else {
-				s.failure("risk_declined")
+			if state.Status != domain.StatusOpen || !state.ExpiresAt.After(s.now()) {
+				return nil, ErrPaymentNotOpen
 			}
+			record, claimErr := s.deps.Store.ClaimAssessment(budgetCtx, input.attemptID, s.stalledAfter())
+			if errors.Is(claimErr, ErrAssessmentBusy) {
+				return attemptResult(attempt), nil
+			}
+			if claimErr != nil {
+				return nil, claimErr
+			}
+			input.signals = record.Signals
+			assessment, assessmentErr := s.assess(budgetCtx, state, input)
+			if assessmentErr != nil {
+				cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), storeTimeout)
+				err = s.deps.Store.FailAssessment(cleanup, input.attemptID, record.Fence, s.config.AssessmentBackoff)
+				cancel()
+				if err != nil {
+					return nil, err
+				}
+				s.failure("assessment_error")
+				attempt.AssessmentStatus = "ASSESSMENT_ERROR"
+				return attemptResult(attempt), nil
+			}
+			if !state.ExpiresAt.After(s.now()) {
+				if err := s.ExpirePayment(ctx, input.paymentID); err != nil {
+					return nil, err
+				}
+				return nil, ErrPaymentNotOpen
+			}
+			next, err = s.transition(ctx, TransitionRequest{PaymentID: input.paymentID, AssessmentFence: &record.Fence, Command: domain.RecordRiskDecision{Envelope: s.envelope(state.Version), AttemptID: attemptID, Assessment: wire.Assessment(assessment)}})
+		case domain.PhaseRiskDeclined:
+			s.failure("risk_declined")
 			next, err = s.commit(ctx, state, nil, nil, domain.DeclineAttempt{
 				Envelope: s.envelope(state.Version), AttemptID: attemptID, Source: domain.DeclineSourceRisk, Reason: attempt.DeclineReason,
 			})
@@ -306,15 +339,10 @@ func (s *Service) failure(reason string) {
 	}
 }
 
-func (s *Service) assess(budgetCtx context.Context, state domain.State, input attemptInput) *paymentsv1.RiskAssessment {
-	fallback := &paymentsv1.RiskAssessment{
-		Outcome:       paymentsv1.RiskOutcome_RISK_OUTCOME_DECLINE,
-		ReasonCodes:   []string{FallbackReason},
-		PolicyVersion: FallbackPolicyVersion,
-	}
+func (s *Service) assess(budgetCtx context.Context, state domain.State, input attemptInput) (*paymentsv1.RiskAssessment, error) {
 	timeout := min(s.config.FraudTimeout, remaining(budgetCtx))
 	if timeout <= 0 {
-		return fallback
+		return nil, context.DeadlineExceeded
 	}
 	fraudCtx, cancel := context.WithTimeout(budgetCtx, timeout)
 	defer cancel()
@@ -323,16 +351,25 @@ func (s *Service) assess(budgetCtx context.Context, state domain.State, input at
 		Merchant: wire.MerchantProto(state.Merchant), Customer: wire.CustomerProto(state.Customer), Snapshot: wire.SnapshotProto(state.Snapshot), Signals: input.signals,
 		CorrelationID: input.correlationID,
 	})
-	if err != nil || assessment == nil {
-		slog.WarnContext(budgetCtx, "fraud decision unavailable; failing closed", "payment_id", state.PaymentID, "error", err)
-		return fallback
+	if err != nil {
+		return nil, err
 	}
-	if assessment.GetPolicyVersion() == "" || slices.Contains(assessment.GetReasonCodes(), "") ||
+	if assessment == nil || assessment.GetPolicyVersion() == "" || slices.Contains(assessment.GetReasonCodes(), "") ||
+		assessment.GetAssessmentId() == "" || len(assessment.GetEvidenceSha256()) != 64 ||
 		(assessment.GetOutcome() != paymentsv1.RiskOutcome_RISK_OUTCOME_APPROVE && assessment.GetOutcome() != paymentsv1.RiskOutcome_RISK_OUTCOME_DECLINE) {
-		slog.WarnContext(budgetCtx, "fraud returned an unusable assessment; failing closed", "payment_id", state.PaymentID)
-		return fallback
+		return nil, errors.New("fraud returned an unusable assessment")
 	}
-	return assessment
+	if _, err := hex.DecodeString(assessment.GetEvidenceSha256()); err != nil {
+		return nil, errors.New("fraud returned an invalid evidence digest")
+	}
+	return assessment, nil
+}
+
+func minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
 }
 
 func remaining(ctx context.Context) time.Duration {
@@ -344,6 +381,9 @@ func remaining(ctx context.Context) time.Duration {
 }
 
 func (s *Service) requestProcessor(ctx context.Context, state domain.State, input attemptInput) (domain.State, error) {
+	if state.Status != domain.StatusOpen || !state.ExpiresAt.After(s.now()) {
+		return domain.State{}, ErrPaymentNotOpen
+	}
 	sealed, err := s.deps.Sealer.Seal([]byte(input.token), input.attemptID[:])
 	if err != nil {
 		return domain.State{}, fmt.Errorf("seal payment method token: %w", err)

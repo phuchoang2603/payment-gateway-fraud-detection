@@ -113,6 +113,24 @@
         "contracts/data-products",
         "contracts/features"
       ]
+    },
+    {
+      "service": "feast",
+      "image-suffix": "/feast",
+      "context": ".",
+      "dockerfile": "infra/docker/feast.Dockerfile",
+      "inputs": [
+        "src/data-pipeline/feast"
+      ]
+    },
+    {
+      "service": "streaming",
+      "image-suffix": "/streaming",
+      "context": ".",
+      "dockerfile": "infra/docker/streaming.Dockerfile",
+      "inputs": [
+        "src/data-pipeline/streaming"
+      ]
     }
   ]
 }

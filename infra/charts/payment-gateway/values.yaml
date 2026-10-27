@@ -92,17 +92,15 @@ services:
       data:
       - secretKey: integrations.json
         remoteKey: GATEWAY_INTEGRATIONS_JSON
-        env: EDGE_INTEGRATIONS_FILE
-      mountPath: /etc/edge/integrations
+        env: EDGE_INTEGRATIONS_JSON
     - name: edge-secrets
       data:
       - secretKey: fingerprint-key
         remoteKey: GATEWAY_FINGERPRINT_KEY
-        env: EDGE_FINGERPRINT_KEY_FILE
+        env: EDGE_FINGERPRINT_KEY
       - secretKey: cookie-key
         remoteKey: GATEWAY_CHECKOUT_COOKIE_KEY
-        env: EDGE_CHECKOUT_COOKIE_KEY_FILE
-      mountPath: /etc/edge/secrets
+        env: EDGE_CHECKOUT_COOKIE_KEY
     networkPolicy:
       ingressFrom:
       - podSelector:
@@ -116,6 +114,22 @@ services:
       hostnames:
       - pay-gateway.phuchoang.sbs
   fraud-service:
+    database: fraud
+    env:
+    - name: FRAUD_AUTH_REDIS_ADDR
+      value: payment-gateway-authorization-redis.payment-gateway.svc.cluster.local:6379
+    - name: FRAUD_VELOCITY_EPOCH
+      value: live-v1
+    - name: FRAUD_VELOCITY_THRESHOLD_10S
+      value: '10'
+    - name: FRAUD_VELOCITY_THRESHOLD_60S
+      value: '30'
+    externalSecrets:
+    - name: fraud-authorization
+      data:
+      - secretKey: password
+        remoteKey: GATEWAY_AUTHORIZATION_REDIS_PASSWORD
+        env: FRAUD_AUTH_REDIS_PASSWORD
     mesh:
       callers:
       - payments
@@ -136,8 +150,7 @@ services:
       data:
       - secretKey: integrations.json
         remoteKey: GATEWAY_INTEGRATIONS_JSON
-        env: NOTIFIER_INTEGRATIONS_FILE
-      mountPath: /etc/notifier/integrations
+        env: NOTIFIER_INTEGRATIONS_JSON
     networkPolicy:
       egress:
       - to:
@@ -210,14 +223,13 @@ services:
       data:
       - secretKey: redis-password
         remoteKey: GATEWAY_REDIS_PASSWORD
-        env: PAYMENTS_REDIS_PASSWORD_FILE
+        env: PAYMENTS_REDIS_PASSWORD
       - secretKey: encryption-key
         remoteKey: GATEWAY_PAYMENTS_ENCRYPTION_KEY
-        env: PAYMENTS_ENCRYPTION_KEY_FILE
+        env: PAYMENTS_ENCRYPTION_KEY
       - secretKey: checkout-token-key
         remoteKey: GATEWAY_CHECKOUT_TOKEN_KEY
-        env: PAYMENTS_CHECKOUT_TOKEN_KEY_FILE
-      mountPath: /etc/payments/secrets
+        env: PAYMENTS_CHECKOUT_TOKEN_KEY
     resources:
       requests:
         cpu: 100m
@@ -277,8 +289,7 @@ services:
       data:
       - secretKey: encryption-key
         remoteKey: GATEWAY_VAULT_ENCRYPTION_KEY
-        env: VAULT_ENCRYPTION_KEY_FILE
-      mountPath: /etc/vault/keys
+        env: VAULT_ENCRYPTION_KEY
     database: vault
 
 database:
@@ -302,6 +313,10 @@ database:
         payments_cdc:
           replication: true
       runtimeRole: payments_app
+    fraud:
+      roles:
+        fraud_app: {}
+      runtimeRole: fraud_app
     notifier: {}
     vault: {}
     processor: {}
@@ -328,6 +343,24 @@ redis:
   clients:
   - payments
 
+authorizationRedis:
+  name: payment-gateway-authorization-redis
+  image:
+    repository: quay.io/opstree/redis
+    tag: v7.2.16
+    pullPolicy: IfNotPresent
+  appendonly: 'yes'
+  storageSize: 2Gi
+  maxmemory: 256mb
+  resources:
+    requests: {cpu: 100m, memory: 384Mi}
+    limits: {cpu: 500m, memory: 768Mi}
+  password:
+    secretName: payment-gateway-authorization-redis
+    secretKey: password
+    remoteKey: GATEWAY_AUTHORIZATION_REDIS_PASSWORD
+  clients: [fraud-service]
+
 ingress:
   enabled: true
   name: payment-gateway-ingress
@@ -336,3 +369,11 @@ ingress:
     enabled: false
     clusterTunnel: ''
     hostname: ''
+
+features:
+  enabled: false
+  url: http://feast-server:6566
+  epoch: live-v1
+  definitionHash: 8ca9a423f452f8ed7a8d1e8aa082dadb72590498cfd1e8da48f94f6c06b0e50d
+  maxAnchorAge: 30s
+  maxProgressAge: 30s

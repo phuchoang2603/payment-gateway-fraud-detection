@@ -1,0 +1,9 @@
+images:
+  feast:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast
+    digest: ""
+    revision: ""
+  streaming:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming
+    digest: ""
+    revision: ""

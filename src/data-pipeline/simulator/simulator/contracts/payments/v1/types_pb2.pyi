@@ -120,17 +120,21 @@ class AttemptSignals(_message.Message):
     def __init__(self, attempted_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., payment_method: _Optional[_Union[PaymentMethod, _Mapping]] = ..., device_fingerprint: _Optional[str] = ..., ip_country: _Optional[str] = ..., ip_network_fingerprint: _Optional[str] = ..., user_agent_family: _Optional[str] = ...) -> None: ...
 
 class RiskAssessment(_message.Message):
-    __slots__ = ("outcome", "reason_codes", "policy_version", "model_version", "feature_set_version", "risk_score")
+    __slots__ = ("outcome", "reason_codes", "policy_version", "model_version", "feature_set_version", "risk_score", "assessment_id", "evidence_sha256")
     OUTCOME_FIELD_NUMBER: _ClassVar[int]
     REASON_CODES_FIELD_NUMBER: _ClassVar[int]
     POLICY_VERSION_FIELD_NUMBER: _ClassVar[int]
     MODEL_VERSION_FIELD_NUMBER: _ClassVar[int]
     FEATURE_SET_VERSION_FIELD_NUMBER: _ClassVar[int]
     RISK_SCORE_FIELD_NUMBER: _ClassVar[int]
+    ASSESSMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    EVIDENCE_SHA256_FIELD_NUMBER: _ClassVar[int]
     outcome: RiskOutcome
     reason_codes: _containers.RepeatedScalarFieldContainer[str]
     policy_version: str
     model_version: str
     feature_set_version: str
     risk_score: float
-    def __init__(self, outcome: _Optional[_Union[RiskOutcome, str]] = ..., reason_codes: _Optional[_Iterable[str]] = ..., policy_version: _Optional[str] = ..., model_version: _Optional[str] = ..., feature_set_version: _Optional[str] = ..., risk_score: _Optional[float] = ...) -> None: ...
+    assessment_id: str
+    evidence_sha256: str
+    def __init__(self, outcome: _Optional[_Union[RiskOutcome, str]] = ..., reason_codes: _Optional[_Iterable[str]] = ..., policy_version: _Optional[str] = ..., model_version: _Optional[str] = ..., feature_set_version: _Optional[str] = ..., risk_score: _Optional[float] = ..., assessment_id: _Optional[str] = ..., evidence_sha256: _Optional[str] = ...) -> None: ...

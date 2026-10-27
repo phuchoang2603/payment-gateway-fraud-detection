@@ -58,4 +58,7 @@ message RiskAssessment {
   optional string model_version = 4;
   optional string feature_set_version = 5;
   optional double risk_score = 6;
+  string assessment_id = 7;
+  // Hash of the immutable JSON evidence retained by Fraud, not its protobuf projection.
+  string evidence_sha256 = 8;
 }

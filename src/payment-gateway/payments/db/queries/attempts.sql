@@ -11,15 +11,23 @@ SET status = $2, version = $3, decline_source = $4, decline_reason = $5,
 WHERE attempt_id = $1 AND version = $9;
 
 -- name: ListAttempts :many
-SELECT * FROM attempts WHERE payment_id = $1 ORDER BY ordinal;
+SELECT a.*, CASE WHEN r.status <> 'COMPLETED' AND r.retry_until <= clock_timestamp()
+THEN 'EXPIRED' ELSE coalesce(r.status, '') END::text AS assessment_status
+FROM attempts a LEFT JOIN assessment_requests r USING (attempt_id)
+WHERE payment_id = $1 ORDER BY ordinal;
 
 -- name: GetAttempt :one
 SELECT * FROM attempts WHERE attempt_id = $1;
 
 -- name: ListRecoveryAttempts :many
-SELECT attempt_id, payment_id, status, updated_at FROM attempts
-WHERE status IN ('requested', 'unknown') AND updated_at <= $1
-ORDER BY updated_at
+SELECT a.attempt_id, a.payment_id, a.status, a.updated_at FROM attempts a
+JOIN payments p USING (payment_id)
+LEFT JOIN assessment_requests r USING (attempt_id)
+WHERE p.status = 'open' AND a.updated_at <= $1
+  AND (a.status IN ('requested', 'unknown', 'risk_approved', 'risk_declined')
+       OR (a.status = 'started' AND r.retry_until > clock_timestamp()
+           AND r.lease_until <= clock_timestamp() AND r.retry_after <= clock_timestamp()))
+ORDER BY a.updated_at
 LIMIT $2;
 
 -- name: OldestAwaitingProcessor :one

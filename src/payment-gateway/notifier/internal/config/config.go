@@ -14,10 +14,10 @@ import (
 
 // Environment variables (all prefixed NOTIFIER_):
 //
-//	DATABASE_URL / DATABASE_URL_FILE                runtime database URL (serve)
-//	MIGRATE_DATABASE_URL / _FILE                    owner database URL (migrate); falls back to DATABASE_URL
+//	DATABASE_URL                                   runtime database URL (serve)
+//	MIGRATE_DATABASE_URL                           owner database URL (migrate); falls back to DATABASE_URL
 //	GRPC_ADDR (:8000), SHUTDOWN_TIMEOUT (10s)
-//	INTEGRATIONS_FILE                               path of the mounted integrations JSON
+//	INTEGRATIONS_JSON                               JSON array of integrations
 //	KAFKA_BROKERS                                   comma-separated bootstrap servers
 //	KAFKA_TOPIC (payments.events.v1), KAFKA_GROUP (gateway-notifier)
 //	DELIVERY_TIMEOUT (10s), DELIVERY_INITIAL_DELAY (2m), DELIVERY_BACKOFF_FACTOR (2),
@@ -35,7 +35,7 @@ type Config struct {
 	MigrateDatabaseURL string
 	GRPCAddr           string
 	ShutdownTimeout    time.Duration
-	IntegrationsFile   string
+	IntegrationsJSON   string
 	KafkaBrokers       []string
 	KafkaTopic         string
 	KafkaGroup         string
@@ -49,10 +49,10 @@ type Config struct {
 type Lookup func(string) string
 
 func FromEnv() (Config, error) {
-	return FromLookup(os.Getenv, os.ReadFile)
+	return FromLookup(os.Getenv)
 }
 
-func FromLookup(lookup Lookup, readFile func(string) ([]byte, error)) (Config, error) {
+func FromLookup(lookup Lookup) (Config, error) {
 	cfg := Config{
 		GRPCAddr:        orDefault(lookup("NOTIFIER_GRPC_ADDR"), defaultGRPCAddr),
 		ShutdownTimeout: defaultShutdownTimeout,
@@ -68,7 +68,7 @@ func FromLookup(lookup Lookup, readFile func(string) ([]byte, error)) (Config, e
 		PollInterval:     time.Second,
 		BatchSize:        20,
 		Concurrency:      4,
-		IntegrationsFile: lookup("NOTIFIER_INTEGRATIONS_FILE"),
+		IntegrationsJSON: lookup("NOTIFIER_INTEGRATIONS_JSON"),
 	}
 	for _, broker := range strings.Split(lookup("NOTIFIER_KAFKA_BROKERS"), ",") {
 		if broker = strings.TrimSpace(broker); broker != "" {
@@ -76,13 +76,8 @@ func FromLookup(lookup Lookup, readFile func(string) ([]byte, error)) (Config, e
 		}
 	}
 
-	var err error
-	if cfg.DatabaseURL, err = secret(lookup, readFile, "NOTIFIER_DATABASE_URL"); err != nil {
-		return Config{}, err
-	}
-	if cfg.MigrateDatabaseURL, err = secret(lookup, readFile, "NOTIFIER_MIGRATE_DATABASE_URL"); err != nil {
-		return Config{}, err
-	}
+	cfg.DatabaseURL = lookup("NOTIFIER_DATABASE_URL")
+	cfg.MigrateDatabaseURL = lookup("NOTIFIER_MIGRATE_DATABASE_URL")
 
 	durations := []struct {
 		name string
@@ -134,8 +129,8 @@ func (c Config) ValidateServe() error {
 	if c.DatabaseURL == "" {
 		return errors.New("NOTIFIER_DATABASE_URL must be set")
 	}
-	if c.IntegrationsFile == "" {
-		return errors.New("NOTIFIER_INTEGRATIONS_FILE must be set")
+	if c.IntegrationsJSON == "" {
+		return errors.New("NOTIFIER_INTEGRATIONS_JSON must be set")
 	}
 	if len(c.KafkaBrokers) == 0 {
 		return errors.New("NOTIFIER_KAFKA_BROKERS must be set")
@@ -179,15 +174,4 @@ func orDefault(value, fallback string) string {
 		return fallback
 	}
 	return value
-}
-
-func secret(lookup Lookup, readFile func(string) ([]byte, error), name string) (string, error) {
-	if path := lookup(name + "_FILE"); path != "" {
-		data, err := readFile(path)
-		if err != nil {
-			return "", fmt.Errorf("read %s_FILE: %w", name, err)
-		}
-		return strings.TrimSpace(string(data)), nil
-	}
-	return lookup(name), nil
 }

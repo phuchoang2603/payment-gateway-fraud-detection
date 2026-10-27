@@ -33,7 +33,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: [payments, notifier, vault-simulator, processor-simulator]
+                values: [payments, fraud-service, notifier, vault-simulator, processor-simulator]
       ports:
         - port: 5432
           protocol: TCP

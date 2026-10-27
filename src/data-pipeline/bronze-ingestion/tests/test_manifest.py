@@ -7,7 +7,7 @@ import pytest
 from data_platform.manifest import selected_manifest, verify_file
 
 
-def test_completed_inventory_and_integrity(dataset):
+def test_completed_inventory_and_integrity(dataset, tmp_path):
     root, expected = dataset
     actual, digest = selected_manifest(str(root))
     assert actual == expected and len(digest) == 64
@@ -17,6 +17,15 @@ def test_completed_inventory_and_integrity(dataset):
         broken = {**actual["inventory"][0], field: value}
         with pytest.raises(ValueError):
             verify_file(str(root), broken)
+    historical = deepcopy(expected)
+    historical["feature_definition"] = {
+        "version": "fraud-baseline-v1",
+        "sha256": "2ee2a5153a248bdc98df3b2643e10a65bc5693ea111129b6c65a67352aa4ec0b",
+    }
+    historical["data_product"]["feature_definition"] = historical["feature_definition"]
+    (tmp_path / "manifest.json").write_text(json.dumps(historical))
+    selected, historical_digest = selected_manifest(str(tmp_path))
+    assert selected == historical and historical_digest != digest
 
 
 def test_deferred_source_gate_reaches_preflight_and_records_the_native_policy(dataset, tmp_path, monkeypatch):

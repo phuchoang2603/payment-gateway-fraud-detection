@@ -23,7 +23,27 @@ func (s *Service) RecoverAttempt(ctx context.Context, candidate RecoveryCandidat
 			return err
 		}
 		attempt, ok := state.Attempt(candidate.AttemptID.String())
-		if !ok || !attempt.Phase.AwaitingProcessor() {
+		if !ok || state.Status != domain.StatusOpen {
+			return nil
+		}
+		if attempt.Phase == domain.PhaseStarted || attempt.Phase == domain.PhaseRiskApproved || attempt.Phase == domain.PhaseRiskDeclined {
+			if !state.ExpiresAt.After(s.now()) {
+				return s.ExpirePayment(ctx, candidate.PaymentID)
+			}
+			record, err := s.deps.Store.AssessmentRequest(ctx, candidate.AttemptID)
+			if err != nil {
+				return err
+			}
+			token, err := s.deps.Sealer.Open(record.EncryptedToken, candidate.AttemptID[:])
+			if err != nil {
+				return fmt.Errorf("decrypt assessment recovery token: %w", err)
+			}
+			budget, cancel := context.WithTimeout(ctx, s.config.AttemptBudget)
+			defer cancel()
+			_, err = s.drive(ctx, budget, state, attemptInput{integrationID: uuid.MustParse(state.IntegrationID), paymentID: candidate.PaymentID, attemptID: candidate.AttemptID, token: string(token), signals: record.Signals, correlationID: state.CorrelationID})
+			return err
+		}
+		if !attempt.Phase.AwaitingProcessor() {
 			return nil
 		}
 		operation, err := s.lookupOperation(ctx, state, attempt, candidate)
