@@ -32,7 +32,7 @@ def resolve_owners(sdk):
 
 
 def configure_profiles(sdk, run):
-    from metadata.generated.schema.entity.data.table import TableProfilerConfig
+    from metadata.generated.schema.entity.data.table import Table, TableProfilerConfig
 
     plans = {}
     for table in PORTS:
@@ -45,9 +45,11 @@ def configure_profiles(sdk, run):
         sample = int(os.environ.get("PROFILE_MAX_ROWS", "100000"))
         if sample < 1:
             raise ValueError("profile row bound must be positive")
+        discovered = sdk.get_by_name(Table, quality.entity(table), nullable=False)
+        projection = [str(column.name.root) for column in discovered.columns]
         query = (
             f"SELECT {quality.marker(run)}"
-            + ", ".join(f"`{name}`" for name in names)
+            + ", ".join("`" + name.replace("`", "``") + "`" for name in projection)
             + f" FROM {quality.CATALOG}.{quality.SCHEMA}.{quality.physical_table(table)} LIMIT {sample}"
         )
         config = TableProfilerConfig(
@@ -136,7 +138,7 @@ def synchronize(sdk, run, manifest, expected, stages, report_uri, outcome):
             Table,
             found,
             destination,
-            allowed_fields=["owners", "dataProducts", "domains"],
+            allowed_fields={"owners": True, "dataProducts": True, "domains": True},
             override_metadata=True,
             skip_on_failure=False,
         )
