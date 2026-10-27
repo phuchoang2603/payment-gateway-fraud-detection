@@ -28,30 +28,30 @@ services:
   edge:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/edge
-      digest: sha256:3ab6920728d6063f30b630350ab2d5e38c8c0f629645d84aaf57729108be1d6c
-      revision: 1bfef36deb1e75dc3f25f7b8ff8c1d6ba26deba1
+      digest: sha256:f9afacfb9c638293a186808ec06bfe8a4d37ace975d446a8a17f23d54580b8d4
+      revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
   fraud-service:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection
-      digest: sha256:134267b5fb0c0ed05ea11afc4530260b4e4683bb6aaa83618436cce1ff9a3a0a
-      revision: 1bfef36deb1e75dc3f25f7b8ff8c1d6ba26deba1
+      digest: sha256:2ea665e218267d12401a110646bea6d233cfd484935322831ae5e9056d3468ae
+      revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
   notifier:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/notifier
-      digest: sha256:f99149a903d405f81573da49ec62892c4346996ebfb69b3f82e6d24aaa9e3492
-      revision: 1bfef36deb1e75dc3f25f7b8ff8c1d6ba26deba1
+      digest: sha256:60a43a00cdf285786692a8f8fc8d415f5ccf8b3e8fe760d9fa067da9d490c039
+      revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
   payments:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments
-      digest: sha256:b48436f043f203533f89c2234620c8b7dda121528513fb9fc5f7f812cd4a5af5
-      revision: 1bfef36deb1e75dc3f25f7b8ff8c1d6ba26deba1
+      digest: sha256:4ca85c47b841cb7d4127c1cbcec0800b38bf809bab6cf4ef4d343edf8c8a9049
+      revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
   processor-simulator:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/processor-simulator
-      digest: sha256:cf068323845492fed5ccf3b9de7fb98d443fb16e474961110bca5ff1b786b8bc
-      revision: 1bfef36deb1e75dc3f25f7b8ff8c1d6ba26deba1
+      digest: sha256:4f2e1291bbb784cc0ba122c071d73e13418eb947f3a2b13a97564468c591f4c9
+      revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
   vault-simulator:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/vault-simulator
-      digest: sha256:5cb9141c6a6223c9c351984519595bdf5b4a06c853401f55181fada2a73d138a
-      revision: 1bfef36deb1e75dc3f25f7b8ff8c1d6ba26deba1
+      digest: sha256:7b08c25f20f379b4dac85ce4e0e65786252e4abc1332a80fe335c47590d47244
+      revision: 6cec4a964d76ffd6348229317fea51d50f468e6a

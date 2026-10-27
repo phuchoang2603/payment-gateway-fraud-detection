@@ -1,9 +1,9 @@
 images:
   feast:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast
-    digest: ""
-    revision: ""
+    digest: sha256:3bbaa6c0fdd2bcdca51086a62954c49bd47c9aa1be4248c4229a466d94172303
+    revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
   streaming:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming
-    digest: ""
-    revision: ""
+    digest: sha256:7a603e740fe5253961ecb71c1180ae2af7f26d9dca7602f190e8474144787591
+    revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
