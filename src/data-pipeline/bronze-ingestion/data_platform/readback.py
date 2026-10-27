@@ -102,11 +102,19 @@ def governance_gaps(published, hashes, fetch=get):
             or domain["id"] not in ids(found.get("domains"))
         ):
             gaps.append(f"table:{table}:membership")
-        contract = fetch("dataContracts/entity", {"entityId": identity["id"], "entityType": "table"})
+        contract = fetch(
+            "dataContracts/entity", {"entityId": identity["id"], "entityType": "table", "fields": "owners"}
+        )
         expected = published["contracts"][table]
         if (
             hashes[table] not in contract.get("description", "")
-            or not contains(contract, {k: v for k, v in expected["body"].items() if k != "qualityExpectations"})
+            or not contains(
+                contract,
+                {
+                    **{k: v for k, v in expected["body"].items() if k != "qualityExpectations"},
+                    "termsOfUse": {"content": expected["body"]["termsOfUse"]},
+                },
+            )
             or ids(contract.get("qualityExpectations")) != ids(expected["body"]["qualityExpectations"])
             or contract["id"] != expected["id"]
         ):
@@ -146,8 +154,19 @@ def governance_gaps(published, hashes, fetch=get):
         if name in tasks
     ):
         gaps.append("pipeline:tasks")
+    execution = pipeline.get("pipelineStatus") or {}
+    expected_execution = published["status"]
     if (
-        not contains(pipeline.get("pipelineStatus"), published["status"])
+        not contains(
+            {
+                **execution,
+                "taskStatus": sorted(execution.get("taskStatus", []), key=lambda task: task.get("name", "")),
+            },
+            {
+                **expected_execution,
+                "taskStatus": sorted(expected_execution["taskStatus"], key=lambda task: task["name"]),
+            },
+        )
         or pipeline.get("sourceUrl") != published["url"]
     ):
         gaps.append("pipeline:execution")

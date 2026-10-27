@@ -15,8 +15,8 @@ These checked items describe retained implementation, not acceptance of the rewr
 - [x] 2.1 Build a thin server-matched official OpenMetadata ingestion image with the official SDK, isolated from Spark/JVM imports, with shared SDK/runner plumbing and product-specific publication mapping; verify its native workflow and synchronization entrypoints through the existing CI/image workflow.
 - [x] 2.2 Replace HTTP request-generation/templates with one idempotent SDK synchronization path; remove obsolete publisher glue, unused RBAC/config/dependencies and tests, and verify no parallel publisher or custom discovery/results remains.
 - [x] 2.3 Map native nested contract schema, active raw test references, declared terms/semantics/security/SLA fields and resolvable owners while retaining Git identity/hash/YAML; existing behavioral CI must reject unsupported required mapping or unresolved owners.
-- [ ] 2.4 Synchronize product/domain/assets and entity-side membership, owners and pipeline membership; verify complete forward/reverse API readback without treating a UI drawer as proof of API absence.
-- [ ] 2.5 Resolve actual historical/clean-landing storage assets and publish independent source-to-pipeline-to-output lineage; behavioral coverage must reject fabricated events-to-labels ingestion dependencies.
+- [x] 2.4 Synchronize product/domain/assets and entity-side membership, owners and pipeline membership; verify complete forward/reverse API readback without treating a UI drawer as proof of API absence.
+- [x] 2.5 Resolve actual historical/clean-landing storage assets and publish independent source-to-pipeline-to-output lineage; behavioral coverage must reject fabricated events-to-labels ingestion dependencies.
 - [ ] 2.6 Publish real pipeline tasks/dependencies, current execution/task I/O/status, counts/snapshots and Argo links; verify idempotent metadata-only replay preserves execution identity and original native results.
 
 ## 3. Argo and profiling

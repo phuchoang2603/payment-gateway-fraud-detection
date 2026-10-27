@@ -200,7 +200,11 @@ def publication_fixture():
     def fetch(path, query=None):
         if path == "dataContracts/entity":
             value = contracts[query["entityId"]]
-            return {"id": value["id"], **value["body"]}
+            return {
+                "id": value["id"],
+                **value["body"],
+                "termsOfUse": {"content": value["body"]["termsOfUse"]},
+            }
         return entities[path]
 
     return published, entities, fetch
@@ -208,6 +212,10 @@ def publication_fixture():
 
 def test_readback_rejects_incomplete_contracts_ports_lineage_execution_and_profiles():
     published, entities, fetch = publication_fixture()
+    entities[f"pipelines/name/{governance.PIPELINE}"]["pipelineStatus"] = {
+        **published["status"],
+        "taskStatus": list(reversed(published["status"]["taskStatus"])),
+    }
     assert readback.governance_gaps(published, hashes(), fetch) == []
     entities[f"dataProducts/name/{governance.PRODUCT}/inputPorts"]["data"] = []
     entities[f"tables/name/{quality.entity('payment_events')}"]["owners"] = []
