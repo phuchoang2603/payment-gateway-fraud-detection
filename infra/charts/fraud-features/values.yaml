@@ -1,13 +1,11 @@
+global:
+  imageTag: dev
 images:
   feast:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-    revision: '0000000000000000000000000000000000000000'
     pullPolicy: IfNotPresent
   streaming:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-    revision: '0000000000000000000000000000000000000000'
     pullPolicy: IfNotPresent
 externalSecrets:
   refreshInterval: 1h

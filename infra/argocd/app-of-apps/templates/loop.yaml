@@ -20,10 +20,10 @@ spec:
       releaseName: {{ $name }}
       valueFiles:
         - {{ printf "values-%s.yaml" ($.Values.environment | default "dev") }}
-      {{- with $application.releaseValues }}
       valuesObject:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        global:
+          imageTag: {{ $.Values.global.imageTag | quote }}
+          revision: {{ $.Values.global.targetRevision | quote }}
   syncPolicy:
     automated:
       prune: true

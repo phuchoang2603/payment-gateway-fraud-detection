@@ -1,9 +1,9 @@
+global:
+  imageTag: dev
 enabled: false
 namespace: data
 image:
   repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
-  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-  revision: '0000000000000000000000000000000000000000'
 openmetadata:
   url: http://openmetadata.data.svc.cluster.local:8585/api
   externalSecret:

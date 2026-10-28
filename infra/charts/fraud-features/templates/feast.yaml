@@ -37,7 +37,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: {{ $name }}
-          image: {{ include "fraud-features.image" $.Values.images.feast | quote }}
+          image: {{ include "fraud-features.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
           imagePullPolicy: {{ $.Values.images.feast.pullPolicy }}
           {{- if eq $mode "write" }}
           command: [python, -m, fraud_feast.writer_runtime]

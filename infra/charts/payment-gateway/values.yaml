@@ -1,3 +1,6 @@
+global:
+  imageTag: dev
+  revision: unknown
 externalSecrets:
   refreshInterval: 1h
   secretStoreRef:
@@ -8,8 +11,6 @@ defaults:
   replicaCount: 1
   image:
     pullPolicy: IfNotPresent
-    digest: ''
-    revision: ''
   telemetry:
     tracingEnabled: true
     metricsEnabled: true
@@ -60,8 +61,6 @@ services:
   edge:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/edge
-      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-      revision: '0000000000000000000000000000000000000000'
     mesh:
       callers:
       - payment-gateway-ingress-istio
@@ -134,13 +133,9 @@ services:
       - payments
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection
-      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-      revision: '0000000000000000000000000000000000000000'
   notifier:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/notifier
-      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-      revision: '0000000000000000000000000000000000000000'
     env:
     - name: NOTIFIER_KAFKA_BROKERS
       value: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc.cluster.local:9092
@@ -211,8 +206,6 @@ services:
   payments:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments
-      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-      revision: '0000000000000000000000000000000000000000'
     mesh:
       callers:
       - edge
@@ -247,8 +240,6 @@ services:
   processor-simulator:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/processor-simulator
-      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-      revision: '0000000000000000000000000000000000000000'
     mesh:
       callers:
       - payments
@@ -269,8 +260,6 @@ services:
   vault-simulator:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/vault-simulator
-      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-      revision: '0000000000000000000000000000000000000000'
     mesh:
       rules:
       - callers:

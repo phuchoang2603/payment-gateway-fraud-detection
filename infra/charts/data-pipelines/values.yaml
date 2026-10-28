@@ -1,14 +1,13 @@
+global:
+  imageTag: dev
+  revision: unknown
 enabled: false
 namespace: data
 images:
   spark:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-    revision: '0000000000000000000000000000000000000000'
   openmetadata:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-    revision: '0000000000000000000000000000000000000000'
 workflow:
   activeDeadlineSeconds: 7200
 spark:

@@ -4,24 +4,9 @@ import re
 import subprocess
 from pathlib import Path
 
-import yaml
-
 
 def git(*arguments):
     return subprocess.check_output(["git", *arguments], text=True).strip()
-
-
-def image_values(value, images):
-    if not isinstance(value, dict):
-        return {}
-    repository = value.get("repository")
-    if repository in images:
-        return images[repository]
-    return {
-        key: override
-        for key, child in value.items()
-        if (override := image_values(child, images))
-    }
 
 
 def main():
@@ -36,34 +21,15 @@ def main():
     if not current or current[0] != revision:
         print("Source moved; skipping stale release")
         return
-    manifests = Path(".image-manifests")
-    services = json.loads(Path(".github/service-images.json").read_text())["include"]
-    images = {}
-    for service in services:
-        manifest = json.loads((manifests / f"{service['service']}.json").read_text())
-        repository = (
-            "ghcr.io/"
-            + os.environ["GITHUB_REPOSITORY"].lower()
-            + service["image-suffix"]
-        )
-        if manifest["repository"] != repository or manifest["revision"] != revision:
-            raise ValueError("published image does not match the release source")
-        if not re.fullmatch(r"sha256:[a-f0-9]{64}", manifest["digest"]):
-            raise ValueError("published image lacks an immutable digest")
-        images[repository] = manifest
+    tag = os.environ["DEPLOY_IMAGE_TAG"]
+    if not re.fullmatch(rf"(?:pr-[0-9]+|main)-{revision}", tag):
+        raise ValueError("image tag does not match the release source")
     root = Path("infra/argocd/app-of-apps")
-    applications = yaml.safe_load((root / "values.yaml").read_text())["applications"]
-    release = {"global": {"targetRevision": revision}, "applications": {}}
-    for name, application in applications.items():
-        chart = Path(application["path"])
-        values = yaml.safe_load((chart / "values.yaml").read_text())
-        overrides = image_values(values, images)
-        if overrides:
-            release["applications"][name] = {"releaseValues": overrides}
+    release = {"global": {"targetRevision": revision, "imageTag": tag}}
     branch = f"deploy/{environment}"
     previous = git("ls-remote", "origin", f"refs/heads/{branch}").split()
     git("switch", "--force-create", branch, revision)
-    (root / "release.yaml").write_text(yaml.safe_dump(release, sort_keys=False))
+    (root / "release.yaml").write_text(json.dumps(release, indent=2) + "\n")
     git("config", "user.name", "github-actions[bot]")
     git("config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com")
     git("add", str(root / "release.yaml"))

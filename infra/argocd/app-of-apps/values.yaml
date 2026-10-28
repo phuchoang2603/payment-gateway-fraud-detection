@@ -1,6 +1,7 @@
 global:
   repoURL: https://github.com/phuchoang2603/payment-gateway-fraud-detection.git
   targetRevision: HEAD
+  imageTag: dev
 destinationServer: https://kubernetes.default.svc
 namePrefix: payment-gateway
 applications:

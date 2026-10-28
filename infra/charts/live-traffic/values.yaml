@@ -1,7 +1,7 @@
+global:
+  imageTag: dev
 image:
   repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator
-  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-  revision: '0000000000000000000000000000000000000000'
 secretStore: gateway-doppler
 kafkaBrokers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092
 simulator:

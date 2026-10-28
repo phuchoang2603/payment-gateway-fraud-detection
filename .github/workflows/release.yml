@@ -31,7 +31,6 @@ jobs:
       matrix: ${{ fromJSON(needs.matrix.outputs.images) }}
     uses: ./.github/workflows/build-image.yml
     with:
-      service: ${{ matrix.service }}
       image: ${{ github.repository }}${{ matrix.image-suffix }}
       context: ${{ matrix.context }}
       dockerfile: ${{ matrix.dockerfile }}
@@ -50,16 +49,11 @@ jobs:
       cancel-in-progress: false
     env:
       DEPLOY_ENVIRONMENT: ${{ github.event_name == 'pull_request' && 'dev' || 'prod' }}
+      DEPLOY_IMAGE_TAG: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}', github.event.number, github.sha) || format('main-{0}', github.sha) }}
       SOURCE_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.number) || 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v10.1.0
-      - uses: actions/download-artifact@v8.0.2
-        with:
-          pattern: image-*
-          path: .image-manifests
-          merge-multiple: true
-      - name: Publish the complete GitOps release
-        run: uv run --with PyYAML==6.0.3 python scripts/publish-release.py
+      - name: Publish the GitOps release
+        run: python3 scripts/publish-release.py

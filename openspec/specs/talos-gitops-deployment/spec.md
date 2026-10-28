@@ -57,7 +57,7 @@ Every PR and main push SHALL run independent Python, Go and Helm check jobs cove
 #### Scenario: Merged service changes
 
 - **WHEN** changes reach main
-- **THEN** fraud, edge, Payments, notifier, vault simulator, processor simulator and Debezium Connect images are built and published with immutable digests and the main commit tag
+- **THEN** fraud, edge, Payments, notifier, vault simulator, processor simulator and Debezium Connect images are built and published with the shared main commit tag
 
 ### Requirement: Gateway workload deployment
 
@@ -90,7 +90,7 @@ The deployment SHALL target Edge, Payments, fraud, notifier, vault simulator, pr
 
 ### Requirement: Separate PR and main image tags
 
-Same-repository PRs SHALL publish every application image with `pr-<number>-<full-sha>` using the built merge commit. Fork PRs SHALL build without publication. Main SHALL publish `main-<full-sha>`. Deployment SHALL use immutable digests, without mutable `latest` tags.
+Same-repository PRs SHALL publish every application image with `pr-<number>-<full-sha>` using the built merge commit. Fork PRs SHALL build without publication. Main SHALL publish `main-<full-sha>`. Deployment SHALL use the shared commit-based tag for all application images, without mutable `latest` tags. Commit tags SHALL NOT be repurposed for different source code.
 
 #### Scenario: Publish PR images
 
@@ -99,12 +99,12 @@ Same-repository PRs SHALL publish every application image with `pr-<number>-<ful
 
 ### Requirement: Complete environment releases
 
-After all application images publish successfully, CI SHALL publish one complete release to `deploy/dev` for a trusted PR or `deploy/prod` for main. The release SHALL select immutable child chart sources and every owned image digest from the same revision. Publication SHALL reject missing, malformed or mismatched image manifests and skip superseded source revisions. CI SHALL NOT contact Kubernetes or commit image pins to main. Argo CD SHALL reconcile the release branch.
+After all application images publish successfully, CI SHALL publish one complete release to `deploy/dev` for a trusted PR or `deploy/prod` for main. The release SHALL select child chart sources at the release commit and one shared image tag from the same revision. Publication SHALL validate the shared tag against the source revision and skip superseded source revisions. Per-image manifests and digest/revision overrides SHALL NOT be required. CI SHALL NOT contact Kubernetes or commit image pins to main. Argo CD SHALL reconcile the release branch.
 
 #### Scenario: Publish a complete release
 
 - **WHEN** all application images for the current source revision have published
-- **THEN** one release records that revision and every application image digest on the corresponding deployment branch
+- **THEN** one release records that revision and the shared application image tag on the corresponding deployment branch
 
 #### Scenario: Superseded source
 
@@ -148,7 +148,7 @@ Application credentials SHALL come from the environment's gateway Doppler config
 
 ### Requirement: Environment data-pipeline deployment
 
-Both environment values SHALL enable DP1 workflow templates in `data`, with externally supplied credentials, immutable images and explicit resource budgets. Fresh-start source selection SHALL use v17. Live simulation and recurring ingestion SHALL remain disabled until the new source and its actual manifest digest are validated. No historical objects or acceptance receipts SHALL be copied or relabelled as fresh acceptance.
+Both environment values SHALL enable DP1 workflow templates in `data`, with externally supplied credentials, commit-tagged images and explicit resource budgets. Fresh-start source selection SHALL use v17. Live simulation and recurring ingestion SHALL remain disabled until the new source and its actual manifest digest are validated. No historical objects or acceptance receipts SHALL be copied or relabelled as fresh acceptance.
 
 #### Scenario: Fresh environment rollout
 
@@ -196,7 +196,7 @@ The platform SHALL provide bounded persistent StarRocks FE/BE resources for SQL 
 - **THEN** StarRocks reads the recorded Iceberg snapshots directly without a mandatory imported copy and acceptance checks matching native results
 
 ### Requirement: Matched metadata runtime ownership
-The application SHALL own the thin metadata image and workflow configuration, pin its immutable digest and match its official ingestion base/SDK to the shared OpenMetadata server. Generic externally managed metadata and lakehouse credential references SHALL remain reusable across pipeline stages. Shared platform services SHALL NOT be replaced or removed to reset DP1-owned application data.
+The application SHALL own the thin metadata image and workflow configuration, use the shared release image tag and match its official ingestion base/SDK to the shared OpenMetadata server. Generic externally managed metadata and lakehouse credential references SHALL remain reusable across pipeline stages. Shared platform services SHALL NOT be replaced or removed to reset DP1-owned application data.
 
 #### Scenario: Deploy the rewritten metadata stages
 

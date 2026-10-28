@@ -1,3 +1,5 @@
+global:
+  imageTag: dev
 kafka:
   clusterName: payment-gateway-kafka
   version: 4.3.1
@@ -35,8 +37,6 @@ connect:
   clusterName: payment-gateway-connect
   image:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/connect-debezium
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-    revision: '0000000000000000000000000000000000000000'
   jvmOptions:
     -Xms: 512m
     -Xmx: 512m
@@ -101,8 +101,6 @@ schemaRegistry:
     enabled: true
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/schema-register
-      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-      revision: '0000000000000000000000000000000000000000'
     activeDeadlineSeconds: 600
     resources:
       requests:

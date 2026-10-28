@@ -29,7 +29,7 @@ spec:
         mutexes:
           - name: metadata-{{ $name }}
       container:
-        image: {{ include "metadata-integrations.image" $.Values.image | quote }}
+        image: {{ include "metadata-integrations.image" (dict "image" $.Values.image "global" $.Values.global) | quote }}
         command: [python, -m, data_platform.integrations]
         {{- $secretRefs := list }}
         {{- with $connector.externalSecret }}

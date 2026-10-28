@@ -60,7 +60,7 @@ metadata:
   name: fraud-streaming-{{ .Values.epoch }}
   namespace: {{ .Release.Namespace }}
 spec:
-  image: {{ include "fraud-features.image" .Values.images.streaming | quote }}
+  image: {{ include "fraud-features.image" (dict "image" .Values.images.streaming "global" $.Values.global) | quote }}
   imagePullPolicy: {{ .Values.images.streaming.pullPolicy }}
   flinkVersion: v2_2
   serviceAccount: fraud-streaming
