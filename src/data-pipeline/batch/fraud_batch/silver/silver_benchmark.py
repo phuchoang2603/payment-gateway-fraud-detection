@@ -8,12 +8,13 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 from pyspark import StorageLevel
+from pyspark.sql import functions as F
 
+from fraud_batch.common.images import immutable_image
 from fraud_batch.common.storage import Store
+from fraud_batch.silver.silver import canonical_events
 from fraud_batch.silver.silver_runs import digest, verify_candidate
 from fraud_batch.silver.silver_source import selected_bronze
-from fraud_batch.silver.silver_transform import build, validate_basics
-from fraud_batch.silver.silver_write import candidate_outputs
 
 
 def explain(frame):
@@ -43,26 +44,56 @@ def safe_location(value):
     return value
 
 
-def run_variant(spark, source, completeness, variant, partitions, relative_error):
+def workloads(events, optimized, salt_buckets):
+    created = (
+        events.where(F.col("payment_created").isNotNull())
+        .select(
+            "integration_id",
+            "event_id",
+            F.col("payment_created.merchant.merchant_id").alias("merchant_id"),
+            F.explode("payment_created.snapshot.items").alias("item"),
+        )
+        .select("integration_id", "event_id", "merchant_id", F.col("item.category").alias("category"))
+    )
+    keys = ["integration_id", "merchant_id", "category"]
+    if optimized:
+        salted = created.withColumn("bucket", F.pmod(F.xxhash64("event_id"), F.lit(salt_buckets)))
+        shares = salted.groupBy(*keys, "bucket").count().groupBy(*keys).agg(F.sum("count").alias("count"))
+    else:
+        shares = created.groupBy(*keys).count()
+    methods = (
+        events.where(F.col("attempt_started").isNotNull())
+        .select(
+            "integration_id",
+            F.col("attempt_started.context.customer.customer_id").alias("customer_id"),
+            F.col("attempt_started.signals.payment_method.fingerprint").alias("payment_method"),
+        )
+        .where(F.col("payment_method").isNotNull())
+    )
+    customers = ["integration_id", "customer_id"]
+    cardinality = (
+        methods.distinct().groupBy(*customers).count().withColumnRenamed("count", "distinct_methods")
+        if optimized
+        else methods.groupBy(*customers).agg(F.countDistinct("payment_method").alias("distinct_methods"))
+    )
+    return {"merchant_category_counts": shares, "customer_payment_methods": cardinality}
+
+
+def run_variant(spark, events, variant, salt_buckets):
     context = spark.sparkContext
     group = f"dp2-benchmark-{variant}-{time.time_ns()}"
     context.setJobGroup(group, f"Silver {variant} benchmark", interruptOnCancel=True)
     started = time.monotonic()
     cached = {}
     try:
-        if variant == "partitioned":
-            source = {
-                "payment_events": source["payment_events"].repartition(partitions, "integration_id", "event_id"),
-                "fraud_labels": source["fraud_labels"].repartition(
-                    partitions, "integration_id", "payment_id", "attempt_id"
-                ),
-            }
-        frames = build(source, relative_error)
-        validate_basics(frames, completeness)
-        outputs = candidate_outputs(frames)
+        outputs = workloads(events, variant == "optimized", salt_buckets)
         plans = {name: explain(frame) for name, frame in outputs.items()}
         cached = {name: frame.persist(StorageLevel.DISK_ONLY) for name, frame in outputs.items()}
-        counts = {name: frame.count() for name, frame in cached.items()}
+        counts, timings = {}, {}
+        for name, frame in cached.items():
+            workload_started = time.monotonic()
+            counts[name] = frame.count()
+            timings[name] = time.monotonic() - workload_started
         elapsed = time.monotonic() - started
     except Exception:
         for frame in cached.values():
@@ -70,18 +101,24 @@ def run_variant(spark, source, completeness, variant, partitions, relative_error
         raise
     finally:
         context.clearJobGroup()
-    jobs = job_stages(context, group)
     return cached, {
         "variant": variant,
         "runtime_seconds": elapsed,
         "row_counts": counts,
+        "workload_seconds": timings,
         "plans": plans,
-        **jobs,
+        **job_stages(context, group),
     }
 
 
-def benchmark(spark, bronze_store, evidence_store, candidate, relative_error=0.05):
+def benchmark(spark, bronze_store, evidence_store, candidate):
     source = selected_bronze(spark, bronze_store, candidate)
+    canonical = canonical_events(source["payment_events"])
+    if canonical.conflicts.limit(1).count():
+        raise ValueError("benchmark input contains conflicting event identities")
+    salt_buckets = int(os.environ.get("SILVER_BENCHMARK_SALT_BUCKETS", "8"))
+    if salt_buckets < 2:
+        raise ValueError("benchmark salt buckets must be at least two")
     partitions = int(spark.conf.get("spark.sql.shuffle.partitions"))
     if partitions < 1:
         raise ValueError("benchmark requires positive shuffle partitions")
@@ -105,23 +142,23 @@ def benchmark(spark, bronze_store, evidence_store, candidate, relative_error=0.0
             "cache": "DISK_ONLY per variant and released before the next; filesystem cache not controlled",
             "warmup": "none",
             "repetitions": 1,
-            "order": ["baseline", "partitioned"],
-            "relative_error": relative_error,
+            "order": ["baseline", "optimized"],
+            "salt_buckets": salt_buckets,
+            "workloads": {
+                "merchant_category_counts": "direct counts versus event-hash salted partial counts",
+                "customer_payment_methods": "countDistinct versus distinct keys followed by count",
+            },
             "limitations": "Timings exclude the bidirectional comparison. Collect task durations, shuffle/spill metrics and screenshots manually from Spark UI or the retained event log; repeat trials separately. No improvement is assumed.",
         },
     }
     retained = False
     try:
-        baseline, baseline_report = run_variant(
-            spark, source, candidate["completeness"], "baseline", partitions, relative_error
-        )
+        baseline, baseline_report = run_variant(spark, canonical.canonical, "baseline", salt_buckets)
         report["baseline"] = baseline_report
         for frame in baseline.values():
             frame.unpersist()
-        optimized, optimized_report = run_variant(
-            spark, source, candidate["completeness"], "partitioned", partitions, relative_error
-        )
-        report["partitioned"] = optimized_report
+        optimized, optimized_report = run_variant(spark, canonical.canonical, "optimized", salt_buckets)
+        report["optimized"] = optimized_report
         equality = {
             name: not baseline[name].exceptAll(optimized[name]).limit(1).count()
             and not optimized[name].exceptAll(baseline[name]).limit(1).count()
@@ -162,8 +199,7 @@ def main():
     bronze_evidence = os.environ["BRONZE_EVIDENCE_ROOT"]
     silver_evidence = os.environ["SILVER_EVIDENCE_ROOT"]
     candidate_id = os.environ["SILVER_CANDIDATE_ID"]
-    image_digest = os.environ["IMAGE_DIGEST"]
-    relative_error = float(os.environ.get("SILVER_RELATIVE_ERROR", "0.05"))
+    image = immutable_image(os.environ["IMAGE_REFERENCE"])
     completeness = os.environ.get("SILVER_COMPLETENESS")
     if completeness is not None and completeness not in ("complete", "recurring"):
         raise ValueError("SILVER_COMPLETENESS must be complete or recurring")
@@ -173,7 +209,7 @@ def main():
     candidate = store.get(f"dp2/candidates/{candidate_id}.json")
     if (
         not candidate
-        or candidate.get("transformation_revision") != image_digest
+        or candidate.get("transformation_revision") != image
         or (completeness is not None and candidate.get("completeness") != completeness)
     ):
         raise ValueError("benchmark requires the original candidate image and pinned inputs")
@@ -182,7 +218,7 @@ def main():
 
     spark = session()
     try:
-        result = benchmark(spark, Store(bronze_evidence), store, candidate, relative_error)
+        result = benchmark(spark, Store(bronze_evidence), store, candidate)
         candidate["benchmark"] = result
         store.put(f"dp2/candidates/{candidate['candidate_id']}.json", candidate)
     finally:

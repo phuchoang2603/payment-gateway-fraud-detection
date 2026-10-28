@@ -101,7 +101,7 @@ spec:
           - {name: INPUT_MODE, value: "{{workflow.parameters.input-mode}}"}
           - {name: SOURCE_EPOCH, value: "{{workflow.parameters.source-epoch}}"}
           - {name: DATASET_VERSION, value: "{{workflow.parameters.dataset-version}}"}
-          - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
+          - {name: IMAGE_REFERENCE, value: __SPARK_IMAGE__}
           - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
         resources:
           requests: {cpu: 100m, memory: 256Mi}
@@ -229,7 +229,7 @@ spec:
                         - {name: SOURCE_EPOCH, value: "{{workflow.parameters.source-epoch}}"}
                         - {name: DATASET_VERSION, value: "{{workflow.outputs.parameters.selected-version}}"}
                         - {name: SPARK_SHUFFLE_PARTITIONS, value: "__SHUFFLE_PARTITIONS__"}
-                        - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
+                        - {name: IMAGE_REFERENCE, value: __SPARK_IMAGE__}
                         - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
                         - {name: SPARK_APPLICATION_NAME, value: "dp1-{{workflow.uid}}-ingest-{{inputs.parameters.attempt}}"}
             executorSpec:

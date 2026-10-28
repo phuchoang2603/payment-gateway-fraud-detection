@@ -15,11 +15,7 @@ spec:
     parameters:
       - {name: accepted-versions, value: ""}
       - {name: candidate-id, value: ""}
-      - {name: merge-current, value: "false"}
       - {name: completeness, value: complete}
-      - {name: run-benchmark, value: "false"}
-      - {name: backfill-start, value: ""}
-      - {name: backfill-end, value: ""}
   podGC:
     strategy: OnWorkflowSuccess
   templates:
@@ -36,16 +32,10 @@ spec:
               parameters:
                 - {name: mode, value: transform}
                 - {name: script, value: silver_runtime.py}
-          - name: dp2-benchmark
-            depends: dp2-transform.Succeeded
-            when: "{{workflow.parameters.run-benchmark}} == true"
-            template: spark
-            arguments:
-              parameters:
-                - {name: mode, value: benchmark}
-                - {name: script, value: silver_benchmark.py}
+                - {name: candidate-id, value: "{{workflow.outputs.parameters.silver-candidate-id}}"}
           - name: dp2-discover
-            depends: dp2-transform.Succeeded && (dp2-benchmark.Succeeded || dp2-benchmark.Skipped)
+            depends: dp2-transform.Succeeded
+            when: "{{workflow.outputs.parameters.silver-run}} == true"
             template: native
             arguments:
               parameters:
@@ -53,6 +43,7 @@ spec:
                 - {name: candidate-id, value: "{{workflow.outputs.parameters.silver-candidate-id}}"}
           - name: dp2-validate
             depends: dp2-discover.Succeeded
+            when: "{{workflow.outputs.parameters.silver-run}} == true"
             template: native
             arguments:
               parameters:
@@ -60,11 +51,21 @@ spec:
                 - {name: candidate-id, value: "{{workflow.outputs.parameters.silver-candidate-id}}"}
           - name: dp2-publish
             depends: dp2-validate.Succeeded
+            when: "{{workflow.outputs.parameters.silver-run}} == true"
             template: native
             arguments:
               parameters:
                 - {name: stage, value: publish}
                 - {name: candidate-id, value: "{{workflow.outputs.parameters.silver-candidate-id}}"}
+    - name: benchmark
+      steps:
+        - - name: dp2-benchmark
+            template: spark
+            arguments:
+              parameters:
+                - {name: mode, value: benchmark}
+                - {name: script, value: silver_benchmark.py}
+                - {name: candidate-id, value: "{{workflow.parameters.candidate-id}}"}
     - name: publish-only
       steps:
         - - name: dp2-publish
@@ -79,15 +80,13 @@ spec:
         command: [python, -m, fraud_batch.silver.silver_plan]
         envFrom:
           - configMapRef: {name: dp1-config}
-          - secretRef: {name: lakehouse-rustfs}
+          - secretRef: {name: gateway-storage}
+          - secretRef: {name: gateway-catalog-client}
         env:
           - {name: SILVER_ACCEPTED_VERSIONS, value: "{{workflow.parameters.accepted-versions}}"}
-          - {name: SILVER_MERGE_CURRENT, value: "{{workflow.parameters.merge-current}}"}
           - {name: SILVER_COMPLETENESS, value: "{{workflow.parameters.completeness}}"}
-          - {name: SILVER_BACKFILL_START, value: "{{workflow.parameters.backfill-start}}"}
-          - {name: SILVER_BACKFILL_END, value: "{{workflow.parameters.backfill-end}}"}
           - {name: BRONZE_EVIDENCE_ROOT, value: __BRONZE_EVIDENCE__}
-          - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
+          - {name: IMAGE_REFERENCE, value: __SPARK_IMAGE__}
         resources:
           requests: {cpu: 100m, memory: 256Mi}
           limits: {cpu: "1", memory: 512Mi}
@@ -104,6 +103,7 @@ spec:
         parameters:
           - name: mode
           - name: script
+          - name: candidate-id
       retryStrategy:
         limit: "2"
         retryPolicy: OnFailure
@@ -127,6 +127,7 @@ spec:
                 - {name: attempt, value: "{{retries}}"}
                 - {name: mode, value: "{{inputs.parameters.mode}}"}
                 - {name: script, value: "{{inputs.parameters.script}}"}
+                - {name: candidate-id, value: "{{inputs.parameters.candidate-id}}"}
         - - name: cleanup
             templateRef: {name: data-pipeline-spark-utilities, template: cleanup-spark}
             arguments:
@@ -146,6 +147,7 @@ spec:
           - name: attempt
           - name: mode
           - name: script
+          - name: candidate-id
       activeDeadlineSeconds: __SPARK_DEADLINE__
       retryStrategy:
         limit: "2"
@@ -208,12 +210,13 @@ spec:
                     - name: spark-kubernetes-driver
                       envFrom:
                         - configMapRef: {name: dp1-config}
-                        - secretRef: {name: lakehouse-rustfs}
+                        - secretRef: {name: gateway-storage}
+                        - secretRef: {name: gateway-catalog-client}
                       env:
                         - {name: SILVER_COMPLETENESS, value: "{{workflow.parameters.completeness}}"}
                         - {name: BRONZE_EVIDENCE_ROOT, value: __BRONZE_EVIDENCE__}
-                        - {name: SILVER_CANDIDATE_ID, value: "{{workflow.outputs.parameters.silver-candidate-id}}"}
-                        - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
+                        - {name: SILVER_CANDIDATE_ID, value: "{{inputs.parameters.candidate-id}}"}
+                        - {name: IMAGE_REFERENCE, value: __SPARK_IMAGE__}
                         - {name: WORKFLOW_ID, value: "{{workflow.name}}"}
                         - {name: SPARK_SHUFFLE_PARTITIONS, value: "__SHUFFLE_PARTITIONS__"}
                         - {name: SPARK_APPLICATION_NAME, value: "dp2-{{workflow.uid}}-{{inputs.parameters.mode}}-{{inputs.parameters.attempt}}"}
@@ -229,7 +232,8 @@ spec:
                     - name: spark-kubernetes-executor
                       envFrom:
                         - configMapRef: {name: dp1-config}
-                        - secretRef: {name: lakehouse-rustfs}
+                        - secretRef: {name: gateway-storage}
+                        - secretRef: {name: gateway-catalog-client}
     - name: native
       inputs:
         parameters:
@@ -245,7 +249,8 @@ spec:
         command: [python, -m, fraud_batch.silver.silver_native]
         envFrom:
           - configMapRef: {name: dp1-config}
-          - secretRef: {name: lakehouse-rustfs}
+          - secretRef: {name: gateway-storage}
+          - secretRef: {name: gateway-catalog-client}
           - configMapRef: {name: metadata-client}
           - secretRef: {name: openmetadata}
           - secretRef: {name: metadata-starrocks}

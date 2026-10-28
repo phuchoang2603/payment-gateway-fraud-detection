@@ -1,5 +1,7 @@
 Existing implementation is retained after the rebase; all tasks below require reconciliation or verification against the fresh dev baseline. Previous results are not carried forward as acceptance. Tests and image builds run in CI only.
 
+Implementation update: full-batch curation, shared payment context, standalone workload benchmarks, immutable release references and platform wiring are implemented. Local Ruff, Helm render/lint and OpenSpec validation pass; fresh CI and dev execution remain pending for tasks that include those checks.
+
 ## 1. Declared schemas and normalization
 
 - [ ] 1.1 Define versioned physical schemas and direct per-version normalization to the output contract, with schema 3 unchanged and schema 4 adding assessment references; verify existing CI contract checks cover optionality, source-origin/hash semantics and generated references without Kafka framing changes.
@@ -20,7 +22,7 @@ Existing implementation is retained after the rebase; all tasks below require re
 - [ ] 3.2 Implement Silver scoped grains/keys, canonical events, attempt histories, label observations and delivery provenance in the existing Spark package; verify focused CI behavior rejects content conflicts and retains exact delivery accounting while collapsing identical business duplicates.
 - [ ] 3.3 Adapt Silver quality contracts for conditional schema, lifecycle/context/amount/linkage and complete versus recurring pending history; verify native results enforce label availability and keep truth/chargeback/decision meanings separate without recreating retired DP1 fault probes.
 - [ ] 3.4 Replace affected-entity incremental processing with full-batch recomputation over explicitly selected accepted Bronze receipts; remove automatic accepted-base merging and bounded-backfill controls and their redundant tests. Retain simple input/output identities and separate acceptance; verify idempotent replay, independent late labels and newly accepted older records in focused CI checks.
-- [ ] 3.5 Reuse one payment-context aggregation for pending classification and attempt histories; preserve scoped joins, conflict handling, exact delivery accounting and temporal rules.
+- [x] 3.5 Reuse one payment-context aggregation for pending classification and attempt histories; preserve scoped joins, conflict handling, exact delivery accounting and temporal rules.
 
 ## 4. Data pipeline integration and relevant evidence
 
@@ -49,7 +51,7 @@ Existing implementation is retained after the rebase; all tasks below require re
 
 ## 8. Shared-platform integration and fresh dev acceptance
 
-- [ ] 8.1 Adapt Silver and Spark utility templates to the current image helper and `global.imageTags`; remove equal-revision assumptions and reconcile Bronze/Silver run and benchmark identities with immutable release tags.
+- [x] 8.1 Adapt Silver and Spark utility templates to the current image helper and `global.imageTags`; remove equal-revision assumptions and reconcile Bronze/Silver run and benchmark identities with immutable release tags.
 - [ ] 8.2 Replace legacy Silver storage secrets with `gateway-storage` and `gateway-catalog-client`, verify Polaris auth and environment-selected S3 settings, and replace stale governance namespace defaults with `data`.
-- [ ] 8.3 Configure environment-specific DP2 evidence roots under `runs/payment-gateway/dp2` without prod writes to dev; keep schedules disabled pending source/catalog verification.
+- [x] 8.3 Configure environment-specific DP2 evidence roots under `runs/payment-gateway/dp2` without prod writes to dev; keep schedules disabled pending source/catalog verification.
 - [ ] 8.4 After CI succeeds, generate fresh dev v17, configure its actual digest, execute the cleared notebook, and accept independent Bronze and Silver runs. Record only new outputs and actual captures; defer prod/full-scale acceptance.

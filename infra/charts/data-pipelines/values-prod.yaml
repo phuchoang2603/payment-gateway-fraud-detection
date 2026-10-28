@@ -1,5 +1,6 @@
 enabled: true
 config:
+  SILVER_EVIDENCE_ROOT: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp2
   SOURCE_ROOT: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v17
   EVIDENCE_ROOT: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp1
   S3_ENDPOINT: https://s3.us-east-1.amazonaws.com

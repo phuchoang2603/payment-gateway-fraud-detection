@@ -12,7 +12,7 @@ from fraud_batch.common.products import PORTS, contract_path
 
 PRODUCT = "bronze-payments"
 PIPELINE = "argo.historical-dp1-bronze"
-STORAGE = "rustfs"
+STORAGE = "platform-object-storage"
 TASKS = {
     "select": ["ingest"],
     "ingest": ["discover"],

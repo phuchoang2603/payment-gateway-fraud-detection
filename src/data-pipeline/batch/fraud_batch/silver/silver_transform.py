@@ -4,7 +4,13 @@ from dataclasses import dataclass
 from pyspark.sql import functions as F
 
 from fraud_batch.silver.diagnostics import source_diagnostics
-from fraud_batch.silver.silver import attempt_histories, canonical_events, label_observations, mark_pending_events
+from fraud_batch.silver.silver import (
+    attempt_histories,
+    canonical_events,
+    label_observations,
+    mark_pending_events,
+    payment_context,
+)
 from fraud_batch.silver.silver_quality import (
     invalid_attempt_contexts,
     invalid_checkout_amounts,
@@ -22,30 +28,32 @@ class CandidateFrames:
     labels: object
     attempts: object
     diagnostics: dict
+    context: object
 
 
 def build(source, relative_error=0.05):
-    events = mark_pending_events(canonical_events(source["payment_events"]))
+    events = canonical_events(source["payment_events"])
+    context = payment_context(events.canonical)
+    events = mark_pending_events(events, context)
     labels = label_observations(source["fraud_labels"])
-    attempts = attempt_histories(events.canonical, labels.observations)
+    attempts = attempt_histories(events.canonical, labels.observations, context)
     diagnostics = source_diagnostics(source["payment_events"], events.canonical, events.provenance, relative_error)
-    return CandidateFrames(events=events, labels=labels, attempts=attempts, diagnostics=diagnostics)
+    return CandidateFrames(events=events, labels=labels, attempts=attempts, diagnostics=diagnostics, context=context)
 
 
-def transform(
-    spark, bronze_store, silver_store, candidate, namespace="bronze", silver_namespace="silver", relative_error=0.05
-):
-    from fraud_batch.silver.silver_incremental import recompute
-
+def transform(spark, bronze_store, candidate, namespace="bronze", relative_error=0.05):
     source = selected_bronze(spark, bronze_store, candidate, namespace)
-    return recompute(
-        spark, bronze_store, silver_store, candidate, source, build, namespace, silver_namespace, relative_error
-    )
+    return build(source, relative_error)
 
 
 @contextmanager
 def persist_intermediates(candidate):
-    frames = [candidate.events.canonical, candidate.events.provenance, candidate.labels.observations]
+    frames = [
+        candidate.context,
+        candidate.events.canonical,
+        candidate.events.provenance,
+        candidate.labels.observations,
+    ]
     try:
         for frame in frames:
             frame.persist()

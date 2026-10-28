@@ -16,7 +16,6 @@ IDENTITY_FIELDS = (
     "product_sha256",
     "quality_sha256",
     "completeness",
-    "boundaries",
 )
 
 
@@ -137,20 +136,11 @@ def pin_input(bronze_store, silver_store, version):
     return pinned
 
 
-def open_candidate(bronze_store, silver_store, versions, transformation_revision, completeness, boundaries=None):
+def open_candidate(bronze_store, silver_store, versions, transformation_revision, completeness):
     if not versions or len(set(versions)) != len(versions) or not transformation_revision:
         raise ValueError("candidate requires unique accepted inputs and a transformation revision")
     if completeness not in ("complete", "recurring"):
         raise ValueError("candidate requires an explicit completeness boundary")
-    if boundaries is not None:
-        if not isinstance(boundaries, dict) or set(boundaries) != {"start", "end"}:
-            raise ValueError("backfill requires explicit start and end boundaries")
-        try:
-            start, end = (datetime.fromisoformat(boundaries[name].replace("Z", "+00:00")) for name in ("start", "end"))
-            if start.utcoffset() is None or end.utcoffset() is None or start >= end:
-                raise ValueError
-        except (AttributeError, TypeError, ValueError):
-            raise ValueError("backfill boundaries must be ordered timezone-aware timestamps") from None
     selected = [pin_input(bronze_store, silver_store, version) for version in sorted(versions)]
     identity = {
         "inputs": selected,
@@ -159,7 +149,6 @@ def open_candidate(bronze_store, silver_store, versions, transformation_revision
         "product_sha256": product_hash(),
         "quality_sha256": quality_hash(),
         "completeness": completeness,
-        "boundaries": boundaries,
     }
     candidate_id = digest(identity)
     key = f"dp2/candidates/{candidate_id}.json"

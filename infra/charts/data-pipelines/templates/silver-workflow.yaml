@@ -1,7 +1,4 @@
 {{- if .Values.enabled }}
-{{- if ne .Values.images.spark.revision .Values.images.openmetadata.revision }}
-{{- fail "DP2 Spark and OpenMetadata images must use the same Git revision" }}
-{{- end }}
 {{ .Files.Get "files/silver-workflow.yaml"
   | replace "__WORKFLOW_DEADLINE__" (.Values.workflow.activeDeadlineSeconds | toString)
   | replace "__SPARK_DEADLINE__" (.Values.spark.activeDeadlineSeconds | toString)
@@ -9,8 +6,8 @@
   | replace "__EXECUTORS__" (.Values.spark.executors | toString)
   | replace "__SHUFFLE_PARTITIONS__" (.Values.spark.shufflePartitions | toString)
   | replace "__NAMESPACE__" .Values.namespace
-  | replace "__SPARK_IMAGE__" (include "data-pipelines.image" .Values.images.spark)
-  | replace "__OPENMETADATA_IMAGE__" (include "data-pipelines.image" .Values.images.openmetadata)
+  | replace "__SPARK_IMAGE__" (include "data-pipelines.image" (dict "image" .Values.images.spark "global" $.Values.global))
+  | replace "__OPENMETADATA_IMAGE__" (include "data-pipelines.image" (dict "image" .Values.images.openmetadata "global" $.Values.global))
   | replace "__SOURCE_ROOT__" (.Values.config.SOURCE_ROOT | quote)
   | replace "__SOURCE_EPOCH__" (.Values.recurring.sourceEpoch | quote)
   | replace "__DATASET_VERSION__" (.Values.config.DATASET_VERSION | quote)

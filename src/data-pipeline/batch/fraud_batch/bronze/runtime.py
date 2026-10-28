@@ -1,13 +1,13 @@
 import json
 import logging
 import os
-import re
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fraud_batch.bronze.runs import VALIDATION_POLICY, evidence_key, open_run, save_run
+from fraud_batch.common.images import immutable_image
 from fraud_batch.common.manifest import selected_manifest
 from fraud_batch.common.products import hashes
 from fraud_batch.common.storage import Store
@@ -70,9 +70,7 @@ def main():
                 manifest, digest = selected_manifest(source)
             if manifest["dataset_version"] != version:
                 raise ValueError("selected manifest differs from requested version")
-            image = os.environ.get("IMAGE_DIGEST", "")
-            if not re.fullmatch(r".+@sha256:[a-f0-9]{64}", image):
-                raise ValueError("IMAGE_DIGEST must identify the immutable job image")
+            image = immutable_image(os.environ.get("IMAGE_REFERENCE", ""))
             run = open_run(
                 store,
                 version,

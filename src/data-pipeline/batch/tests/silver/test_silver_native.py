@@ -11,7 +11,6 @@ def test_native_rules_pin_all_candidate_and_bronze_snapshots():
         "contracts": hashes(),
         "product_sha256": product_hash(),
         "quality_sha256": quality_hash(),
-        "boundaries": None,
         "snapshots": {table: index + 10 for index, table in enumerate(SILVER_PORTS)},
         "transformation_revision": "image@sha256:" + "b" * 64,
         "inputs": [

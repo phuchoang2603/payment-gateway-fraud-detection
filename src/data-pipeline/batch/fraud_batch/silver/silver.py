@@ -31,24 +31,27 @@ class AttemptFrames:
     linked_labels: DataFrame
 
 
-def mark_pending_events(frames: EventFrames) -> EventFrames:
-    events = frames.canonical
-    payments = events.groupBy("integration_id", "payment_id").agg(
-        F.sum(F.when(F.col("payment_created").isNotNull(), 1).otherwise(0)).alias("_created"),
+def payment_context(events: DataFrame) -> DataFrame:
+    return events.groupBy("integration_id", "payment_id").agg(
+        F.sum(F.when(F.col("payment_created").isNotNull(), 1).otherwise(0)).alias("created_events"),
         F.sum(
             F.when(F.col("payment_succeeded").isNotNull() | F.col("payment_expired").isNotNull(), 1).otherwise(0)
-        ).alias("_terminal"),
-        F.min("aggregate_version").alias("_first"),
-        F.max("aggregate_version").alias("_last"),
-        F.count(F.lit(1)).alias("_events"),
+        ).alias("terminal_events"),
+        F.min("aggregate_version").alias("payment_first_version"),
+        F.max("aggregate_version").alias("payment_last_version"),
+        F.count(F.lit(1)).alias("payment_event_count"),
     )
+
+
+def mark_pending_events(frames: EventFrames, context: DataFrame) -> EventFrames:
+    events = frames.canonical
     pending = (
-        (F.col("_created") == 0)
-        | (F.col("_terminal") == 0)
-        | (F.col("_first") != 1)
-        | (F.col("_last") != F.col("_events"))
+        (F.col("created_events") == 0)
+        | (F.col("terminal_events") == 0)
+        | (F.col("payment_first_version") != 1)
+        | (F.col("payment_last_version") != F.col("payment_event_count"))
     )
-    flags = events.select(*EVENT_KEY, "payment_id").join(payments, ["integration_id", "payment_id"], "left")
+    flags = events.select(*EVENT_KEY, "payment_id").join(context, ["integration_id", "payment_id"], "left")
     flags = flags.select(*EVENT_KEY, "payment_id", F.coalesce(pending, F.lit(True)).alias("pending_context"))
     provenance = frames.provenance.join(flags, list(EVENT_KEY), "left").withColumn(
         "pending_context", F.coalesce(F.col("pending_context"), F.lit(False))
@@ -61,7 +64,7 @@ def mark_pending_events(frames: EventFrames) -> EventFrames:
     return EventFrames(canonical=events, provenance=provenance, conflicts=frames.conflicts)
 
 
-def attempt_histories(events: DataFrame, labels: DataFrame) -> AttemptFrames:
+def attempt_histories(events: DataFrame, labels: DataFrame, context: DataFrame) -> AttemptFrames:
     attempt = F.coalesce(
         *[
             F.col(f"{payload}.attempt_id")
@@ -86,16 +89,7 @@ def attempt_histories(events: DataFrame, labels: DataFrame) -> AttemptFrames:
         F.sum(F.when(F.col("attempt_started").isNotNull(), 1).otherwise(0)).alias("started_events"),
         F.min(F.when(F.col("attempt_started").isNotNull(), F.col("occurred_at"))).alias("attempt_started_at"),
     )
-    payment_context = events.groupBy("integration_id", "payment_id").agg(
-        F.sum(F.when(F.col("payment_created").isNotNull(), 1).otherwise(0)).alias("created_events"),
-        F.sum(
-            F.when(F.col("payment_succeeded").isNotNull() | F.col("payment_expired").isNotNull(), 1).otherwise(0)
-        ).alias("terminal_events"),
-        F.min("aggregate_version").alias("payment_first_version"),
-        F.max("aggregate_version").alias("payment_last_version"),
-        F.count(F.lit(1)).alias("payment_event_count"),
-    )
-    grouped = grouped.join(payment_context, ["integration_id", "payment_id"], "left").fillna(
+    grouped = grouped.join(context, ["integration_id", "payment_id"], "left").fillna(
         {"created_events": 0, "terminal_events": 0}
     )
     invalid = grouped.where(

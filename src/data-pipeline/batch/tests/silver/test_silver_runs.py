@@ -55,8 +55,6 @@ def test_candidate_pins_accepted_snapshots_and_replays_idempotently(tmp_path):
     bronze.put("accepted/bad.json", bad)
     with pytest.raises(ValueError, match="matching accepted snapshots"):
         pin_input(bronze, silver, "bad")
-    with pytest.raises(ValueError, match="timezone-aware"):
-        open_candidate(bronze, silver, ["first"], "revision", "complete", {"start": "2025-01-02", "end": "2025-01-01"})
 
 
 def test_landing_ledger_version_remains_pinned_after_progress_advances(tmp_path):
@@ -119,7 +117,6 @@ def test_missing_native_evidence_cannot_replace_accepted_pointer(tmp_path, monke
         "product_sha256": product_hash(),
         "quality_sha256": quality_hash(),
         "completeness": "complete",
-        "boundaries": None,
         "transformation_revision": "revision",
         "snapshots": {table: index + 10 for index, table in enumerate(SILVER_PORTS)},
         "inputs": [{"dataset_version": "old", "snapshots": {"payment_events": 100, "fraud_labels": 101}}],

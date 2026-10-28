@@ -80,7 +80,18 @@ def test_inventory_accepts_only_a_fully_declared_later_physical_version(tmp_path
         source_manifest.supported_versions.cache_clear()
 
 
-def test_deferred_source_gate_reaches_preflight_and_records_the_native_policy(dataset, tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "image, succeeds",
+    [
+        ("image@sha256:" + "a" * 64, True),
+        ("registry/image:pr-97-" + "a" * 40, True),
+        ("registry/image:main-" + "b" * 40, True),
+        ("registry/image:latest", False),
+    ],
+)
+def test_deferred_source_gate_reaches_preflight_and_records_the_native_policy(
+    dataset, tmp_path, monkeypatch, image, succeeds
+):
     from fraud_batch.bronze.runs import EXECUTION, open_run
     from fraud_batch.bronze.runtime import main
     from fraud_batch.common.storage import Store
@@ -99,13 +110,16 @@ def test_deferred_source_gate_reaches_preflight_and_records_the_native_policy(da
     selected, _ = selected_manifest(str(source))
     assert selected["validation"] == manifest["validation"]
     evidence = tmp_path / "evidence"
-    monkeypatch.setenv("IMAGE_DIGEST", "image@sha256:" + "a" * 64)
+    monkeypatch.setenv("IMAGE_REFERENCE", image)
     monkeypatch.setenv("PIPELINE_STAGE", "preflight")
     monkeypatch.setenv("SOURCE_ROOT", str(source))
     monkeypatch.setenv("EVIDENCE_ROOT", str(evidence))
     monkeypatch.setenv("DATASET_VERSION", "smoke")
     monkeypatch.setenv("PIPELINE_OUTPUT", str(tmp_path / "out"))
-    assert main() == 0
+    assert main() == (0 if succeeds else 1)
+    if not succeeds:
+        assert not (tmp_path / "out/version").exists()
+        return
     store = Store(str(evidence))
     run = store.get("versions/smoke/run.json")
     assert run["source_validation"] == manifest["validation"]

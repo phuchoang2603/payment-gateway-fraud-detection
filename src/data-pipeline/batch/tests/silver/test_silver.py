@@ -8,7 +8,13 @@ from fraud_batch.bronze.ingest import source_frames
 from fraud_batch.bronze.runs import open_run
 from fraud_batch.common.products import AUDIT, hashes
 from fraud_batch.common.storage import Store
-from fraud_batch.silver.silver import attempt_histories, canonical_events, label_observations, mark_pending_events
+from fraud_batch.silver.silver import (
+    attempt_histories,
+    canonical_events,
+    label_observations,
+    mark_pending_events,
+    payment_context,
+)
 from fraud_batch.silver.silver_quality import invalid_recurring_lifecycles
 
 
@@ -103,15 +109,37 @@ def test_labels_are_pending_until_their_attempt_context_is_available(spark, data
     events = canonical_events(raw["payment_events"])
     labels = label_observations(raw["fraud_labels"]).observations
     assert not events.conflicts.take(1)
-    pending = attempt_histories(events.canonical.limit(0), labels)
+    pending = attempt_histories(events.canonical.limit(0), labels, payment_context(events.canonical.limit(0)))
     assert pending.linked_labels.where("pending_context = false").count() == 0
-    resolved = attempt_histories(events.canonical, labels)
+    resolved = attempt_histories(events.canonical, labels, payment_context(events.canonical))
     assert not resolved.invalid.take(1)
     assert not resolved.pending.take(1)
     assert not resolved.linked_labels.where("pending_context = true").take(1)
     assert resolved.linked_labels.count() == labels.count()
-    partial = mark_pending_events(canonical_events(raw["payment_events"].where("aggregate_version <= 2")))
+    partial = canonical_events(raw["payment_events"].where("aggregate_version <= 2"))
+    partial = mark_pending_events(partial, payment_context(partial.canonical))
     assert not invalid_recurring_lifecycles(partial.canonical).take(1)
     assert partial.provenance.where("pending_context_deliveries > 0").take(1)
-    partial_attempts = attempt_histories(partial.canonical, labels)
+    partial_attempts = attempt_histories(partial.canonical, labels, payment_context(partial.canonical))
     assert not partial_attempts.linked_labels.where("pending_context = false").take(1)
+
+
+def test_benchmark_variants_preserve_skewed_counts_and_distinct_methods(spark, bounded_shuffle):
+    from fraud_batch.silver.silver_benchmark import workloads
+
+    schema = (
+        "integration_id string, event_id string, "
+        "payment_created struct<merchant:struct<merchant_id:string>,snapshot:struct<items:array<struct<category:string>>>>, "
+        "attempt_started struct<context:struct<customer:struct<customer_id:string>>,signals:struct<payment_method:struct<fingerprint:string>>>>"
+    )
+    rows = [
+        ("scope", str(index), (("hot",), ([("electronics",)],)), ((("customer",),), ((method,),)))
+        for index, method in enumerate(["method-a", "method-a", "method-b", None])
+    ]
+    events = spark.createDataFrame(rows, schema)
+    for optimized in (False, True):
+        results = workloads(events, optimized, 4)
+        assert [tuple(row) for row in results["merchant_category_counts"].collect()] == [
+            ("scope", "hot", "electronics", 4)
+        ]
+        assert [tuple(row) for row in results["customer_payment_methods"].collect()] == [("scope", "customer", 2)]
