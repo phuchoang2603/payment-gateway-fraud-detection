@@ -5,29 +5,13 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import yaml
+from pipeline_common.catalog import client, expand, native, ref
+from pipeline_common.governance import resolve_owners
+from pipeline_common.products import PORTS, hashes
+from pipeline_common.storage import Store
 
 from data_platform import governance, quality, readback
-from data_platform.catalog import client, expand, native, ref
-from data_platform.products import PORTS, hashes
 from data_platform.runs import accept, evidence_key
-from data_platform.storage import Store
-
-
-def resolve_owners(sdk):
-    from metadata.generated.schema.api.teams.createTeam import CreateTeamRequest
-    from metadata.generated.schema.entity.teams.user import User
-
-    team = governance.product_document()["team"]
-    mapping = json.loads(os.environ.get("OPENMETADATA_OWNER_MAP", "{}"))
-    users = []
-    for member in team["members"]:
-        if member.get("role") == "owner":
-            user = sdk.get_by_name(User, mapping.get(member["username"], member["username"]), nullable=False)
-            users.append(user.id)
-    if not users:
-        raise ValueError("product has no resolvable declared owners")
-    owner = sdk.create_or_update(CreateTeamRequest(name=team["name"], teamType="Group", users=users))
-    return [ref(owner, "team")]
 
 
 def configure_profiles(sdk, run):
@@ -378,7 +362,7 @@ def main():
 
         manifest, digest = selection(store, run["dataset_version"])
     else:
-        from data_platform.manifest import selected_manifest
+        from pipeline_common.manifest import selected_manifest
 
         manifest, digest = selected_manifest(run["source_root"])
     if digest != run["manifest_sha256"]:
@@ -404,7 +388,11 @@ def main():
         elif stage == "validate":
             cases = quality.cases(run, manifest)
             with ThreadPoolExecutor(max_workers=2) as pool:
-                list(pool.map(lambda table: native("test", quality.test_workflow(table, cases)), PORTS))
+                list(
+                    pool.map(
+                        lambda table: native("test", quality.test_workflow(table, cases, quality.entity(table))), PORTS
+                    )
+                )
         elif stage == "profile":
             receipt["coverage"] = configure_profiles(client(), run)
             native("profile", quality.profiler_workflow())

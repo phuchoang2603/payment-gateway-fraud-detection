@@ -2,9 +2,9 @@ import os
 import time
 from pathlib import Path
 
-from data_platform.manifest import inventory_location, verify_file
-from data_platform.products import PORTS
-from data_platform.storage import Store
+from pipeline_common.manifest import inventory_location, verify_file
+from pipeline_common.products import PORTS
+from pipeline_common.storage import Store
 
 MAX_FILES = 10000
 MAX_BYTES = 1024**3

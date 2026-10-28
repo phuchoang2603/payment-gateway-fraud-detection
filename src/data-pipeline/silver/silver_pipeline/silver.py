@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from data_platform.products import AUDIT
+from pipeline_common.products import AUDIT
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 

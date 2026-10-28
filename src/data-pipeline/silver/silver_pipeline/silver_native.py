@@ -8,12 +8,12 @@ from pathlib import Path
 from uuid import uuid4
 
 import yaml
-from data_platform import quality, readback
-from data_platform.catalog import expand, native
-from data_platform.contracts import prepare
-from data_platform.integrations import workflow
-from data_platform.products import SILVER_PORTS
-from data_platform.storage import Store
+from pipeline_common import quality, readback
+from pipeline_common.catalog import expand, native
+from pipeline_common.contracts import prepare
+from pipeline_common.integrations import workflow
+from pipeline_common.products import SILVER_PORTS
+from pipeline_common.storage import Store
 
 from silver_pipeline.silver_contracts import contract_path, hashes, product_hash, quality_hash
 from silver_pipeline.silver_runs import publication_lock, verify_candidate
@@ -383,7 +383,7 @@ def run(stage, store, candidate):
     }
     try:
         for table in SILVER_PORTS:
-            config = quality.test_workflow(table, rules)
+            config = quality.test_workflow(table, rules, f"starrocks.lakehouse.silver.{table}")
             config["source"]["sourceConfig"]["config"]["entityFullyQualifiedName"] = (
                 f"starrocks.lakehouse.silver.{table}"
             )

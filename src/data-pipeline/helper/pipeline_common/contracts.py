@@ -4,7 +4,7 @@ from functools import cached_property
 
 import yaml
 
-from data_platform.products import AUDIT, contract_path
+from pipeline_common.products import AUDIT, contract_path
 
 STARROCKS_TYPES = {
     "string": "varchar(1073741824)",

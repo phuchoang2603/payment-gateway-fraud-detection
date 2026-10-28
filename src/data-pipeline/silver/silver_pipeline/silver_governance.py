@@ -8,10 +8,10 @@ from hashlib import sha256
 from uuid import uuid4
 
 import yaml
-from data_platform import governance, readback
-from data_platform.bronze_metadata import resolve_owners
-from data_platform.catalog import client, ref
-from data_platform.products import PRODUCTS, SILVER_PORTS
+from pipeline_common import governance, readback
+from pipeline_common.catalog import client, ref
+from pipeline_common.governance import resolve_owners
+from pipeline_common.products import PRODUCTS, SILVER_PORTS
 
 from silver_pipeline.silver_contracts import contract_path, hashes, product_hash, quality_hash
 from silver_pipeline.silver_runs import digest, publication_lock, verify_candidate

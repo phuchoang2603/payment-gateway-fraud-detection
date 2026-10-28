@@ -3,7 +3,7 @@ import os
 import re
 from pathlib import Path
 
-from data_platform.storage import Store
+from pipeline_common.storage import Store
 
 from silver_pipeline.silver_runs import digest, open_candidate
 

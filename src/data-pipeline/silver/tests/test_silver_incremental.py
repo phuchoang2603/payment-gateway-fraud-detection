@@ -2,9 +2,9 @@ from datetime import UTC, datetime
 
 import pytest
 from data_platform.ingest import source_frames
-from data_platform.products import hashes
 from data_platform.runs import open_run
-from data_platform.storage import Store
+from pipeline_common.products import hashes
+from pipeline_common.storage import Store
 from pyspark.sql import functions as F
 
 import silver_pipeline.silver_incremental as incremental

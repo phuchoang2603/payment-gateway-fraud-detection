@@ -3,6 +3,7 @@ name = "fraud-data-platform"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "fraud-pipeline-common",
   "pyarrow==23.0.1",
   "pyyaml==6.0.3",
   "boto3==1.42.36",
@@ -44,3 +45,6 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.uv.sources]
+fraud-pipeline-common = { path = "../helper" }

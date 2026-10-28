@@ -1,4 +1,4 @@
-from data_platform.products import SILVER_PORTS
+from pipeline_common.products import SILVER_PORTS
 
 from silver_pipeline.silver_contracts import hashes, product_hash, quality_hash
 from silver_pipeline.silver_native import cancel_owned_queries, cases, expected

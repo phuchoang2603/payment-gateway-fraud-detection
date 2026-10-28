@@ -1,0 +1,43 @@
+[project]
+name = "fraud-pipeline-common"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "pyarrow==23.0.1",
+  "pyyaml==6.0.3",
+  "boto3==1.42.36",
+  "certifi==2026.10.19",
+]
+
+[project.optional-dependencies]
+spark = ["pyspark==4.1.3"]
+
+[dependency-groups]
+dev = [
+    "pyspark==4.1.3",
+    "pytest==9.0.2",
+    "ruff==0.15.0",
+    "numpy>=2.3,<3",
+    "pydantic>=2.12,<3",
+    "psutil==7.2.2",
+    "pytz==2026.5",
+    "protobuf>=7.36.1,<8",
+]
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "pipeline_common"
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 119
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

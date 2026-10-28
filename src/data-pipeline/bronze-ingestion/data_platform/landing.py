@@ -3,17 +3,12 @@ import re
 from hashlib import sha256
 from itertools import zip_longest
 
-from data_platform.manifest import supported_versions
-from data_platform.products import PORTS
+from pipeline_common.landing import identity, selection, state_key
+from pipeline_common.manifest import supported_versions
+from pipeline_common.products import PORTS
 
 FORMAT = "decoded-payments-parquet-v1"
 TOPICS = {"payments.events.v1": "payment_events", "fraud.labels.v1": "fraud_labels"}
-
-
-def identity(value):
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value):
-        raise ValueError("invalid landing epoch")
-    return value
 
 
 def validate_batch(key, body, epoch):
@@ -50,18 +45,6 @@ def validate_batch(key, body, epoch):
     if not seen or sum(f["rows"] for f in batch["files"]) != batch["rows"]:
         raise ValueError("landing batch rows differ from files")
     return batch, digest
-
-
-def state_key(epoch):
-    return f"landing/{identity(epoch)}/progress.json"
-
-
-def selection(store, version):
-    encoded = store.read(f"selections/{version}.json", max_bytes=64 * 1024 * 1024)
-    manifest = json.loads(encoded)
-    if manifest.get("dataset_version") != version:
-        raise ValueError("immutable landing selection is missing")
-    return manifest, sha256(encoded).hexdigest()
 
 
 def select(source, store, epoch, max_batches=100):

@@ -6,12 +6,12 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from pipeline_common.products import hashes
+from pipeline_common.storage import Store
 
 from data_platform.ingest import ingest, selected_snapshots, table_name
 from data_platform.landing import advance, select, selection, state_key
-from data_platform.products import hashes
 from data_platform.runs import open_run
-from data_platform.storage import Store
 
 EPOCH = "landing-fixture"
 

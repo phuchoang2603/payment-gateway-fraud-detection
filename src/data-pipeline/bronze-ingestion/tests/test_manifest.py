@@ -3,12 +3,11 @@ import shutil
 from copy import deepcopy
 from hashlib import sha256
 
+import pipeline_common.manifest as source_manifest
 import pytest
 import yaml
-
-import data_platform.manifest as source_manifest
-from data_platform.manifest import selected_manifest, source_contracts, verify_file
-from data_platform.products import PRODUCTS
+from pipeline_common.manifest import selected_manifest, source_contracts, verify_file
+from pipeline_common.products import PRODUCTS
 
 
 def test_completed_inventory_and_integrity(dataset, tmp_path):
@@ -81,9 +80,10 @@ def test_inventory_accepts_only_a_fully_declared_later_physical_version(tmp_path
 
 
 def test_deferred_source_gate_reaches_preflight_and_records_the_native_policy(dataset, tmp_path, monkeypatch):
-    from data_platform.runs import EXECUTION, open_run
+    from pipeline_common.storage import Store
+
     from data_platform.runtime import main
-    from data_platform.storage import Store
+    from data_platform.runs import EXECUTION, open_run
 
     root, manifest = dataset
     source = tmp_path / "source"

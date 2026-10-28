@@ -3,7 +3,7 @@ import json
 import os
 import re
 
-from data_platform.storage import Store
+from pipeline_common.storage import Store
 
 from silver_pipeline.silver_runs import open_candidate, pin_input, verify_candidate
 
@@ -37,7 +37,7 @@ def main(argv=None):
     if bool(args.backfill_start) != bool(args.backfill_end):
         parser.error("backfill requires both start and end")
     boundaries = {"start": args.backfill_start, "end": args.backfill_end} if args.backfill_start else None
-    from data_platform.spark import session
+    from pipeline_common.spark import session
 
     from silver_pipeline.diagnostics import retain_diagnostics
     from silver_pipeline.silver_transform import transform

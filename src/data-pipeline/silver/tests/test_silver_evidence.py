@@ -1,5 +1,5 @@
 import pytest
-from data_platform.storage import Store
+from pipeline_common.storage import Store
 
 from silver_pipeline.silver_evidence import validate_evidence
 

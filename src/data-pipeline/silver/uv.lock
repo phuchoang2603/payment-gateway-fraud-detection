@@ -64,6 +64,41 @@ source = { directory = "../bronze-ingestion" }
 dependencies = [
     { name = "boto3" },
     { name = "certifi" },
+    { name = "fraud-pipeline-common" },
+    { name = "pyarrow" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "boto3", specifier = "==1.42.36" },
+    { name = "certifi", specifier = "==2026.10.19" },
+    { name = "fraud-pipeline-common", directory = "../helper" },
+    { name = "pyarrow", specifier = "==23.0.1" },
+    { name = "pyspark", marker = "extra == 'spark'", specifier = "==4.1.3" },
+    { name = "pyyaml", specifier = "==6.0.3" },
+]
+provides-extras = ["spark"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "numpy", specifier = ">=2.3,<3" },
+    { name = "protobuf", specifier = ">=7.36.1,<8" },
+    { name = "psutil", specifier = "==7.2.2" },
+    { name = "pydantic", specifier = ">=2.12,<3" },
+    { name = "pyspark", specifier = "==4.1.3" },
+    { name = "pytest", specifier = "==9.0.2" },
+    { name = "pytz", specifier = "==2026.5" },
+    { name = "ruff", specifier = "==0.15.0" },
+]
+
+[[package]]
+name = "fraud-pipeline-common"
+version = "0.1.0"
+source = { directory = "../helper" }
+dependencies = [
+    { name = "boto3" },
+    { name = "certifi" },
     { name = "pyarrow" },
     { name = "pyyaml" },
 ]
@@ -97,7 +132,7 @@ source = { editable = "." }
 dependencies = [
     { name = "boto3" },
     { name = "certifi" },
-    { name = "fraud-data-platform" },
+    { name = "fraud-pipeline-common" },
     { name = "pyarrow" },
     { name = "pyyaml" },
 ]
@@ -109,6 +144,7 @@ spark = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "fraud-data-platform" },
     { name = "numpy" },
     { name = "protobuf" },
     { name = "psutil" },
@@ -123,7 +159,7 @@ dev = [
 requires-dist = [
     { name = "boto3", specifier = "==1.42.36" },
     { name = "certifi", specifier = "==2026.10.19" },
-    { name = "fraud-data-platform", directory = "../bronze-ingestion" },
+    { name = "fraud-pipeline-common", directory = "../helper" },
     { name = "pyarrow", specifier = "==23.0.1" },
     { name = "pyspark", marker = "extra == 'spark'", specifier = "==4.1.3" },
     { name = "pyyaml", specifier = "==6.0.3" },
@@ -132,6 +168,7 @@ provides-extras = ["spark"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "fraud-data-platform", directory = "../bronze-ingestion" },
     { name = "numpy", specifier = ">=2.3,<3" },
     { name = "protobuf", specifier = ">=7.36.1,<8" },
     { name = "psutil", specifier = "==7.2.2" },

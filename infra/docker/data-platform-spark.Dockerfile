@@ -11,6 +11,7 @@ FROM python:3.12.15-slim-bookworm AS build
 COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /opt/data-pipeline/bronze-ingestion
 ENV UV_NO_CACHE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0
+COPY src/data-pipeline/helper /opt/data-pipeline/helper
 COPY src/data-pipeline/bronze-ingestion/pyproject.toml src/data-pipeline/bronze-ingestion/uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project --extra spark --no-install-package pyspark
 COPY src/data-pipeline/bronze-ingestion/data_platform ./data_platform

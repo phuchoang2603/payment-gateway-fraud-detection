@@ -1,7 +1,7 @@
 from data_platform.ingest import source_frames
-from data_platform.products import hashes
 from data_platform.runs import open_run
-from data_platform.storage import Store
+from pipeline_common.products import hashes
+from pipeline_common.storage import Store
 from pyspark.sql import functions as F
 
 from silver_pipeline.silver import canonical_events

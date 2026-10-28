@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 
-from data_platform.manifest import physical_schemas
+from pipeline_common.manifest import physical_schemas
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 

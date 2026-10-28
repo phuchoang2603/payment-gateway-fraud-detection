@@ -2,9 +2,10 @@ import time
 from dataclasses import dataclass
 from hashlib import sha256
 
-from data_platform.catalog import server
-from data_platform.contracts import prepare
-from data_platform.products import PORTS
+from pipeline_common.contracts import prepare
+from pipeline_common.products import PORTS
+from pipeline_common.quality import connection as connection
+from pipeline_common.quality import test_workflow as test_workflow
 
 CATALOG = "lakehouse"
 SCHEMA = "bronze"
@@ -118,23 +119,8 @@ def expected(run, contracts, case_list):
     }
 
 
-def parameters(case):
-    return [
-        {"name": "sqlExpression", "value": case.sql},
-        {"name": "strategy", "value": "COUNT"},
-        {"name": "operator", "value": "=="},
-        {"name": "threshold", "value": "0"},
-    ]
-
-
-def connection():
-    from data_platform.integrations import connection as shared_connection
-
-    return shared_connection(SERVICE)
-
-
 def metadata_workflow():
-    from data_platform.integrations import workflow
+    from pipeline_common.integrations import workflow
 
     return workflow(SERVICE)
 
@@ -163,40 +149,6 @@ def profiler_workflow():
     }
     workflow["processor"] = {"type": "orm-profiler", "config": {}}
     return workflow
-
-
-def test_workflow(table, case_list):
-    return {
-        "source": {
-            "type": "testsuite",
-            "serviceName": SERVICE,
-            "sourceConfig": {
-                "config": {
-                    "type": "TestSuite",
-                    "entityFullyQualifiedName": entity(table),
-                    "testCases": [c.name for c in case_list if c.table == table],
-                }
-            },
-        },
-        "processor": {
-            "type": "orm-test-runner",
-            "config": {
-                "forceUpdate": True,
-                "testCases": [
-                    {
-                        "name": c.name,
-                        "description": c.description,
-                        "testDefinitionName": "tableCustomSQLQuery",
-                        "parameterValues": parameters(c),
-                    }
-                    for c in case_list
-                    if c.table == table
-                ],
-            },
-        },
-        "sink": {"type": "metadata-rest", "config": {}},
-        "workflowConfig": {"loggerLevel": "INFO", "openMetadataServerConfig": server()},
-    }
 
 
 def prepare_run(store, run, contracts, manifest):

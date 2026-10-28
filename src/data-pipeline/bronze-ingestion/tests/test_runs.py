@@ -1,7 +1,7 @@
 import pytest
+from pipeline_common.storage import Store
 
 from data_platform.runs import EXECUTION, accept, evidence_key, open_run, save_run
-from data_platform.storage import Store
 
 CONTRACTS = {"payment_events": "one", "fraud_labels": "two"}
 

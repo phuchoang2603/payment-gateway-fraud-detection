@@ -4,15 +4,15 @@ from datetime import datetime
 from hashlib import sha256
 
 import yaml
+from pipeline_common.governance import DOMAIN as DOMAIN
+from pipeline_common.governance import REPOSITORY, columns, product_document
+from pipeline_common.products import PORTS, contract_path
 
-from data_platform.products import PORTS, PRODUCTS, contract_path
 from data_platform.quality import entity
 
-DOMAIN = "fraud-detection"
 PRODUCT = "bronze-payments"
 PIPELINE = "argo.historical-dp1-bronze"
 STORAGE = "rustfs"
-REPOSITORY = "https://github.com/phuchoang2603/payment-gateway-fraud-detection"
 TASKS = {
     "select": ["ingest"],
     "ingest": ["discover"],
@@ -21,40 +21,6 @@ TASKS = {
     "profile": ["publish"],
     "publish": [],
 }
-TYPES = {
-    "string": "STRING",
-    "binary": "BINARY",
-    "long": "BIGINT",
-    "int": "INT",
-    "double": "DOUBLE",
-    "boolean": "BOOLEAN",
-    "timestamp": "TIMESTAMP",
-}
-
-
-def product_document(product=PRODUCT):
-    return yaml.safe_load((PRODUCTS / product / "product.odps.yaml").read_text())
-
-
-def columns(properties):
-    result = []
-    for prop in properties:
-        logical = prop["logicalType"]
-        dtype = "STRUCT" if logical == "object" else "ARRAY" if logical == "array" else TYPES[prop["physicalType"]]
-        col = {"name": prop["name"], "dataType": dtype, "description": prop.get("description", prop["name"])}
-        if prop.get("required"):
-            col["constraint"] = "NOT_NULL"
-        if logical == "object":
-            col["children"] = columns(prop["properties"])
-        elif logical == "array":
-            item = prop["items"]
-            if item["logicalType"] == "array":
-                raise ValueError("nested array contract mapping is unsupported")
-            col["arrayDataType"] = "STRUCT" if item["logicalType"] == "object" else TYPES[item["physicalType"]]
-            if item["logicalType"] == "object":
-                col["children"] = columns(item["properties"])
-        result.append(col)
-    return result
 
 
 def contract_body(table, entity_id, owners, tests, git_revision):

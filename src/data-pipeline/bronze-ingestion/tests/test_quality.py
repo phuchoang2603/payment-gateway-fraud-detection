@@ -2,11 +2,11 @@ import json
 from copy import deepcopy
 
 import pytest
+from pipeline_common.products import hashes
+from pipeline_common.storage import Store
 
 from data_platform import bronze_metadata, governance, quality, readback
-from data_platform.products import hashes
 from data_platform.runs import evidence_key
-from data_platform.storage import Store
 
 REVISION = "a" * 40
 

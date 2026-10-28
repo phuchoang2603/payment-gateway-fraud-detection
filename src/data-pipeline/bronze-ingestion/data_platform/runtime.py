@@ -7,10 +7,11 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from data_platform.manifest import selected_manifest
-from data_platform.products import hashes
+from pipeline_common.manifest import selected_manifest
+from pipeline_common.products import hashes
+from pipeline_common.storage import Store
+
 from data_platform.runs import VALIDATION_POLICY, evidence_key, open_run, save_run
-from data_platform.storage import Store
 
 STAGES = ["preflight", "ingest", "verify-source", "select"]
 
@@ -133,8 +134,9 @@ def main():
                 if application not in attempts:
                     attempts.append(application)
                 save_run(store, run)
+            from pipeline_common.spark import session
+
             from data_platform.ingest import ingest
-            from data_platform.spark import session
 
             spark = session(local_warehouse)
             ingest(spark, source, manifest, store, run)

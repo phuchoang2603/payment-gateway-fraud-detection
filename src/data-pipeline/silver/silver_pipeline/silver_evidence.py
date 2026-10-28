@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from hashlib import sha256
 
-from data_platform.products import SILVER_PORTS
+from pipeline_common.products import SILVER_PORTS
 
 from silver_pipeline.silver_runs import digest
 

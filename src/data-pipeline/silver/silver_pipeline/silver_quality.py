@@ -1,6 +1,6 @@
-from data_platform.contracts import prepare
-from data_platform.manifest import physical_schemas
-from data_platform.products import AUDIT
+from pipeline_common.contracts import prepare
+from pipeline_common.manifest import physical_schemas
+from pipeline_common.products import AUDIT
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 from pyspark.sql import types as T

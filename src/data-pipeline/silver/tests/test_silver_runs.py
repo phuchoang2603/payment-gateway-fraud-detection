@@ -4,9 +4,9 @@ from unittest.mock import Mock
 
 import pytest
 from botocore.exceptions import ClientError
-from data_platform.landing import state_key
-from data_platform.products import SILVER_PORTS
-from data_platform.storage import Store
+from pipeline_common.landing import state_key
+from pipeline_common.products import SILVER_PORTS
+from pipeline_common.storage import Store
 
 from silver_pipeline.silver_contracts import hashes, product_hash, quality_hash
 from silver_pipeline.silver_governance import publish

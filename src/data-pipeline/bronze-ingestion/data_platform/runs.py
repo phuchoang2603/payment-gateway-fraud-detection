@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from uuid import uuid4
 
-from data_platform.products import PORTS
+from pipeline_common.products import PORTS
 
 VALIDATION_POLICY = "bronze-catalog-v4"
 EXECUTION = {"gate": "dp1-starrocks-openmetadata", "policy": VALIDATION_POLICY, "engine": "starrocks"}

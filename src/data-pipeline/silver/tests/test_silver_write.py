@@ -1,8 +1,8 @@
 import pytest
 from data_platform.ingest import source_frames
-from data_platform.products import hashes
 from data_platform.runs import open_run
-from data_platform.storage import Store
+from pipeline_common.products import hashes
+from pipeline_common.storage import Store
 
 from silver_pipeline.silver import attempt_histories, canonical_events, label_observations, mark_pending_events
 from silver_pipeline.silver_contracts import hashes as silver_hashes

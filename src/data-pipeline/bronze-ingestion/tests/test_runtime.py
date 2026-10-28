@@ -1,8 +1,8 @@
 import pytest
+from pipeline_common.storage import Store
 
 from data_platform import ingest
 from data_platform.runs import open_run
-from data_platform.storage import Store
 
 
 def test_preprovisioned_namespace_does_not_request_namespace_creation(tmp_path, monkeypatch):
@@ -18,7 +18,7 @@ def test_preprovisioned_namespace_does_not_request_namespace_creation(tmp_path, 
         catalog = Catalog()
 
         def table(self, name):
-            from data_platform.contracts import prepare
+            from pipeline_common.contracts import prepare
 
             class Table:
                 schema = prepare("payment_events" if name.endswith("payment_events") else "fraud_labels").schema
@@ -38,7 +38,7 @@ def test_preprovisioned_namespace_does_not_request_namespace_creation(tmp_path, 
 
     monkeypatch.setattr(ingest, "verify_content", lambda *args: None)
     monkeypatch.setattr(ingest, "verify_files", lambda *args: None)
-    from data_platform.contracts import prepare
+    from pipeline_common.contracts import prepare
 
     frames = {
         table: type("Frame", (), {"schema": prepare(table).schema})() for table in ("payment_events", "fraud_labels")
@@ -52,7 +52,7 @@ def test_preprovisioned_namespace_does_not_request_namespace_creation(tmp_path, 
 
 
 def test_missing_native_secret_fails_before_starting_a_process(monkeypatch):
-    from data_platform.catalog import native
+    from pipeline_common.catalog import native
 
     monkeypatch.delenv("REQUIRED_CONNECTOR_SECRET", raising=False)
     with pytest.raises(KeyError, match="REQUIRED_CONNECTOR_SECRET"):

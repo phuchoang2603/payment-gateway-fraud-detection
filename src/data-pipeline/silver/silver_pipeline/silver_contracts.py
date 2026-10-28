@@ -2,7 +2,7 @@ import os
 from hashlib import sha256
 from pathlib import Path
 
-from data_platform.products import PRODUCTS, SILVER_PORTS
+from pipeline_common.products import PRODUCTS, SILVER_PORTS
 
 
 def contract_path(table):
@@ -25,6 +25,6 @@ def quality_hash():
 
 
 def schema(table):
-    from data_platform.contracts import prepare
+    from pipeline_common.contracts import prepare
 
     return prepare(table, contract_path(table)).schema

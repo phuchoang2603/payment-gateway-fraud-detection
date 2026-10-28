@@ -3,8 +3,8 @@ import re
 import time
 from uuid import uuid4
 
-from data_platform.contracts import check_physical
-from data_platform.products import SILVER_PORTS
+from pipeline_common.contracts import check_physical
+from pipeline_common.products import SILVER_PORTS
 from pyspark.sql import functions as F
 
 from silver_pipeline.silver_contracts import hashes, product_hash, quality_hash, schema

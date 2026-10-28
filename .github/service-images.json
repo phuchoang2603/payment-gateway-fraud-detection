@@ -111,6 +111,7 @@
       "paths": [
         "infra/docker/data-platform-spark.Dockerfile",
         "src/data-pipeline/bronze-ingestion",
+        "src/data-pipeline/helper",
         "src/data-pipeline/silver",
         "contracts/data-products",
         "contracts/features"
@@ -124,6 +125,7 @@
       "paths": [
         "infra/docker/data-platform-metadata.Dockerfile",
         "src/data-pipeline/bronze-ingestion/data_platform",
+        "src/data-pipeline/helper/pipeline_common",
         "src/data-pipeline/silver/silver_pipeline",
         "contracts/data-products",
         "contracts/features"

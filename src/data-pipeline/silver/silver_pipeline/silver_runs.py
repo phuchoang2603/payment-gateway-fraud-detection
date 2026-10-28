@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from uuid import uuid4
 
-from data_platform.landing import state_key
-from data_platform.products import PORTS
+from pipeline_common.landing import state_key
+from pipeline_common.products import PORTS
 
 from silver_pipeline.silver_contracts import hashes, product_hash, quality_hash
 

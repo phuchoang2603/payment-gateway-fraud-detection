@@ -12,8 +12,8 @@ import pyarrow.fs as fs
 import pyarrow.parquet as pq
 import yaml
 
-from data_platform.products import PORTS, PRODUCTS
-from data_platform.storage import Store
+from pipeline_common.products import PORTS, PRODUCTS
+from pipeline_common.storage import Store
 
 
 def source_contracts(product_version):

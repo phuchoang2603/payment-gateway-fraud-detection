@@ -31,7 +31,7 @@ def dataset(tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def spark(tmp_path_factory):
-    from data_platform.spark import session
+    from pipeline_common.spark import session
 
     instance = session(tmp_path_factory.mktemp("warehouse"))
     yield instance

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote, urlsplit
 from urllib.request import urlopen
 
-from data_platform.storage import Store
+from pipeline_common.storage import Store
 from pyspark import StorageLevel
 
 from silver_pipeline.silver_runs import digest, verify_candidate
@@ -245,7 +245,7 @@ def main(argv=None):
     ):
         raise ValueError("benchmark requires the original candidate image and pinned inputs")
     verify_candidate(candidate)
-    from data_platform.spark import session
+    from pipeline_common.spark import session
 
     spark = session()
     try:
