@@ -40,10 +40,10 @@ spec:
         - name: migrate
           image: {{ $image | quote }}
           imagePullPolicy: {{ $svc.image.pullPolicy }}
+          args: [migrate]
           securityContext:
             {{- include "payment-gateway.container-security" . | nindent 12 }}
           env:
-            - {name: SERVICE_MODE, value: migrate}
             {{- include "payment-gateway.database-env" (dict "database" $svc.database "migrate" true) | nindent 12 }}
       {{- end }}
       containers:

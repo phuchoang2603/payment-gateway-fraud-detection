@@ -23,9 +23,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	command := os.Getenv("SERVICE_MODE")
-	if command == "" {
-		command = "serve"
+	command := "serve"
+	if len(os.Args) > 1 {
+		command = os.Args[1]
 	}
 	var err error
 	switch command {

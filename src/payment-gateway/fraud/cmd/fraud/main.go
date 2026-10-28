@@ -32,11 +32,10 @@ func main() {
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	mode := os.Getenv("SERVICE_MODE")
-	if mode != "" && mode != "serve" && mode != "migrate" {
-		return errors.New("SERVICE_MODE must be serve or migrate")
-	}
-	if mode == "migrate" {
+	if len(os.Args) > 1 {
+		if len(os.Args) != 2 || os.Args[1] != "migrate" {
+			return errors.New("usage: fraud [migrate]")
+		}
 		databaseURL := os.Getenv("FRAUD_MIGRATE_DATABASE_URL")
 		if databaseURL == "" {
 			return errors.New("FRAUD_MIGRATE_DATABASE_URL is required")
