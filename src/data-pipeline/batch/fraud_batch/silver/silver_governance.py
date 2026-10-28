@@ -17,7 +17,8 @@ from fraud_batch.silver.silver_contracts import contract_path, hashes, product_h
 from fraud_batch.silver.silver_runs import digest, publication_lock, verify_candidate
 
 PRODUCT = "silver-payments"
-PIPELINE = "argo.historical-dp1-dp2"
+PIPELINE_NAME = "historical-dp2-silver"
+PIPELINE = f"argo.{PIPELINE_NAME}"
 TASKS = {
     "dp2-transform": ["dp2-discover"],
     "dp2-discover": ["dp2-validate"],
@@ -186,7 +187,7 @@ def synchronize(sdk, candidate, expected, stages, outcome, report_uri):
     )
     pipeline = sdk.create_or_update(
         CreatePipelineRequest(
-            name="historical-dp1-dp2",
+            name=PIPELINE_NAME,
             service="argo",
             description="Accepted Bronze inputs and separately validated Silver candidates.",
             owners=owners,
