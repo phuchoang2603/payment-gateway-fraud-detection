@@ -1,4 +1,3 @@
-import argparse
 import os
 import re
 import time
@@ -404,35 +403,30 @@ def run(stage, store, candidate):
         store.put(f"{prefix}/native-validation.json", result)
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(prog="dp2-native")
-    parser.add_argument("stage", choices=("discover", "validate", "publish"))
-    parser.add_argument(
-        "--evidence",
-        default=os.environ.get("SILVER_EVIDENCE_ROOT"),
-        required=not os.environ.get("SILVER_EVIDENCE_ROOT"),
-    )
-    parser.add_argument(
-        "--candidate-id",
-        default=os.environ.get("SILVER_CANDIDATE_ID"),
-        required=not os.environ.get("SILVER_CANDIDATE_ID"),
-    )
-    parser.add_argument("--takeover-stopped-publisher", action="store_true")
-    args = parser.parse_args(argv)
-    if not re.fullmatch(r"[a-f0-9]{64}", args.candidate_id):
-        parser.error("invalid candidate identity")
-    store = Store(args.evidence)
-    candidate = store.get(f"dp2/candidates/{args.candidate_id}.json")
-    allowed = ("candidate", "accepted") if args.stage == "publish" else ("candidate",)
+def main():
+    stage = os.environ["PIPELINE_STAGE"]
+    if stage not in ("discover", "validate", "publish"):
+        raise ValueError("unsupported Silver metadata stage")
+    evidence = os.environ["SILVER_EVIDENCE_ROOT"]
+    candidate_id = os.environ["SILVER_CANDIDATE_ID"]
+    takeover_stopped_publisher = os.environ.get("SILVER_TAKEOVER_STOPPED_PUBLISHER", "false")
+    if takeover_stopped_publisher not in ("true", "false"):
+        raise ValueError("SILVER_TAKEOVER_STOPPED_PUBLISHER must be true or false")
+    takeover_stopped_publisher = takeover_stopped_publisher == "true"
+    if not re.fullmatch(r"[a-f0-9]{64}", candidate_id):
+        raise ValueError("invalid candidate identity")
+    store = Store(evidence)
+    candidate = store.get(f"dp2/candidates/{candidate_id}.json")
+    allowed = ("candidate", "accepted") if stage == "publish" else ("candidate",)
     if not candidate or candidate.get("state") not in allowed:
         raise ValueError("native Silver validation requires an unaccepted candidate")
-    if args.stage == "publish":
+    if stage == "publish":
         from silver_pipeline.silver_governance import publish
 
-        publish(store, candidate, takeover_stopped=args.takeover_stopped_publisher)
+        publish(store, candidate, takeover_stopped=takeover_stopped_publisher)
         return 0
-    with publication_lock(store, args.candidate_id, os.environ["WORKFLOW_ID"], args.takeover_stopped_publisher):
-        run(args.stage, store, candidate)
+    with publication_lock(store, candidate_id, os.environ["WORKFLOW_ID"], takeover_stopped_publisher):
+        run(stage, store, candidate)
     return 0
 
 

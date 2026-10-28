@@ -82,8 +82,8 @@ def test_inventory_accepts_only_a_fully_declared_later_physical_version(tmp_path
 def test_deferred_source_gate_reaches_preflight_and_records_the_native_policy(dataset, tmp_path, monkeypatch):
     from pipeline_common.storage import Store
 
-    from data_platform.runtime import main
     from data_platform.runs import EXECUTION, open_run
+    from data_platform.runtime import main
 
     root, manifest = dataset
     source = tmp_path / "source"

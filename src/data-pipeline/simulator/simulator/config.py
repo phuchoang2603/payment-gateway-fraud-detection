@@ -235,8 +235,5 @@ class HistoricalConfig(StrictModel):
         return self
 
 
-def load_config(path: Path, dataset_version: str | None = None) -> HistoricalConfig:
-    configuration = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if dataset_version is not None:
-        configuration["dataset_version"] = dataset_version
-    return HistoricalConfig.model_validate(configuration)
+def load_config(path: Path) -> HistoricalConfig:
+    return HistoricalConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))

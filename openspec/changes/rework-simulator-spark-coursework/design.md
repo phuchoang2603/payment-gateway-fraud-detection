@@ -106,3 +106,7 @@ The guide covers config examples and denominators, seeds/entity continuity, sche
 
 - Record the unused dataset version, concrete effective dates, approximation error and bounded benchmark resources before execution; these do not change the architecture or acceptance obligations.
 - Actual version-5 business requirements are future work. Supporting a declared version schedule does not pre-approve unknown fields or breaking semantics.
+
+### Config-only execution
+
+Service runtime settings come from their existing configuration channels: simulator YAML plus an environment-selected mode/config path, and environment configuration for pipeline stages, Go service modes and Feast. Entry points do not accept CLI overrides. Helm supplies these values with the matching CI-built images. Python mutation selection and scoring live in a reusable repository script; each project declares its scope in `pyproject.toml`, and CI evaluates changed functions only. Shared helper behavior is covered through Bronze consumer tests rather than a separate helper suite.

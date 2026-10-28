@@ -1,4 +1,3 @@
-import argparse
 import contextlib
 import io
 import json
@@ -159,37 +158,23 @@ def benchmark(spark, bronze_store, evidence_store, candidate, relative_error=0.0
                 frame.unpersist()
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(prog="dp2-benchmark")
-    parser.add_argument(
-        "--bronze-evidence",
-        default=os.environ.get("BRONZE_EVIDENCE_ROOT"),
-        required=not os.environ.get("BRONZE_EVIDENCE_ROOT"),
-    )
-    parser.add_argument(
-        "--silver-evidence",
-        default=os.environ.get("SILVER_EVIDENCE_ROOT"),
-        required=not os.environ.get("SILVER_EVIDENCE_ROOT"),
-    )
-    parser.add_argument(
-        "--candidate-id",
-        default=os.environ.get("SILVER_CANDIDATE_ID"),
-        required=not os.environ.get("SILVER_CANDIDATE_ID"),
-    )
-    parser.add_argument(
-        "--image-digest", default=os.environ.get("IMAGE_DIGEST"), required=not os.environ.get("IMAGE_DIGEST")
-    )
-    parser.add_argument("--relative-error", type=float, default=0.05)
-    parser.add_argument("--completeness", choices=("complete", "recurring"))
-    args = parser.parse_args(argv)
-    if not re.fullmatch(r"[a-f0-9]{64}", args.candidate_id):
-        parser.error("invalid candidate identity")
-    store = Store(args.silver_evidence)
-    candidate = store.get(f"dp2/candidates/{args.candidate_id}.json")
+def main():
+    bronze_evidence = os.environ["BRONZE_EVIDENCE_ROOT"]
+    silver_evidence = os.environ["SILVER_EVIDENCE_ROOT"]
+    candidate_id = os.environ["SILVER_CANDIDATE_ID"]
+    image_digest = os.environ["IMAGE_DIGEST"]
+    relative_error = float(os.environ.get("SILVER_RELATIVE_ERROR", "0.05"))
+    completeness = os.environ.get("SILVER_COMPLETENESS")
+    if completeness is not None and completeness not in ("complete", "recurring"):
+        raise ValueError("SILVER_COMPLETENESS must be complete or recurring")
+    if not re.fullmatch(r"[a-f0-9]{64}", candidate_id):
+        raise ValueError("invalid candidate identity")
+    store = Store(silver_evidence)
+    candidate = store.get(f"dp2/candidates/{candidate_id}.json")
     if (
         not candidate
-        or candidate.get("transformation_revision") != args.image_digest
-        or (args.completeness is not None and candidate.get("completeness") != args.completeness)
+        or candidate.get("transformation_revision") != image_digest
+        or (completeness is not None and candidate.get("completeness") != completeness)
     ):
         raise ValueError("benchmark requires the original candidate image and pinned inputs")
     verify_candidate(candidate)
@@ -197,7 +182,7 @@ def main(argv=None):
 
     spark = session()
     try:
-        result = benchmark(spark, Store(args.bronze_evidence), store, candidate, args.relative_error)
+        result = benchmark(spark, Store(bronze_evidence), store, candidate, relative_error)
         candidate["benchmark"] = result
         store.put(f"dp2/candidates/{candidate['candidate_id']}.json", candidate)
     finally:

@@ -48,6 +48,8 @@ spec:
             capabilities:
               drop: [ALL]
           env:
+            - name: FEAST_MODE
+              value: {{ $mode | quote }}
             - name: FEAST_REDIS_ADDR
               value: {{ printf "%s:6379" $.Values.redis.name | quote }}
             - name: FEAST_REDIS_PASSWORD

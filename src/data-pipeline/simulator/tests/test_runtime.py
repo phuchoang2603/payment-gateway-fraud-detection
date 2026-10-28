@@ -7,8 +7,8 @@ from simulator.runtime import main
 from tests.conftest import small_config
 
 
-def test_dataset_version_is_selected_before_generation(tmp_path, monkeypatch):
-    config = small_config().model_dump(mode="json")
+def test_config_selects_the_dataset_before_generation(tmp_path, monkeypatch):
+    config = small_config(output=str(tmp_path / "output")).model_dump(mode="json")
     config["dataset_version"] = "SET_UNUSED_DATASET_VERSION"
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(config))
@@ -19,10 +19,13 @@ def test_dataset_version_is_selected_before_generation(tmp_path, monkeypatch):
         return {"dataset_version": selected.dataset_version, "config_sha256": "hash", "history_end": None}
 
     monkeypatch.setattr(storage, "generate", generate)
-    with pytest.raises(SystemExit):
-        main(["historical", "--config", str(path), "--output", str(tmp_path)])
+    monkeypatch.setenv("SIMULATOR_MODE", "historical")
+    monkeypatch.setenv("SIMULATOR_CONFIG", str(path))
+    assert main() == 2
     assert not seen
-    assert main(["historical", "--config", str(path), "--dataset-version", "unused", "--output", str(tmp_path)]) == 0
+    config["dataset_version"] = "unused"
+    path.write_text(yaml.safe_dump(config))
+    assert main() == 0
     assert seen == ["unused"]
 
 

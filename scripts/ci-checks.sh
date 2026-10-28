@@ -16,7 +16,9 @@ check_python() (
   cd "$1"
   uv run --locked ruff check .
   uv run --locked ruff format --check .
-  uv run --locked pytest -q
+  if [[ -d tests ]]; then
+    uv run --locked pytest -q
+  fi
 )
 
 check_go() (
@@ -78,8 +80,8 @@ case "${1:-}" in
     done < <(find contracts/data-products -mindepth 2 -maxdepth 2 -name product.odps.yaml -print0 | sort -z)
     ;;
   python)
-    uvx --from ruff==0.16.6 ruff check --target-version py311 scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
-    uvx --from ruff==0.16.6 ruff format --check scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
+    uvx --from ruff==0.16.6 ruff check --target-version py311 scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py scripts/check-python-mutations.py
+    uvx --from ruff==0.16.6 ruff format --check scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py scripts/check-python-mutations.py
     check_projects pyproject.toml check_python
     ;;
   helm)

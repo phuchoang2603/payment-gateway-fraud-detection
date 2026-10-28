@@ -64,4 +64,4 @@ sources = ["payments/v1/types.proto", "payments/v1/events.proto", "payments/v1/l
 [tool.mutmut]
 source_paths = ["simulator"]
 only_mutate = ["simulator/config.py"]
-pytest_add_cli_args_test_selection = ["tests/test_schema_schedule.py"]
+pytest_add_cli_args_test_selection = ["tests/test_schema_schedule.py", "tests/test_runtime.py"]

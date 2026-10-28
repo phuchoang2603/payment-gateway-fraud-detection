@@ -1,4 +1,3 @@
-import argparse
 import json
 import os
 from pathlib import Path
@@ -51,18 +50,18 @@ def register(sdk, configured):
         )
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser()
-    parser.add_argument("stage", choices=["register", "discover"])
-    parser.add_argument("--connector")
-    args = parser.parse_args(argv)
-    if args.stage == "register":
+def main():
+    stage = os.environ["METADATA_STAGE"]
+    if stage not in ("register", "discover"):
+        raise ValueError("METADATA_STAGE must be register or discover")
+    connector = os.environ.get("METADATA_CONNECTOR")
+    if stage == "register":
         configured = connectors()
-        register(client(), {args.connector: configured[args.connector]} if args.connector else configured)
+        register(client(), {connector: configured[connector]} if connector else configured)
     else:
-        if not args.connector:
-            parser.error("discover requires --connector")
-        native("ingest", workflow(args.connector))
+        if not connector:
+            raise ValueError("discovery requires METADATA_CONNECTOR")
+        native("ingest", workflow(connector))
     return 0
 
 

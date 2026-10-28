@@ -35,7 +35,7 @@ spec:
             arguments:
               parameters:
                 - {name: mode, value: transform}
-                - {name: script, value: silver_cli.py}
+                - {name: script, value: silver_runtime.py}
           - name: dp2-benchmark
             depends: dp2-transform.Succeeded
             when: "{{workflow.parameters.run-benchmark}} == true"
@@ -77,16 +77,15 @@ spec:
       container:
         image: __OPENMETADATA_IMAGE__
         command: [python, -m, silver_pipeline.silver_plan]
-        args:
-          - "--accepted-versions={{workflow.parameters.accepted-versions}}"
-          - "--merge-current={{workflow.parameters.merge-current}}"
-          - "--completeness={{workflow.parameters.completeness}}"
-          - "--backfill-start={{workflow.parameters.backfill-start}}"
-          - "--backfill-end={{workflow.parameters.backfill-end}}"
         envFrom:
           - configMapRef: {name: dp1-config}
           - secretRef: {name: lakehouse-rustfs}
         env:
+          - {name: SILVER_ACCEPTED_VERSIONS, value: "{{workflow.parameters.accepted-versions}}"}
+          - {name: SILVER_MERGE_CURRENT, value: "{{workflow.parameters.merge-current}}"}
+          - {name: SILVER_COMPLETENESS, value: "{{workflow.parameters.completeness}}"}
+          - {name: SILVER_BACKFILL_START, value: "{{workflow.parameters.backfill-start}}"}
+          - {name: SILVER_BACKFILL_END, value: "{{workflow.parameters.backfill-end}}"}
           - {name: BRONZE_EVIDENCE_ROOT, value: __BRONZE_EVIDENCE__}
           - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
         resources:
@@ -168,7 +167,6 @@ spec:
               dp2-stage: "{{inputs.parameters.mode}}"
           spec:
             pyFiles: local:///opt/data-pipeline/silver/.venv/lib/python3.12/site-packages/silver_pipeline/{{inputs.parameters.script}}
-            driverArgs: ["--completeness={{workflow.parameters.completeness}}"]
             runtimeVersions:
               sparkVersion: "4.1.3"
             sparkConf:
@@ -212,6 +210,7 @@ spec:
                         - configMapRef: {name: dp1-config}
                         - secretRef: {name: lakehouse-rustfs}
                       env:
+                        - {name: SILVER_COMPLETENESS, value: "{{workflow.parameters.completeness}}"}
                         - {name: BRONZE_EVIDENCE_ROOT, value: __BRONZE_EVIDENCE__}
                         - {name: SILVER_CANDIDATE_ID, value: "{{workflow.outputs.parameters.silver-candidate-id}}"}
                         - {name: IMAGE_DIGEST, value: __SPARK_IMAGE__}
@@ -244,7 +243,6 @@ spec:
       container:
         image: __OPENMETADATA_IMAGE__
         command: [python, -m, silver_pipeline.silver_native]
-        args: ["{{inputs.parameters.stage}}"]
         envFrom:
           - configMapRef: {name: dp1-config}
           - secretRef: {name: lakehouse-rustfs}
@@ -252,6 +250,7 @@ spec:
           - secretRef: {name: openmetadata}
           - secretRef: {name: metadata-starrocks}
         env:
+          - {name: PIPELINE_STAGE, value: "{{inputs.parameters.stage}}"}
           - {name: SILVER_CANDIDATE_ID, value: "{{inputs.parameters.candidate-id}}"}
           - {name: WORKFLOW_NAMESPACE, value: "{{workflow.namespace}}"}
           - {name: WORKFLOW_ID, value: "{{workflow.name}}"}

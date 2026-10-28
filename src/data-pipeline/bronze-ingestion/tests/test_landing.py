@@ -126,3 +126,12 @@ def test_landing_rejects_mutated_pending_manifest_and_overlapping_positions(data
     advance(store, run)
     with pytest.raises(ValueError, match="overlapping landing"):
         select(source, store, EPOCH)
+
+
+def test_selection_and_epoch_are_validated(tmp_path):
+    store = Store(str(tmp_path))
+    store.put("selections/version.json", {"dataset_version": "other"})
+    with pytest.raises(ValueError, match="selection"):
+        selection(store, "version")
+    with pytest.raises(ValueError, match="epoch"):
+        state_key("../outside")

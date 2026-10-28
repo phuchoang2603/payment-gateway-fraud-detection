@@ -81,6 +81,7 @@ spec:
             - name: scratch
               mountPath: /tmp
 {{- else }}
+            - {name: SIMULATOR_MODE, value: archive}
             - name: LANDING_TOPICS
               value: {{ $settings.topics | quote }}
             - name: LANDING_GROUP

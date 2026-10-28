@@ -17,9 +17,9 @@ import (
 
 func main() {
 	slog.SetDefault(slog.New(observe.NewLogHandler(os.Stdout, "payments")))
-	command := "serve"
-	if len(os.Args) > 1 {
-		command = os.Args[1]
+	command := os.Getenv("SERVICE_MODE")
+	if command == "" {
+		command = "serve"
 	}
 	cfg, err := config.FromEnv()
 	if err != nil {

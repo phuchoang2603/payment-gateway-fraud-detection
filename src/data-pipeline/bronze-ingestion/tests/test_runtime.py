@@ -57,3 +57,17 @@ def test_missing_native_secret_fails_before_starting_a_process(monkeypatch):
     monkeypatch.delenv("REQUIRED_CONNECTOR_SECRET", raising=False)
     with pytest.raises(KeyError, match="REQUIRED_CONNECTOR_SECRET"):
         native("ingest", {"password": "${REQUIRED_CONNECTOR_SECRET}"})
+
+
+def test_installed_contract_root_is_found_from_project_ancestors(tmp_path, monkeypatch):
+    from pipeline_common import products
+
+    root = tmp_path / "checkout"
+    contracts = root / "contracts/data-products"
+    contracts.mkdir(parents=True)
+    installed = root / "src/data-pipeline/helper/.venv/lib/python3.12/site-packages/pipeline_common/products.py"
+    installed.parent.mkdir(parents=True)
+    monkeypatch.delenv("DATA_PRODUCTS_ROOT", raising=False)
+    monkeypatch.setattr(products, "__file__", str(installed))
+    monkeypatch.chdir(tmp_path)
+    assert products.contracts_root() == contracts

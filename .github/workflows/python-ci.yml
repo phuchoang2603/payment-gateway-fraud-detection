@@ -36,9 +36,10 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: src/data-pipeline/simulator
+    env:
+      MUTATION_BASE: ${{ github.event.pull_request.base.sha }}
+      CI_TEST_REPORTS: /tmp/python-mutation-evidence
+      DATA_PRODUCTS_ROOT: ${{ github.workspace }}/contracts/data-products
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -49,42 +50,12 @@ jobs:
       - uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
-          cache-dependency-glob: src/data-pipeline/simulator/uv.lock
-      - name: Select changed schema schedule logic
-        id: scope
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          if ! git diff --quiet "$BASE_SHA"...HEAD -- simulator/config.py; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Mutate changed schema cutover selection
-        if: steps.scope.outputs.changed == 'true'
-        env:
-          DATA_PRODUCTS_ROOT: ${{ github.workspace }}/contracts/data-products
-        run: |
-          uv run --locked mutmut run --max-children 2 '*SchemaSchedule*version_at*'
-          uv run --locked mutmut export-cicd-stats
-          uv run --locked mutmut results > mutants/results.txt
-      - name: Require mutation score above 80 percent
-        if: steps.scope.outputs.changed == 'true'
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          stats = json.loads(Path("mutants/mutmut-cicd-stats.json").read_text())
-          outcomes = ("killed", "survived", "no_tests", "skipped", "suspicious", "timeout",
-                      "check_was_interrupted_by_user", "segfault")
-          evaluated = sum(stats[name] for name in outcomes)
-          score = 100 * stats["killed"] / evaluated if evaluated else 0
-          print(f"Schema schedule: {stats['killed']}/{evaluated} mutants killed ({score:.2f}%)")
-          if score <= 80:
-              raise SystemExit("Mutation score must exceed 80%; inspect surviving mutants")
-          PY
+          cache-dependency-glob: src/**/uv.lock
+      - name: Check mutations in changed Python functions
+        run: python scripts/check-python-mutations.py
       - uses: actions/upload-artifact@v7.0.2
-        if: always() && steps.scope.outputs.changed == 'true'
+        if: always()
         with:
-          name: python-schema-mutations
-          path: src/data-pipeline/simulator/mutants/
+          name: python-mutation-evidence
+          path: ${{ env.CI_TEST_REPORTS }}
           if-no-files-found: warn
