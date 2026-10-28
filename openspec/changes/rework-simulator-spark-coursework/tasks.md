@@ -42,4 +42,4 @@
 
 ## 7. One batch project
 
-- [ ] 7.1 Consolidate Bronze, Silver and shared modules into one `batch` project and lockfile; retain separate pipeline entrypoints/workflows, share test fixtures and the Spark image environment, and update imports, build inputs, workflow paths and domain references. Verify static checks locally and tests/builds in CI; leave Go services and the other data workloads unchanged.
+- [x] 7.1 Consolidate Bronze, Silver and shared modules into one `batch` project and lockfile; retain separate pipeline entrypoints/workflows, share test fixtures and the Spark image environment, and update imports, build inputs, workflow paths and domain references. Verify static checks locally and tests/builds in CI; leave Go services and the other data workloads unchanged.
