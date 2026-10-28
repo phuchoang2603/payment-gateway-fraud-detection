@@ -1,7 +1,7 @@
 import json
 import time
 
-from confluent_kafka import IsolationLevel, TopicPartition
+from confluent_kafka import IsolationLevel, KafkaError, KafkaException, TopicPartition
 from confluent_kafka.admin import AdminClient, OffsetSpec
 from pyflink.common import Row, Types
 from pyflink.common.watermark_strategy import TimestampAssigner
@@ -97,17 +97,7 @@ class ObserveSource(KeyedProcessFunction):
                 consumed >= self.watermarks[index] for index, consumed in state["offsets"].items()
             )
         ):
-            offsets = self.admin.list_offsets(
-                {
-                    TopicPartition(self.topic, index): OffsetSpec.latest()
-                    for index in range(self.partitions)
-                },
-                isolation_level=IsolationLevel.READ_UNCOMMITTED,
-                request_timeout=5,
-            )
-            self.watermarks = {
-                partition.partition: result.result().offset for partition, result in offsets.items()
-            }
+            self.watermarks = self.latest_offsets(state["offsets"])
             self.last_poll = time.monotonic()
             self.progress_observed = state["now"] if self.logical else micros()
         now = state["now"] if self.logical else max(state["now"], micros())
@@ -120,6 +110,33 @@ class ObserveSource(KeyedProcessFunction):
         )
         self.state.update(state)
         yield Packet(fact, now, state["bootstrap"], progress)
+
+    def latest_offsets(self, consumed):
+        for attempt in range(2):
+            try:
+                offsets = self.admin.list_offsets(
+                    {
+                        TopicPartition(self.topic, index): OffsetSpec.latest()
+                        for index in range(self.partitions)
+                    },
+                    isolation_level=IsolationLevel.READ_UNCOMMITTED,
+                    request_timeout=5,
+                )
+                observed = {
+                    partition.partition: result.result().offset
+                    for partition, result in offsets.items()
+                }
+                if set(observed) == set(consumed) and all(
+                    observed[index] >= 0 and observed[index] > offset
+                    for index, offset in consumed.items()
+                ):
+                    return observed
+                if attempt:
+                    raise RuntimeError("source offset observation trails consumed progress")
+            except KafkaException as error:
+                if attempt or error.args[0].code() != KafkaError.FENCED_LEADER_EPOCH:
+                    raise
+            self.admin.list_topics(self.topic, timeout=5)
 
 
 class Deduplicate(KeyedProcessFunction):

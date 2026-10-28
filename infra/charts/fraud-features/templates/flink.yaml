@@ -34,7 +34,7 @@ metadata:
 rules:
   - apiGroups: [apps]
     resources: [deployments]
-    resourceNames: [fraud-streaming]
+    resourceNames: [fraud-streaming-{{ .Values.epoch }}]
     verbs: [get]
   - apiGroups: [""]
     resources: [pods, services, configmaps]
@@ -57,7 +57,7 @@ roleRef:
 apiVersion: flink.apache.org/v1beta1
 kind: FlinkDeployment
 metadata:
-  name: fraud-streaming
+  name: fraud-streaming-{{ .Values.epoch }}
   namespace: {{ .Release.Namespace }}
 spec:
   image: {{ include "fraud-features.image" .Values.images.streaming | quote }}

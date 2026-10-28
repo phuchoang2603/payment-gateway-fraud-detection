@@ -1,0 +1,253 @@
+{
+  "recorded_at": "2026-10-27T22:57:05.231634+00:00",
+  "source_commit": "4b58ec56876f9bddeaa8226841c6c37968949c69",
+  "image_pin_commit": "980de99",
+  "simulator": {
+    "image_digest": "sha256:002e57d34ffb5f70c884964d6236023435686ef2796f309e888b491fe1b49210",
+    "run": "57cdbe9c9f3440a7a72515a0c15d4f1c",
+    "duration_seconds": 0,
+    "payments_per_second": 0.2,
+    "concurrency": 2,
+    "left_running": true
+  },
+  "source": {
+    "manifest": "s3://synthetic-source/historical/v16/manifest.json",
+    "manifest_sha256": "719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e",
+    "clock": "UTC-wall-clock"
+  },
+  "ci": {
+    "head": "4b58ec5",
+    "checks": "all 26 passed; production pin job skipped on PR as designed",
+    "python_run": 40596879089,
+    "go_run": 40596879220,
+    "image_run": 40596879102,
+    "limits": "new missing-snapshot and leader-epoch fixes not yet CI-verified or deployed"
+  },
+  "payments": {
+    "population": {
+      "observed_at": "2026-10-27T22:53:53.059925+00:00",
+      "payments": 53,
+      "first": "2026-10-27T22:49:31.195975+00:00",
+      "last": "2026-10-27T22:53:50.619148+00:00"
+    },
+    "settled_sample": 51,
+    "outcomes": {
+      "succeeded": 46,
+      "declined": 5
+    },
+    "assessment_states": {
+      "COMPLETED": 51
+    },
+    "evidence_hashes_recomputed_valid": true,
+    "ledger": {
+      "event_counts": {
+        "payment_created": 51,
+        "attempt_started": 51,
+        "risk_decision_recorded": 51,
+        "processor_operation_requested": 51,
+        "processor_outcome_unknown": 1,
+        "payment_succeeded": 46,
+        "attempt_declined": 5
+      },
+      "evidence_linkages_valid": true,
+      "decisions_checked": 51
+    },
+    "processor_operations": 51
+  },
+  "observations": {
+    "customer_status": {
+      "error": 50,
+      "stale": 1
+    },
+    "method_status": {
+      "error": 51
+    },
+    "customer_guard_status": {
+      "timeout": 27,
+      "coverage_unknown": 23,
+      "registered": 1
+    },
+    "method_guard_status": {
+      "timeout": 27,
+      "coverage_unknown": 24
+    }
+  },
+  "feast_readback": {
+    "views_read": 6,
+    "counts_1h": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "coverage": "1h complete; 24h/7d unknown with null quantities",
+    "sdk_read_latency_ms": [
+      426.23,
+      22.58,
+      7.3,
+      3.64,
+      5.15,
+      2.43
+    ],
+    "sample_snapshots": [
+      {
+        "view": "customer",
+        "snapshot_id": "d662e9d6fdeb61efa8f8eb381bf085590b254a1b90ba0e8c34c76be96cc962b5",
+        "revision": 1,
+        "anchor": "2026-10-27T22:50:35.935653Z"
+      },
+      {
+        "view": "method",
+        "snapshot_id": "e170f69ff90469a1c0092ff33bdc6507a0a0d64c7cce305333e3897ead8e84a9",
+        "revision": 1,
+        "anchor": "2026-10-27T22:50:35.941267Z"
+      }
+    ]
+  },
+  "flink": {
+    "baseline_checkpoint": 859,
+    "latest_completed_checkpoint": 887,
+    "restored_checkpoint": 887,
+    "observed_state": "RUNNING",
+    "tasks": {
+      "running": 6,
+      "canceling": 0,
+      "canceled": 0,
+      "total": 7,
+      "created": 0,
+      "scheduled": 0,
+      "deploying": 0,
+      "reconciling": 0,
+      "finished": 0,
+      "initializing": 1,
+      "failed": 0
+    },
+    "failure": "FENCED_LEADER_EPOCH during AdminClient offset refresh triggered checkpoint recovery; checkpoint 888 suspended",
+    "pending_fix": "one metadata refresh and bounded retry for leader fencing; other errors remain visible"
+  },
+  "resources": [
+    {
+      "pod": "fraud-streaming-taskmanager-1-1",
+      "restarts": 0,
+      "memory_peak_bytes": 908980224
+    },
+    {
+      "pod": "live-simulator-7b7c47d58f-s5w7t",
+      "restarts": 0,
+      "memory_peak_bytes": 97107968
+    }
+  ],
+  "argo": {
+    "branch": "improve/flink-recovery",
+    "root_gateway_features_live": "Synced/Healthy",
+    "data_pipelines": "main, unchanged"
+  },
+  "limits": [
+    "Missing Feast entities currently recorded as error instead of missing; fix awaiting CI and rollout.",
+    "100ms guard timeouts observed; rules remain authoritative and observations remain non-enforcing.",
+    "One transient producer PID warning at startup; simulator remained running without container restarts.",
+    "Bounded low-rate observation only; no sustained-load/SLO, full v16 replay or full-history coverage acceptance."
+  ],
+  "post_fix_verification": {
+    "observed_at": "2026-10-27T23:09:17.173465+00:00",
+    "source_commit": "affc7e2d9b336c933f05e83b75072f6f8902019f",
+    "image_pin_commit": "beeed4e9aebf531417f2b4cb598dea5a090edf8b",
+    "ci": {
+      "checks": "all 26 passed",
+      "python_run": 40598639252,
+      "go_run": 40598639250,
+      "image_run": 40598640037,
+      "contracts_helm_run": 40598639271,
+      "warnings": "13 upstream PyFlink/httplib2 deprecation warnings remain"
+    },
+    "sample_after": "2026-10-27T23:07:30Z",
+    "simulator_run": "04a666db67b24df590494c3aa31d8d99",
+    "simulator_container_restarts": 2,
+    "settled_payments": 17,
+    "attempt_statuses": {
+      "declined": 6,
+      "succeeded": 11
+    },
+    "assessment_statuses": {
+      "COMPLETED": 17
+    },
+    "all_evidence_hashes_valid": true,
+    "all_shadow_and_observe_only": true,
+    "ledger": {
+      "event_counts": {
+        "payment_created": 17,
+        "attempt_started": 17,
+        "risk_decision_recorded": 17,
+        "processor_operation_requested": 17,
+        "attempt_declined": 6,
+        "payment_succeeded": 11
+      },
+      "evidence_linkages_valid": true,
+      "decisions_checked": 17
+    },
+    "processor_operations": 17,
+    "observations": {
+      "customer_status": {
+        "missing": 17
+      },
+      "method_status": {
+        "missing": 17
+      },
+      "customer_guard_status": {
+        "coverage_unknown": 14,
+        "timeout": 3
+      },
+      "method_guard_status": {
+        "coverage_unknown": 13,
+        "timeout": 3,
+        "registered": 1
+      }
+    },
+    "remaining_blockers": {
+      "writer": "Rejects invalid source progress in live-v1 journal; committed offsets observed as partition 0:99, 1:125, 2:105. Sample invalid update at partition 0 offset 100 has observed high watermark -1001 on all three source partitions.",
+      "producer_fix": "Reject invalid or trailing broker offset observations before assigning cached progress; one metadata refresh/retry, then fail visibly. Awaiting CI and deployment.",
+      "recovery": "Fresh live-v2 epoch proposed with live-v1 journal/checkpoints preserved and coverage reset to unknown; awaiting user choice. No records skipped or rewritten.",
+      "flink": "New image deployed; REST job list empty during last-state upgrade at observation. Restoration and new completed checkpoint not yet verified.",
+      "simulator": "Two container restarts since initial sample. Previous process ended with label producer failure and unfinished admitted work; current run continues producing payments."
+    }
+  },
+  "offset_guard_release": {
+    "recorded_at": "2026-10-27T23:18:44.263234+00:00",
+    "source_commit": "99dce83b611cf8c11d596b92159dee4c888cd99e",
+    "ci": {
+      "checks": "all 26 passed",
+      "contracts_helm_run": 40600377663,
+      "python_run": 40600377657,
+      "go_run": 40600377921,
+      "image_run": 40600377778
+    },
+    "published_image": {
+      "repository": "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming",
+      "revision": "081d320abd79b7611d95fae54a08aa48af20584c",
+      "digest": "sha256:2d102addb7ac5c9d00991c0076214908293007a392d2ed69ba286d008ed7bbf2"
+    },
+    "deployment": "image pin prepared; deployed guard recovery/readback not yet verified",
+    "prior_image_recovery": {
+      "state": "RUNNING",
+      "tasks": {
+        "running": 7,
+        "canceling": 0,
+        "canceled": 0,
+        "total": 7,
+        "created": 0,
+        "scheduled": 0,
+        "deploying": 0,
+        "reconciling": 0,
+        "finished": 0,
+        "initializing": 0,
+        "failed": 0
+      },
+      "restored_checkpoint": 947,
+      "completed_checkpoint": 984,
+      "completed_checkpoint_state_bytes": 1500263
+    },
+    "acceptance": "live-v1 writer remains blocked by invalid durable records. Fresh live-v2 bootstrap awaits user choice; records, checkpoints and coverage have not been reset."
+  }
+}

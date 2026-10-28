@@ -134,6 +134,7 @@ async def traffic(config, model, gateway, labels, stop):
     pending = set()
     failures = []
     started = time.monotonic()
+    deadline = started + config.duration_seconds if config.duration_seconds else None
     ordinal = completed = 0
     max_lag = 0.0
 
@@ -181,11 +182,11 @@ async def traffic(config, model, gateway, labels, stop):
             slots.release()
 
     try:
-        while not stop.is_set() and time.monotonic() - started < config.duration_seconds:
+        while not stop.is_set() and (deadline is None or time.monotonic() < deadline):
             if failures:
                 raise failures[0]
             due = started + ordinal / config.payments_per_second
-            if due >= started + config.duration_seconds:
+            if deadline is not None and due >= deadline:
                 break
             try:
                 await asyncio.wait_for(stop.wait(), timeout=max(0.001, due - time.monotonic()))

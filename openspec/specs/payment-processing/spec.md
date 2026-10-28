@@ -77,12 +77,17 @@ Starting an attempt SHALL require an idempotency key scoped to the session. A re
 
 ### Requirement: Risk decision orchestration
 
-Each attempt SHALL request a `fraud.v1` decision within a configured deadline and record it before any processor call. A `DECLINE` SHALL end the attempt with a risk decline. When fraud is unavailable, times out or errors, Payments SHALL fail closed: it SHALL record a `DECLINE` assessment with reason `FRAUD_UNAVAILABLE` and fallback policy version `payments-fallback-v1`, and SHALL NOT call the processor.
+Each attempt SHALL request a fraud decision within a configured deadline and durably record a valid assessment before any processor call. DECLINE SHALL end the attempt with a risk decline. Fraud unavailability, timeout or execution failure SHALL block processor authorization and retain a distinct recoverable assessment error, not create a FRAUD_UNAVAILABLE decline assessment. Payments SHALL reuse a completed durable assessment on retry, and SHALL atomically commit its authoritative RiskDecisionRecorded, decision evidence linkage and payment/attempt state using the existing transactional ledger/outbox publication path. Broker delivery SHALL remain at least once with downstream deduplication; a separate fraud.assessed payment event SHALL NOT be required.
 
 #### Scenario: Fraud unavailable
 
 - **WHEN** the fraud call times out
-- **THEN** the attempt is declined by risk with `FRAUD_UNAVAILABLE` and no processor operation is requested
+- **THEN** no processor operation is requested, the attempt reports operational assessment failure and recovery retains its identity without a fabricated risk decline
+
+#### Scenario: Commit response lost
+
+- **WHEN** Payments commits a risk decision but loses the caller response
+- **THEN** retry returns recorded state without a second decision event or processor effect
 
 ### Requirement: Processor effect intent and unknown outcomes
 
@@ -124,7 +129,7 @@ Payments SHALL keep idempotency records for payment creation and attempts in Red
 
 ### Requirement: Recovery and expiry workers
 
-A recovery worker SHALL find attempts with unknown outcomes, and requested operations without a recorded outcome past a grace period. It SHALL query the processor by operation key and record the observed result. Where the processor has no record of the operation, it SHALL resubmit with the same key. An expiry worker SHALL record `PaymentExpired` for open payments past expiry with no attempt awaiting a processor outcome. Workers SHALL be safe to run concurrently and repeatedly.
+A recovery worker SHALL also resume stalled or retryable assessment execution under the same attempt identity with fenced ownership and bounded retries. It SHALL not rescore finalized assessments. An attempt with no processor intent MAY expire under the existing payment expiry policy; late assessment results SHALL NOT reopen expired payments or authorize effects. A recovery worker SHALL find attempts with unknown outcomes, and requested operations without a recorded outcome past a grace period. It SHALL query the processor by operation key and record the observed result. Where the processor has no record of the operation, it SHALL resubmit with the same key. An expiry worker SHALL record `PaymentExpired` for open payments past expiry with no attempt awaiting a processor outcome. Workers SHALL be safe to run concurrently and repeatedly.
 
 #### Scenario: Crash after intent
 

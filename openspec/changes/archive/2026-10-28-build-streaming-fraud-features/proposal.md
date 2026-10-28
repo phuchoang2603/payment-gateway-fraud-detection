@@ -9,7 +9,7 @@ The gateway now has self-contained attempt events and a published 90-day develop
 - Add synchronous integration-scoped 10s/60s submission counters, atomically registered/deduplicated per entity, on an authorization Redis deployment separate from Feast Redis. Begin with observe-only rules.
 - **BREAKING:** replace stateless assessment retries with durable, fenced assessment execution and replay of persisted results/evidence. Distinguish operational assessment errors from fraud declines while continuing to block authorization when no valid decision exists.
 - Reuse Payments' transactional event ledger and committed-event publication as the outbox for authoritative RiskDecisionRecorded; do not introduce a competing fraud.assessed payment event.
-- Exercise feature replay, online retrieval, concurrent submissions, response loss and recovery through CI using the existing 90-day smoke source and current-time live generation. Record real results and limitations before enforcement.
+- Accept this shadow/observe-only slice using existing CI conformance/integration tests and recorded bounded live verification of payment outcomes, online readback and checkpoint recovery. Full v16 replay, sustained-load testing and a broader deployed outage exercise are outside this slice's acceptance; retain those limitations before any enforcement decision. No CI cluster/source credentials or additional exercise workflow is required.
 
 ## Capabilities
 

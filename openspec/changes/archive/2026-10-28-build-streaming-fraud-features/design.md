@@ -97,10 +97,16 @@ Use separate configurable total/call deadlines under the existing Payments attem
 
 1. Update active feature definition/reference/examples, coherent delta specs and affected documentation; leave published v16 bytes/evidence unchanged.
 2. Pin supported runtime versions and coordinate Flink controller, owned checkpoint storage, Feast registry and private deployment prerequisites with the platform repo. Reuse existing Postgres/Kafka; provision separate authorization and Feast Redis.
-3. Deploy aggregation/writer/server with explicit live epoch and current-time source. Run historical replay in a separate epoch through CI; do not bootstrap old July events as current history.
+3. Deploy aggregation/writer/server with explicit live epoch and current-time source. Verify logical-clock behavior and epoch isolation through existing CI integration tests; do not bootstrap old July events as current history. Full v16 replay is outside this slice's acceptance.
 4. Roll out durable Fraud/Payments assessment behavior and shadow/observe-only adapters together. Keep model serving absent and existing valid rules active.
-5. Run focused CI recovery/conformance and deployed smoke exercises, recording feature lag, request latency, resources and errors. Update roadmap status only from accepted evidence.
+5. Reuse existing focused CI recovery/conformance tests and recorded bounded live verification in `evidence/live-rollout-2026-10-27.json`. Retain measured request latency, readback, checkpoint recovery, resource observations and reported freshness/coverage failures. No additional CI-managed cluster exercise or CI cluster/source credentials are required. Update roadmap status only from accepted evidence.
 6. On rollout failure disable shadow reads and velocity observation first. Retain durable result replay and committed evidence. Stop writers before changing active epochs; never restore the obsolete error-to-decline behavior as an implicit fallback. Restore application releases only with an explicit compatible persistence plan.
+
+## Acceptance boundary
+
+This slice is accepted from the existing Python/Go CI behavior and integration coverage plus bounded live verification. Logical-clock reference parity, expiration, duplicate/reordered input, writer replay and checkpoint recovery are covered by the existing tests; deployed evidence records payment outcomes, durable assessment linkage, Feast readback and populated-checkpoint restoration. Passing the relevant CI remains required.
+
+Full immutable-v16 replay, sustained state growth/load, broad deployed outage testing and numerical latency/freshness SLO acceptance are not required to close this change and have not been demonstrated. Cold-read timeouts, stale snapshots, unknown 24h/7d coverage and slow startup remain recorded limitations. History stays shadow-only, velocity stays observe-only and valid rules remain authoritative. Existing evidence and the dated task audit retain their original observations; their references to pending broader exercises describe the earlier acceptance plan, superseded by this boundary, not successful executions.
 
 ## Open Questions
 

@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from random import Random
 
 import pytest
+from features.reference import definition_identity
 from features.reference import snapshot as reference_snapshot
 
 from fraud_streaming.model import DAY, HOUR, RETENTION, Attempt, Contribution, Entity, Fact, Packet
@@ -114,6 +115,10 @@ def test_snapshot_identity_and_same_anchor_late_correction():
     second = SnapshotUpdate.FromString(
         snapshot(state, state.advance(ANCHOR), epoch="ci", now=ANCHOR)
     )
+    assert {
+        "version": first.definition.version,
+        "sha256": first.definition.sha256,
+    } == definition_identity()
     assert first.anchor == second.anchor
     assert first.values.assessed_count_1h == 1 and second.values.assessed_count_1h == 2
     assert second.revision == first.revision + 1

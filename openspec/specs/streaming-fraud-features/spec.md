@@ -1,8 +1,10 @@
+# streaming-fraud-features Specification
+
 ## Purpose
 
 Provide continuously updated assessed-history snapshots with explicit coverage, recoverable publication and supported online feature retrieval.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Independent scoped history aggregation
 
@@ -52,7 +54,7 @@ Historical snapshots SHALL use a dedicated online-store deployment separate from
 
 ### Requirement: Replay and live acceptance evidence
 
-Acceptance SHALL separately report historical logical-clock conformance, current-time freshness, duplicate/reorder/late-input handling, expiration, restart recovery, online readback and measured resource/latency limits. Replay SHALL use a distinct output epoch and SHALL NOT seed old events as current live history. Historical source immutability and prior evidence SHALL be preserved.
+Acceptance for this shadow/observe-only slice SHALL reuse existing CI conformance/integration tests and recorded bounded live verification. Reports SHALL distinguish tested logical-clock conformance, duplicate/reorder/late-input handling, expiration, restart recovery and online readback from observed current-time freshness, coverage and resource/latency limitations. Full 90-day source replay, sustained-load testing and a broader deployed outage exercise SHALL NOT be prerequisites for closing this slice or be claimed as demonstrated. Any replay SHALL use a distinct output epoch and SHALL NOT seed old events as current live history. Historical source immutability and prior evidence SHALL be preserved.
 
 #### Scenario: Old development source
 

@@ -188,6 +188,11 @@ def test_sdk_entity_and_epoch_isolation(store):
     incompatible.snapshot_id = schema.snapshot_id(incompatible)
     with pytest.raises(ValueError, match="incompatible snapshot identity"):
         write(writer, incompatible)
+    incompatible.CopyFrom(customer)
+    incompatible.schema_version = 2
+    incompatible.snapshot_id = schema.snapshot_id(incompatible)
+    with pytest.raises(ValueError, match="incompatible snapshot identity"):
+        write(writer, incompatible)
     assert writer.current(customer, "customer") == customer
 
 
