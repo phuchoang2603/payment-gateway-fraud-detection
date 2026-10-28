@@ -32,7 +32,7 @@ def test_canonical_events_are_idempotent_under_duplicate_replay(spark, bounded_s
     )
     first = canonical_events(deliveries).canonical
     replay = canonical_events(deliveries.unionByName(deliveries).orderBy(F.col("content").desc()))
-    assert set(first.collect()) == set(replay.canonical.collect())
+    assert sorted(first.collect()) == sorted(replay.canonical.collect())
     assert replay.provenance.agg(F.sum("deliveries")).first()[0] == 2 * len(records)
 
 
