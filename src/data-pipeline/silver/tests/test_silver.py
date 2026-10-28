@@ -3,9 +3,10 @@ from datetime import UTC, datetime
 from data_platform.ingest import source_frames
 from data_platform.products import AUDIT, hashes
 from data_platform.runs import open_run
-from data_platform.silver import attempt_histories, canonical_events, label_observations, mark_pending_events
-from data_platform.silver_quality import invalid_recurring_lifecycles
 from data_platform.storage import Store
+
+from silver_pipeline.silver import attempt_histories, canonical_events, label_observations, mark_pending_events
+from silver_pipeline.silver_quality import invalid_recurring_lifecycles
 
 
 def test_canonical_events_preserve_delivery_counts_and_reject_conflicts(spark, bounded_shuffle):

@@ -8,13 +8,13 @@ from hashlib import sha256
 from uuid import uuid4
 
 import yaml
-
 from data_platform import governance, readback
 from data_platform.bronze_metadata import resolve_owners
 from data_platform.catalog import client, ref
 from data_platform.products import PRODUCTS, SILVER_PORTS
-from data_platform.silver_contracts import contract_path, hashes, product_hash, quality_hash
-from data_platform.silver_runs import digest, publication_lock, verify_candidate
+
+from silver_pipeline.silver_contracts import contract_path, hashes, product_hash, quality_hash
+from silver_pipeline.silver_runs import digest, publication_lock, verify_candidate
 
 PRODUCT = "silver-payments"
 PIPELINE = "argo.historical-dp1-dp2"
@@ -334,8 +334,8 @@ def gaps(published, candidate, fetch=readback.get):
 
 
 def _publish_locked(store, candidate):
-    from data_platform.silver_evidence import validate_evidence
-    from data_platform.silver_native import cases, expected, observed
+    from silver_pipeline.silver_evidence import validate_evidence
+    from silver_pipeline.silver_native import cases, expected, observed
 
     candidate_id = candidate["candidate_id"]
     prefix = f"dp2/candidates/{candidate_id}"

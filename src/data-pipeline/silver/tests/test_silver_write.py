@@ -1,15 +1,15 @@
 import pytest
-
 from data_platform.ingest import source_frames
 from data_platform.products import hashes
 from data_platform.runs import open_run
-from data_platform.silver import attempt_histories, canonical_events, label_observations, mark_pending_events
-from data_platform.silver_contracts import hashes as silver_hashes
-from data_platform.silver_contracts import product_hash, quality_hash
-from data_platform.silver_runs import IDENTITY_FIELDS, digest
-from data_platform.silver_transform import CandidateFrames
-from data_platform.silver_write import OUTPUTS, selected_snapshot, table_name, write_candidate
 from data_platform.storage import Store
+
+from silver_pipeline.silver import attempt_histories, canonical_events, label_observations, mark_pending_events
+from silver_pipeline.silver_contracts import hashes as silver_hashes
+from silver_pipeline.silver_contracts import product_hash, quality_hash
+from silver_pipeline.silver_runs import IDENTITY_FIELDS, digest
+from silver_pipeline.silver_transform import CandidateFrames
+from silver_pipeline.silver_write import OUTPUTS, selected_snapshot, table_name, write_candidate
 
 
 def test_candidate_recovers_a_partial_commit_without_promoting(spark, dataset, tmp_path, bounded_shuffle):

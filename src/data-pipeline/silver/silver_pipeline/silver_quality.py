@@ -1,10 +1,9 @@
-from pyspark.sql import Window
-from pyspark.sql import functions as F
-from pyspark.sql import types as T
-
 from data_platform.contracts import prepare
 from data_platform.manifest import physical_schemas
 from data_platform.products import AUDIT
+from pyspark.sql import Window
+from pyspark.sql import functions as F
+from pyspark.sql import types as T
 
 PAYLOADS = (
     "payment_created",

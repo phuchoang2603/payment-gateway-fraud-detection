@@ -3,8 +3,9 @@ import json
 import os
 import re
 
-from data_platform.silver_runs import open_candidate, pin_input, verify_candidate
 from data_platform.storage import Store
+
+from silver_pipeline.silver_runs import open_candidate, pin_input, verify_candidate
 
 
 def main(argv=None):
@@ -36,10 +37,11 @@ def main(argv=None):
     if bool(args.backfill_start) != bool(args.backfill_end):
         parser.error("backfill requires both start and end")
     boundaries = {"start": args.backfill_start, "end": args.backfill_end} if args.backfill_start else None
-    from data_platform.diagnostics import retain_diagnostics
-    from data_platform.silver_transform import transform
-    from data_platform.silver_write import write_candidate
     from data_platform.spark import session
+
+    from silver_pipeline.diagnostics import retain_diagnostics
+    from silver_pipeline.silver_transform import transform
+    from silver_pipeline.silver_write import write_candidate
 
     bronze = Store(args.bronze_evidence)
     silver = Store(args.silver_evidence)

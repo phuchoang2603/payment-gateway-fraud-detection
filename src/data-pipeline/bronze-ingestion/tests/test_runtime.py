@@ -38,7 +38,12 @@ def test_preprovisioned_namespace_does_not_request_namespace_creation(tmp_path, 
 
     monkeypatch.setattr(ingest, "verify_content", lambda *args: None)
     monkeypatch.setattr(ingest, "verify_files", lambda *args: None)
-    monkeypatch.setattr(ingest, "source_frames", lambda *args: {"payment_events": None, "fraud_labels": None})
+    from data_platform.contracts import prepare
+
+    frames = {
+        table: type("Frame", (), {"schema": prepare(table).schema})() for table in ("payment_events", "fraud_labels")
+    }
+    monkeypatch.setattr(ingest, "source_frames", lambda *args: frames)
     monkeypatch.setattr(ingest, "committed_snapshot", lambda *args: 1)
     store = Store(str(tmp_path))
     run = open_run(store, "candidate", "digest", {}, "image", "workflow")

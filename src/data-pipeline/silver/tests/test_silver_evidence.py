@@ -1,7 +1,7 @@
 import pytest
-
-from data_platform.silver_evidence import validate_evidence
 from data_platform.storage import Store
+
+from silver_pipeline.silver_evidence import validate_evidence
 
 
 def test_missing_real_capture_index_cannot_be_accepted(tmp_path):

@@ -7,7 +7,8 @@ from uuid import uuid4
 
 from data_platform.landing import state_key
 from data_platform.products import PORTS
-from data_platform.silver_contracts import hashes, product_hash, quality_hash
+
+from silver_pipeline.silver_contracts import hashes, product_hash, quality_hash
 
 IDENTITY_FIELDS = (
     "inputs",

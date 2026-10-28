@@ -1,7 +1,8 @@
 from data_platform.products import SILVER_PORTS
-from data_platform.silver_contracts import hashes, product_hash, quality_hash
-from data_platform.silver_native import cancel_owned_queries, cases, expected
-from data_platform.silver_runs import IDENTITY_FIELDS, digest
+
+from silver_pipeline.silver_contracts import hashes, product_hash, quality_hash
+from silver_pipeline.silver_native import cancel_owned_queries, cases, expected
+from silver_pipeline.silver_runs import IDENTITY_FIELDS, digest
 
 
 def test_native_rules_pin_all_candidate_and_bronze_snapshots():

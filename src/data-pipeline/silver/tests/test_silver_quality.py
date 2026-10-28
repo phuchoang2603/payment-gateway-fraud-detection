@@ -1,16 +1,16 @@
-from pyspark.sql import functions as F
-
 from data_platform.ingest import source_frames
 from data_platform.products import hashes
 from data_platform.runs import open_run
-from data_platform.silver import canonical_events
-from data_platform.silver_quality import (
+from data_platform.storage import Store
+from pyspark.sql import functions as F
+
+from silver_pipeline.silver import canonical_events
+from silver_pipeline.silver_quality import (
     invalid_attempt_contexts,
     invalid_checkout_amounts,
     invalid_complete_lifecycles,
     invalid_events,
 )
-from data_platform.storage import Store
 
 
 def test_complete_histories_reject_invalid_amounts_and_lifecycle_order(spark, dataset, tmp_path, bounded_shuffle):

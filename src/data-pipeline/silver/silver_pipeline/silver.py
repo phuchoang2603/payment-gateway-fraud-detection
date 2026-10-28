@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 
+from data_platform.products import AUDIT
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
-
-from data_platform.products import AUDIT
 
 EVENT_KEY = ("integration_id", "event_id")
 ATTEMPT_KEY = ("integration_id", "payment_id", "attempt_id")

@@ -8,15 +8,15 @@ from pathlib import Path
 from uuid import uuid4
 
 import yaml
-
 from data_platform import quality, readback
 from data_platform.catalog import expand, native
 from data_platform.contracts import prepare
 from data_platform.integrations import workflow
 from data_platform.products import SILVER_PORTS
-from data_platform.silver_contracts import contract_path, hashes, product_hash, quality_hash
-from data_platform.silver_runs import publication_lock, verify_candidate
 from data_platform.storage import Store
+
+from silver_pipeline.silver_contracts import contract_path, hashes, product_hash, quality_hash
+from silver_pipeline.silver_runs import publication_lock, verify_candidate
 
 QUALITY_ROOT = Path(os.environ.get("DATA_QUALITY_ROOT") or Path(__file__).resolve().parents[4] / "contracts/quality")
 
@@ -430,7 +430,7 @@ def main(argv=None):
     if not candidate or candidate.get("state") not in allowed:
         raise ValueError("native Silver validation requires an unaccepted candidate")
     if args.stage == "publish":
-        from data_platform.silver_governance import publish
+        from silver_pipeline.silver_governance import publish
 
         publish(store, candidate, takeover_stopped=args.takeover_stopped_publisher)
         return 0

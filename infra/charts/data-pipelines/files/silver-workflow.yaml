@@ -100,7 +100,7 @@ spec:
           - name: require-input
       container:
         image: __OPENMETADATA_IMAGE__
-        command: [python, -m, data_platform.silver_plan]
+        command: [python, -m, silver_pipeline.silver_plan]
         args:
           - "--accepted-versions={{workflow.parameters.accepted-versions}}"
           - "--selected-version={{inputs.parameters.selected-version}}"
@@ -193,7 +193,7 @@ spec:
               dp2-workflow: "{{workflow.name}}"
               dp2-stage: "{{inputs.parameters.mode}}"
           spec:
-            pyFiles: local:///opt/data-pipeline/bronze-ingestion/.venv/lib/python3.12/site-packages/data_platform/{{inputs.parameters.script}}
+            pyFiles: local:///opt/data-pipeline/bronze-ingestion/.venv/lib/python3.12/site-packages/silver_pipeline/{{inputs.parameters.script}}
             driverArgs: ["--completeness={{workflow.parameters.completeness}}"]
             runtimeVersions:
               sparkVersion: "4.1.3"
@@ -268,7 +268,7 @@ spec:
         backoff: {duration: 15s, factor: 2}
       container:
         image: __OPENMETADATA_IMAGE__
-        command: [python, -m, data_platform.silver_native]
+        command: [python, -m, silver_pipeline.silver_native]
         args: ["{{inputs.parameters.stage}}"]
         envFrom:
           - configMapRef: {name: dp1-config}

@@ -3,8 +3,9 @@ import os
 import re
 from pathlib import Path
 
-from data_platform.silver_runs import digest, open_candidate
 from data_platform.storage import Store
+
+from silver_pipeline.silver_runs import digest, open_candidate
 
 
 def main(argv=None):

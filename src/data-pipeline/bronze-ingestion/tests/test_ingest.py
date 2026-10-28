@@ -61,7 +61,9 @@ def test_mixed_physical_schemas_normalize_without_relabeling_envelopes(spark, tm
         "initial_version": 3,
         "changes": [{"effective_at": "2026-07-02T00:00:00Z", "version": 4}],
     }
-    manifest = generate(HistoricalConfig.model_validate(config), fs.LocalFileSystem(), str(tmp_path))
+    manifest = generate(
+        HistoricalConfig.model_validate(config), fs.LocalFileSystem(), str(tmp_path), allow_small_dataset=True
+    )
     root = tmp_path / "historical/mixed"
     run = open_run(Store(str(tmp_path / "evidence")), "mixed", "a" * 64, hashes(), "image", "workflow")
     events = source_frames(spark, str(root), manifest, run)["payment_events"]

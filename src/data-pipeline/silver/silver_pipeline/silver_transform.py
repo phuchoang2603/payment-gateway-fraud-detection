@@ -2,9 +2,9 @@ from dataclasses import dataclass
 
 from pyspark.sql import functions as F
 
-from data_platform.diagnostics import source_diagnostics
-from data_platform.silver import attempt_histories, canonical_events, label_observations, mark_pending_events
-from data_platform.silver_quality import (
+from silver_pipeline.diagnostics import source_diagnostics
+from silver_pipeline.silver import attempt_histories, canonical_events, label_observations, mark_pending_events
+from silver_pipeline.silver_quality import (
     invalid_attempt_contexts,
     invalid_checkout_amounts,
     invalid_complete_lifecycles,
@@ -12,7 +12,7 @@ from data_platform.silver_quality import (
     invalid_recurring_lifecycles,
     missing_required_fields,
 )
-from data_platform.silver_source import selected_bronze
+from silver_pipeline.silver_source import selected_bronze
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,7 @@ def build(source, relative_error=0.05):
 def transform(
     spark, bronze_store, silver_store, candidate, namespace="bronze", silver_namespace="silver", relative_error=0.05
 ):
-    from data_platform.silver_incremental import recompute
+    from silver_pipeline.silver_incremental import recompute
 
     source = selected_bronze(spark, bronze_store, candidate, namespace)
     return recompute(

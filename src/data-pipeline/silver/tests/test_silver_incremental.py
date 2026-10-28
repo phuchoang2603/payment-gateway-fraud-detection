@@ -1,17 +1,17 @@
 from datetime import UTC, datetime
 
 import pytest
-from pyspark.sql import functions as F
-
-import data_platform.silver_incremental as incremental
 from data_platform.ingest import source_frames
 from data_platform.products import hashes
 from data_platform.runs import open_run
-from data_platform.silver_incremental import accepted_base, affected_payments
-from data_platform.silver_runs import digest
-from data_platform.silver_transform import build
-from data_platform.silver_write import candidate_outputs
 from data_platform.storage import Store
+from pyspark.sql import functions as F
+
+import silver_pipeline.silver_incremental as incremental
+from silver_pipeline.silver_incremental import accepted_base, affected_payments
+from silver_pipeline.silver_runs import digest
+from silver_pipeline.silver_transform import build
+from silver_pipeline.silver_write import candidate_outputs
 
 
 def test_affected_payments_include_late_labels_cross_payment_conflicts_and_backfill(spark, bounded_shuffle):

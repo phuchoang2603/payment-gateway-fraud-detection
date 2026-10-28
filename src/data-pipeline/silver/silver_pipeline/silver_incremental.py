@@ -1,10 +1,10 @@
 from pyspark.sql import functions as F
 
-from data_platform.diagnostics import source_diagnostics
-from data_platform.silver import AttemptFrames, EventFrames, LabelFrames
-from data_platform.silver_runs import digest
-from data_platform.silver_source import selected_bronze
-from data_platform.silver_write import OUTPUTS, selected_snapshot, table_name
+from silver_pipeline.diagnostics import source_diagnostics
+from silver_pipeline.silver import AttemptFrames, EventFrames, LabelFrames
+from silver_pipeline.silver_runs import digest
+from silver_pipeline.silver_source import selected_bronze
+from silver_pipeline.silver_write import OUTPUTS, selected_snapshot, table_name
 
 PAYMENT_KEY = ("integration_id", "payment_id")
 
@@ -62,7 +62,7 @@ def recompute(
     silver_namespace="silver",
     relative_error=0.05,
 ):
-    from data_platform.silver_transform import CandidateFrames
+    from silver_pipeline.silver_transform import CandidateFrames
 
     previous = accepted_base(silver_store, candidate)
     if previous is None:

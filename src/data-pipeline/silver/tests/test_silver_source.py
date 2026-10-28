@@ -1,11 +1,11 @@
-from pyspark.sql import functions as F
-
 from data_platform.ingest import source_frames, table_name
 from data_platform.manifest import selected_manifest
 from data_platform.products import PORTS, hashes
 from data_platform.runs import open_run
-from data_platform.silver_source import selected_bronze
 from data_platform.storage import Store
+from pyspark.sql import functions as F
+
+from silver_pipeline.silver_source import selected_bronze
 
 
 def test_prior_bronze_snapshots_retain_source_identity_and_normalize_references(

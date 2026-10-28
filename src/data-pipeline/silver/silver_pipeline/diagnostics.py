@@ -1,11 +1,11 @@
 import json
 from datetime import datetime, timezone
 
+from data_platform.manifest import physical_schemas
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
-from data_platform.manifest import physical_schemas
-from data_platform.silver_runs import digest
+from silver_pipeline.silver_runs import digest
 
 
 def distribution(frame, name, denominator):

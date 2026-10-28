@@ -4,7 +4,8 @@ from datetime import datetime
 from hashlib import sha256
 
 from data_platform.products import SILVER_PORTS
-from data_platform.silver_runs import digest
+
+from silver_pipeline.silver_runs import digest
 
 REQUIRED_CAPTURES = (
     "generator-configuration",

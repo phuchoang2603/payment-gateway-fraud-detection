@@ -3,13 +3,13 @@ import re
 import time
 from uuid import uuid4
 
-from pyspark.sql import functions as F
-
 from data_platform.contracts import check_physical
 from data_platform.products import SILVER_PORTS
-from data_platform.silver_contracts import hashes, product_hash, quality_hash, schema
-from data_platform.silver_runs import verify_candidate
-from data_platform.silver_transform import validate_basics
+from pyspark.sql import functions as F
+
+from silver_pipeline.silver_contracts import hashes, product_hash, quality_hash, schema
+from silver_pipeline.silver_runs import verify_candidate
+from silver_pipeline.silver_transform import validate_basics
 
 OUTPUTS = SILVER_PORTS
 

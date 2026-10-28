@@ -4,13 +4,13 @@ from unittest.mock import Mock
 
 import pytest
 from botocore.exceptions import ClientError
-
 from data_platform.landing import state_key
 from data_platform.products import SILVER_PORTS
-from data_platform.silver_contracts import hashes, product_hash, quality_hash
-from data_platform.silver_governance import publish
-from data_platform.silver_runs import IDENTITY_FIELDS, digest, open_candidate, pin_input
 from data_platform.storage import Store
+
+from silver_pipeline.silver_contracts import hashes, product_hash, quality_hash
+from silver_pipeline.silver_governance import publish
+from silver_pipeline.silver_runs import IDENTITY_FIELDS, digest, open_candidate, pin_input
 
 
 def accepted(version, snapshot):

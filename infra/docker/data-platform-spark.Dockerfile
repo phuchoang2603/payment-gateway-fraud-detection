@@ -15,6 +15,8 @@ COPY src/data-pipeline/bronze-ingestion/pyproject.toml src/data-pipeline/bronze-
 RUN uv sync --locked --no-dev --no-install-project --extra spark --no-install-package pyspark
 COPY src/data-pipeline/bronze-ingestion/data_platform ./data_platform
 RUN uv sync --locked --no-dev --no-editable --extra spark --no-install-package pyspark
+COPY src/data-pipeline/silver /opt/data-pipeline/silver
+RUN uv pip install --python .venv/bin/python --no-deps /opt/data-pipeline/silver
 RUN find .venv -type d \( -path "*/site-packages/numpy" -o -path "*/site-packages/dbt" \) -prune -o \
         -type d \( -name tests -o -name test \) -prune -exec rm -rf {} + && \
     find .venv -type d -name __pycache__ -prune -exec rm -rf {} + && \

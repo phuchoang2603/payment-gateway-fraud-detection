@@ -1,13 +1,12 @@
 from pathlib import Path
 
-from pyspark.sql import functions as F
-from pyspark.sql import types as T
-
 from data_platform.contracts import check_physical, prepare
 from data_platform.ingest import normalize_events, table_name
 from data_platform.landing import selection
 from data_platform.manifest import selected_manifest
 from data_platform.products import AUDIT, PORTS
+from pyspark.sql import functions as F
+from pyspark.sql import types as T
 
 
 def selected_inventory(bronze_store, pinned):
