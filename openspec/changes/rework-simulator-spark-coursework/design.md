@@ -1,6 +1,6 @@
 ## Context
 
-See proposal.md for motivation. The rebased baseline is main `59bc194` (shared dev/prod platform migration). Existing generator and Silver implementation is retained, but previous publication, CI and runtime receipts do not establish acceptance in the new environment. Fresh development verification is pending.
+See proposal.md for motivation. The rebased baseline is main `08c6ac0` (shared dev/prod platform migration). Existing generator and Silver implementation is retained, but previous publication, CI and runtime receipts do not establish acceptance in the new environment. Fresh development verification is pending.
 
 Reference repositories were inspected read-only:
 
