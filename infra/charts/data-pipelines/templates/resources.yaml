@@ -1,23 +1,11 @@
 {{- if .Values.enabled }}
-{{- range $name, $image := .Values.images }}
-{{- if not (regexMatch "^sha256:[a-f0-9]{64}$" $image.digest) }}
-{{- fail (printf "images.%s must use an immutable sha256 digest" $name) }}
-{{- end }}
-{{- end }}
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ .Values.namespace }}
-  annotations:
-    helm.sh/resource-policy: keep
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: dp1-config
   namespace: {{ .Values.namespace }}
 data:
-  GIT_REVISION: {{ required "images.spark.revision is required" .Values.images.spark.revision | quote }}
+  GIT_REVISION: {{ regexFind "[a-f0-9]{40}$" (index .Values.global.imageTags .Values.images.spark.repository) | default "dev" | quote }}
   LANDING_MAX_BATCHES: {{ .Values.recurring.maxBatches | quote }}
   {{- toYaml .Values.config | nindent 2 }}
 ---

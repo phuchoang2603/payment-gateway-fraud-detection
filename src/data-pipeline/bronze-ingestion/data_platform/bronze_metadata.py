@@ -1,4 +1,3 @@
-import argparse
 import json
 import logging
 import os
@@ -157,7 +156,7 @@ def synchronize(sdk, run, manifest, expected, stages, report_uri, outcome):
     sdk.get_by_name(PipelineService, "argo", nullable=False)
     link = (
         os.environ["ARGO_WORKFLOWS_URL"].rstrip("/")
-        + f"/workflows/{os.environ.get('WORKFLOW_NAMESPACE', 'fraud-data-prod')}/{os.environ.get('WORKFLOW_ID', run['workflow'])}"
+        + f"/workflows/{os.environ.get('WORKFLOW_NAMESPACE', 'data')}/{os.environ.get('WORKFLOW_ID', run['workflow'])}"
     )
     pipeline = sdk.create_or_update(
         CreatePipelineRequest(
@@ -357,15 +356,17 @@ def publish(store, run, contracts, manifest):
         store.put(evidence_key(run, contracts, "publish"), receipt)
 
 
-def main(argv=None):
+def main():
     logging.disable(logging.INFO)
-    parser = argparse.ArgumentParser()
-    parser.add_argument("stage", choices=["discover", "validate", "profile", "publish", "quiesce"])
-    parser.add_argument("--refresh", choices=["true", "false"], default="false")
-    args = parser.parse_args(argv)
-    if args.refresh == "true" and args.stage != "profile":
+    stage = os.environ["PIPELINE_STAGE"]
+    if stage not in ("discover", "validate", "profile", "publish", "quiesce"):
+        raise ValueError("unsupported Bronze metadata stage")
+    refresh = os.environ.get("PROFILE_REFRESH", "false")
+    if refresh not in ("true", "false"):
+        raise ValueError("PROFILE_REFRESH must be true or false")
+    if refresh == "true" and stage != "profile":
         raise ValueError("only on-demand profiling supports refresh")
-    if args.stage == "quiesce":
+    if stage == "quiesce":
         quiesce()
         return 0
     store, contracts = Store(os.environ["EVIDENCE_ROOT"]), hashes()
@@ -382,11 +383,11 @@ def main(argv=None):
         manifest, digest = selected_manifest(run["source_root"])
     if digest != run["manifest_sha256"]:
         raise ValueError("metadata source identity changed")
-    stage_key = evidence_key(run, contracts, "profile-on-demand" if args.refresh == "true" else args.stage)
-    if args.stage == "publish":
+    stage_key = evidence_key(run, contracts, "profile-on-demand" if refresh == "true" else stage)
+    if stage == "publish":
         publish(store, run, contracts, manifest)
         return 0
-    if stage_matches(store.get(stage_key), run) and args.refresh != "true":
+    if stage_matches(store.get(stage_key), run) and refresh != "true":
         return 0
     receipt = {
         "run_id": run["run_id"],
@@ -394,17 +395,17 @@ def main(argv=None):
         "snapshots": run["snapshots"],
         "started_at": int(time.time() * 1000),
         "outcome": "error",
-        "mode": "on-demand" if args.refresh == "true" else "acceptance",
+        "mode": "on-demand" if refresh == "true" else "acceptance",
     }
     try:
-        if args.stage == "discover":
+        if stage == "discover":
             quality.prepare_run(store, run, contracts, manifest)
             native("ingest", quality.metadata_workflow())
-        elif args.stage == "validate":
+        elif stage == "validate":
             cases = quality.cases(run, manifest)
             with ThreadPoolExecutor(max_workers=2) as pool:
                 list(pool.map(lambda table: native("test", quality.test_workflow(table, cases)), PORTS))
-        elif args.stage == "profile":
+        elif stage == "profile":
             receipt["coverage"] = configure_profiles(client(), run)
             native("profile", quality.profiler_workflow())
             for table, coverage in receipt["coverage"].items():

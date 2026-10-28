@@ -1,7 +1,6 @@
 import json
 import os
 import signal
-import sys
 import threading
 
 import uvicorn
@@ -38,36 +37,36 @@ def store():
 
 def main():
     feature_store = store()
-    if sys.argv[1:] == ["serve"]:
-        uvicorn.run(get_app(feature_store), host="0.0.0.0", port=6566, access_log=False)
-    elif sys.argv[1:] == ["write"]:
-        stopped = threading.Event()
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            signal.signal(sig, lambda *_: stopped.set())
-        consumer = Consumer(
-            {
-                "bootstrap.servers": os.environ["FEATURE_KAFKA_BROKERS"],
-                "group.id": os.environ["FEATURE_WRITER_GROUP"],
-                "enable.auto.commit": False,
-                "enable.auto.offset.store": False,
-                "auto.offset.reset": "earliest",
-                "isolation.level": "read_committed",
-                "max.poll.interval.ms": 600_000,
-                "allow.auto.create.topics": False,
-            }
-        )
-        consumer.subscribe([os.environ["FEATURE_UPDATE_TOPIC"]])
-        consume(
-            consumer,
-            Writer(
-                feature_store,
-                epoch=os.environ["FEATURE_EPOCH"],
-                definition_hash=os.environ["FEATURE_DEFINITION_SHA256"],
-            ),
-            stopped,
-        )
-    else:
-        raise ValueError("expected serve or write")
+    uvicorn.run(get_app(feature_store), host="0.0.0.0", port=6566, access_log=False)
+
+
+def write():
+    feature_store = store()
+    stopped = threading.Event()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda *_: stopped.set())
+    consumer = Consumer(
+        {
+            "bootstrap.servers": os.environ["FEATURE_KAFKA_BROKERS"],
+            "group.id": os.environ["FEATURE_WRITER_GROUP"],
+            "enable.auto.commit": False,
+            "enable.auto.offset.store": False,
+            "auto.offset.reset": "earliest",
+            "isolation.level": "read_committed",
+            "max.poll.interval.ms": 600_000,
+            "allow.auto.create.topics": False,
+        }
+    )
+    consumer.subscribe([os.environ["FEATURE_UPDATE_TOPIC"]])
+    consume(
+        consumer,
+        Writer(
+            feature_store,
+            epoch=os.environ["FEATURE_EPOCH"],
+            definition_hash=os.environ["FEATURE_DEFINITION_SHA256"],
+        ),
+        stopped,
+    )
 
 
 if __name__ == "__main__":

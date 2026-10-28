@@ -1,17 +1,21 @@
+global:
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/edge: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/notifier: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/vault-simulator: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/processor-simulator: dev
 externalSecrets:
   refreshInterval: 1h
   secretStoreRef:
     kind: ClusterSecretStore
-    name: fraud-doppler
-
+    name: gateway-doppler
 defaults:
   enabled: true
   replicaCount: 1
   image:
     pullPolicy: IfNotPresent
-    tag: latest
-    digest: ""
-    revision: ""
   telemetry:
     tracingEnabled: true
     metricsEnabled: true
@@ -20,7 +24,7 @@ defaults:
     samplingRatio: '0.1'
     metricExportInterval: 60000
   mesh:
-    enabled: false
+    enabled: true
     callers: []
     callerNamespaces: []
     rules: []
@@ -58,7 +62,6 @@ defaults:
     pathPrefix: /checkout/
     timeouts:
       request: 10s
-
 services:
   edge:
     image:
@@ -80,7 +83,7 @@ services:
     - name: EDGE_VAULT_ADDRESS
       value: vault-simulator.payment-gateway.svc.cluster.local:8000
     - name: EDGE_PUBLIC_BASE_URL
-      value: https://pay-gateway.phuchoang.sbs
+      value: https://pay-gateway-dev.phuchoang.sbs
     - name: EDGE_TRUSTED_PROXY_HEADER
       value: X-Forwarded-For
     - name: EDGE_TRUSTED_PROXY_HOPS
@@ -112,7 +115,7 @@ services:
     httpRoute:
       enabled: true
       hostnames:
-      - pay-gateway.phuchoang.sbs
+      - pay-gateway-dev.phuchoang.sbs
   fraud-service:
     database: fraud
     env:
@@ -182,9 +185,11 @@ services:
               kubernetes.io/metadata.name: observability
           podSelector:
             matchExpressions:
-              - key: app.kubernetes.io/name
-                operator: In
-                values: [vmagent, vtagent]
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+              - vmagent
+              - vtagent
         ports:
         - port: 8429
           protocol: TCP
@@ -291,13 +296,13 @@ services:
         remoteKey: GATEWAY_VAULT_ENCRYPTION_KEY
         env: VAULT_ENCRYPTION_KEY
     database: vault
-
 database:
   name: payment-gateway-pg
   instances: 1
   imageName: ghcr.io/cloudnative-pg/postgresql:18.3-system-trixie
   storage:
     size: 2Gi
+    storageClass: local-path
   resources:
     requests:
       cpu: 100m
@@ -320,7 +325,6 @@ database:
     notifier: {}
     vault: {}
     processor: {}
-
 redis:
   name: payment-gateway-redis
   image:
@@ -342,7 +346,6 @@ redis:
     remoteKey: GATEWAY_REDIS_PASSWORD
   clients:
   - payments
-
 authorizationRedis:
   name: payment-gateway-authorization-redis
   image:
@@ -353,27 +356,30 @@ authorizationRedis:
   storageSize: 2Gi
   maxmemory: 256mb
   resources:
-    requests: {cpu: 100m, memory: 384Mi}
-    limits: {cpu: 500m, memory: 768Mi}
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
   password:
     secretName: payment-gateway-authorization-redis
     secretKey: password
     remoteKey: GATEWAY_AUTHORIZATION_REDIS_PASSWORD
-  clients: [fraud-service]
-
+  clients:
+  - fraud-service
 ingress:
   enabled: true
   name: payment-gateway-ingress
   port: 80
   tunnel:
-    enabled: false
-    clusterTunnel: ''
-    hostname: ''
-
+    enabled: true
+    clusterTunnel: talos-proxmox
+    hostname: pay-gateway-dev.phuchoang.sbs
 features:
-  enabled: false
-  url: http://feast-server:6566
-  epoch: live-v2
+  enabled: true
+  url: http://feast-server.data.svc.cluster.local:6566
+  epoch: live-v17
   definitionHash: 8ca9a423f452f8ed7a8d1e8aa082dadb72590498cfd1e8da48f94f6c06b0e50d
   maxAnchorAge: 30s
   maxProgressAge: 30s

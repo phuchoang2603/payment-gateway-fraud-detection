@@ -1,35 +1,34 @@
+global:
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming: dev
 images:
   feast:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast
-    tag: latest
-    digest: ""
-    revision: ""
     pullPolicy: IfNotPresent
   streaming:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming
-    tag: latest
-    digest: ""
-    revision: ""
     pullPolicy: IfNotPresent
-
 externalSecrets:
   refreshInterval: 1h
   secretStoreRef:
     kind: ClusterSecretStore
-    name: fraud-doppler
-
-epoch: live-v2
+    name: gateway-doppler
+epoch: live-v17
 definitionHash: 8ca9a423f452f8ed7a8d1e8aa082dadb72590498cfd1e8da48f94f6c06b0e50d
-topic: fraud.feature-updates.v1.live-v2
+topic: fraud.feature-updates.v1.live-v17
 kafkaBrokers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc.cluster.local:9092
-
 feast:
   enabled: true
-  writerGroup: fraud-feast-writer-live-v2
+  writerGroup: fraud-feast-writer-live-v17
   resources:
-    requests: {cpu: 100m, memory: 512Mi}
-    limits: {cpu: '1', memory: 1Gi}
-
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: '1'
+      memory: 1Gi
 redis:
   name: payment-gateway-feast-redis
   image:
@@ -40,28 +39,41 @@ redis:
   storageSize: 2Gi
   maxmemory: 512mb
   resources:
-    requests: {cpu: 100m, memory: 768Mi}
-    limits: {cpu: 500m, memory: 1536Mi}
+    requests:
+      cpu: 100m
+      memory: 768Mi
+    limits:
+      cpu: 500m
+      memory: 1536Mi
   password:
     secretName: payment-gateway-feast-redis
     secretKey: password
     remoteKey: GATEWAY_FEAST_REDIS_PASSWORD
-  clients: [feast-writer, feast-server]
-
+  clients:
+  - feast-writer
+  - feast-server
 streaming:
   enabled: true
   sourceTopic: payments.events.v1
   sourcePartitions: 3
   maxEntityEntries: 50000
-  storageHostname: minio.home.phuchoang.sbs
-  storageCIDR: 10.69.1.101/32
-  storageRoot: s3://fraud-flink-prod
-  storageSecretName: fraud-flink-storage
+  storageRoot: s3://platform-dev/runs/payment-gateway/flink
+  storageSecretName: gateway-flink-storage
   jobManager:
     resources:
-      requests: {cpu: '1', memory: 1536Mi}
-      limits: {memory: 1536Mi}
+      requests:
+        cpu: '1'
+        memory: 1536Mi
+      limits:
+        memory: 1536Mi
   taskManager:
     resources:
-      requests: {cpu: '1', memory: 2Gi}
-      limits: {memory: 2Gi}
+      requests:
+        cpu: '1'
+        memory: 2Gi
+      limits:
+        memory: 2Gi
+  storageEndpoint: https://minio.home.phuchoang.sbs
+  pathStyle: true
+  region: us-east-1
+  storageStore: gateway-doppler

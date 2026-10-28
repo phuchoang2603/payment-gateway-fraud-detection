@@ -137,9 +137,9 @@ def source_filesystem(root):
         return fs.S3FileSystem(
             access_key=os.environ["AWS_ACCESS_KEY_ID"],
             secret_key=os.environ["AWS_SECRET_ACCESS_KEY"],
-            endpoint_override=os.environ.get("S3_ENDPOINT", "https://minio.home.phuchoang.sbs"),
+            endpoint_override=os.environ["S3_ENDPOINT"],
             region=os.environ.get("AWS_REGION", "us-east-1"),
-            force_virtual_addressing=False,
+            force_virtual_addressing=os.environ.get("S3_PATH_STYLE", "false").lower() != "true",
             tls_ca_file_path=certifi.where(),
         ), root[5:]
     return fs.LocalFileSystem(), root.removeprefix("file://")

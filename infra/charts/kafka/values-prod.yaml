@@ -1,26 +1,3 @@
-schemaRegistry:
-  registration:
-    enabled: true
-    image:
-      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/schema-register
-      digest: sha256:e65ee6767984f26d23089204b8c510ac27e58ef239221153ef3655cc6b941078
-      revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
-
 kafka:
-  metadataNamespace: fraud-data-prod
-  replicas: 1
-  replicationFactor: 1
-  minInsyncReplicas: 1
   storage:
-    size: 10Gi
-
-entities:
-  payments:
-    connector:
-      databaseName: payments
-
-connect:
-  image:
-    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/connect-debezium
-    digest: sha256:f5246f726d041cef2b71c5c99f9de37807cd5a5bf46c7e0048f42002f43385a1
-    revision: 1bfef36deb1e75dc3f25f7b8ff8c1d6ba26deba1
+    storageClass: gp3

@@ -6,7 +6,8 @@
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
       "build-args": "SERVICE_PATH=src/payment-gateway/fraud\nBUILD_PKG=./cmd/fraud\nBUILD_BIN=fraud\nEXPOSE_PORT=8000\n",
-      "inputs": [
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
         "src/payment-gateway/fraud",
         "src/payment-gateway/shared"
       ]
@@ -17,7 +18,8 @@
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
       "build-args": "SERVICE_PATH=src/payment-gateway/edge\nBUILD_PKG=./cmd/edge\nBUILD_BIN=edge\nEXPOSE_PORT=8080\n",
-      "inputs": [
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
         "src/payment-gateway/edge",
         "src/payment-gateway/shared"
       ]
@@ -28,7 +30,8 @@
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
       "build-args": "SERVICE_PATH=src/payment-gateway/payments\nBUILD_PKG=./cmd/payments\nBUILD_BIN=payments\nEXPOSE_PORT=8000\n",
-      "inputs": [
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
         "src/payment-gateway/payments",
         "src/payment-gateway/shared"
       ]
@@ -39,7 +42,8 @@
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
       "build-args": "SERVICE_PATH=src/payment-gateway/notifier\nBUILD_PKG=./cmd/notifier\nBUILD_BIN=notifier\nEXPOSE_PORT=8000\n",
-      "inputs": [
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
         "src/payment-gateway/notifier",
         "src/payment-gateway/shared"
       ]
@@ -50,7 +54,8 @@
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
       "build-args": "SERVICE_PATH=src/payment-gateway/vault-simulator\nBUILD_PKG=./cmd/vault-simulator\nBUILD_BIN=vault-simulator\nEXPOSE_PORT=8000\n",
-      "inputs": [
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
         "src/payment-gateway/vault-simulator",
         "src/payment-gateway/shared"
       ]
@@ -61,7 +66,8 @@
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
       "build-args": "SERVICE_PATH=src/payment-gateway/processor-simulator\nBUILD_PKG=./cmd/processor-simulator\nBUILD_BIN=processor-simulator\nEXPOSE_PORT=8000\n",
-      "inputs": [
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
         "src/payment-gateway/processor-simulator",
         "src/payment-gateway/shared"
       ]
@@ -71,16 +77,20 @@
       "image-suffix": "/connect-debezium",
       "context": ".",
       "dockerfile": "infra/docker/connect-debezium.Dockerfile",
-      "inputs": []
+      "paths": [
+        "infra/docker/connect-debezium.Dockerfile"
+      ]
     },
     {
       "service": "schema-register",
       "image-suffix": "/schema-register",
       "context": ".",
       "dockerfile": "infra/docker/schema-register.Dockerfile",
-      "inputs": [
-        "scripts/schema_registry.py",
-        "contracts/payments/v1"
+      "paths": [
+        "infra/docker/schema-register.Dockerfile",
+        "contracts/payments/v1",
+        "contracts/features/v1",
+        "scripts/schema_registry.py"
       ]
     },
     {
@@ -88,7 +98,8 @@
       "image-suffix": "/live-simulator",
       "context": ".",
       "dockerfile": "infra/docker/live-simulator.Dockerfile",
-      "inputs": [
+      "paths": [
+        "infra/docker/live-simulator.Dockerfile",
         "src/data-pipeline/simulator"
       ]
     },
@@ -97,7 +108,8 @@
       "image-suffix": "/data-platform-spark",
       "context": ".",
       "dockerfile": "infra/docker/data-platform-spark.Dockerfile",
-      "inputs": [
+      "paths": [
+        "infra/docker/data-platform-spark.Dockerfile",
         "src/data-pipeline/bronze-ingestion",
         "contracts/data-products",
         "contracts/features"
@@ -108,7 +120,8 @@
       "image-suffix": "/data-platform-metadata",
       "context": ".",
       "dockerfile": "infra/docker/data-platform-metadata.Dockerfile",
-      "inputs": [
+      "paths": [
+        "infra/docker/data-platform-metadata.Dockerfile",
         "src/data-pipeline/bronze-ingestion/data_platform",
         "contracts/data-products",
         "contracts/features"
@@ -119,7 +132,8 @@
       "image-suffix": "/feast",
       "context": ".",
       "dockerfile": "infra/docker/feast.Dockerfile",
-      "inputs": [
+      "paths": [
+        "infra/docker/feast.Dockerfile",
         "src/data-pipeline/feast"
       ]
     },
@@ -128,7 +142,8 @@
       "image-suffix": "/streaming",
       "context": ".",
       "dockerfile": "infra/docker/streaming.Dockerfile",
-      "inputs": [
+      "paths": [
+        "infra/docker/streaming.Dockerfile",
         "src/data-pipeline/streaming"
       ]
     }

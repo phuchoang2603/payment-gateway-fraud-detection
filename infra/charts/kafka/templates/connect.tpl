@@ -8,7 +8,7 @@ metadata:
     strimzi.io/use-connector-resources: "true"
 spec:
   version: {{ .Values.kafka.version }}
-  image: {{ include "kafka.image" .Values.connect.image }}
+  image: {{ include "kafka.image" (dict "image" .Values.connect.image "global" $.Values.global) }}
   replicas: 1
   bootstrapServers: {{ printf "%s-kafka-bootstrap:9092" .Values.kafka.clusterName }}
   groupId: {{ .Values.connect.clusterName }}

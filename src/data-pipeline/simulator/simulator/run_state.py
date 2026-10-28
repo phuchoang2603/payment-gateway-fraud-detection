@@ -29,7 +29,7 @@ class RunState:
                 )
             if state.get("owner") and not takeover:
                 raise FileExistsError(
-                    "another writer owns this dataset; stop it before explicit --takeover-stopped-writer"
+                    "another writer owns this dataset; stop it before enabling execution.takeover_stopped_writer"
                 )
             self.state = state
             self.state["owner"] = self.owner

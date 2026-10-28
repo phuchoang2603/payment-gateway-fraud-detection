@@ -1,9 +1,6 @@
 {{- $registration := .Values.schemaRegistry.registration }}
 {{- if and .Values.schemaRegistry.enabled $registration.enabled }}
-{{- if not $registration.image.digest }}
-{{- fail "schemaRegistry.registration.image.digest must reference a published image" }}
-{{- end }}
-{{- $image := include "kafka.image" $registration.image }}
+{{- $image := include "kafka.image" (dict "image" $registration.image "global" $.Values.global) }}
 {{- $subjects := dict }}
 {{- range .Values.entities }}
 {{- range .topics }}

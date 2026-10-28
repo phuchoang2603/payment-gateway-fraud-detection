@@ -8,17 +8,17 @@ spec:
   refreshInterval: {{ .Values.externalSecrets.refreshInterval }}
   secretStoreRef:
     kind: {{ .Values.externalSecrets.secretStoreRef.kind }}
-    name: {{ .Values.externalSecrets.secretStoreRef.name }}
+    name: {{ .Values.streaming.storageStore }}
   target:
     name: {{ .Values.streaming.storageSecretName }}
     creationPolicy: Owner
   data:
     - secretKey: AWS_ACCESS_KEY_ID
       remoteRef:
-        key: FLINK_S3_ACCESS_KEY_ID
+        key: OBJECT_GATEWAY_ACCESS_KEY_ID
     - secretKey: AWS_SECRET_ACCESS_KEY
       remoteRef:
-        key: FLINK_S3_SECRET_ACCESS_KEY
+        key: OBJECT_GATEWAY_SECRET_ACCESS_KEY
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -60,7 +60,7 @@ metadata:
   name: fraud-streaming-{{ .Values.epoch }}
   namespace: {{ .Release.Namespace }}
 spec:
-  image: {{ include "fraud-features.image" .Values.images.streaming | quote }}
+  image: {{ include "fraud-features.image" (dict "image" .Values.images.streaming "global" $.Values.global) | quote }}
   imagePullPolicy: {{ .Values.images.streaming.pullPolicy }}
   flinkVersion: v2_2
   serviceAccount: fraud-streaming
@@ -82,8 +82,9 @@ spec:
     high-availability.kubernetes.leader-election.lease-duration: 60s
     high-availability.kubernetes.leader-election.renew-deadline: 45s
     high-availability.storageDir: {{ printf "%s/checkpoints/ha/%s" .Values.streaming.storageRoot .Values.epoch | quote }}
-    s3.endpoint: {{ printf "https://%s" .Values.streaming.storageHostname | quote }}
-    s3.path.style.access: 'true'
+    s3.endpoint: {{ .Values.streaming.storageEndpoint | quote }}
+    s3.path.style.access: {{ .Values.streaming.pathStyle | toString | quote }}
+    s3.region: {{ .Values.streaming.region | quote }}
     restart-strategy.type: exponential-delay
     resourcemanager.taskmanager-registration.timeout: 10min
     slot.request.timeout: 15min
@@ -182,6 +183,7 @@ spec:
             - {port: '8081', protocol: TCP}
     - toEndpoints:
         - matchLabels:
+            k8s:io.kubernetes.pod.namespace: payment-gateway
             strimzi.io/cluster: payment-gateway-kafka
       toPorts:
         - ports: [{port: '9092', protocol: TCP}]
@@ -194,8 +196,7 @@ spec:
     - toEntities: [kube-apiserver]
       toPorts:
         - ports: [{port: '443', protocol: TCP}, {port: '6443', protocol: TCP}]
-    - toCIDR:
-        - {{ .Values.streaming.storageCIDR | quote }}
+    - toEntities: [world]
       toPorts:
         - ports: [{port: '443', protocol: TCP}]
 {{- end }}

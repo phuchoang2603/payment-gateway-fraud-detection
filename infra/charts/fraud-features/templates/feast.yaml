@@ -37,9 +37,11 @@ spec:
           type: RuntimeDefault
       containers:
         - name: {{ $name }}
-          image: {{ include "fraud-features.image" $.Values.images.feast | quote }}
+          image: {{ include "fraud-features.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
           imagePullPolicy: {{ $.Values.images.feast.pullPolicy }}
-          args: [{{ $mode | quote }}]
+          {{- if eq $mode "write" }}
+          command: [python, -m, fraud_feast.writer_runtime]
+          {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -101,7 +103,10 @@ spec:
   {{- if eq $mode "serve" }}
   ingress:
     - from:
-        - podSelector:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: payment-gateway
+          podSelector:
             matchLabels:
               app.kubernetes.io/name: fraud-service
       ports:
@@ -127,7 +132,10 @@ spec:
         - {port: 53, protocol: TCP}
     {{- if eq $mode "write" }}
     - to:
-        - podSelector:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: payment-gateway
+          podSelector:
             matchLabels:
               strimzi.io/cluster: payment-gateway-kafka
       ports:

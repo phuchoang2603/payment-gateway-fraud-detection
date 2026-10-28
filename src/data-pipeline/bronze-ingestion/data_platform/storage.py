@@ -12,12 +12,17 @@ from botocore.exceptions import ClientError
 def s3_client():
     return boto3.client(
         "s3",
-        endpoint_url=os.environ.get("S3_ENDPOINT", "https://minio.home.phuchoang.sbs"),
+        endpoint_url=os.environ.get("S3_ENDPOINT"),
         aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
         aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
         region_name=os.environ.get("AWS_REGION", "us-east-1"),
         config=Config(
-            connect_timeout=10, read_timeout=30, retries={"max_attempts": 3}, s3={"addressing_style": "path"}
+            connect_timeout=10,
+            read_timeout=30,
+            retries={"max_attempts": 3},
+            s3={
+                "addressing_style": "path" if os.environ.get("S3_PATH_STYLE", "false").lower() == "true" else "virtual"
+            },
         ),
     )
 

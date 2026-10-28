@@ -1,11 +1,44 @@
 global:
   repoURL: https://github.com/phuchoang2603/payment-gateway-fraud-detection.git
-  targetRevision: main
-destinationName: dev
-namePrefix: payment-gateway-dev
+  targetRevision: HEAD
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/edge: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/notifier: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/vault-simulator: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/processor-simulator: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/connect-debezium: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/schema-register: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming: dev
+destinationServer: https://kubernetes.default.svc
+namePrefix: payment-gateway
 applications:
+  secret-store:
+    destinationNamespace: payment-gateway
+    path: infra/charts/secret-store
+  kafka:
+    destinationNamespace: payment-gateway
+    path: infra/charts/kafka
   payment-gateway:
-    enabled: true
     destinationNamespace: payment-gateway
     path: infra/charts/payment-gateway
-    valuesFile: []
+  live-traffic:
+    destinationNamespace: payment-gateway
+    path: infra/charts/live-traffic
+  fraud-features:
+    destinationNamespace: data
+    path: infra/charts/fraud-features
+  metadata-integrations:
+    destinationNamespace: data
+    path: infra/charts/metadata-integrations
+  data-pipelines:
+    destinationNamespace: data
+    path: infra/charts/data-pipelines
+  lakehouse-integration:
+    destinationNamespace: data
+    path: infra/charts/lakehouse-integration

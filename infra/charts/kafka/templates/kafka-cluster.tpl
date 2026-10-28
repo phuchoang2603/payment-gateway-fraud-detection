@@ -25,6 +25,7 @@ spec:
       - id: 0
         type: persistent-claim
         size: {{ .Values.kafka.storage.size }}
+        class: {{ .Values.kafka.storage.storageClass | default "local-path" }}
         kraftMetadata: shared
 ---
 apiVersion: kafka.strimzi.io/v1
@@ -48,13 +49,15 @@ spec:
           - namespaceSelector:
               matchLabels:
                 kubernetes.io/metadata.name: {{ .Values.kafka.clientNamespace | default .Release.Namespace }}
-          {{- if .Values.kafka.metadataNamespace }}
+          {{- if .Values.kafka.dataNamespace }}
           - namespaceSelector:
               matchLabels:
-                kubernetes.io/metadata.name: {{ .Values.kafka.metadataNamespace }}
+                kubernetes.io/metadata.name: {{ .Values.kafka.dataNamespace }}
             podSelector:
-              matchLabels:
-                app.kubernetes.io/name: metadata-integrations
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values: {{ .Values.kafka.dataClients | toJson }}
           {{- end }}
       - name: tls
         port: 9093
@@ -64,13 +67,15 @@ spec:
           - namespaceSelector:
               matchLabels:
                 kubernetes.io/metadata.name: {{ .Values.kafka.clientNamespace | default .Release.Namespace }}
-          {{- if .Values.kafka.metadataNamespace }}
+          {{- if .Values.kafka.dataNamespace }}
           - namespaceSelector:
               matchLabels:
-                kubernetes.io/metadata.name: {{ .Values.kafka.metadataNamespace }}
+                kubernetes.io/metadata.name: {{ .Values.kafka.dataNamespace }}
             podSelector:
-              matchLabels:
-                app.kubernetes.io/name: metadata-integrations
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values: {{ .Values.kafka.dataClients | toJson }}
           {{- end }}
     config:
       auto.create.topics.enable: "false"
@@ -108,13 +113,15 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.kafka.clientNamespace | default .Release.Namespace }}
-        {{- if .Values.kafka.metadataNamespace }}
+        {{- if .Values.kafka.dataNamespace }}
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: {{ .Values.kafka.metadataNamespace }}
+              kubernetes.io/metadata.name: {{ .Values.kafka.dataNamespace }}
           podSelector:
-            matchLabels:
-              app.kubernetes.io/name: metadata-integrations
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: {{ .Values.kafka.dataClients | toJson }}
         {{- end }}
       ports:
         - protocol: TCP

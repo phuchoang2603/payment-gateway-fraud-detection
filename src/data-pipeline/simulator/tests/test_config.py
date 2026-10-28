@@ -1,13 +1,13 @@
 import pytest
 from pydantic import ValidationError
 
-from simulator.cli import destination
+from simulator.runtime import destination
 from tests.conftest import small_config
 
 
 def test_output_url_must_not_carry_credentials():
     with pytest.raises(ValueError, match="without credentials"):
-        destination("s3://key:secret@synthetic-source")
+        destination("s3://key:secret@platform-dev")
 
 
 @pytest.mark.parametrize(

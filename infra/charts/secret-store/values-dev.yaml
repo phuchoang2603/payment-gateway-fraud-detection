@@ -1,0 +1,13 @@
+secretStore:
+  enabled: true
+  name: gateway-doppler
+  project: payment-gateway-fraud-detection
+  config: dev
+  namespaces:
+  - payment-gateway
+  - data
+  - ml
+  tokenSecret:
+    namespace: payment-gateway
+    name: doppler-token
+    key: dopplerToken

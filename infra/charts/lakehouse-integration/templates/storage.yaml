@@ -1,0 +1,34 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: iceberg-storage
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.storage.secretStore }}
+  target:
+    name: iceberg-storage
+  data:
+    - secretKey: AWS_ACCESS_KEY_ID
+      remoteRef:
+        key: {{ .Values.storage.accessKey }}
+    - secretKey: AWS_SECRET_ACCESS_KEY
+      remoteRef:
+        key: {{ .Values.storage.secretKey }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: gateway-catalog-client
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: doppler
+  target:
+    name: gateway-catalog-client
+  data:
+    - secretKey: ICEBERG_CLIENT_SECRET
+      remoteRef:
+        key: ICEBERG_CLIENT_SECRET

@@ -4,12 +4,18 @@ metadata:
   name: payment-gateway-fraud-detection
   namespace: argo-cd
 spec:
-  description: Applications managed by the payment-gateway-fraud-detection repository
+  description: Gateway applications and data jobs on the shared platform
   sourceRepos:
-    - https://github.com/phuchoang2603/payment-gateway-fraud-detection.git
+  - https://github.com/phuchoang2603/payment-gateway-fraud-detection.git
   destinations:
-    - server: https://kubernetes.default.svc
-      namespace: "*"
+  - server: https://kubernetes.default.svc
+    namespace: argo-cd
+  - server: https://kubernetes.default.svc
+    namespace: payment-gateway
+  - server: https://kubernetes.default.svc
+    namespace: data
+  - server: https://kubernetes.default.svc
+    namespace: ml
   clusterResourceWhitelist:
-    - group: "*"
-      kind: "*"
+  - group: external-secrets.io
+    kind: ClusterSecretStore

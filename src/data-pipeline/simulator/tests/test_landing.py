@@ -88,9 +88,11 @@ def test_conditional_create_replay_requires_matching_metadata():
         "ContentLength": len(body),
         "Metadata": {"Sha256": digest(body), "Landing-Format": FORMAT},
     }
-    store = LandingStore(client, "synthetic-source", "smoke-run")
+    store = LandingStore(client, "s3://platform-dev/datasets/payment-gateway", "smoke-run")
     store.create("streaming/file", body)
     assert client.put_object.call_args.kwargs["IfNoneMatch"] == "*"
+    assert client.put_object.call_args.kwargs["Bucket"] == "platform-dev"
+    assert client.put_object.call_args.kwargs["Key"] == "datasets/payment-gateway/streaming/file"
     client.put_object.side_effect = ClientError({"Error": {"Code": "PreconditionFailed"}}, "PutObject")
     store.create("streaming/file", body)
     client.head_object.return_value["Metadata"]["Sha256"] = "different"

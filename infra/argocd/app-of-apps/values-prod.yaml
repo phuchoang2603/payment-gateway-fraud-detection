@@ -1,0 +1,2 @@
+environment: prod
+namePrefix: payment-gateway-prod

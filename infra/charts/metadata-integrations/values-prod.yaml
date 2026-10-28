@@ -1,5 +1,10 @@
 enabled: true
-image:
-  repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
-  digest: sha256:5892e56fa09e80940c4002614725c23de72b950dae233e99693c3d8381318e4f
-  revision: 6cec4a964d76ffd6348229317fea51d50f468e6a
+connectors:
+  object-storage:
+    source:
+      serviceConnection:
+        config:
+          awsConfig:
+            endPointURL: https://s3.us-east-1.amazonaws.com
+          bucketNames:
+          - platform-prod-142737101504-us-east-1

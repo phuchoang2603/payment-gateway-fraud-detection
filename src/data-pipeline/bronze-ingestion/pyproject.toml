@@ -13,7 +13,7 @@ dependencies = [
 spark = ["pyspark==4.1.3"]
 
 [project.scripts]
-dp1 = "data_platform.cli:main"
+dp1 = "data_platform.runtime:main"
 
 [dependency-groups]
 dev = [

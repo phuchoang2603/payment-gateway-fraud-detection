@@ -19,7 +19,7 @@ Synthetic data only. Scenario truth and future outcomes must never become decisi
 ## Servers
 | Name | Type | Attributes |
 | ---- | ---- | ---------- |
-| bronze | custom | *REST catalog with independently configured signing and S3FileIO credentials. Read accepted snapshot pairs, never unvalidated latest state.*<br />• **environment:** prod<br />• **database:** fraud-lakehouse-prod<br />• **host:** https://minio.home.phuchoang.sbs/iceberg/v1<br />• **schema_:** bronze |
+| bronze | custom | *REST catalog with OAuth2 catalog authentication and independently configured S3FileIO credentials. Read accepted snapshot pairs, never unvalidated latest state.*<br />• **environment:** prod<br />• **database:** lakehouse<br />• **host:** http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1<br />• **schema_:** bronze |
 
 ## Schema
 ### fraud_labels

@@ -10,69 +10,60 @@ permissions:
   packages: write
 
 concurrency:
-  group: images-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: service-release-${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && format('fork-{0}', github.event.number) || (github.event_name == 'pull_request' && 'dev' || 'prod') }}
+  cancel-in-progress: false
+
+env:
+  DEPLOY_ENVIRONMENT: ${{ github.event_name == 'pull_request' && 'dev' || 'prod' }}
+  DEPLOY_IMAGE_TAG: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}', github.event.number, github.sha) || format('main-{0}', github.sha) }}
+  SOURCE_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.number) || 'refs/heads/main' }}
 
 jobs:
-  matrix:
+  plan:
     runs-on: ubuntu-latest
     outputs:
-      images: ${{ steps.images.outputs.matrix }}
-      has-images: ${{ steps.images.outputs.has-images }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      build: ${{ steps.plan.outputs.build }}
+      image_tags: ${{ steps.plan.outputs.image_tags }}
+      previous: ${{ steps.plan.outputs.previous }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-      - id: images
-        env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          matrix=$(python3 scripts/select-service-images.py "$BASE" "$GITHUB_SHA")
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "has-images=$(jq '.include | length > 0' <<< "$matrix")" >> "$GITHUB_OUTPUT"
+      - id: plan
+        run: python3 scripts/release.py plan
 
   images:
-    needs: matrix
-    if: needs.matrix.outputs.has-images == 'true'
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
     name: ${{ matrix.service }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.matrix.outputs.images) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     uses: ./.github/workflows/build-image.yml
     with:
-      service: ${{ matrix.service }}
       image: ${{ github.repository }}${{ matrix.image-suffix }}
       context: ${{ matrix.context }}
       dockerfile: ${{ matrix.dockerfile }}
       build-args: ${{ matrix.build-args || '' }}
       publish: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 
-  pin:
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.images.result == 'success'
-    needs: images
+  deploy:
+    needs: [plan, images]
+    if: >-
+      always() && !cancelled() && needs.plan.result == 'success' &&
+      (needs.images.result == 'success' || (needs.plan.outputs.build == 'false' && needs.images.result == 'skipped')) &&
+      (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'pull_request' && 'dev' || 'prod' }}
     permissions:
       contents: write
+    env:
+      IMAGE_TAGS: ${{ needs.plan.outputs.image_tags }}
+      PREVIOUS_RELEASE: ${{ needs.plan.outputs.previous }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
-          fetch-depth: 2
-      - uses: astral-sh/setup-uv@v10.1.0
-      - uses: actions/download-artifact@v8.0.2
-        with:
-          pattern: image-*
-          path: .image-manifests
-          merge-multiple: true
-      - name: Pin production charts after affected main images publish
-        run: uv run --with PyYAML==6.0.3 python scripts/pin-service-images.py .image-manifests
-      - name: Commit updated production image pins
-        run: |
-          if git diff --quiet -- 'infra/**/values-prod.yaml'; then
-            echo "production images already match published digests"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- 'infra/**/values-prod.yaml'
-          git commit -m "chore(infra): pin published images from ${GITHUB_SHA} [skip ci]"
-          git push
+          fetch-depth: 0
+      - name: Publish the GitOps release
+        run: python3 scripts/release.py publish

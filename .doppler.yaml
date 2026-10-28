@@ -1,3 +1,3 @@
 setup:
   project: payment-gateway-fraud-detection
-  config: prd
+  config: dev

@@ -1,6 +1,6 @@
 {{- range $name, $svc := include "payment-gateway.services" . | fromYaml }}
 {{- $port := first $svc.ports }}
-{{- $image := include "payment-gateway.image" $svc.image }}
+{{- $image := include "payment-gateway.image" (dict "image" $svc.image "global" $.Values.global) }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -80,7 +80,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.uid
             - name: SERVICE_REVISION
-              value: {{ $svc.image.revision | default $svc.image.digest | default $svc.image.tag | quote }}
+              value: {{ regexFind "[a-f0-9]{40}$" (index $.Values.global.imageTags $svc.image.repository) | default "dev" | quote }}
             {{- if $svc.database }}
             {{- include "payment-gateway.database-env" (dict "database" $svc.database "migrate" false) | nindent 12 }}
             {{- end }}

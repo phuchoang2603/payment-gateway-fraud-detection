@@ -1,5 +1,11 @@
 {{- define "metadata-integrations.runtime" -}}
 env:
+  - name: METADATA_STAGE
+    value: {{ .stage | quote }}
+  {{- with .connector }}
+  - name: METADATA_CONNECTOR
+    value: {{ . | quote }}
+  {{- end }}
   - name: NATIVE_TIMEOUT_SECONDS
     value: {{ sub .Values.activeDeadlineSeconds 60 | quote }}
 envFrom:
@@ -21,13 +27,7 @@ resources:
 {{- end -}}
 
 {{- define "metadata-integrations.image" -}}
-{{- $repository := required "image.repository is required" .repository -}}
-{{- if .digest -}}
-{{- if not (regexMatch "^sha256:[a-f0-9]{64}$" .digest) -}}
-{{- fail "image.digest must be a sha256 digest" -}}
-{{- end -}}
-{{- printf "%s@%s" $repository .digest -}}
-{{- else -}}
-{{- printf "%s:%s" $repository (.tag | default "latest") -}}
-{{- end -}}
+{{- $repository := required "image.repository is required" .image.repository -}}
+{{- $tag := required (printf "image tag missing for %s" $repository) (index .global.imageTags $repository) -}}
+{{- printf "%s:%s" $repository $tag -}}
 {{- end -}}

@@ -1,0 +1,6 @@
+redis:
+  storageClass: local-path
+streaming:
+  storageEndpoint: https://minio.home.phuchoang.sbs
+  pathStyle: true
+  storageRoot: s3://platform-dev/runs/payment-gateway/flink

@@ -48,7 +48,7 @@ def test_held_record_replays_and_forwards_original_bytes_with_duplicates(monkeyp
         max_records=1,
     )
     config = LiveConfig(
-        manifest="s3://synthetic-source/historical/test/manifest.json",
+        manifest="s3://platform-dev/datasets/payment-gateway/historical/test/manifest.json",
         manifest_sha256="0" * 64,
         kafka_brokers=brokers,
         faults=settings,

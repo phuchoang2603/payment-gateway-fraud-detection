@@ -22,9 +22,9 @@ tags:
 - payments
 customProperties:
 - property: warehouse
-  value: s3://fraud-lakehouse-prod/
+  value: s3://{bucket}/lakehouse/
 - property: catalog
-  value: https://minio.home.phuchoang.sbs/iceberg
+  value: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
 - property: accessPolicy
   value: Combined source-read/lake-write runtime identity and separate read-only metadata identity, provisioned externally;
     never reuse the generator writer.

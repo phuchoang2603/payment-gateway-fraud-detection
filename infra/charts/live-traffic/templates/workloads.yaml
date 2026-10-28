@@ -26,7 +26,7 @@ spec:
         istio.io/dataplane-mode: ambient
 {{- end }}
       annotations:
-        checksum/config: {{ toJson $.Values | sha256sum }}
+        checksum/config: {{ omit $.Values "global" | toJson | sha256sum }}
     spec:
       serviceAccountName: {{ $name }}
       automountServiceAccountToken: false
@@ -40,8 +40,13 @@ spec:
           type: RuntimeDefault
       containers:
         - name: {{ $name }}
-          image: {{ include "live-traffic.image" $.Values.image | quote }}
+          image: {{ include "live-traffic.image" (dict "image" $.Values.image "global" $.Values.global) | quote }}
           imagePullPolicy: Always
+{{- if eq $name "live-simulator" }}
+          command: [python, -m, simulator.live.runtime]
+{{- else }}
+          command: [python, -m, simulator.landing.runtime]
+{{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -54,18 +59,21 @@ spec:
                 name: live-source
           env:
             - name: S3_ENDPOINT
-              value: {{ $.Values.s3Endpoint | quote }}
+              value: {{ $.Values.objectStorage.endpoint | quote }}
             - name: AWS_REGION
-              value: us-east-1
+              value: {{ $.Values.objectStorage.region | quote }}
+            - name: S3_PATH_STYLE
+              value: {{ $.Values.objectStorage.pathStyle | toString | quote }}
             - name: KAFKA_BROKERS
               value: {{ $.Values.kafkaBrokers | quote }}
 {{- if eq $name "live-simulator" }}
+            - name: SIMULATOR_CONFIG
+              value: /etc/simulator/live.yaml
             - name: GATEWAY_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: live-gateway
                   key: api-key
-          args: [live, --config, /etc/simulator/live.yaml]
           volumeMounts:
             - name: config
               mountPath: /etc/simulator
@@ -79,15 +87,14 @@ spec:
               value: {{ $settings.group | quote }}
             - name: LANDING_SOURCE_EPOCH
               value: {{ $settings.sourceEpoch | quote }}
-            - name: LANDING_BUCKET
-              value: {{ $settings.bucket | quote }}
+            - name: LANDING_ROOT
+              value: {{ printf "s3://%s/%s" $.Values.objectStorage.bucket $.Values.objectStorage.prefix | quote }}
             - name: LANDING_MAX_RECORDS
               value: {{ $settings.maxRecords | int | quote }}
             - name: LANDING_MAX_BYTES
               value: {{ $settings.maxBytes | int | quote }}
             - name: LANDING_FLUSH_INTERVAL
               value: {{ $settings.flushInterval | quote }}
-          args: [archive]
 {{- end }}
 {{- if eq $name "live-simulator" }}
       volumes:

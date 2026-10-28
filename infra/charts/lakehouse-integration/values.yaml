@@ -1,0 +1,29 @@
+storage:
+  secretStore: gateway-doppler
+  accessKey: OBJECT_GATEWAY_ACCESS_KEY_ID
+  secretKey: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+catalog:
+  name: lakehouse
+  bucket: platform-dev
+  prefix: lakehouse
+  endpoint: https://minio.home.phuchoang.sbs
+  region: us-east-1
+  pathStyle: true
+setup:
+  image: starrocks/fe-ubuntu:4.1.6
+  rootPasswordKey: STARROCKS_ROOT_PASSWORD
+  catalogs:
+    - name: lakehouse
+      uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
+      warehouse: lakehouse
+      region: us-east-1
+      oauthUri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
+      clientId: platform
+      pathStyle: true
+      s3Endpoint: https://minio.home.phuchoang.sbs
+  users:
+    - name: openmetadata
+      passwordKey: STARROCKS_OPENMETADATA_PASSWORD
+      sessionVariables:
+        query_timeout: 3600
+        new_planner_optimize_timeout: 60000

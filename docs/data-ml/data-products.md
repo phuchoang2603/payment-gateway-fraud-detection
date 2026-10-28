@@ -32,7 +32,7 @@ The fraud-labels linkage rule reads `payment_events`, so validate labels in a da
 
 `historical/v12` is an immutable one-off -365-day calendar shift of v8, with the same entities/content and no regeneration. Its manifest SHA-256 is `66aa2af7fecb1177e0d3891ea86054ff9c076ff6e8743b35b6bec0bd351511ce`; 2,851 files received full row/remote readback checks and 22,131 received upload-integrity/HEAD checks. Spark/GX acceptance remains pending. Live decoded Parquet lands separately under `streaming/`; see the [landing interface](data-pipeline.md#live-simulation-and-landing).
 
-The maintained smoke profile now targets a new 90-day development source, `historical/v16`: 10,000 customers, 2,000 merchants, July 1 through September 28, 2025 purchase starts, seed 2603 and current payload schema 3. Lifecycle completion and scheduled label availability may extend beyond that range. It has no 100 GB size gate. Publication and source checks passed: [manifest](https://minio.home.phuchoang.sbs/synthetic-source/historical/v16/manifest.json) SHA-256 `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`. The CI-image Kubernetes run verified all 1,954 inventory files and all nine source SQL checks. It contains 795,718 events and 161,967 labels in 139,597,476 physical Parquet bytes; this is development-source evidence, not DP1 acceptance. Previous source versions are historical evidence, not supported current-runtime inputs; the operator removed the old sources and stopped v14.
+The previous smoke profile published the 90-day development source `historical/v16`: 10,000 customers, 2,000 merchants, July 1 through September 28, 2025 purchase starts, seed 2603 and current payload schema 3. Lifecycle completion and scheduled label availability may extend beyond that range. It has no 100 GB size gate. Publication and source checks passed: [manifest](https://minio.home.phuchoang.sbs/synthetic-source/historical/v16/manifest.json) SHA-256 `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`. The CI-image Kubernetes run verified all 1,954 inventory files and all nine source SQL checks. It contains 795,718 events and 161,967 labels in 139,597,476 physical Parquet bytes; this is development-source evidence, not DP1 acceptance. Previous source versions are historical evidence, not supported current-runtime inputs; the operator removed the old sources and stopped v14.
 
 The first schema-3 candidate v15 failed its declared risk-assessment rule because that rule incorrectly required reason codes on clean approvals. Its manifest and failed evidence remain unchanged. Contract 4.0.1 corrects the rule to require reasons on declines; v16 passes the corrected rule.
 
@@ -54,14 +54,15 @@ Generate only the development profile now. Full-volume Python generation is defe
 
 ```bash
 cd src/data-pipeline/simulator
-doppler run -p payment-gateway-fraud-detection -c prd -- sh -c \
-  'AWS_ACCESS_KEY_ID="$HISTORICAL_RUSTFS_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$HISTORICAL_RUSTFS_SECRET_KEY" \
-   uv run --locked simulator historical --config configs/historical-smoke.yaml'
+doppler run -p payment-gateway-fraud-detection -c dev -- sh -c \
+  'AWS_ACCESS_KEY_ID="$OBJECT_GATEWAY_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$OBJECT_GATEWAY_SECRET_ACCESS_KEY" \
+   S3_ENDPOINT=https://minio.home.phuchoang.sbs S3_PATH_STYLE=true AWS_REGION=us-east-1 \
+   SIMULATOR_CONFIG=configs/historical-smoke.yaml uv run --locked simulator'
 ```
 
-Bump `dataset_version` in the config for every new dataset. Pass `--output <dir>` to generate locally without credentials.
+Bump `dataset_version` in the config for every new dataset. Set `output` in the selected YAML to a local directory to generate without credentials.
 
-The approved new `historical --config <path>` path generates and uploads raw task Parquet, verifies checksums, row-count accounting and the physical-byte gate, and writes the completion manifest last. It then cleans only `_run/`, retaining persistent `raw/` files. It resumes compatible unfinished work or repairs cleanup on a completed inventory without rewriting files or the manifest. Completed versions cannot be regenerated or overwritten; recovery verifies the stored logical configuration.
+The historical runtime generates and uploads raw task Parquet, verifies checksums, row-count accounting and the physical-byte gate, and writes the completion manifest last. It then cleans only `_run/`, retaining persistent `raw/` files. It resumes compatible unfinished work or repairs cleanup on a completed inventory without rewriting files or the manifest. Completed versions cannot be regenerated or overwritten; recovery verifies the stored logical configuration.
 
 The manifest uses `manifest_version: 3`, `source_layout: task-fragments-v1` and an exact inventory of `raw/{table}/{task.key}/v{schema_version}.parquet` files beneath the dataset root. Each file records `schema_version`, checksum, bytes, rows and `partitions: {date: rows}`; those dates summarize occurrence dates for events and availability dates for labels. A task file can cover several dates. Source files carry no sorting or compaction guarantee. The current context contract versions the historical-payments product to `6.0.1` and the payment-events contract to `4.0.1`; current files use event schema 3.
 
@@ -69,9 +70,9 @@ New generation-time contract checks are recorded as `result: skipped`, gate `dp1
 
 After durable publication, cleanup retains `_run/publication.json` with successful delete counts and never deletes inventory-listed raw files. Cleanup failures exit nonzero; rerunning verifies file integrity and retries. Publication uses no object tags. Source immutability is enforced by completed-manifest/configuration/inventory checks; runtime credentials cannot delete streaming sources, and historical delete scope is limited to `historical/*/_run/*`.
 
-`--prepare-only` leaves generated raw inventory ready, without sorting or a completion manifest. The normal command continues publication under the same generation identity. Normal shutdown releases ownership. After a crash, stop the former writer first and pass `--takeover-stopped-writer`; elapsed time never authorizes takeover. Small remote publication still requires `--allow-small-dataset` below one customer block; probes normally use local `--output`.
+`execution.prepare_only: true` leaves generated raw inventory ready, without sorting or a completion manifest. The normal command continues publication under the same generation identity. Normal shutdown releases ownership. After a crash, stop the former writer first and set `execution.takeover_stopped_writer: true`; elapsed time never authorizes takeover. Small remote publication still requires `execution.allow_small_dataset: true` below one customer block; probes normally use a local YAML `output`.
 
-The historical command is generation-only: it has no migration command or old-configuration compatibility path. The separate `live` entry point drives current-time gateway commands.
+The historical command is generation-only: it has no migration command or old-configuration compatibility path. The separate `python -m simulator.live.runtime` entry point drives current-time gateway commands.
 
 The historical 2026-10-22 RustFS probe confirmed create-if-absent, ETag-conditional update and streamed transfer; HEAD returned no SHA-256 checksum, so integrity verification streams each object. Unsupported conditional operations fail rather than falling back to unsafe writes. New execution controls cover workers, in-flight reservations, scratch and transfers, without DuckDB sort/validation budgets. Logical customer blocks, burst groups, layout, scenarios, contracts and minimum source bytes form the generation identity.
 
@@ -87,4 +88,4 @@ The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai
 
 Git bronze contracts define StarRocks COUNT-of-violations SQL and conditional nested requirements. The official version-matched OpenMetadata ingestion image discovers tables and executes native quality rules; Argo performs explicit product/contract/lineage writes and verifies complete results. Spark performs source-integrity checks, ingestion and bidirectional duplicate-aware source/output reconciliation against recorded snapshots. Native per-day counts alone do not establish content equality.
 
-Use the published v16 manifest and its complete inventory, including lifecycle and label tails. V16 development acceptance is separate from source/live checks and later full-scale/coursework acceptance. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and metadata-only recovery.
+The fresh platform migration selects v17, which must be generated and validated before ingestion. The v16 observations and manifest below are historical evidence. V16 development acceptance is separate from source/live checks and later full-scale/coursework acceptance. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and metadata-only recovery.

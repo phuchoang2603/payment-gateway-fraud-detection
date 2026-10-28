@@ -1,58 +1,39 @@
-{{- /*
-  Loop through all defined applications in .Values.applications
-  and create an ArgoCD Application resource for each.
-*/}}
-{{- range $appName, $appConfig := .Values.applications }}
-{{- if $appConfig.enabled }}
+{{- range $name, $application := .Values.applications }}
+---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ printf "%s-%s" $.Values.namePrefix $appName | quote }}
+  name: {{ printf "%s-%s" $.Values.namePrefix $name }}
   namespace: argo-cd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: payment-gateway-fraud-detection
   destination:
-    {{- if $.Values.destinationServer }}
     server: {{ $.Values.destinationServer | quote }}
-    {{- else }}
-    name: {{ $.Values.destinationName | quote }}
-    {{- end }}
-    namespace: {{ $appConfig.destinationNamespace | quote }}
-  sources:
-    # Main source for the Helm Chart
-    - repoURL: {{ default $.Values.global.repoURL $appConfig.chartURL | quote }}
-      path: {{ $appConfig.path | quote }}
-      targetRevision: {{ default $.Values.global.targetRevision $appConfig.chartTargetRevision | quote }}
-      helm:
-        releaseName: {{ $appName | quote }}
-        {{- if $appConfig.valuesFile }}
-        valueFiles:
-          {{- range $appConfig.valuesFile }}
-          - {{ printf "$values/%s" . | quote }}
-          {{- end }}
-        {{- end }}
-
-    {{- if $appConfig.valuesFile }}
-    - repoURL: {{ default $.Values.global.repoURL $appConfig.valuesURL | quote }}
-      targetRevision: {{ default $.Values.global.targetRevision $appConfig.valuesTargetRevision | quote }}
-      ref: values
-    {{- end }}
+    namespace: {{ $application.destinationNamespace }}
+  source:
+    repoURL: {{ $.Values.global.repoURL }}
+    targetRevision: {{ $.Values.global.targetRevision | quote }}
+    path: {{ $application.path }}
+    helm:
+      releaseName: {{ $name }}
+      valueFiles:
+        - {{ printf "values-%s.yaml" ($.Values.environment | default "dev") }}
+      valuesObject:
+        global:
+          imageTags:
+{{ toYaml $.Values.global.imageTags | indent 12 }}
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-      {{- if $appConfig.allowEmpty }}
-      allowEmpty: true
-      {{- end }}
-    {{- with $appConfig.syncRetry }}
     retry:
-      {{- toYaml . | nindent 6 }}
-    {{- end }}
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
     syncOptions:
-      - CreateNamespace=true
       - ServerSideApply=true
----
-{{- end }}
 {{- end }}

@@ -1,0 +1,26 @@
+database:
+  storage:
+    storageClass: local-path
+ingress:
+  tunnel:
+    hostname: pay-gateway-dev.phuchoang.sbs
+services:
+  edge:
+    env:
+    - name: EDGE_HTTP_ADDR
+      value: :8080
+    - name: EDGE_PAYMENTS_ADDR
+      value: payments.payment-gateway.svc.cluster.local:8000
+    - name: EDGE_VAULT_ADDRESS
+      value: vault-simulator.payment-gateway.svc.cluster.local:8000
+    - name: EDGE_PUBLIC_BASE_URL
+      value: https://pay-gateway-dev.phuchoang.sbs
+    - name: EDGE_TRUSTED_PROXY_HEADER
+      value: X-Forwarded-For
+    - name: EDGE_TRUSTED_PROXY_HOPS
+      value: '1'
+    - name: EDGE_SYNTHETIC_FINGERPRINT_KEY
+      value: synthetic-fingerprint-v1
+    httpRoute:
+      hostnames:
+      - pay-gateway-dev.phuchoang.sbs

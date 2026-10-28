@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-catalog-setup
+data:
+  catalog.json: |
+    {{- $location := printf "s3://%s/%s" .Values.catalog.bucket .Values.catalog.prefix }}
+    {{- $storage := dict "storageType" "S3" "region" .Values.catalog.region "endpoint" .Values.catalog.endpoint "pathStyleAccess" .Values.catalog.pathStyle "stsUnavailable" true "allowedLocations" (list (printf "%s/" $location)) }}
+    {{- $catalog := dict "name" .Values.catalog.name "type" "INTERNAL" "properties" (dict "default-base-location" $location) "storageConfigInfo" $storage }}
+    {{- dict "catalog" $catalog | toJson | nindent 4 }}
+  setup.py: |
+    import json, os, pathlib, urllib.request, urllib.parse, urllib.error
+    base = "http://iceberg-catalog:8181"
+    payload = urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": os.environ["CLIENT_ID"], "client_secret": os.environ["CLIENT_SECRET"], "scope": "PRINCIPAL_ROLE:ALL"}).encode()
+    request = urllib.request.Request(base + "/api/catalog/v1/oauth/tokens", data=payload)
+    with urllib.request.urlopen(request, timeout=30) as response:
+        token = json.load(response)["access_token"]
+    document = pathlib.Path("/setup/catalog.json").read_bytes()
+    name = json.loads(document)["catalog"]["name"]
+    headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+    try:
+        with urllib.request.urlopen(urllib.request.Request(base + "/api/management/v1/catalogs/" + urllib.parse.quote(name), headers=headers), timeout=30):
+            pass
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            raise
+        with urllib.request.urlopen(urllib.request.Request(base + "/api/management/v1/catalogs", data=document, headers=headers), timeout=30):
+            pass
+    grants_url = base + "/api/management/v1/catalogs/" + urllib.parse.quote(name) + "/catalog-roles/catalog_admin/grants"
+    with urllib.request.urlopen(urllib.request.Request(grants_url, headers=headers), timeout=30) as response:
+        grants = json.load(response)["grants"]
+    for privilege in ["TABLE_READ_DATA", "TABLE_WRITE_DATA"]:
+        if not any(grant["type"] == "catalog" and grant["privilege"] == privilege for grant in grants):
+            payload = json.dumps({"grant": {"type": "catalog", "privilege": privilege}}).encode()
+            with urllib.request.urlopen(urllib.request.Request(grants_url, data=payload, headers=headers, method="PUT"), timeout=30):
+                pass
+    print("Iceberg catalog registration verified")
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gateway-catalog-setup
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: setup
+          image: python:3.13.9-alpine3.22
+          command: [python, /setup/setup.py]
+          env:
+            - name: CLIENT_ID
+              value: platform
+            - name: CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: {name: gateway-catalog-client, key: ICEBERG_CLIENT_SECRET}
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts:
+            - name: setup
+              mountPath: /setup
+              readOnly: true
+      volumes:
+        - name: setup
+          configMap:
+            name: gateway-catalog-setup

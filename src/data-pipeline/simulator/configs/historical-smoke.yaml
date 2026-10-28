@@ -1,4 +1,4 @@
-dataset_version: v16
+dataset_version: v17
 seed: 2603
 integration_id: 01234567-89ab-4cde-8fab-0123456789ab
 synthetic_key: synthetic-fingerprint-v1
@@ -52,12 +52,15 @@ label_delays:
   max_days: 21
 storage:
   row_group_rows: 131072
-output: s3://synthetic-source
+output: s3://platform-dev/datasets/payment-gateway
 minimum_source_parquet_bytes: 0
 customer_block_size: 1000
 card_testing_bursts_per_task: 16
 chunk_purchases: 2000
 execution:
+  prepare_only: false
+  takeover_stopped_writer: false
+  allow_small_dataset: false
   workers: 3
   max_in_flight: 4
   scratch_directory: /tmp

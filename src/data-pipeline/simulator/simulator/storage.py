@@ -405,7 +405,7 @@ def generate(
             raise ValueError("incompatible run state: format or generation/contract/revision identity mismatch")
         if existing.get("owner") and not takeover_stopped_writer:
             raise FileExistsError(
-                "another writer owns this dataset; stop it before explicit --takeover-stopped-writer"
+                "another writer owns this dataset; stop it before enabling execution.takeover_stopped_writer"
             )
     elif store.has_objects():
         raise FileExistsError("incomplete dataset has no supported run state; use a new dataset version")
@@ -530,7 +530,7 @@ def publish_inventory(
     if config.counts.customers < config.customer_block_size and not allow_small_dataset:
         raise ValueError(
             f"publication refused: {config.counts.customers} customers is below one "
-            f"{config.customer_block_size}-customer block; pass --allow-small-dataset for a contract probe"
+            f"{config.customer_block_size}-customer block; enable execution.allow_small_dataset for a contract probe"
         )
     observed = _observations(stats, inventory)
     physical = sum(item["bytes"] for item in inventory)
