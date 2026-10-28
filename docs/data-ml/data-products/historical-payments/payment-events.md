@@ -2,7 +2,7 @@
 ## Info
 *Complete synthetic payment lifecycle histories for reproducible pipeline development.*
 - **name:** Historical synthetic payment events
-- **version:** 5.0.0
+- **version:** 5.0.1
 - **status:** active
 - **team:** Fraud data platform
 

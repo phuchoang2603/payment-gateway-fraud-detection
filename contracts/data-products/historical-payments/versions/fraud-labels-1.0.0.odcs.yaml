@@ -1,0 +1,74 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:historical-fraud-labels
+name: Historical synthetic fraud labels
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Separately delivered simulation truth and delayed chargebacks for the historical payment events.
+  usage: Join labels to payment attempts only after label_available_at. Validate together with the payment events they reference.
+  limitations: Synthetic data only. Scenario truth and future outcomes must never become decision inputs. Labels may only be used after label_available_at.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, source, payments]
+customProperties:
+  - property: classification
+    value: synthetic
+  - property: retentionPolicy
+    value: Immutable versioned inputs; delete only through an explicit dataset cleanup operation.
+  - property: sqlDialect
+    value: duckdb
+servers:
+  - server: validation
+    type: duckdb
+    environment: local
+    database: validation.duckdb
+    description: Local tables or views named fraud_labels and the referenced payment_events, prepared by the producing or ingesting job. Override the database path with DATACONTRACT_DUCKDB_DATABASE.
+schema:
+  - name: fraud_labels
+    physicalName: fraud_labels
+    logicalType: object
+    physicalType: table
+    description: Separate synthetic attempt truth and delayed chargebacks. Never join future labels into features.
+    dataGranularityDescription: One label source observation for one scoped payment attempt.
+    customProperties:
+      - {property: schemaVersions, value: [1]}
+    properties:
+      - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: Same dedicated synthetic namespace as the referenced payment.}
+      - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: Referenced payment aggregate identity.}
+      - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Referenced started attempt identity.}
+      - {name: is_fraud, logicalType: boolean, physicalType: BOOLEAN, required: true, description: Fraud truth according to this source; friendly-fraud chargebacks may differ from simulation truth.}
+      - {name: occurred_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, logicalTypeOptions: &utc_timestamp {timezone: true, defaultTimezone: UTC}, required: true, description: Time of the labeled business occurrence.}
+      - {name: label_available_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, logicalTypeOptions: *utc_timestamp, required: true, description: Earliest time this label may be used by training or evaluation.}
+      - {name: source, logicalType: string, physicalType: VARCHAR, required: true, description: LABEL_SOURCE_SIMULATION_TRUTH or LABEL_SOURCE_CHARGEBACK.}
+      - {name: scenario, logicalType: string, physicalType: VARCHAR, description: Synthetic generating scenario on simulation truth only; excluded from features.}
+    quality:
+      - id: label_availability
+        type: sql
+        description: Labels cannot be available before their occurrence and carry a recognized source.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE label_available_at < occurred_at
+            OR source NOT IN ('LABEL_SOURCE_SIMULATION_TRUTH', 'LABEL_SOURCE_CHARGEBACK')
+            OR (source = 'LABEL_SOURCE_SIMULATION_TRUTH' AND coalesce(scenario, '') = '')
+            OR (source = 'LABEL_SOURCE_CHARGEBACK' AND (NOT is_fraud OR scenario IS NOT NULL))
+        mustBe: 0
+      - id: label_attempt_linkage
+        type: sql
+        description: Every label references a started attempt in the same integration and payment; chargebacks require that attempt to succeed.
+        query: |
+          SELECT count(*) FROM {object} label
+          WHERE NOT EXISTS (
+            SELECT 1 FROM payment_events event
+            WHERE event.integration_id = label.integration_id AND event.payment_id = label.payment_id
+              AND event.attempt_started.attempt_id = label.attempt_id
+          ) OR (label.source = 'LABEL_SOURCE_CHARGEBACK' AND NOT EXISTS (
+            SELECT 1 FROM payment_events event
+            WHERE event.integration_id = label.integration_id AND event.payment_id = label.payment_id
+              AND event.payment_succeeded.attempt_id = label.attempt_id
+          ))
+        mustBe: 0

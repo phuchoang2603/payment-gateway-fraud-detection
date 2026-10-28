@@ -2,7 +2,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: urn:datacontract:fraud:historical-fraud-labels
 name: Historical synthetic fraud labels
-version: 1.0.0
+version: 1.0.1
 status: active
 domain: fraud-detection
 description:
@@ -12,7 +12,7 @@ description:
 team:
   name: Fraud data platform
   members:
-    - username: phuchoang2603
+    - username: xuanphuc.a1gv
       role: owner
 tags: [synthetic, source, payments]
 customProperties:

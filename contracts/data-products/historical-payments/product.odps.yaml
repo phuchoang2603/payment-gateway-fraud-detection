@@ -33,7 +33,7 @@ customProperties:
     value: https://github.com/phuchoang2603/payment-gateway-fraud-detection/tree/main/src/data-pipeline/simulator
 outputPorts:
   - name: payment-events
-    version: 5.0.0
+    version: 5.0.1
     type: files
     contractId: urn:datacontract:fraud:historical-payment-events
     description: Complete payment lifecycle histories in immutable task chunks of Zstandard Parquet. Exact files and their date counts are declared by the completion manifest; ordering and compaction belong to ingestion.
@@ -43,13 +43,13 @@ outputPorts:
       - property: consumption
         value: Deduplicate identical event deliveries and read complete histories across occurrence dates. Drift metadata is manifest-only.
   - name: fraud-labels
-    version: 1.0.0
+    version: 1.0.1
     type: files
     contractId: urn:datacontract:fraud:historical-fraud-labels
     description: Simulation truth and delayed chargebacks in immutable task chunks of Zstandard Parquet. A chunk may span several label availability dates.
     inputContracts:
       - id: urn:datacontract:fraud:historical-payment-events
-        version: 5.0.0
+        version: 5.0.1
     customProperties:
       - property: path
         value: raw/fraud_labels/{task}/v1.parquet

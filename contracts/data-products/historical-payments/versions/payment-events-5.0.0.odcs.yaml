@@ -1,0 +1,430 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:historical-payment-events
+name: Historical synthetic payment events
+version: 5.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Complete synthetic payment lifecycle histories for reproducible pipeline development.
+  usage: Validate source datasets before publication and ingestion. Deduplicate identical event deliveries before interpreting lifecycle transitions.
+  limitations: Synthetic data only. Histories are complete across all date partitions. Empty configured schedules are valid.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, source, payments]
+customProperties:
+  - property: classification
+    value: synthetic
+  - property: retentionPolicy
+    value: Immutable versioned inputs; delete only through an explicit dataset cleanup operation.
+  - property: sqlDialect
+    value: duckdb
+servers:
+  - server: validation
+    type: duckdb
+    environment: local
+    database: validation.duckdb
+    description: Local table or view named payment_events, prepared by the producing or ingesting job. Override the database path with DATACONTRACT_DUCKDB_DATABASE.
+schema:
+  - name: payment_events
+    physicalName: payment_events
+    logicalType: object
+    physicalType: table
+    description: One authoritative transition per event_id; repeated identical deliveries are permitted. Histories are complete across all date partitions.
+    dataGranularityDescription: One delivered payment lifecycle event.
+    customProperties:
+      - property: schemaVersions
+        value: [3, 4]
+    properties:
+      - name: event_id
+        logicalType: string
+        physicalType: VARCHAR
+        required: true
+        description: Opaque event identity. Repeated deliveries retain this identity and identical content.
+      - name: payment_id
+        logicalType: string
+        physicalType: VARCHAR
+        required: true
+        description: Payment aggregate identity within integration_id.
+      - name: aggregate_version
+        logicalType: integer
+        physicalType: BIGINT
+        required: true
+        description: Consecutive authoritative transition number starting at one; delivery duplicates do not increment it.
+      - name: integration_id
+        logicalType: string
+        physicalType: VARCHAR
+        required: true
+        description: Dedicated synthetic integration namespace; never share it with a real integration.
+      - name: occurred_at
+        logicalType: timestamp
+        physicalType: TIMESTAMPTZ
+        logicalTypeOptions: &utc_timestamp
+          timezone: true
+          defaultTimezone: UTC
+        required: true
+        description: Business occurrence time in UTC at microsecond precision.
+      - name: recorded_at
+        logicalType: timestamp
+        physicalType: TIMESTAMPTZ
+        logicalTypeOptions: *utc_timestamp
+        required: true
+        description: Source recording time, at or after occurred_at; not ingestion time.
+      - name: schema_version
+        logicalType: integer
+        physicalType: UINTEGER
+        required: true
+        description: Original event-envelope version, independent of the physical file schema recorded in the inventory.
+      - name: correlation_id
+        logicalType: string
+        physicalType: VARCHAR
+        required: true
+        description: Correlation identity shared across one payment history.
+      - name: payment_created
+        logicalType: object
+        description: Initial immutable checkout snapshot. Exactly one lifecycle payload is present per event.
+        properties:
+          - name: merchant
+            logicalType: object
+            required: true
+            description: Integration-scoped merchant references.
+            properties:
+              - {name: merchant_id, logicalType: string, physicalType: VARCHAR, required: true, description: Gateway merchant identity.}
+              - {name: external_seller_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration seller identity.}
+          - name: customer
+            logicalType: object
+            required: true
+            description: Integration-scoped customer references.
+            properties:
+              - {name: customer_id, logicalType: string, physicalType: VARCHAR, required: true, description: Gateway customer identity.}
+              - {name: external_buyer_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration buyer identity.}
+          - name: snapshot
+            logicalType: object
+            required: true
+            description: Checkout facts captured at creation; raw personal and payment credentials are excluded.
+            properties:
+              - {name: external_order_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration order reference.}
+              - name: total
+                logicalType: object
+                required: true
+                description: Total in integer minor units; must equal the item sum.
+                properties: &money_fields
+                  - {name: minor_units, logicalType: integer, physicalType: BIGINT, required: true, description: Nonnegative integer amount in currency minor units.}
+                  - {name: currency, logicalType: string, physicalType: VARCHAR, required: true, description: Three-letter uppercase currency code shared by all items.}
+              - name: items
+                logicalType: array
+                required: true
+                description: Nonempty checkout line items.
+                items:
+                  logicalType: object
+                  required: true
+                  properties:
+                    - {name: product_id, logicalType: string, physicalType: VARCHAR, required: true, description: Product reference.}
+                    - {name: category, logicalType: string, physicalType: VARCHAR, required: true, description: "Refurbished electronics product type, such as phone, laptop or accessory."}
+                    - {name: condition, logicalType: string, physicalType: VARCHAR, required: true, description: "Refurbished condition grade: excellent, good or fair."}
+                    - {name: quantity, logicalType: integer, physicalType: INTEGER, required: true, description: Positive item quantity.}
+                    - name: unit_price
+                      logicalType: object
+                      required: true
+                      description: Price for one item in checkout currency.
+                      properties: *money_fields
+              - {name: merchant_account_created_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, logicalTypeOptions: *utc_timestamp, required: true, description: Merchant account creation time.}
+              - {name: customer_account_created_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, logicalTypeOptions: *utc_timestamp, required: true, description: Customer account creation time.}
+              - name: shipping
+                logicalType: object
+                required: true
+                description: Coarse shipping geography and synthetic address fingerprint.
+                properties:
+                  - {name: country, logicalType: string, physicalType: VARCHAR, required: true, description: Shipping country code.}
+                  - {name: region, logicalType: string, physicalType: VARCHAR, required: true, description: Shipping region.}
+                  - {name: postal_code, logicalType: string, physicalType: VARCHAR, required: true, description: Shipping postal code.}
+                  - {name: address_fingerprint, logicalType: string, physicalType: VARCHAR, required: true, description: Normalized keyed synthetic address fingerprint; no street lines.}
+      - name: attempt_started
+        logicalType: object
+        description: Starts a new nonconcurrent attempt on an open payment.
+        properties:
+          - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Attempt identity unique within this payment.}
+          - name: signals
+            logicalType: object
+            required: true
+            description: Runtime observations; unavailable optional signals remain null.
+            properties:
+              - {name: attempted_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, logicalTypeOptions: *utc_timestamp, required: true, description: Attempt occurrence time.}
+              - name: payment_method
+                logicalType: object
+                required: true
+                description: Method category and keyed synthetic token fingerprint.
+                properties:
+                  - {name: type, logicalType: string, physicalType: VARCHAR, required: true, description: Payment method category.}
+                  - {name: fingerprint, logicalType: string, physicalType: VARCHAR, required: true, description: Synthetic method fingerprint; never raw credentials.}
+              - {name: device_fingerprint, logicalType: string, physicalType: VARCHAR, description: Observed synthetic device fingerprint.}
+              - {name: ip_country, logicalType: string, physicalType: VARCHAR, description: Resolved IP country if available.}
+              - {name: ip_network_fingerprint, logicalType: string, physicalType: VARCHAR, description: Keyed network fingerprint; never raw IP.}
+              - name: user_agent_family
+                logicalType: string
+                physicalType: VARCHAR
+                description: Optional observed browser family.
+                customProperties:
+                  - {property: sinceSchemaVersion, value: 2}
+          - name: context
+            logicalType: object
+            required: true
+            description: Immutable scoring context matching PaymentCreated and the Fraud request.
+            properties:
+              - name: merchant
+                logicalType: object
+                required: true
+                description: Integration-scoped merchant references.
+                properties:
+                  - {name: merchant_id, logicalType: string, physicalType: VARCHAR, required: true, description: Gateway merchant identity.}
+                  - {name: external_seller_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration seller identity.}
+              - name: customer
+                logicalType: object
+                required: true
+                description: Integration-scoped customer references.
+                properties:
+                  - {name: customer_id, logicalType: string, physicalType: VARCHAR, required: true, description: Gateway customer identity.}
+                  - {name: external_buyer_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration buyer identity.}
+              - name: snapshot
+                logicalType: object
+                required: true
+                description: Checkout facts captured at creation; raw personal and payment credentials are excluded.
+                properties:
+                  - {name: external_order_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration order reference.}
+                  - name: total
+                    logicalType: object
+                    required: true
+                    description: Total in integer minor units; must equal the item sum.
+                    properties: &attempt_money_fields
+                      - {name: minor_units, logicalType: integer, physicalType: BIGINT, required: true, description: Nonnegative integer amount in currency minor units.}
+                      - {name: currency, logicalType: string, physicalType: VARCHAR, required: true, description: Three-letter uppercase currency code shared by all items.}
+                  - name: items
+                    logicalType: array
+                    required: true
+                    description: Nonempty checkout line items.
+                    items:
+                      logicalType: object
+                      required: true
+                      properties:
+                        - {name: product_id, logicalType: string, physicalType: VARCHAR, required: true, description: Product reference.}
+                        - {name: category, logicalType: string, physicalType: VARCHAR, required: true, description: "Refurbished electronics product type, such as phone, laptop or accessory."}
+                        - {name: condition, logicalType: string, physicalType: VARCHAR, required: true, description: "Refurbished condition grade: excellent, good or fair."}
+                        - {name: quantity, logicalType: integer, physicalType: INTEGER, required: true, description: Positive item quantity.}
+                        - name: unit_price
+                          logicalType: object
+                          required: true
+                          description: Price for one item in checkout currency.
+                          properties: *attempt_money_fields
+                  - {name: merchant_account_created_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, logicalTypeOptions: *utc_timestamp, required: true, description: Merchant account creation time.}
+                  - {name: customer_account_created_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, logicalTypeOptions: *utc_timestamp, required: true, description: Customer account creation time.}
+                  - name: shipping
+                    logicalType: object
+                    required: true
+                    description: Coarse shipping geography and synthetic address fingerprint.
+                    properties:
+                      - {name: country, logicalType: string, physicalType: VARCHAR, required: true, description: Shipping country code.}
+                      - {name: region, logicalType: string, physicalType: VARCHAR, required: true, description: Shipping region.}
+                      - {name: postal_code, logicalType: string, physicalType: VARCHAR, required: true, description: Shipping postal code.}
+                      - {name: address_fingerprint, logicalType: string, physicalType: VARCHAR, required: true, description: Normalized keyed synthetic address fingerprint; no street lines.}
+      - name: risk_decision_recorded
+        logicalType: object
+        description: Exactly one assessment for the active attempt before any processor request.
+        properties:
+          - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Active attempt identity.}
+          - name: assessment
+            logicalType: object
+            required: true
+            description: Decision evidence. Optional model and feature versions are absent for rules-only decisions.
+            properties:
+              - {name: outcome, logicalType: string, physicalType: VARCHAR, required: true, description: RISK_OUTCOME_APPROVE or RISK_OUTCOME_DECLINE.}
+              - name: reason_codes
+                logicalType: array
+                required: true
+                description: Policy reason codes; declines require at least one.
+                items: {logicalType: string, physicalType: VARCHAR, required: true}
+              - {name: policy_version, logicalType: string, physicalType: VARCHAR, required: true, description: Evaluated policy version.}
+              - {name: model_version, logicalType: string, physicalType: VARCHAR, description: Evaluated model version if a model was used.}
+              - {name: feature_set_version, logicalType: string, physicalType: VARCHAR, description: Evaluated feature-set version if features were used.}
+              - {name: risk_score, logicalType: number, physicalType: DOUBLE, description: Optional model risk score.}
+              - {name: assessment_id, logicalType: string, physicalType: VARCHAR, description: "Optional synthetic reference, not a persisted Fraud document. UUIDv5 namespace 71088b85-53a3-5ed5-bf27-8ea372bf796d uses the UTF-8 name synthetic-assessment-v1:<integration_id>:<payment_id>:<attempt_id>."}
+              - {name: evidence_sha256, logicalType: string, physicalType: VARCHAR, description: "Optional lowercase SHA-256 of UTF-8 JSON synthetic-assessment-v1 evidence with sorted keys, no insignificant whitespace and unescaped Unicode. The object contains format, integration_id, payment_id, attempt_id, all retained attempt signals, and all assessment fields except references; unavailable assessment fields are JSON null. The signals attempted_at timestamp uses UTC ISO 8601 with six fractional digits and +00:00 offset. This is synthetic evidence, not a live served-vector export."}
+      - name: processor_operation_requested
+        logicalType: object
+        description: Processor authorization request after risk approval.
+        properties:
+          - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Active approved attempt identity.}
+          - {name: operation_key, logicalType: string, physicalType: VARCHAR, required: true, description: Idempotent processor operation identity.}
+      - name: processor_outcome_unknown
+        logicalType: object
+        description: Pending processor result; only processor decline or success can resolve it.
+        properties:
+          - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Active requested attempt identity.}
+      - name: attempt_declined
+        logicalType: object
+        description: Risk or processor decline that permits a subsequent attempt.
+        properties:
+          - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Active declined attempt identity.}
+          - {name: source, logicalType: string, physicalType: VARCHAR, required: true, description: DECLINE_SOURCE_RISK or DECLINE_SOURCE_PROCESSOR.}
+          - {name: reason, logicalType: string, physicalType: VARCHAR, required: true, description: Decline reason.}
+      - name: payment_succeeded
+        logicalType: object
+        description: Terminal successful processor result.
+        properties:
+          - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Successful requested attempt identity.}
+          - {name: processor_reference, logicalType: string, physicalType: VARCHAR, required: true, description: Synthetic processor result reference.}
+      - name: payment_expired
+        logicalType: object
+        description: Terminal expiry with no pending processor result.
+        properties:
+          - {name: _present, logicalType: boolean, physicalType: BOOLEAN, required: true, description: True marker for the otherwise empty expiry payload.}
+    quality:
+      - id: payment_delivery_consistency
+        type: sql
+        description: Repeated event identities must carry identical content.
+        query: |
+          SELECT count(*) FROM (
+            SELECT event_id FROM {object} e
+            GROUP BY event_id HAVING count(DISTINCT to_json(e)) > 1
+          )
+        mustBe: 0
+      - id: payment_envelope
+        type: sql
+        description: Envelope identities are nonempty, timestamps are ordered, schemas are supported and exactly one lifecycle payload is present.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE event_id = '' OR payment_id = '' OR integration_id = ''
+            OR correlation_id = ''
+            OR schema_version <> 3 OR aggregate_version < 1
+            OR recorded_at < occurred_at
+            OR (CAST(payment_created IS NOT NULL AS INTEGER)
+              + CAST(attempt_started IS NOT NULL AS INTEGER)
+              + CAST(risk_decision_recorded IS NOT NULL AS INTEGER)
+              + CAST(processor_operation_requested IS NOT NULL AS INTEGER)
+              + CAST(processor_outcome_unknown IS NOT NULL AS INTEGER)
+              + CAST(attempt_declined IS NOT NULL AS INTEGER)
+              + CAST(payment_succeeded IS NOT NULL AS INTEGER)
+              + CAST(payment_expired IS NOT NULL AS INTEGER)) <> 1
+            OR (payment_expired IS NOT NULL AND NOT payment_expired._present)
+        mustBe: 0
+      - id: payment_lifecycle
+        type: sql
+        description: Complete canonical histories have consecutive versions, legal transitions, consistent attempt identities and correlation. Causation is implied by aggregate_version order.
+        query: |
+          WITH canonical AS (SELECT DISTINCT * FROM {object}),
+          typed AS (
+            SELECT *,
+              CASE
+                WHEN payment_created IS NOT NULL THEN 'created'
+                WHEN attempt_started IS NOT NULL THEN 'started'
+                WHEN risk_decision_recorded IS NOT NULL THEN 'decision'
+                WHEN processor_operation_requested IS NOT NULL THEN 'requested'
+                WHEN processor_outcome_unknown IS NOT NULL THEN 'unknown'
+                WHEN attempt_declined IS NOT NULL THEN 'declined'
+                WHEN payment_succeeded IS NOT NULL THEN 'succeeded'
+                WHEN payment_expired IS NOT NULL THEN 'expired'
+              END AS kind,
+              coalesce(attempt_started.attempt_id, risk_decision_recorded.attempt_id,
+                processor_operation_requested.attempt_id, processor_outcome_unknown.attempt_id,
+                attempt_declined.attempt_id, payment_succeeded.attempt_id) AS attempt
+            FROM canonical
+          ),
+          ordered AS (
+            SELECT *,
+              row_number() OVER history AS ordinal,
+              count(*) OVER (PARTITION BY integration_id, payment_id) AS transitions,
+              lag(kind) OVER history AS previous_kind,
+              lag(occurred_at) OVER history AS previous_time,
+              lag(correlation_id) OVER history AS previous_correlation,
+              lag(risk_decision_recorded.assessment.outcome) OVER history AS previous_outcome,
+              last_value(attempt_started.attempt_id IGNORE NULLS) OVER history AS active_attempt
+            FROM typed
+            WINDOW history AS (
+              PARTITION BY integration_id, payment_id ORDER BY aggregate_version, event_id
+              ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            )
+          )
+          SELECT count(*) FROM ordered
+          WHERE aggregate_version <> ordinal
+            OR (ordinal = transitions AND kind NOT IN ('succeeded', 'expired'))
+            OR (ordinal > 1 AND (correlation_id <> previous_correlation OR occurred_at < previous_time))
+            OR (kind NOT IN ('created', 'expired') AND
+              (attempt IS NULL OR attempt = '' OR attempt IS DISTINCT FROM active_attempt))
+            OR NOT coalesce(CASE kind
+              WHEN 'created' THEN ordinal = 1
+              WHEN 'started' THEN previous_kind IN ('created', 'declined')
+              WHEN 'decision' THEN previous_kind = 'started'
+              WHEN 'requested' THEN previous_kind = 'decision'
+                AND previous_outcome = 'RISK_OUTCOME_APPROVE'
+              WHEN 'unknown' THEN previous_kind = 'requested'
+              WHEN 'declined' THEN
+                (previous_kind = 'decision' AND previous_outcome = 'RISK_OUTCOME_DECLINE'
+                  AND attempt_declined.source = 'DECLINE_SOURCE_RISK')
+                OR (previous_kind IN ('requested', 'unknown')
+                  AND attempt_declined.source = 'DECLINE_SOURCE_PROCESSOR')
+              WHEN 'succeeded' THEN previous_kind IN ('requested', 'unknown')
+              WHEN 'expired' THEN previous_kind IN ('created', 'started', 'decision', 'declined')
+              ELSE false END, false)
+        mustBe: 0
+      - id: payment_attempt_identity
+        type: sql
+        description: Each canonical attempt identity starts once within its scoped payment.
+        query: |
+          SELECT count(*) FROM (
+            SELECT integration_id, payment_id, attempt_started.attempt_id
+            FROM (SELECT DISTINCT * FROM {object})
+            WHERE attempt_started IS NOT NULL
+            GROUP BY ALL HAVING count(*) > 1
+          )
+        mustBe: 0
+      - id: payment_risk_assessment
+        type: sql
+        description: Decisions declare an approve or decline outcome and policy version. Declines require a reason; clean approvals may have no reasons.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE risk_decision_recorded IS NOT NULL AND (
+            risk_decision_recorded.assessment.outcome NOT IN ('RISK_OUTCOME_APPROVE', 'RISK_OUTCOME_DECLINE')
+            OR risk_decision_recorded.assessment.policy_version = ''
+            OR (risk_decision_recorded.assessment.outcome = 'RISK_OUTCOME_DECLINE'
+              AND len(risk_decision_recorded.assessment.reason_codes) = 0)
+            OR list_contains(risk_decision_recorded.assessment.reason_codes, '')
+          )
+        mustBe: 0
+      - id: payment_snapshot_amounts
+        type: sql
+        description: Checkout item quantities and amounts are valid and sum to the total in the same currency.
+        query: |
+          SELECT count(*) FROM {object} e
+          WHERE payment_created IS NOT NULL AND (
+            payment_created.snapshot.total.minor_units < 0
+            OR NOT regexp_full_match(payment_created.snapshot.total.currency, '[A-Z]{3}')
+            OR len(payment_created.snapshot.items) = 0
+            OR payment_created.snapshot.total.minor_units IS DISTINCT FROM (
+              SELECT sum(CAST(item.quantity AS HUGEINT) * item.unit_price.minor_units)
+              FROM unnest(e.payment_created.snapshot.items) AS entries(item)
+            )
+            OR EXISTS (
+              SELECT 1 FROM unnest(e.payment_created.snapshot.items) AS entries(item)
+              WHERE item.quantity <= 0 OR item.unit_price.minor_units < 0
+                OR item.unit_price.currency IS DISTINCT FROM e.payment_created.snapshot.total.currency
+            )
+          )
+        mustBe: 0
+      - id: attempt_context_consistency
+        type: sql
+        description: Each attempt carries the immutable checkout context from its payment creation.
+        query: |
+          WITH created AS (
+            SELECT DISTINCT integration_id, payment_id, payment_created FROM {object}
+            WHERE payment_created IS NOT NULL
+          )
+          SELECT count(*) FROM {object} e
+          LEFT JOIN created c USING (integration_id, payment_id)
+          WHERE e.attempt_started IS NOT NULL AND (
+            e.attempt_started.context IS NULL
+            OR c.payment_created IS NULL
+            OR to_json(e.attempt_started.context) IS DISTINCT FROM to_json(c.payment_created)
+          )
+        mustBe: 0

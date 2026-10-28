@@ -2,7 +2,7 @@
 ## Info
 *Separately delivered simulation truth and delayed chargebacks for the historical payment events.*
 - **name:** Historical synthetic fraud labels
-- **version:** 1.0.0
+- **version:** 1.0.1
 - **status:** active
 - **team:** Fraud data platform
 
