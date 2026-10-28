@@ -28,7 +28,7 @@ The fraud-labels linkage rule reads `payment_events`, so validate labels in a da
 
 ### Development source
 
-Fresh dev v17 is pending generation at `s3://platform-dev/datasets/payment-gateway/historical/v17/manifest.json`. Record its actual manifest digest and measured characteristics after publication; previous-environment sources are not current acceptance. The [generator notebook](../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb) has cleared outputs awaiting this source.
+Fresh dev v17 is published at `s3://platform-dev/datasets/payment-gateway/historical/v17/manifest.json`. Its actual digest and measured characteristics are recorded in the [evidence index](../../openspec/changes/rework-simulator-spark-coursework/evidence/index.md) and executed [generator notebook](../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb); previous-environment sources are not current acceptance.
 
 For configuration, schema schedules, immutable publication, label semantics and diagnostic interpretation, see the [data generator guide](data-generator.md). Source publication does not accept Bronze or Silver. Full-scale generation remains deferred until the whole pipeline is ready.
 
@@ -38,7 +38,7 @@ For configuration, schema schedules, immutable publication, label semantics and 
 
 Git bronze contracts define StarRocks COUNT-of-violations SQL and conditional nested requirements. The official version-matched OpenMetadata ingestion image discovers tables and executes native quality rules; Argo performs explicit product/contract/lineage writes and verifies complete results. Spark performs source-integrity checks, ingestion and bidirectional duplicate-aware source/output reconciliation against recorded snapshots. Native per-day counts alone do not establish content equality.
 
-Fresh dev v17 must be published and validated before Bronze acceptance. See the [DP1 operation instructions](data-pipeline.md#historical-dp1). Prod pipeline acceptance remains deferred.
+Fresh dev v17 is published; persisted validation remains pending before Bronze acceptance. See the [DP1 operation instructions](data-pipeline.md#historical-dp1). Prod pipeline acceptance remains deferred.
 
 ## Silver payments
 
