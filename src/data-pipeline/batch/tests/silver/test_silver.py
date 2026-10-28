@@ -130,7 +130,7 @@ def test_benchmark_variants_preserve_skewed_counts_and_distinct_methods(spark, b
     schema = (
         "integration_id string, event_id string, "
         "payment_created struct<merchant:struct<merchant_id:string>,snapshot:struct<items:array<struct<category:string>>>>, "
-        "attempt_started struct<context:struct<customer:struct<customer_id:string>>,signals:struct<payment_method:struct<fingerprint:string>>>>"
+        "attempt_started struct<context:struct<customer:struct<customer_id:string>>,signals:struct<payment_method:struct<fingerprint:string>>>"
     )
     rows = [
         ("scope", str(index), (("hot",), ([("electronics",)],)), ((("customer",),), ((method,),)))
