@@ -6,6 +6,7 @@ import signal
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 import httpx
@@ -263,3 +264,14 @@ async def run_live(config):
         for result in results:
             if isinstance(result, Exception):
                 raise RuntimeError("live loop failed") from result
+
+
+def main():
+    from simulator.live.config import load_live_config
+
+    path = Path(os.environ.get("SIMULATOR_CONFIG", "/etc/simulator/live.yaml"))
+    asyncio.run(run_live(load_live_config(path)))
+
+
+if __name__ == "__main__":
+    main()

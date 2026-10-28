@@ -136,3 +136,7 @@ def main():
     finally:
         for sig, handler in previous.items():
             signal.signal(sig, handler)
+
+
+if __name__ == "__main__":
+    main()

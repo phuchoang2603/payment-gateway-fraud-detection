@@ -100,8 +100,7 @@ spec:
         - name: register
           image: {{ include "metadata-integrations.image" .Values.image | quote }}
           command: [python, -m, data_platform.integrations]
-          args: [register]
-          {{- include "metadata-integrations.runtime" (dict "Values" .Values "secretRefs" $registrationSecrets) | nindent 10 }}
+          {{- include "metadata-integrations.runtime" (dict "Values" .Values "secretRefs" $registrationSecrets "stage" "register") | nindent 10 }}
       volumes:
         - name: connectors
           configMap:

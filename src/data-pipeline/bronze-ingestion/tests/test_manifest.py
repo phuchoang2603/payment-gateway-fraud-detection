@@ -29,8 +29,8 @@ def test_completed_inventory_and_integrity(dataset, tmp_path):
 
 
 def test_deferred_source_gate_reaches_preflight_and_records_the_native_policy(dataset, tmp_path, monkeypatch):
-    from data_platform.cli import main
     from data_platform.runs import EXECUTION, open_run
+    from data_platform.runtime import main
     from data_platform.storage import Store
 
     root, manifest = dataset
@@ -48,7 +48,12 @@ def test_deferred_source_gate_reaches_preflight_and_records_the_native_policy(da
     assert selected["validation"] == manifest["validation"]
     evidence = tmp_path / "evidence"
     monkeypatch.setenv("IMAGE_DIGEST", "image@sha256:" + "a" * 64)
-    assert main(["preflight", "--source", str(source), "--evidence", str(evidence), "--version", "smoke"]) == 0
+    monkeypatch.setenv("PIPELINE_STAGE", "preflight")
+    monkeypatch.setenv("SOURCE_ROOT", str(source))
+    monkeypatch.setenv("EVIDENCE_ROOT", str(evidence))
+    monkeypatch.setenv("DATASET_VERSION", "smoke")
+    monkeypatch.setenv("PIPELINE_OUTPUT", str(tmp_path / "out"))
+    assert main() == 0
     store = Store(str(evidence))
     run = store.get("versions/smoke/run.json")
     assert run["source_validation"] == manifest["validation"]

@@ -1,5 +1,11 @@
 {{- define "metadata-integrations.runtime" -}}
 env:
+  - name: METADATA_STAGE
+    value: {{ .stage | quote }}
+  {{- with .connector }}
+  - name: METADATA_CONNECTOR
+    value: {{ . | quote }}
+  {{- end }}
   - name: NATIVE_TIMEOUT_SECONDS
     value: {{ sub .Values.activeDeadlineSeconds 60 | quote }}
 envFrom:

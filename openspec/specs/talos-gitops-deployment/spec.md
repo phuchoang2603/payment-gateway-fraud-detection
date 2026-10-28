@@ -210,3 +210,10 @@ The gateway repository SHALL own the unified object storage IAM policy, producti
 - **WHEN** the selected environment is reconciled with gateway credentials available
 - **THEN** Polaris and StarRocks use the same environment gateway storage identity as Flink, metadata storage connections and the synthetic writer
 - **AND** gateway removal does not destroy shared server databases, PVCs or the platform bucket
+
+### Requirement: Environment-configurable Python entrypoints
+Python services SHALL read runtime settings from configuration files and environment variables without command-line overrides. Historical and live simulation SHALL allow `SIMULATOR_CONFIG` to select a YAML file, with defaults suited to their dedicated entrypoints. Historical publication controls SHALL be part of YAML execution settings. Helm SHALL configure pipeline stages, metadata stages and connector selection through environment variables; Feast writer and archiver SHALL have dedicated entrypoints.
+
+#### Scenario: Select an environment configuration
+- **WHEN** a simulator is started with `SIMULATOR_CONFIG` selecting a valid environment YAML
+- **THEN** it uses that file's output and execution settings without CLI flags, while storage credentials remain external environment secrets

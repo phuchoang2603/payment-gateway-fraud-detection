@@ -58,6 +58,9 @@ customer_block_size: 1000
 card_testing_bursts_per_task: 16
 chunk_purchases: 2000
 execution:
+  prepare_only: false
+  takeover_stopped_writer: false
+  allow_small_dataset: false
   workers: 3
   max_in_flight: 4
   scratch_directory: /tmp

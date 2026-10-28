@@ -42,6 +42,11 @@ spec:
         - name: {{ $name }}
           image: {{ include "live-traffic.image" $.Values.image | quote }}
           imagePullPolicy: Always
+{{- if eq $name "live-simulator" }}
+          command: [python, -m, simulator.live.runtime]
+{{- else }}
+          command: [python, -m, simulator.landing.runtime]
+{{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -62,12 +67,13 @@ spec:
             - name: KAFKA_BROKERS
               value: {{ $.Values.kafkaBrokers | quote }}
 {{- if eq $name "live-simulator" }}
+            - name: SIMULATOR_CONFIG
+              value: /etc/simulator/live.yaml
             - name: GATEWAY_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: live-gateway
                   key: api-key
-          args: [live, --config, /etc/simulator/live.yaml]
           volumeMounts:
             - name: config
               mountPath: /etc/simulator
@@ -89,7 +95,6 @@ spec:
               value: {{ $settings.maxBytes | int | quote }}
             - name: LANDING_FLUSH_INTERVAL
               value: {{ $settings.flushInterval | quote }}
-          args: [archive]
 {{- end }}
 {{- if eq $name "live-simulator" }}
       volumes:

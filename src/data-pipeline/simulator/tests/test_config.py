@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from simulator.cli import destination
+from simulator.runtime import destination
 from tests.conftest import small_config
 
 

@@ -102,6 +102,9 @@ RUN_STATE_VERSION = 2
 
 
 class Execution(StrictModel):
+    prepare_only: bool = False
+    takeover_stopped_writer: bool = False
+    allow_small_dataset: bool = False
     workers: int = Field(default=1, gt=0)
     max_in_flight: int = Field(default=1, gt=0)
     scratch_directory: Path = Path("/tmp")

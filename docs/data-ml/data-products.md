@@ -57,12 +57,12 @@ cd src/data-pipeline/simulator
 doppler run -p payment-gateway-fraud-detection -c dev -- sh -c \
   'AWS_ACCESS_KEY_ID="$OBJECT_GATEWAY_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$OBJECT_GATEWAY_SECRET_ACCESS_KEY" \
    S3_ENDPOINT=https://minio.home.phuchoang.sbs S3_PATH_STYLE=true AWS_REGION=us-east-1 \
-   uv run --locked simulator historical --config configs/historical-smoke.yaml'
+   SIMULATOR_CONFIG=configs/historical-smoke.yaml uv run --locked simulator'
 ```
 
-Bump `dataset_version` in the config for every new dataset. Pass `--output <dir>` to generate locally without credentials.
+Bump `dataset_version` in the config for every new dataset. Set `output` in the selected YAML to a local directory to generate without credentials.
 
-The approved new `historical --config <path>` path generates and uploads raw task Parquet, verifies checksums, row-count accounting and the physical-byte gate, and writes the completion manifest last. It then cleans only `_run/`, retaining persistent `raw/` files. It resumes compatible unfinished work or repairs cleanup on a completed inventory without rewriting files or the manifest. Completed versions cannot be regenerated or overwritten; recovery verifies the stored logical configuration.
+The historical runtime generates and uploads raw task Parquet, verifies checksums, row-count accounting and the physical-byte gate, and writes the completion manifest last. It then cleans only `_run/`, retaining persistent `raw/` files. It resumes compatible unfinished work or repairs cleanup on a completed inventory without rewriting files or the manifest. Completed versions cannot be regenerated or overwritten; recovery verifies the stored logical configuration.
 
 The manifest uses `manifest_version: 3`, `source_layout: task-fragments-v1` and an exact inventory of `raw/{table}/{task.key}/v{schema_version}.parquet` files beneath the dataset root. Each file records `schema_version`, checksum, bytes, rows and `partitions: {date: rows}`; those dates summarize occurrence dates for events and availability dates for labels. A task file can cover several dates. Source files carry no sorting or compaction guarantee. The current context contract versions the historical-payments product to `6.0.1` and the payment-events contract to `4.0.1`; current files use event schema 3.
 
@@ -70,9 +70,9 @@ New generation-time contract checks are recorded as `result: skipped`, gate `dp1
 
 After durable publication, cleanup retains `_run/publication.json` with successful delete counts and never deletes inventory-listed raw files. Cleanup failures exit nonzero; rerunning verifies file integrity and retries. Publication uses no object tags. Source immutability is enforced by completed-manifest/configuration/inventory checks; runtime credentials cannot delete streaming sources, and historical delete scope is limited to `historical/*/_run/*`.
 
-`--prepare-only` leaves generated raw inventory ready, without sorting or a completion manifest. The normal command continues publication under the same generation identity. Normal shutdown releases ownership. After a crash, stop the former writer first and pass `--takeover-stopped-writer`; elapsed time never authorizes takeover. Small remote publication still requires `--allow-small-dataset` below one customer block; probes normally use local `--output`.
+`execution.prepare_only: true` leaves generated raw inventory ready, without sorting or a completion manifest. The normal command continues publication under the same generation identity. Normal shutdown releases ownership. After a crash, stop the former writer first and set `execution.takeover_stopped_writer: true`; elapsed time never authorizes takeover. Small remote publication still requires `execution.allow_small_dataset: true` below one customer block; probes normally use a local YAML `output`.
 
-The historical command is generation-only: it has no migration command or old-configuration compatibility path. The separate `live` entry point drives current-time gateway commands.
+The historical command is generation-only: it has no migration command or old-configuration compatibility path. The separate `python -m simulator.live.runtime` entry point drives current-time gateway commands.
 
 The historical 2026-10-22 RustFS probe confirmed create-if-absent, ETag-conditional update and streamed transfer; HEAD returned no SHA-256 checksum, so integrity verification streams each object. Unsupported conditional operations fail rather than falling back to unsafe writes. New execution controls cover workers, in-flight reservations, scratch and transfers, without DuckDB sort/validation budgets. Logical customer blocks, burst groups, layout, scenarios, contracts and minimum source bytes form the generation identity.
 

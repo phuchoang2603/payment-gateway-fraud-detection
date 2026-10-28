@@ -35,6 +35,10 @@ Apply the AppProject and the selected environment root once after the release br
 
 ## Runtime configuration
 
+Python services do not accept CLI configuration overrides. Historical generation reads `configs/historical-smoke.yaml` by default; `SIMULATOR_CONFIG` can select a different YAML. Live traffic uses its dedicated `simulator.live.runtime` module and defaults to `/etc/simulator/live.yaml`, also overridable with `SIMULATOR_CONFIG`. Generation controls (`prepare_only`, `takeover_stopped_writer`, `allow_small_dataset`) belong under YAML `execution`.
+
+Bronze and its metadata stages use `PIPELINE_STAGE`; metadata integrations use `METADATA_STAGE` and optional `METADATA_CONNECTOR`. Profiling uses `PROFILE_REFRESH=true|false`. `SOURCE_ROOT`, `EVIDENCE_ROOT`, `DATASET_VERSION`, storage endpoint settings and secret references remain environment configuration supplied by Helm. Feast serving and writing use dedicated modules, and the archiver uses `simulator.landing.runtime`; no mode flags are needed.
+
 All services validate configuration at startup and exit non-zero with a sanitized diagnostic on invalid values. Boolean switches accept only `true` or `false` (case-insensitive).
 
 | Service | Variable                           | Default                                                  | Purpose                                                          |
@@ -100,7 +104,7 @@ The [task checklist](../../openspec/changes/archive/2026-10-23-build-minimum-pay
 
 ## Object storage and fresh rollout
 
-Both environments use the same prefixes: `datasets/payment-gateway/` for historical and streaming source, `runs/payment-gateway/` for DP1 evidence and Flink state, and the platform `lakehouse/` prefix through Polaris for Iceberg tables. Kubeflow owns `artifacts/`. Never tag active Flink state with `expire=true`, which enables the platform finished-run lifecycle rule. Bucket names have no special meaning to application code. Set `S3_ENDPOINT`, `S3_PATH_STYLE`, and `AWS_REGION` for CLI execution; use `--output s3://<bucket>/datasets/payment-gateway` to select the environment.
+Both environments use the same prefixes: `datasets/payment-gateway/` for historical and streaming source, `runs/payment-gateway/` for DP1 evidence and Flink state, and the platform `lakehouse/` prefix through Polaris for Iceberg tables. Kubeflow owns `artifacts/`. Never tag active Flink state with `expire=true`, which enables the platform finished-run lifecycle rule. Bucket names have no special meaning to application code. Set `S3_ENDPOINT`, `S3_PATH_STYLE`, and `AWS_REGION` for runtime storage access; set YAML `output: s3://<bucket>/datasets/payment-gateway` to select the destination.
 
 Existing gateway datasets, Kafka offsets, feature epochs and checkpoints are not migrated. Generate a fresh v17 source before enabling the live simulator, set its actual manifest digest, and start fresh streaming state. Data-pipeline schedules remain disabled until the new source and catalog credentials are verified. No dataset has been rebuilt merely by changing the charts. Apply only gateway-owned cleanup; never empty the shared platform bucket or delete shared namespaces.
 

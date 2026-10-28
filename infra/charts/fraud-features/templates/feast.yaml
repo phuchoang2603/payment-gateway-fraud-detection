@@ -39,7 +39,9 @@ spec:
         - name: {{ $name }}
           image: {{ include "fraud-features.image" $.Values.images.feast | quote }}
           imagePullPolicy: {{ $.Values.images.feast.pullPolicy }}
-          args: [{{ $mode | quote }}]
+          {{- if eq $mode "write" }}
+          command: [python, -m, fraud_feast.writer_runtime]
+          {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

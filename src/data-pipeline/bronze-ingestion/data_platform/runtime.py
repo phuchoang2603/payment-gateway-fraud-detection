@@ -1,4 +1,3 @@
-import argparse
 import json
 import logging
 import os
@@ -16,95 +15,91 @@ from data_platform.storage import Store
 STAGES = ["preflight", "ingest", "verify-source", "select"]
 
 
-def main(argv=None):
+def main():
     logging.disable(logging.INFO)
-    parser = argparse.ArgumentParser(prog="dp1")
-    parser.add_argument("stage", choices=STAGES)
-    parser.add_argument("--source", default=os.environ.get("SOURCE_ROOT"), required=not os.environ.get("SOURCE_ROOT"))
-    parser.add_argument(
-        "--evidence", default=os.environ.get("EVIDENCE_ROOT"), required=not os.environ.get("EVIDENCE_ROOT")
-    )
-    parser.add_argument(
-        "--version", default=os.environ.get("DATASET_VERSION"), required=not os.environ.get("DATASET_VERSION")
-    )
-    parser.add_argument("--workflow", default=os.environ.get("WORKFLOW_ID", "local"))
-    parser.add_argument("--timeout", type=int, default=900)
-    parser.add_argument("--local-warehouse")
-    parser.add_argument("--out", default="/tmp/out")
-    parser.add_argument(
-        "--input-mode", choices=["historical", "landing"], default=os.environ.get("INPUT_MODE", "historical")
-    )
-    parser.add_argument("--epoch", default=os.environ.get("SOURCE_EPOCH"))
-    parser.add_argument("--max-batches", type=int, default=int(os.environ.get("LANDING_MAX_BATCHES", "100")))
-    args = parser.parse_args(argv)
+    stage = os.environ["PIPELINE_STAGE"]
+    if stage not in STAGES:
+        raise ValueError("unsupported Bronze pipeline stage")
+    source = os.environ["SOURCE_ROOT"]
+    evidence = os.environ["EVIDENCE_ROOT"]
+    version = os.environ["DATASET_VERSION"]
+    workflow = os.environ.get("WORKFLOW_ID", "local")
+    timeout = int(os.environ.get("SOURCE_VERIFY_TIMEOUT", "900"))
+    local_warehouse = os.environ.get("LOCAL_WAREHOUSE")
+    out = os.environ.get("PIPELINE_OUTPUT", "/tmp/out")
+    input_mode = os.environ.get("INPUT_MODE", "historical")
+    if input_mode not in ("historical", "landing"):
+        raise ValueError("INPUT_MODE must be historical or landing")
+    epoch = os.environ.get("SOURCE_EPOCH", "")
+    max_batches = int(os.environ.get("LANDING_MAX_BATCHES", "100"))
     spark = None
     started_at = int(time.time() * 1000)
     try:
-        if args.stage == "verify-source":
+        if stage == "verify-source":
             from data_platform.inventory import verify_source
 
-            manifest, digest = selected_manifest(args.source)
-            if manifest["dataset_version"] != args.version:
+            manifest, digest = selected_manifest(source)
+            if manifest["dataset_version"] != version:
                 raise ValueError("selected manifest differs from requested version")
-            totals = verify_source(args.source, manifest, args.timeout)
+            totals = verify_source(source, manifest, timeout)
             print(json.dumps({"manifest_sha256": digest, "totals": totals, "outcome": "passed"}, sort_keys=True))
             return 0
-        store = Store(args.evidence)
+        store = Store(evidence)
         contracts = hashes()
-        if args.stage == "select" and args.input_mode == "landing":
+        if stage == "select" and input_mode == "landing":
             from data_platform.landing import select
 
-            if args.max_batches < 1:
+            if max_batches < 1:
                 raise ValueError("landing batch limit must be positive")
-            manifest = select(Store(args.source), store, args.epoch, args.max_batches)
+            manifest = select(Store(source), store, epoch, max_batches)
             if manifest is None:
-                out = Path(args.out)
+                out = Path(out)
                 out.mkdir(parents=True, exist_ok=True)
                 for name, value in {"version": "none", "ingest": "false", "native": "false"}.items():
                     (out / name).write_text(value)
                 return 0
-            args.version = manifest["dataset_version"]
-        if args.stage in ("preflight", "ingest", "select"):
-            if args.input_mode == "landing":
+            version = manifest["dataset_version"]
+        if stage in ("preflight", "ingest", "select"):
+            if input_mode == "landing":
                 from data_platform.landing import selection
 
-                manifest, digest = selection(store, args.version)
-                if manifest["source_root"] != args.source or manifest["source_epoch"] != args.epoch:
+                manifest, digest = selection(store, version)
+                if manifest["source_root"] != source or manifest["source_epoch"] != epoch:
                     raise ValueError("landing selection source/epoch differs")
             else:
-                manifest, digest = selected_manifest(args.source)
-            if manifest["dataset_version"] != args.version:
+                manifest, digest = selected_manifest(source)
+            if manifest["dataset_version"] != version:
                 raise ValueError("selected manifest differs from requested version")
             image = os.environ.get("IMAGE_DIGEST", "")
             if not re.fullmatch(r".+@sha256:[a-f0-9]{64}", image):
                 raise ValueError("IMAGE_DIGEST must identify the immutable job image")
             run = open_run(
                 store,
-                args.version,
+                version,
                 digest,
                 contracts,
                 image,
-                args.workflow,
+                workflow,
                 source_validation=manifest["validation"]
                 if manifest.get("validation", {}).get("result") == "skipped"
                 else None,
             )
-            if args.input_mode == "landing":
+            if input_mode == "landing":
                 run["input_mode"] = "landing"
-                run["selection_uri"] = f"{store.root}/selections/{args.version}.json"
+                run["selection_uri"] = f"{store.root}/selections/{version}.json"
                 run["source_epoch"] = manifest["source_epoch"]
                 run["changed_ports"] = [t for t, rows in manifest["totals"].items() if rows]
                 run["batches"] = [{k: b[k] for k in ("key", "sha256", "range")} for b in manifest["batches"]]
             else:
                 run["source_product"] = manifest["data_product"]
-            run["source_root"] = args.source
-            if args.stage == "select":
+            run["source_root"] = source
+            if stage == "select":
                 run.setdefault("stages", {}).setdefault(
                     "select", {"outcome": "passed", "started_at": started_at, "ended_at": int(time.time() * 1000)}
                 )
             save_run(store, run)
-            if args.stage in ("preflight", "select"):
-                out = Path(args.out)
+            if stage in ("preflight", "select"):
+                out = Path(out)
                 out.mkdir(parents=True, exist_ok=True)
                 conservation = run.get("conservation", {})
                 ingested = (
@@ -120,7 +115,7 @@ def main(argv=None):
                     for stage in ("discover", "validate", "profile")
                 )
                 for name, value in {
-                    "version": args.version,
+                    "version": version,
                     "ingest": str(not ingested).lower(),
                     "native": str(not native).lower(),
                 }.items():
@@ -128,28 +123,28 @@ def main(argv=None):
                 print(json.dumps({"run_id": run["run_id"], "state": run["state"]}))
                 return 0
         else:
-            run = store.get(f"versions/{args.version}/run.json")
+            run = store.get(f"versions/{version}/run.json")
             if not run:
                 raise ValueError("run context is missing")
-        if args.stage == "ingest":
+        if stage == "ingest":
             application = os.environ.get("SPARK_APPLICATION_NAME")
             if application:
-                attempts = run.setdefault("spark_applications", {}).setdefault(args.stage, [])
+                attempts = run.setdefault("spark_applications", {}).setdefault(stage, [])
                 if application not in attempts:
                     attempts.append(application)
                 save_run(store, run)
             from data_platform.ingest import ingest
             from data_platform.spark import session
 
-            spark = session(args.local_warehouse)
-            ingest(spark, args.source, manifest, store, run)
+            spark = session(local_warehouse)
+            ingest(spark, source, manifest, store, run)
             run.setdefault("stages", {}).setdefault(
                 "ingest", {"outcome": "passed", "started_at": started_at, "ended_at": int(time.time() * 1000)}
             )
             save_run(store, run)
         return 0
     except Exception as error:
-        if args.stage in ("preflight", "ingest", "select") and "run" in locals():
+        if stage in ("preflight", "ingest", "select") and "run" in locals():
             failure = {
                 "validation_policy": VALIDATION_POLICY,
                 "run_id": run["run_id"],
@@ -159,12 +154,10 @@ def main(argv=None):
                 "snapshots": run["snapshots"],
                 "outcome": "error",
                 "run_time": datetime.now(timezone.utc).isoformat(),
-                "execution_errors": [{"stage": args.stage, "type": type(error).__name__}],
+                "execution_errors": [{"stage": stage, "type": type(error).__name__}],
             }
-            store.put(evidence_key(run, contracts, f"error-{args.stage}"), failure)
-        print(
-            json.dumps({"stage": args.stage, "error_type": type(error).__name__, "outcome": "error"}), file=sys.stderr
-        )
+            store.put(evidence_key(run, contracts, f"error-{stage}"), failure)
+        print(json.dumps({"stage": stage, "error_type": type(error).__name__, "outcome": "error"}), file=sys.stderr)
         return 1
     finally:
         if spark:
