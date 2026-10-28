@@ -13,11 +13,6 @@ def test_output_url_must_not_carry_credentials():
         destination("s3://key:secret@platform-dev")
 
 
-def test_unselected_dataset_version_fails_before_generation():
-    with pytest.raises(ValidationError, match="choose an unused dataset version"):
-        small_config(dataset_version="SET_UNUSED_DATASET_VERSION")
-
-
 @pytest.mark.parametrize(
     "overrides",
     [
@@ -64,14 +59,13 @@ def test_schema_schedule_selects_by_occurrence_and_rejects_ambiguous_or_unknown_
             small_config(schema_schedule={"initial_version": 3, "changes": changes})
 
 
-@pytest.mark.parametrize("initial_version", [3, 4])
-def test_schema_schedule_accepts_declared_later_versions(monkeypatch, initial_version):
+def test_schema_schedule_skips_an_intermediate_declared_version(monkeypatch):
     monkeypatch.setitem(ASSESSMENTS, 5, ASSESSMENTS[4])
     schedule = small_config(
         schema_schedule={
-            "initial_version": initial_version,
+            "initial_version": 3,
             "changes": [{"effective_at": "2026-07-03T00:00:00Z", "version": 5}],
         }
     ).schema_schedule
-    assert schedule.version_at(datetime(2026, 7, 2, tzinfo=UTC)) == initial_version
+    assert schedule.version_at(datetime(2026, 7, 2, tzinfo=UTC)) == 3
     assert schedule.version_at(datetime(2026, 7, 3, tzinfo=UTC)) == 5

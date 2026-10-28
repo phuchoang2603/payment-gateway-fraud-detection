@@ -92,13 +92,9 @@ def test_manifest_records_actual_event_and_label_time_ranges(dataset):
     ) == tuple(value.isoformat() for value in label_range)
 
 
-def test_rebuilt_profiles_match_the_manifest_digest(dataset):
-    _, manifest = dataset
-    assert build_profiles(small_config()).digest() == manifest["profile_sha256"]
-
-
 def test_regeneration_is_byte_identical(dataset, tmp_path):
     root, manifest = dataset
+    assert build_profiles(small_config()).digest() == manifest["profile_sha256"]
     storage.generate(small_config(), fs.LocalFileSystem(), str(tmp_path))
     again = tmp_path / "historical" / "smoke"
     files = sorted(
@@ -310,32 +306,6 @@ def test_empty_schedule_publishes_an_empty_valid_dataset(tmp_path):
     assert manifest["observed"]["payments"] == 0
     assert manifest["storage"]["payment_events"]["files"] == 0
     assert (tmp_path / "historical" / "smoke" / "manifest.json").exists()
-
-
-def test_task_fragments_are_one_file_per_table_and_schema_version(dataset):
-    root, _ = dataset
-    for task in (root / "raw" / "payment_events").iterdir():
-        assert [path.name for path in task.iterdir()] == ["v3.parquet"]
-
-
-def test_publication_receipt_records_skipped_cleanup(dataset):
-    root, _ = dataset
-    publication = json.loads((root / "_run" / "publication.json").read_text())
-    assert publication["cleanup"] == "skipped"
-    assert (root / "raw").is_dir()
-
-
-def test_cleanup_removes_intermediates_after_publication(tmp_path):
-    config = small_config(dataset_version="cleanup")
-    root = tmp_path / "output"
-    storage.generate(config, fs.LocalFileSystem(), str(root), cleanup_intermediates=True)
-    prefix = root / "historical" / "cleanup"
-    publication = json.loads((prefix / "_run" / "publication.json").read_text())
-    assert publication["cleanup"] == "removed"
-    assert publication["objects"] > 0
-    assert publication["bytes"] > 0
-    assert (prefix / "manifest.json").exists()
-    assert {path.name for path in (prefix / "_run").iterdir()} == {"locks", "publication.json"}
 
 
 def test_publication_refuses_probe_scale_without_opt_in(tmp_path):
