@@ -52,6 +52,6 @@ Implementation update: full-batch curation, shared payment context, standalone w
 ## 8. Shared-platform integration and fresh dev acceptance
 
 - [x] 8.1 Adapt Silver and Spark utility templates to the current image helper and `global.imageTags`; remove equal-revision assumptions and reconcile Bronze/Silver run and benchmark identities with immutable release tags.
-- [ ] 8.2 Replace legacy Silver storage secrets with `gateway-storage` and `gateway-catalog-client`, verify Polaris auth and environment-selected S3 settings, and replace stale governance namespace defaults with `data`.
+- [x] 8.2 Replace legacy Silver storage secrets with `gateway-storage` and `gateway-catalog-client`, verify Polaris auth and environment-selected S3 settings, and replace stale governance namespace defaults with `data`.
 - [x] 8.3 Configure environment-specific DP2 evidence roots under `runs/payment-gateway/dp2` without prod writes to dev; keep schedules disabled pending source/catalog verification.
 - [ ] 8.4 After CI succeeds, generate fresh dev v17, configure its actual digest, execute the cleared notebook, and accept independent Bronze and Silver runs. Record only new outputs and actual captures; defer prod/full-scale acceptance.

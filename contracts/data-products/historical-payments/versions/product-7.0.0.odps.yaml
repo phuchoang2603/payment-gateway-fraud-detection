@@ -1,0 +1,61 @@
+apiVersion: v1.1.0
+kind: DataProduct
+id: urn:dataproduct:fraud:historical-payments
+name: Historical synthetic payments
+version: 7.0.0
+status: active
+domain: fraud-detection
+type: sourceAligned
+description:
+  purpose: Reproducible synthetic payment histories and delayed fraud labels for pipeline development.
+  usage: Select a completed immutable dataset by its manifest. Each output port's ODCS contract defines its schema and quality rules.
+  limitations: Synthetic source only; no claim of real-world fraud performance, production model acceptance or processing benchmark scale. Drift and history duration depend on the selected dataset configuration.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, source, payments]
+customProperties:
+  - property: endpoint
+    value: Environment-selected MinIO or AWS S3 endpoint
+  - property: locationTemplate
+    value: s3://{bucket}/datasets/payment-gateway/historical/{dataset_version}/
+  - property: completionMarker
+    value: manifest.json
+  - property: accessPolicy
+    value: Shared historical-source identity from Doppler prd; historical/* and streaming/* list/read/write; delete only historical/*/_run/* metadata. Completed sources are immutable by publication protocol.
+  - property: featureDefinitions
+    value: contracts/features/fraud-snapshot-v1.yaml
+  - property: physicalSchemaDefinitions
+    value: historical-payments/physical-schemas-v1.yaml
+  - property: generator
+    value: https://github.com/phuchoang2603/payment-gateway-fraud-detection/tree/main/src/data-pipeline/simulator
+outputPorts:
+  - name: payment-events
+    version: 5.0.0
+    type: files
+    contractId: urn:datacontract:fraud:historical-payment-events
+    description: Complete payment lifecycle histories in immutable task chunks of Zstandard Parquet. Exact files and their date counts are declared by the completion manifest; ordering and compaction belong to ingestion.
+    customProperties:
+      - property: path
+        value: raw/payment_events/{task}/v{schema_version}.parquet
+      - property: consumption
+        value: Deduplicate identical event deliveries and read complete histories across occurrence dates. Drift metadata is manifest-only.
+  - name: fraud-labels
+    version: 1.0.0
+    type: files
+    contractId: urn:datacontract:fraud:historical-fraud-labels
+    description: Simulation truth and delayed chargebacks in immutable task chunks of Zstandard Parquet. A chunk may span several label availability dates.
+    inputContracts:
+      - id: urn:datacontract:fraud:historical-payment-events
+        version: 5.0.0
+    customProperties:
+      - property: path
+        value: raw/fraud_labels/{task}/v1.parquet
+      - property: consumption
+        value: Join labels only after label_available_at, exclude feature warmup, and never use scenario as a feature.
+support:
+  - channel: GitHub maintainer
+    url: https://github.com/phuchoang2603
+    scope: support

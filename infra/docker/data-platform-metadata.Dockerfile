@@ -1,4 +1,4 @@
-FROM openmetadata/ingestion:2.0.6@sha256:fd104fda383aa86750d89af8787d6e1f5b8f3aa8c606fee08eb4c616fcf5df85
+FROM openmetadata/ingestion:2.0.7@sha256:5c0bd8728d4f92b67de3fac1a5664015364b7eca07d0038504138f17a3d243c6
 COPY src/data-pipeline/batch/fraud_batch /opt/data-platform/fraud_batch
 COPY contracts/data-products /contracts/data-products
 COPY contracts/features /contracts/features
