@@ -14,3 +14,7 @@ The generator job `payment-gateway/historical-v17` completed. The published mani
 | OpenMetadata lineage, validation and contracts | Pending | Real lineage, native rule results and contract captures with accepted input/output snapshots |
 
 Use the [DP2 evidence instructions](../../../../docs/data-ml/data-pipeline.md#silver-dp2) to correlate retained machine-readable results and real captures. Missing captures remain pending; a passing CI check or historical receipt is not a substitute.
+
+The config-only runtime and reusable mutation runner passed [all checks on `dc6bd49`](https://github.com/phuchoang2603/payment-gateway-fraud-detection/commit/dc6bd492c279d5c50ff2aebfc16170eeeb0ff9fd/checks). The [Python mutation artifact](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40623018983) records the selected changed functions and 9 killed / 10 evaluated mutants (90%). Mutmut skips the decorated Pydantic validators; this score covers the changed schema selection function, not the whole pipeline. Helper boundary checks run with Bronze, with no separate helper test suite.
+
+Runtime images built successfully in [CI run 40623019030](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40623019030). These PR images are temporary and are removed on PR closure. Production rollout must coordinate the config-only manifests with permanent main images and the existing publish-and-pin workflow; existing production image pins were not replaced with PR digests.
