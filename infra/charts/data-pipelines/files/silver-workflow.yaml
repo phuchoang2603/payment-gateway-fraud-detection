@@ -76,7 +76,7 @@ spec:
     - name: plan
       container:
         image: __OPENMETADATA_IMAGE__
-        command: [python, -m, silver_pipeline.silver_plan]
+        command: [python, -m, fraud_batch.silver.silver_plan]
         envFrom:
           - configMapRef: {name: dp1-config}
           - secretRef: {name: lakehouse-rustfs}
@@ -166,7 +166,7 @@ spec:
               dp2-workflow: "{{workflow.name}}"
               dp2-stage: "{{inputs.parameters.mode}}"
           spec:
-            pyFiles: local:///opt/data-pipeline/silver/.venv/lib/python3.12/site-packages/silver_pipeline/{{inputs.parameters.script}}
+            pyFiles: local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/fraud_batch/silver/{{inputs.parameters.script}}
             runtimeVersions:
               sparkVersion: "4.1.3"
             sparkConf:
@@ -188,8 +188,8 @@ spec:
               spark.eventLog.enabled: "true"
               spark.eventLog.dir: __SILVER_EVENT_LOG_ROOT__
               spark.eventLog.compress: "true"
-              spark.pyspark.python: /opt/data-pipeline/silver/.venv/bin/python
-              spark.pyspark.driver.python: /opt/data-pipeline/silver/.venv/bin/python
+              spark.pyspark.python: /opt/data-pipeline/batch/.venv/bin/python
+              spark.pyspark.driver.python: /opt/data-pipeline/batch/.venv/bin/python
             applicationTolerations:
               restartConfig: {restartPolicy: Never}
               resourceRetainPolicy: OnFailure
@@ -242,7 +242,7 @@ spec:
         backoff: {duration: 15s, factor: 2}
       container:
         image: __OPENMETADATA_IMAGE__
-        command: [python, -m, silver_pipeline.silver_native]
+        command: [python, -m, fraud_batch.silver.silver_native]
         envFrom:
           - configMapRef: {name: dp1-config}
           - secretRef: {name: lakehouse-rustfs}

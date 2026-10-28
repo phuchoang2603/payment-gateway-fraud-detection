@@ -9,17 +9,12 @@ ADD --checksum=sha256:62638f33045690c6bc5e496b54b0b2e89a9ad38cbedacdf6e017fea6bc
 
 FROM python:3.12.15-slim-bookworm AS build
 COPY --from=uv /uv /usr/local/bin/uv
-WORKDIR /opt/data-pipeline/bronze-ingestion
+WORKDIR /opt/data-pipeline/batch
 ENV UV_NO_CACHE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0
-COPY src/data-pipeline/helper /opt/data-pipeline/helper
-COPY src/data-pipeline/bronze-ingestion/pyproject.toml src/data-pipeline/bronze-ingestion/uv.lock ./
+COPY src/data-pipeline/batch/pyproject.toml src/data-pipeline/batch/uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project --extra spark --no-install-package pyspark
-COPY src/data-pipeline/bronze-ingestion/data_platform ./data_platform
+COPY src/data-pipeline/batch/fraud_batch ./fraud_batch
 RUN uv sync --locked --no-dev --no-editable --extra spark --no-install-package pyspark
-COPY src/data-pipeline/silver /opt/data-pipeline/silver
-WORKDIR /opt/data-pipeline/silver
-RUN uv sync --locked --no-dev --no-editable --extra spark --no-install-package pyspark
-WORKDIR /opt/data-pipeline/bronze-ingestion
 RUN find .venv -type d \( -path "*/site-packages/numpy" -o -path "*/site-packages/dbt" \) -prune -o \
         -type d \( -name tests -o -name test \) -prune -exec rm -rf {} + && \
     find .venv -type d -name __pycache__ -prune -exec rm -rf {} + && \
@@ -41,19 +36,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYSPARK_PYTHON="/usr/local/bin/python" \
     PYTHONPATH="/opt/spark/python/lib/pyspark.zip:/opt/spark/python/lib/py4j-0.10.9.9-src.zip"
 RUN groupadd --gid 185 spark && useradd --uid 185 --gid 185 --home-dir /opt/spark spark
-COPY --from=build /opt/data-pipeline/bronze-ingestion/.venv /opt/data-pipeline/bronze-ingestion/.venv
-COPY --from=build /opt/data-pipeline/silver/.venv /opt/data-pipeline/silver/.venv
+COPY --from=build /opt/data-pipeline/batch/.venv /opt/data-pipeline/batch/.venv
 COPY --from=jars /jars/ /opt/spark/jars/
-COPY src/data-pipeline/bronze-ingestion/config/log4j2.properties /opt/dp1/log4j2.properties
+COPY src/data-pipeline/batch/config/log4j2.properties /opt/dp1/log4j2.properties
 COPY contracts/data-products /contracts/data-products
 COPY contracts/features /contracts/features
 COPY contracts/quality /contracts/quality
-ENV PATH="/opt/data-pipeline/bronze-ingestion/.venv/bin:$PATH" \
-    PYSPARK_PYTHON="/opt/data-pipeline/bronze-ingestion/.venv/bin/python" \
+ENV PATH="/opt/data-pipeline/batch/.venv/bin:$PATH" \
+    PYSPARK_PYTHON="/opt/data-pipeline/batch/.venv/bin/python" \
     DATA_PRODUCTS_ROOT="/contracts/data-products" \
     DATA_QUALITY_ROOT="/contracts/quality" \
     DP1_BUNDLED_JARS="true"
 WORKDIR /opt/spark/work-dir
-RUN chown 185:185 /opt/data-pipeline/bronze-ingestion /opt/spark/work-dir
+RUN chown 185:185 /opt/data-pipeline/batch /opt/spark/work-dir
 USER 185
 ENTRYPOINT ["/usr/bin/tini", "--", "/opt/entrypoint.sh"]

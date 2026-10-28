@@ -90,7 +90,7 @@ spec:
     - name: select
       container:
         image: __OPENMETADATA_IMAGE__
-        command: [python, -m, data_platform.runtime]
+        command: [python, -m, fraud_batch.bronze.runtime]
         envFrom:
           - configMapRef: {name: dp1-config}
           - secretRef: {name: gateway-storage}
@@ -180,7 +180,7 @@ spec:
               dp1-workflow: "{{workflow.name}}"
               dp1-stage: "ingest"
           spec:
-            pyFiles: local:///opt/data-pipeline/bronze-ingestion/.venv/lib/python3.12/site-packages/data_platform/runtime.py
+            pyFiles: local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/fraud_batch/bronze/runtime.py
             runtimeVersions:
               sparkVersion: "4.1.3"
             sparkConf:
@@ -199,7 +199,7 @@ spec:
               spark.executor.extraJavaOptions: -Dlog4j.configurationFile=file:/opt/dp1/log4j2.properties
               spark.kubernetes.executor.deleteOnTermination: "true"
               spark.sql.shuffle.partitions: "__SHUFFLE_PARTITIONS__"
-              spark.pyspark.python: /opt/data-pipeline/bronze-ingestion/.venv/bin/python
+              spark.pyspark.python: /opt/data-pipeline/batch/.venv/bin/python
             applicationTolerations:
               restartConfig:
                 restartPolicy: Never
@@ -333,7 +333,7 @@ spec:
         backoff: {duration: 15s, factor: 2}
       container:
         image: __OPENMETADATA_IMAGE__
-        command: [python, -m, data_platform.bronze_metadata]
+        command: [python, -m, fraud_batch.bronze.bronze_metadata]
         envFrom:
           - configMapRef: {name: dp1-config}
           - secretRef: {name: gateway-storage}

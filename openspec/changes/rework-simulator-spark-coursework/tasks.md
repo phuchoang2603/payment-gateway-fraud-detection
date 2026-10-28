@@ -39,3 +39,7 @@
 
 - [x] 6.1 Move mutation selection/scoring/reporting to one reusable script driven by project configuration and changed functions; remove the helper-only test suite and its test dependencies, retaining useful boundary checks in Bronze.
 - [x] 6.2 Remove runtime CLI overrides and mode arguments from simulator, Bronze/Silver, metadata and Feast entrypoints. Supply the same settings through YAML/environment configuration, update deployed manifests and affected tests/docs together, and verify CI without changing Kafka contracts or rerunning sources.
+
+## 7. One batch project
+
+- [ ] 7.1 Consolidate Bronze, Silver and shared modules into one `batch` project and lockfile; retain separate pipeline entrypoints/workflows, share test fixtures and the Spark image environment, and update imports, build inputs, workflow paths and domain references. Verify static checks locally and tests/builds in CI; leave Go services and the other data workloads unchanged.

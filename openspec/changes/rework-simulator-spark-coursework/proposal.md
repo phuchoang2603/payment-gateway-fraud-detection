@@ -27,6 +27,6 @@ The generator and accepted DP1 preserve raw payment histories, but the current s
 
 ## Impact
 
-Affected implementation areas are `src/data-pipeline/simulator`, `src/data-pipeline/bronze-ingestion`, `contracts/data-products`, `contracts/landing`, `contracts/quality/silver-payments.yaml`, `infra/charts/data-pipelines`, and domain documentation under `docs/data-ml/`. Reuse RustFS/native Iceberg REST, Apache Spark Operator, Argo, StarRocks, and shared OpenMetadata 2.0.6 runtime/SDK integration; add no orchestrator, catalog or feature engine.
+Affected implementation areas are `src/data-pipeline/simulator`, `src/data-pipeline/batch`, `contracts/data-products`, `contracts/landing`, `contracts/quality/silver-payments.yaml`, `infra/charts/data-pipelines`, and domain documentation under `docs/data-ml/`. Reuse RustFS/native Iceberg REST, Apache Spark Operator, Argo, StarRocks, and shared OpenMetadata 2.0.6 runtime/SDK integration; add no orchestrator, catalog or feature engine.
 
 Only planning artifacts are created now. Implementation, dataset publication, pipeline execution and capture collection follow separately. Docker/image-size optimization, lake/warehouse tuning, gold marts, Flink/Feast changes, HybridSource, Kafka Connect/registry rework, full-scale acceptance, model training and drift detection are outside implementation scope. The instructor permits equivalent tools: use Argo for orchestration screenshots and OpenMetadata for lineage, validation and contract screenshots. Streaming experiments remain deferred, without claiming an exemption.

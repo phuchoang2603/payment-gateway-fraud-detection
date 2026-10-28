@@ -96,7 +96,7 @@ spec:
       containers:
         - name: register
           image: {{ include "metadata-integrations.image" (dict "image" .Values.image "global" $.Values.global) | quote }}
-          command: [python, -m, data_platform.integrations]
+          command: [python, -m, fraud_batch.common.integrations]
           {{- include "metadata-integrations.runtime" (dict "Values" .Values "secretRefs" $registrationSecrets "stage" "register") | nindent 10 }}
       volumes:
         - name: connectors

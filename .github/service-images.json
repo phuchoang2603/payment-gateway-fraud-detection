@@ -110,9 +110,7 @@
       "dockerfile": "infra/docker/data-platform-spark.Dockerfile",
       "paths": [
         "infra/docker/data-platform-spark.Dockerfile",
-        "src/data-pipeline/bronze-ingestion",
-        "src/data-pipeline/helper",
-        "src/data-pipeline/silver",
+        "src/data-pipeline/batch",
         "contracts/data-products",
         "contracts/features"
       ]
@@ -124,9 +122,7 @@
       "dockerfile": "infra/docker/data-platform-metadata.Dockerfile",
       "paths": [
         "infra/docker/data-platform-metadata.Dockerfile",
-        "src/data-pipeline/bronze-ingestion/data_platform",
-        "src/data-pipeline/helper/pipeline_common",
-        "src/data-pipeline/silver/silver_pipeline",
+        "src/data-pipeline/batch/fraud_batch",
         "contracts/data-products",
         "contracts/features"
       ]
