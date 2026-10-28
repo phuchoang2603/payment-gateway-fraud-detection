@@ -2,7 +2,7 @@ import json
 
 import yaml
 
-from simulator import storage
+from simulator import runtime, storage
 from simulator.runtime import main
 from tests.conftest import small_config
 
@@ -19,8 +19,7 @@ def test_config_selects_the_dataset_before_generation(tmp_path, monkeypatch):
         return {"dataset_version": selected.dataset_version, "config_sha256": "hash", "history_end": None}
 
     monkeypatch.setattr(storage, "generate", generate)
-    monkeypatch.setenv("SIMULATOR_MODE", "historical")
-    monkeypatch.setenv("SIMULATOR_CONFIG", str(path))
+    monkeypatch.setattr(runtime, "CONFIG_PATH", path)
     assert main() == 2
     assert not seen
     config["dataset_version"] = "unused"
