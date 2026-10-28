@@ -1,4 +1,6 @@
 database:
+  nodeSelector:
+    karpenter.sh/capacity-type: on-demand
   storage:
     storageClass: gp3
 ingress:

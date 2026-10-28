@@ -6,6 +6,11 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "3"
 spec:
+  {{- with .Values.database.nodeSelector }}
+  affinity:
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}
   instances: {{ .Values.database.instances }}
   imageName: {{ .Values.database.imageName }}
   enableSuperuserAccess: false
