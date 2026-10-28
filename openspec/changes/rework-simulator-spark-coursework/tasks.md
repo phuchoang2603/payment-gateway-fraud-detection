@@ -9,8 +9,8 @@
 
 - [x] 2.1 Extend the maintained development config with version scheduling and controlled duplicates alongside existing skew/entity controls; verify CI generation coverage protects deterministic identity, cross-version lifecycle completion and complete delayed labels without creating separate training profiles.
 - [ ] 2.2 Add bounded source counters and Spark diagnostics for skew shares, approximate cardinality/error settings, evolved-field nulls/values by eligible payload/version/date and exact duplicate rates; verify outputs distinguish configured pools from observations and declare all denominators.
-- [ ] 2.3 Record an unused dataset version, dates, seed, initial 3-to-4 schedule and resource budgets, then publish the immutable development source after required CI checks; verify manifest-last integrity, complete inventory/tails and both real schema shapes without fabricating a version-5 dataset or running full scale.
-- [ ] 2.4 Capture actual generator configuration, schema definitions/schedule and diagnostic query/code/output with rows/files/bytes/format/compression/time ranges; verify captures and machine-readable results correlate to the selected manifest/hash and code revision.
+- [x] 2.3 Record an unused dataset version, dates, seed, initial 3-to-4 schedule and resource budgets, then publish the immutable development source after required CI checks; verify manifest-last integrity, complete inventory/tails and both real schema shapes without fabricating a version-5 dataset or running full scale.
+- [x] 2.4 Capture actual generator configuration, schema definitions/schedule and diagnostic query/code/output with rows/files/bytes/format/compression/time ranges; verify captures and machine-readable results correlate to the selected manifest/hash and code revision.
 
 ## 3. DP1 reuse and Spark Silver
 
