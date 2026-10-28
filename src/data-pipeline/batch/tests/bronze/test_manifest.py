@@ -32,22 +32,26 @@ def test_completed_inventory_and_integrity(dataset, tmp_path):
     assert selected == historical and historical_digest != digest
 
 
-def test_prior_source_contract_identity_remains_selectable(dataset, tmp_path):
+@pytest.mark.parametrize("product_version", ["6.0.1", "7.0.0"])
+def test_prior_source_contract_identity_remains_selectable(dataset, tmp_path, product_version):
     _, manifest = dataset
     manifest = deepcopy(manifest)
-    product, paths = source_contracts("6.0.1")
-    contract = paths["payment_events"].read_bytes()
+    product, paths = source_contracts(product_version)
     manifest["data_product"]["version"] = product["version"]
-    del manifest["data_product"]["physical_schema_definitions"]
-    manifest["data_product"]["contracts"]["payment-events"] = {
-        "id": "urn:datacontract:fraud:historical-payment-events",
-        "version": "4.0.1",
-        "sha256": sha256(contract).hexdigest(),
-    }
+    if not any(item["property"] == "physicalSchemaDefinitions" for item in product["customProperties"]):
+        del manifest["data_product"]["physical_schema_definitions"]
+    for table, port in source_manifest.PORTS.items():
+        original = paths[table].read_bytes()
+        contract = yaml.safe_load(original)
+        manifest["data_product"]["contracts"][port] = {
+            "id": contract["id"],
+            "version": contract["version"],
+            "sha256": sha256(original).hexdigest(),
+        }
     (tmp_path / "manifest.json").write_text(json.dumps(manifest))
     selected, _ = selected_manifest(str(tmp_path))
     assert selected == manifest
-    manifest["schema_versions"]["payment_events"] = [4]
+    manifest["schema_versions"]["payment_events"] = [5]
     (tmp_path / "manifest.json").write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match="unsupported source schemas"):
         selected_manifest(str(tmp_path))
