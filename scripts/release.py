@@ -60,6 +60,13 @@ def plan():
         match = re.fullmatch(r"(?:pr-[0-9]+|main)-([a-f0-9]{40})", old_tag)
         changed = True
         if match:
+            if subprocess.run(
+                ["git", "cat-file", "-e", f"{match[1]}^{{commit}}"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            ).returncode:
+                git("fetch", "--no-tags", "origin", match[1])
             diff = git(
                 "diff",
                 "--name-only",

@@ -8,6 +8,8 @@ All 23 CI checks passed on `dd47299`; the scoped schema-scheduling mutation resu
 
 The first Spark application initially had no status because the long-running dev operator still watched retired namespace `fraud-data-dev` and logged 403 responses. Its deployed ConfigMap already selected `data`, with dynamic reload disabled. A rollout restart loaded `watched namespaces [data]` and the operator began reconciling the application; this was an environment reload, not successful ingestion evidence.
 
+Release planning on `6f1a4c6` failed before image builds because retained image revision `c89bee2d968ee7bd5053f043e6fc78c97cfc349b` was absent from the CI checkout. Fetching that exact commit from origin succeeded; the planner now fetches missing retained revisions before diffing. The first Argo Spark resource pod also exited 137 while the driver image was still pulling; ingestion and native acceptance remain pending.
+
 | Requirement | Status | Retain after execution |
 |---|---|---|
 | Generator configuration and diagnostics | Notebook executed against verified fresh source | Manifest/hash, generator fingerprint, actual configuration, volume, dates, skew, exact/approximate cardinality, schema null/value results and illustrative duplicate accounting in the [notebook](../../../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb); Spark diagnostics remain pending |
