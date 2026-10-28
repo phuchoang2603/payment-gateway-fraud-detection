@@ -1,13 +1,13 @@
 secretStore:
   enabled: true
-  name: fraud-doppler
+  name: gateway-doppler
   project: payment-gateway-fraud-detection
   config: prd
   namespaces:
-    - fraud-ml-prod
-    - fraud-data-prod
-    - payment-gateway
+  - payment-gateway
+  - data
+  - ml
   tokenSecret:
-    namespace: operators
-    name: fraud-doppler-token
+    namespace: payment-gateway
+    name: doppler-token
     key: dopplerToken

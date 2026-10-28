@@ -20,11 +20,13 @@ def main(argv=None):
     logging.disable(logging.INFO)
     parser = argparse.ArgumentParser(prog="dp1")
     parser.add_argument("stage", choices=STAGES)
-    parser.add_argument("--source", default=os.environ.get("SOURCE_ROOT", "s3://synthetic-source/historical/v16"))
+    parser.add_argument("--source", default=os.environ.get("SOURCE_ROOT"), required=not os.environ.get("SOURCE_ROOT"))
     parser.add_argument(
-        "--evidence", default=os.environ.get("EVIDENCE_ROOT", "s3://fraud-lakehouse-prod/dp1-evidence/catalog-v4")
+        "--evidence", default=os.environ.get("EVIDENCE_ROOT"), required=not os.environ.get("EVIDENCE_ROOT")
     )
-    parser.add_argument("--version", default=os.environ.get("DATASET_VERSION", "v16"))
+    parser.add_argument(
+        "--version", default=os.environ.get("DATASET_VERSION"), required=not os.environ.get("DATASET_VERSION")
+    )
     parser.add_argument("--workflow", default=os.environ.get("WORKFLOW_ID", "local"))
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--local-warehouse")
@@ -32,7 +34,7 @@ def main(argv=None):
     parser.add_argument(
         "--input-mode", choices=["historical", "landing"], default=os.environ.get("INPUT_MODE", "historical")
     )
-    parser.add_argument("--epoch", default=os.environ.get("SOURCE_EPOCH", "v16-20261026"))
+    parser.add_argument("--epoch", default=os.environ.get("SOURCE_EPOCH"))
     parser.add_argument("--max-batches", type=int, default=int(os.environ.get("LANDING_MAX_BATCHES", "100")))
     args = parser.parse_args(argv)
     spark = None

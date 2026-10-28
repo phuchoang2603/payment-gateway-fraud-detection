@@ -1,11 +1,30 @@
 global:
   repoURL: https://github.com/phuchoang2603/payment-gateway-fraud-detection.git
-  targetRevision: main
-destinationName: dev
-namePrefix: payment-gateway-dev
+  targetRevision: HEAD
+destinationServer: https://kubernetes.default.svc
+namePrefix: payment-gateway
 applications:
+  secret-store:
+    destinationNamespace: payment-gateway
+    path: infra/charts/secret-store
+  kafka:
+    destinationNamespace: payment-gateway
+    path: infra/charts/kafka
   payment-gateway:
-    enabled: true
     destinationNamespace: payment-gateway
     path: infra/charts/payment-gateway
-    valuesFile: []
+  live-traffic:
+    destinationNamespace: payment-gateway
+    path: infra/charts/live-traffic
+  fraud-features:
+    destinationNamespace: data
+    path: infra/charts/fraud-features
+  metadata-integrations:
+    destinationNamespace: data
+    path: infra/charts/metadata-integrations
+  data-pipelines:
+    destinationNamespace: data
+    path: infra/charts/data-pipelines
+  lakehouse-integration:
+    destinationNamespace: data
+    path: infra/charts/lakehouse-integration

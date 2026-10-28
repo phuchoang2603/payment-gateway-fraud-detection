@@ -1,14 +1,14 @@
 enabled: false
-namespace: fraud-data-prod
+namespace: data
 images:
   spark:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark
-    digest: ""
-    revision: ""
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    revision: '0000000000000000000000000000000000000000'
   openmetadata:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
-    digest: ""
-    revision: ""
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    revision: '0000000000000000000000000000000000000000'
 workflow:
   activeDeadlineSeconds: 7200
 spark:
@@ -18,27 +18,28 @@ spark:
 native:
   activeDeadlineSeconds: 1800
 config:
-  SOURCE_ROOT: s3://synthetic-source/historical/v16
-  DATASET_VERSION: v16
-  EVIDENCE_ROOT: s3://fraud-lakehouse-prod/dp1-evidence/catalog-v4
-  ICEBERG_REST_URI: https://minio.home.phuchoang.sbs/iceberg
-  ICEBERG_WAREHOUSE: fraud-lakehouse-prod
-  ICEBERG_SIGV4_ENABLED: "true"
-  ICEBERG_SIGNING_NAME: s3
+  SOURCE_ROOT: s3://platform-dev/datasets/payment-gateway/historical/v17
+  DATASET_VERSION: v17
+  EVIDENCE_ROOT: s3://platform-dev/runs/payment-gateway/dp1
+  ICEBERG_REST_URI: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
+  ICEBERG_WAREHOUSE: lakehouse
+  ICEBERG_CLIENT_ID: platform
   S3_ENDPOINT: https://minio.home.phuchoang.sbs
   AWS_REGION: us-east-1
-  ARGO_WORKFLOWS_URL: https://workflows.phuchoang.sbs
-  PROFILE_MAX_ROWS: "100000"
+  ARGO_WORKFLOWS_URL: https://workflows-dev.phuchoang.sbs
+  PROFILE_MAX_ROWS: '100000'
+  ICEBERG_OAUTH2_URI: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
+  S3_PATH_STYLE: 'true'
 lakehouse:
   externalSecret:
-    name: lakehouse-rustfs
-    store: fraud-doppler
+    name: gateway-storage
+    store: gateway-doppler
     data:
-      AWS_ACCESS_KEY_ID: LAKEHOUSE_RUSTFS_ACCESS_KEY
-      AWS_SECRET_ACCESS_KEY: LAKEHOUSE_RUSTFS_SECRET_KEY
+      AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
+      AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
 recurring:
   enabled: false
-  schedule: "0 0 * * *"
-  sourceRoot: s3://synthetic-source
-  sourceEpoch: v16-20261026
+  schedule: 0 0 * * *
+  sourceRoot: s3://platform-dev/datasets/payment-gateway
+  sourceEpoch: v17
   maxBatches: 100

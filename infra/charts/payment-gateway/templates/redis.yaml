@@ -23,8 +23,11 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ $redis.name }}
 spec:
+  podSecurityContext:
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
   kubernetesConfig:
-    image: {{ include "payment-gateway.image" $redis.image | quote }}
+    image: {{ printf "%s:%s" $redis.image.repository $redis.image.tag | quote }}
     imagePullPolicy: {{ $redis.image.pullPolicy }}
     redisSecret:
       name: {{ $redis.password.secretName }}
@@ -36,6 +39,7 @@ spec:
     keepAfterDelete: true
     volumeClaimTemplate:
       spec:
+        storageClassName: {{ $.Values.database.storage.storageClass }}
         accessModes: [ReadWriteOnce]
         resources:
           requests:

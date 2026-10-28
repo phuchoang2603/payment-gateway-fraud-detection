@@ -6,25 +6,24 @@ kafka:
   replicationFactor: 1
   minInsyncReplicas: 1
   clientNamespace: payment-gateway
-  metadataNamespace: ""
+  metadataNamespace: data
   storage:
     size: 5Gi
   jvmOptions:
-    "-Xms": 512m
-    "-Xmx": 512m
+    -Xms: 512m
+    -Xmx: 512m
   resources:
     requests:
       cpu: 250m
       memory: 768Mi
     limits:
-      cpu: "1"
+      cpu: '1'
       memory: 1Gi
-
 entityOperator:
   topicOperator:
     jvmOptions:
-      "-Xms": 256m
-      "-Xmx": 256m
+      -Xms: 256m
+      -Xmx: 256m
     resources:
       requests:
         cpu: 50m
@@ -32,16 +31,15 @@ entityOperator:
       limits:
         cpu: 500m
         memory: 512Mi
-
 connect:
   clusterName: payment-gateway-connect
   image:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/connect-debezium
-    tag: latest
-    digest: ""
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    revision: '0000000000000000000000000000000000000000'
   jvmOptions:
-    "-Xms": 512m
-    "-Xmx": 512m
+    -Xms: 512m
+    -Xmx: 512m
   resources:
     requests:
       cpu: 250m
@@ -58,28 +56,27 @@ connect:
     timeoutSeconds: 5
     periodSeconds: 10
     failureThreshold: 12
-
 entities:
   fraudFeatures:
     topics:
-      - name: fraud.feature-updates.v1.live-v2
-        valueSchema: features/v1/features.proto
-        partitions: 3
-        retention: 1209600000
+    - name: fraud.feature-updates.v1.live-v17
+      valueSchema: features/v1/features.proto
+      partitions: 3
+      retention: 1209600000
   payments:
     topics:
-      - name: payments.events.v1
-        valueSchema: payments/v1/events.proto
-        partitions: 3
-        retention: 604800000
-      - name: payments.events.v1.faulty
-        valueSchema: payments/v1/events.proto
-        partitions: 3
-        retention: 604800000
-      - name: fraud.labels.v1
-        valueSchema: payments/v1/labels.proto
-        partitions: 3
-        retention: 604800000
+    - name: payments.events.v1
+      valueSchema: payments/v1/events.proto
+      partitions: 3
+      retention: 604800000
+    - name: payments.events.v1.faulty
+      valueSchema: payments/v1/events.proto
+      partitions: 3
+      retention: 604800000
+    - name: fraud.labels.v1
+      valueSchema: payments/v1/labels.proto
+      partitions: 3
+      retention: 604800000
     connector:
       name: payments-events
       sourceSecretName: payments-cdc
@@ -96,17 +93,16 @@ entities:
         payload: payload
         routeByField: event_type
         topic: payments.events.v1
-
 schemaRegistry:
   enabled: true
   port: 8081
   compatibility: BACKWARD_TRANSITIVE
   registration:
-    enabled: false
+    enabled: true
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/schema-register
-      tag: latest
-      digest: ""
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+      revision: '0000000000000000000000000000000000000000'
     activeDeadlineSeconds: 600
     resources:
       requests:
@@ -117,7 +113,7 @@ schemaRegistry:
         memory: 128Mi
   image:
     repository: ghcr.io/aiven-open/karapace
-    tag: "6.2.4"
+    tag: 6.2.4
   resources:
     requests:
       cpu: 25m

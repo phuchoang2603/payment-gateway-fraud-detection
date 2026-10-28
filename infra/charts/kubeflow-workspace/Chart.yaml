@@ -1,5 +1,0 @@
-apiVersion: v2
-name: fraud-kubeflow-workspace
-description: Prod fraud-detection Kubeflow Profile and namespace-scoped services
-type: application
-version: 0.1.0

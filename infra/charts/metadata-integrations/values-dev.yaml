@@ -1,0 +1,10 @@
+enabled: true
+connectors:
+  object-storage:
+    source:
+      serviceConnection:
+        config:
+          awsConfig:
+            endPointURL: https://minio.home.phuchoang.sbs
+          bucketNames:
+          - platform-dev

@@ -1,18 +1,21 @@
 image:
   repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator
-  tag: latest
-  digest: ""
-secretStore: fraud-doppler
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  revision: '0000000000000000000000000000000000000000'
+secretStore: gateway-doppler
 kafkaBrokers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092
-s3Endpoint: https://minio.home.phuchoang.sbs
 simulator:
   enabled: false
   resources:
-    requests: {cpu: 100m, memory: 512Mi}
-    limits: {cpu: '1', memory: 2Gi}
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: '1'
+      memory: 2Gi
   config:
-    manifest: s3://synthetic-source/historical/v16/manifest.json
-    manifest_sha256: 719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e
+    manifest: s3://platform-dev/datasets/payment-gateway/historical/v17/manifest.json
+    manifest_sha256: ''
     gateway_url: http://edge.payment-gateway.svc:8080
     return_url: https://example.com/checkout/complete
     duration_seconds: 300
@@ -27,12 +30,21 @@ simulator:
 archiver:
   enabled: false
   topics: payments.events.v1,fraud.labels.v1
-  group: payments-parquet-landing-v16-20261026
-  sourceEpoch: v16-20261026
-  bucket: synthetic-source
+  group: payments-parquet-landing-v17
+  sourceEpoch: v17
   maxRecords: 10000
   maxBytes: 33554432
   flushInterval: 10s
   resources:
-    requests: {cpu: 100m, memory: 128Mi}
-    limits: {cpu: '1', memory: 1Gi}
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: '1'
+      memory: 1Gi
+objectStorage:
+  endpoint: https://minio.home.phuchoang.sbs
+  region: us-east-1
+  pathStyle: true
+  bucket: platform-dev
+  prefix: datasets/payment-gateway

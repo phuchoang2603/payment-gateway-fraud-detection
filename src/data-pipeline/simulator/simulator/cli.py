@@ -8,14 +8,19 @@ import pyarrow.fs as fs
 
 from simulator.config import load_config
 
-S3_ENDPOINT = "minio.home.phuchoang.sbs"
-
 
 def destination(output: str) -> tuple[fs.FileSystem, str]:
     if not output.startswith("s3://"):
         return fs.LocalFileSystem(), str(Path(output).expanduser().resolve())
     parsed = urlsplit(output)
-    if not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
+    if (
+        not parsed.netloc
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or ".." in parsed.path.split("/")
+    ):
         raise ValueError("S3 output must be a bucket and optional prefix, without credentials or query")
     access_key = os.environ.get("AWS_ACCESS_KEY_ID")
     secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
@@ -25,10 +30,10 @@ def destination(output: str) -> tuple[fs.FileSystem, str]:
         access_key=access_key,
         secret_key=secret_key,
         session_token=os.environ.get("AWS_SESSION_TOKEN"),
-        region=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+        region=os.environ.get("AWS_REGION", "us-east-1"),
         scheme="https",
-        endpoint_override=os.environ.get("AWS_ENDPOINT_URL_S3", S3_ENDPOINT).removeprefix("https://"),
-        force_virtual_addressing=False,
+        endpoint_override=os.environ.get("S3_ENDPOINT"),
+        force_virtual_addressing=os.environ.get("S3_PATH_STYLE", "false").lower() != "true",
         allow_bucket_creation=False,
         allow_bucket_deletion=False,
     )

@@ -54,9 +54,11 @@ spec:
                 name: live-source
           env:
             - name: S3_ENDPOINT
-              value: {{ $.Values.s3Endpoint | quote }}
+              value: {{ $.Values.objectStorage.endpoint | quote }}
             - name: AWS_REGION
-              value: us-east-1
+              value: {{ $.Values.objectStorage.region | quote }}
+            - name: S3_PATH_STYLE
+              value: {{ $.Values.objectStorage.pathStyle | toString | quote }}
             - name: KAFKA_BROKERS
               value: {{ $.Values.kafkaBrokers | quote }}
 {{- if eq $name "live-simulator" }}
@@ -79,8 +81,8 @@ spec:
               value: {{ $settings.group | quote }}
             - name: LANDING_SOURCE_EPOCH
               value: {{ $settings.sourceEpoch | quote }}
-            - name: LANDING_BUCKET
-              value: {{ $settings.bucket | quote }}
+            - name: LANDING_ROOT
+              value: {{ printf "s3://%s/%s" $.Values.objectStorage.bucket $.Values.objectStorage.prefix | quote }}
             - name: LANDING_MAX_RECORDS
               value: {{ $settings.maxRecords | int | quote }}
             - name: LANDING_MAX_BYTES

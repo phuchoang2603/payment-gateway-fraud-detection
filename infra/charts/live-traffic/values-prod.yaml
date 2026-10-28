@@ -1,12 +1,10 @@
-image:
-  repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator
-  digest: sha256:002e57d34ffb5f70c884964d6236023435686ef2796f309e888b491fe1b49210
-  revision: 418e82057f981442df384b47e8886c6fd114f4a5
+objectStorage:
+  endpoint: https://s3.us-east-1.amazonaws.com
+  pathStyle: false
+  bucket: platform-prod-142737101504-us-east-1
 simulator:
-  enabled: true
+  enabled: false
   config:
-    duration_seconds: 0
-    payments_per_second: 0.2
-    concurrency: 2
+    manifest: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v17/manifest.json
 archiver:
   enabled: true

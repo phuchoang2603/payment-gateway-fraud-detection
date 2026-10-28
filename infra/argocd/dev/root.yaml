@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: payment-gateway-dev-root
+  namespace: argo-cd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: payment-gateway-fraud-detection
+  source:
+    repoURL: https://github.com/phuchoang2603/payment-gateway-fraud-detection.git
+    targetRevision: deploy/dev
+    path: infra/argocd/app-of-apps
+    helm:
+      valueFiles:
+      - values-dev.yaml
+      - release.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo-cd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true

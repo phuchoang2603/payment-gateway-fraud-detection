@@ -94,7 +94,8 @@ spec:
         args: [select]
         envFrom:
           - configMapRef: {name: dp1-config}
-          - secretRef: {name: lakehouse-rustfs}
+          - secretRef: {name: gateway-storage}
+          - secretRef: {name: gateway-catalog-client}
         env:
           - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
           - {name: INPUT_MODE, value: "{{workflow.parameters.input-mode}}"}
@@ -220,7 +221,8 @@ spec:
                     - name: spark-kubernetes-driver
                       envFrom:
                         - configMapRef: {name: dp1-config}
-                        - secretRef: {name: lakehouse-rustfs}
+                        - secretRef: {name: gateway-storage}
+                        - secretRef: {name: gateway-catalog-client}
                       env:
                         - {name: SOURCE_ROOT, value: "{{workflow.parameters.source-root}}"}
                         - {name: INPUT_MODE, value: "{{workflow.parameters.input-mode}}"}
@@ -243,7 +245,8 @@ spec:
                     - name: spark-kubernetes-executor
                       envFrom:
                         - configMapRef: {name: dp1-config}
-                        - secretRef: {name: lakehouse-rustfs}
+                        - secretRef: {name: gateway-storage}
+                        - secretRef: {name: gateway-catalog-client}
     - name: recover-previous
       steps:
         - - name: workflow-pods
@@ -334,7 +337,8 @@ spec:
         args: ["{{inputs.parameters.stage}}", "--refresh={{inputs.parameters.refresh}}"]
         envFrom:
           - configMapRef: {name: dp1-config}
-          - secretRef: {name: lakehouse-rustfs}
+          - secretRef: {name: gateway-storage}
+          - secretRef: {name: gateway-catalog-client}
           - configMapRef: {name: metadata-client}
           - secretRef: {name: openmetadata}
           - secretRef: {name: metadata-starrocks}

@@ -5,12 +5,11 @@ import signal
 import time
 from threading import Event
 
-import boto3
-from botocore.config import Config
 from confluent_kafka import Consumer, TopicPartition
 
 from simulator.landing.archive import LandingStore, publish
 from simulator.landing.parquet import Record
+from simulator.s3 import client as s3_client
 
 
 def run_archiver(
@@ -107,18 +106,7 @@ def main():
         raise ValueError("invalid landing topic")
     if not os.environ.get("AWS_ACCESS_KEY_ID") or not os.environ.get("AWS_SECRET_ACCESS_KEY"):
         raise ValueError("missing object store credentials")
-    client = boto3.client(
-        "s3",
-        endpoint_url=os.environ.get("S3_ENDPOINT", "https://minio.home.phuchoang.sbs"),
-        region_name=os.environ.get("AWS_REGION", "us-east-1"),
-        config=Config(
-            s3={"addressing_style": "path"},
-            connect_timeout=15,
-            read_timeout=120,
-            retries={"max_attempts": 3},
-            request_checksum_calculation="when_required",
-        ),
-    )
+    client = s3_client()
     consumer = Consumer(
         {
             "bootstrap.servers": os.environ.get(
@@ -137,9 +125,7 @@ def main():
     try:
         run_archiver(
             consumer,
-            LandingStore(
-                client, os.environ.get("LANDING_BUCKET", "synthetic-source"), os.environ["LANDING_SOURCE_EPOCH"]
-            ),
+            LandingStore(client, os.environ["LANDING_ROOT"], os.environ["LANDING_SOURCE_EPOCH"]),
             topics,
             os.environ.get("LABEL_TOPIC", "fraud.labels.v1"),
             stop,

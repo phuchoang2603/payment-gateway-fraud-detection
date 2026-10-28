@@ -14,7 +14,7 @@ DP1 SHALL expose distinct ingest and validate stages with input, output and run 
 - **THEN** they can identify its source manifest, ingest result, validated snapshots, validation outcome and governance outcome
 
 ### Requirement: Versioned-export batch selection
-Each historical-mode workflow submission SHALL select one completed, immutable source export through `source-root` and `dataset-version` parameters, with chart-configured defaults selecting published v16 for development. Scale generation SHALL NOT be a prerequisite for development ingestion; later full-volume acceptance SHALL remain separate. Every stage SHALL use the selected parameters consistently. Subsequent historical batches SHALL select newly completed export versions. Recurring landing mode SHALL select completed input units through durable input tracking; a schedule alone SHALL NOT constitute discovery or retry safety.
+Each historical-mode workflow submission SHALL select one completed, immutable source export through `source-root` and `dataset-version` parameters, with chart-configured defaults selecting a freshly generated and validated v17 source. Scale generation SHALL NOT be a prerequisite for development ingestion; later full-volume acceptance SHALL remain separate. Every stage SHALL use the selected parameters consistently. Subsequent historical batches SHALL select newly completed export versions. Recurring landing mode SHALL select completed input units through durable input tracking; a schedule alone SHALL NOT constitute discovery or retry safety.
 
 #### Scenario: Process the next completed export
 
@@ -35,7 +35,7 @@ Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for
 - **THEN** its Argo stage fails with application diagnostics and its driver and executors are removed
 
 ### Requirement: Bounded retry and cancellation
-Argo SHALL own bounded stage retries with stable logical run identity and distinct execution attempts. Deterministic quality failures SHALL NOT be retried for acceptance. Graceful cancellation and deadlines SHALL delete active SparkApplications, verify driver/executor cleanup, and only then release writer serialization without deleting durable evidence. StarRocks queries SHALL have bounded timeouts and run-owned identification. Cleanup SHALL stop or await run-owned queries and verify quiescence as well as Spark cleanup before writer handoff; elapsed timeout alone SHALL NOT establish cleanup. Unconfirmed cleanup SHALL block writer handoff. A platform-owned native Kubernetes admission policy SHALL reject Workflow deletion in `fraud-data-prod` unless its recorded phase is Succeeded, Failed or Error. It SHALL reject setting `spec.shutdown: Terminate` unless the existing phase is Pending or terminal. Operators SHALL stop active Workflows gracefully and verify completed cleanup before deletion. Missing phase SHALL NOT permit deletion or hard termination. Workflows in other namespaces SHALL remain unaffected. Terminal status alone SHALL NOT be considered proof of successful Spark cleanup.
+Argo SHALL own bounded stage retries with stable logical run identity and distinct execution attempts. Deterministic quality failures SHALL NOT be retried for acceptance. Graceful cancellation and deadlines SHALL delete active SparkApplications, verify driver/executor cleanup, and only then release writer serialization without deleting durable evidence. StarRocks queries SHALL have bounded timeouts and run-owned identification. Cleanup SHALL stop or await run-owned queries and verify quiescence as well as Spark cleanup before writer handoff; elapsed timeout alone SHALL NOT establish cleanup. Unconfirmed cleanup SHALL block writer handoff. A platform-owned native Kubernetes admission policy SHALL reject Workflow deletion in `data` unless its recorded phase is Succeeded, Failed or Error. It SHALL reject setting `spec.shutdown: Terminate` unless the existing phase is Pending or terminal. Operators SHALL stop active Workflows gracefully and verify completed cleanup before deletion. Missing phase SHALL NOT permit deletion or hard termination. Workflows in other namespaces SHALL remain unaffected. Terminal status alone SHALL NOT be considered proof of successful Spark cleanup.
 
 #### Scenario: Retry after transient driver failure
 
@@ -49,7 +49,7 @@ Argo SHALL own bounded stage retries with stable logical run identity and distin
 
 #### Scenario: Delete or hard-terminate an active workflow
 
-- **WHEN** a user requests deletion or hard termination of a running Workflow in `fraud-data-prod`
+- **WHEN** a user requests deletion or hard termination of a running Workflow in `data`
 - **THEN** Kubernetes rejects the request with guidance to use graceful stop and wait for completion
 - **AND** graceful stop remains permitted, completed Workflows can be deleted, and other workflow namespaces are unaffected
 

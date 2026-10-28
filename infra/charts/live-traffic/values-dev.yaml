@@ -1,0 +1,10 @@
+objectStorage:
+  endpoint: https://minio.home.phuchoang.sbs
+  pathStyle: true
+  bucket: platform-dev
+simulator:
+  enabled: false
+  config:
+    manifest: s3://platform-dev/datasets/payment-gateway/historical/v17/manifest.json
+archiver:
+  enabled: true

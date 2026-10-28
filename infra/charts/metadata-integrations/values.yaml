@@ -1,23 +1,23 @@
 enabled: false
-namespace: fraud-data-prod
+namespace: data
 image:
   repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
-  digest: ""
-  revision: ""
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  revision: '0000000000000000000000000000000000000000'
 openmetadata:
-  url: http://openmetadata.openmetadata.svc.cluster.local:8585/api
+  url: http://openmetadata.data.svc.cluster.local:8585/api
   externalSecret:
     name: openmetadata
-    store: fraud-doppler
+    store: gateway-doppler
     data:
       OPENMETADATA_TOKEN: OPENMETADATA_TOKEN
-schedule: "0 3 * * *"
+schedule: 0 3 * * *
 activeDeadlineSeconds: 1800
 connectors:
   starrocks:
     externalSecret:
       name: metadata-starrocks
-      store: doppler
+      store: gateway-doppler
       data:
         STARROCKS_PASSWORD: STARROCKS_OPENMETADATA_PASSWORD
     kind: database
@@ -30,7 +30,7 @@ connectors:
           type: StarRocks
           username: openmetadata
           password: ${STARROCKS_PASSWORD}
-          hostPort: kube-starrocks-fe-service.starrocks.svc.cluster.local:9030
+          hostPort: kube-starrocks-fe-service.data.svc.cluster.local:9030
           databaseName: lakehouse
           connectionArguments:
             init_command: SET CATALOG lakehouse
@@ -38,7 +38,10 @@ connectors:
         config:
           type: DatabaseMetadata
           schemaFilterPattern:
-            includes: ["^bronze$", "^silver$", "^gold$"]
+            includes:
+            - ^bronze$
+            - ^silver$
+            - ^gold$
           markDeletedTables: false
           includeStoredProcedures: false
           overrideMetadata: false
@@ -60,31 +63,13 @@ connectors:
         config:
           type: MessagingMetadata
           topicFilterPattern:
-            includes: ["^payments\\.events\\.v1$", "^fraud\\.labels\\.v1$", "^payments\\.events\\.v1\\.faulty$"]
+            includes:
+            - ^payments\.events\.v1$
+            - ^fraud\.labels\.v1$
+            - ^payments\.events\.v1\.faulty$
           generateSampleData: false
           markDeletedTopics: false
           overrideMetadata: false
-  rustfs:
-    externalSecret:
-      name: metadata-rustfs
-      store: doppler
-      data:
-        AWS_ACCESS_KEY_ID: STARROCKS_RUSTFS_ACCESS_KEY
-        AWS_SECRET_ACCESS_KEY: STARROCKS_RUSTFS_SECRET_KEY
-    kind: storage
-    discover: false
-    source:
-      type: s3
-      serviceName: rustfs
-      serviceConnection:
-        config:
-          type: S3
-          awsConfig:
-            awsAccessKeyId: ${AWS_ACCESS_KEY_ID}
-            awsSecretAccessKey: ${AWS_SECRET_ACCESS_KEY}
-            awsRegion: us-east-1
-            endPointURL: https://minio.home.phuchoang.sbs
-          bucketNames: [fraud-lakehouse-prod]
   argo:
     kind: pipeline
     discover: false
@@ -93,3 +78,25 @@ connectors:
       serviceConnection:
         config:
           type: CustomPipeline
+  object-storage:
+    externalSecret:
+      name: metadata-object-storage
+      store: gateway-doppler
+      data:
+        AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
+        AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+    kind: storage
+    discover: false
+    source:
+      type: s3
+      serviceName: platform-object-storage
+      serviceConnection:
+        config:
+          type: S3
+          awsConfig:
+            awsAccessKeyId: ${AWS_ACCESS_KEY_ID}
+            awsSecretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+            awsRegion: us-east-1
+            endPointURL: https://minio.home.phuchoang.sbs
+          bucketNames:
+          - platform-dev

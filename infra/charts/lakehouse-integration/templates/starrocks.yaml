@@ -1,0 +1,131 @@
+{{- $s := .Values.setup }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: gateway-starrocks-setup
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: doppler
+  target:
+    name: gateway-starrocks-setup
+  data:
+    - secretKey: ROOT_PASSWORD
+      remoteRef:
+        key: {{ $s.rootPasswordKey }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: gateway-starrocks-runtime
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.storage.secretStore }}
+  target:
+    name: gateway-starrocks-runtime
+  data:
+    - secretKey: AWS_ACCESS_KEY_ID
+      remoteRef:
+        key: {{ .Values.storage.accessKey }}
+    - secretKey: AWS_SECRET_ACCESS_KEY
+      remoteRef:
+        key: {{ .Values.storage.secretKey }}
+  {{- range $i, $u := $s.users }}
+    - secretKey: USER_{{ $i }}_PASSWORD
+      remoteRef:
+        key: {{ $u.passwordKey }}
+  {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-starrocks-setup
+data:
+  setup.sql: |
+  {{- range $i, $c := $s.catalogs }}
+    CREATE EXTERNAL CATALOG IF NOT EXISTS {{ $c.name }} PROPERTIES (
+      "type" = "iceberg",
+      "iceberg.catalog.type" = "rest",
+      "iceberg.catalog.uri" = "{{ $c.uri }}",
+      "iceberg.catalog.warehouse" = "{{ $c.warehouse }}",
+      "iceberg.catalog.vended-credentials-enabled" = "false",
+      "iceberg.catalog.security" = "oauth2",
+      "iceberg.catalog.oauth2.credential" = "{{ $c.clientId }}:@ICEBERG_CLIENT_SECRET@",
+      "iceberg.catalog.oauth2.scope" = "PRINCIPAL_ROLE:ALL",
+      "iceberg.catalog.oauth2.server-uri" = "{{ $c.oauthUri }}",
+      "iceberg.catalog.oauth2.token-refresh-enabled" = "true",
+      "aws.s3.use_instance_profile" = "false",
+      "aws.s3.access_key" = "@AWS_ACCESS_KEY_ID@",
+      "aws.s3.secret_key" = "@AWS_SECRET_ACCESS_KEY@",
+      "aws.s3.region" = "{{ $c.region }}",
+      "aws.s3.endpoint" = "{{ $c.s3Endpoint }}",
+      "aws.s3.enable_path_style_access" = "{{ $c.pathStyle }}"
+    );
+    ALTER CATALOG {{ $c.name }} SET (
+      "iceberg.catalog.oauth2.credential" = "{{ $c.clientId }}:@ICEBERG_CLIENT_SECRET@",
+      "aws.s3.access_key" = "@AWS_ACCESS_KEY_ID@",
+      "aws.s3.secret_key" = "@AWS_SECRET_ACCESS_KEY@"
+    );
+  {{- end }}
+  {{- range $i, $u := $s.users }}
+    CREATE USER IF NOT EXISTS '{{ $u.name }}'@'%' IDENTIFIED BY '@USER_{{ $i }}_PASSWORD@';
+    ALTER USER '{{ $u.name }}'@'%' IDENTIFIED BY '@USER_{{ $i }}_PASSWORD@';
+    {{- $properties := list }}
+    {{- range $key, $value := $u.sessionVariables }}
+    {{- $properties = append $properties (printf "\"session.%s\" = \"%v\"" $key $value) }}
+    {{- end }}
+    ALTER USER '{{ $u.name }}'@'%' SET PROPERTIES ({{ join ", " $properties }});
+    {{- range $s.catalogs }}
+    GRANT USAGE ON CATALOG {{ .name }} TO USER '{{ $u.name }}'@'%';
+    SET CATALOG {{ .name }};
+    GRANT SELECT ON ALL TABLES IN ALL DATABASES TO USER '{{ $u.name }}'@'%';
+    {{- end }}
+  {{- end }}
+  setup.sh: |
+    set -euo pipefail
+    sr() { MYSQL_PWD="$1" mysql -h kube-starrocks-fe-service -P 9030 -uroot --connect-timeout=5 "${@:2}"; }
+    until sr "$ROOT_PASSWORD" -e 'SELECT 1' >/dev/null 2>&1; do sleep 10; done
+    if ! sed {{ range $i, $c := $s.catalogs }}-e "s|@ICEBERG_CLIENT_SECRET@|$ICEBERG_CLIENT_SECRET|g" -e "s|@AWS_ACCESS_KEY_ID@|$AWS_ACCESS_KEY_ID|g" -e "s|@AWS_SECRET_ACCESS_KEY@|$AWS_SECRET_ACCESS_KEY|g" {{ end }}{{ range $i, $u := $s.users }}-e "s|@USER_{{ $i }}_PASSWORD@|$USER_{{ $i }}_PASSWORD|g" {{ end }}/setup/setup.sql | sr "$ROOT_PASSWORD" >/dev/null 2>&1; then
+      echo "StarRocks integration setup failed" >&2
+      exit 1
+    fi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gateway-starrocks-setup
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 20
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: apply
+          image: {{ $s.image }}
+          command: [bash, /setup/setup.sh]
+          envFrom:
+            - secretRef:
+                name: gateway-starrocks-setup
+            - secretRef:
+                name: gateway-starrocks-runtime
+            - secretRef:
+                name: gateway-catalog-client
+          volumeMounts:
+            - {name: setup, mountPath: /setup}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+      volumes:
+        - name: setup
+          configMap:
+            name: gateway-starrocks-setup

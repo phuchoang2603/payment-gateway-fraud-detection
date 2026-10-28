@@ -32,7 +32,7 @@ The fraud-labels linkage rule reads `payment_events`, so validate labels in a da
 
 `historical/v12` is an immutable one-off -365-day calendar shift of v8, with the same entities/content and no regeneration. Its manifest SHA-256 is `66aa2af7fecb1177e0d3891ea86054ff9c076ff6e8743b35b6bec0bd351511ce`; 2,851 files received full row/remote readback checks and 22,131 received upload-integrity/HEAD checks. Spark/GX acceptance remains pending. Live decoded Parquet lands separately under `streaming/`; see the [landing interface](data-pipeline.md#live-simulation-and-landing).
 
-The maintained smoke profile now targets a new 90-day development source, `historical/v16`: 10,000 customers, 2,000 merchants, July 1 through September 28, 2025 purchase starts, seed 2603 and current payload schema 3. Lifecycle completion and scheduled label availability may extend beyond that range. It has no 100 GB size gate. Publication and source checks passed: [manifest](https://minio.home.phuchoang.sbs/synthetic-source/historical/v16/manifest.json) SHA-256 `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`. The CI-image Kubernetes run verified all 1,954 inventory files and all nine source SQL checks. It contains 795,718 events and 161,967 labels in 139,597,476 physical Parquet bytes; this is development-source evidence, not DP1 acceptance. Previous source versions are historical evidence, not supported current-runtime inputs; the operator removed the old sources and stopped v14.
+The previous smoke profile published the 90-day development source `historical/v16`: 10,000 customers, 2,000 merchants, July 1 through September 28, 2025 purchase starts, seed 2603 and current payload schema 3. Lifecycle completion and scheduled label availability may extend beyond that range. It has no 100 GB size gate. Publication and source checks passed: [manifest](https://minio.home.phuchoang.sbs/synthetic-source/historical/v16/manifest.json) SHA-256 `719815e3f0a90e27bbc8303feaacdddb4858c604325656982fd443e49b05882e`. The CI-image Kubernetes run verified all 1,954 inventory files and all nine source SQL checks. It contains 795,718 events and 161,967 labels in 139,597,476 physical Parquet bytes; this is development-source evidence, not DP1 acceptance. Previous source versions are historical evidence, not supported current-runtime inputs; the operator removed the old sources and stopped v14.
 
 The first schema-3 candidate v15 failed its declared risk-assessment rule because that rule incorrectly required reason codes on clean approvals. Its manifest and failed evidence remain unchanged. Contract 4.0.1 corrects the rule to require reasons on declines; v16 passes the corrected rule.
 
@@ -54,8 +54,9 @@ Generate only the development profile now. Full-volume Python generation is defe
 
 ```bash
 cd src/data-pipeline/simulator
-doppler run -p payment-gateway-fraud-detection -c prd -- sh -c \
-  'AWS_ACCESS_KEY_ID="$HISTORICAL_RUSTFS_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$HISTORICAL_RUSTFS_SECRET_KEY" \
+doppler run -p payment-gateway-fraud-detection -c dev -- sh -c \
+  'AWS_ACCESS_KEY_ID="$OBJECT_GATEWAY_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$OBJECT_GATEWAY_SECRET_ACCESS_KEY" \
+   S3_ENDPOINT=https://minio.home.phuchoang.sbs S3_PATH_STYLE=true AWS_REGION=us-east-1 \
    uv run --locked simulator historical --config configs/historical-smoke.yaml'
 ```
 
@@ -87,4 +88,4 @@ The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai
 
 Git bronze contracts define StarRocks COUNT-of-violations SQL and conditional nested requirements. The official version-matched OpenMetadata ingestion image discovers tables and executes native quality rules; Argo performs explicit product/contract/lineage writes and verifies complete results. Spark performs source-integrity checks, ingestion and bidirectional duplicate-aware source/output reconciliation against recorded snapshots. Native per-day counts alone do not establish content equality.
 
-Use the published v16 manifest and its complete inventory, including lifecycle and label tails. V16 development acceptance is separate from source/live checks and later full-scale/coursework acceptance. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and metadata-only recovery.
+The fresh platform migration selects v17, which must be generated and validated before ingestion. The v16 observations and manifest below are historical evidence. V16 development acceptance is separate from source/live checks and later full-scale/coursework acceptance. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and metadata-only recovery.

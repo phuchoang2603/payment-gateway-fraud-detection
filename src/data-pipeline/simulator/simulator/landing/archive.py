@@ -3,6 +3,7 @@ import json
 import re
 from collections import defaultdict
 from hashlib import sha256
+from urllib.parse import urlsplit
 
 from botocore.exceptions import ClientError
 
@@ -16,16 +17,31 @@ def digest(body):
 
 
 class LandingStore:
-    def __init__(self, client, bucket, source_epoch):
+    def __init__(self, client, root, source_epoch):
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", source_epoch):
             raise ValueError("invalid streaming source epoch")
+        parsed = urlsplit(root)
+        if (
+            parsed.scheme != "s3"
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or ".." in parsed.path.split("/")
+        ):
+            raise ValueError("landing root must be an S3 URI without credentials or traversal")
         self.source_epoch = source_epoch
         self.client = client
-        self.bucket = bucket
+        self.bucket = parsed.netloc
+        self.prefix = parsed.path.strip("/")
 
     def create(self, key, body):
         if not key.startswith("streaming/"):
             raise ValueError("object outside streaming prefix")
+        if ".." in key.split("/"):
+            raise ValueError("object path must stay inside its scope")
+        key = f"{self.prefix}/{key}".lstrip("/")
         checksum = digest(body)
         metadata = {"sha256": checksum, "landing-format": FORMAT}
         try:

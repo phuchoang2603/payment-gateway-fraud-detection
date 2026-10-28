@@ -11,6 +11,7 @@ spec:
   enableSuperuserAccess: false
   storage:
     size: {{ .Values.database.storage.size }}
+    storageClass: {{ .Values.database.storage.storageClass }}
   resources:
     {{- toYaml .Values.database.resources | nindent 4 }}
   postgresql:

@@ -18,9 +18,9 @@ team:
 tags: [synthetic, source, payments]
 customProperties:
   - property: endpoint
-    value: https://minio.home.phuchoang.sbs
+    value: Environment-selected MinIO or AWS S3 endpoint
   - property: locationTemplate
-    value: s3://synthetic-source/historical/{dataset_version}/
+    value: s3://{bucket}/datasets/payment-gateway/historical/{dataset_version}/
   - property: completionMarker
     value: manifest.json
   - property: accessPolicy

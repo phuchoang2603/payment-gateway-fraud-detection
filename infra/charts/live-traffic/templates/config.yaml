@@ -39,8 +39,8 @@ spec:
   data:
     - secretKey: AWS_ACCESS_KEY_ID
       remoteRef:
-        key: HISTORICAL_RUSTFS_ACCESS_KEY
+        key: OBJECT_GATEWAY_ACCESS_KEY_ID
     - secretKey: AWS_SECRET_ACCESS_KEY
       remoteRef:
-        key: HISTORICAL_RUSTFS_SECRET_KEY
+        key: OBJECT_GATEWAY_SECRET_ACCESS_KEY
 {{- end }}

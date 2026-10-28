@@ -22,7 +22,9 @@ from tests.conftest import small_config
 
 def live_config(**overrides):
     return LiveConfig(
-        manifest="s3://synthetic-source/historical/test/manifest.json", manifest_sha256="0" * 64, **overrides
+        manifest="s3://platform-dev/datasets/payment-gateway/historical/test/manifest.json",
+        manifest_sha256="0" * 64,
+        **overrides,
     )
 
 
@@ -46,7 +48,7 @@ def test_live_profiles_and_card_identity_across_calendar_gap(monkeypatch):
     with pytest.raises(ValueError, match="outside synthetic encoding"):
         card_number(10**11, "ok")
     monkeypatch.setattr(
-        "simulator.live.source.boto3.client",
+        "simulator.s3.boto3.client",
         lambda *a, **kw: SimpleNamespace(get_object=lambda **kw: {"Body": io.BytesIO(json.dumps(manifest).encode())}),
     )
     with pytest.raises(ValueError, match="manifest digest"):

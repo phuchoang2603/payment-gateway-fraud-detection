@@ -101,7 +101,10 @@ spec:
   {{- if eq $mode "serve" }}
   ingress:
     - from:
-        - podSelector:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: payment-gateway
+          podSelector:
             matchLabels:
               app.kubernetes.io/name: fraud-service
       ports:
@@ -127,7 +130,10 @@ spec:
         - {port: 53, protocol: TCP}
     {{- if eq $mode "write" }}
     - to:
-        - podSelector:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: payment-gateway
+          podSelector:
             matchLabels:
               strimzi.io/cluster: payment-gateway-kafka
       ports:

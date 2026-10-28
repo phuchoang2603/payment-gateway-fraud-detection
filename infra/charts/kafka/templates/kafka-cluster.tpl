@@ -25,6 +25,7 @@ spec:
       - id: 0
         type: persistent-claim
         size: {{ .Values.kafka.storage.size }}
+        class: {{ .Values.kafka.storage.storageClass | default "local-path" }}
         kraftMetadata: shared
 ---
 apiVersion: kafka.strimzi.io/v1

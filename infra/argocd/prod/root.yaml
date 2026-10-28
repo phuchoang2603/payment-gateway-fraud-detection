@@ -4,101 +4,23 @@ metadata:
   name: payment-gateway-prod-root
   namespace: argo-cd
   finalizers:
-    - resources-finalizer.argocd.argoproj.io/foreground
+  - resources-finalizer.argocd.argoproj.io
 spec:
   project: payment-gateway-fraud-detection
   source:
     repoURL: https://github.com/phuchoang2603/payment-gateway-fraud-detection.git
-    targetRevision: main
+    targetRevision: deploy/prod
     path: infra/argocd/app-of-apps
     helm:
-      releaseName: payment-gateway-prod
-      valuesObject:
-        global:
-          targetRevision: main
-        namePrefix: payment-gateway-prod
-        destinationServer: https://kubernetes.default.svc
-        applications:
-          metadata-integrations:
-            enabled: true
-            destinationNamespace: fraud-data-prod
-            path: infra/charts/metadata-integrations
-            valuesFile:
-              - infra/charts/metadata-integrations/values-prod.yaml
-          data-pipelines:
-            enabled: true
-            destinationNamespace: fraud-data-prod
-            path: infra/charts/data-pipelines
-            valuesFile:
-              - infra/charts/data-pipelines/values-prod.yaml
-          payment-gateway:
-            enabled: true
-            chartTargetRevision: main
-            valuesTargetRevision: main
-            destinationNamespace: payment-gateway
-            path: infra/charts/payment-gateway
-            valuesFile:
-              - infra/charts/payment-gateway/values-prod.yaml
-            syncRetry: &retry
-              limit: -1
-              backoff:
-                duration: 5s
-                factor: 2
-                maxDuration: 3m
-          fraud-features:
-            enabled: true
-            allowEmpty: true
-            destinationNamespace: payment-gateway
-            path: infra/charts/fraud-features
-            valuesFile:
-              - infra/charts/fraud-features/values-prod.yaml
-            syncRetry: *retry
-          kafka:
-            enabled: true
-            chartTargetRevision: main
-            valuesTargetRevision: main
-            destinationNamespace: payment-gateway
-            path: infra/charts/kafka
-            valuesFile:
-              - infra/charts/kafka/values-prod.yaml
-            syncRetry: *retry
-          live-traffic:
-            enabled: true
-            allowEmpty: true
-            chartTargetRevision: main
-            valuesTargetRevision: main
-            destinationNamespace: payment-gateway
-            path: infra/charts/live-traffic
-            valuesFile:
-              - infra/charts/live-traffic/values-prod.yaml
-            syncRetry: *retry
-          secret-store:
-            enabled: true
-            destinationNamespace: argo-cd
-            path: infra/charts/secret-store
-            valuesFile:
-              - infra/charts/secret-store/values-prod.yaml
-            syncRetry:
-              limit: -1
-              backoff:
-                duration: 5s
-                factor: 2
-                maxDuration: 3m
-          kubeflow-workspace:
-            enabled: true
-            destinationNamespace: argo-cd
-            path: infra/charts/kubeflow-workspace
-            syncRetry:
-              limit: -1
-              backoff:
-                duration: 5s
-                factor: 2
-                maxDuration: 3m
+      valueFiles:
+      - values-prod.yaml
+      - release.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: argo-cd
   syncPolicy:
     automated:
+      prune: true
       selfHeal: true
     syncOptions:
-      - ServerSideApply=true
+    - ServerSideApply=true

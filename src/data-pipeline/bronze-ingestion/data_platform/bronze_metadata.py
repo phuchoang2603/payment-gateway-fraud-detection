@@ -157,7 +157,7 @@ def synchronize(sdk, run, manifest, expected, stages, report_uri, outcome):
     sdk.get_by_name(PipelineService, "argo", nullable=False)
     link = (
         os.environ["ARGO_WORKFLOWS_URL"].rstrip("/")
-        + f"/workflows/{os.environ.get('WORKFLOW_NAMESPACE', 'fraud-data-prod')}/{os.environ.get('WORKFLOW_ID', run['workflow'])}"
+        + f"/workflows/{os.environ.get('WORKFLOW_NAMESPACE', 'data')}/{os.environ.get('WORKFLOW_ID', run['workflow'])}"
     )
     pipeline = sdk.create_or_update(
         CreatePipelineRequest(

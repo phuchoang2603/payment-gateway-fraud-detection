@@ -1,9 +1,6 @@
-images:
-  feast:
-    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast
-    digest: sha256:07c284e7eb9b7dfe007a36539ccbc82a425179afe4bf887e9f82cc3227ea06dd
-    revision: fd851946301403792733f19149aa1b63e478e72c
-  streaming:
-    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming
-    digest: sha256:2d102addb7ac5c9d00991c0076214908293007a392d2ed69ba286d008ed7bbf2
-    revision: 081d320abd79b7611d95fae54a08aa48af20584c
+redis:
+  storageClass: gp3
+streaming:
+  storageEndpoint: https://s3.us-east-1.amazonaws.com
+  pathStyle: false
+  storageRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/flink
