@@ -6,7 +6,7 @@ Deploy fraud-service into the existing Talos environments with independent appli
 
 ### Requirement: Environment-specific deployment ownership
 
-Dev and prod SHALL use the same application charts with environment-specific endpoint, hostname, storage-class and secret-config values. Gateway and Kafka SHALL reside in `payment-gateway`; data, Flink and Feast workloads SHALL reside in platform-owned `data`. The platform SHALL own Kubeflow and its `ml` workspace. Application deployment SHALL NOT create or adopt shared namespaces, Profiles or controllers.
+Dev and prod SHALL use the same application charts with environment-specific endpoint, hostname, storage-class, secret-config and application-enablement values. Prod SHALL currently enable gateway services, PostgreSQL, Redis and Kafka/CDC while disabling live traffic/archiving, Flink/Feast, metadata jobs and Spark workflows; Fraud feature retrieval SHALL be disabled in prod. Existing shared lakehouse credential/catalog wiring SHALL remain available without pipeline compute. Gateway and Kafka SHALL reside in `payment-gateway`; data, Flink and Feast workloads SHALL reside in platform-owned `data`. The platform SHALL own Kubeflow and its `ml` workspace. Application deployment SHALL NOT create or adopt shared namespaces, Profiles or controllers.
 
 #### Scenario: Render both environments
 
@@ -148,7 +148,7 @@ Application credentials SHALL come from the environment's gateway Doppler config
 
 ### Requirement: Environment data-pipeline deployment
 
-Both environment values SHALL enable DP1 workflow templates in `data`, with externally supplied credentials, commit-tagged images and explicit resource budgets. Fresh-start source selection SHALL use v17. Live simulation and recurring ingestion SHALL remain disabled until the new source and its actual manifest digest are validated. No historical objects or acceptance receipts SHALL be copied or relabelled as fresh acceptance.
+Dev SHALL enable DP1 workflow templates in `data`; prod SHALL keep the DP1 application disabled until explicitly enabled, with externally supplied credentials, commit-tagged images and explicit resource budgets. Fresh-start source selection SHALL use v17. Live simulation and recurring ingestion SHALL remain disabled until the new source and its actual manifest digest are validated. No historical objects or acceptance receipts SHALL be copied or relabelled as fresh acceptance.
 
 #### Scenario: Fresh environment rollout
 

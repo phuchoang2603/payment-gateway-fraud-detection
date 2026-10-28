@@ -1,2 +1,11 @@
 environment: prod
 namePrefix: payment-gateway-prod
+applications:
+  live-traffic:
+    enabled: false
+  fraud-features:
+    enabled: false
+  metadata-integrations:
+    enabled: false
+  data-pipelines:
+    enabled: false

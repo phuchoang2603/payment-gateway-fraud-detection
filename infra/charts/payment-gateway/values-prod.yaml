@@ -24,3 +24,5 @@ services:
     httpRoute:
       hostnames:
       - pay-gateway.phuchoang.sbs
+features:
+  enabled: false

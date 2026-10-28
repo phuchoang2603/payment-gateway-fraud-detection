@@ -1,4 +1,5 @@
 {{- range $name, $application := .Values.applications }}
+{{- if or (not (hasKey $application "enabled")) $application.enabled }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -36,4 +37,5 @@ spec:
         maxDuration: 3m
     syncOptions:
       - ServerSideApply=true
+{{- end }}
 {{- end }}
