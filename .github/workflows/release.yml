@@ -10,25 +10,36 @@ permissions:
   packages: write
 
 concurrency:
-  group: images-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: service-release-${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && format('fork-{0}', github.event.number) || (github.event_name == 'pull_request' && 'dev' || 'prod') }}
+  cancel-in-progress: false
+
+env:
+  DEPLOY_ENVIRONMENT: ${{ github.event_name == 'pull_request' && 'dev' || 'prod' }}
+  DEPLOY_IMAGE_TAG: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}', github.event.number, github.sha) || format('main-{0}', github.sha) }}
+  SOURCE_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.number) || 'refs/heads/main' }}
 
 jobs:
-  matrix:
+  plan:
     runs-on: ubuntu-latest
     outputs:
-      images: ${{ steps.images.outputs.matrix }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      build: ${{ steps.plan.outputs.build }}
+      image_tags: ${{ steps.plan.outputs.image_tags }}
+      previous: ${{ steps.plan.outputs.previous }}
     steps:
       - uses: actions/checkout@v7.0.1
-      - id: images
-        run: echo "matrix=$(jq -c . .github/service-images.json)" >> "$GITHUB_OUTPUT"
+        with:
+          fetch-depth: 0
+      - id: plan
+        run: python3 scripts/release.py plan
 
   images:
-    needs: matrix
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
     name: ${{ matrix.service }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.matrix.outputs.images) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     uses: ./.github/workflows/build-image.yml
     with:
       image: ${{ github.repository }}${{ matrix.image-suffix }}
@@ -38,22 +49,21 @@ jobs:
       publish: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 
   deploy:
-    needs: images
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: [plan, images]
+    if: >-
+      always() && !cancelled() && needs.plan.result == 'success' &&
+      (needs.images.result == 'success' || (needs.plan.outputs.build == 'false' && needs.images.result == 'skipped')) &&
+      (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'pull_request' && 'dev' || 'prod' }}
     permissions:
       contents: write
-    concurrency:
-      group: gateway-deploy-${{ github.event_name == 'pull_request' && 'dev' || 'prod' }}
-      cancel-in-progress: false
     env:
-      DEPLOY_ENVIRONMENT: ${{ github.event_name == 'pull_request' && 'dev' || 'prod' }}
-      DEPLOY_IMAGE_TAG: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}', github.event.number, github.sha) || format('main-{0}', github.sha) }}
-      SOURCE_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.number) || 'refs/heads/main' }}
+      IMAGE_TAGS: ${{ needs.plan.outputs.image_tags }}
+      PREVIOUS_RELEASE: ${{ needs.plan.outputs.previous }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
       - name: Publish the GitOps release
-        run: python3 scripts/publish-release.py
+        run: python3 scripts/release.py publish

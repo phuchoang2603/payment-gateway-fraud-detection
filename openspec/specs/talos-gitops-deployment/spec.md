@@ -52,12 +52,12 @@ Every PR and main push SHALL run independent Python, Go and Helm check jobs cove
 #### Scenario: Pull request or branch push
 
 - **WHEN** a PR is opened or updated
-- **THEN** independent checks validate all services and the image matrix builds every service image
+- **THEN** independent checks validate all services and the image matrix builds affected service images
 
 #### Scenario: Merged service changes
 
 - **WHEN** changes reach main
-- **THEN** fraud, edge, Payments, notifier, vault simulator, processor simulator and Debezium Connect images are built and published with the shared main commit tag
+- **THEN** affected service images are built and published with their new main commit tag; unchanged images retain their deployed tags
 
 ### Requirement: Gateway workload deployment
 
@@ -90,21 +90,21 @@ The deployment SHALL target Edge, Payments, fraud, notifier, vault simulator, pr
 
 ### Requirement: Separate PR and main image tags
 
-Same-repository PRs SHALL publish every application image with `pr-<number>-<full-sha>` using the built merge commit. Fork PRs SHALL build without publication. Main SHALL publish `main-<full-sha>`. Deployment SHALL use the shared commit-based tag for all application images, without mutable `latest` tags. Commit tags SHALL NOT be repurposed for different source code.
+Same-repository PRs SHALL publish affected application images with `pr-<number>-<full-sha>` using the built merge commit. Fork PRs SHALL build without publication. Main SHALL publish `main-<full-sha>`. Deployment SHALL use each application image’s retained commit-based tag, without mutable `latest` tags. Commit tags SHALL NOT be repurposed for different source code.
 
 #### Scenario: Publish PR images
 
 - **WHEN** a same-repository PR is updated
-- **THEN** every application image is published for that source revision and only the dev release may change
+- **THEN** every affected application image is published for that source revision and only the dev release may change
 
 ### Requirement: Complete environment releases
 
-After all application images publish successfully, CI SHALL publish one complete release to `deploy/dev` for a trusted PR or `deploy/prod` for main. The release SHALL select child chart sources at the release commit and one shared image tag from the same revision. Publication SHALL validate the shared tag against the source revision and skip superseded source revisions. Per-image manifests and digest/revision overrides SHALL NOT be required. CI SHALL NOT contact Kubernetes or commit image pins to main. Argo CD SHALL reconcile the release branch.
+After all affected application images publish successfully, CI SHALL publish one complete release to `deploy/dev` for a trusted PR or `deploy/prod` for main. The release SHALL select child chart sources at the release commit and per-service commit tags. Only services whose build dependencies changed since their deployed image commit SHALL rebuild; unchanged images SHALL retain their existing tags. Chart-only changes SHALL publish without image builds. Publication SHALL validate commit tags and protect the planned deployment baseline and skip superseded source revisions. Per-image manifests and digest/revision overrides SHALL NOT be required. CI SHALL NOT contact Kubernetes or commit image pins to main. Argo CD SHALL reconcile the release branch.
 
 #### Scenario: Publish a complete release
 
-- **WHEN** all application images for the current source revision have published
-- **THEN** one release records that revision and the shared application image tag on the corresponding deployment branch
+- **WHEN** all affected application images for the current source revision have published
+- **THEN** one release records the chart revision and each application image’s commit tag on the corresponding deployment branch
 
 #### Scenario: Superseded source
 
@@ -196,7 +196,7 @@ The platform SHALL provide bounded persistent StarRocks FE/BE resources for SQL 
 - **THEN** StarRocks reads the recorded Iceberg snapshots directly without a mandatory imported copy and acceptance checks matching native results
 
 ### Requirement: Matched metadata runtime ownership
-The application SHALL own the thin metadata image and workflow configuration, use the shared release image tag and match its official ingestion base/SDK to the shared OpenMetadata server. Generic externally managed metadata and lakehouse credential references SHALL remain reusable across pipeline stages. Shared platform services SHALL NOT be replaced or removed to reset DP1-owned application data.
+The application SHALL own the thin metadata image and workflow configuration, use its own service commit tag and match its official ingestion base/SDK to the shared OpenMetadata server. Generic externally managed metadata and lakehouse credential references SHALL remain reusable across pipeline stages. Shared platform services SHALL NOT be replaced or removed to reset DP1-owned application data.
 
 #### Scenario: Deploy the rewritten metadata stages
 

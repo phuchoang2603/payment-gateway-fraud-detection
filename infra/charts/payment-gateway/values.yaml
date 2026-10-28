@@ -1,6 +1,11 @@
 global:
-  imageTag: dev
-  revision: unknown
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/edge: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/notifier: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/vault-simulator: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/processor-simulator: dev
 externalSecrets:
   refreshInterval: 1h
   secretStoreRef:

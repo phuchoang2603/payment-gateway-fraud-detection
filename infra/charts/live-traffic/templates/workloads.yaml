@@ -26,7 +26,7 @@ spec:
         istio.io/dataplane-mode: ambient
 {{- end }}
       annotations:
-        checksum/config: {{ toJson $.Values | sha256sum }}
+        checksum/config: {{ omit $.Values "global" | toJson | sha256sum }}
     spec:
       serviceAccountName: {{ $name }}
       automountServiceAccountToken: false

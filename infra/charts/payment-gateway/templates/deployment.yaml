@@ -80,7 +80,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.uid
             - name: SERVICE_REVISION
-              value: {{ $.Values.global.revision | quote }}
+              value: {{ regexFind "[a-f0-9]{40}$" (index $.Values.global.imageTags $svc.image.repository) | default "dev" | quote }}
             {{- if $svc.database }}
             {{- include "payment-gateway.database-env" (dict "database" $svc.database "migrate" false) | nindent 12 }}
             {{- end }}

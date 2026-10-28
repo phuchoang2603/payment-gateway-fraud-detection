@@ -1,5 +1,7 @@
 global:
-  imageTag: dev
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata: dev
 enabled: false
 namespace: data
 image:

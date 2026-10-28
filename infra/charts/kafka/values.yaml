@@ -1,5 +1,8 @@
 global:
-  imageTag: dev
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/connect-debezium: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/schema-register: dev
 kafka:
   clusterName: payment-gateway-kafka
   version: 4.3.1

@@ -22,8 +22,8 @@ spec:
         - {{ printf "values-%s.yaml" ($.Values.environment | default "dev") }}
       valuesObject:
         global:
-          imageTag: {{ $.Values.global.imageTag | quote }}
-          revision: {{ $.Values.global.targetRevision | quote }}
+          imageTags:
+{{ toYaml $.Values.global.imageTags | indent 12 }}
   syncPolicy:
     automated:
       prune: true

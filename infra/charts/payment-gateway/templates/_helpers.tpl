@@ -45,6 +45,6 @@ capabilities:
 
 {{- define "payment-gateway.image" -}}
 {{- $repository := required "image.repository is required" .image.repository -}}
-{{- $tag := required "global.imageTag is required" .global.imageTag -}}
+{{- $tag := required (printf "image tag missing for %s" $repository) (index .global.imageTags $repository) -}}
 {{- printf "%s:%s" $repository $tag -}}
 {{- end -}}

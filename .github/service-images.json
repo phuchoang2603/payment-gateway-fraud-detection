@@ -5,84 +5,147 @@
       "image-suffix": "",
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
-      "build-args": "SERVICE_PATH=src/payment-gateway/fraud\nBUILD_PKG=./cmd/fraud\nBUILD_BIN=fraud\nEXPOSE_PORT=8000\n"
+      "build-args": "SERVICE_PATH=src/payment-gateway/fraud\nBUILD_PKG=./cmd/fraud\nBUILD_BIN=fraud\nEXPOSE_PORT=8000\n",
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
+        "src/payment-gateway/fraud",
+        "src/payment-gateway/shared"
+      ]
     },
     {
       "service": "edge",
       "image-suffix": "/edge",
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
-      "build-args": "SERVICE_PATH=src/payment-gateway/edge\nBUILD_PKG=./cmd/edge\nBUILD_BIN=edge\nEXPOSE_PORT=8080\n"
+      "build-args": "SERVICE_PATH=src/payment-gateway/edge\nBUILD_PKG=./cmd/edge\nBUILD_BIN=edge\nEXPOSE_PORT=8080\n",
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
+        "src/payment-gateway/edge",
+        "src/payment-gateway/shared"
+      ]
     },
     {
       "service": "payments",
       "image-suffix": "/payments",
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
-      "build-args": "SERVICE_PATH=src/payment-gateway/payments\nBUILD_PKG=./cmd/payments\nBUILD_BIN=payments\nEXPOSE_PORT=8000\n"
+      "build-args": "SERVICE_PATH=src/payment-gateway/payments\nBUILD_PKG=./cmd/payments\nBUILD_BIN=payments\nEXPOSE_PORT=8000\n",
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
+        "src/payment-gateway/payments",
+        "src/payment-gateway/shared"
+      ]
     },
     {
       "service": "notifier",
       "image-suffix": "/notifier",
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
-      "build-args": "SERVICE_PATH=src/payment-gateway/notifier\nBUILD_PKG=./cmd/notifier\nBUILD_BIN=notifier\nEXPOSE_PORT=8000\n"
+      "build-args": "SERVICE_PATH=src/payment-gateway/notifier\nBUILD_PKG=./cmd/notifier\nBUILD_BIN=notifier\nEXPOSE_PORT=8000\n",
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
+        "src/payment-gateway/notifier",
+        "src/payment-gateway/shared"
+      ]
     },
     {
       "service": "vault-simulator",
       "image-suffix": "/vault-simulator",
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
-      "build-args": "SERVICE_PATH=src/payment-gateway/vault-simulator\nBUILD_PKG=./cmd/vault-simulator\nBUILD_BIN=vault-simulator\nEXPOSE_PORT=8000\n"
+      "build-args": "SERVICE_PATH=src/payment-gateway/vault-simulator\nBUILD_PKG=./cmd/vault-simulator\nBUILD_BIN=vault-simulator\nEXPOSE_PORT=8000\n",
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
+        "src/payment-gateway/vault-simulator",
+        "src/payment-gateway/shared"
+      ]
     },
     {
       "service": "processor-simulator",
       "image-suffix": "/processor-simulator",
       "context": ".",
       "dockerfile": "infra/docker/go-service.Dockerfile",
-      "build-args": "SERVICE_PATH=src/payment-gateway/processor-simulator\nBUILD_PKG=./cmd/processor-simulator\nBUILD_BIN=processor-simulator\nEXPOSE_PORT=8000\n"
+      "build-args": "SERVICE_PATH=src/payment-gateway/processor-simulator\nBUILD_PKG=./cmd/processor-simulator\nBUILD_BIN=processor-simulator\nEXPOSE_PORT=8000\n",
+      "paths": [
+        "infra/docker/go-service.Dockerfile",
+        "src/payment-gateway/processor-simulator",
+        "src/payment-gateway/shared"
+      ]
     },
     {
       "service": "connect-debezium",
       "image-suffix": "/connect-debezium",
       "context": ".",
-      "dockerfile": "infra/docker/connect-debezium.Dockerfile"
+      "dockerfile": "infra/docker/connect-debezium.Dockerfile",
+      "paths": [
+        "infra/docker/connect-debezium.Dockerfile"
+      ]
     },
     {
       "service": "schema-register",
       "image-suffix": "/schema-register",
       "context": ".",
-      "dockerfile": "infra/docker/schema-register.Dockerfile"
+      "dockerfile": "infra/docker/schema-register.Dockerfile",
+      "paths": [
+        "infra/docker/schema-register.Dockerfile",
+        "contracts/payments/v1",
+        "contracts/features/v1",
+        "scripts/schema_registry.py"
+      ]
     },
     {
       "service": "live-simulator",
       "image-suffix": "/live-simulator",
       "context": ".",
-      "dockerfile": "infra/docker/live-simulator.Dockerfile"
+      "dockerfile": "infra/docker/live-simulator.Dockerfile",
+      "paths": [
+        "infra/docker/live-simulator.Dockerfile",
+        "src/data-pipeline/simulator"
+      ]
     },
     {
       "service": "data-platform-spark",
       "image-suffix": "/data-platform-spark",
       "context": ".",
-      "dockerfile": "infra/docker/data-platform-spark.Dockerfile"
+      "dockerfile": "infra/docker/data-platform-spark.Dockerfile",
+      "paths": [
+        "infra/docker/data-platform-spark.Dockerfile",
+        "src/data-pipeline/bronze-ingestion",
+        "contracts/data-products",
+        "contracts/features"
+      ]
     },
     {
       "service": "data-platform-metadata",
       "image-suffix": "/data-platform-metadata",
       "context": ".",
-      "dockerfile": "infra/docker/data-platform-metadata.Dockerfile"
+      "dockerfile": "infra/docker/data-platform-metadata.Dockerfile",
+      "paths": [
+        "infra/docker/data-platform-metadata.Dockerfile",
+        "src/data-pipeline/bronze-ingestion/data_platform",
+        "contracts/data-products",
+        "contracts/features"
+      ]
     },
     {
       "service": "feast",
       "image-suffix": "/feast",
       "context": ".",
-      "dockerfile": "infra/docker/feast.Dockerfile"
+      "dockerfile": "infra/docker/feast.Dockerfile",
+      "paths": [
+        "infra/docker/feast.Dockerfile",
+        "src/data-pipeline/feast"
+      ]
     },
     {
       "service": "streaming",
       "image-suffix": "/streaming",
       "context": ".",
-      "dockerfile": "infra/docker/streaming.Dockerfile"
+      "dockerfile": "infra/docker/streaming.Dockerfile",
+      "paths": [
+        "infra/docker/streaming.Dockerfile",
+        "src/data-pipeline/streaming"
+      ]
     }
   ]
 }
