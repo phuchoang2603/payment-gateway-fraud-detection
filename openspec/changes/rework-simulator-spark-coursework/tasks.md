@@ -18,7 +18,7 @@ Implementation update: full-batch curation, shared payment context, standalone w
 
 ## 3. DP1 reuse and Spark Silver
 
-- [ ] 3.1 Exercise DP1 on the mixed-version source using normal CI-built images; verify independently pinned event/label snapshots, native raw checks and bidirectional duplicate-aware conservation before accepting raw outputs.
+- [x] 3.1 Exercise DP1 on the mixed-version source using normal CI-built images; verify independently pinned event/label snapshots, native raw checks and bidirectional duplicate-aware conservation before accepting raw outputs.
 - [x] 3.2 Implement Silver scoped grains/keys, canonical events, attempt histories, label observations and delivery provenance in the existing Spark package; verify focused CI behavior rejects content conflicts and retains exact delivery accounting while collapsing identical business duplicates.
 - [x] 3.3 Adapt Silver quality contracts for conditional schema, lifecycle/context/amount/linkage and complete versus recurring pending history; verify native results enforce label availability and keep truth/chargeback/decision meanings separate without recreating retired DP1 fault probes.
 - [x] 3.4 Replace affected-entity incremental processing with full-batch recomputation over explicitly selected accepted Bronze receipts; remove automatic accepted-base merging and bounded-backfill controls and their redundant tests. Retain simple input/output identities and separate acceptance; verify idempotent replay, independent late labels and newly accepted older records in focused CI checks.

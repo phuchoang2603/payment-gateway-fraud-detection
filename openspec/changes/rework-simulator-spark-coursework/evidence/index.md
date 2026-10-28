@@ -22,6 +22,8 @@ Discovery, validation and profiling completed successfully; the expected rule se
 
 These executions used client `2.0.6.0`; their logs identify the migrated server as `2.0.7`. The shared image is updated to official `openmetadata/ingestion:2.0.7`, OCI index digest `sha256:5c0bd8728d4f92b67de3fac1a5664015364b7eca07d0038504138f17a3d243c6`, verified against the registry manifest bytes. Its CI build and subsequent runtime use remain pending.
 
+All 23 CI checks passed on `4b332a1`. Dev deployed metadata image `pr-97-fd37d3acf4f32b0dd1f6337e5d3cbb715d071a04` with matched OpenMetadata 2.0.7 and the corrected ownership contracts. Workflow `data/dev-v17-dp1-5q4vz` reused the existing raw snapshots (ingestion skipped), reran discovery/validation/profiling under the changed contract hashes, and published accepted receipt `s3://platform-dev/runs/payment-gateway/dp1/accepted/v17.json`. Its result is `passed`: six expected cases, zero problems and no governance gaps, with the same manifest digest, run ID and independent snapshots recorded above. Final workflow cleanup was still running when the receipt was read. Separate Silver workflow `data/dev-v17-dp2-f48gw` was then submitted against accepted version `v17`, completeness `complete`; Silver acceptance remains pending.
+
 | Requirement | Status | Retain after execution |
 |---|---|---|
 | Generator configuration and diagnostics | Notebook executed against verified fresh source | Manifest/hash, generator fingerprint, actual configuration, volume, dates, skew, exact/approximate cardinality, schema null/value results and illustrative duplicate accounting in the [notebook](../../../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb); Spark diagnostics remain pending |
