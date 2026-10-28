@@ -578,7 +578,7 @@ func TestSimulatedClientValidation(t *testing.T) {
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
 	token, _ := h.tokenize(syntheticKey, "4111000000000008")
 	for name, client := range map[string]string{
-		"bad country": `{"ip_country": "Vietnam"}`,
+		"bad country": `{"ip_country": "United States"}`,
 		"bad network": `{"ip_network": "not-an-ip"}`,
 	} {
 		body := fmt.Sprintf(`{"payment_method_token": %q, "simulated_client": %s}`, token, client)

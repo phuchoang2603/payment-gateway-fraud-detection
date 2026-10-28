@@ -12,7 +12,7 @@ The original pre-scale generator had several independent scaling limits (histori
 - `_compact` limits DuckDB memory, but `_validate` opens a separate connection without the same resource controls. Lifecycle checks use full-history distinct/window operations; label linkage joins both datasets across dates.
 - `card_testing.rate` means expected bursts per day, whereas compromise rates mean per-customer daily probabilities. A uniform multiplier would change fraud prevalence incorrectly. The IPv4 network pool is intentionally capped at 65,536 `/24` networks within `10.0.0.0/8`.
 
-The existing historical-payments ODCS contracts already express the required lifecycle, duplicate and delayed-label semantics. CardFraudPlatform's `generator/generate_scale.py` demonstrates independent day/chunk work, upload-and-release and a separate scale dataset; its simpler transaction records and throughput are not estimates for this generator. RecSys supplies pipeline patterns but no inspected proof of a 100 GB generation run.
+The existing historical-payments ODCS contracts already express the required lifecycle, duplicate and delayed-label semantics.
 
 The coursework source inspected for this plan is `EDAI K11 - DE.xlsx`, sheet `edai-1 (50%)`, cell B5; it says offline simulation is at least 100 GB. Cell C8 asks for persisted source data before bronze ingestion; streaming starts separately at B9. The project [roadmap](../../../docs/overview/roadmap.md#references) links the published rubric. Neither the workbook wording nor the references establish whether its volume is compressed or uncompressed.
 

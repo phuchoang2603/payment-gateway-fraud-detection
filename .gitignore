@@ -82,7 +82,6 @@ dmypy.json
 # OS-specific files
 .DS_Store
 Thumbs.db
-/docs/coursework/
 
 # Local development shell state
 .devenv/

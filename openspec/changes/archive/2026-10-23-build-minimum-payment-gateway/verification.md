@@ -83,4 +83,4 @@ Compare the topic with the ledger by consuming `payments.events.v1` with a Kafka
 
 ## Limits
 
-This is a synthetic acceptance run on one prod cluster. It does not establish the 99.9% monthly objective, the 50 attempts/s load target, PCI DSS compliance, ISO 8583 behavior, VND or issuer authentication, authorization/capture, settlement or reconciliation. The expiry check moved one payment's `expires_at` into the past; no other ledger input was altered.
+This is a synthetic acceptance run on one prod cluster. It does not establish the 99.9% monthly objective, the 50 attempts/s load target, PCI DSS compliance, ISO 8583 behavior, issuer authentication, authorization/capture, settlement or reconciliation. The expiry check moved one payment's `expires_at` into the past; no other ledger input was altered.

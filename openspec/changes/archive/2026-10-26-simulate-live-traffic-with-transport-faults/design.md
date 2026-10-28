@@ -62,7 +62,7 @@ For duplicate and late selection use the first eight SHA-256 bytes of `{seed}:{f
 
 A record completes only after all required publications are acknowledged. Commit the next Kafka offset only through the contiguous completed prefix of each partition. After a crash, held/unacknowledged events are reconsumed; extra duplicates are possible, loss is not acceptable within retained source offsets. With faults disabled, an uninterrupted pass publishes each consumed record once in order; restart recovery remains at least once. Logs distinguish configured faults, observed delivery counts, backlog and replay caveats.
 
-These are delivery faults, not RecSys-style request-volume bursts or backdated source events. RecSys's Python `StreamProblemPipeline` demonstrates useful module organization, but writes generated records to Postgres with integrated backdating/replay/tick multipliers. The card-fraud producer directly replays generated Kafka records, with faults already present in its data. Neither replaces the gateway-owned committed-event boundary here.
+These are delivery faults, not request-volume bursts or backdated source events. The producer directly replays generated Kafka records, with faults already present in its data. This does not replace the gateway-owned committed-event boundary.
 
 ### Independent labels and valid training targets
 

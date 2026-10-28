@@ -107,13 +107,11 @@ Streaming windows specify event time, watermarks, allowed lateness, deduplicatio
 
 The streaming implementation updates rolling counts, the 24h amount sum and seven-day device reference counts incrementally. Ordered expiry queues replace full-history scans and retain exact microsecond window boundaries; each entity registers only its next Flink timer. Typed digest state avoids pickling event-dedup metadata, and each source payload is decoded once. State layout changes require a fresh explicitly isolated epoch rather than allowing unrestored state into existing online keys. Per-entity serialization and the single source-progress observer remain potential bottlenecks; these changes do not establish throughput, checkpoint-size or memory improvements without comparable CI/deployed measurements.
 
-Long-running Flink jobs and their checkpoints stay on premises near Kafka and the lake. Local Spark is the batch baseline. AWS burst evaluation may stage an immutable versioned snapshot *one way* from MinIO to AWS S3 for a bounded Spark backfill; cloud outputs stay in separate S3 storage until validated and selectively imported. No live bidirectional Iceberg/catalog replication, cross-WAN Flink state or unmeasured large Spark deployment on today's stateless AWS workers.
+Long-running Flink jobs and their checkpoints stay on premises near Kafka and the lake. Local Spark is the batch baseline. AWS burst evaluation may stage an immutable versioned snapshot _one way_ from MinIO to AWS S3 for a bounded Spark backfill; cloud outputs stay in separate S3 storage until validated and selectively imported. No live bidirectional Iceberg/catalog replication, cross-WAN Flink state or unmeasured large Spark deployment on today's stateless AWS workers.
 
 ## Shared storage and service boundaries
 
 Shared storage infrastructure may host separate service-owned databases and credentials; services must not share mutable domain models or query one another's tables. The planned gateway includes Edge, Payments, Go fraud, a processor simulator, an isolated vault simulator, Redis, Kafka and the webhook notifier. Go fraud owns the rules decision runtime; Feast feature serving and KServe inference are introduced later as separate dependencies called directly by Go fraud. Integration configuration and derived IDs replace Accounts. Keep recovery and expiry workers inside Payments until independent scaling or isolation is needed; features, inference, drift and investigation follow their own acceptance steps.
-
-The [Vietnam payment policy research](../research/vietnam-payment-policy.md) separates current regulatory sources, provider policies and fictional simulator assumptions, including authentication and dispute scope.
 
 ## Historical DP1
 

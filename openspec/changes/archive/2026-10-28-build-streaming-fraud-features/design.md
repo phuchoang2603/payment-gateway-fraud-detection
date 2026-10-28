@@ -20,7 +20,7 @@ Use a pinned PyFlink-compatible Python runtime independent of the simulator's Py
 
 The durable feature topic adds one journal and a small writer but isolates Feast downtime from aggregation and supports independent replay and a later offline consumer. Direct synchronous Flink-to-Feast HTTP pushes couple checkpoints to an external side effect and were rejected. No custom Redis feature serialization or extra scoring coordinator is needed.
 
-The card-fraud-platform reference uses the topic/SDK-writer pattern, but includes current authorization and uses incompatible defaults. RecSys provides state/window examples but has a custom Redis layout/API we will not copy. Context7 was unavailable due to quota during exploration; official Flink/Feast docs and Feast Redis source informed this design. Pin-release behavior must be verified before rollout, especially equal timestamps and concurrent writes.
+Context7 was unavailable due to quota during exploration; official Flink/Feast docs and Feast Redis source informed this design. Pin-release behavior must be verified before rollout, especially equal timestamps and concurrent writes.
 
 ### 2. Snapshot semantics and coverage are explicit
 
