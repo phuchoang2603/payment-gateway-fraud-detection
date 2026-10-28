@@ -1,4 +1,6 @@
 enabled: true
+spark:
+  shufflePartitions: 32
 config:
   SILVER_EVIDENCE_ROOT: s3://platform-dev/runs/payment-gateway/dp2
   SOURCE_ROOT: s3://platform-dev/datasets/payment-gateway/historical/v17

@@ -3,6 +3,7 @@ import re
 import time
 from uuid import uuid4
 
+from pyspark import StorageLevel
 from pyspark.sql import functions as F
 
 from fraud_batch.common.contracts import check_physical
@@ -75,7 +76,9 @@ def write_candidate(spark, store, candidate, frames, completeness, namespace="si
             spark.sql(f"CREATE NAMESPACE lake.{namespace}")
         for table, frame in candidate_outputs(frames).items():
             name = table_name(table, namespace)
-            expected = frame.withColumn("_candidate_id", F.lit(candidate["candidate_id"])).persist()
+            expected = frame.withColumn("_candidate_id", F.lit(candidate["candidate_id"])).persist(
+                StorageLevel.DISK_ONLY
+            )
             try:
                 check_physical(expected.schema, schema(table))
                 if not spark.catalog.tableExists(name):

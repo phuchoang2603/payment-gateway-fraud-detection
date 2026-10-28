@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
 
+from pyspark import StorageLevel
 from pyspark.sql import functions as F
 
 from fraud_batch.silver.diagnostics import source_diagnostics
@@ -56,7 +57,7 @@ def persist_intermediates(candidate):
     ]
     try:
         for frame in frames:
-            frame.persist()
+            frame.persist(StorageLevel.DISK_ONLY)
         yield candidate
     finally:
         for frame in reversed(frames):
