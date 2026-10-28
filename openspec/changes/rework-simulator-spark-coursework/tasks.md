@@ -17,7 +17,7 @@
 - [ ] 3.1 Exercise DP1 on the mixed-version source using normal CI-built images; verify independently pinned event/label snapshots, native raw checks and bidirectional duplicate-aware conservation before accepting raw outputs.
 - [ ] 3.2 Implement Silver scoped grains/keys, canonical events, attempt histories, label observations and delivery provenance in the existing Spark package; verify focused CI behavior rejects content conflicts and retains exact delivery accounting while collapsing identical business duplicates.
 - [ ] 3.3 Adapt Silver quality contracts for conditional schema, lifecycle/context/amount/linkage and complete versus recurring pending history; verify native results enforce label availability and keep truth/chargeback/decision meanings separate without recreating retired DP1 fault probes.
-- [ ] 3.4 Add accepted-input progress, affected-entity correction, bounded backfill and candidate/accepted receipts; verify CI recovery covers partial writes, replay, independent labels and newly accepted older records without duplicate outputs or promotion of failed candidates.
+- [ ] 3.4 Add accepted-input progress, affected-entity correction, bounded backfill and candidate/accepted receipts; verify CI covers idempotent replay, independent labels and newly accepted older records without duplicate outputs or promotion of failed candidates.
 
 ## 4. Data pipeline integration and relevant evidence
 
@@ -32,3 +32,5 @@
 - [x] 5.2 Move maintained generator instructions from `data-products.md` into the guide, retain dataset receipts/product descriptions, and minimally link from `data-pipeline.md` and existing navigation; verify links resolve and no instructions or generated field references are duplicated.
 - [ ] 5.3 Remove superseded changed-area branches/references and redundant coverage, run local non-test lint/schema/diff checks and inspect required CI tests/builds; verify all changes stay within data scope and no local tests/builds or unrelated optimization work is performed.
 - [ ] 5.4 Simplify the development writer to recoverable batch snapshot replacement, remove screenshot validation and its tests, and provide manual capture guidance; verify lint/spec checks locally and writer behavior in CI.
+
+- [ ] 5.5 Use parametrized equivalence partitions and cutover boundary values, Hypothesis duplicate-replay idempotency, and CI-only mutmut on selected changed schema-schedule functions with a mutation score above 80%; retain the exact mutation scope and results. Remove the Silver test-only interruption hook and avoid new publication-failure simulations.

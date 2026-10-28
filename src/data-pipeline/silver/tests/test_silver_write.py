@@ -1,4 +1,3 @@
-import pytest
 from data_platform.ingest import source_frames
 from data_platform.runs import open_run
 from pipeline_common.products import hashes
@@ -12,7 +11,7 @@ from silver_pipeline.silver_transform import CandidateFrames
 from silver_pipeline.silver_write import OUTPUTS, selected_snapshot, table_name, write_candidate
 
 
-def test_candidate_recovers_a_partial_commit_without_promoting(spark, dataset, tmp_path, bounded_shuffle):
+def test_repeated_candidate_write_keeps_the_same_snapshots(spark, dataset, tmp_path, bounded_shuffle):
     root, manifest = dataset
     store = Store(str(tmp_path / "evidence"))
     run = open_run(store, "smoke", "a" * 64, hashes(), "image", "workflow")
@@ -35,20 +34,13 @@ def test_candidate_recovers_a_partial_commit_without_promoting(spark, dataset, t
     }
     candidate["candidate_id"] = digest({field: candidate[field] for field in IDENTITY_FIELDS})
 
-    def interrupt(table):
-        raise RuntimeError(f"interrupted after {table}")
-
-    with pytest.raises(RuntimeError, match="interrupted after payment_events"):
-        write_candidate(spark, store, candidate, frames, "complete", "silver_recovery", after_commit=interrupt)
-    assert candidate["snapshots"] == {}
-    assert store.get("dp2/accepted.json") is None
-    write_candidate(spark, store, candidate, frames, "complete", "silver_recovery")
+    write_candidate(spark, store, candidate, frames, "complete", "silver_replay")
     snapshots = dict(candidate["snapshots"])
     assert set(snapshots) == set(OUTPUTS)
-    write_candidate(spark, store, candidate, frames, "complete", "silver_recovery")
+    write_candidate(spark, store, candidate, frames, "complete", "silver_replay")
     assert candidate["snapshots"] == snapshots
     events_output = selected_snapshot(
-        spark, table_name("payment_events", "silver_recovery"), snapshots["payment_events"]
+        spark, table_name("payment_events", "silver_replay"), snapshots["payment_events"]
     )
     assert events_output.count() == events.canonical.count()
     assert store.get("dp2/accepted.json") is None

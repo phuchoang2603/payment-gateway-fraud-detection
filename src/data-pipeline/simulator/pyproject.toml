@@ -23,6 +23,7 @@ simulator = "simulator.runtime:main"
 dev = [
     "duckdb==1.5.5",
     "pytest>=9,<10",
+    "mutmut==3.8.0",
     "ruff>=0.14,<1",
 ]
 notebook = [
@@ -59,3 +60,8 @@ quote-style = "double"
 [tool.protobuf]
 python-package = "simulator.contracts"
 sources = ["payments/v1/types.proto", "payments/v1/events.proto", "payments/v1/labels.proto"]
+
+[tool.mutmut]
+source_paths = ["simulator"]
+only_mutate = ["simulator/config.py"]
+pytest_add_cli_args_test_selection = ["tests/test_schema_schedule.py"]

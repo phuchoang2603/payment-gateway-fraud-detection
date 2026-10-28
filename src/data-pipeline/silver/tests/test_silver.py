@@ -2,11 +2,38 @@ from datetime import UTC, datetime
 
 from data_platform.ingest import source_frames
 from data_platform.runs import open_run
+from hypothesis import HealthCheck, example, given, settings
+from hypothesis import strategies as st
 from pipeline_common.products import AUDIT, hashes
 from pipeline_common.storage import Store
+from pyspark.sql import functions as F
 
 from silver_pipeline.silver import attempt_histories, canonical_events, label_observations, mark_pending_events
 from silver_pipeline.silver_quality import invalid_recurring_lifecycles
+
+
+@settings(max_examples=8, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(st.lists(st.tuples(st.integers(0, 2), st.integers(0, 2), st.integers(0, 2)), min_size=1, max_size=6))
+@example([(0, 0, 0), (0, 0, 1), (1, 0, 0)])
+@example([(0, 0, 0), (0, 0, 0)])
+def test_canonical_events_are_idempotent_under_duplicate_replay(spark, bounded_shuffle, records):
+    audit = {name: "source" for name in AUDIT if name != "_source_schema_version"}
+    deliveries = spark.createDataFrame(
+        [
+            {
+                "integration_id": str(integration),
+                "event_id": str(event),
+                "content": content,
+                "_source_schema_version": 4,
+                **audit,
+            }
+            for integration, event, content in records
+        ]
+    )
+    first = canonical_events(deliveries).canonical
+    replay = canonical_events(deliveries.unionByName(deliveries).orderBy(F.col("content").desc()))
+    assert set(first.collect()) == set(replay.canonical.collect())
+    assert replay.provenance.agg(F.sum("deliveries")).first()[0] == 2 * len(records)
 
 
 def test_canonical_events_preserve_delivery_counts_and_reject_conflicts(spark, bounded_shuffle):

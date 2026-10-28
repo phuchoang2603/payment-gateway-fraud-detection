@@ -48,7 +48,7 @@ def selected_snapshot(spark, name, snapshot):
     return spark.read.format("iceberg").option("versionAsOf", str(snapshot)).load(name)
 
 
-def write_candidate(spark, store, candidate, frames, completeness, namespace="silver", after_commit=None):
+def write_candidate(spark, store, candidate, frames, completeness, namespace="silver"):
     if candidate.get("state") != "candidate" or not re.fullmatch(r"[a-f0-9]{64}", candidate.get("candidate_id", "")):
         raise ValueError("Silver output requires an identified unaccepted candidate")
     verify_candidate(candidate)
@@ -90,8 +90,6 @@ def write_candidate(spark, store, candidate, frames, completeness, namespace="si
                         .option("snapshot-property.dp2.candidate-id", candidate["candidate_id"])
                         .overwrite(F.lit(True))
                     )
-                    if after_commit:
-                        after_commit(table)
                     snapshot = committed_snapshot(spark, name, candidate["candidate_id"])
                     if snapshot is None:
                         raise RuntimeError("Silver commit did not produce a recoverable snapshot")
