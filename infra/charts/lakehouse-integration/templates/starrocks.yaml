@@ -16,6 +16,11 @@ spec:
     - secretKey: ROOT_PASSWORD
       remoteRef:
         key: {{ $s.rootPasswordKey }}
+  {{- range $i, $u := $s.users }}
+    - secretKey: USER_{{ $i }}_PASSWORD
+      remoteRef:
+        key: {{ $u.passwordKey }}
+  {{- end }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -35,11 +40,6 @@ spec:
     - secretKey: AWS_SECRET_ACCESS_KEY
       remoteRef:
         key: {{ .Values.storage.secretKey }}
-  {{- range $i, $u := $s.users }}
-    - secretKey: USER_{{ $i }}_PASSWORD
-      remoteRef:
-        key: {{ $u.passwordKey }}
-  {{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap

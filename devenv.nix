@@ -4,7 +4,6 @@
 
   packages = with pkgs; [
     kubernetes-helm
-    opentofu
     kubectl
 
     ruff

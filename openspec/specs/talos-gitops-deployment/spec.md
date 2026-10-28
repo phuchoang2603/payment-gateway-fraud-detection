@@ -204,7 +204,7 @@ The application SHALL own the thin metadata image and workflow configuration, pi
 - **THEN** native workflows and SDK synchronization use the matched version through external secret references without installing a second catalog or retaining a parallel HTTP publisher
 
 ### Requirement: Gateway-owned lakehouse integration
-The gateway repository SHALL own the unified object storage IAM policy, production identity, gateway Doppler credential keys, Polaris catalog registration and StarRocks catalog/reader setup. The platform SHALL own servers, durable databases and administrative authentication. The gateway integration SHALL provide the storage Secret referenced by the platform Polaris Deployment without creating a second storage identity.
+The gateway repository SHALL own the unified object storage policy, gateway Doppler credential references, Polaris catalog registration and StarRocks catalog/reader setup. The platform SHALL provision production storage identities and publish credentials to gateway Doppler using the gateway-owned policy at a pinned revision. The platform SHALL own servers, durable databases, administrative authentication and generated StarRocks reader passwords. The gateway integration SHALL provide the storage Secret referenced by the platform Polaris Deployment without creating a second storage identity.
 
 #### Scenario: Reconcile the gateway integration
 - **WHEN** the selected environment is reconciled with gateway credentials available

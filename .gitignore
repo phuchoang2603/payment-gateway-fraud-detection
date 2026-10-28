@@ -77,7 +77,6 @@ dmypy.json
 *.tfstate*
 *.tfplan
 .terraform.lock.hcl
-!infra/terraform/storage/.terraform.lock.hcl
 .terraform/
 
 # OS-specific files

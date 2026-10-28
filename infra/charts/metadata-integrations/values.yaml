@@ -17,7 +17,7 @@ connectors:
   starrocks:
     externalSecret:
       name: metadata-starrocks
-      store: gateway-doppler
+      store: doppler
       data:
         STARROCKS_PASSWORD: STARROCKS_OPENMETADATA_PASSWORD
     kind: database
