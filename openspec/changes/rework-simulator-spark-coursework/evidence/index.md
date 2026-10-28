@@ -33,3 +33,5 @@ All 23 CI checks passed on `4b332a1`. Dev deployed metadata image `pr-97-fd37d3a
 | Code and UI captures | Pending | Actual code, Spark, separate Argo DP1/DP2 stages and OpenMetadata lineage/validation/contracts; Argo browser access reached the login page and its API returned 401, so no authenticated UI capture is claimed |
 
 Tests and image builds run in CI only. Record fresh results after the integration updates; prod and full-scale acceptance remain deferred. Archived history is retained separately.
+
+All 23 checks passed on `4375a9f`. The first Silver Spark attempt failed before transformation because Spark requires its event-log directory to exist: `FileNotFoundException: s3a://platform-dev/runs/payment-gateway/dp2/spark-events`. The driver log was inspected during the next attempt and preserved locally at `/tmp/dev-v17-silver-driver.log`. Silver planning now creates the event-log prefix via a hidden marker; the same marker was provisioned in dev so the existing workflow can retry. No source objects or Bronze snapshots were changed.

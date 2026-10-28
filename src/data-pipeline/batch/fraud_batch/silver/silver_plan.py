@@ -24,6 +24,7 @@ def main():
     should_run = not pointer or pointer.get("candidate_id") != candidate["candidate_id"]
     if candidate.get("state") != "candidate" and should_run:
         raise ValueError("selected Silver candidate is already accepted but not current")
+    silver.put("spark-events/.keep", {})
     output = Path(out)
     output.mkdir(parents=True, exist_ok=True)
     (output / "candidate-id").write_text(candidate["candidate_id"])
