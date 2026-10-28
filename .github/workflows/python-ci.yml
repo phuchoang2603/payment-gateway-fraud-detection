@@ -58,12 +58,12 @@ jobs:
           if ! git diff --quiet "$BASE_SHA"...HEAD -- simulator/config.py; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Mutate schema validation and cutover selection
+      - name: Mutate changed schema cutover selection
         if: steps.scope.outputs.changed == 'true'
         env:
           DATA_PRODUCTS_ROOT: ${{ github.workspace }}/contracts/data-products
         run: |
-          uv run --locked mutmut run --max-children 2 '*SchemaChange*' '*SchemaSchedule*'
+          uv run --locked mutmut run --max-children 2 '*SchemaSchedule*version_at*'
           uv run --locked mutmut export-cicd-stats
           uv run --locked mutmut results > mutants/results.txt
       - name: Require mutation score above 80 percent

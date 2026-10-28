@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone, tzinfo
 
 import pytest
 from pydantic import ValidationError
@@ -7,6 +7,11 @@ from simulator.arrow import ASSESSMENTS
 from simulator.config import SchemaSchedule
 
 BOUNDARY = datetime(2026, 7, 3, tzinfo=UTC)
+
+
+class UnspecifiedOffset(tzinfo):
+    def utcoffset(self, dt):
+        return None
 
 
 @pytest.mark.parametrize(
@@ -60,5 +65,9 @@ def test_declared_nonconsecutive_versions_and_multiple_cutovers(monkeypatch):
     assert schedule.version_at(BOUNDARY) == 3
     assert schedule.version_at(BOUNDARY + timedelta(days=1)) == 5
     assert SchemaSchedule(initial_version=4).version_at(BOUNDARY) == 4
+
+
+@pytest.mark.parametrize("zone", [None, UnspecifiedOffset()], ids=["missing-zone", "missing-offset"])
+def test_occurrence_requires_a_known_utc_offset(zone):
     with pytest.raises(ValueError, match="timezone"):
-        schedule.version_at(BOUNDARY.replace(tzinfo=None))
+        SchemaSchedule().version_at(BOUNDARY.replace(tzinfo=zone))
