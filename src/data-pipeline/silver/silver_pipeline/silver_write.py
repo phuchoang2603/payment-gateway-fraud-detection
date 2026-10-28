@@ -32,24 +32,43 @@ def candidate_outputs(frames):
     }
 
 
-def committed_snapshot(spark, name, candidate_id):
-    rows = (
-        spark.table(name + ".snapshots")
-        .where(F.col("summary")["dp2.candidate-id"] == candidate_id)
-        .orderBy(F.col("committed_at").desc())
-        .limit(1)
-        .collect()
-    )
+def current_snapshot(spark, name):
+    rows = spark.table(name + ".refs").where(F.col("name") == "main").select("snapshot_id").limit(1).collect()
     return rows[0].snapshot_id if rows else None
 
 
-def selected_snapshot(spark, name, snapshot, candidate_id):
-    return (
-        spark.read.format("iceberg")
-        .option("versionAsOf", str(snapshot))
-        .load(name)
-        .where(F.col("_candidate_id") == candidate_id)
-    )
+def selected_snapshot(spark, name, snapshot):
+    return spark.read.format("iceberg").option("versionAsOf", str(snapshot)).load(name)
+
+
+def merge_changes(spark, name, expected, candidate_id):
+    columns = [column for column in expected.columns if column != "_candidate_id"]
+    actual = spark.table(name).select(*columns)
+    target = expected.select(*columns)
+    removed = actual.exceptAll(target).withColumn("_change", F.lit("delete"))
+    added = target.exceptAll(actual).withColumn("_change", F.lit("insert"))
+    changes = removed.unionByName(added).persist()
+    view = "dp2_changes_" + uuid4().hex
+    try:
+        if changes.limit(1).count():
+            changes.createOrReplaceTempView(view)
+            match = " AND ".join(f"t.`{column}` <=> s.`{column}`" for column in columns)
+            names = ", ".join(f"`{column}`" for column in columns) + ", `_candidate_id`"
+            values = ", ".join(f"s.`{column}`" for column in columns) + f", '{candidate_id}'"
+            spark.sql(
+                f"MERGE INTO {name} t USING {view} s ON {match} "
+                "WHEN MATCHED AND s._change = 'delete' THEN DELETE "
+                f"WHEN NOT MATCHED AND s._change = 'insert' THEN INSERT ({names}) VALUES ({values})"
+            )
+        elif current_snapshot(spark, name) is None:
+            expected.writeTo(name).overwrite(F.lit(True))
+    finally:
+        spark.catalog.dropTempView(view)
+        changes.unpersist()
+    snapshot = current_snapshot(spark, name)
+    if snapshot is None:
+        raise RuntimeError("Silver commit did not produce a recoverable snapshot")
+    return snapshot
 
 
 def write_candidate(spark, store, candidate, frames, completeness, namespace="silver", after_commit=None):
@@ -79,28 +98,30 @@ def write_candidate(spark, store, candidate, frames, completeness, namespace="si
             spark.sql(f"CREATE NAMESPACE lake.{namespace}")
         for table, frame in candidate_outputs(frames).items():
             name = table_name(table, namespace)
-            expected = frame.withColumn("_candidate_id", F.lit(candidate["candidate_id"]))
-            check_physical(expected.schema, schema(table))
-            if not spark.catalog.tableExists(name):
-                expected.limit(0).writeTo(name).using("iceberg").partitionedBy("_candidate_id").create()
-            check_physical(spark.table(name).schema, expected.schema)
-            snapshot = candidate["snapshots"].get(table) or committed_snapshot(spark, name, candidate["candidate_id"])
-            if snapshot is None:
-                (
-                    expected.writeTo(name)
-                    .option("snapshot-property.dp2.candidate-id", candidate["candidate_id"])
-                    .overwrite(F.col("_candidate_id") == candidate["candidate_id"])
-                )
-                snapshot = committed_snapshot(spark, name, candidate["candidate_id"])
+            expected = frame.withColumn("_candidate_id", F.lit(candidate["candidate_id"])).persist()
+            try:
+                check_physical(expected.schema, schema(table))
+                if not spark.catalog.tableExists(name):
+                    expected.limit(0).writeTo(name).using("iceberg").partitionedBy("_candidate_id").create()
+                check_physical(spark.table(name).schema, expected.schema)
+                snapshot = candidate["snapshots"].get(table)
                 if snapshot is None:
-                    raise RuntimeError("Silver commit did not produce a recoverable snapshot")
-                if after_commit:
-                    after_commit(table)
-            actual = selected_snapshot(spark, name, snapshot, candidate["candidate_id"])
-            if actual.exceptAll(expected).limit(1).count() or expected.exceptAll(actual).limit(1).count():
-                raise ValueError(f"Silver candidate snapshot differs from deterministic output: {table}")
-            candidate["snapshots"][table] = snapshot
-            store.put(f"dp2/candidates/{candidate['candidate_id']}.json", candidate)
+                    snapshot = merge_changes(spark, name, expected, candidate["candidate_id"])
+                    if after_commit:
+                        after_commit(table)
+                actual = selected_snapshot(spark, name, snapshot)
+                columns = [column for column in expected.columns if column != "_candidate_id"]
+                actual_content = actual.select(*columns)
+                expected_content = expected.select(*columns)
+                if (
+                    actual_content.exceptAll(expected_content).limit(1).count()
+                    or expected_content.exceptAll(actual_content).limit(1).count()
+                ):
+                    raise ValueError(f"Silver candidate snapshot differs from deterministic output: {table}")
+                candidate["snapshots"][table] = snapshot
+                store.put(f"dp2/candidates/{candidate['candidate_id']}.json", candidate)
+            finally:
+                expected.unpersist()
         receipt["outcome"] = "passed"
         return candidate
     except Exception as error:

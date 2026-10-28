@@ -37,6 +37,6 @@ Missing chargebacks are unknown; scenario and future outcomes are not predecisio
 |  attempt_started_at | timestamp | *Start time when linked attempt context is complete.* |
 |  payment_succeeded_at | timestamp | *Success time when the linked attempt succeeded.* |
 |  pending_context | boolean | *True while required attempt or success context is missing.*<br />• `required` |
-|  _candidate_id | string | *Candidate identity.*<br />• `required` |
+|  _candidate_id | string | *Candidate that last changed this row; the accepted receipt identifies the complete snapshot.*<br />• `required` |
 
 ## SLA Properties

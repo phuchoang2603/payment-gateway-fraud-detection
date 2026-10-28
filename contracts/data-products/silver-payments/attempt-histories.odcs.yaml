@@ -42,4 +42,4 @@ schema:
   - {name: payment_last_version, logicalType: integer, physicalType: long, required: true, description: Latest selected aggregate version.}
   - {name: payment_event_count, logicalType: integer, physicalType: long, required: true, description: Number of selected canonical payment events.}
   - {name: pending_context, logicalType: boolean, physicalType: boolean, required: true, description: True when required payment or attempt context has not arrived.}
-  - {name: _candidate_id, logicalType: string, physicalType: string, required: true, description: Candidate identity.}
+  - {name: _candidate_id, logicalType: string, physicalType: string, required: true, description: Candidate that last changed this row; the accepted receipt identifies the complete snapshot.}

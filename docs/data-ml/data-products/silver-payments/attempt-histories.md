@@ -41,6 +41,6 @@ The history is not a predecision feature vector.
 |  payment_last_version | integer | *Latest selected aggregate version.*<br />• `required` |
 |  payment_event_count | integer | *Number of selected canonical payment events.*<br />• `required` |
 |  pending_context | boolean | *True when required payment or attempt context has not arrived.*<br />• `required` |
-|  _candidate_id | string | *Candidate identity.*<br />• `required` |
+|  _candidate_id | string | *Candidate that last changed this row; the accepted receipt identifies the complete snapshot.*<br />• `required` |
 
 ## SLA Properties

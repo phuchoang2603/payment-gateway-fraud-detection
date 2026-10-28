@@ -157,3 +157,27 @@ def test_integrity_and_overflow_fail_before_table_creation(spark, dataset, tmp_p
         ingest(spark, str(cloned), candidate, store, run, namespace="prewrite")
     assert not spark.catalog.tableExists(table_name("payment_events", "prewrite"))
     assert run["snapshots"] == {}
+
+
+def test_nested_normalization_preserves_null_parents_and_canonical_order(spark):
+    from pipeline_common.bronze_schema import normalize_events
+    from pyspark.sql import types as T
+
+    source = T.StructType([T.StructField("payload", T.StructType([T.StructField("existing", T.StringType())]))])
+    target = T.StructType(
+        [
+            T.StructField(
+                "payload",
+                T.StructType([T.StructField("added", T.StringType()), T.StructField("existing", T.StringType())]),
+            )
+        ]
+    )
+    rows = spark.createDataFrame([(("value",),), (None,)], source)
+    normalized = normalize_events(rows, source, target)
+    values = normalized.collect()
+    assert values[0].payload.asDict() == {"added": None, "existing": "value"}
+    assert values[1].payload is None
+    assert normalized.schema["payload"].dataType.fieldNames() == ["added", "existing"]
+    incompatible = T.StructType([T.StructField("payload", T.StringType())])
+    with pytest.raises(ValueError, match="incompatible physical type"):
+        normalize_events(rows, source, incompatible)

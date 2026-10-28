@@ -2,9 +2,20 @@ import os
 from hashlib import sha256
 from pathlib import Path
 
-PRODUCTS = Path(
-    os.environ.get("DATA_PRODUCTS_ROOT") or Path(__file__).resolve().parents[4] / "contracts/data-products"
-)
+
+def contracts_root():
+    configured = os.environ.get("DATA_PRODUCTS_ROOT")
+    if configured:
+        return Path(configured)
+    for base in (Path.cwd(), Path(__file__).resolve()):
+        for parent in (base, *base.parents):
+            candidate = parent / "contracts/data-products"
+            if candidate.is_dir():
+                return candidate
+    raise FileNotFoundError("set DATA_PRODUCTS_ROOT to the data-product contracts directory")
+
+
+PRODUCTS = contracts_root()
 PORTS = {"payment_events": "payment-events", "fraud_labels": "fraud-labels"}
 SILVER_PORTS = (
     "payment_events",

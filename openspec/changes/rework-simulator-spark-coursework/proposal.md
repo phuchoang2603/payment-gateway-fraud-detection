@@ -8,7 +8,7 @@ The generator and accepted DP1 preserve raw payment histories, but the current s
 - Configure and measure merchant/category skew, identity cardinality, identical duplicate exports and a configurable physical-schema version schedule (initial demonstration: event schema 3 to 4) within one new immutable historical dataset. Preserve complete lifecycle and delayed-label tails and all v16 evidence.
 - **BREAKING**: advance affected source/product/physical/Bronze contracts together, including assessment evidence references. Replace schema-3-only assumptions with version declarations and normalization rules shared by generation and ingestion, without transition-specific branches; unsupported shapes fail rather than silently losing fields.
 - Reuse DP1 and implement Spark Silver curation with conflict-aware deduplication, delivery accounting, lifecycle/linkage/context checks and label-availability semantics.
-- Compose existing DP1 and new DP2 stages in one Argo workflow while retaining persisted Bronze and independent acceptance boundaries.
+- Run DP1 and DP2 as independent Argo workflows, with persisted Bronze and separate acceptance boundaries.
 - Preserve reproducible unoptimized/optimized Spark executions for the generated offline problems. Require actual diagnostic output, Spark UI, code, Argo and OpenMetadata captures with immutable references.
 - Document generator configuration, schema schedules, source layout and diagnostic interpretation in `docs/data-ml/data-generator.md`; move relevant maintained instructions from existing data docs and link them without duplicating generated contract references. Preserve the source boundary for later drift continuation, without implementing drift detection.
 

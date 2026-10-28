@@ -47,10 +47,19 @@ def declared_versions(contract):
     )
 
 
-def physical_schemas():
-    product = yaml.safe_load((PRODUCTS / "historical-payments/product.odps.yaml").read_text())
+def physical_schemas(product_version=None):
+    product = (
+        source_contracts(product_version)[0]
+        if product_version is not None
+        else yaml.safe_load((PRODUCTS / "historical-payments/product.odps.yaml").read_text())
+    )
     path = next(
-        item["value"] for item in product["customProperties"] if item["property"] == "physicalSchemaDefinitions"
+        (
+            item["value"]
+            for item in product.get("customProperties", [])
+            if item["property"] == "physicalSchemaDefinitions"
+        ),
+        "historical-payments/physical-schemas-v1.yaml",
     )
     return yaml.safe_load((PRODUCTS / path).read_text())
 
@@ -63,8 +72,9 @@ def supported_versions(table):
     for path in products:
         product = yaml.safe_load(path.read_text())
         _, contracts = source_contracts(product["version"])
-        versions.update(declared_versions(yaml.safe_load(contracts[table].read_text())))
-    return versions.intersection(physical_schemas()[table])
+        declared = set(declared_versions(yaml.safe_load(contracts[table].read_text())))
+        versions.update(declared.intersection(physical_schemas(product["version"])[table]))
+    return versions
 
 
 def read_manifest(root):
@@ -126,7 +136,7 @@ def read_manifest(root):
             raise ValueError(f"unsupported source contract identity: {port}")
         if validation.get(port) != "passed" and not deferred:
             raise ValueError(f"source contract validation is incomplete: {port}")
-        supported = set(declared_versions(contract)).intersection(physical_schemas()[table])
+        supported = set(declared_versions(contract)).intersection(physical_schemas(product["version"])[table])
         versions = manifest.get("schema_versions", {}).get(table, [])
         if not versions or any(v not in supported for v in versions):
             raise ValueError(f"unsupported source schemas: {table}")

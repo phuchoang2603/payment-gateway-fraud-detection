@@ -334,7 +334,6 @@ def gaps(published, candidate, fetch=readback.get):
 
 
 def _publish_locked(store, candidate):
-    from silver_pipeline.silver_evidence import validate_evidence
     from silver_pipeline.silver_native import cases, expected, observed
 
     candidate_id = candidate["candidate_id"]
@@ -416,10 +415,6 @@ def _publish_locked(store, candidate):
         if problems:
             raise ValueError("Silver governance readback has gaps: " + ", ".join(problems[:10]))
         store.put(f"{prefix}/governance-pending/{attempt['attempt_id']}.json", published, create=True)
-        if candidate["completeness"] == "complete" or store.get(f"dp2/evidence/{candidate_id}.json") is not None:
-            evidence = validate_evidence(store, candidate, os.environ["GIT_REVISION"])
-        else:
-            evidence = {"status": "pending", "reason": "coursework captures not supplied for this recurring candidate"}
         stages["dp2-publish"] = {**attempt, "outcome": "passed", "ended_at": int(time.time() * 1000)}
         published["status"] = execution(candidate, stages, "passed")
         sdk.add_pipeline_status(PIPELINE, PipelineStatus.model_validate(published["status"]))
@@ -439,7 +434,6 @@ def _publish_locked(store, candidate):
             "transformation_revision": candidate["transformation_revision"],
             "completeness": candidate["completeness"],
             "diagnostics": diagnostic_ref,
-            "evidence": evidence,
             "native_validation": validation,
             "governance": published,
             "outcome": "passed",

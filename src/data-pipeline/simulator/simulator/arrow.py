@@ -5,6 +5,8 @@ from typing import Any
 import pyarrow as pa
 import yaml
 
+from simulator.paths import products_root
+
 Record = dict[str, Any]
 TIMESTAMP = pa.timestamp("us", tz="UTC")
 MONEY = pa.struct([("minor_units", pa.int64()), ("currency", pa.string())])
@@ -49,10 +51,11 @@ ASSESSMENT_FIELDS = {
     "assessment_id": pa.string(),
     "evidence_sha256": pa.string(),
 }
-SCHEMA_DEFINITIONS = Path(
-    os.environ.get("PAYMENT_PHYSICAL_SCHEMAS_PATH")
-    or Path(__file__).resolve().parents[4] / "contracts/data-products/historical-payments/physical-schemas-v1.yaml"
+_product = yaml.safe_load((products_root() / "historical-payments/product.odps.yaml").read_text())
+_schema_path = next(
+    item["value"] for item in _product["customProperties"] if item["property"] == "physicalSchemaDefinitions"
 )
+SCHEMA_DEFINITIONS = Path(os.environ.get("PAYMENT_PHYSICAL_SCHEMAS_PATH") or products_root() / _schema_path)
 PHYSICAL_SCHEMAS = yaml.safe_load(SCHEMA_DEFINITIONS.read_text())
 ASSESSMENTS = {
     version: pa.struct([(name, ASSESSMENT_FIELDS[name]) for name in definition["assessment_fields"]])

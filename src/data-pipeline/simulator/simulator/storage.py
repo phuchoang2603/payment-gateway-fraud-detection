@@ -22,6 +22,7 @@ from simulator.config import ALGORITHM_VERSION, RUN_STATE_VERSION, HistoricalCon
 from simulator.fragment_index import FragmentIndex
 from simulator.generation import Record, build_history
 from simulator.object_store import ObjectStore, digest_file
+from simulator.paths import products_root
 from simulator.profiles import (
     DUPLICATE_STAGE,
     HISTORY_STAGE,
@@ -35,9 +36,7 @@ from simulator.resources import CapacityExceeded, LimitedWriter, ResourceMonitor
 from simulator.run_state import RunState
 from simulator.statistics import DatasetStatistics
 
-PRODUCT_ROOT = Path(
-    os.environ.get("DATA_PRODUCTS_ROOT") or Path(__file__).resolve().parents[4] / "contracts/data-products"
-)
+PRODUCT_ROOT = products_root()
 PRODUCT_DIR = PRODUCT_ROOT / "historical-payments"
 COMPRESSION = "zstd"
 COMPRESSION_LEVEL = 3

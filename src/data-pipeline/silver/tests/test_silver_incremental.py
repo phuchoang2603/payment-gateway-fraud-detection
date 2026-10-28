@@ -114,7 +114,7 @@ def test_late_terminal_and_labels_recompute_only_affected_payment(
     monkeypatch.setattr(
         incremental,
         "selected_snapshot",
-        lambda spark, name, snapshot, candidate_id: prior_outputs[name.rsplit(".", 1)[-1]],
+        lambda spark, name, snapshot: prior_outputs[name.rsplit(".", 1)[-1]],
     )
     candidate = {**metadata, "inputs": [old_input, new_input], "boundaries": None}
     updated = incremental.recompute(spark, store, store, candidate, source, build)

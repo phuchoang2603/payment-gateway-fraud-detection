@@ -38,7 +38,7 @@ Progress SHALL track accepted input receipts and immutable selected snapshots in
 
 ### Requirement: Measured offline optimization
 
-Acceptance SHALL retain an unoptimized baseline and each measured optimization step using the same selected data, declared compute budget and equivalent correct output. Reports SHALL explain observed skew, high-cardinality cost, schema normalization and duplicate handling using actual execution evidence. Runtime, task distributions, shuffle/spill, available memory metrics and physical plans SHALL identify collection limitations. Development results SHALL NOT establish deferred full-scale acceptance.
+Coursework evidence SHALL retain an unoptimized baseline and each measured optimization step using the same selected data, declared compute budget and equivalent correct output. Reports SHALL explain observed skew, high-cardinality cost, schema normalization and duplicate handling using actual execution evidence. Runtime, task distributions, shuffle/spill, available memory metrics and physical plans SHALL identify collection limitations. Development results SHALL NOT establish deferred full-scale acceptance.
 
 #### Scenario: Optimization has no measured benefit
 

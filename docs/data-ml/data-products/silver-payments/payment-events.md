@@ -127,6 +127,6 @@ Decision and future outcome fields are not predecision features.
 |  payment_expired | object | *Terminal expiry with no pending processor result.* |
 | &#x2007;&#x21b3; _present | boolean | *True marker for the otherwise empty expiry payload.*<br />• `required` |
 |  _source_schema_version | integer | *Declared physical input schema version, independent of the event envelope.*<br />• `required` |
-|  _candidate_id | string | *Candidate identity resolved through the accepted product receipt.*<br />• `required` |
+|  _candidate_id | string | *Candidate that last changed this row; the accepted receipt identifies the complete snapshot.*<br />• `required` |
 
 ## SLA Properties

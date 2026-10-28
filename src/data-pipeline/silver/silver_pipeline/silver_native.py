@@ -12,13 +12,13 @@ from pipeline_common import quality, readback
 from pipeline_common.catalog import expand, native
 from pipeline_common.contracts import prepare
 from pipeline_common.integrations import workflow
-from pipeline_common.products import SILVER_PORTS
+from pipeline_common.products import PRODUCTS, SILVER_PORTS
 from pipeline_common.storage import Store
 
 from silver_pipeline.silver_contracts import contract_path, hashes, product_hash, quality_hash
 from silver_pipeline.silver_runs import publication_lock, verify_candidate
 
-QUALITY_ROOT = Path(os.environ.get("DATA_QUALITY_ROOT") or Path(__file__).resolve().parents[4] / "contracts/quality")
+QUALITY_ROOT = Path(os.environ.get("DATA_QUALITY_ROOT") or PRODUCTS.parent / "quality")
 
 
 @dataclass
@@ -37,10 +37,7 @@ def relation(candidate, table):
     snapshot = candidate["snapshots"][table]
     if type(snapshot) is not int or snapshot <= 0:
         raise ValueError("native quality requires a pinned Silver snapshot")
-    return (
-        f"(SELECT * FROM lakehouse.silver.{table} FOR VERSION AS OF {snapshot} "
-        f"WHERE _candidate_id = '{candidate['candidate_id']}')"
-    )
+    return f"(SELECT * FROM lakehouse.silver.{table} FOR VERSION AS OF {snapshot})"
 
 
 def bronze_count(candidate, table):

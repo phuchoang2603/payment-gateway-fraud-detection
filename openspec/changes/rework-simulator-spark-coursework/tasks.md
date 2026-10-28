@@ -21,7 +21,7 @@
 
 ## 4. Data pipeline integration and relevant evidence
 
-- [ ] 4.1 Compose DP1/DP2 templates in one Argo entrypoint with separate acceptance and direct-from-accepted-Bronze execution; verify CI workflow checks and deployed stage graph show readable ordering, bounded retries and the same graph for supported version schedules.
+- [ ] 4.1 Provide independent DP1 and DP2 Argo entrypoints with separate acceptance and direct-from-accepted-Bronze execution; verify CI workflow checks and deployed stage graph show readable ordering, bounded retries and the same graph for supported version schedules.
 - [ ] 4.2 Reuse shared OpenMetadata connections/runtime/SDK for curated contracts, lineage and native SQL checks; verify readback pins actual accepted inputs/outputs and complete current rule results.
 - [ ] 4.3 Preserve a correct unoptimized Spark baseline and measure targeted skew/high-cardinality optimizations using fixed input/resources; verify equal canonical content and retain plans, task durations, shuffle/spill/runtime and honest collection limits with code captures and Spark UI screenshots.
 - [ ] 4.4 Capture Argo DP1/DP2 ingest/validate ordering and OpenMetadata lineage/validation/contracts alongside data diagnostics; verify one concise evidence index resolves actual run/application IDs, selected snapshots, code revisions and results. Exclude Docker, gold/warehouse tuning, Flink and other unrelated evidence tasks.

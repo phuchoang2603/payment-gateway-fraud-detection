@@ -1,0 +1,61 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: data-pipeline-spark-utilities
+  namespace: __NAMESPACE__
+spec:
+  templates:
+    - name: cleanup-spark
+      inputs:
+        parameters:
+          - name: selector
+      steps:
+        - - name: applications
+            template: delete-spark-applications
+            arguments:
+              parameters:
+                - {name: selector, value: "{{inputs.parameters.selector}}"}
+        - - name: pods
+            template: delete-pods
+            arguments:
+              parameters:
+                - {name: selector, value: "{{inputs.parameters.selector}}"}
+    - name: delete-spark-applications
+      inputs:
+        parameters:
+          - name: selector
+      activeDeadlineSeconds: 180
+      resource:
+        action: delete
+        flags:
+          - sparkapplications.spark.apache.org
+          - --namespace=__NAMESPACE__
+          - --selector={{inputs.parameters.selector}}
+          - --cascade=foreground
+          - --wait=true
+          - --timeout=120s
+    - name: delete-pods
+      inputs:
+        parameters:
+          - name: selector
+      activeDeadlineSeconds: 180
+      resource:
+        action: delete
+        flags:
+          - pods
+          - --namespace=__NAMESPACE__
+          - --selector={{inputs.parameters.selector}}
+          - --cascade=foreground
+          - --wait=true
+          - --timeout=120s
+    - name: spark-outcome
+      inputs:
+        parameters:
+          - name: status
+      container:
+        image: __SPARK_IMAGE__
+        command: [python, -c]
+        args: ["import sys; sys.exit(0 if sys.argv[1] == 'Succeeded' else 1)", "{{inputs.parameters.status}}"]
+        resources:
+          requests: {cpu: 100m, memory: 128Mi}
+          limits: {cpu: "1", memory: 256Mi}

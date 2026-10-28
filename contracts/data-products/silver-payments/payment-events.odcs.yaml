@@ -504,4 +504,4 @@ schema:
     logicalType: string
     physicalType: string
     required: true
-    description: Candidate identity resolved through the accepted product receipt.
+    description: Candidate that last changed this row; the accepted receipt identifies the complete snapshot.

@@ -40,7 +40,7 @@ def main(argv=None):
     from pipeline_common.spark import session
 
     from silver_pipeline.diagnostics import retain_diagnostics
-    from silver_pipeline.silver_transform import transform
+    from silver_pipeline.silver_transform import persist_intermediates, transform
     from silver_pipeline.silver_write import write_candidate
 
     bronze = Store(args.bronze_evidence)
@@ -68,8 +68,9 @@ def main(argv=None):
     spark = session()
     try:
         frames = transform(spark, bronze, silver, candidate, relative_error=args.relative_error)
-        candidate = write_candidate(spark, silver, candidate, frames, args.completeness)
-        diagnostics = retain_diagnostics(silver, candidate, frames)
+        with persist_intermediates(frames):
+            candidate = write_candidate(spark, silver, candidate, frames, args.completeness)
+            diagnostics = retain_diagnostics(silver, candidate, frames)
         candidate["diagnostics"] = diagnostics
         silver.put(f"dp2/candidates/{candidate['candidate_id']}.json", candidate)
     finally:

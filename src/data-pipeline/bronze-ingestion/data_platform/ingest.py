@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pipeline_common.bronze_schema import event_input_schema, normalize_events, table_name
 from pipeline_common.contracts import check_physical, prepare
-from pipeline_common.manifest import verify_files
+from pipeline_common.manifest import physical_schemas, verify_files
 from pipeline_common.products import AUDIT, PORTS
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
@@ -30,7 +30,11 @@ def source_frames(spark, root, manifest, run):
                 ]
                 part = spark.read.parquet(*paths)
                 source_schema = (
-                    event_input_schema(target_schema, version) if table == "payment_events" else target_schema
+                    event_input_schema(
+                        target_schema, version, physical_schemas(manifest.get("data_product", {}).get("version"))
+                    )
+                    if table == "payment_events"
+                    else target_schema
                 )
                 check_physical(part.schema, source_schema)
                 if table == "payment_events":

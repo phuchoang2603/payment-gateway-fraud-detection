@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 from pyspark.sql import functions as F
@@ -42,26 +43,48 @@ def transform(
     )
 
 
+@contextmanager
+def persist_intermediates(candidate):
+    frames = [candidate.events.canonical, candidate.events.provenance, candidate.labels.observations]
+    try:
+        for frame in frames:
+            frame.persist()
+        yield candidate
+    finally:
+        for frame in reversed(frames):
+            frame.unpersist()
+
+
+def check_violations(checks):
+    findings = [frame.limit(1).select(F.lit(message).alias("violation")) for frame, message in checks]
+    combined = findings[0]
+    for finding in findings[1:]:
+        combined = combined.unionByName(finding)
+    result = combined.limit(1).collect()
+    if result:
+        raise ValueError(result[0].violation)
+
+
 def validate_basics(candidate, completeness):
     if completeness not in ("complete", "recurring"):
         raise ValueError("completeness must be complete or recurring")
-    if candidate.events.conflicts.limit(1).count():
-        raise ValueError("event identity has conflicting business content or physical schema")
-    if candidate.attempts.invalid.limit(1).count():
-        raise ValueError("attempt or payment identity has multiple start events")
     events = candidate.events.canonical
-    if missing_required_fields(events).limit(1).count():
-        raise ValueError("event is missing conditionally required contract fields")
-    if invalid_events(events).limit(1).count():
-        raise ValueError("event violates envelope, payload or assessment reference rules")
-    if invalid_checkout_amounts(events).limit(1).count():
-        raise ValueError("checkout item quantities or amounts are inconsistent")
-    if invalid_attempt_contexts(events, completeness).limit(1).count():
-        raise ValueError("attempt context differs from its immutable checkout")
-    if completeness == "complete" and invalid_complete_lifecycles(events).limit(1).count():
-        raise ValueError("complete payment lifecycle is invalid")
-    if completeness == "recurring" and invalid_recurring_lifecycles(events).limit(1).count():
-        raise ValueError("observed recurring payment transitions are invalid")
+    lifecycle = (
+        (invalid_complete_lifecycles(events), "complete payment lifecycle is invalid")
+        if completeness == "complete"
+        else (invalid_recurring_lifecycles(events), "observed recurring payment transitions are invalid")
+    )
+    check_violations(
+        [
+            (candidate.events.conflicts, "event identity has conflicting business content or physical schema"),
+            (candidate.attempts.invalid, "attempt or payment identity has multiple start events"),
+            (missing_required_fields(events), "event is missing conditionally required contract fields"),
+            (invalid_events(events), "event violates envelope, payload or assessment reference rules"),
+            (invalid_checkout_amounts(events), "checkout item quantities or amounts are inconsistent"),
+            (invalid_attempt_contexts(events, completeness), "attempt context differs from its immutable checkout"),
+            lifecycle,
+        ]
+    )
     if (
         events.where(
             F.col("integration_id").isNull()

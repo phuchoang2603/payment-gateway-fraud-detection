@@ -1,0 +1,6 @@
+{{- if .Values.enabled }}
+{{ .Files.Get "files/spark-utilities.yaml"
+  | replace "__NAMESPACE__" .Values.namespace
+  | replace "__SPARK_IMAGE__" (include "data-pipelines.image" .Values.images.spark)
+}}
+{{- end }}

@@ -1,55 +1,35 @@
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: historical-dp1-dp2
+  name: historical-dp2-silver
   namespace: __NAMESPACE__
 spec:
   serviceAccountName: dp1-workflow
-  entrypoint: composed
+  entrypoint: silver
   onExit: finalizer
   activeDeadlineSeconds: __WORKFLOW_DEADLINE__
   synchronization:
     mutexes:
-      - name: bronze-payments-writer
+      - name: silver-payments-writer
   arguments:
     parameters:
-      - {name: run-dp1, value: "false"}
-      - {name: source-root, value: __SOURCE_ROOT__}
-      - {name: dataset-version, value: __DATASET_VERSION__}
-      - {name: input-mode, value: historical}
-      - {name: source-epoch, value: __SOURCE_EPOCH__}
       - {name: accepted-versions, value: ""}
       - {name: candidate-id, value: ""}
       - {name: merge-current, value: "false"}
       - {name: completeness, value: complete}
-      - {name: run-benchmark, value: "true"}
+      - {name: run-benchmark, value: "false"}
       - {name: backfill-start, value: ""}
       - {name: backfill-end, value: ""}
   podGC:
     strategy: OnWorkflowSuccess
   templates:
-    - name: composed
+    - name: silver
       dag:
         tasks:
-          - name: dp1
-            when: "{{workflow.parameters.run-dp1}} == true"
-            templateRef: {name: historical-dp1-bronze, template: historical}
-          - name: plan-after-dp1
-            depends: dp1.Succeeded
-            template: plan
-            arguments:
-              parameters:
-                - {name: selected-version, value: "{{workflow.outputs.parameters.selected-version}}"}
-                - {name: require-input, value: "false"}
           - name: plan-accepted
-            depends: dp1.Skipped
             template: plan
-            arguments:
-              parameters:
-                - {name: selected-version, value: none}
-                - {name: require-input, value: "true"}
           - name: dp2-transform
-            depends: plan-after-dp1.Succeeded || plan-accepted.Succeeded
+            depends: plan-accepted.Succeeded
             when: "{{workflow.outputs.parameters.silver-run}} == true"
             template: spark
             arguments:
@@ -94,17 +74,11 @@ spec:
                 - {name: stage, value: publish}
                 - {name: candidate-id, value: "{{workflow.parameters.candidate-id}}"}
     - name: plan
-      inputs:
-        parameters:
-          - name: selected-version
-          - name: require-input
       container:
         image: __OPENMETADATA_IMAGE__
         command: [python, -m, silver_pipeline.silver_plan]
         args:
           - "--accepted-versions={{workflow.parameters.accepted-versions}}"
-          - "--selected-version={{inputs.parameters.selected-version}}"
-          - "--require-input={{inputs.parameters.require-input}}"
           - "--merge-current={{workflow.parameters.merge-current}}"
           - "--completeness={{workflow.parameters.completeness}}"
           - "--backfill-start={{workflow.parameters.backfill-start}}"
@@ -137,12 +111,12 @@ spec:
         backoff: {duration: 15s, factor: 2, cap: 2m}
       steps:
         - - name: prepare-creators
-            templateRef: {name: historical-dp1-bronze, template: delete-pods}
+            templateRef: {name: data-pipeline-spark-utilities, template: delete-pods}
             arguments:
               parameters:
                 - {name: selector, value: "workflows.argoproj.io/workflow={{workflow.name}},dp2-application-stage={{inputs.parameters.mode}}"}
         - - name: prepare
-            templateRef: {name: historical-dp1-bronze, template: cleanup-spark}
+            templateRef: {name: data-pipeline-spark-utilities, template: cleanup-spark}
             arguments:
               parameters:
                 - {name: selector, value: "dp2-workflow={{workflow.name}},dp2-stage={{inputs.parameters.mode}}"}
@@ -155,12 +129,12 @@ spec:
                 - {name: mode, value: "{{inputs.parameters.mode}}"}
                 - {name: script, value: "{{inputs.parameters.script}}"}
         - - name: cleanup
-            templateRef: {name: historical-dp1-bronze, template: cleanup-spark}
+            templateRef: {name: data-pipeline-spark-utilities, template: cleanup-spark}
             arguments:
               parameters:
                 - {name: selector, value: "dp2-workflow={{workflow.name}},dp2-stage={{inputs.parameters.mode}}"}
         - - name: outcome
-            templateRef: {name: historical-dp1-bronze, template: spark-outcome}
+            templateRef: {name: data-pipeline-spark-utilities, template: spark-outcome}
             arguments:
               parameters:
                 - {name: status, value: "{{steps.application.status}}"}
@@ -193,7 +167,7 @@ spec:
               dp2-workflow: "{{workflow.name}}"
               dp2-stage: "{{inputs.parameters.mode}}"
           spec:
-            pyFiles: local:///opt/data-pipeline/bronze-ingestion/.venv/lib/python3.12/site-packages/silver_pipeline/{{inputs.parameters.script}}
+            pyFiles: local:///opt/data-pipeline/silver/.venv/lib/python3.12/site-packages/silver_pipeline/{{inputs.parameters.script}}
             driverArgs: ["--completeness={{workflow.parameters.completeness}}"]
             runtimeVersions:
               sparkVersion: "4.1.3"
@@ -216,7 +190,8 @@ spec:
               spark.eventLog.enabled: "true"
               spark.eventLog.dir: __SILVER_EVENT_LOG_ROOT__
               spark.eventLog.compress: "true"
-              spark.pyspark.python: /opt/data-pipeline/bronze-ingestion/.venv/bin/python
+              spark.pyspark.python: /opt/data-pipeline/silver/.venv/bin/python
+              spark.pyspark.driver.python: /opt/data-pipeline/silver/.venv/bin/python
             applicationTolerations:
               restartConfig: {restartPolicy: Never}
               resourceRetainPolicy: OnFailure
@@ -294,9 +269,7 @@ spec:
     - name: finalizer
       steps:
         - - name: cleanup-silver
-            templateRef: {name: historical-dp1-bronze, template: cleanup-spark}
+            templateRef: {name: data-pipeline-spark-utilities, template: cleanup-spark}
             arguments:
               parameters:
                 - {name: selector, value: "dp2-workflow={{workflow.name}}"}
-        - - name: cleanup-bronze
-            templateRef: {name: historical-dp1-bronze, template: finalizer}

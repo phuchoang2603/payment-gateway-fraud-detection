@@ -80,7 +80,7 @@ def recompute(
     changed = {table: frame.join(affected, list(PAYMENT_KEY), "left_semi") for table, frame in source.items()}
     updated = build(changed, relative_error)
     prior = {
-        table: selected_snapshot(spark, table_name(table, silver_namespace), snapshot, previous["candidate_id"])
+        table: selected_snapshot(spark, table_name(table, silver_namespace), snapshot)
         for table, snapshot in previous["snapshots"].items()
     }
     events = EventFrames(

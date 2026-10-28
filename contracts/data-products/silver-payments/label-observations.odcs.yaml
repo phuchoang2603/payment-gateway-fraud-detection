@@ -33,4 +33,4 @@ schema:
   - {name: attempt_started_at, logicalType: timestamp, physicalType: timestamp, description: Start time when linked attempt context is complete.}
   - {name: payment_succeeded_at, logicalType: timestamp, physicalType: timestamp, description: Success time when the linked attempt succeeded.}
   - {name: pending_context, logicalType: boolean, physicalType: boolean, required: true, description: True while required attempt or success context is missing.}
-  - {name: _candidate_id, logicalType: string, physicalType: string, required: true, description: Candidate identity.}
+  - {name: _candidate_id, logicalType: string, physicalType: string, required: true, description: Candidate that last changed this row; the accepted receipt identifies the complete snapshot.}

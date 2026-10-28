@@ -26,7 +26,7 @@ def test_native_rules_pin_all_candidate_and_bronze_snapshots():
     accounting = next(rule.sql for rule in rules if rule.name == "source_event_conservation")
     assert "FOR VERSION AS OF 100" in accounting and "FOR VERSION AS OF 200" in accounting
     assert "_source_dataset_version = 'old'" in accounting and "_source_dataset_version = 'late'" in accounting
-    assert f"_candidate_id = '{candidate['candidate_id']}'" in accounting
+    assert "_candidate_id =" not in accounting
     prepared = expected(candidate, rules)
     assert prepared["snapshots"] == candidate["snapshots"]
     assert len(prepared["cases"]) == len(rules)

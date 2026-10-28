@@ -53,6 +53,6 @@ Historical duplicate deliveries in one file are represented with multiplicity.
 |  identical_duplicate_deliveries | integer | *Extra identical deliveries.*<br />• `required` |
 |  payment_id | string | *Scoped payment identity.*<br />• `required` |
 |  pending_context | boolean | *Whether the payment context is incomplete.*<br />• `required` |
-|  _candidate_id | string | *Candidate identity.*<br />• `required` |
+|  _candidate_id | string | *Candidate that last changed this row; the accepted receipt identifies the complete snapshot.*<br />• `required` |
 
 ## SLA Properties

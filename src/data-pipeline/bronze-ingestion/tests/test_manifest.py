@@ -185,3 +185,27 @@ def test_verify_source_rejects_file_set_and_content_changes(dataset, tmp_path, m
         file.write_bytes(content)
     with pytest.raises(ValueError):
         verify_source(str(source), manifest)
+
+
+def test_physical_definitions_are_resolved_from_pinned_product(tmp_path, monkeypatch):
+    old = tmp_path / "historical-payments/physical-old.yaml"
+    new = tmp_path / "historical-payments/physical-new.yaml"
+    old.parent.mkdir(parents=True)
+    old.write_text("payment_events: {3: {}}\n")
+    new.write_text("payment_events: {4: {}}\n")
+    products = {
+        "old": {
+            "customProperties": [
+                {"property": "physicalSchemaDefinitions", "value": "historical-payments/physical-old.yaml"}
+            ]
+        },
+        "new": {
+            "customProperties": [
+                {"property": "physicalSchemaDefinitions", "value": "historical-payments/physical-new.yaml"}
+            ]
+        },
+    }
+    monkeypatch.setattr(source_manifest, "PRODUCTS", tmp_path)
+    monkeypatch.setattr(source_manifest, "source_contracts", lambda version: (products[version], {}))
+    assert set(source_manifest.physical_schemas("old")["payment_events"]) == {3}
+    assert set(source_manifest.physical_schemas("new")["payment_events"]) == {4}

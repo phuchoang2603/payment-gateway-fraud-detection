@@ -21,8 +21,6 @@ def main(argv=None):
         required=not os.environ.get("SILVER_EVIDENCE_ROOT"),
     )
     parser.add_argument("--accepted-versions", default="")
-    parser.add_argument("--selected-version", default="none")
-    parser.add_argument("--require-input", choices=("true", "false"), default="false")
     parser.add_argument("--merge-current", choices=("true", "false"), default="false")
     parser.add_argument("--completeness", choices=("complete", "recurring"), required=True)
     parser.add_argument("--backfill-start", default="")
@@ -39,8 +37,6 @@ def main(argv=None):
     boundaries = {"start": args.backfill_start, "end": args.backfill_end} if args.backfill_start else None
     bronze, silver = Store(args.bronze_evidence), Store(args.silver_evidence)
     versions = {value.strip() for value in args.accepted_versions.split(",") if value.strip()}
-    if args.selected_version != "none":
-        versions.add(args.selected_version)
     pointer = silver.get("dp2/accepted.json")
     if pointer and (args.merge_current == "true" or args.completeness == "recurring"):
         receipt = silver.get(pointer["receipt_key"])
@@ -51,7 +47,7 @@ def main(argv=None):
             versions.update(previous)
         elif not previous.issubset(versions):
             raise ValueError("recurring Silver input cannot omit previously accepted Bronze receipts")
-    if args.require_input == "true" and not versions:
+    if not versions:
         raise ValueError("direct Silver execution requires accepted Bronze input")
     candidate = (
         open_candidate(bronze, silver, sorted(versions), args.image_digest, args.completeness, boundaries)

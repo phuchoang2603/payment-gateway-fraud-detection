@@ -46,6 +46,6 @@ Historical duplicate deliveries in one file are represented with multiplicity.
 | &#x2007;&#x2007;&#x2007;&#x21b3; key | string | *No description.*<br />• `required` |
 | &#x2007;&#x2007;&#x2007;&#x21b3; value | string | *No description.* |
 |  deliveries | integer | *Number of identical observation deliveries with this provenance.*<br />• `required` |
-|  _candidate_id | string | *Candidate identity.*<br />• `required` |
+|  _candidate_id | string | *Candidate that last changed this row; the accepted receipt identifies the complete snapshot.*<br />• `required` |
 
 ## SLA Properties

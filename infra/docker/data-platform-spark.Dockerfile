@@ -17,7 +17,9 @@ RUN uv sync --locked --no-dev --no-install-project --extra spark --no-install-pa
 COPY src/data-pipeline/bronze-ingestion/data_platform ./data_platform
 RUN uv sync --locked --no-dev --no-editable --extra spark --no-install-package pyspark
 COPY src/data-pipeline/silver /opt/data-pipeline/silver
-RUN uv pip install --python .venv/bin/python --no-deps /opt/data-pipeline/silver
+WORKDIR /opt/data-pipeline/silver
+RUN uv sync --locked --no-dev --no-editable --extra spark --no-install-package pyspark
+WORKDIR /opt/data-pipeline/bronze-ingestion
 RUN find .venv -type d \( -path "*/site-packages/numpy" -o -path "*/site-packages/dbt" \) -prune -o \
         -type d \( -name tests -o -name test \) -prune -exec rm -rf {} + && \
     find .venv -type d -name __pycache__ -prune -exec rm -rf {} + && \
@@ -40,6 +42,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH="/opt/spark/python/lib/pyspark.zip:/opt/spark/python/lib/py4j-0.10.9.9-src.zip"
 RUN groupadd --gid 185 spark && useradd --uid 185 --gid 185 --home-dir /opt/spark spark
 COPY --from=build /opt/data-pipeline/bronze-ingestion/.venv /opt/data-pipeline/bronze-ingestion/.venv
+COPY --from=build /opt/data-pipeline/silver/.venv /opt/data-pipeline/silver/.venv
 COPY --from=jars /jars/ /opt/spark/jars/
 COPY src/data-pipeline/bronze-ingestion/config/log4j2.properties /opt/dp1/log4j2.properties
 COPY contracts/data-products /contracts/data-products

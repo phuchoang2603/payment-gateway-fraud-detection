@@ -39,9 +39,9 @@ Update Arrow generation/decoding, manifest/path checks, source/product/Bronze co
 
 Report nulls and preserved values by eligible payload, source version and date, distinguishing physical absence from unavailability/invalid new values. Keep v16 sources, original contract artifacts and receipts immutable. New ingestion resolves declared contract identities without unrestricted legacy fallback or rewriting prior acceptance.
 
-### Persist Bronze, compose orchestration
+### Persist Bronze, run independent orchestration
 
-Use one Argo entrypoint that invokes existing DP1 and new DP2 stages. Keep reusable stage templates and separate raw/curated acceptance; do not merge all logic into one uninspectable Spark job. DP2 can start from an accepted DP1 receipt without rerunning ingestion. Historical and completed landing inputs share the implementation and tables, with explicit source selection/progress.
+Use independent Argo entrypoints for existing DP1 and new DP2 stages. Keep reusable stage templates and separate raw/curated acceptance. DP2 can start from an accepted DP1 receipt without rerunning ingestion. Historical and completed landing inputs share the implementation and tables, with explicit source selection/progress.
 
 DP2 pins both independent Bronze snapshots, accepted source filters and the accepted landing ledger version. Never select latest table state or use a maximum event/export date as input progress. A future landing implementation may change; the DP2 consumer boundary is the accepted DP1 receipt with source provenance and supported business schema, not archiver internals.
 
