@@ -32,43 +32,20 @@ def candidate_outputs(frames):
     }
 
 
-def current_snapshot(spark, name):
-    rows = spark.table(name + ".refs").where(F.col("name") == "main").select("snapshot_id").limit(1).collect()
+def committed_snapshot(spark, name, candidate_id):
+    rows = (
+        spark.table(name + ".snapshots")
+        .where(F.col("summary")["dp2.candidate-id"] == candidate_id)
+        .orderBy(F.col("committed_at").desc())
+        .select("snapshot_id")
+        .limit(1)
+        .collect()
+    )
     return rows[0].snapshot_id if rows else None
 
 
 def selected_snapshot(spark, name, snapshot):
     return spark.read.format("iceberg").option("versionAsOf", str(snapshot)).load(name)
-
-
-def merge_changes(spark, name, expected, candidate_id):
-    columns = [column for column in expected.columns if column != "_candidate_id"]
-    actual = spark.table(name).select(*columns)
-    target = expected.select(*columns)
-    removed = actual.exceptAll(target).withColumn("_change", F.lit("delete"))
-    added = target.exceptAll(actual).withColumn("_change", F.lit("insert"))
-    changes = removed.unionByName(added).persist()
-    view = "dp2_changes_" + uuid4().hex
-    try:
-        if changes.limit(1).count():
-            changes.createOrReplaceTempView(view)
-            match = " AND ".join(f"t.`{column}` <=> s.`{column}`" for column in columns)
-            names = ", ".join(f"`{column}`" for column in columns) + ", `_candidate_id`"
-            values = ", ".join(f"s.`{column}`" for column in columns) + f", '{candidate_id}'"
-            spark.sql(
-                f"MERGE INTO {name} t USING {view} s ON {match} "
-                "WHEN MATCHED AND s._change = 'delete' THEN DELETE "
-                f"WHEN NOT MATCHED AND s._change = 'insert' THEN INSERT ({names}) VALUES ({values})"
-            )
-        elif current_snapshot(spark, name) is None:
-            expected.writeTo(name).overwrite(F.lit(True))
-    finally:
-        spark.catalog.dropTempView(view)
-        changes.unpersist()
-    snapshot = current_snapshot(spark, name)
-    if snapshot is None:
-        raise RuntimeError("Silver commit did not produce a recoverable snapshot")
-    return snapshot
 
 
 def write_candidate(spark, store, candidate, frames, completeness, namespace="silver", after_commit=None):
@@ -102,13 +79,22 @@ def write_candidate(spark, store, candidate, frames, completeness, namespace="si
             try:
                 check_physical(expected.schema, schema(table))
                 if not spark.catalog.tableExists(name):
-                    expected.limit(0).writeTo(name).using("iceberg").partitionedBy("_candidate_id").create()
+                    expected.limit(0).writeTo(name).using("iceberg").create()
                 check_physical(spark.table(name).schema, expected.schema)
-                snapshot = candidate["snapshots"].get(table)
+                snapshot = candidate["snapshots"].get(table) or committed_snapshot(
+                    spark, name, candidate["candidate_id"]
+                )
                 if snapshot is None:
-                    snapshot = merge_changes(spark, name, expected, candidate["candidate_id"])
+                    (
+                        expected.writeTo(name)
+                        .option("snapshot-property.dp2.candidate-id", candidate["candidate_id"])
+                        .overwrite(F.lit(True))
+                    )
                     if after_commit:
                         after_commit(table)
+                    snapshot = committed_snapshot(spark, name, candidate["candidate_id"])
+                    if snapshot is None:
+                        raise RuntimeError("Silver commit did not produce a recoverable snapshot")
                 actual = selected_snapshot(spark, name, snapshot)
                 columns = [column for column in expected.columns if column != "_candidate_id"]
                 actual_content = actual.select(*columns)

@@ -6,8 +6,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone
-from urllib.parse import quote, urlsplit
-from urllib.request import urlopen
+from urllib.parse import urlsplit
 
 from pipeline_common.storage import Store
 from pyspark import StorageLevel
@@ -45,56 +44,6 @@ def safe_location(value):
     return value
 
 
-def ui_metrics(context, stages):
-    url = context.uiWebUrl
-    if not url:
-        return {"available": False, "reason": "Spark UI URL unavailable"}
-    parsed = urlsplit(url)
-    if parsed.scheme not in ("http", "https") or parsed.username or parsed.password:
-        return {"available": False, "reason": "Spark UI URL is unsupported or contains credentials"}
-    base = url.rstrip("/") + "/api/v1/applications/" + quote(context.applicationId, safe="")
-
-    def fetch(path):
-        with urlopen(base + path, timeout=5) as response:
-            body = response.read(5 * 1024 * 1024 + 1)
-        if len(body) > 5 * 1024 * 1024:
-            raise ValueError("Spark UI response exceeds collection bound")
-        return json.loads(body)
-
-    try:
-        available = fetch("/stages?status=complete")
-        selected = [item for item in available if item.get("stageId") in stages][:100]
-        results = []
-        for item in selected:
-            stage = {
-                key: item.get(key)
-                for key in (
-                    "stageId",
-                    "attemptId",
-                    "numTasks",
-                    "executorRunTime",
-                    "shuffleReadBytes",
-                    "shuffleWriteBytes",
-                    "memoryBytesSpilled",
-                    "diskBytesSpilled",
-                    "peakExecutionMemory",
-                )
-            }
-            try:
-                stage["task_quantiles"] = fetch(f"/stages/{item['stageId']}/{item['attemptId']}/taskSummary")
-            except Exception as error:
-                stage["task_quantiles_unavailable"] = type(error).__name__
-            results.append(stage)
-        return {
-            "available": True,
-            "stages": results,
-            "truncated": len(selected) == 100,
-            "requested_stage_count": len(stages),
-        }
-    except Exception as error:
-        return {"available": False, "reason": type(error).__name__}
-
-
 def run_variant(spark, source, completeness, variant, partitions, relative_error):
     context = spark.sparkContext
     group = f"dp2-benchmark-{variant}-{time.time_ns()}"
@@ -129,7 +78,6 @@ def run_variant(spark, source, completeness, variant, partitions, relative_error
         "row_counts": counts,
         "plans": plans,
         **jobs,
-        "ui_metrics": ui_metrics(context, jobs["stage_ids"]),
     }
 
 
@@ -160,7 +108,7 @@ def benchmark(spark, bronze_store, evidence_store, candidate, relative_error=0.0
             "repetitions": 1,
             "order": ["baseline", "partitioned"],
             "relative_error": relative_error,
-            "limitations": "Timings exclude the bidirectional comparison. Task and spill metrics depend on retained Spark UI data; screenshots and repeated trials must be collected separately. No improvement is assumed.",
+            "limitations": "Timings exclude the bidirectional comparison. Collect task durations, shuffle/spill metrics and screenshots manually from Spark UI or the retained event log; repeat trials separately. No improvement is assumed.",
         },
     }
     retained = False

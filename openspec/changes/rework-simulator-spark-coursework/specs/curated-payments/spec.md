@@ -31,6 +31,8 @@ Curated validation SHALL enforce conditional schema, context, amounts, lifecycle
 
 Progress SHALL track accepted input receipts and immutable selected snapshots independently of event-date maxima. Reprocessing the same logical input SHALL produce equivalent canonical content without adding rows. Late accepted inputs SHALL recompute affected entities/time ranges, and backfills SHALL record their boundaries and transformation revision. Multi-table candidate writes SHALL not replace the accepted pointer until validation and governance succeed.
 
+The development MVP SHALL publish complete Silver table snapshots using batch replacement and recover tagged commits on retry. Optimized incremental row writes are deferred; previous accepted snapshots SHALL remain readable.
+
 #### Scenario: Newly accepted old event
 
 - **WHEN** a new accepted input contains a record older than the latest processed event date
@@ -48,6 +50,8 @@ Coursework evidence SHALL retain an unoptimized baseline and each measured optim
 ### Requirement: Reviewable data code and runtime evidence
 
 An evidence index SHALL pair real output/UI screenshots with immutable code/query references and machine-readable receipts. Spark captures SHALL show the relevant baseline problem, changed execution plan/stages and resulting metrics. Argo captures SHALL show DP1/DP2 stage ordering; OpenMetadata captures SHALL show actual lineage, native validation and inspectable contracts.
+
+Capture instructions SHALL be documentation for manual report preparation. Screenshot validation, upload schemas and screenshot-specific tests SHALL NOT be part of the pipeline or its acceptance.
 
 #### Scenario: Missing screenshot or measurement
 

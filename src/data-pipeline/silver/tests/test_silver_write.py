@@ -52,26 +52,3 @@ def test_candidate_recovers_a_partial_commit_without_promoting(spark, dataset, t
     )
     assert events_output.count() == events.canonical.count()
     assert store.get("dp2/accepted.json") is None
-
-
-def test_incremental_merge_keeps_unchanged_rows_and_prior_snapshot(spark):
-    from pyspark.sql import functions as F
-
-    from silver_pipeline.silver_write import merge_changes
-
-    spark.sql("CREATE NAMESPACE IF NOT EXISTS lake.silver_merge")
-    name = "lake.silver_merge.merge_probe"
-    first = spark.createDataFrame([("a", 1), ("b", 2)], ["key", "value"]).withColumn("_candidate_id", F.lit("first"))
-    first.limit(0).writeTo(name).using("iceberg").partitionedBy("_candidate_id").create()
-    first_snapshot = merge_changes(spark, name, first, "first")
-    second = spark.createDataFrame([("a", 1), ("b", 3)], ["key", "value"]).withColumn("_candidate_id", F.lit("second"))
-    second_snapshot = merge_changes(spark, name, second, "second")
-    before = {
-        row.key: (row.value, row._candidate_id) for row in selected_snapshot(spark, name, first_snapshot).collect()
-    }
-    after = {
-        row.key: (row.value, row._candidate_id) for row in selected_snapshot(spark, name, second_snapshot).collect()
-    }
-    assert before == {"a": (1, "first"), "b": (2, "first")}
-    assert after == {"a": (1, "first"), "b": (3, "second")}
-    assert merge_changes(spark, name, second, "second") == second_snapshot

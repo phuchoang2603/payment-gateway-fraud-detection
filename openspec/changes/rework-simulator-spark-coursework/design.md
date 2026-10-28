@@ -53,7 +53,7 @@ Record raw selected deliveries = canonical representative deliveries + identical
 
 Adapt `contracts/quality/silver-payments.yaml` for scoped identity and complete historical versus recurring prefix context. Enforce lifecycle order, attempt linkage, conditional fields, amount consistency and label timing. Pending context is explicit and revisited when accepted inputs arrive. Missing chargebacks are unknown; simulation truth is a target only; no scenario, future outcome or decision covariates enter predecision features.
 
-Start with a reproducible full selected-source transformation at development size, then add accepted-input progress and bounded recomputation of affected entities/time ranges for recurring/backfill. Stage candidate outputs and promote a product acceptance receipt only after complete data/governance checks; readers resolve that receipt rather than assuming multi-table atomic commits. Preserve prior accepted outputs on partial failure.
+Use a reproducible full selected-source transformation at development size, with accepted-input progress and affected-entity recomputation for recurring/backfill. Publish complete table snapshots using batch replacement; defer optimized incremental writes until measurements justify them. Tag commits with the candidate identity so retries recover completed writes, and retain prior accepted snapshots. Promote a product acceptance receipt only after complete data/governance checks; readers resolve that receipt rather than assuming multi-table atomic commits.
 
 Gold marts, SCD2 analytics and selected MVs remain subsequent roadmap work. This slice ends at accepted Silver, which DP3 can consume directly.
 
@@ -65,7 +65,7 @@ Full 100 GB generation/acceptance remains after the whole pipeline. No container
 
 ### Evidence collected alongside each stage
 
-Use one concise evidence index under this change during implementation, backed by existing artifact/object storage for large screenshots and Spark event logs. Each entry contains requirement, status, code revision/permalink or bounded excerpt, image digest, dataset manifest/hash, run/application/SQL IDs, selected snapshots, capture time, result and limitations. Link machine-readable output with the screenshot; do not replace real UI screenshots with diagrams or fabricated mockups. Capture code as well as linking it. Redact credentials and unrelated personal data.
+Use the existing evidence index and manual capture instructions in `docs/data-ml/data-pipeline.md`. Screenshots belong to the coursework report; do not implement screenshot validation, upload protocols or tests. Captions link actual output to the code revision, manifest/hash, run/application IDs and selected snapshots. Keep useful data diagnostics and Spark event logs. Capture real UI/code and redact credentials; missing captures remain pending without blocking data acceptance.
 
 | Requirement | Capture and retained evidence | Owner / timing |
 | --- | --- | --- |
