@@ -1,30 +1,13 @@
 # Data coursework evidence
 
-The generator job `payment-gateway/historical-v17` completed. The published manifest is `s3://synthetic-source/historical/v17/manifest.json`, SHA256 `c57ed26a5a16fd7acd359cfe0eee8927d7f276ebe6d1349de1fff207f51aab7b`. It reports 811,960 event deliveries, 161,967 labels, 1,959 Parquet files and 146,690,621 bytes (Zstandard level 3), with physical event schemas 3 and 4. Label availability extends through 2025-10-19. This is publication evidence only; downstream validation is pending. The executed [generator notebook](../../../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb) records full-source data diagnostics, with all 1,959 cached source objects matching their inventory sizes and SHA256 hashes. No new DP1/DP2 acceptance, Spark benchmark, Argo or OpenMetadata capture has been collected for this change. The [archived v16 DP1 evidence](../../archive/2026-10-27-historical-dp1-bronze/evidence/) is a historical baseline, not acceptance of the new source or Silver.
+Fresh dev evidence is pending after the shared-platform rebase. The selected source is `s3://platform-dev/datasets/payment-gateway/historical/v17/manifest.json`; it must be generated afresh and its actual SHA256 recorded. Old publication, CI and pipeline receipts are not acceptance of this environment.
 
-| Requirement | Status | Required correlation |
+| Requirement | Status | Retain after execution |
 |---|---|---|
-| Generator configuration and source diagnostics | Executed notebook; Spark diagnostics pending | New manifest hash, code revision, rows, files, bytes, format and event/label time ranges |
-| Skew and cardinality | Full-source notebook tables/plots retained; Spark results pending | Executable queries, denominators, approximation error and observed output |
-| Physical schema evolution | Physical definitions and eligible-delivery null/value outputs retained in notebook | Definitions, schedule, normalized results and eligible-field values/nulls by version and date |
-| Duplicate deliveries | Notebook: 16,242 extra / 811,960 deliveries (2.000345%), zero conflicts, zero post-dedup duplicates; persisted Silver pending | Injection and deduplication code, exact accounting and conflict results |
-| Spark baseline and batch snapshots | Pending | Same inputs/resources, application and SQL IDs, plans, runtime, task/shuffle/spill metrics and equal-content comparison |
-| Spark code and UI captures | Pending | Real code and Spark UI screenshots correlated to benchmark application and stage IDs |
-| Argo stages | Pending | Real captures of the separate DP1 and DP2 workflows, run IDs, stage ordering and outcomes |
-| OpenMetadata lineage, validation and contracts | Pending | Real lineage, native rule results and contract captures with accepted input/output snapshots |
+| Generator configuration and diagnostics | Pending | Fresh manifest/hash, code revision, volume, dates, skew, cardinality, schema null/value results and duplicate rates in the [notebook](../../../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb) |
+| Bronze acceptance | Pending | Independent event/label snapshots, integrity, duplicate-aware conservation, native validation and governance |
+| Silver acceptance | Pending | Accepted Bronze inputs, canonical outputs, delivery accounting, lifecycle/linkage and label-availability results |
+| Spark optimization | Pending | Fixed inputs/resources, plans, application IDs, measured baseline/optimized metrics and equivalent output |
+| Code and UI captures | Pending | Actual code, Spark, separate Argo DP1/DP2 stages and OpenMetadata lineage/validation/contracts |
 
-Use the [DP2 evidence instructions](../../../../docs/data-ml/data-pipeline.md#silver-dp2) to correlate retained machine-readable results and real captures. Missing captures remain pending; a passing CI check or historical receipt is not a substitute.
-
-The config-only runtime and reusable mutation runner passed [all checks on `dc6bd49`](https://github.com/phuchoang2603/payment-gateway-fraud-detection/commit/dc6bd492c279d5c50ff2aebfc16170eeeb0ff9fd/checks). The [Python mutation artifact](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40623018983) records the selected changed functions and 9 killed / 10 evaluated mutants (90%). Mutmut skips the decorated Pydantic validators; this score covers the changed schema selection function, not the whole pipeline. Helper boundary checks run with Bronze, with no separate helper test suite.
-
-Runtime images built successfully in [CI run 40623019030](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40623019030). These PR images are temporary and are removed on PR closure. Production rollout must coordinate the config-only manifests with permanent main images and the existing publish-and-pin workflow; existing production image pins were not replaced with PR digests.
-
-The unified batch project passed [Python CI on `14ab290`](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40626825530): 59 batch tests passed using the shared fixtures, and the configured mutation scope retained 90% (9/10). Both batch runtime images built successfully in [service-image CI](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40626825529). All 26 reported checks passed; production image pinning was correctly skipped for this PR build. Go service source and chart files have no diff against main. No pipeline execution or deployment was performed for the consolidation.
-
-The fixed-path/dedicated-entrypoint update passed all 26 checks on `334ff9b`, including [Python CI](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40632650024) (59 batch tests; configured mutation scope 9/10) and [image builds](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40632650149).
-
-The deployed v17 DP1 execution is `fraud-data-prod/v17-dp1-coursework-c56h8`. Source selection passed and ingestion started; acceptance remains pending. This temporary Workflow uses a separate `dp1-coursework-pr97` ConfigMap and CI image revision `977c10c4921bf84f959b0dbbb9f3ae679bc79947`, Spark digest `sha256:457e01819d47785996f41bae75a2a613270893c31918b8378855a56f5e12fa12` and metadata digest `sha256:0dde1b7fdbfd26474f359043b3246258ec32ce4a253e493750c598c7bce9a682`. Production image pins, workflow templates, schedules and live traffic were unchanged. No source was regenerated.
-
-The historical generator Job completed successfully at `2026-10-28T02:19:30Z`. The notebook reads the immutable v17 source, verifies its pinned manifest and local file identities, and retains executed outputs with DuckDB 1.5.5. Cardinality estimates are explicitly DuckDB HyperLogLog estimates compared with exact scoped counts, not Spark estimates or configured-pool counts. Category shares use all canonical checkout line items; merchant/region shares use canonical payment-created events. Schema 3 has 79,107 eligible decision deliveries with absent references; schema 4 has 81,326 with populated identifiers and hashes. These source results and illustrative SQL deduplication do not establish DP1/DP2 acceptance.
-
-The first Argo Spark resource-wait pod for `v17-dp1-coursework-c56h8` exited 137; the workflow remains in its configured retry path. This is retained as a real downstream failure, separate from successful source generation.
+Tests and image builds run in CI only. Record fresh results after the integration updates; prod and full-scale acceptance remain deferred. Archived history is retained separately.

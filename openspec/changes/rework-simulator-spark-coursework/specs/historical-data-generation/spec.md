@@ -2,7 +2,7 @@
 
 ### Requirement: Ninety-day development population
 
-The maintained development configuration SHALL span exactly 90 purchase-start dates for a modest US/USD electronics population with repeat behavior and supported fraud scenarios. It SHALL declare seed, calibration, entity pools, resource budgets, merchant/category skew, an identical-duplicate export rate and an explicit schedule of declared physical schema versions. It SHALL generate one problem-bearing dataset usable after curation for feature development, without requiring separate training/problem profiles or a scale-byte minimum. It SHALL remain a development source rather than evidence of 100 GB scale or real-world model quality. Published v16 SHALL remain unchanged.
+The maintained development configuration SHALL span exactly 90 purchase-start dates for a modest US/USD electronics population with repeat behavior and supported fraud scenarios. It SHALL declare seed, calibration, entity pools, resource budgets, merchant/category skew, an identical-duplicate export rate and an explicit schedule of declared physical schema versions. It SHALL generate one problem-bearing dataset usable after curation for feature development, without requiring separate training/problem profiles or a scale-byte minimum. It SHALL remain a development source rather than evidence of 100 GB scale or real-world model quality. Fresh environment-scoped v17 SHALL be generated in dev; old remote objects and archived history SHALL remain untouched.
 
 #### Scenario: Default development range
 
