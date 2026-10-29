@@ -11,7 +11,7 @@ Keys are integration-scoped customer and payment-method identities. Request feat
 | Group | Features | Computed by | Status |
 |---|---|---|---|
 | Request | amount, customer account age, IP and shipping country mismatch | Request context | Done |
-| Short history | customer and method attempt counts over 5 minutes, 1 hour and 24 hours; distinct customer devices over 24 hours | Flink, written online | Online done (shadow); moving to contract v2 in [PR #101](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/101) |
+| Short history | customer and method attempt counts over 5 minutes, 1 hour and 24 hours; distinct customer devices over 24 hours | Flink, written online | Online done (shadow), contract v2 |
 | Long history | 7- and 30-day counts and amounts per customer and method | DP3 daily Spark batch over Silver, materialized into Feast | Planned |
 
 Labels, scenario and oracle fields, and anything that happens after the attempt (decision, outcome, payment status) are never features.

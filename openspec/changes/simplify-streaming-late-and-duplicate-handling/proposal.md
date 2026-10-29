@@ -38,5 +38,5 @@ None.
 - Data pipeline: `src/data-pipeline/streaming`, `features/reference.py`, Feast schema/writer, the live simulator and its tests.
 - Go: Edge HTTP attempt parsing and the fraud Feast adapter/evidence. Payments, Fraud policy and the velocity guard are unchanged.
 - Infra: Kafka topics, the fraud-features epoch/definition hash and live-traffic settings.
-- Docs: affected passages in the data-pipeline, ML and payment-flow guides.
+- Docs: affected passages in `docs/data/online.md`, `docs/ml/feature-store.md` and `docs/payment-gateway/flows.md`.
 - Out of scope: label rechecks/drain, the drift schedule and drift detection, HybridSource, Spark/Silver work (owned by `rework-simulator-spark-coursework`) and the other real/simulated Go service boundaries.
