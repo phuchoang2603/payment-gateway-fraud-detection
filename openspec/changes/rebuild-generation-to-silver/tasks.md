@@ -68,6 +68,13 @@
 
 - [x] 8.1 Implement the benchmark job over one pinned Silver snapshot: a skewed merchant join as a sort-merge join with three variants (AQE skew join off, AQE skew join on, salting into 16 buckets), each run once and timed through the phase helper. Each variant's output is reduced to its row count and an order-independent checksum and compared with the baseline. The report gives each variant's duration, Spark job, stage and task IDs, and the hot-key share with its denominator. Verify with CI tests that every variant returns the baseline output, that an unequal row set and a same-count changed value each fail the guard, that the salted join matches the baseline for the hot merchant, and that the hot-key share uses all attempts as its denominator.
 
+## 10. ClickHouse instance
+
+- [ ] 10.1 Add `infra/charts/clickhouse` (ClickHouseInstallation, `clickhouse` Service, one ExternalSecret per user, PostSync setup Job) and its app-of-apps entry for dev and prod. Verify with CI helm lint and template for every values file and with the 0.27.4 CRD key check.
+- [ ] 10.2 Move the `openmetadata` user out of `lakehouse-integration`; its setup creates only the `lakehouse` DataLakeCatalog database as admin, after the instance accepts connections. Verify with CI helm template.
+- [ ] 10.3 Confirm the chart defines no operator management user and no NetworkPolicy that could block the operator in namespace `operators`. Verify by grep and CI helm template.
+- [ ] 10.4 Cluster, blocked until the dev rebuild and readiness: the instance is ready, the three users exist, `langfuse` exists, the `lakehouse` database is created, and `openmetadata` reads `lakehouse.*` with its profile applied.
+
 ## 9. Docs, specs and final checks
 
 - [x] 9.1 Add the generator documentation (now `docs/data/offline.md`: configuration, schema changes, layout, rerun) and remove landing and old DP1 instructions. Bronze and Silver results go in `docs/data/offline.md`, `storage.md` and `orchestration-governance.md`. Verify that links resolve and generated references match.

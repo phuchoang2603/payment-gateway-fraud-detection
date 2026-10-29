@@ -44,7 +44,7 @@ Deployment SHALL provide one opt-in single-replica simulator workload running tr
 - **THEN** the simulator workload is absent while existing gateway/Kafka services and completed data remain intact
 
 ### Requirement: Data-platform ownership boundary
-Application deployment SHALL own DP1 workloads in the platform-owned data namespace. The shared platform SHALL own Argo, the native Workflow lifecycle admission policy and binding scoped to `data`, Apache Spark Operator and its CRDs, ClickHouse and its Altinity operator and CRDs, OpenMetadata and its PostgreSQL/OpenSearch backing services. ClickHouse SHALL be reconciled in the platform repository through Argo CD and the Altinity operator. Application deployment SHALL own its SQL/contracts and native ingestion workflow configuration, not shared engine installation. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
+Application deployment SHALL own DP1 workloads in the platform-owned data namespace. The shared platform SHALL own Argo, the native Workflow lifecycle admission policy and binding scoped to `data`, Apache Spark Operator and its CRDs, the Altinity ClickHouse operator 0.27.4 and its CRDs watching `data`, OpenMetadata and its PostgreSQL/OpenSearch backing services. The operator SHALL be reconciled in the platform repository through Argo CD. Application deployment SHALL own its SQL/contracts, native ingestion workflow configuration and the ClickHouse instance and users it queries, but not the operator. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
 
 #### Scenario: Remove the data-pipeline application
 
@@ -52,7 +52,7 @@ Application deployment SHALL own DP1 workloads in the platform-owned data namesp
 - **THEN** shared controllers, OpenMetadata, backing-service persistence, accepted source objects and committed lake data remain under their existing owners
 
 ### Requirement: Gateway-owned lakehouse integration
-The gateway repository SHALL own gateway Doppler credential references, Polaris catalog registration and ClickHouse DataLakeCatalog and reader setup. The platform SHALL own storage policies, provision production storage identities and publish credentials to gateway Doppler. The platform SHALL own servers, durable databases, administrative authentication and generated ClickHouse reader passwords. The gateway integration SHALL provide the storage Secret referenced by the platform Polaris Deployment without creating a second storage identity.
+The gateway repository SHALL own gateway Doppler credential references, Polaris catalog registration and the ClickHouse `lakehouse` DataLakeCatalog database, which SHALL be created as admin after the instance accepts connections and re-applied on every sync. The platform SHALL own storage policies, provision production storage identities and publish credentials to gateway Doppler. The platform SHALL own the Polaris and PostgreSQL servers, durable databases and the Altinity operator's management credential. The gateway integration SHALL provide the storage Secret referenced by the platform Polaris Deployment without creating a second storage identity.
 
 #### Scenario: Reconcile the gateway integration
 - **WHEN** the selected environment is reconciled with gateway credentials available
@@ -68,7 +68,7 @@ DP1 SHALL receive the gateway access key scoped to gateway datasets, run evidenc
 - **THEN** source, lake and catalog credentials remain external references with independently scoped access, and no plaintext replacement credentials are embedded
 
 ### Requirement: Shared analytical SQL service
-The platform SHALL provide a bounded persistent ClickHouse server for SQL quality and analytics, reading the platform Polaris Iceberg REST catalog through a DataLakeCatalog database with OAuth2 and environment S3 access. Deployment SHALL NOT add Trino, a second analytical engine, a replacement catalog or a signing proxy for this path. Existing observability ClickHouse SHALL remain unaffected. Resource/PVC budgets SHALL be measured with Spark and OpenMetadata; a single-node toy deployment SHALL NOT claim HA. Shared engine deletion SHALL NOT be coupled to pipeline application removal.
+The data-pipelines application SHALL run one bounded persistent ClickHouse instance for SQL quality, analytics and Langfuse, reading the platform Polaris Iceberg REST catalog through a DataLakeCatalog database with OAuth2 and environment S3 access. Deployment SHALL NOT add Trino, a second analytical engine, a replacement catalog or a signing proxy for this path. Existing observability ClickHouse SHALL remain unaffected. Resource budgets SHALL be checked against node allocatable capacity before rollout; a single-node instance SHALL NOT claim HA. Removing the application SHALL NOT delete the lake data, the Polaris catalog or the operator.
 
 #### Scenario: Query accepted lake data
 
@@ -76,6 +76,20 @@ The platform SHALL provide a bounded persistent ClickHouse server for SQL qualit
 - **THEN** ClickHouse reads the recorded Iceberg snapshots directly without a mandatory imported copy and acceptance checks matching native results
 
 ## ADDED Requirements
+
+### Requirement: ClickHouse instance and users
+The data-pipelines application SHALL define one `ClickHouseInstallation` named `clickhouse` in `data`, with one shard and one replica, image `clickhouse/clickhouse-server:26.10.2.103`, and a `clickhouse` Service exposing HTTP 8123 and native 9000. The default profile SHALL set `allow_database_iceberg` to 1. Users `admin`, `langfuse` and `openmetadata` SHALL take their passwords from ExternalSecrets on ClusterSecretStore `doppler` (`CLICKHOUSE_ADMIN_PASSWORD`, `CLICKHOUSE_LANGFUSE_PASSWORD`, `CLICKHOUSE_OPENMETADATA_PASSWORD`). The chart SHALL NOT define the Altinity operator's management user, which the operator adds itself, and SHALL NOT override its profile or network settings. A setup Job SHALL create database `langfuse` after the instance accepts connections.
+
+#### Scenario: Render the instance
+
+- **WHEN** the clickhouse chart is rendered for any environment
+- **THEN** it contains one ClickHouseInstallation, the Service with both ports, one ExternalSecret per user, and no reference to the operator's management user or its password
+
+#### Scenario: OpenMetadata user limits
+
+- **WHEN** the `openmetadata` user connects
+- **THEN** its profile is readonly with `allow_database_iceberg` set, and its grants are limited to `lakehouse.*`, `system.tables` and `system.columns`
+
 
 ### Requirement: Simulator credentials and image delivery
 

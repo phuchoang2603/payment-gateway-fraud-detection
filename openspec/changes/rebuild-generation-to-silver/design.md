@@ -242,6 +242,15 @@ The local CLI remains for tests and development only.
 - **Probes.** `maintain-lakehouse` also records, for one customer's 30-day window on `silver.attempts` (the customer with the most attempts), the files, bytes and planning time that Iceberg's planner selects before and after the Z-order rewrite. For partitioned Bronze it records the planned files for a one-day filter and for no filter. These are plan-only measurements read from the Iceberg scan's file tasks; no copies are made.
 - *Alternative:* sort or Z-order every write. Rejected: write-time sorting adds a full shuffle to each Silver run. Maintenance applies the Z-order to `silver.attempts` once per day instead, because each Silver run overwrites every file anyway.
 
+### 13. ClickHouse instance and users belong to this change
+
+- **Ownership.** `infra/charts/clickhouse` (own app-of-apps entry, namespace `data`, enabled in dev and prod) defines the `ClickHouseInstallation`, the `clickhouse` Service, one ExternalSecret per user and a PostSync setup Job. The platform installs only the Altinity clickhouse-operator 0.27.4, which watches `data`.
+- **Contract for Langfuse.** Service `clickhouse.data.svc.cluster.local` (HTTP 8123, native 9000), image `clickhouse/clickhouse-server:26.10.2.103`, one shard and one replica, and `allow_database_iceberg = 1` in the default profile.
+- **Users.** `admin` (`CLICKHOUSE_ADMIN_PASSWORD`, access management, used by the setup jobs), `langfuse` (`CLICKHOUSE_LANGFUSE_PASSWORD`, `ALL` on `langfuse.*`, `SELECT` on `system.*`) and `openmetadata` (`CLICKHOUSE_OPENMETADATA_PASSWORD`, profile `openmetadata` with `readonly = 2` and `allow_database_iceberg = 1`, `SELECT` on `lakehouse.*`, `system.tables` and `system.columns`). The operator's management user is added by the Altinity normalizer with its own profile and is not defined here.
+- **Passwords.** Each comes from an ExternalSecret on ClusterSecretStore `doppler`. Password references use `valueFrom.secretKeyRef`, the 0.27.4 form; the removed `k8s_secret_` prefix is not used.
+- **Lakehouse split.** `lakehouse-integration` now creates only the `lakehouse` DataLakeCatalog database, as admin, after the instance accepts connections.
+- **Sizing.** Dev keeps the draft size, 2 CPU and 8 GiB requests with a 12 GiB limit, against the dev Proxmox workers, about 20 vCPU and 64 GiB across three VMs. Prod requests 500m CPU and 3 GiB with a 4 GiB memory limit and no CPU limit, sized beside the other databases on two On-Demand `m6a.xlarge` workers (4 vCPU and 16 GiB each). The platform docs do not record rendered prod requests, so the fit is unconfirmed until rollout.
+
 ## Risks / Trade-offs
 
 - [Bronze not run within Kafka retention (7 days)] → `failOnDataLoss` fails the run loudly. Enabling the schedule must come with a cadence or retention that covers it. Raising retention is a Kafka chart change owned by the live change.
