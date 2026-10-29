@@ -11,6 +11,7 @@ spec:
   workflowSpec:
     serviceAccountName: data-pipelines
     entrypoint: kafka
+    onExit: publish
     templates:
       - name: kafka
         steps:
@@ -26,4 +27,5 @@ spec:
               templateRef:
                 name: dp2-silver
                 template: silver
+{{- include "data-pipelines.publish" (dict "root" $ "pipeline" "dp1-bronze-kafka" "dataset" .Values.bronze.datasetVersion) | nindent 6 }}
 {{- end }}

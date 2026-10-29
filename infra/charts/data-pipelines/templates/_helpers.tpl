@@ -122,6 +122,26 @@ retryStrategy:
   retryPolicy: {{ .Values.spark.retry.policy }}
 {{- end -}}
 
+{{- define "data-pipelines.publish" -}}
+- name: publish
+  retryStrategy:
+    limit: 2
+    retryPolicy: OnError
+  container:
+    image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
+    command: [python, -m, openmetadata_jobs.publish]
+    env:
+      - name: PIPELINE
+        value: {{ .pipeline | quote }}
+      - name: DATASET_VERSION
+        value: {{ .dataset | quote }}
+      - name: WORKFLOW_STATUS
+        value: {{ "{{workflow.status}}" | quote }}
+      - name: RUN_ID
+        value: {{ "{{workflow.name}}" | quote }}
+{{- include "data-pipelines.env" .root | nindent 6 }}
+{{- end -}}
+
 {{- define "data-pipelines.spark-application" -}}
 {{- $sizing := .sizing -}}
 {{- $image := include "data-pipelines.image" (dict "image" .root.Values.images.spark "global" .root.Values.global) -}}

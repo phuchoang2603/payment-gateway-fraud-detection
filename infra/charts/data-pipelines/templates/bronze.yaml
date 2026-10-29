@@ -10,6 +10,7 @@ metadata:
 spec:
   serviceAccountName: data-pipelines
   entrypoint: bronze
+  onExit: publish
   arguments:
     parameters:
       - name: source
@@ -38,9 +39,6 @@ spec:
           - name: checks
             template: checks
             depends: "spark-historical.Succeeded || spark-kafka.Succeeded"
-          - name: publish
-            template: publish
-            depends: "spark-historical.Failed || spark-kafka.Failed || checks.Succeeded || checks.Failed"
     - name: spark-historical
       {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
       resource:
@@ -70,13 +68,5 @@ spec:
           - name: CHECK_PRODUCT
             value: bronze-payments
 {{- include "data-pipelines.env" $ | nindent 10 }}
-    - name: publish
-      retryStrategy:
-        limit: 2
-        retryPolicy: OnError
-      container:
-        image: {{ include "data-pipelines.image" (dict "image" .Values.images.openmetadata "global" .Values.global) | quote }}
-        command: [python, -m, openmetadata_jobs.publish]
-        env:
-{{- include "data-pipelines.env" $ | nindent 10 }}
+{{- include "data-pipelines.publish" (dict "root" $ "pipeline" (printf "dp1-bronze-%s" "{{workflow.parameters.source}}") "dataset" "{{workflow.parameters.dataset-version}}") | nindent 4 }}
 {{- end }}

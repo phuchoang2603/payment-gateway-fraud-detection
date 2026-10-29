@@ -8,6 +8,7 @@ metadata:
 spec:
   serviceAccountName: data-pipelines
   entrypoint: silver
+  onExit: publish
   activeDeadlineSeconds: {{ .Values.silver.activeDeadlineSeconds }}
   synchronization:
     mutexes:
@@ -25,9 +26,6 @@ spec:
           - name: checks
             template: checks
             depends: spark
-          - name: publish
-            template: publish
-            depends: "spark.Failed || checks.Succeeded || checks.Failed"
     - name: spark
       {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
       resource:
@@ -48,13 +46,5 @@ spec:
           - name: CHECK_PRODUCT
             value: silver-payments
 {{- include "data-pipelines.env" $ | nindent 10 }}
-    - name: publish
-      retryStrategy:
-        limit: 2
-        retryPolicy: OnError
-      container:
-        image: {{ include "data-pipelines.image" (dict "image" .Values.images.openmetadata "global" .Values.global) | quote }}
-        command: [python, -m, openmetadata_jobs.publish]
-        env:
-{{- include "data-pipelines.env" $ | nindent 10 }}
+{{- include "data-pipelines.publish" (dict "root" $ "pipeline" "dp2-silver" "dataset" .Values.bronze.datasetVersion) | nindent 4 }}
 {{- end }}
