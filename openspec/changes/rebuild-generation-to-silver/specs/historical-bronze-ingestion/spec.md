@@ -14,7 +14,7 @@ DP1 SHALL write payment events and fraud labels from every input into one `bronz
 - **THEN** the run fails without committing rather than narrowing, truncating or dropping the record
 
 ### Requirement: Historical source ingestion
-In historical mode, DP1 SHALL ingest exactly the files listed in a selected dataset version's `manifest.json`, verifying each file's SHA-256 and row count before writing. Files of physical schema versions 3 and 4 SHALL be read together, with absent version-3 fields as null. The run SHALL replace only that dataset version's Bronze rows, so a rerun leaves the same content. After writing, Bronze row counts for the dataset version SHALL equal the manifest totals per table or the run SHALL fail. Source files and the manifest SHALL remain unchanged.
+In historical mode, DP1 SHALL ingest exactly the files listed in a selected dataset version's `manifest.json`, verifying each file's SHA-256 and row count before writing. Files of physical schema versions 1 and 2 SHALL be read together, with fields absent from version 1 as null. The run SHALL replace only that dataset version's Bronze rows, so a rerun leaves the same content. After writing, Bronze row counts for the dataset version SHALL equal the manifest totals per table or the run SHALL fail. Source files and the manifest SHALL remain unchanged.
 
 #### Scenario: Missing or altered source
 

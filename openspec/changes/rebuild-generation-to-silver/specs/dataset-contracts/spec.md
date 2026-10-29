@@ -11,7 +11,7 @@ Each data product SHALL live in its own folder under `contracts/data-products/<p
 
 ### Requirement: Historical payments product
 
-The `historical-payments` product SHALL expose two output ports: `payment-events` and `fraud-labels`, each backed by its own ODCS contract with ownership, synthetic classification, field meanings and the supported physical schema versions, including which fields are absent in version 3. The `fraud-labels` port SHALL declare the `payment-events` contract as an input contract. The descriptor SHALL record the storage layout, the manifest as completion marker, access policy and consumption rules.
+The `historical-payments` product SHALL expose two output ports: `payment-events` and `fraud-labels`, each backed by its own ODCS contract with ownership, synthetic classification, field meanings and the supported physical schema versions, including which fields are absent in physical version 1 (fields declared with `sinceSchemaVersion` 2). The `fraud-labels` port SHALL declare the `payment-events` contract as an input contract. The descriptor SHALL record the storage layout, the manifest as completion marker, access policy and consumption rules.
 
 #### Scenario: Label leakage guidance
 
@@ -20,7 +20,7 @@ The `historical-payments` product SHALL expose two output ports: `payment-events
 
 ### Requirement: Current attempt context across source formats
 
-Historical Parquet and Kafka-decoded payment events SHALL expose the same typed business fields and optionality as the current payment protobuf contract, apart from fields declared absent in physical schema version 3. Generated schema references SHALL describe them. Kafka and file provenance SHALL remain separate from business fields.
+Historical Parquet and Kafka-decoded payment events SHALL expose the same typed business fields and optionality as the current payment protobuf contract, apart from fields declared absent in physical schema version 1. Generated schema references SHALL describe them. Kafka and file provenance SHALL remain separate from business fields.
 
 #### Scenario: Historical and live attempts read by Spark
 

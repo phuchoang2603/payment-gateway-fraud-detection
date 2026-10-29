@@ -30,51 +30,45 @@ Constraints:
 
 ## Decisions
 
-### 1. Entity world as one shared module, landed first
+### 1. Entity world as one shared module, landed in this PR
 
-`simulator/world.py` exposes the minimal surface both generators need, agreed with the live change:
+`simulator/world.py` is the only domain module. It holds the configuration models, calibration loading, identity functions and constants, and the entity world that both generators use.
 
-- **`WorldConfig`:** seed, integration id, synthetic key, start date, entity counts, behaviour, scenarios, label delays and chargeback reporting probability.
-- **`World.build(config)`,** plus `world.digest` (config, seed and calibration identity) and `world.start_date`.
-- **`world.purchase(rng, day, ordinal)`** accepts any non-negative day, including days past the historical range. It returns one purchase:
-  - customer and merchant external IDs and account creation times;
-  - item category, condition, quantity and unit price;
-  - device, browser, IP network, IP country and shipping address;
-  - payment-method index and fingerprint;
-  - scenario, processor outcome, fraud and friendly-fraud flags, and label delay.
-- **Constants:** `SCENARIOS`, `CATEGORIES`, `CONDITIONS`, and `entity_id`, kept byte-compatible with today's `identity.py`.
+- **`WorldConfig`:** seed, integration id, synthetic key, start date, entity counts, behaviour (including the foreign-IP probability), scenarios and label delays.
+- **`World.build(config)`,** plus `world.digest` (configuration, calibration bytes and tzdb version) and `world.start_date`.
+- **`world.day_purchases(day, customers)`** returns the `(customer, number)` purchases of a customer range. Counts come from one per-day draw over all customers, so the same purchases come out however the range is split. **`world.purchase(rng, day, customer)`** and **`world.card_test(rng, day, burst)`** build one purchase each, with streams from `purchase_rng(day, customer, number)` and `burst_rng(day, burst, number)`.
+- **Constants and helpers:** `SCENARIOS`, `CATEGORIES`, `CONDITIONS`, `entity_id` and `fingerprint` (byte-compatible with the identity vectors), `StrictModel` and `stage_rng`.
 
-Entity pools, Zipf weights, familiar-merchant lists and compromise windows stay internal. Compromise windows are per customer and seeded from the world seed.
+Entity pools, Zipf weights, familiar-merchant lists and compromise windows stay internal and are seeded from the world seed. Customer activity and region are per-customer traits fixed by the seed.
 
-It lands on `main` as a working module before the rest of the rewrite. The live change switches `live/` to it, and this change then deletes `profiles.py`, `behavior.py`, `identity.py`, `calibration.py` and the other generator modules. The manifest records the full generator configuration, so the live simulator rebuilds the same world from configuration instead of a manifest-specific profile format.
+This PR also switches `live/` to `world.py`. `HistoricalModel` builds a `World` from the manifest's recorded world configuration and rejects a manifest whose `world_digest` differs. `profiles.py`, `behavior.py`, `identity.py`, `calibration.py` and `config.py` are deleted in the same change. The live simulator's behaviour is otherwise unchanged.
 
-*Alternatives:*
-- Keep the old modules until the live change is done. Rejected: it keeps two implementations alive.
-- Have this change edit `live/` directly. Rejected: it collides with the parallel branch.
+*Alternative:* keep the old modules until the live change is done. Rejected: it keeps two implementations alive.
 
-### 2. Generation unit is one purchase-start day
+### 2. Generation unit is one purchase-start day, split into parts
 
-- **Determinism.** Each day's events and labels come from RNG streams keyed by `(seed, stage, day, ordinal)`. A day can be generated without earlier days, and worker count cannot change records.
-- **Output.** A day is split into fixed customer chunks (`chunk_customers` in the config), each written as one part per table: `payment_events/date=D/part-NNNNN.parquet` and `fraud_labels/date=D/part-NNNNN.parquet`, with row groups appended as purchases are generated. Part names are deterministic, so regenerating a day overwrites the same keys. The partition date is the purchase-start day, not the row timestamp. Lifecycle tails and delayed labels stay in their purchase day's files and carry their own timestamps.
-- **Bounded resources.** A worker holds one chunk in memory and one local temporary part at a time, uploads it, and deletes it. Memory and scratch are bounded by chunk size and worker count, not by day or dataset size. This is what makes the full-scale run possible without the old scratch budgeting.
-- **Atomic files.** A part is written to a local temporary file and then uploaded with a single PUT (multipart for large parts), or moved into place locally.
-- **Start.** `config.json` (the logical configuration and its hash) is written first. A rerun with a different hash refuses to run.
-- **Day completion.** After all of a day's parts are uploaded, a `date=D/_day.json` marker records each part's rows, bytes and SHA-256. A rerun skips days with a marker and regenerates days without one. Publication builds the manifest from the markers, without rereading data files.
-- **Publication.** Once every day has a marker, it writes `manifest.json` last with an if-absent condition, listing each part with rows, bytes and SHA-256, plus total physical bytes. If the config declares `minimum_source_bytes` and the total is lower, publication refuses with both numbers. A version that already has a manifest is never modified.
+- **Keys.** Each purchase is keyed by its purchase-start day, its customer and that customer's purchase number that day. Card-testing bursts are keyed by (day, burst, number). A purchase's random stream and identity depend only on its key, never on how the day is split or how many workers run.
+- **Counts.** A day's purchase counts come from one Poisson draw over all customers, scaled by each customer's activity and the region's local-hour, weekday and seasonal intensity. The draw is computed once per process and is independent of the split.
+- **Parts.** Internal constants size a part: customers per part (`PART_CUSTOMERS`) and rows per Parquet row group. A part holds one table's rows for a customer range. Names are `payment_events/date=D/part-NNNNN.v{1|2}.parquet` (events are split by physical schema version, see decision 3) and `fraud_labels/date=D/part-NNNNN.parquet`. Part names are deterministic, so regenerating a day overwrites the same keys. The partition date is the purchase-start day, not the row timestamp.
+- **Scheduling.** `produce` submits every pending (day, part) pair of a shard to the pool at once. Each day's `_day.json` marker is written as soon as all of that day's parts have finished, with no per-day barrier.
+- **Bounded resources.** A worker holds one part's rows per writer and one local temporary file at a time. It uploads the file and deletes it. Memory and scratch are bounded by part size and worker count, not by day or dataset size.
+- **Atomic files.** A part is written to a local temporary file and uploaded with a single PUT (multipart for large parts), or moved into place locally.
+- **Start.** `config.json` (the logical configuration, the generator digest and their hash) is written first. A rerun with a different hash refuses to run.
+- **Day completion.** A `date=D/_day.json` marker records each part's rows, bytes and SHA-256 once all of the day's parts are uploaded. A rerun skips days with a marker and regenerates days without one.
+- **Publication.** Once every day has a marker, `publish` writes `manifest.json` last with an if-absent condition. It lists the logical configuration, generator digest, contract identities, row and byte totals and the file list. If the configuration declares `minimum_source_bytes` and the total is lower, publication refuses with both numbers. A version that already has a manifest is never modified.
 
-This replaces task receipts, `_run/` state, scratch budgeting, writer takeover and cleanup. Day markers stay as part of the published dataset; they are small and document how each day was written.
+*Alternative:* keep the old customer-block tasks with receipts and resume adoption. Rejected: day markers give the same restart granularity with one rule, and parts bound resources without a separate budget model.
 
-*Alternative:* keep the old customer-block tasks with receipts and resume adoption. Rejected: day markers give the same restart granularity with one rule, and chunked parts bound resources without a separate budget model.
+### 3. Physical versions declared by the contract
 
-### 3. Schema change as data, not code paths
+- **Declaration.** The historical `payment-events` ODCS contract is the only declaration of physical versions. Each field added after version 1 carries a property-level `customProperties` entry `sinceSchemaVersion`. Today those are `assessment.assessment_id`, `assessment.evidence_sha256` and `signals.user_agent_family`, all since version 2.
+- **Versions.** Physical versions start at 1 and are integers 1 and 2. `schema_changes: [{effective_at, version}]` in the configuration gives only dates and target versions: dev changes to 2 on 2025-08-15, and full changes to 2 on 2025-07-01. An event's physical version is chosen by its `occurred_at`.
+- **Projection.** The generator builds each event in the full shape and projects it onto the fields available at its version, using the paths the contract declares. Field names are not coded.
+- **Files.** Events of each physical version go to separate part files whose Parquet schemas really differ: version-1 parts physically lack the declared columns. A day that spans the change has parts of both versions.
+- **Envelope.** `schema_version` is 3 on every row, matching the gateway. `physical_schema_version` stays as a row column, and the contract's conditional-presence rule keys on it.
+- **Unknown versions.** A physical version outside the contract's declared versions is rejected before writing.
 
-- **Configuration.** `schema_changes: [{effective_at, version}]` declares the change, starting at version 3. An event's physical version is chosen by its `occurred_at`.
-- **Shape.** Version 3 omits `assessment.assessment_id` and `assessment.evidence_sha256`; version 4 is the full current protobuf shape.
-- **Files.** A day spanning the change writes one file containing both shapes: the omitted fields are null and `physical_schema_version` tells them apart.
-- **Contract.** The historical contract declares both fields as optional, conditioned on `physical_schema_version >= 4`.
-- **Unknown versions.** A version other than 3 or 4 is rejected before writing.
-
-*Alternative:* write separate files per version for a `mergeSchema` demonstration. Rejected for the source: Bronze still reads with `mergeSchema`, but a version column is the explicit contract. The benchmark job can demonstrate merge behaviour separately if it is needed later.
+*Alternative:* one file per table holding both shapes, with the omitted fields null. Rejected: the Parquet schema would not show which version lacks the fields, so Bronze would have to infer the layout from the rows.
 
 ### 4. Bronze tables are shared by both sources
 
@@ -143,7 +137,7 @@ The availability comparison uses the attempt start even while the payment is ope
 
 Each ODCS contract declares `quality` rules as scalar violation-count SQL with `mustBe: 0`, which the batch package turns into native OpenMetadata test cases.
 
-- **Bronze rules:** required fields and conditional nested fields, valid enums, and `physical_schema_version` in {3, 4}.
+- **Bronze rules:** required fields and conditional nested fields, valid enums, and `physical_schema_version` in {1, 2}.
 - **Silver rules:**
   - zero `lifecycle_valid = false`;
   - zero `linkage = 'violation'`;
@@ -184,7 +178,7 @@ Diagnostics and benchmark are separate on-demand `WorkflowTemplate`s with a sing
 ### 9. Diagnostics and benchmark are code only
 
 - **Diagnostics** read Bronze and write JSON with:
-  - per-version row and null counts for v4 fields;
+  - per-version row and null counts for fields declared since version 2;
   - merchant and category top-share and Gini skew;
   - `approx_count_distinct` cardinality, with exact counts where cheap, labelled as such;
   - the identical-duplicate rate with its denominator.
@@ -205,17 +199,22 @@ Neither job runs in the pipeline workflows.
 
 ### 11. Generation runs as an on-demand cluster workflow
 
-A `generate-historical` Argo `WorkflowTemplate` in the data-pipelines chart runs the generator from the simulator image as one pod. `SIMULATOR_CONFIG` selects the environment's config, which is baked into the image:
+A `generate-historical` Argo `WorkflowTemplate` in the data-pipelines chart runs the simulator image as a DAG: `generator.shards` shard pods in parallel, then one publish pod. The configuration, shard count and CPU come from the chart. Each environment's `SIMULATOR_CONFIG` file is baked into the image:
 
 | Environment | Config | Output |
 |---|---|---|
-| dev | `historical-dev.yaml`: v18, 90 days, 10k customers | `s3://platform-dev/datasets/payment-gateway/historical/v18` |
-| prod | `historical-full.yaml`: v19, 365 days from 2025-01-01, 3M customers, schema change mid-year, `minimum_source_bytes: 100000000000` | `s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19` |
+| dev | `historical-dev.yaml`: v18, 90 days, 10k customers, one shard | `s3://platform-dev/datasets/payment-gateway/historical/v18` |
+| prod | `historical-full.yaml`: v19, 365 days from 2025-01-01, 3M customers, change to version 2 on 2025-07-01, `minimum_source_bytes: 100000000000`, four shards | `s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19` |
 
-- **Credentials:** the existing gateway object identity, scoped to `datasets/payment-gateway/`.
-- **Resources:** explicit CPU, memory and ephemeral-storage requests sized from the chunk size and worker count, plus `activeDeadlineSeconds`.
+- **Settings:** the YAML holds only the logical dataset. Run settings come from the environment: `GENERATOR_MODE` (`generate`, `shard` or `publish`), `SHARD_INDEX` and `SHARD_COUNT` for shard steps, `GENERATOR_WORKERS` (set from the CPU request), `GENERATOR_CONTRACTS` (the contract directory, baked into the image) and `SIMULATOR_CONFIG`.
+- **Shards:** shard `i` of `n` generates the days whose index modulo `n` is `i`. A publish step refuses until every day has a marker. Prod uses four shards, the `aws-cpu-burst` pool's node limit, with one shard per spot xlarge node.
+- **Digest:** the generator digest is a SHA-256 over `world.py`, `lifecycle.py`, `historical.py`, `store.py`, the calibration file and the historical contracts. The configuration hash includes it, and `config.json` and the manifest record it. The image carries the same files, so the digest is reproducible between CI and the cluster.
+- **Credentials:** the existing gateway object identity, held in the `gateway-storage` secret from the `datasets/payment-gateway/` scope.
+- **Resources:** CPU, memory and ephemeral-storage requests sized to fit one spot xlarge node, plus `activeDeadlineSeconds`. Ephemeral storage stays modest because each worker's scratch is one part.
 - **Retries:** `retryStrategy` on errors. A retried pod skips completed days by their markers, so a node replacement only costs the day in progress.
-- **Prod:** the data-pipelines Argo CD application is enabled with a values switch that renders only the generator template; Bronze, Silver, schedules and their credentials stay off.
+- **RBAC:** a `historical-generator` ServiceAccount, a Role with `workflowtaskresults` `create, patch` and its RoleBinding. The platform repository has no executor ServiceAccount bound in `data`, so this one is created here. The `gateway-storage` ExternalSecret supplies the S3 credentials.
+- **Shared spec:** the common container spec (image, env, credentials, resources, node selector, retry and deadline) is one named template in `_helpers.tpl`, used by the shard and publish steps.
+- **Prod:** the data-pipelines Argo CD application is enabled and renders only this workflow; Bronze, Silver, schedules and their credentials stay off.
 
 *Alternatives:*
 - A Helm-managed `Job`: rejected, because a Job runs at sync time, is immutable, and needs a rename for every run.
@@ -227,8 +226,8 @@ The local CLI remains for tests and development only.
 
 - [Bronze not run within Kafka retention (7 days)] → `failOnDataLoss` fails the run loudly. Enabling the schedule must come with a cadence or retention that covers it. Raising retention is a Kafka chart change owned by the live change.
 - [`from_protobuf` types differ from the historical Parquet types (timestamps, enums, `uint64`)] → One explicit cast to the Bronze contract schema serves both sources. A CI test decodes protobuf fixtures and generated Parquet into the same Bronze schema, and any mismatch fails. Exact Spark 4.1 `from_protobuf` options are verified against the Spark docs during implementation.
-- [The full-scale run takes hours and its throughput is unmeasured for the new code] → The dev v18 run measures rows per second per worker first, and the prod resources and deadline are set from that. A pod lost to node replacement resumes from day markers. The run is reported only as a published manifest with its byte total; no coursework evidence is captured.
-- [Prod compute and storage cost] → One bounded pod on prod nodes, with no Spark or OpenMetadata workloads enabled in prod. About 100+ GB is stored in the prod bucket. The template is on demand and does nothing until submitted.
+- [The full-scale run takes hours and its throughput is unmeasured for the new code] → The dev v18 run measures rows per second per worker first, and the prod resources, shard count and deadline are set from that. The `aws-cpu-burst` pool caps prod at four xlarge nodes, so four shards is the ceiling until the pool limit changes. A pod lost to node replacement resumes from day markers. The run is reported only as a published manifest with its byte total; no coursework evidence is captured.
+- [Prod compute and storage cost] → Four shard pods and one publish pod on spot prod nodes, with no Spark or OpenMetadata workloads enabled in prod. About 100+ GB is stored in the prod bucket. The template is on demand and does nothing until submitted.
 - [Full Silver recompute grows with history] → Acceptable at development scale. Incremental Silver is a later change once volume justifies it.
 - [Historical overwrite-by-filter rewrites data files] → Partitioning by `_source` keeps rewrites within historical partitions.
 - [Spec deltas overlap the live change] → This change modifies only these requirements of shared specs:
@@ -250,10 +249,10 @@ The local CLI remains for tests and development only.
 Prod releases come only from `main`, and trusted PRs release to dev. The work therefore lands in two PRs:
 
 1. **Generator PR → `main`:**
-   - `simulator/world.py`, the rewritten generator and the reset `historical-payments` v1 contracts. Old modules that `live/` still imports stay until the live change switches to `world.py`;
+   - `simulator/world.py`, the rewritten generator and the reset `historical-payments` v1 contracts. This PR switches `live/` to `world.py` and deletes the old modules;
    - the `generate-historical` template;
    - the dev and full-scale configs;
-   - the prod generator-only enablement.
+   - the prod enablement of the generator workflow.
 
    After its releases:
    - submit `generate-historical` in dev (v18) to measure throughput;
@@ -277,4 +276,4 @@ Steps 3 and 4 run when the whole pipeline is ready, not as tasks of this change.
 ## Open Questions
 
 - Exact transitive jar versions for the Kafka connector under Spark 4.1.3, resolved when the Dockerfile is written.
-- Whether the benchmark should also show a `mergeSchema` on/off read over v3/v4 files. It can be added to the benchmark job later without spec changes.
+- Whether the benchmark should also show a `mergeSchema` on/off read over physical versions 1/2 files. It can be added to the benchmark job later without spec changes.

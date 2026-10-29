@@ -2,7 +2,7 @@
 
 ### Requirement: Validated generator configuration
 
-The generator SHALL read one configuration file declaring dataset version, seed, synthetic integration identity, start date and duration (default 90 days), entity counts, purchase behavior including merchant and category skew, per-scenario rates and parameters, a duplicate-export rate, ordered physical schema changes, label delays and output root. Invalid or inconsistent configuration, including an unsupported physical schema version or unordered schema changes, SHALL fail before any output is written. Credentials SHALL NOT be accepted in the configuration file.
+The generator SHALL read one configuration file declaring dataset version, seed, synthetic integration identity, start date and duration (default 90 days), entity counts, purchase behavior including merchant and category skew and the foreign-IP probability, per-scenario rates and parameters, a duplicate-export rate, ordered physical schema changes, label delays, an optional minimum source size and output root. Run settings (mode, shard, worker count and contract directory) SHALL come from the environment, not the configuration file. Invalid or inconsistent configuration, including an unsupported physical schema version or unordered schema changes, SHALL fail before any output is written. Credentials SHALL NOT be accepted in the configuration file.
 
 #### Scenario: Unknown scenario name
 
@@ -11,12 +11,12 @@ The generator SHALL read one configuration file declaring dataset version, seed,
 
 #### Scenario: Unsupported schema version
 
-- **WHEN** a schema change declares a physical version other than 3 or 4, or changes are not in ascending time order
+- **WHEN** a schema change declares a physical version other than 1 or 2, or changes are not in ascending time order
 - **THEN** the generator exits nonzero before writing output
 
 ### Requirement: Ninety-day development population
 
-The maintained development configuration SHALL publish dataset v18: 90 purchase-start dates from 2025-07-01 for a modest US/USD electronics population with repeat behavior and supported fraud scenarios, a 2% duplicate-export rate and a change from physical schema 3 to 4 on 2025-08-15. It SHALL remain a development source rather than evidence of scale or real-world model quality. Published v8–v17 datasets SHALL remain untouched and are not readable by the rebuilt pipeline.
+The maintained development configuration SHALL publish dataset v18: 90 purchase-start dates from 2025-07-01 for a modest US/USD electronics population with repeat behavior and supported fraud scenarios, a 2% duplicate-export rate and a change to physical version 2 on 2025-08-15. It SHALL remain a development source rather than evidence of scale or real-world model quality. Published v8–v17 datasets SHALL remain untouched and are not readable by the rebuilt pipeline.
 
 #### Scenario: Default development range
 
@@ -27,40 +27,59 @@ The maintained development configuration SHALL publish dataset v18: 90 purchase-
 
 ### Requirement: Deterministic per-day generation
 
-The same logical configuration and generator revision SHALL produce the same records. Worker count, day completion order and interruption SHALL NOT change records. Each purchase-start day SHALL be generated independently of other days. Different seeds SHALL produce different histories with the same configured statistical shape.
+The same logical configuration and generator digest SHALL produce the same records. Purchases SHALL be keyed by purchase-start day, customer and that customer's purchase number that day; card-testing bursts SHALL be keyed by day and burst. Worker count, the division of a day into parts, day completion order and interruption SHALL NOT change records. Each purchase-start day SHALL be generated independently of other days. Different seeds SHALL produce different histories with the same configured statistical shape.
 
 #### Scenario: Regenerate a dataset
 
-- **WHEN** a dataset is generated twice to separate locations with the same configuration and revision
+- **WHEN** a dataset is generated twice to separate locations with the same configuration and digest
 - **THEN** both outputs contain identical records and identical manifest row counts
 
-#### Scenario: Change parallelism after interruption
+#### Scenario: Change parallelism or split after interruption
 
-- **WHEN** an interrupted run is rerun with a different worker count
+- **WHEN** an interrupted run is rerun with a different worker count or a different part size
 - **THEN** its records equal those of an uninterrupted run
 
 ### Requirement: Shared entity world
 
-The entity world (entity pools, identities, fingerprints, skew weights, purchase behavior and compromise schedules) SHALL be built from the generator configuration and seed alone, by one module shared with the live simulator. Merchant and customer IDs and address, IP-network and payment-method fingerprints SHALL match the shared identity vectors. The manifest SHALL record the complete logical configuration, so a consumer can rebuild the same world without reading generated files.
+The entity world (entity pools, identities, fingerprints, skew weights, purchase behavior, customer activity and compromise schedules) SHALL be built from the generator configuration and seed alone, by one module shared with the live simulator. Merchant and customer IDs and address, IP-network and payment-method fingerprints SHALL match the shared identity vectors. The manifest SHALL record the complete logical configuration, so a consumer can rebuild the same world without reading generated files. The live simulator SHALL reject a manifest whose recorded world digest differs from the digest of the world it builds from that configuration.
 
 #### Scenario: Rebuild the world from a manifest
 
 - **WHEN** the live simulator builds the entity world from a v18 manifest's recorded configuration
 - **THEN** it obtains the same entities and payment-method fingerprints the generator used
 
+#### Scenario: World digest mismatch
+
+- **WHEN** a manifest's world digest does not match the world built from its recorded configuration
+- **THEN** the live simulator refuses the manifest
+
 #### Scenario: Identity vectors
 
 - **WHEN** the generator derives IDs and fingerprints for each case in the shared identity vectors
 - **THEN** it produces exactly the listed values
 
+### Requirement: Gateway-aligned fraud policy
+
+Each simulated attempt SHALL receive the gateway's policy decision: `HIGH_AMOUNT` for amounts above 200000 minor units, and `NEW_ACCOUNT_GEO_MISMATCH` when the IP country differs from the shipping country, the customer account is younger than seven days and the amount exceeds 20000 minor units. An attempt SHALL be declined when any reason code applies, and every reason code SHALL be recorded with the gateway's policy version. IP countries SHALL follow the configured foreign-IP probability and the compromise scenarios.
+
+#### Scenario: Geo mismatch on a new account
+
+- **WHEN** an attempt for a new account with an IP country different from the shipping country has an amount above 20000 minor units
+- **THEN** the attempt is declined with the `NEW_ACCOUNT_GEO_MISMATCH` reason code
+
 ### Requirement: Configured data problems
 
-The configuration SHALL control merchant/category Zipf skew, entity pool sizes, an identical duplicate-export rate and dated physical schema changes. Each event's physical schema version SHALL be chosen by its occurrence time; version 3 SHALL omit the assessment `assessment_id` and `evidence_sha256` fields and version 4 SHALL include them. Every event row SHALL carry its `physical_schema_version`. Duplicate exports SHALL repeat the original event identity, content and physical version.
+The configuration SHALL control merchant/category Zipf skew, entity pool sizes, an identical duplicate-export rate and dated physical schema changes. Physical versions SHALL be declared by the historical payment-events contract: a field declared with `sinceSchemaVersion` N SHALL be absent from every physical version below N. Each event's physical version SHALL be chosen by its occurrence time. Every event row SHALL carry its `physical_schema_version` and a `schema_version` of 3, matching the gateway. Duplicate exports SHALL repeat the original event identity, content and physical version.
 
 #### Scenario: Schema change boundary
 
-- **WHEN** a payment's risk decisions occur before and after a configured change to version 4
-- **THEN** the earlier events have version 3 with the two fields absent and the later events have version 4 with both fields present
+- **WHEN** a payment's risk decisions occur before and after a configured change to version 2
+- **THEN** the earlier events have physical version 1 with the assessment identity fields absent, and the later events have physical version 2 with both fields present
+
+#### Scenario: Physical version parts
+
+- **WHEN** a version-1 part and a version-2 part are opened
+- **THEN** the version-1 Parquet schema lacks the fields declared with `sinceSchemaVersion` 2, and the version-2 Parquet schema has them
 
 #### Scenario: Duplicate export
 
@@ -69,16 +88,16 @@ The configuration SHALL control merchant/category Zipf skew, entity pool sizes, 
 
 ### Requirement: Per-day immutable dataset layout
 
-Output SHALL be written under `historical/<dataset_version>/` as `payment_events/date=<purchase-start date>/part-*.parquet` and `fraud_labels/date=<purchase-start date>/part-*.parquet`, keeping each payment's full lifecycle and labels in its purchase-start day. The generator SHALL write the logical configuration and its hash before any data file, and SHALL refuse to continue a version whose stored configuration differs. A day MAY consist of several parts with deterministic names; a day SHALL be complete only when its completion marker lists every part with rows, bytes and SHA-256. A rerun SHALL skip complete days and regenerate incomplete ones. Each data file SHALL become visible only when complete. Memory and local scratch SHALL be bounded by the configured chunk size and worker count, independent of dataset size. Publication SHALL list every data file with rows, bytes and SHA-256, the total physical bytes, the seed, configuration, generator revision and contract identities in `manifest.json`, written last and only if absent. If the configuration declares a minimum source size and the total is smaller, publication SHALL refuse and report both values. A version with a manifest SHALL be immutable. Output SHALL conform to the `historical-payments` contracts; source publication SHALL NOT claim Bronze or Silver quality acceptance.
+Output SHALL be written under `historical/<dataset_version>/` as `payment_events/date=<purchase-start date>/part-NNNNN.v<physical version>.parquet` and `fraud_labels/date=<purchase-start date>/part-NNNNN.parquet`, keeping each payment's full lifecycle and labels in its purchase-start day. The generator SHALL write the logical configuration, the generator digest and their hash before any data file, and SHALL refuse to continue a version whose stored configuration or digest differs. A day MAY consist of several parts with deterministic names; a day SHALL be complete only when its completion marker lists every part with rows, bytes and SHA-256. A rerun SHALL skip complete days and regenerate incomplete ones. Each data file SHALL become visible only when complete. Memory and local scratch SHALL be bounded by the internal part size and worker count, independent of dataset size. Publication SHALL list every data file with rows, bytes and SHA-256, the total physical bytes, the logical configuration, the generator digest and contract identities in `manifest.json`, written last and only if absent. If the configuration declares a minimum source size and the total is smaller, publication SHALL refuse and report both values. A version with a manifest SHALL be immutable. Output SHALL conform to the `historical-payments` contracts; source publication SHALL NOT claim Bronze or Silver quality acceptance.
 
 #### Scenario: Rerun after interruption
 
 - **WHEN** generation stops after some days and is rerun with the same configuration
 - **THEN** completed days are skipped, missing days are generated and the manifest is published once all days exist
 
-#### Scenario: Changed configuration under an existing version
+#### Scenario: Changed configuration or contract under an existing version
 
-- **WHEN** a rerun uses a configuration whose hash differs from the stored one
+- **WHEN** a rerun uses a configuration or generator digest that differs from the stored one
 - **THEN** the generator refuses and modifies nothing
 
 #### Scenario: Published version
@@ -93,16 +112,16 @@ Output SHALL be written under `historical/<dataset_version>/` as `payment_events
 
 ### Requirement: Generator execution
 
-Environment datasets SHALL be generated by an on-demand cluster workflow running the simulator image as one pod, with the configuration selected by `SIMULATOR_CONFIG`, environment-supplied object credentials, explicit resources, a deadline and retries that resume from completed days. The same code SHALL run locally against a directory for tests and development. Local and S3-compatible roots SHALL have equivalent guarantees.
+Environment datasets SHALL be generated by an on-demand cluster workflow running the simulator image: shard pods generate disjoint sets of purchase-start days in parallel, and a publish pod writes the manifest once every day has a marker. Each pod SHALL take its configuration from `SIMULATOR_CONFIG` and its mode, shard, worker count and contract directory from the environment, with environment-supplied object credentials, explicit resources, a deadline and retries that resume from completed days. The same code SHALL run locally against a directory for tests and development. Local and S3-compatible roots SHALL have equivalent guarantees.
 
 #### Scenario: Pod replaced during generation
 
-- **WHEN** the generator pod is lost after some days completed and the workflow retries
+- **WHEN** a shard pod is lost after some days completed and the workflow retries
 - **THEN** the retry skips completed days and the published dataset equals an uninterrupted run
 
 ### Requirement: Generator diagnostics
 
-The repository SHALL provide an on-demand diagnostics job over ingested Bronze data that reports per-version row counts and v4-field null counts, merchant and category top-share and skew, entity cardinality with exact values distinguished from approximate estimates, and the identical-duplicate rate with its denominator. Diagnostics SHALL be informational and SHALL NOT gate generation, Bronze or Silver.
+The repository SHALL provide an on-demand diagnostics job over ingested Bronze data that reports per-version row counts and null counts for fields declared with `sinceSchemaVersion`, merchant and category top-share and skew, entity cardinality with exact values distinguished from approximate estimates, and the identical-duplicate rate with its denominator. Diagnostics SHALL be informational and SHALL NOT gate generation, Bronze or Silver.
 
 #### Scenario: Diagnostics after ingestion
 
@@ -111,7 +130,7 @@ The repository SHALL provide an on-demand diagnostics job over ingested Bronze d
 
 ### Requirement: Full-scale source generation
 
-A maintained full-scale configuration SHALL publish dataset v19 to the prod bucket: 365 purchase-start days for about 3 million customers, with the same behavior, scenarios, 2% duplicate-export rate and a mid-period change from physical schema 3 to 4, and a declared minimum of 100,000,000,000 physical Parquet bytes across listed event and label files. It SHALL use the same generator, layout and manifest as v18. Publication establishes only the source; Bronze and Silver at full scale and coursework evidence remain later work.
+A maintained full-scale configuration SHALL publish dataset v19 to the prod bucket: 365 purchase-start days for about 3 million customers, with the same behavior, scenarios, 2% duplicate-export rate and a mid-period change to physical version 2, and a declared minimum of 100,000,000,000 physical Parquet bytes across listed event and label files. It SHALL use the same generator, layout and manifest as v18. Publication establishes only the source; Bronze and Silver at full scale and coursework evidence remain later work.
 
 #### Scenario: Full-scale publication
 
@@ -146,7 +165,7 @@ A maintained full-scale configuration SHALL publish dataset v19 to the prod buck
 **Migration**: See "Generator execution".
 
 ### Requirement: Bounded generation resources
-**Reason**: Scratch and in-flight budgeting are replaced by chunk-bounded parts.
+**Reason**: Scratch and in-flight budgeting are replaced by bounded parts.
 **Migration**: See "Per-day immutable dataset layout".
 
 ### Requirement: Verified resume
