@@ -37,7 +37,7 @@ schema:
     dataGranularityDescription: One delivered payment lifecycle event.
     customProperties:
       - property: schemaVersions
-        value: [3, 4]
+        value: [1, 2]
     properties:
       - name: event_id
         logicalType: string
@@ -77,12 +77,12 @@ schema:
         logicalType: integer
         physicalType: UINTEGER
         required: true
-        description: Event schema version equal to physical_schema_version; version four adds the assessment identity and evidence digest.
+        description: Gateway event schema version. Always three; physical_schema_version records the dataset's declared field set.
       - name: physical_schema_version
         logicalType: integer
         physicalType: UINTEGER
         required: true
-        description: Physical schema version of this row, chosen by occurred_at from the dataset's declared schema change. Versions three and four are present.
+        description: Physical schema version of this row, chosen by occurred_at from the dataset's declared schema changes. Version one lacks fields declared with sinceSchemaVersion two; version two has them.
       - name: correlation_id
         logicalType: string
         physicalType: VARCHAR
@@ -254,8 +254,8 @@ schema:
               - {name: model_version, logicalType: string, physicalType: VARCHAR, description: Evaluated model version if a model was used.}
               - {name: feature_set_version, logicalType: string, physicalType: VARCHAR, description: Evaluated feature-set version if features were used.}
               - {name: risk_score, logicalType: number, physicalType: DOUBLE, description: Optional model risk score.}
-              - {name: assessment_id, logicalType: string, physicalType: VARCHAR, description: Assessment identity; present only when physical_schema_version is four.}
-              - {name: evidence_sha256, logicalType: string, physicalType: VARCHAR, description: SHA-256 digest of the scoring evidence; present only when physical_schema_version is four.}
+              - {name: assessment_id, logicalType: string, physicalType: VARCHAR, description: Assessment identity; absent from physical schema version one., customProperties: [{property: sinceSchemaVersion, value: 2}]}
+              - {name: evidence_sha256, logicalType: string, physicalType: VARCHAR, description: SHA-256 digest of the scoring evidence; absent from physical schema version one., customProperties: [{property: sinceSchemaVersion, value: 2}]}
       - name: processor_operation_requested
         logicalType: object
         description: Processor authorization request after risk approval.
@@ -302,7 +302,7 @@ schema:
           SELECT count(*) FROM {object}
           WHERE event_id = '' OR payment_id = '' OR integration_id = ''
             OR correlation_id = ''
-            OR schema_version NOT IN (3, 4) OR physical_schema_version <> schema_version OR aggregate_version < 1
+            OR schema_version <> 3 OR physical_schema_version NOT IN (1, 2) OR aggregate_version < 1
             OR recorded_at < occurred_at
             OR (CAST(payment_created IS NOT NULL AS INTEGER)
               + CAST(attempt_started IS NOT NULL AS INTEGER)
@@ -316,13 +316,13 @@ schema:
         mustBe: 0
       - id: payment_physical_schema_fields
         type: sql
-        description: Assessment identity and evidence digest are present exactly for physical schema version four.
+        description: Fields declared with sinceSchemaVersion two are present exactly for physical schema versions from two onward.
         query: |
           SELECT count(*) FROM {object}
           WHERE risk_decision_recorded IS NOT NULL
             AND (
-              (physical_schema_version = 4) <> (risk_decision_recorded.assessment.assessment_id IS NOT NULL)
-              OR (physical_schema_version = 4) <> (risk_decision_recorded.assessment.evidence_sha256 IS NOT NULL)
+              (physical_schema_version >= 2) <> (risk_decision_recorded.assessment.assessment_id IS NOT NULL)
+              OR (physical_schema_version >= 2) <> (risk_decision_recorded.assessment.evidence_sha256 IS NOT NULL)
             )
         mustBe: 0
       - id: payment_lifecycle
