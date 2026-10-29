@@ -43,12 +43,12 @@ The model servers SHALL obtain their GPU through a chart-owned ResourceClaim req
 - **WHEN** another workload holds the environment's only GPU
 - **THEN** the model server pod stays pending without disturbing the claim holder
 
-### Requirement: Cached model weights
-Model weights SHALL be downloaded once into an environment PVC by an idempotent fill job and mounted by the model server, so a restart or a replacement node in the same zone does not download them again. The fill job SHALL verify the pinned revision and SHALL NOT need credentials.
+### Requirement: Model weights in object storage
+Model weights SHALL be copied once per environment, at their pinned revisions, into the platform bucket under `artifacts/models/` by an idempotent upload job that runs off GPU and control-plane nodes. Model servers SHALL stream weights from there directly into GPU memory without writing them to the node's disk, using the platform's existing artifacts identity.
 
 #### Scenario: Pod restart
 - **WHEN** the model server pod is deleted
-- **THEN** its replacement loads weights from the PVC without network download
+- **THEN** its replacement streams the same pinned weights from object storage and the node's disk usage does not grow by the model size
 
 ### Requirement: One chat replica serves all agents
 A single chat model replica SHALL serve every agent's calls concurrently through continuous batching, in dev and prod. Its measured concurrency capacity SHALL set the gateway's rate limits. Adding capacity SHALL be done by adding replicas on additional GPUs behind the same InferencePool, without changing agents or their model config.

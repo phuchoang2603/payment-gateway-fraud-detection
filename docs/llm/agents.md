@@ -19,6 +19,7 @@ Fraud analysts ask about a specific payment or attempt. Agents assemble the reco
 | Evidence agent | Uses the evidence tool and RAG to explain a payment | Agent with MCP tool |
 | Risk agent | Uses the scoring tool and RAG to assess similar attempts | Second agent |
 | Coordinator agent | Routes an analyst question to the two agents and merges the answer | Coordinator agent |
+| Decision model | laya on CPU: typed, calibrated decisions for the coordinator's routing and for gateway screening of requests that ask agents to act | Coordinator agent, gateway security |
 
 ## Boundaries
 

@@ -9,12 +9,21 @@ gpu:
 
 storage:
   storageClass: local-path
-  modelCache: 40Gi
   compileCache: 5Gi
+
+# Model weights live in the environment bucket and stream straight to the GPU (Run:ai Model Streamer).
+modelStore:
+  bucket: platform-dev
+  prefix: artifacts/models
+  endpoint: https://minio.home.phuchoang.sbs
+  virtualAddressing: false
+  # The Kubeflow artifacts identity, platform-owned and scoped to artifacts/, datasets/ and runs/.
+  credentialsSecret: mlpipeline-minio-artifact
 
 vllm:
   image: vllm/vllm-openai:v0.32.0
   uid: 1000
+  loaderConfig: '{"concurrency":16,"memory_limit":2147483648}'
 
 models:
   chat:
@@ -23,12 +32,11 @@ models:
     revision: 220b46e3b2180893580a4454f21f22d3ebb187d3
     replicas: 1
     stopped: false
-    # KServe's start script evals these, so JSON values stay single-quoted inside the string.
     args:
       - --max-model-len=16384
       - --gpu-memory-utilization=0.80
       - --reasoning-parser=qwen3
-      - --default-chat-template-kwargs='{"enable_thinking":false}'
+      - --default-chat-template-kwargs={"enable_thinking":false}
       - --enable-auto-tool-choice
       - --tool-call-parser=hermes
     resources:
@@ -46,8 +54,8 @@ models:
     resources:
       requests: {cpu: 250m, memory: 2Gi}
       limits: {memory: 4Gi}
-  # Downloaded with the served models so the benchmark can compare weights without a new fill.
-  extraDownloads:
+  # Uploaded with the served models so the benchmark can compare weights without another upload.
+  extraUploads:
     - repo: Qwen/Qwen3-8B-AWQ
       revision: 4da05a8edb55c6046cce958586c33b61da07bb79
 
@@ -122,9 +130,12 @@ benchmark:
       - {concurrency: 8, requests: 64}
       - {concurrency: 16, requests: 96}
   # Standalone chat server for model-server variants while models.chat.stopped is true.
+  # repo/revision/loaderConfig default to the chat model's; args are appended to the chat args.
   variant:
     name: ""
-    repo: Qwen/Qwen3-8B-FP8
+    repo: ""
+    revision: ""
+    loaderConfig: ""
     args: []
     compileCache: true
   storage:

@@ -47,6 +47,7 @@ Feast is built as one change after Bronze and Silver merge. Until then the strea
 | Area | Capability | Page | Status |
 |---|---|---|---|
 | Agents | Inference platform, agent gateway, registry, RAG pipeline, MCP tools, coordinator agent | [Agents](../llm/agents.md) | Planned |
+| Decision model | Self-hosted laya on CPU for coordinator routing and gateway request screening | [Agents](../llm/agents.md) | Planned |
 | GPU scheduling | Kueue queueing for GPU training and serving workloads | [Agents](../llm/agents.md) | Planned |
 | Model loading | GPUDirect Storage for model weights on supported GPUs and local NVMe | [Agents](../llm/agents.md) | Planned |
 

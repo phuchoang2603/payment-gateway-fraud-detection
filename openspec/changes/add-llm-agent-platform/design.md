@@ -35,6 +35,7 @@ The rubric (`edai-2`, LLM rows) asks for: an llm-d based inference platform with
 **Non-Goals:**
 
 - The RAG pipeline (only the embedding endpoint it will call is built here), MCP servers, the scoring tool, the risk and coordinator agents, MCP/A2A routes, agent autoscaling, prompt management, LLM/agent dashboards and A/B tests. These come after the feature-store change.
+- A self-hosted laya decision model on CPU, for the coordinator's routing and for gateway screening (an agentgateway prompt-guard webhook) of requests that ask agents to act. It belongs with the coordinator in phase 2. The hosted Jev API is not used, because it would send analyst prompts to a third party.
 - Public exposure of the gateway, kagent UI or registry UI (port-forward only in this phase).
 - Running prod GPU capacity without explicit user confirmation.
 
@@ -46,7 +47,7 @@ KServe 0.21's `LLMInferenceService` deploys vLLM, llm-d's inference scheduler (E
 
 The workload overrides only what it needs:
 
-- `model.uri: pvc://llm-models/qwen3-8b-fp8` and `model.name: qwen3-8b`;
+- `model.uri: s3://<bucket>/artifacts/models/Qwen/Qwen3-8B-FP8/<revision>` and `model.name: qwen3-8b`;
 - `template.containers[main]`: the vLLM image, args and resources;
 - `template.resourceClaims`: the GPU claim;
 - `router.gateway.refs`: the agentgateway Gateway;
@@ -142,15 +143,15 @@ Serving flags (checked against the vLLM v0.32.0 source):
 | `--max-num-seqs` | bounded to what the KV cache holds, to avoid preemption | benchmarked |
 | `--performance-mode` | `balanced` (default) vs `interactivity` (small-batch latency, which suits agent turns) | benchmarked |
 | `--speculative-config` n-gram | chat | benchmarked |
-| `--load-format` | `safetensors` (default, mmap) vs `fastsafetensors` vs `instanttensor` | benchmarked as cold start |
+| `--load-format` | `runai_streamer` from object storage; `concurrency` and the CPU buffer `memory_limit` via `--model-loader-extra-config` | benchmarked as cold start |
 | torch.compile / CUDA-graph cache | `VLLM_CACHE_ROOT` on a small writable PVC instead of an emptyDir, so restarts skip recompilation | benchmarked as cold start |
 
 KServe's start script `eval`s the container args, so JSON-valued args are written single-quoted inside the value.
 
-Both fast loaders already ship in the image (`fastsafetensors>=0.3.3` and `instanttensor>=0.2.2` are in vLLM's CUDA requirements). Without GPUDirect Storage, vLLM's fastsafetensors path falls back to `nogds=True` by itself, and InstantTensor uses direct I/O, using GDS only when present. GPUDirect Storage itself is not used:
+fastsafetensors and InstantTensor also ship in the image, but they read local files, so they don't apply once weights stream from object storage. GPUDirect Storage is not used either:
 - Talos ships no `nvidia-fs` extension (only gdrcopy, which is GPUDirect RDMA), and the GPU operator's GDS component needs an operator-managed driver, which Talos does not use;
 - NVIDIA supports GDS only on data-center and workstation GPUs, which excludes the dev GeForce card. The dev card is also passed through to a VM on a virtio disk;
-- prod's model cache is EBS, network block storage, so it has no peer-to-peer path. GDS would only help if the cache moved to the `g6.xlarge`'s ephemeral local NVMe, which would mean downloading again on every Spot replacement.
+- weights stream from object storage, which GDS does not read. GDS would only help from the `g6.xlarge`'s ephemeral local NVMe, which would mean downloading again on every Spot replacement.
 
 ### 6. GPU through DRA, placement per environment
 
@@ -161,14 +162,20 @@ The chart owns one ResourceClaim `llm-gpu` in `ml` (a claim, not a template): on
 
 The pool is shared with Kubeflow training and limited to one node, so serving and training cannot run at the same time in prod. Serving must therefore be off whenever training runs (decision 10).
 
-### 7. Model cache on a PVC
+### 7. Model weights in object storage, streamed to the GPU
 
-A 10 GB download on every start would dominate cold start, especially for Spot replacements. The chart owns PVC `llm-models` (40 Gi, RWO, room for the AWQ fallback) and a `model-fill` Job (Argo CD sync hook, idempotent; it skips files that are already complete). The Job downloads the pinned revisions of both models with `hf download` and writes nothing else. Both `LLMInferenceService`s mount their subdirectory via `pvc://`, so KServe skips its storage-initializer download. Both pods share one node, so an RWO volume is enough.
+Weights live once per environment in the platform bucket under `artifacts/models/<repo>/<revision>/`:
+- dev: MinIO `platform-dev`;
+- prod: S3 `platform-prod-…`.
 
-- Dev: `local-path`, pinned to `dev-server1` by its first consumer.
-- Prod: `gp3` with `WaitForFirstConsumer` in `us-east-1a`. A replacement Spot node in the same zone reattaches it.
+They stream straight into GPU memory with Run:ai Model Streamer (`--load-format runai_streamer`, already in the vLLM image), so the serving node never writes weights to its disk. That matters because the dev GPU node is also the control plane: writing tens of gigabytes there starves etcd, and the GPU cannot move to a worker because of a physical constraint. On prod, every new Spot node streams in-region from S3, with no volume to reattach.
 
-The benchmark measures cold start with and without the cache (decision 9). KServe `LocalModelCache` was considered and not chosen: it is node-group based, and the Spot node changes each time.
+- **Upload:** an idempotent `model-upload` Job (sync wave -1) copies the pinned Hugging Face revisions file by file. It skips objects already present with the same size and deletes each local copy after upload. Node affinity keeps it off GPU and control-plane nodes.
+- **Credentials:** the platform's Kubeflow artifacts identity (Secret `mlpipeline-minio-artifact` in `ml`, scoped to `artifacts/`, `datasets/` and `runs/`), so no new platform policy is needed.
+- **Serving:** the chart sets the container command to `vllm serve s3://…` because KServe's preset start script serves a local `/mnt/models`. `storageInitializer` is off, and `model.uri` records the object location. Because the args are no longer re-parsed by the preset's `eval`, JSON values need no extra quoting.
+- **Compile cache:** a small RWO PVC keeps torch.compile and CUDA-graph artifacts per model, so restarts skip recompilation.
+
+KServe's `LocalModelCache` and a model PVC were considered and dropped: both write the weights to a node disk.
 
 ### 8. Agent runtime: kagent 0.10.4 with Agent Substrate 0.0.9
 
@@ -209,8 +216,7 @@ Optimizations measured, each against the previous kept configuration:
 3. `--max-num-seqs` bound and `--performance-mode interactivity` vs `balanced`;
 4. n-gram speculative decoding vs none, on a grounded-answer workload where the answers quote context;
 5. cold start, split into weight-load time and time to Ready:
-   - PVC cache vs an `hf://` download;
-   - `safetensors` vs `fastsafetensors` vs `instanttensor`;
+   - streamer `concurrency` and buffer settings;
    - with and without a persisted compile cache;
 6. FP8 vs AWQ weights, if FP8 runs on sm_120.
 
@@ -269,9 +275,9 @@ The clusters stay on Talos 1.13.9 / Kubernetes 1.36.3. No change is needed to th
 
 - [vLLM FP8 on sm_120 may hit a kernel gap in v0.32.0] → AWQ is the fallback and is recorded on first bring-up. The image is pinned, never `latest`.
 - [`dev-server1` is the control plane and is 82% CPU-requested] → model-server requests are kept at 1 CPU / 8 GiB. If it still does not fit, other dev requests are reviewed with the user instead of overcommitting.
-- [Prod GPU pool is Spot, shared with training and limited to one node] → serving is off in prod by default and has to be enabled deliberately. The PVC cache bounds cold start after interruption, and agents get errors (not hangs) while the pool has no Ready endpoint.
+- [Prod GPU pool is Spot, shared with training and limited to one node] → serving is off in prod by default and has to be enabled deliberately. Streaming from in-region object storage bounds cold start after interruption, and agents get errors (not hangs) while the pool has no Ready endpoint.
 - [Agent Substrate 0.0.9 is pre-1.0] → it is isolated to `SandboxAgent`. The normal `Agent`, model servers, gateway, benchmark and catalog do not depend on it, so the warm-up row can slip without blocking the rest.
-- [The prod pool is L4-only Spot in one zone] → launches may wait on capacity. Serving is off in prod by default, and the PVC cache shortens each launch.
+- [The prod pool is L4-only Spot in one zone] → launches may wait on capacity. Serving is off in prod by default, and streaming from S3 shortens each launch.
 - [Chat and embedding share one 16 GB GPU] → fixed memory fractions per process, with AWQ chat as the in-family fallback. If both still do not fit, embedding moves to CPU (0.6B is small) and the decision is recorded.
 - [The OpenMetadata part depends on PR #102] → it lands after #102 merges and is rebased onto its layout. The rest of the change does not wait for it.
 - [agentgateway policies overwrite per target] → the chart renders policies from the route list, one per route, so a second policy for the same route cannot be declared in values.
@@ -281,7 +287,7 @@ The clusters stay on Talos 1.13.9 / Kubernetes 1.36.3. No change is needed to th
 
 1. The user approves the talos-proxmox set. P1–P5 are implemented and synced in dev; P0 changes only the prod pool definition.
 2. This change's chart goes to dev through `deploy/dev` once the PR is open and CI is green, after telling the user.
-3. Dev bring-up: model fill, both `LLMInferenceService`s Ready on the shared GPU, gateway policy checks, agent chat, registry publication, warm-up with few workers, benchmark runs, OpenMetadata assets (after #102). Evidence and docs follow from those runs.
+3. Dev bring-up: model upload, both `LLMInferenceService`s Ready on the shared GPU, gateway policy checks, agent chat, registry publication, warm-up with few workers, benchmark runs, OpenMetadata assets (after #102). Evidence and docs follow from those runs.
 4. Prod platform components and prod enablement (chart, then GPU pool launch) happen only on explicit user confirmation.
 
 Rollback: disable the `llm-platform` application. Nothing in the payment or data paths depends on it.
