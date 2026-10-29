@@ -89,7 +89,7 @@ def main():
     spark = session("dp2-benchmark")
     try:
         snapshot = current_snapshot(spark, ATTEMPTS)
-        attempts = spark.read.option("snapshot-id", snapshot).table(ATTEMPTS)
+        attempts = spark.read.option("versionAsOf", snapshot).table(ATTEMPTS)
         result = {"run_id": run_id, "silver_snapshot_id": snapshot, "aggregations": benchmark(attempts)}
         Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/benchmark.json", result)
         print(json.dumps(result, sort_keys=True))

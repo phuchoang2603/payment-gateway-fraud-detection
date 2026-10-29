@@ -36,8 +36,8 @@ LABEL_HASH_FIELDS = list(LABEL_COLUMNS)
 def run(spark, run_id):
     events_snapshot = current_snapshot(spark, BRONZE_EVENTS)
     labels_snapshot = current_snapshot(spark, BRONZE_LABELS)
-    events = spark.read.option("snapshot-id", events_snapshot).table(BRONZE_EVENTS)
-    labels = spark.read.option("snapshot-id", labels_snapshot).table(BRONZE_LABELS)
+    events = spark.read.option("versionAsOf", events_snapshot).table(BRONZE_EVENTS)
+    labels = spark.read.option("versionAsOf", labels_snapshot).table(BRONZE_LABELS)
     pins = {
         "bronze.payment_events.snapshot_id": str(events_snapshot),
         "bronze.fraud_labels.snapshot_id": str(labels_snapshot),

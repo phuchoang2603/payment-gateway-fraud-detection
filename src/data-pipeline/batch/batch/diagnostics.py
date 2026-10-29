@@ -90,7 +90,7 @@ def main():
     spark = session("dp1-diagnostics")
     try:
         snapshot = current_snapshot(spark, EVENTS)
-        events = spark.read.option("snapshot-id", snapshot).table(EVENTS)
+        events = spark.read.option("versionAsOf", snapshot).table(EVENTS)
         result = {"run_id": run_id, "bronze_snapshot_id": snapshot, **report(events)}
         Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/diagnostics.json", result)
         print(json.dumps(result, sort_keys=True, default=str))
