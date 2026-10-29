@@ -1,10 +1,3 @@
 enabled: true
-config:
-  SOURCE_ROOT: s3://platform-dev/datasets/payment-gateway/historical/v17
-  EVIDENCE_ROOT: s3://platform-dev/runs/payment-gateway/dp1
-  S3_ENDPOINT: https://minio.home.phuchoang.sbs
-  S3_PATH_STYLE: 'true'
-  ARGO_WORKFLOWS_URL: https://workflows-dev.phuchoang.sbs
-recurring:
-  enabled: false
-  sourceRoot: s3://platform-dev/datasets/payment-gateway
+generator:
+  config: historical-dev.yaml

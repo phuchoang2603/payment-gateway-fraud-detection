@@ -1,0 +1,58 @@
+dataset_version: v19
+duration_days: 365
+duplicate_rate: 0.02
+minimum_source_bytes: 100000000000
+schema_changes:
+  - effective_at: "2026-04-30T00:00:00Z"
+    version: 3
+output: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway
+world:
+  seed: 2603
+  integration_id: 01234567-89ab-4cde-8fab-0123456789ab
+  synthetic_key: synthetic-fingerprint-v1
+  start_date: 2025-10-29
+  counts:
+    customers: 3000000
+    merchants: 20000
+    devices: 4200000
+    ip_networks: 65536
+    addresses: 3300000
+    payment_methods: 3900000
+  behavior:
+    purchases_per_customer_day: 0.17
+    merchant_zipf_exponent: 1.1
+    category_zipf_exponent: 1.2
+    familiar_merchant_probability: 0.8
+    familiar_context_probability: 0.95
+    foreign_ip_probability: 0.03
+    hot_merchant_share: 0.5
+    issuer_decline_rate: 0.04
+    insufficient_funds_rate: 0.03
+    unknown_outcome_rate: 0.02
+    unknown_resolution_minutes: 15
+    retry_rate: 0.3
+    expiry_minutes: 60
+  scenarios:
+    obvious_high_value:
+      rate: 0.001
+      amount_multiplier: 8
+    stolen_card_new_device:
+      rate: 0.0004
+      window_days: 7
+      attempts_per_day: 1.5
+      amount_multiplier: 2.5
+    account_takeover:
+      rate: 0.0002
+      window_days: 3
+      attempts_per_day: 2
+      amount_multiplier: 3
+    card_testing:
+      rate: 60
+      burst_size: 25
+      burst_minutes: 10
+      decline_rate: 0.8
+    friendly_fraud:
+      rate: 0.003
+  label_delays:
+    min_days: 7
+    max_days: 21

@@ -1,6 +1,6 @@
 # Data products
 
-Each data product lives in one folder under [`contracts/data-products/`](../../contracts/data-products): an [ODPS](https://github.com/bitol-io/open-data-product-standard) descriptor `product.odps.yaml` and one [ODCS](https://github.com/bitol-io/open-data-contract-standard) contract per output port. The descriptor identifies the product, owner, access and ports; each contract defines its port's field meanings and quality rules. Product, contract, physical schema and dataset versions are independent, and dataset manifests record each identity, version and file hash.
+Each data product lives in one folder under [`contracts/data-products/`](../../contracts/data-products): an [ODPS](https://github.com/bitol-io/open-data-product-standard) descriptor `product.odps.yaml` and one [ODCS](https://github.com/bitol-io/open-data-contract-standard) contract per output port. The descriptor identifies the product, owner, access and ports; each contract defines its port's field meanings and quality rules. Product, contract, schema and dataset versions are independent, and dataset manifests record each identity, version and file hash.
 
 Each contract has a generated schema reference under [`docs/data-ml/data-products/<product>/`](data-products). CI discovers every product folder, lints descriptor and contracts with pinned native tools, and diffs each reference against a fresh export (`bash scripts/ci-checks.sh contracts`). After changing a contract, regenerate its reference with the export command in [`scripts/ci-checks.sh`](../../scripts/ci-checks.sh).
 
@@ -17,7 +17,7 @@ The SQL rules use DuckDB syntax. Source DuckDB rules are distinct from downstrea
 
 ## Historical payments
 
-[`historical-payments`](../../contracts/data-products/historical-payments) is the reproducible synthetic source for DP1 ingestion and downstream feature and training pipelines described in [data pipeline architecture](data-pipeline.md). It stays outside bronze tables and production payment storage.
+[`historical-payments`](../../contracts/data-products/historical-payments) is the reproducible synthetic source for ingestion and downstream feature and training pipelines described in [data pipeline architecture](data-pipeline.md). It stays outside bronze tables and production payment storage.
 
 | Port | Contract | Reference |
 |---|---|---|
@@ -28,7 +28,7 @@ The fraud-labels linkage rule reads `payment_events`, so validate labels in a da
 
 ### Published version
 
-`historical/v8` is the original published full-scale source, generated with seed 2603 (its exact configuration is retained in its manifest): 24,982 raw files, 123,286,939,620 physical and 243,759,611,982 uncompressed Parquet bytes, with validation deferred to the `dp1-spark-gx` gate. `historical/v10` is a small smoke export (100,000 customers, six days) using the same manifest format. Each `manifest.json` records the configuration hash, generator revision, contract hashes, per-file inventory, per-partition row counts and storage metrics. [`historical-sanity.ipynb`](../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb) reads a published manifest for distribution, skew, attempt context and duplicate checks.
+`historical/v8` is the original published full-scale source, generated with seed 2603 (its exact configuration is retained in its manifest): 24,982 raw files, 123,286,939,620 physical and 243,759,611,982 uncompressed Parquet bytes, with validation deferred to the `dp1-spark-gx` gate. `historical/v10` is a small smoke export (100,000 customers, six days) using the same manifest format. Each `manifest.json` records the configuration hash, generator revision, contract hashes, per-file inventory, per-partition row counts and storage metrics.
 
 `historical/v12` is an immutable one-off -365-day calendar shift of v8, with the same entities/content and no regeneration. Its manifest SHA-256 is `66aa2af7fecb1177e0d3891ea86054ff9c076ff6e8743b35b6bec0bd351511ce`; 2,851 files received full row/remote readback checks and 22,131 received upload-integrity/HEAD checks. Spark/GX acceptance remains pending. Live decoded Parquet lands separately under `streaming/`; see the [landing interface](data-pipeline.md#live-simulation-and-landing).
 
@@ -50,21 +50,7 @@ After seven days of warmup, one conservative evaluation schedule is:
 
 Fit after training maturity, select after validation maturity, then evaluate the untouched test interval. The excluded intervals allow the configured 21-day chargeback tail; always enforce actual availability. Customer/method overlap is substantial (4,874 customers and 5,346 methods shared between training and test), so this is temporal evaluation, not an entity holdout. Stable campaign IDs are not exported; campaign overlap is unmeasured and customer/method overlap is only a proxy. These counts support pipeline experiments, not a model-quality claim.
 
-Generate only the development profile now. Full-volume Python generation is deferred until ingestion, features, training and serving have been exercised; no Spark simulator is required. Run generation from the devenv shell:
-
-```bash
-cd src/data-pipeline/simulator
-doppler run -p payment-gateway-fraud-detection -c dev -- sh -c \
-  'AWS_ACCESS_KEY_ID="$OBJECT_GATEWAY_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$OBJECT_GATEWAY_SECRET_ACCESS_KEY" \
-   S3_ENDPOINT=https://minio.home.phuchoang.sbs S3_PATH_STYLE=true AWS_REGION=us-east-1 \
-   SIMULATOR_CONFIG=configs/historical-smoke.yaml uv run --locked simulator'
-```
-
-Bump `dataset_version` in the config for every new dataset. Set `output` in the selected YAML to a local directory to generate without credentials.
-
-The historical runtime generates and uploads raw task Parquet, verifies checksums, row-count accounting and the physical-byte gate, and writes the completion manifest last. It then cleans only `_run/`, retaining persistent `raw/` files. It resumes compatible unfinished work or repairs cleanup on a completed inventory without rewriting files or the manifest. Completed versions cannot be regenerated or overwritten; recovery verifies the stored logical configuration.
-
-The manifest uses `manifest_version: 3`, `source_layout: task-fragments-v1` and an exact inventory of `raw/{table}/{task.key}/v{schema_version}.parquet` files beneath the dataset root. Each file records `schema_version`, checksum, bytes, rows and `partitions: {date: rows}`; those dates summarize occurrence dates for events and availability dates for labels. A task file can cover several dates. Source files carry no sorting or compaction guarantee. The current context contract versions the historical-payments product to `6.0.1` and the payment-events contract to `4.0.1`; current files use event schema 3.
+Generation runs in the cluster as the `generate-historical` workflow. Configuration, run instructions, layout and reruns are in [data-generator](data-generator.md).
 
 New generation-time contract checks are recorded as `result: skipped`, gate `dp1-starrocks-openmetadata` and a reason. Older manifest gate names remain historical provenance. Python/DuckDB finalization and remote analytical scans are removed from the new path. DP1 validates exactly the listed raw files, preserves duplicate deliveries and delayed labels, derives Bronze partitions from timestamp columns and requires the owning DP1 snapshot-pinned SQL checks on both persisted tables plus verified native OpenMetadata governance before Bronze quality acceptance. Source publication alone does not establish quality acceptance. Reports use cheap additive row/scenario/duplicate/schema and bounded skew counters; observed cardinality validation is marked downstream, with configured pools kept separate from measurements.
 
@@ -76,16 +62,10 @@ The historical command is generation-only: it has no migration command or old-co
 
 The historical 2026-10-22 RustFS probe confirmed create-if-absent, ETag-conditional update and streamed transfer; HEAD returned no SHA-256 checksum, so integrity verification streams each object. Unsupported conditional operations fail rather than falling back to unsafe writes. New execution controls cover workers, in-flight reservations, scratch and transfers, without DuckDB sort/validation budgets. Logical customer blocks, burst groups, layout, scenarios, contracts and minimum source bytes form the generation identity.
 
-The maintained generator starts fresh with a US-only electronics calibration profile, fixed entity birth dates, regional IANA/DST scheduling and UTC storage. Calibration references and explicit behavioral assumptions are hashed into generation identity. The candidate configurations use current event schema three, no injected duplicates and overlapping fraud/legitimate contexts. Schema-cutover branches are removed; duplicate-delivery experiments require `data_problems.experiment: true`. Prior-version evidence is historical; old source versions are not supported inputs to the current algorithm. Live source selection is separate.
+The maintained generator uses a US-only electronics calibration profile, regional IANA/DST scheduling and UTC storage. The maintained configurations are `historical-dev.yaml` (v18) and `historical-full.yaml` (v19), which declare a dated change to schema version 3 and a 2% duplicate-export rate; see [data-generator](data-generator.md). Prior-version evidence is historical; old source versions are not supported inputs to the current algorithm. Live source selection is separate.
 
 Distribution/scenario/skew counters are informational diagnostics, not source publication gates. Amount/context/time/activity counters use payments, missingness/risk counters use attempts, and purchase-weighted activity is not a population census. Chargeback reporting probability and availability beyond the configured history end are explicit; absent chargebacks are not confirmed negatives. Oracle scenario/truth and postdecision outcomes must be excluded from features. Use forward-time evaluation with mature labels plus entity/campaign holdouts; public payment context does not establish a representative checkout fraud distribution.
 
 The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai-1 (50%)`, cell B5: offline simulation of at least 100 GB. Compression accounting is unspecified there. Full-scale coursework evidence requires at least **100,000,000,000 physical bytes** across inventory-listed raw event and label Parquet files, counted once, excluding `_run`, reports, streaming data, replicas and downstream copies. The v13 smoke export does not satisfy this target. The manifest separately records uncompressed Parquet column-chunk bytes and decimal GB/GiB. A configured full-scale byte gate still prevents undersized publication. Changing logical inputs requires a new dataset version after publication.
 
-## Bronze payments
-
-`bronze-payments` version `2.0.0` exposes `bronze.raw_payment_events` and `bronze.raw_fraud_labels` Iceberg ports. Current event schema 3 preserves enriched AttemptStarted context; label schema 1 retains availability and feature-leakage restrictions. Ingestion appends `_source_dataset_version`, `_source_manifest_sha256`, `_source_file`, `_ingestion_run_id` and `_ingested_at`, preserving identical deliveries.
-
-Git bronze contracts define StarRocks COUNT-of-violations SQL and conditional nested requirements. The official version-matched OpenMetadata ingestion image discovers tables and executes native quality rules; Argo performs explicit product/contract/lineage writes and verifies complete results. Spark performs source-integrity checks, ingestion and bidirectional duplicate-aware source/output reconciliation against recorded snapshots. Native per-day counts alone do not establish content equality.
-
-The fresh platform migration selects v17, which must be generated and validated before ingestion. The v16 observations and manifest below are historical evidence. V16 development acceptance is separate from source/live checks and later full-scale/coursework acceptance. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and metadata-only recovery.
+Bronze and Silver contracts are being rebuilt and are not part of `main`.

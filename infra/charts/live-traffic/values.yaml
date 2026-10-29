@@ -29,21 +29,6 @@ simulator:
       duplicate_rate: 0
       late_rate: 0
       hold_seconds: 0
-archiver:
-  enabled: false
-  topics: payments.events.v1,fraud.labels.v1
-  group: payments-parquet-landing-v17
-  sourceEpoch: v17
-  maxRecords: 10000
-  maxBytes: 33554432
-  flushInterval: 10s
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: '1'
-      memory: 1Gi
 objectStorage:
   endpoint: https://minio.home.phuchoang.sbs
   region: us-east-1

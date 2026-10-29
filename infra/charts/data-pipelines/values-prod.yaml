@@ -1,10 +1,23 @@
 enabled: true
+generator:
+  config: historical-full.yaml
+  shards: 4
+  workers: 3
+  retryLimit: 10
+  # Unmeasured. Sized to fit one aws-cpu-burst xlarge (about 3.5 allocatable vCPU; root disk about 37Gi).
+  activeDeadlineSeconds: 86400
+  nodeSelector:
+    karpenter.sh/nodepool: aws-cpu-burst
+    karpenter.sh/capacity-type: spot
+  resources:
+    requests:
+      cpu: "3"
+      memory: 8Gi
+      ephemeral-storage: 10Gi
+    limits:
+      cpu: "3500m"
+      memory: 12Gi
+      ephemeral-storage: 20Gi
 config:
-  SOURCE_ROOT: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v17
-  EVIDENCE_ROOT: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp1
   S3_ENDPOINT: https://s3.us-east-1.amazonaws.com
   S3_PATH_STYLE: 'false'
-  ARGO_WORKFLOWS_URL: https://workflows.phuchoang.sbs
-recurring:
-  enabled: false
-  sourceRoot: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway

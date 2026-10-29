@@ -100,19 +100,8 @@
       "dockerfile": "infra/docker/live-simulator.Dockerfile",
       "paths": [
         "infra/docker/live-simulator.Dockerfile",
-        "src/data-pipeline/simulator"
-      ]
-    },
-    {
-      "service": "data-platform-spark",
-      "image-suffix": "/data-platform-spark",
-      "context": ".",
-      "dockerfile": "infra/docker/data-platform-spark.Dockerfile",
-      "paths": [
-        "infra/docker/data-platform-spark.Dockerfile",
-        "src/data-pipeline/bronze-ingestion",
-        "contracts/data-products",
-        "contracts/features"
+        "src/data-pipeline/simulator",
+        "contracts/data-products/historical-payments"
       ]
     },
     {
@@ -122,9 +111,7 @@
       "dockerfile": "infra/docker/data-platform-metadata.Dockerfile",
       "paths": [
         "infra/docker/data-platform-metadata.Dockerfile",
-        "src/data-pipeline/bronze-ingestion/data_platform",
-        "contracts/data-products",
-        "contracts/features"
+        "src/data-pipeline/bronze-ingestion/data_platform"
       ]
     },
     {

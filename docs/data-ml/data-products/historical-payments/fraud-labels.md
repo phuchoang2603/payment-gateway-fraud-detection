@@ -29,7 +29,7 @@ Synthetic data only. Scenario truth and future outcomes must never become decisi
 | ----- | ---- | ---------- |
 |  integration_id | string | *Same dedicated synthetic namespace as the referenced payment.*<br />• `required` |
 |  payment_id | string | *Referenced payment aggregate identity.*<br />• `required` |
-|  attempt_id | string | *Referenced started attempt identity.*<br />• `required` |
+|  attempt_id | string | *Referenced started attempt identity in the same integration and payment. Chargebacks reference an attempt that succeeded.*<br />• `required` |
 |  is_fraud | boolean | *Fraud truth according to this source; friendly-fraud chargebacks may differ from simulation truth.*<br />• `required` |
 |  occurred_at | timestamp | *Time of the labeled business occurrence.*<br />• **logicalTypeOptions:** {'timezone': True, 'defaultTimezone': 'UTC'}<br />• `required` |
 |  label_available_at | timestamp | *Earliest time this label may be used by training or evaluation.*<br />• **logicalTypeOptions:** {'timezone': True, 'defaultTimezone': 'UTC'}<br />• `required` |

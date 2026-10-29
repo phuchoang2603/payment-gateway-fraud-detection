@@ -52,6 +52,7 @@ context: |
   storage, CI and project-specific instructions in docs/ for the wiki, not in
   CONTRIBUTING.md. Update existing pages instead of adding per-directory READMEs
   or repeating information maintained elsewhere.
+  Consult the FSDS coursework repository (`../fsds` relative to the main repository checkout) for relevant examples and requirements when planning or applying changes. Read it only; never execute, import or modify it. Adapt examples to this project's synthetic payment scope and contracts, treat them as references rather than evidence of this project's implementation, and report when it is unavailable.
 
 rules:
   proposal:
@@ -73,6 +74,7 @@ rules:
 operations:
   apply:
     guidance:
+      - Consult the FSDS coursework repository (`../fsds` relative to the main repository checkout) for relevant examples and requirements when planning or applying changes. Read it only; never execute, import or modify it. Adapt examples to this project's synthetic payment scope and contracts, treat them as references rather than evidence of this project's implementation, and report when it is unavailable.
       - Use devenv when available and Context7 for current public API guidance.
       - Start fresh in the changed area unless the user explicitly requests legacy compatibility. Remove superseded code, compatibility adapters, dead paths and stale config, tests and docs together; preserve immutable datasets and historical evidence.
       - Reuse behavioral coverage and remove unnecessary tests in the changed area. Do not add config-only, config-getter, trivial getter/no-op, implementation-mirroring or redundant tests or config-only CI suites/jobs; configuration coverage must protect meaningful behavior or a distinct failure/security boundary.

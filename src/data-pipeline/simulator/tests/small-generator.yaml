@@ -1,0 +1,21 @@
+dataset_version: smoke
+duration_days: 6
+duplicate_rate: 0.05
+schema_changes:
+  - effective_at: "2026-07-04T00:00:00Z"
+    version: 3
+output: unused
+world:
+  seed: 7
+  integration_id: 01234567-89ab-4cde-8fab-0123456789ab
+  synthetic_key: synthetic-fingerprint-v1
+  start_date: 2026-07-01
+  counts: {customers: 300, merchants: 20, devices: 400, ip_networks: 100, addresses: 320, payment_methods: 400}
+  behavior: {purchases_per_customer_day: 0.3, merchant_zipf_exponent: 1.1, category_zipf_exponent: 1.2, familiar_merchant_probability: 0.8, familiar_context_probability: 0.9, foreign_ip_probability: 0.05, issuer_decline_rate: 0.05, insufficient_funds_rate: 0.03, unknown_outcome_rate: 0.05, unknown_resolution_minutes: 15, retry_rate: 0.5, expiry_minutes: 60}
+  scenarios:
+    obvious_high_value: {rate: 0.02, amount_multiplier: 8}
+    stolen_card_new_device: {rate: 0.01, window_days: 3, attempts_per_day: 2, amount_multiplier: 2.5}
+    account_takeover: {rate: 0.01, window_days: 2, attempts_per_day: 2, amount_multiplier: 3}
+    card_testing: {rate: 1, burst_size: 10, burst_minutes: 5, decline_rate: 0.8}
+    friendly_fraud: {rate: 0.05}
+  label_delays: {reporting_probability: 1, min_days: 1, max_days: 3}

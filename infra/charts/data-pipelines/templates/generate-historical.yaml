@@ -1,0 +1,36 @@
+{{- if .Values.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: generate-historical
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: historical-generator
+  entrypoint: generate
+  synchronization:
+    mutexes:
+      - name: historical-generator-writer
+  templates:
+    - name: generate
+      dag:
+        tasks:
+          - name: shard
+            template: shard
+            arguments:
+              parameters:
+                - name: index
+                  value: {{ "{{item}}" | quote }}
+            withSequence:
+              start: "0"
+              end: {{ sub .Values.generator.shards 1 | quote }}
+          - name: publish
+            template: publish
+            depends: shard
+    - name: shard
+      inputs:
+        parameters:
+          - name: index
+{{- include "data-pipelines.generator.step" (dict "root" $ "mode" "shard" "shard" true) | nindent 6 }}
+    - name: publish
+{{- include "data-pipelines.generator.step" (dict "root" $ "mode" "publish" "shard" false) | nindent 6 }}
+{{- end }}

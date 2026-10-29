@@ -6,5 +6,3 @@ simulator:
   enabled: false
   config:
     manifest: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v17/manifest.json
-archiver:
-  enabled: true

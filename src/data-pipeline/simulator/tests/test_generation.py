@@ -1,205 +1,282 @@
-from datetime import date
+import json
+import shutil
+from collections import defaultdict
+from datetime import UTC, datetime
+from pathlib import Path
 
+import pyarrow.parquet as pq
 import pytest
+import yaml
+from pydantic import ValidationError
 
-from simulator.generation import build_history
-from simulator.profiles import (
-    CARD_TESTING,
-    HISTORY_STAGE,
-    STOLEN_CARD_NEW_DEVICE,
-    build_profiles,
-    compromised_on,
-    schedule_for_task,
-    stage_rng,
-    tasks_for_day,
+import simulator.historical as historical
+from simulator.historical import (
+    ConfigurationChanged,
+    GenerationError,
+    GeneratorConfig,
+    SourceTooSmall,
+    VersionPublished,
+    generate,
+    produce,
+    publish,
 )
-from tests.conftest import small_config
+
+SMALL_GENERATOR = Path(__file__).with_name("small-generator.yaml")
+CONTRACTS = Path(__file__).resolve().parents[4] / "contracts/data-products/historical-payments"
 
 
-def _histories(config, day):
-    profiles = build_profiles(config)
-    schedules, histories = [], []
-    for task in tasks_for_day(config, (day - config.start_date).days):
-        schedule = schedule_for_task(config, task, profiles)
-        schedules.append(schedule)
-        for index in range(len(schedule)):
-            random = stage_rng(config.seed, HISTORY_STAGE, task.offset, task.kind, task.block, index)
-            histories.append(build_history(config, profiles, schedule, index, day, task.ordinal(index), random))
-    import numpy as np
-
-    from simulator.profiles import Schedule
-
-    return Schedule(
-        *(
-            np.concatenate([getattr(s, name) for s in schedules])
-            for name in ("customers", "merchants", "seconds", "scenarios", "groups")
-        )
-    ), histories
+def config_for(output: Path, **overrides) -> GeneratorConfig:
+    data = yaml.safe_load(SMALL_GENERATOR.read_text())
+    data["output"] = str(output)
+    for path, value in overrides.items():
+        target = data
+        *parents, leaf = path.split(".")
+        for parent in parents:
+            target = target.setdefault(parent, {})
+        target[leaf] = value
+    return GeneratorConfig.model_validate(data)
 
 
-def test_profiles_are_reproducible_from_the_seed():
-    assert build_profiles(small_config()).digest() == build_profiles(small_config()).digest()
-    assert build_profiles(small_config()).digest() != build_profiles(small_config(seed=8)).digest()
+def run(config: GeneratorConfig) -> dict:
+    return generate(config, CONTRACTS)
 
 
-def test_compromise_windows_started_earlier_continue_on_a_rebuilt_day():
-    config = small_config(**{"scenarios.stolen_card_new_device.rate": 0.2})
-    profiles = build_profiles(config)
-    started = set(compromised_on(config, STOLEN_CARD_NEW_DEVICE, 0).tolist())
-    task = next(tasks_for_day(config, 2))
-    schedule = schedule_for_task(config, task, profiles)
-    fraud = schedule.scenarios == STOLEN_CARD_NEW_DEVICE
-    from_day_zero = set(schedule.customers[fraud & (schedule.groups == 0)].tolist())
-    assert from_day_zero and from_day_zero <= started
-    assert not (schedule.groups[fraud] < 0).any()
+def dataset_of(root: Path) -> Path:
+    return root / "historical" / "smoke"
 
 
-@pytest.mark.parametrize("reuse", [0, 1])
-def test_card_testing_bursts_configure_context_reuse_across_many_low_amount_methods(reuse):
-    config = small_config(**{"scenarios.card_testing.rate": 3, "behavior.familiar_context_probability": reuse})
-    schedule, histories = _histories(config, date(2026, 7, 2))
-    bursts = {}
-    for index, history in enumerate(histories):
-        if schedule.scenarios[index] != CARD_TESTING:
-            continue
-        created = history.events[0]["payment_created"]["snapshot"]
-        signals = history.events[1]["attempt_started"]["signals"]
-        assert created["total"]["minor_units"] <= 500
-        bursts.setdefault(int(schedule.groups[index]), []).append(signals)
-    assert bursts
-    for signals in bursts.values():
-        assert (len({signal["device_fingerprint"] for signal in signals}) == 1) == bool(reuse)
-        assert len({signal["payment_method"]["fingerprint"] for signal in signals}) == len(signals)
-        span = max(signal["attempted_at"] for signal in signals) - min(signal["attempted_at"] for signal in signals)
-        assert span.total_seconds() <= config.scenarios.card_testing.burst_minutes * 60 + 5
-
-
-def test_disabled_scenarios_never_appear_in_labels():
-    config = small_config(
-        **{
-            "scenarios.card_testing.rate": 0,
-            "scenarios.account_takeover.rate": 0,
-            "scenarios.friendly_fraud.rate": 0,
-        }
-    )
-    _, histories = _histories(config, date(2026, 7, 3))
-    scenarios = {label["scenario"] for history in histories for label in history.labels}
-    assert not scenarios & {"card_testing", "account_takeover", "friendly_fraud"}
-
-
-def test_memory_mapped_profiles_are_read_only_distinct_and_rebuild_in_another_process(tmp_path):
-    import subprocess
-    import sys
-
-    import numpy as np
-
-    config = small_config()
-    profiles = build_profiles(config, tmp_path)
-    assert isinstance(profiles.familiar_merchants, np.memmap)
-    assert not profiles.familiar_merchants.flags.writeable
-    assert all(len(set(row)) == len(row) for row in profiles.familiar_merchants)
-    assert build_profiles(config, tmp_path, reopen=True).digest() == profiles.digest()
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "from simulator.profiles import build_profiles; "
-            "from tests.conftest import small_config; print(build_profiles(small_config()).digest())",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert result.stdout.strip() == profiles.digest()
-
-
-def test_continuation_refuses_unsupported_algorithm_and_profile_mismatch():
-    from simulator.config import ALGORITHM_VERSION
-    from simulator.profiles import profiles_from_manifest
-
-    manifest = {
-        "algorithm_version": ALGORITHM_VERSION,
-        "configuration": small_config().model_dump(mode="json"),
-        "profile_sha256": build_profiles(small_config()).digest(),
+def files_under(directory: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(directory).as_posix(): path.read_bytes()
+        for path in sorted(directory.rglob("*"))
+        if path.is_file()
     }
-    assert profiles_from_manifest(manifest).digest() == manifest["profile_sha256"]
-    with pytest.raises(ValueError, match="unsupported"):
-        profiles_from_manifest({**manifest, "algorithm_version": "old"})
-    with pytest.raises(ValueError, match="digest mismatch"):
-        profiles_from_manifest({**manifest, "profile_sha256": "changed"})
 
 
-def test_entity_births_remain_fixed_across_purchases_and_days():
-    from datetime import timedelta
-
-    births = {}
-    config = small_config(**{"behavior.purchases_per_customer_day": 2})
-    for offset in (0, 2):
-        _, histories = _histories(config, config.start_date + timedelta(days=offset))
-        for history in histories:
-            created = history.events[0]["payment_created"]
-            for entity, field in (
-                ("customer", "customer_account_created_at"),
-                ("merchant", "merchant_account_created_at"),
-            ):
-                key = entity, created[entity][f"{entity}_id"]
-                birth = created["snapshot"][field]
-                assert births.setdefault(key, birth) == birth
-    assert births
+def read_rows(dataset: Path, table: str) -> list[dict]:
+    rows: list[dict] = []
+    for path in sorted((dataset / table).rglob("*.parquet")):
+        rows.extend(pq.read_table(path).to_pylist())
+    return rows
 
 
-def test_us_dst_uses_real_instants_without_inventing_spring_hour():
-    from datetime import UTC, datetime
-
-    from simulator.calibration import hourly_weights, zone
-
-    before = datetime(2026, 3, 8, 6, 30, tzinfo=UTC)
-    after = datetime(2026, 3, 8, 7, 30, tzinfo=UTC)
-    assert (before.astimezone(zone(0)).hour, after.astimezone(zone(0)).hour) == (1, 3)
-    assert before.astimezone(zone(4)).utcoffset() == after.astimezone(zone(4)).utcoffset()
-    weights, _ = hourly_weights(before.date(), 0)
-    assert weights[7] < weights[6]
+def records(dataset: Path) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = defaultdict(list)
+    for table in ("payment_events", "fraud_labels"):
+        for row in read_rows(dataset, table):
+            result[table].append(json.dumps(row, sort_keys=True, default=str))
+    return {table: sorted(rows) for table, rows in result.items()}
 
 
-def test_historical_risk_matches_gateway_rule_boundaries():
-    from datetime import UTC, datetime, timedelta
+def test_worker_count_and_interrupted_day_do_not_change_the_dataset(tmp_path):
+    single = run(config_for(tmp_path / "single"))
 
-    from simulator.generation import risk_reasons
+    parallel_root = tmp_path / "parallel"
+    generate(config_for(parallel_root), CONTRACTS, workers=2)
+    dataset = dataset_of(parallel_root)
+    (dataset / "manifest.json").unlink()
+    (dataset / "date=2026-07-03" / "_day.json").unlink()
+    (dataset / "payment_events" / "date=2026-07-03" / "part-00000.v2.parquet").unlink()
 
-    now = datetime(2026, 7, 1, tzinfo=UTC)
-    created = now - timedelta(days=1)
-    assert risk_reasons(200000, created, now, "US", None) == []
-    assert risk_reasons(200001, created, now, "US", None) == ["HIGH_AMOUNT"]
-    assert risk_reasons(200001, created, now, "US", "CA") == ["HIGH_AMOUNT", "NEW_ACCOUNT_GEO_MISMATCH"]
-    assert risk_reasons(20001, now - timedelta(days=7), now, "US", "CA") == []
-    assert risk_reasons(20000, created, now, "US", "CA") == []
-
-
-def test_unreported_success_retains_oracle_truth_without_observed_negative():
-    config = small_config(**{"label_delays.reporting_probability": 0, "scenarios.friendly_fraud.rate": 1})
-    _, histories = _histories(config, config.start_date)
-    assert any(history.diagnostics["unreported_eligible_dispute_payments"] for history in histories)
-    for history in histories:
-        assert all(label["source"] == "LABEL_SOURCE_SIMULATION_TRUTH" for label in history.labels)
-        assert all(label["occurred_at"] <= label["label_available_at"] for label in history.labels)
+    assert generate(config_for(parallel_root), CONTRACTS, workers=1) == single
 
 
-def test_fraud_and_legitimate_contexts_use_the_same_pools_and_overlap():
-    config = small_config(**{"scenarios.stolen_card_new_device.rate": 0.5})
-    profiles = build_profiles(config)
-    _, histories = _histories(config, config.start_date)
-    device_pool, network_pool = set(profiles.device_pool), set(profiles.network_pool)
-    amounts, contexts = {}, {}
-    for history in histories:
-        signals = history.events[1]["attempt_started"]["signals"]
-        assert signals["device_fingerprint"] is None or signals["device_fingerprint"] in device_pool
-        assert signals["ip_network_fingerprint"] is None or signals["ip_network_fingerprint"] in network_pool
-        assert signals["ip_country"] is None
-        amount = history.events[0]["payment_created"]["snapshot"]["total"]["minor_units"]
-        amounts.setdefault(history.truth, []).append(amount)
-        for key in history.diagnostics:
-            if key.startswith("context."):
-                contexts[key] = contexts.get(key, 0) + 1
-    legitimate, stolen = amounts["legitimate"], amounts["stolen_card_new_device"]
-    assert max(min(legitimate), min(stolen)) < min(max(legitimate), max(stolen))
-    assert contexts["context.legitimate.new"] and contexts["context.stolen_card_new_device.familiar"]
+def test_records_do_not_depend_on_the_split_or_worker_count(tmp_path, monkeypatch):
+    default_root = tmp_path / "default"
+    run(config_for(default_root))
+    default = records(dataset_of(default_root))
+
+    monkeypatch.setattr(historical, "PART_CUSTOMERS", 100)
+    split_root = tmp_path / "split"
+    run(config_for(split_root))
+    monkeypatch.undo()
+
+    pooled_root = tmp_path / "pooled"
+    generate(config_for(pooled_root), CONTRACTS, workers=2)
+
+    assert records(dataset_of(split_root)) == default
+    assert records(dataset_of(pooled_root)) == default
+
+
+def test_changed_configuration_is_refused_without_modifying_the_version(tmp_path):
+    root = tmp_path / "out"
+    with pytest.raises(SourceTooSmall):
+        run(config_for(root, minimum_source_bytes=10**12))
+    before = files_under(dataset_of(root))
+
+    with pytest.raises(ConfigurationChanged):
+        run(config_for(root, **{"world.seed": 8}))
+
+    assert files_under(dataset_of(root)) == before
+
+
+def test_changed_contract_is_refused_without_modifying_the_version(tmp_path):
+    root = tmp_path / "out"
+    with pytest.raises(SourceTooSmall):
+        run(config_for(root, minimum_source_bytes=10**12))
+    before = files_under(dataset_of(root))
+    contracts = tmp_path / "contracts"
+    shutil.copytree(CONTRACTS, contracts)
+    product = contracts / "product.odps.yaml"
+    product.write_text(product.read_text() + "\n# revised\n")
+
+    with pytest.raises(ConfigurationChanged):
+        publish(config_for(root), contracts)
+
+    assert files_under(dataset_of(root)) == before
+
+
+def test_published_version_is_refused_without_modifying_it(tmp_path):
+    root = tmp_path / "out"
+    run(config_for(root))
+    before = files_under(dataset_of(root))
+
+    with pytest.raises(VersionPublished):
+        run(config_for(root))
+
+    assert files_under(dataset_of(root)) == before
+
+
+def test_undersized_source_reports_observed_and_required_bytes_without_manifest(tmp_path):
+    root = tmp_path / "out"
+    with pytest.raises(SourceTooSmall, match=r"physical bytes \d+ are below minimum_source_bytes 1000000000000"):
+        run(config_for(root, minimum_source_bytes=10**12))
+
+    assert not (dataset_of(root) / "manifest.json").exists()
+    assert len(list(dataset_of(root).glob("date=*/_day.json"))) == 6
+
+
+def test_schema_change_splits_versions_by_occurrence_time(tmp_path):
+    root = tmp_path / "out"
+    run(config_for(root))
+    events = read_rows(dataset_of(root), "payment_events")
+    change = datetime(2026, 7, 4, tzinfo=UTC)
+
+    assert {row["schema_version"] for row in events} == {2, 3}
+    for row in events:
+        expected = 3 if row["occurred_at"] >= change else 2
+        assert row["schema_version"] == expected
+        risk = row["risk_decision_recorded"]
+        if risk is not None:
+            has_assessment_id = risk["assessment"].get("assessment_id") is not None
+            assert has_assessment_id == (expected == 3)
+
+
+def test_each_schema_version_has_a_parquet_schema_that_declares_its_fields(tmp_path):
+    root = tmp_path / "out"
+    manifest = run(config_for(root))
+    events = [part for part in manifest["files"] if part["table"] == "payment_events"]
+
+    def fields_of(version: int) -> tuple[set[str], set[str]]:
+        part = next(p for p in events if p["schema_version"] == version and p["rows"] > 0)
+        schema = pq.read_schema(dataset_of(root) / part["path"])
+        assessment = {f.name for f in schema.field("risk_decision_recorded").type["assessment"].type}
+        signals = {f.name for f in schema.field("attempt_started").type["signals"].type}
+        return assessment, signals
+
+    v2_assessment, v2_signals = fields_of(2)
+    v3_assessment, v3_signals = fields_of(3)
+    assert {"assessment_id", "evidence_sha256"}.isdisjoint(v2_assessment)
+    assert {"assessment_id", "evidence_sha256"} <= v3_assessment
+    assert "user_agent_family" not in v2_signals
+    assert "user_agent_family" in v3_signals
+
+
+def test_duplicate_exports_are_republished_with_a_later_recorded_at(tmp_path):
+    root = tmp_path / "out"
+    run(config_for(root))
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for row in read_rows(dataset_of(root), "payment_events"):
+        groups[row["event_id"]].append(row)
+
+    duplicated = [group for group in groups.values() if len(group) > 1]
+    assert duplicated
+    for group in duplicated:
+        original, *republished = sorted(group, key=lambda row: row["recorded_at"])
+        content = {key: value for key, value in original.items() if key != "recorded_at"}
+        for copy in republished:
+            assert {key: value for key, value in copy.items() if key != "recorded_at"} == content
+            assert copy["recorded_at"] > original["recorded_at"]
+
+
+def test_parts_are_never_empty_and_rows_sit_on_their_side_of_the_change(tmp_path):
+    root = tmp_path / "out"
+    manifest = run(config_for(root))
+    change = datetime(2026, 7, 4, tzinfo=UTC)
+
+    assert all(part["rows"] > 0 for part in manifest["files"])
+    for part in manifest["files"]:
+        if part["table"] != "payment_events":
+            continue
+        rows = pq.read_table(dataset_of(root) / part["path"]).to_pylist()
+        if part["path"].endswith(".v3.parquet"):
+            assert all(row["occurred_at"] >= change for row in rows)
+        else:
+            assert all(row["occurred_at"] < change for row in rows)
+    assert any(part["path"].endswith(".v3.parquet") for part in manifest["files"])
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        [
+            {"effective_at": "2026-07-04T00:00:00Z", "version": 3},
+            {"effective_at": "2026-07-03T00:00:00Z", "version": 4},
+        ],
+        [{"effective_at": "2026-07-04T00:00:00Z", "version": 2}],
+    ],
+)
+def test_invalid_schema_schedule_is_rejected_before_any_output(tmp_path, changes):
+    with pytest.raises(ValidationError):
+        config_for(tmp_path / "out", schema_changes=changes)
+    assert not (tmp_path / "out").exists()
+
+
+def test_schema_version_the_contract_does_not_declare_is_refused_before_output(tmp_path):
+    root = tmp_path / "out"
+    config = config_for(root, schema_changes=[{"effective_at": "2026-07-04T00:00:00Z", "version": 4}])
+
+    with pytest.raises(GenerationError, match="not declared by the payment-events contract"):
+        run(config)
+    assert not root.exists()
+
+
+def test_manifest_records_identities_totals_and_the_file_list(tmp_path):
+    root = tmp_path / "out"
+    manifest = run(config_for(root))
+    stored = json.loads((dataset_of(root) / "manifest.json").read_text())
+
+    assert stored == manifest
+    assert set(manifest) == {
+        "dataset_version",
+        "generator_digest",
+        "configuration_sha256",
+        "configuration",
+        "world_digest",
+        "contracts",
+        "rows",
+        "physical_bytes",
+        "files",
+    }
+    assert manifest["physical_bytes"] == sum(part["bytes"] for part in manifest["files"])
+    assert manifest["rows"]["payment_events"] == sum(
+        part["rows"] for part in manifest["files"] if part["table"] == "payment_events"
+    )
+
+
+def test_disjoint_shards_then_publish_equal_a_single_run(tmp_path):
+    single = run(config_for(tmp_path / "single"))
+    sharded = tmp_path / "sharded"
+    produce(config_for(sharded), CONTRACTS, shard=(0, 2))
+    produce(config_for(sharded), CONTRACTS, shard=(1, 2))
+
+    assert publish(config_for(sharded), CONTRACTS) == single
+
+
+def test_publish_refuses_while_any_shard_is_missing(tmp_path):
+    root = tmp_path / "out"
+    produce(config_for(root), CONTRACTS, shard=(0, 2))
+
+    with pytest.raises(GenerationError):
+        publish(config_for(root), CONTRACTS)
+    assert not (dataset_of(root) / "manifest.json").exists()

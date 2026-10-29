@@ -3,21 +3,23 @@ import io
 import json
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 import pytest
+import yaml
 
-from simulator.config import ALGORITHM_VERSION
 from simulator.contracts.payments.v1.labels_pb2 import LABEL_SOURCE_SIMULATION_TRUTH, FraudLabel
-from simulator.identity import entity_id
+from simulator.historical import GeneratorConfig, generate
 from simulator.live.config import Faults, LiveConfig
 from simulator.live.faults import deliveries
 from simulator.live.model import HistoricalModel, card_number
 from simulator.live.runtime import Gateway, Labels, run_live, traffic
 from simulator.live.source import load_model
-from simulator.profiles import build_profiles
-from tests.conftest import small_config
+from simulator.world import entity_id
+
+CONTRACTS = Path(__file__).resolve().parents[4] / "contracts/data-products/historical-payments"
 
 
 def live_config(**overrides):
@@ -28,21 +30,20 @@ def live_config(**overrides):
     )
 
 
-def test_live_profiles_and_card_identity_across_calendar_gap(monkeypatch):
-    config = small_config()
-    profiles = build_profiles(config)
-    manifest = {
-        "algorithm_version": ALGORITHM_VERSION,
-        "schema_versions": {"payment_events": [3]},
-        "configuration": config.model_dump(mode="json"),
-        "profile_sha256": profiles.digest(),
-    }
+def real_manifest(tmp_path):
+    data = yaml.safe_load(Path(__file__).with_name("small-generator.yaml").read_text())
+    data["output"] = str(tmp_path / "out")
+    return generate(GeneratorConfig.model_validate(data), CONTRACTS)
+
+
+def test_live_purchases_come_from_the_world_and_card_identity_holds(monkeypatch, tmp_path):
+    manifest = real_manifest(tmp_path)
     model = HistoricalModel(manifest)
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
     order, signals, index, *_ = model.purchase(2603, 0, now)
-    assert order["buyer"]["external_id"] in profiles.customer_external_ids
+    assert order["buyer"]["external_id"].startswith("buyer-")
     assert datetime.fromisoformat(order["buyer"]["account_created_at"]) < model.anchor
-    assert profiles.method_pool[index]
+    assert model.world.payment_method_fingerprint(index)
     assert "scenario" not in signals and "is_fraud" not in order
     assert len(card_number(10**11 - 1, "ok")) == 16
     with pytest.raises(ValueError, match="outside synthetic encoding"):
@@ -53,9 +54,8 @@ def test_live_profiles_and_card_identity_across_calendar_gap(monkeypatch):
     )
     with pytest.raises(ValueError, match="manifest digest"):
         load_model(live_config())
-    manifest["profile_sha256"] = "wrong"
-    with pytest.raises(ValueError, match="profile digest"):
-        HistoricalModel(manifest)
+    with pytest.raises(ValueError, match="world digest"):
+        HistoricalModel({**manifest, "world_digest": "wrong"})
 
 
 def test_gateway_retries_preserve_original_command():
@@ -132,12 +132,12 @@ def test_fault_selection_is_order_independent_and_holds_delivery():
 
 def test_traffic_failure_is_visible_and_reports_unfinished(capsys):
     class Model:
-        manifest = {"generation_identity": "model"}
-        config = SimpleNamespace(calibration_sha256="calibration")
-        profiles = SimpleNamespace(method_pool=["expected"])
+        manifest = {"generator_digest": "generator"}
+        config = SimpleNamespace(integration_id="integration")
+        world = SimpleNamespace(digest="world", payment_method_fingerprint=lambda index: "expected")
 
         def purchase(self, *args):
-            return {}, {}, 0, "ok", 0, False, False, 0
+            return {}, {}, 0, "ok", "legitimate", False, False, 0
 
     class GatewayStub:
         async def request(self, *args):
@@ -176,13 +176,13 @@ def test_fatal_loop_stops_shared_process_and_fault_thread(monkeypatch, capsys):
 
 def test_continuous_traffic_stops_on_shutdown_and_finishes_admitted_payments(capsys):
     class Model:
-        manifest = {"generation_identity": "model"}
-        config = SimpleNamespace(calibration_sha256="calibration", integration_id="integration")
-        profiles = SimpleNamespace(method_pool=["expected"])
+        manifest = {"generator_digest": "generator"}
+        config = SimpleNamespace(integration_id="integration")
+        world = SimpleNamespace(digest="world", payment_method_fingerprint=lambda index: "expected")
 
         def purchase(self, *args):
             order = {"seller": {"external_id": "seller"}, "buyer": {"external_id": "buyer"}}
-            return order, {}, 0, "ok", 0, False, False, 0
+            return order, {}, 0, "ok", "legitimate", False, False, 0
 
     class GatewayStub:
         async def request(self, method, path, key, body=None, bearer=None):

@@ -11,7 +11,6 @@ global:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/connect-debezium: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/schema-register: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator: dev
-    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming: dev

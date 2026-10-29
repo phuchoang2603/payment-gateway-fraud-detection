@@ -44,14 +44,12 @@ ASSESSMENT = pa.struct(
         ("model_version", pa.string()),
         ("feature_set_version", pa.string()),
         ("risk_score", pa.float64()),
+        ("assessment_id", pa.string()),
+        ("evidence_sha256", pa.string()),
     ]
 )
-
-
-def event_schema(version: int) -> pa.Schema:
-    if version != 3:
-        raise ValueError(f"unsupported payment event schema version: {version}")
-    signals = [
+SIGNALS = pa.struct(
+    [
         ("attempted_at", TIMESTAMP),
         ("payment_method", PAYMENT_METHOD),
         ("device_fingerprint", pa.string()),
@@ -59,6 +57,10 @@ def event_schema(version: int) -> pa.Schema:
         ("ip_network_fingerprint", pa.string()),
         ("user_agent_family", pa.string()),
     ]
+)
+
+
+def payment_event_schema() -> pa.Schema:
     return pa.schema(
         [
             pa.field("event_id", pa.string(), nullable=False),
@@ -72,13 +74,7 @@ def event_schema(version: int) -> pa.Schema:
             ("payment_created", ATTEMPT_CONTEXT),
             (
                 "attempt_started",
-                pa.struct(
-                    [
-                        ("attempt_id", pa.string()),
-                        ("signals", pa.struct(signals)),
-                        ("context", ATTEMPT_CONTEXT),
-                    ]
-                ),
+                pa.struct([("attempt_id", pa.string()), ("signals", SIGNALS), ("context", ATTEMPT_CONTEXT)]),
             ),
             ("risk_decision_recorded", pa.struct([("attempt_id", pa.string()), ("assessment", ASSESSMENT)])),
             (
