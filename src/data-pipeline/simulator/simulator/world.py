@@ -26,6 +26,9 @@ CONDITION_WEIGHTS = np.array(CALIBRATION["condition_weights"])
 CONDITION_PRICE_FACTORS = np.array(CALIBRATION["condition_price_factors"])
 ACCESSORY = CATEGORIES.index("accessory")
 REGION_WEIGHTS = np.array([region[4] for region in REGIONS])
+CONDITION_CDF = np.cumsum(CONDITION_WEIGHTS / CONDITION_WEIGHTS.sum())
+BROWSER_FAMILIES = tuple(CALIBRATION["browser_families"])
+BROWSER_CDF = np.cumsum(np.array(CALIBRATION["browser_weights"]) / sum(CALIBRATION["browser_weights"]))
 FOREIGN_COUNTRIES = ("CA", "GB", "DE", "MX")
 HOME_COUNTRY = "US"
 
@@ -200,13 +203,13 @@ def hourly_weights(day: date, region: int):
     return weights * intensity / (weights * intensity).sum(), float(np.average(intensity, weights=weights))
 
 
-def purchase_seconds(day: date, regions, rng: np.random.Generator) -> np.ndarray:
-    result = np.empty(len(regions), dtype=np.int64)
-    for region in np.unique(regions):
-        selected = np.flatnonzero(regions == region)
-        weights, _ = hourly_weights(day, int(region))
-        result[selected] = rng.choice(24, len(selected), p=weights) * 3600 + rng.integers(0, 3600, len(selected))
-    return result
+@cache
+def hourly_cdf(day: date, region: int) -> np.ndarray:
+    return np.cumsum(hourly_weights(day, region)[0])
+
+
+def draw(rng: np.random.Generator, cdf: np.ndarray) -> int:
+    return min(int(np.searchsorted(cdf, rng.random(), side="right")), len(cdf) - 1)
 
 
 @dataclass(frozen=True)
@@ -284,6 +287,45 @@ class World:
         sigma = CALIBRATION["activity_log_sigma"]
         self._activity = self._rng(ACTIVITY_STAGE).lognormal(-(sigma**2) / 2, sigma, config.counts.customers)
         self._regions = self._rng(REGION_STAGE).choice(len(REGIONS), config.counts.customers, p=REGION_WEIGHTS)
+        self._customers = self._customer_table()
+
+    def _customer_table(self) -> dict[str, np.ndarray]:
+        counts = self.config.counts
+        size = counts.customers
+        rng = self._rng(CUSTOMER_STAGE)
+        regions = self._regions
+        if counts.addresses > len(REGIONS):
+            slots = (counts.addresses - 1 - regions) // len(REGIONS) + 1
+            addresses = regions + len(REGIONS) * rng.integers(0, np.maximum(slots, 1))
+        else:
+            addresses = regions % counts.addresses
+        return {
+            "age": rng.integers(1, 2500, size),
+            "spend": rng.lognormal(0, CALIBRATION["spend_log_sigma"], size),
+            "familiar": self._familiar_table(rng, size),
+            "home_network": rng.integers(0, counts.ip_networks, size),
+            "address": addresses,
+            "payment_methods": rng.integers(0, counts.payment_methods, (size, 2)),
+        }
+
+    def _familiar_table(self, rng: np.random.Generator, size: int) -> np.ndarray:
+        width = min(3, self.config.counts.merchants)
+        table = self._zipf_merchants(rng, (size, width))
+        while True:
+            ordered = np.sort(table, axis=1)
+            repeated = np.zeros_like(table, dtype=bool)
+            repeated[:, 1:] = ordered[:, 1:] == ordered[:, :-1]
+            rows = np.flatnonzero(repeated.any(axis=1))
+            if not len(rows):
+                return table
+            for column in range(1, width):
+                duplicate = (table[rows, column, None] == table[rows, :column]).any(axis=1)
+                selected = rows[duplicate]
+                table[selected, column] = self._zipf_merchants(rng, len(selected))
+
+    def _zipf_merchants(self, rng: np.random.Generator, shape) -> np.ndarray:
+        indices = np.searchsorted(self._merchant_cdf, rng.random(shape), side="right")
+        return np.minimum(indices, self.config.counts.merchants - 1)
 
     @classmethod
     def build(cls, config: WorldConfig) -> "World":
@@ -295,9 +337,10 @@ class World:
     def _offset(self, day: date) -> int:
         return (day - self.start_date).days
 
+    @lru_cache(maxsize=None)
     def merchant(self, index: int) -> Merchant:
         rng = self._rng(MERCHANT_STAGE, index)
-        category = int(rng.choice(len(CATEGORIES), p=self._category_weights))
+        category = draw(rng, np.cumsum(self._category_weights))
         age = int(rng.integers(30, 1500))
         external_id = f"seller-{index + 1:06d}"
         return Merchant(
@@ -308,48 +351,42 @@ class World:
         )
 
     def customer(self, index: int) -> Customer:
-        counts = self.config.counts
-        rng = self._rng(CUSTOMER_STAGE, index)
-        region = int(self._regions[index])
-        age = int(rng.integers(1, 2500))
-        spend = float(rng.lognormal(0, CALIBRATION["spend_log_sigma"]))
-        familiar = self._familiar_merchants(rng)
-        home_network = int(rng.integers(counts.ip_networks))
-        address = self._customer_address(rng, region)
-        payment_methods = (int(rng.integers(counts.payment_methods)), int(rng.integers(counts.payment_methods)))
+        counts, table = self.config.counts, self._customers
         external_id = f"buyer-{index + 1:06d}"
         shared = index // 2
         return Customer(
             index=index,
             id=entity_id(self.config.integration_id, "customer", external_id),
             external_id=external_id,
-            created_at=self._anchor - timedelta(days=age),
-            region=region,
-            spend=spend,
-            familiar_merchants=familiar,
+            created_at=self._anchor - timedelta(days=int(table["age"][index])),
+            region=int(self._regions[index]),
+            spend=float(table["spend"][index]),
+            familiar_merchants=tuple(int(merchant) for merchant in table["familiar"][index]),
             devices=(index % counts.devices, (shared + counts.customers) % counts.devices),
-            home_network=home_network,
-            address=address,
-            payment_methods=payment_methods,
+            home_network=int(table["home_network"][index]),
+            address=int(table["address"][index]),
+            payment_methods=(int(table["payment_methods"][index, 0]), int(table["payment_methods"][index, 1])),
         )
 
-    def _familiar_merchants(self, rng: np.random.Generator) -> tuple[int, ...]:
-        count = self.config.counts.merchants
-        chosen: list[int] = []
-        while len(chosen) < min(3, count):
-            candidate = min(int(np.searchsorted(self._merchant_cdf, rng.random())), count - 1)
-            if candidate not in chosen:
-                chosen.append(candidate)
-        return tuple(chosen)
-
-    def _customer_address(self, rng: np.random.Generator, region: int) -> int:
-        addresses = self.config.counts.addresses
-        if region >= addresses:
-            return region % addresses
-        return region + len(REGIONS) * int(rng.integers((addresses - 1 - region) // len(REGIONS) + 1))
-
     def _zipf_merchant(self, rng: np.random.Generator) -> int:
-        return min(int(np.searchsorted(self._merchant_cdf, rng.random())), self.config.counts.merchants - 1)
+        return min(
+            int(np.searchsorted(self._merchant_cdf, rng.random(), side="right")), self.config.counts.merchants - 1
+        )
+
+    @lru_cache(maxsize=64)
+    def _compromised(self, scenario: int, start: int) -> frozenset[int]:
+        settings = self._compromise_settings(scenario)
+        draws = self._rng(COMPROMISE_STAGE, scenario, start).random(self.config.counts.customers)
+        return frozenset(np.flatnonzero(draws < settings.rate).tolist())
+
+    def _compromise_settings(self, scenario: int) -> CompromiseScenario:
+        scenarios = self.config.scenarios
+        return scenarios.stolen_card_new_device if scenario == STOLEN_CARD_NEW_DEVICE else scenarios.account_takeover
+
+    @lru_cache(maxsize=65536)
+    def _network_fingerprint(self, network: int) -> tuple[str, str]:
+        address = f"10.{network // 256}.{network % 256}.1"
+        return address, fingerprint(self.config.synthetic_key, "ip_network", address)
 
     def payment_method_fingerprint(self, index: int) -> str:
         return fingerprint(self.config.synthetic_key, "payment_method", f"tok_card-{index:06d}_ok")
@@ -403,7 +440,7 @@ class World:
         else:
             merchant_index = self._zipf_merchant(rng)
         merchant = self.merchant(merchant_index)
-        condition = int(rng.choice(len(CONDITIONS), p=CONDITION_WEIGHTS))
+        condition = draw(rng, CONDITION_CDF)
         quantity = int(rng.integers(1, 4)) if merchant.category == ACCESSORY else 1
         typical = CATEGORY_PRICES[merchant.category] * CONDITION_PRICE_FACTORS[condition] * customer.spend
         unit_price = max(50, round(float(rng.lognormal(np.log(typical), CALIBRATION["purchase_log_sigma"]))))
@@ -412,10 +449,7 @@ class World:
         if scenario == OBVIOUS_HIGH_VALUE:
             unit_price = int(round(unit_price * scenarios.obvious_high_value.amount_multiplier))
         elif compromised:
-            settings = (
-                scenarios.stolen_card_new_device if scenario == STOLEN_CARD_NEW_DEVICE else scenarios.account_takeover
-            )
-            unit_price = int(round(unit_price * settings.amount_multiplier))
+            unit_price = int(round(unit_price * self._compromise_settings(scenario).amount_multiplier))
 
         new_device = rng.random() >= behavior.familiar_context_probability
         if compromised:
@@ -452,7 +486,7 @@ class World:
             address=address,
             method=customer.payment_methods[int(rng.integers(2))],
             ip_country=ip_country,
-            started_seconds=int(purchase_seconds(day, np.array([customer.region]), rng)[0]),
+            started_seconds=draw(rng, hourly_cdf(day, customer.region)) * 3600 + int(rng.integers(0, 3600)),
         )
 
     def card_test(self, rng: np.random.Generator, day: date, burst: int) -> Purchase:
@@ -466,7 +500,7 @@ class World:
             customer=victim,
             merchant=merchant,
             scenario=CARD_TESTING,
-            condition=int(rng.choice(len(CONDITIONS), p=CONDITION_WEIGHTS)),
+            condition=draw(rng, CONDITION_CDF),
             quantity=1,
             unit_price=int(rng.integers(50, 501)),
             device=int(rng.integers(counts.devices)),
@@ -479,12 +513,10 @@ class World:
 
     def _scenario(self, rng: np.random.Generator, offset: int, customer: int) -> tuple[int, int]:
         scenarios, purchases_per_day = self.config.scenarios, self.config.behavior.purchases_per_customer_day
-        for scenario, settings in (
-            (STOLEN_CARD_NEW_DEVICE, scenarios.stolen_card_new_device),
-            (ACCOUNT_TAKEOVER, scenarios.account_takeover),
-        ):
+        for scenario in (STOLEN_CARD_NEW_DEVICE, ACCOUNT_TAKEOVER):
+            settings = self._compromise_settings(scenario)
             for start in range(max(0, offset - settings.window_days + 1), offset + 1):
-                if self._rng(COMPROMISE_STAGE, scenario, start, customer).random() < settings.rate:
+                if customer in self._compromised(scenario, start):
                     if rng.random() < min(1, settings.attempts_per_day / purchases_per_day):
                         return scenario, start
                     break
@@ -514,11 +546,11 @@ class World:
         line, city, region, postal = address_parts(address)
         device_missing = rng.random() < CALIBRATION["device_missing_probability"]
         network_missing = rng.random() < CALIBRATION["network_missing_probability"]
-        browser = str(rng.choice(CALIBRATION["browser_families"], p=CALIBRATION["browser_weights"]))
+        browser = BROWSER_FAMILIES[draw(rng, BROWSER_CDF)]
         if rng.random() < CALIBRATION["browser_missing_probability"]:
             browser = None
         friendly = scenario == LEGITIMATE and rng.random() < self.config.scenarios.friendly_fraud.rate
-        network_address = None if network_missing else f"10.{network // 256}.{network % 256}.1"
+        network_address, network_fingerprint = (None, None) if network_missing else self._network_fingerprint(network)
         return Purchase(
             customer_id=customer.id,
             customer_external_id=customer.external_id,
@@ -532,7 +564,7 @@ class World:
             unit_price=unit_price,
             device=None if device_missing else fingerprint(key, "device", f"device-{device:06d}"),
             browser=browser,
-            network=None if network_missing else fingerprint(key, "ip_network", network_address),
+            network=network_fingerprint,
             network_address=network_address,
             ip_country=ip_country,
             shipping_line=line,
