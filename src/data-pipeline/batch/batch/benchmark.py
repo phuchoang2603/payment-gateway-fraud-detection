@@ -64,7 +64,7 @@ def fingerprint(frame: DataFrame):
     digest = frame.select(F.xxhash64(*frame.columns).cast("decimal(38,0)").alias("hash")).agg(
         F.count("*").alias("rows"), F.sum("hash").alias("checksum")
     )
-    row = digest.first()
+    row = digest.collect()[0]
     return row["rows"], row["checksum"], digest._jdf.queryExecution().executedPlan()
 
 
