@@ -8,7 +8,7 @@ from pyspark.sql.functions import partitioning
 
 from fraud_batch.bronze.runs import save_run
 from fraud_batch.common.bronze_schema import event_input_schema, normalize_events, table_name
-from fraud_batch.common.contracts import check_physical, prepare
+from fraud_batch.common.contracts import check_physical, ensure_contract_columns, prepare
 from fraud_batch.common.manifest import physical_schemas, verify_files
 from fraud_batch.common.products import AUDIT, PORTS
 
@@ -105,30 +105,6 @@ def check_date_partition(spark, name, table):
     canonical = re.sub(r"\s+", "", definition.replace("`", "")).lower()
     if f"days({column})" not in canonical:
         raise ValueError(f"table lacks the required date partition: {name}")
-
-
-def ensure_contract_columns(spark, name, expected):
-    def check(actual, target, path=()):
-        if not isinstance(actual, T.StructType):
-            raise ValueError(f"existing table schema is not a struct: {'.'.join(path)}")
-        extra = set(actual.fieldNames()).difference(target.fieldNames())
-        if extra:
-            raise ValueError(f"existing table has undeclared columns at {'.'.join(path)}: {sorted(extra)}")
-        for field in target:
-            field_path = (*path, field.name)
-            if field.name not in actual.fieldNames():
-                if not field.nullable and field.name != "_source_schema_version":
-                    raise ValueError(f"existing table lacks required field: {'.'.join(field_path)}")
-                if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", item) for item in field_path):
-                    raise ValueError("invalid contract field name")
-                escaped = ".".join(f"`{item}`" for item in field_path)
-                spark.sql(f"ALTER TABLE {name} ADD COLUMN {escaped} {field.dataType.simpleString()}")
-            elif isinstance(field.dataType, T.StructType):
-                check(actual[field.name].dataType, field.dataType, field_path)
-            else:
-                check_physical(actual[field.name].dataType, field.dataType, ".".join(field_path))
-
-    check(spark.table(name).schema, expected)
 
 
 def ingest(spark, root, manifest, store, run, namespace="bronze", after_commit=None):

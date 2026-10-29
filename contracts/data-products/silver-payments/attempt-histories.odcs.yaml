@@ -2,7 +2,7 @@ apiVersion: v3.1.0
 kind: DataContract
 id: urn:datacontract:fraud:silver-attempt-histories
 name: Silver payment attempt histories
-version: 1.0.0
+version: 1.1.0
 status: active
 domain: fraud-detection
 description:
@@ -35,7 +35,8 @@ schema:
       - {name: event_id, logicalType: string, physicalType: string, required: true, description: Canonical event identity.}
       - {name: occurred_at, logicalType: timestamp, physicalType: timestamp, required: true, description: Event occurrence time.}
   - {name: started_events, logicalType: integer, physicalType: long, required: true, description: Number of attempt start events.}
-  - {name: attempt_started_at, logicalType: timestamp, physicalType: timestamp, description: Attempt start when available.}
+  - {name: attempt_started_at, logicalType: timestamp, physicalType: timestamp, description: Server lifecycle occurrence time of AttemptStarted when available.}
+  - {name: attempted_at, logicalType: timestamp, physicalType: timestamp, description: "Client attempt time from AttemptStarted.signals.attempted_at for attempt-based feature windows; it can precede lifecycle occurrence and does not establish online availability."}
   - {name: created_events, logicalType: integer, physicalType: long, required: true, description: Number of payment creation events.}
   - {name: terminal_events, logicalType: integer, physicalType: long, required: true, description: Number of terminal payment events.}
   - {name: payment_first_version, logicalType: integer, physicalType: long, required: true, description: Earliest selected aggregate version.}

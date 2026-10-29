@@ -6,7 +6,7 @@ from uuid import uuid4
 from pyspark import StorageLevel
 from pyspark.sql import functions as F
 
-from fraud_batch.common.contracts import check_physical
+from fraud_batch.common.contracts import check_physical, ensure_contract_columns
 from fraud_batch.common.products import SILVER_PORTS
 from fraud_batch.silver.silver_contracts import hashes, product_hash, quality_hash, schema
 from fraud_batch.silver.silver_runs import verify_candidate
@@ -83,7 +83,8 @@ def write_candidate(spark, store, candidate, frames, completeness, namespace="si
                 check_physical(expected.schema, schema(table))
                 if not spark.catalog.tableExists(name):
                     expected.limit(0).writeTo(name).using("iceberg").create()
-                check_physical(spark.table(name).schema, expected.schema)
+                ensure_contract_columns(spark, name, schema(table))
+                check_physical(spark.table(name).select(*expected.columns).schema, expected.schema)
                 snapshot = candidate["snapshots"].get(table) or committed_snapshot(
                     spark, name, candidate["candidate_id"]
                 )

@@ -55,3 +55,7 @@ Implementation update: fresh dev v17 generation/notebook, independent Bronze and
 - [x] 8.2 Replace legacy Silver storage secrets with `gateway-storage` and `gateway-catalog-client`, verify Polaris auth and environment-selected S3 settings, and replace stale governance namespace defaults with `data`.
 - [x] 8.3 Configure environment-specific DP2 evidence roots under `runs/payment-gateway/dp2` without prod writes to dev; keep schedules disabled pending source/catalog verification.
 - [x] 8.4 After CI succeeds, generate fresh dev v17, configure its actual digest, execute the cleared notebook, and accept independent Bronze and Silver runs. Record only new outputs and actual captures; defer prod/full-scale acceptance.
+
+## 9. Streaming timestamp alignment
+
+- [ ] 9.1 Add client `attempted_at` to the versioned Silver attempt-history contract and transformation while preserving lifecycle `attempt_started_at`; extend existing delayed-context coverage, update generated references and distinguish prior deployed acceptance from this additive follow-up. Verify in CI.

@@ -162,3 +162,29 @@ def check_physical(actual, expected, path=""):
         check_physical(actual.elementType, expected.elementType, path + "[]")
     elif type(actual) is not type(expected):
         raise ValueError(f"schema type differs at {path}: {actual} != {expected}")
+
+
+def ensure_contract_columns(spark, name, expected):
+    from pyspark.sql import types as T
+
+    def check(actual, target, path=()):
+        if not isinstance(actual, T.StructType):
+            raise ValueError(f"existing table schema is not a struct: {'.'.join(path)}")
+        extra = set(actual.fieldNames()).difference(target.fieldNames())
+        if extra:
+            raise ValueError(f"existing table has undeclared columns at {'.'.join(path)}: {sorted(extra)}")
+        for field in target:
+            field_path = (*path, field.name)
+            if field.name not in actual.fieldNames():
+                if not field.nullable and field.name != "_source_schema_version":
+                    raise ValueError(f"existing table lacks required field: {'.'.join(field_path)}")
+                if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", item) for item in field_path):
+                    raise ValueError("invalid contract field name")
+                escaped = ".".join(f"`{item}`" for item in field_path)
+                spark.sql(f"ALTER TABLE {name} ADD COLUMN {escaped} {field.dataType.simpleString()}")
+            elif isinstance(field.dataType, T.StructType):
+                check(actual[field.name].dataType, field.dataType, field_path)
+            else:
+                check_physical(actual[field.name].dataType, field.dataType, ".".join(field_path))
+
+    check(spark.table(name).schema, expected)

@@ -1,3 +1,5 @@
+from pyspark.sql import functions as F
+
 from fraud_batch.bronze.ingest import source_frames
 from fraud_batch.bronze.runs import open_run
 from fraud_batch.common.products import hashes
@@ -6,7 +8,13 @@ from fraud_batch.silver.silver_contracts import hashes as silver_hashes
 from fraud_batch.silver.silver_contracts import product_hash, quality_hash
 from fraud_batch.silver.silver_runs import IDENTITY_FIELDS, digest
 from fraud_batch.silver.silver_transform import build
-from fraud_batch.silver.silver_write import OUTPUTS, selected_snapshot, table_name, write_candidate
+from fraud_batch.silver.silver_write import (
+    OUTPUTS,
+    candidate_outputs,
+    selected_snapshot,
+    table_name,
+    write_candidate,
+)
 
 
 def test_repeated_candidate_write_keeps_the_same_snapshots(spark, dataset, tmp_path, bounded_shuffle):
@@ -28,6 +36,13 @@ def test_repeated_candidate_write_keeps_the_same_snapshots(spark, dataset, tmp_p
     }
     candidate["candidate_id"] = digest({field: candidate[field] for field in IDENTITY_FIELDS})
 
+    spark.sql("CREATE NAMESPACE IF NOT EXISTS lake.silver_replay")
+    old_attempts = (
+        candidate_outputs(frames)["attempt_histories"]
+        .drop("attempted_at")
+        .withColumn("_candidate_id", F.lit("previous"))
+    )
+    old_attempts.limit(0).writeTo(table_name("attempt_histories", "silver_replay")).using("iceberg").create()
     write_candidate(spark, store, candidate, frames, "complete", "silver_replay")
     snapshots = dict(candidate["snapshots"])
     assert set(snapshots) == set(OUTPUTS)
@@ -38,3 +53,8 @@ def test_repeated_candidate_write_keeps_the_same_snapshots(spark, dataset, tmp_p
     )
     assert events_output.count() == frames.events.canonical.count()
     assert store.get("dp2/accepted.json") is None
+    attempts_output = selected_snapshot(
+        spark, table_name("attempt_histories", "silver_replay"), snapshots["attempt_histories"]
+    )
+    assert "attempted_at" in attempts_output.columns
+    assert not attempts_output.where("attempted_at IS NULL").take(1)

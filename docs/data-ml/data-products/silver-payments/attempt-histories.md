@@ -2,7 +2,7 @@
 ## Info
 *Scoped attempt histories and explicit incomplete payment context.*
 - **name:** Silver payment attempt histories
-- **version:** 1.0.0
+- **version:** 1.1.0
 - **status:** active
 - **team:** Fraud data platform
 
@@ -34,7 +34,8 @@ The history is not a predecision feature vector.
 | &#x2007;&#x2007;&#x21b3; event_id | string | *Canonical event identity.*<br />• `required` |
 | &#x2007;&#x2007;&#x21b3; occurred_at | timestamp | *Event occurrence time.*<br />• `required` |
 |  started_events | integer | *Number of attempt start events.*<br />• `required` |
-|  attempt_started_at | timestamp | *Attempt start when available.* |
+|  attempt_started_at | timestamp | *Server lifecycle occurrence time of AttemptStarted when available.* |
+|  attempted_at | timestamp | *Client attempt time from AttemptStarted.signals.attempted_at for attempt-based feature windows; it can precede lifecycle occurrence and does not establish online availability.* |
 |  created_events | integer | *Number of payment creation events.*<br />• `required` |
 |  terminal_events | integer | *Number of terminal payment events.*<br />• `required` |
 |  payment_first_version | integer | *Earliest selected aggregate version.*<br />• `required` |

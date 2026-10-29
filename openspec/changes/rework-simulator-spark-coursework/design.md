@@ -122,3 +122,7 @@ Python data-service runtime settings come from their existing configuration chan
 ### Course example review
 
 Read-only FSDS examples at `/home/felix/repos/fsds` informed the simplification: `data-lake-with-minio/utils/generate_fake_data.py` uses configured Parquet generation; `lake-house-with-minio/utils/schema_evolution.py` demonstrates old/new shapes; `batch-processing-with-pyspark/scripts/spark_sql_from_df.py` uses direct transformations; `data-validation/notebooks/full_flow.ipynb` exposes diagnostic results; and `pipeline-orchestration-with-airflow/run_env/dags/demo.py` declares explicit task dependencies. Adopt that direct structure while retaining our scoped identities, conflict handling, exact conservation and temporal semantics. These examples do not supply measured optimization evidence. The Flink example uses no watermarks and does not establish late-arrival acceptance.
+
+### Streaming v2 alignment
+
+Attempt histories add nullable `attempted_at` from the existing raw attempt signals, retaining lifecycle `attempt_started_at` unchanged. This additive Silver 1.1.0 field supports 5m/1h/24h attempt-start feature windows without changing raw physical schemas or lifecycle ordering. Feature availability remains separate. The existing v17 source and accepted 1.0.0 snapshots remain historical evidence; new output requires its own acceptance. Preserve the immutable v1 feature definition used by source-manifest validation when streaming adopts v2. Flink/Feast runtime changes and topic cleanup remain owned by the separate streaming change.

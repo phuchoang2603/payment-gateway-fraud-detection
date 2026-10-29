@@ -14,7 +14,7 @@ Publication writes the completion manifest last. It pins configuration, generato
 
 [`physical-schemas-v1.yaml`](../../contracts/data-products/historical-payments/physical-schemas-v1.yaml) declares physical shapes independently of event-envelope versions. Configuration selects an initial version and strictly increasing UTC effective times; events select their shape by occurrence time, and duplicate deliveries retain it. Dev v17 demonstrates physical 3 → 4 while the event envelope remains version 3.
 
-Schema 4 adds optional assessment references; missing schema-3 fields normalize to null. Synthetic references describe synthetic assessment evidence, not a persisted Fraud document or served feature vector. Later versions need an explicit shape, compatible contracts and lossless normalization. Schedules can skip declared intermediate versions without a pair-specific migration. Preserve published definition files and their hashes; publish a new definition file when adding shapes.
+Schema 4 adds optional assessment references; missing schema-3 fields normalize to null. Synthetic references describe synthetic assessment evidence, not a persisted Fraud document or served feature vector. Later versions need an explicit shape, compatible contracts and lossless normalization. Schedules can skip declared intermediate versions without a pair-specific migration. Keep published feature definitions such as `fraud-snapshot-v1.yaml` available for source-manifest verification even when serving adopts v2. Preserve published definition files and their hashes; publish a new definition file when adding shapes.
 
 ## Inspecting generated data
 

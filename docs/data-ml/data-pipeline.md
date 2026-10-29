@@ -71,6 +71,8 @@ Use the candidate's original Spark image. It compares direct/salted aggregation 
 
 ## Temporal and storage rules
 
+Silver attempt histories retain `attempt_started_at` from the lifecycle envelope and expose `attempted_at` from `AttemptStarted.signals.attempted_at`. Attempt-based feature windows use the latter, matching the streaming v2 design; lifecycle ordering still uses envelope occurrence time. Client time alone does not establish when a fact was available.
+
 Labels are independent observations: missing reports remain unknown and training joins respect availability/maturity. Scenario/oracle fields and future outcomes cannot become features. Gold marts, SCD2/as-of joins and offline feature tables follow their own contracts and later acceptance.
 
 Iceberg snapshots provide reproducible reads; compaction and retention are explicit maintenance. StarRocks queries external Iceberg tables; external-catalog materialized views store derived data and need scheduled or explicit refresh. Do not expire snapshots referenced by accepted receipts.

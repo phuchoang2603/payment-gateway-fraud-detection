@@ -88,6 +88,7 @@ def attempt_histories(events: DataFrame, labels: DataFrame, context: DataFrame) 
         F.sort_array(F.collect_list(history_event)).alias("events"),
         F.sum(F.when(F.col("attempt_started").isNotNull(), 1).otherwise(0)).alias("started_events"),
         F.min(F.when(F.col("attempt_started").isNotNull(), F.col("occurred_at"))).alias("attempt_started_at"),
+        F.min(F.col("attempt_started.signals.attempted_at")).alias("attempted_at"),
     )
     grouped = grouped.join(context, ["integration_id", "payment_id"], "left").fillna(
         {"created_events": 0, "terminal_events": 0}

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from hypothesis import HealthCheck, example, given, settings
 from hypothesis import strategies as st
@@ -111,7 +111,18 @@ def test_labels_are_pending_until_their_attempt_context_is_available(spark, data
     assert not events.conflicts.take(1)
     pending = attempt_histories(events.canonical.limit(0), labels, payment_context(events.canonical.limit(0)))
     assert pending.linked_labels.where("pending_context = false").count() == 0
-    resolved = attempt_histories(events.canonical, labels, payment_context(events.canonical))
+    signals = F.col("attempt_started.signals").withField(
+        "attempted_at", F.col("occurred_at") - F.expr("INTERVAL 5 MINUTES")
+    )
+    delayed = events.canonical.withColumn("attempt_started", F.col("attempt_started").withField("signals", signals))
+    resolved = attempt_histories(delayed, labels, payment_context(delayed))
+    starts = {
+        (row.integration_id, row.payment_id, row.attempt_started.attempt_id): row.occurred_at
+        for row in delayed.where("attempt_started IS NOT NULL").collect()
+    }
+    for row in resolved.histories.collect():
+        assert row.attempt_started_at == starts[(row.integration_id, row.payment_id, row.attempt_id)]
+        assert row.attempted_at == row.attempt_started_at - timedelta(minutes=5)
     assert not resolved.invalid.take(1)
     assert not resolved.pending.take(1)
     assert not resolved.linked_labels.where("pending_context = true").take(1)

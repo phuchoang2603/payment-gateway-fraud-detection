@@ -22,6 +22,13 @@ Silver SHALL declare scoped event, payment, attempt and label-observation grains
 
 Payment-context aggregation SHALL be reused across pending-context classification and attempt histories rather than recomputed independently. Curated validation SHALL enforce conditional schema, context, amounts, lifecycle, linkage and label availability using the declared completeness boundary. Complete historical input SHALL include terminal lifecycle tails. Recurring incomplete histories SHALL be reported as pending context rather than automatically invalid. Simulation truth, chargeback observations and risk decisions SHALL remain distinct. Missing chargebacks SHALL remain unknown. Future outcomes, scenario/oracle fields and assessment decisions SHALL NOT become predecision features. Accepted Silver SHALL provide enough source times, label availability and provenance for later point-in-time feature construction.
 
+Silver attempt histories SHALL retain lifecycle `attempt_started_at` and separately expose client `attempted_at` from `AttemptStarted.signals.attempted_at`. Attempt-based offline feature construction SHALL use client attempt time consistently with the streaming feature contract, while lifecycle ordering remains based on envelope occurrence/aggregate version and availability is evaluated separately. Switching feature contracts SHALL NOT invalidate immutable raw manifests or require regeneration of unchanged source fields.
+
+#### Scenario: Store-and-forward attempt
+
+- **WHEN** an attempt reaches Payments after its client attempt time
+- **THEN** Silver retains both timestamps without backdating lifecycle events or treating client time as availability
+
 #### Scenario: Label arrives after its event batch
 
 - **WHEN** an independently accepted label input references earlier accepted history
