@@ -25,11 +25,13 @@ def build_updates(packets, *, epoch, logical, max_entries):
         .key_by(lambda packet: packet.fact.event_id)
         .process(Deduplicate(logical, "event"))
         .uid("event-deduplication-v3")
+        .name("Deduplicate events")
     )
     starts = (
         events.key_by(lambda packet: json.dumps(packet.fact.identity))
         .process(Deduplicate(logical, "attempt"))
         .uid("attempt-deduplication-v1")
+        .name("Deduplicate attempts")
     )
     rejects += [events.get_side_output(REJECTS), starts.get_side_output(REJECTS)]
     row_type = Types.ROW_NAMED(
@@ -54,6 +56,7 @@ def build_updates(packets, *, epoch, logical, max_entries):
                 output_type=row_type,
             )
             .uid(f"{view}-aggregation-v3")
+            .name(f"Aggregate {view} windows")
         )
         branches.append(branch)
     return branches[0].union(branches[1]), rejects[0].union(*rejects[1:])
@@ -110,6 +113,7 @@ def main():
             )
         )
         .uid("observed-source-progress-v1")
+        .name("Observe source progress")
     )
     updates, rejects = build_updates(
         packets,

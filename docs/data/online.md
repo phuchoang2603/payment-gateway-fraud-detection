@@ -96,7 +96,7 @@ For each variant it reports mismatched cells, over- and under-counts, and the `t
 
 Run: `cd src/data-pipeline/streaming && PYTHONPATH=.. uv run --locked python -m fraud_streaming.benchmark`.
 
-Results from a local run of the committed module with the default seed (2603), 1,200 attempts and 1,221 deliveries. Injected: 58 late, 8 too late, 17 duplicates, 4 conflicting copies.
+Results with the module defaults: seed 2603, 1,200 attempts and 1,221 deliveries. CI pins these exact figures in `tests/test_benchmark.py`, so a change to the window or dedup logic that alters them fails the build. Injected: 58 late, 8 too late, 17 duplicates, 4 conflicting copies.
 
 | Variant | Mismatched cells (of 3,234) | Over-count | Under-count |
 |---|---|---|---|
@@ -129,7 +129,7 @@ Notes:
 - Flink counters are not checkpointed, so they cover only the window after the last restart.
 - The 3 attempts in `1m_5m` are most likely the catch-up after the TaskManager restart, because the metric measures processing time, not arrival time.
 - Flink sees only attempt starts, so its duplicate share is over attempt starts, while the raw share covers every event type.
-- The disable release reached dev at 12:14:17. Argo's automatic sync had not pruned the simulator by 12:18, so a manual Argo sync pruned only its Deployment, ConfigMap, ServiceAccount, NetworkPolicy and ExternalSecrets at 12:18:31; on-time traffic had already stopped at 12:17:10.
+- The disable release reached `deploy/dev` at 12:14:17, and the live-traffic Application picked it up at about 12:16:43. About a minute later, before automatic sync had pruned anything, a manual Argo sync pruned only the simulator's Deployment, ConfigMap, ServiceAccount, NetworkPolicy and ExternalSecrets, at 12:18:31. The Applications use `automated.prune: true`, so the gap was most likely reconcile delay. On-time traffic had already stopped at 12:17:10.
 - The simulator's first container failed at 11:17:06 while the gateway rolled out with the same release (Edge returned 504 from 11:18:36 to 11:18:38); Kubernetes restarted it, and the run above is the restarted container.
 
 ### Restart
@@ -143,11 +143,19 @@ Notes:
 
 ### Flink UI
 
+The Flink UI shows browser local time, UTC−4: 07:25 and 07:51 in the captures are 11:25 and 11:51 UTC. The captures predate operator names, so every operator appears as `KEYED PROCESS`.
+
 ![Job graph](images/online-job-graph.png)
+
+*Job graph at about 11:51 UTC, before the restart: source and progress observation, event deduplication, attempt deduplication, customer and method aggregation, and the journal and reject sinks. All run at parallelism 1 with 0% backpressure.*
 
 ![Checkpoint history](images/online-checkpoints.png)
 
+*Checkpoint history at about 11:51 UTC: checkpoints 171–180 completed every 10 s in about 0.7–1.2 s, at about 6.4 MB.*
+
 ![Backpressure on the event deduplication operator](images/online-backpressure.png)
+
+*Backpressure on the event deduplication operator at about 12:12 UTC: 0% backpressured, 95% idle, 5% busy.*
 
 The `too_late`, `duplicates_dropped`, `rejected` and lateness values above were read from the Flink REST API (`/jobs/<id>/vertices/<id>/metrics`). A capture of the UI's metrics panel is still missing.
 

@@ -40,13 +40,14 @@
 - [x] 8.1 Add `duplicates_dropped` per dedup scope and bucketed lateness counters (`lt_1m`, `1m_5m`, `5m_15m`, `15m_24h`, `too_late`) to the streaming job, with shared classification used by the job and the benchmark
 - [x] 8.2 Add the seeded replay benchmark `fraud_streaming.benchmark` with handled, no-dedup, arrival-time and baseline variants compared with `reference_v2`, plus a CI test
 - [x] 8.3 Document the window code, metrics and benchmark in `docs/data/online.md`
-- [x] 8.4 Record the replay benchmark report in `docs/data/online.md` from a local run of the committed module (`cd src/data-pipeline/streaming && PYTHONPATH=.. uv run --locked python -m fraud_streaming.benchmark`, seed 2603)
+- [x] 8.4 Record the replay benchmark report in `docs/data/online.md` from the module defaults (seed 2603, 1,200 attempts), with the exact figures pinned by a CI test
 - [x] 8.5 Dev live verification, approved and run on 2026-10-29 (11:17:10–12:18:31 UTC, simulator run `e0810a50db3f41a4b6fb2b0f99b37c7a`, Flink job `a95a3fad89bf1791e9ce32b3453b8879`). Results are in `docs/data/online.md` under Evidence:
   - Argo synced `live-v18`, and both topics existed.
   - The simulator ran for 3,600 s at `late_rate` 0.05 (300–600 s) and redelivery 0.015, then was disabled through a dev-only commit.
   - Configured versus observed rates came from the simulator reports, the raw `payments.events.v1` offsets and the Flink REST metrics.
   - Screenshots of the job graph, checkpoint history and backpressure are in `docs/data/images/`.
   - A controlled TaskManager restart was recorded with the restored checkpoint, the recovery time and a journal revision check.
+- [x] 8.7 Name the streaming operators (`Observe source progress`, `Deduplicate events`, `Deduplicate attempts`, `Aggregate customer windows`, `Aggregate method windows`) without changing their uids
 - [ ] 8.6 Remaining evidence:
   - Capture the Flink UI metrics panel showing `too_late`, `duplicates_dropped`, `rejected` and the lateness buckets. In this run those values were read from the REST API instead.
   - Once Bronze Kafka mode is deployed in dev, compare its duplicate share and `recorded_at − attempted_at` distribution with the raw-topic figures.
