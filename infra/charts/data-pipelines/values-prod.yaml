@@ -2,20 +2,20 @@ enabled: true
 generator:
   config: historical-full.yaml
   retryLimit: 10
-  # Unmeasured: sized from dev (24x) and capped by the spot pool. Revisit after the dev throughput run (task 3.7).
+  # Unmeasured. Sized to fit one aws-cpu-burst xlarge (about 3.5 allocatable vCPU; root disk about 37Gi).
   activeDeadlineSeconds: 86400
   nodeSelector:
     karpenter.sh/nodepool: aws-cpu-burst
     karpenter.sh/capacity-type: spot
   resources:
     requests:
-      cpu: "48"
-      memory: 96Gi
-      ephemeral-storage: 50Gi
+      cpu: "3"
+      memory: 8Gi
+      ephemeral-storage: 10Gi
     limits:
-      cpu: "96"
-      memory: 192Gi
-      ephemeral-storage: 100Gi
+      cpu: "3500m"
+      memory: 12Gi
+      ephemeral-storage: 20Gi
 config:
   S3_ENDPOINT: https://s3.us-east-1.amazonaws.com
   S3_PATH_STYLE: 'false'
