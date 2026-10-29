@@ -36,12 +36,17 @@ DP2 SHALL read both Bronze tables at snapshot IDs fixed when the run starts and 
 - **THEN** the rejected rows are reported and the Silver rejection check for the historical source fails
 
 ### Requirement: Attempt histories
-`silver.attempts` SHALL contain one row per integration, payment and attempt, with the server start time, the client `attempted_at`, the risk decision, the attempt outcome (`succeeded`, `declined`, `unknown` or `pending`) and its time, and the payment status (`open`, `succeeded` or `expired`). Attempts of open payments SHALL be included. An attempt with more than one start or terminal event, events out of aggregate-version order, or a terminal event before its start SHALL be marked lifecycle-invalid, and any lifecycle-invalid attempt SHALL fail the Silver checks.
+`silver.attempts` SHALL contain one row per integration, payment and attempt, carrying top-level `merchant_id`, `customer_id`, `payment_method_fingerprint` and `amount_minor` from the AttemptStarted context and signals, with the server start time, the client `attempted_at`, the risk decision, the attempt outcome (`succeeded`, `declined`, `unknown` or `pending`) and its time, and the payment status (`open`, `succeeded` or `expired`). Attempts of open payments SHALL be included. An attempt with more than one start or terminal event, events out of aggregate-version order, or a terminal event before its start SHALL be marked lifecycle-invalid, and any lifecycle-invalid attempt SHALL fail the Silver checks.
 
 #### Scenario: Retried payment
 
 - **WHEN** a payment has a declined attempt followed by a succeeded attempt
 - **THEN** Silver has two attempt rows with outcomes `declined` and `succeeded` and payment status `succeeded`
+
+#### Scenario: Attempt filter keys
+
+- **WHEN** an attempt has started
+- **THEN** its row carries the merchant, customer, payment-method fingerprint and checkout amount from that AttemptStarted
 
 #### Scenario: In-flight live attempt
 
@@ -94,6 +99,24 @@ After each commit, the Silver tables SHALL pass contract-derived StarRocks SQL c
 
 - **WHEN** rejected rows from the historical source exist
 - **THEN** the Silver rejection check fails
+
+### Requirement: Lakehouse storage layout and maintenance
+Bronze and Silver Iceberg tables SHALL be partitioned as the design declares and created with hash distribution and a 256 MB target file size. The `maintain-lakehouse` workflow SHALL compact each table with a bin-pack rewrite, rewrite its manifests, and expire snapshots older than seven days while keeping the last ten. Maintenance SHALL NOT change row content, and SHALL NOT change Kafka progress, which lives in the Bronze rows. The on-demand `storage-layout` benchmark SHALL measure compaction, partition pruning and Z-order clustering on fixed inputs, reporting files and bytes planned by each Iceberg scan, medians of three timed runs after one warm-up, and SHALL assert equal output in both directions before reporting any timing.
+
+#### Scenario: Compaction between Kafka runs
+
+- **WHEN** a Bronze table is rewritten by a bin-pack compaction between two Kafka-mode runs
+- **THEN** the second run starts from the same offsets the first run ended at and replays no record
+
+#### Scenario: Snapshot expiry
+
+- **WHEN** maintenance expires snapshots
+- **THEN** the last ten snapshots remain, every snapshot not older than seven days remains, and the table content is unchanged
+
+#### Scenario: Layout output differs
+
+- **WHEN** a layout's output differs from its baseline in either direction
+- **THEN** the storage benchmark fails without reporting timings for that case
 
 ### Requirement: Optimization benchmark
 The repository SHALL provide an on-demand Spark benchmark that measures two aggregations over the same pinned Silver snapshot. The first is the skewed merchant aggregation: attempts joined with per-merchant aggregates, grouped by merchant and day. The second is a high-cardinality aggregation: distinct devices and attempt counts per customer and per payment method over 24-hour windows, across about three million customers and 3.9 million payment methods. Each aggregation SHALL run as a baseline with adaptive skew handling off and without salting, and as an optimized variant on fixed resources. Each variant SHALL perform one warm-up and three timed runs, report median durations, and assert equal output in both directions with `exceptAll`. The benchmark SHALL NOT run in the pipeline workflows.
