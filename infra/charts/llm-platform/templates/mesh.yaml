@@ -1,0 +1,93 @@
+{{- $ns := .Release.Namespace }}
+{{- $chat := .Values.models.chat.name }}
+{{- $embedding := .Values.models.embedding.name }}
+{{- $gateway := include "llm-platform.principal" (dict "namespace" $ns "name" .Values.gateway.name) }}
+{{- $benchmark := include "llm-platform.principal" (dict "namespace" $ns "name" "llm-benchmark") }}
+{{- $epp := include "llm-platform.principal" (dict "namespace" $ns "name" (printf "%s-epp-sa" $chat)) }}
+{{- $agents := include "llm-platform.principal" (dict "namespace" $ns "name" .Values.agents.serviceAccount) }}
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ $chat }}-workload
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $chat }}
+      app.kubernetes.io/component: llminferenceservice-workload
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [{{ $gateway | quote }}, {{ $epp | quote }}, {{ $benchmark | quote }}]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ $embedding }}-workload
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $embedding }}
+      app.kubernetes.io/component: llminferenceservice-workload
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [{{ $gateway | quote }}, {{ $benchmark | quote }}]
+---
+# The metrics agent is outside the mesh, so its port is opened without an identity; ext-proc stays gateway-only.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ $chat }}-scheduler
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $chat }}
+      app.kubernetes.io/component: llminferenceservice-router-scheduler
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [{{ $gateway | quote }}]
+    - to:
+        - operation:
+            ports: ["9090"]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ .Values.gateway.name }}
+spec:
+  selector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: {{ .Values.gateway.name }}
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - {{ $agents | quote }}
+              - {{ $benchmark | quote }}
+              {{- range .Values.gateway.externalClients }}
+              - {{ . | quote }}
+              {{- end }}
+    - to:
+        - operation:
+            ports: ["15020"]
+{{- if .Values.benchmark.variant.name }}
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: llm-bench-vllm
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: llm-bench-vllm
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [{{ $benchmark | quote }}]
+{{- end }}

@@ -1,0 +1,56 @@
+{{- $agents := .Values.agents }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $agents.serviceAccount }}
+---
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: {{ $agents.modelConfig }}
+spec:
+  provider: OpenAI
+  model: {{ .Values.models.chat.name }}
+  apiKeySecret: llm-gateway-agents
+  apiKeySecretKey: key
+  openAI:
+    baseUrl: http://{{ .Values.gateway.name }}.{{ .Release.Namespace }}.svc.cluster.local/v1
+{{- range $agent := $agents.list }}
+{{- $declarative := dict "modelConfig" $agents.modelConfig "systemMessage" $agent.systemMessage }}
+---
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: {{ $agent.name }}
+spec:
+  type: Declarative
+  description: {{ $agent.description | quote }}
+  version: {{ $agent.version | quote }}
+  declarative:
+    {{- toYaml $declarative | nindent 4 }}
+    deployment:
+      serviceAccountName: {{ $agents.serviceAccount }}
+      podSecurityContext:
+        {{- include "llm-platform.podSecurity" $agents | nindent 8 }}
+      securityContext:
+        runAsNonRoot: true
+        {{- include "llm-platform.containerSecurity" $ | nindent 8 }}
+---
+apiVersion: kagent.dev/v1alpha2
+kind: SandboxAgent
+metadata:
+  name: {{ $agent.name }}-sandbox
+spec:
+  type: Declarative
+  description: {{ $agent.description | quote }}
+  version: {{ $agent.version | quote }}
+  declarative:
+    {{- toYaml $declarative | nindent 4 }}
+  sandbox:
+    network:
+      allowedDomains:
+        - {{ $.Values.gateway.name }}.{{ $.Release.Namespace }}.svc.cluster.local
+  substrate:
+    snapshotsConfig:
+      location: {{ printf "%s/%s-sandbox/" $agents.sandbox.snapshotRoot $agent.name }}
+{{- end }}

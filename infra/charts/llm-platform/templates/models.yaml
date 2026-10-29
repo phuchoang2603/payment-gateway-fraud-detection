@@ -1,0 +1,150 @@
+{{- $chat := .Values.models.chat }}
+{{- $embedding := .Values.models.embedding }}
+{{- $downloads := concat (list (pick $chat "repo" "revision") (pick $embedding "repo" "revision")) .Values.models.extraDownloads }}
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: llm-gpu
+spec:
+  devices:
+    requests:
+      - name: gpu
+        exactly:
+          deviceClassName: {{ .Values.gpu.deviceClassName }}
+          allocationMode: ExactCount
+          count: 1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llm-models
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.storage.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.modelCache }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llm-compile-cache
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.storage.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.compileCache }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-fill-{{ toJson $downloads | sha256sum | trunc 10 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: model-fill
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "llm-platform.podSecurity" .Values.vllm | nindent 8 }}
+      {{- include "llm-platform.gpuPlacement" . | nindent 6 }}
+      containers:
+        - name: fill
+          image: {{ .Values.vllm.image }}
+          command: [python3, -c]
+          args:
+            - |
+              import json, os
+              from huggingface_hub import snapshot_download
+              for model in json.loads(os.environ["MODELS"]):
+                  path = snapshot_download(model["repo"], revision=model["revision"], local_dir=f"/models/{model['repo']}")
+                  print(f"{model['repo']}@{model['revision']} ready in {path}", flush=True)
+          env:
+            - name: MODELS
+              value: {{ toJson $downloads | quote }}
+            - name: HF_HOME
+              value: /tmp/hf
+            - name: HF_HUB_DISABLE_TELEMETRY
+              value: "1"
+          securityContext:
+            {{- include "llm-platform.containerSecurity" . | nindent 12 }}
+          resources:
+            requests: {cpu: 250m, memory: 1Gi}
+            limits: {memory: 2Gi}
+          volumeMounts:
+            - {name: models, mountPath: /models}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: llm-models
+        - name: tmp
+          emptyDir: {}
+{{- range $role, $model := dict "chat" $chat "embedding" $embedding }}
+---
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: {{ $model.name }}
+  {{- if $model.stopped }}
+  annotations:
+    serving.kserve.io/stop: "true"
+  {{- end }}
+spec:
+  model:
+    name: {{ $model.name }}
+    uri: {{ include "llm-platform.modelURI" $model }}
+  replicas: {{ $model.replicas }}
+  {{- if eq $role "chat" }}
+  router:
+    gateway:
+      refs:
+        - name: {{ $.Values.gateway.name }}
+          namespace: {{ $.Release.Namespace }}
+    route:
+      http:
+        refs:
+          - name: llm
+    scheduler: {}
+  {{- end }}
+  template:
+    {{- include "llm-platform.gpuPlacement" $ | nindent 4 }}
+    securityContext:
+      {{- include "llm-platform.podSecurity" $.Values.vllm | nindent 6 }}
+    resourceClaims:
+      - name: gpu
+        resourceClaimName: llm-gpu
+    containers:
+      - name: main
+        image: {{ $.Values.vllm.image }}
+        args:
+          {{- toYaml $model.args | nindent 10 }}
+        env:
+          {{- include "llm-platform.vllmEnv" $ | nindent 10 }}
+        resources:
+          {{- toYaml $model.resources | nindent 10 }}
+          claims:
+            - name: gpu
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: {{ $.Values.vllm.uid }}
+          {{- include "llm-platform.containerSecurity" $ | nindent 10 }}
+        volumeMounts:
+          - name: compile-cache
+            mountPath: /home/.cache/vllm
+            subPath: {{ $model.name }}
+    volumes:
+      - name: compile-cache
+        persistentVolumeClaim:
+          claimName: llm-compile-cache
+{{- end }}

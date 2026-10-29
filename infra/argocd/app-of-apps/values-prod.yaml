@@ -7,3 +7,5 @@ applications:
     enabled: false
   data-pipelines:
     enabled: true
+  llm-platform:
+    enabled: false
