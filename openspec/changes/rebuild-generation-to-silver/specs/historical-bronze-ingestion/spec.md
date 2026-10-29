@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Delivery-preserving Bronze tables
-DP1 SHALL write payment events and fraud labels from every input into one `bronze.payment_events` and one `bronze.fraud_labels` table. It SHALL retain every delivered record, including identical duplicates, preserve source times and physical schema version, cast to the Bronze contract schema without loss and attach provenance: source kind, run ID, ingestion time, and either dataset version and source file or Kafka topic, partition, offset and timestamp. It SHALL NOT deduplicate or apply business rules.
+DP1 SHALL write payment events and fraud labels from every input into one `bronze.payment_events` and one `bronze.fraud_labels` table. It SHALL retain every delivered record, including identical duplicates, preserve source times and schema version, cast to the Bronze contract schema without loss and attach provenance: source kind, run ID, ingestion time, and either dataset version and source file or Kafka topic, partition, offset and timestamp. It SHALL NOT deduplicate or apply business rules.
 
 #### Scenario: Duplicate deliveries
 
@@ -14,7 +14,7 @@ DP1 SHALL write payment events and fraud labels from every input into one `bronz
 - **THEN** the run fails without committing rather than narrowing, truncating or dropping the record
 
 ### Requirement: Historical source ingestion
-In historical mode, DP1 SHALL ingest exactly the files listed in a selected dataset version's `manifest.json`, verifying each file's SHA-256 and row count before writing. Files of physical schema versions 1 and 2 SHALL be read together, with fields absent from version 1 as null. The run SHALL replace only that dataset version's Bronze rows, so a rerun leaves the same content. After writing, Bronze row counts for the dataset version SHALL equal the manifest totals per table or the run SHALL fail. Source files and the manifest SHALL remain unchanged.
+In historical mode, DP1 SHALL ingest exactly the files listed in a selected dataset version's `manifest.json`, verifying each file's SHA-256 and row count before writing. Files of schema versions 2 and 3 SHALL be read together, with fields absent from version 2 as null. The run SHALL replace only that dataset version's Bronze rows, so a rerun leaves the same content. After writing, Bronze row counts for the dataset version SHALL equal the manifest totals per table or the run SHALL fail. Source files and the manifest SHALL remain unchanged.
 
 #### Scenario: Missing or altered source
 
@@ -27,12 +27,12 @@ In historical mode, DP1 SHALL ingest exactly the files listed in a selected data
 - **THEN** Bronze contains one copy of each delivered row from that version, and rows from other versions and from Kafka are unchanged
 
 ### Requirement: Kafka source ingestion
-In Kafka mode, DP1 SHALL read `payments.events.v1` into the events table and `fraud.labels.v1` into the labels table directly from Kafka, decoding protobuf with the shared payments contracts. Each run SHALL read from the offsets recorded by that table's latest Bronze commit, or from configured starting offsets for the first run, up to the latest offsets at read time. It SHALL commit the rows and their ending offsets in the same table commit. A run that fails SHALL commit nothing, and a run with no new records SHALL commit nothing. If a required offset is no longer retained, the run SHALL fail rather than skip records.
+In Kafka mode, DP1 SHALL read `payments.events.v1` into the events table and `fraud.labels.v1` into the labels table directly from Kafka, decoding protobuf with the shared payments contracts. Each run SHALL read from the offsets recorded by that table's latest Bronze commit, or from configured starting offsets for the first run, up to the latest offsets at read time. It SHALL commit the good rows, the rejected records and the ending offsets in the same table commit. A record that fails protobuf decoding or the cast to the Bronze contract SHALL be written to `bronze.rejected_records` with its raw key and value bytes, topic, partition, offset, Kafka timestamp, error, run ID and ingestion time, and its offset SHALL advance with that commit. A run that fails SHALL commit nothing, and a run with no new records SHALL commit nothing. If a required offset is no longer retained, the run SHALL fail rather than skip records. Historical mode SHALL keep failing on any bad file, because published sources are immutable.
 
 #### Scenario: Consecutive runs
 
 - **WHEN** two Kafka-mode runs execute with new records published between them
-- **THEN** each record appears exactly once in Bronze across both runs, with its topic, partition and offset
+- **THEN** each record appears exactly once in Bronze or in the rejected records across both runs, with its topic, partition and offset
 
 #### Scenario: Failure after reading
 
@@ -44,8 +44,13 @@ In Kafka mode, DP1 SHALL read `payments.events.v1` into the events table and `fr
 - **WHEN** the recorded start offset of a partition has been deleted by Kafka retention
 - **THEN** the run fails and reports the affected topic and partition
 
+#### Scenario: Undecodable record
+
+- **WHEN** a Kafka record fails protobuf decoding or the Bronze cast
+- **THEN** it appears in `bronze.rejected_records` with its raw bytes and error, the good rows of the same commit are written, and the run report and the rejected-records check show the count
+
 ### Requirement: Bronze contract checks
-After each commit, the persisted Bronze tables SHALL pass the contract-derived StarRocks SQL checks for required and conditional nested fields, enumerations and supported physical schema versions. A failed check SHALL fail the run; Bronze checks SHALL NOT claim lifecycle, linkage, duplicate-consistency or label-availability validity, which belong to Silver.
+After each commit, the persisted Bronze tables SHALL pass the contract-derived StarRocks SQL checks for required and conditional nested fields, enumerations and supported schema versions. A failed check SHALL fail the run; Bronze checks SHALL NOT claim lifecycle, linkage, duplicate-consistency or label-availability validity, which belong to Silver.
 
 #### Scenario: Required nested field missing
 

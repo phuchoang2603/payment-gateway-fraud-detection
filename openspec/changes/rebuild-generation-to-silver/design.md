@@ -21,7 +21,7 @@ Constraints:
 **Goals:**
 - One implementation per stage, each small enough to read in one sitting.
 - Historical and live data meet in the same Bronze tables, and Silver treats them identically.
-- Every rule that can fail is either a Spark job failure before writing (conflicting duplicates, unreadable input) or a contract-derived SQL check. Nothing is checked twice.
+- Every rule that can fail is either a Spark job failure before writing (unreadable historical input), a row routed to a rejected-records table (undecodable Kafka records, conflicting Silver payments), or a contract-derived SQL check. Nothing is checked twice.
 
 **Non-Goals:**
 - Incremental Silver, accepted-snapshot pointers, recurring modes, metadata-only replay, writer takeover or resumable partial files.
@@ -49,7 +49,7 @@ This PR also switches `live/` to `world.py`. `HistoricalModel` builds a `World` 
 
 - **Keys.** Each purchase is keyed by its purchase-start day, its customer and that customer's purchase number that day. Card-testing bursts are keyed by (day, burst, number). A purchase's random stream and identity depend only on its key, never on how the day is split or how many workers run.
 - **Counts.** A day's purchase counts come from one Poisson draw over all customers, scaled by each customer's activity and the region's local-hour, weekday and seasonal intensity. The draw is computed once per process and is independent of the split.
-- **Parts.** Internal constants size a part: customers per part (`PART_CUSTOMERS`) and rows per Parquet row group. A part holds one table's rows for a customer range. Names are `payment_events/date=D/part-NNNNN.v{1|2}.parquet` (events are split by physical schema version, see decision 3) and `fraud_labels/date=D/part-NNNNN.parquet`. Part names are deterministic, so regenerating a day overwrites the same keys. The partition date is the purchase-start day, not the row timestamp.
+- **Parts.** Internal constants size a part: customers per part (`PART_CUSTOMERS`) and rows per Parquet row group. A part holds one table's rows for a customer range. Names are `payment_events/date=D/part-NNNNN.v{2|3}.parquet` (events are split by `schema_version`, see decision 3) and `fraud_labels/date=D/part-NNNNN.parquet`. Part names are deterministic, so regenerating a day overwrites the same keys. The partition date is the purchase-start day, not the row timestamp.
 - **Scheduling.** `produce` submits every pending (day, part) pair of a shard to the pool at once. Each day's `_day.json` marker is written as soon as all of that day's parts have finished, with no per-day barrier.
 - **Bounded resources.** A worker holds one part's rows per writer and one local temporary file at a time. It uploads the file and deletes it. Memory and scratch are bounded by part size and worker count, not by day or dataset size.
 - **Atomic files.** A part is written to a local temporary file and uploaded with a single PUT (multipart for large parts), or moved into place locally.
@@ -59,14 +59,15 @@ This PR also switches `live/` to `world.py`. `HistoricalModel` builds a `World` 
 
 *Alternative:* keep the old customer-block tasks with receipts and resume adoption. Rejected: day markers give the same restart granularity with one rule, and parts bound resources without a separate budget model.
 
-### 3. Physical versions declared by the contract
+### 3. Schema versions declared by the contract
 
-- **Declaration.** The historical `payment-events` ODCS contract is the only declaration of physical versions. Each field added after version 1 carries a property-level `customProperties` entry `sinceSchemaVersion`. Today those are `assessment.assessment_id`, `assessment.evidence_sha256` and `signals.user_agent_family`, all since version 2.
-- **Versions.** Physical versions start at 1 and are integers 1 and 2. `schema_changes: [{effective_at, version}]` in the configuration gives only dates and target versions: dev changes to 2 on 2025-08-15, and full changes to 2 on 2025-07-01. An event's physical version is chosen by its `occurred_at`.
-- **Projection.** The generator builds each event in the full shape and projects it onto the fields available at its version, using the paths the contract declares. Field names are not coded.
-- **Files.** Events of each physical version go to separate part files whose Parquet schemas really differ: version-1 parts physically lack the declared columns. A day that spans the change has parts of both versions.
-- **Envelope.** `schema_version` is 3 on every row, matching the gateway. `physical_schema_version` stays as a row column, and the contract's conditional-presence rule keys on it.
-- **Unknown versions.** A physical version outside the contract's declared versions is rejected before writing.
+- **Single version column.** `schema_version` (field 7 of `PaymentEvent`) is the only version of a payment event. There is no separate physical-version column.
+- **Declaration.** The historical `payment-events` ODCS contract is the only declaration of which fields exist in which version. Each field added after version 2 carries a property-level `customProperties` entry `sinceSchemaVersion: 3`. Today those are `assessment.assessment_id`, `assessment.evidence_sha256` and `signals.user_agent_family`.
+- **Versions.** The historical source starts at `schema_version` 2. The configuration's `schema_changes: [{effective_at, version}]` declares a change to `version: 3`, dated per dataset: dev on 2025-08-15, full on 2025-07-01. An event's version is chosen by its `occurred_at`. Version 3 is the gateway's current shape, so Kafka rows need no special handling.
+- **Meaning of "version 2".** Version 2 is defined by the v18 historical contract, not by the gateway's older wire format. A later gateway change (for example to 4) uses the same mechanism: a new contract field marked `sinceSchemaVersion: 4`, and a configuration change entry to version 4. The config accepts only versions the contract declares, and produce refuses others before writing.
+- **Projection.** The generator builds each event in the full shape and projects it onto the fields available at its `schema_version`, using the paths the contract declares. Field names are not coded.
+- **Files.** Events of each version go to separate part files named `.v2.parquet` or `.v3.parquet`. Their Parquet schemas really differ: v2 parts physically lack the declared columns. A day that spans the change has parts of both versions.
+- **Contract rules.** `schema_version` must be in (2, 3). The declared fields are present exactly when `schema_version >= 3`.
 
 *Alternative:* one file per table holding both shapes, with the omitted fields null. Rejected: the Parquet schema would not show which version lacks the fields, so Bronze would have to infer the layout from the rows.
 
@@ -94,8 +95,9 @@ Events are partitioned by `_source` and `days(occurred_at)`; labels by `_source`
 - **Start offsets.** Each table's start offsets come from the latest snapshot property `kafka.offsets`. The first run uses configured starting offsets.
 - **Reading.** Spark reads `format("kafka")` from the start offsets to `latest`, with `failOnDataLoss=true`, so expired offsets fail the run instead of being skipped.
 - **Decoding.** `from_protobuf` decodes records using the payments descriptor set, generated by the existing `codegen:proto` `descriptor` option into the batch package.
-- **Commit.** The append carries `snapshot-property.kafka.offsets`, so rows and progress commit atomically per table. A failed run commits nothing.
+- **Commit.** The append carries `snapshot-property.kafka.offsets`, so rows, rejected records and progress commit atomically per table. Records that fail decoding or the Bronze cast are written to `bronze.rejected_records` in that same commit, so their offsets advance with the good rows. A failed run commits nothing.
 - **Empty runs.** A run with no new records commits nothing.
+- **Rejected records.** `bronze.rejected_records` holds the raw key and value bytes, topic, partition, offset, Kafka timestamp, error, `_run_id` and `_ingested_at` of each record that fails protobuf decoding or the cast to the Bronze contract. Historical mode has no such table: any bad file fails the run, because published sources are immutable. The run report and an OpenMetadata check show the rejected count.
 
 *Alternatives:*
 - Kafka Connect S3 sink (rejected: raw protobuf bytes have no registry schema, so it cannot write typed files without a framing change across Flink, Feast and Fraud).
@@ -107,8 +109,8 @@ Events are partitioned by `_source` and `days(occurred_at)`; labels by `_source`
 The job reads both Bronze tables at their current snapshot IDs, which it records, and writes three tables. Each table is fully replaced with `overwrite(true)`, and the snapshot carries the Bronze snapshot IDs as properties. Rerunning on the same Bronze snapshots produces equal content.
 
 **`silver.payment_events`**
-- A business hash covers all non-provenance columns. `physical_schema_version` counts as provenance.
-- Rows are grouped by `event_id`. More than one distinct hash is a conflict: the job writes the run report and then fails before writing any table.
+- A business hash covers all columns except provenance, and includes `schema_version`.
+- Rows are grouped by `event_id`. More than one distinct hash is a conflict: every row of that event's payment is written to `silver.rejected_events` (below) and the payment is excluded from the accepted tables. The run succeeds.
 - Otherwise one row is kept per event, the earliest `_ingested_at`.
 
 **`silver.attempts`** has one row per `(integration_id, payment_id, attempt_id)` with:
@@ -129,7 +131,9 @@ Lifecycle violations get `lifecycle_valid = false` and are counted by an SQL che
 
 The availability comparison uses the attempt start even while the payment is open. This fixes both PR #97 defects: unlinkable labels on finished payments no longer stay pending forever, and early labels on in-flight attempts are now caught.
 
-**Run report.** It records Bronze snapshot IDs, input rows, distinct events, identical duplicates, conflicts, and label counts per `linkage`. It is written to `runs/payment-gateway/dp2/<run>/report.json`.
+**`silver.rejected_events`** holds every row of a payment whose events conflict. Columns: `rejected_table` (`payment_events`, `attempts` or `labels`), `reason` (the conflicting `event_id`, or the availability or linkage rule), `source` (`historical` or `kafka`, from Bronze), `payment_id` and the row content. Rejection is complete per payment: no row of a conflicting payment enters `silver.payment_events`, `silver.attempts` or `silver.labels`. A Silver check requires zero rejected rows with source `historical`, because published sources are immutable.
+
+**Run report.** It records Bronze snapshot IDs, input rows, distinct events, identical duplicates, conflicts, rejected rows by table and source, and label counts per `linkage`. It is written to `runs/payment-gateway/dp2/<run>/report.json`.
 
 *Alternative:* provenance tables per delivery (PR #97). Rejected: Bronze already holds every delivery, so counts are enough for accounting.
 
@@ -137,7 +141,7 @@ The availability comparison uses the attempt start even while the payment is ope
 
 Each ODCS contract declares `quality` rules as scalar violation-count SQL with `mustBe: 0`, which the batch package turns into native OpenMetadata test cases.
 
-- **Bronze rules:** required fields and conditional nested fields, valid enums, and `physical_schema_version` in {1, 2}.
+- **Bronze rules:** required fields and conditional nested fields, valid enums, and `schema_version` in {2, 3}.
 - **Silver rules:**
   - zero `lifecycle_valid = false`;
   - zero `linkage = 'violation'`;
@@ -148,7 +152,7 @@ Each ODCS contract declares `quality` rules as scalar violation-count SQL with `
 
 The checks stage runs native discovery for the run's tables, then the test suite, in one container. It fails unless every expected test for this run is Success.
 
-The Spark jobs own only conservation and conflicts: manifest row equality, offset bookkeeping and duplicate conflicts.
+The Spark jobs own only conservation and quarantine accounting: manifest row equality, offset bookkeeping, and the rejected-record counts that the run report and checks read.
 
 ### 7. Two workflows, three stages, one retry level
 
@@ -174,11 +178,12 @@ Diagnostics and benchmark are separate on-demand `WorkflowTemplate`s with a sing
 - `contracts/data-products/{historical-payments,bronze-payments,silver-payments}/` each contain `product.odps.yaml` plus one `*.odcs.yaml` per table, all at version 1.0.0. There are no `versions/` copies and no `physical-schemas-*.yaml`.
 - Silver business rules live in the Silver contracts; `contracts/quality/` is removed.
 - Generated references under `docs/data-ml/data-products/` are regenerated by the existing CI check.
+- The Bronze product adds a `rejected-records` port for the quarantined Kafka records, and the Silver product adds a `rejected-events` port. Each port's contract declares its rule: the Silver contract requires zero rejected rows with source `historical`.
 
 ### 9. Diagnostics and benchmark are code only
 
 - **Diagnostics** read Bronze and write JSON with:
-  - per-version row and null counts for fields declared since version 2;
+  - per-version row and null counts for fields declared since version 3;
   - merchant and category top-share and Gini skew;
   - `approx_count_distinct` cardinality, with exact counts where cheap, labelled as such;
   - the identical-duplicate rate with its denominator.
@@ -204,7 +209,7 @@ A `generate-historical` Argo `WorkflowTemplate` in the data-pipelines chart runs
 | Environment | Config | Output |
 |---|---|---|
 | dev | `historical-dev.yaml`: v18, 90 days, 10k customers, one shard | `s3://platform-dev/datasets/payment-gateway/historical/v18` |
-| prod | `historical-full.yaml`: v19, 365 days from 2025-01-01, 3M customers, change to version 2 on 2025-07-01, `minimum_source_bytes: 100000000000`, four shards | `s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19` |
+| prod | `historical-full.yaml`: v19, 365 days from 2025-01-01, 3M customers, change to version 3 on 2025-07-01, `minimum_source_bytes: 100000000000`, four shards | `s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19` |
 
 - **Settings:** the YAML holds only the logical dataset. Run settings come from the environment: `GENERATOR_MODE` (`generate`, `shard` or `publish`), `SHARD_INDEX` and `SHARD_COUNT` for shard steps, `GENERATOR_WORKERS` (set from the CPU request), `GENERATOR_CONTRACTS` (the contract directory, baked into the image) and `SIMULATOR_CONFIG`.
 - **Shards:** shard `i` of `n` generates the days whose index modulo `n` is `i`. A publish step refuses until every day has a marker. Prod uses four shards, the `aws-cpu-burst` pool's node limit, with one shard per spot xlarge node.
@@ -242,7 +247,7 @@ The local CLI remains for tests and development only.
   - per-day determinism and refused config changes;
   - the schema change boundary and duplicates;
   - Bronze idempotent historical rerun, plus Kafka offsets and empty runs (against a Kafka test container, opt-in like the existing broker tests);
-  - Silver conflicts, linkage cases and availability.
+  - Silver conflict quarantine, linkage cases and availability; Kafka records that fail decoding are quarantined, not dropped.
 
 ## Migration Plan
 
@@ -276,4 +281,4 @@ Steps 3 and 4 run when the whole pipeline is ready, not as tasks of this change.
 ## Open Questions
 
 - Exact transitive jar versions for the Kafka connector under Spark 4.1.3, resolved when the Dockerfile is written.
-- Whether the benchmark should also show a `mergeSchema` on/off read over physical versions 1/2 files. It can be added to the benchmark job later without spec changes.
+- Whether the benchmark should also show a `mergeSchema` on/off read over schema versions 2/3 files. It can be added to the benchmark job later without spec changes.

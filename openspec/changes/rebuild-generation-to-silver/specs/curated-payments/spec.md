@@ -18,7 +18,7 @@ DP2 SHALL read both Bronze tables at snapshot IDs fixed when the run starts and 
 - **THEN** all three Silver tables have equal content after each run
 
 ### Requirement: Event deduplication and conflicts
-`silver.payment_events` SHALL contain one row per `event_id`. Deliveries of the same `event_id` SHALL collapse when their business content is equal, ignoring provenance and physical schema version. Deliveries of the same `event_id` with different business content SHALL fail the run before any Silver table is written, after the run report is persisted.
+`silver.payment_events` SHALL contain one row per `event_id`. Deliveries of the same `event_id` SHALL collapse when their business content, including `schema_version`, is equal, ignoring provenance. When deliveries of one `event_id` differ in business content, the run SHALL succeed: every row of that payment SHALL be written to `silver.rejected_events` with its conflict reason, and the payment SHALL be excluded from `silver.payment_events`, `silver.attempts` and `silver.labels`, so no row of a conflicting payment enters an accepted table.
 
 #### Scenario: Identical duplicate
 
@@ -28,7 +28,12 @@ DP2 SHALL read both Bronze tables at snapshot IDs fixed when the run starts and 
 #### Scenario: Conflicting content
 
 - **WHEN** two deliveries of one `event_id` differ in any business field
-- **THEN** the run fails, Silver tables are unchanged and the report lists the conflict count
+- **THEN** the run succeeds, every row of that payment is in `silver.rejected_events` with the conflict reason, the accepted Silver tables exclude that payment, and the run report counts the conflict and the rejected rows
+
+#### Scenario: Historical conflict
+
+- **WHEN** a conflict occurs among rows from the historical source
+- **THEN** the rejected rows are reported and the Silver rejection check for the historical source fails
 
 ### Requirement: Attempt histories
 `silver.attempts` SHALL contain one row per integration, payment and attempt, with the server start time, the client `attempted_at`, the risk decision, the attempt outcome (`succeeded`, `declined`, `unknown` or `pending`) and its time, and the payment status (`open`, `succeeded` or `expired`). Attempts of open payments SHALL be included. An attempt with more than one start or terminal event, events out of aggregate-version order, or a terminal event before its start SHALL be marked lifecycle-invalid, and any lifecycle-invalid attempt SHALL fail the Silver checks.
@@ -70,12 +75,12 @@ A label SHALL NOT be available before its occurrence. A label for an attempt tha
 - **THEN** the label is a `violation` and the Silver checks fail
 
 ### Requirement: Run report
-Each DP2 run SHALL persist a report with its Bronze snapshot IDs, input rows per table, distinct events, identical duplicates, conflicts, attempts by outcome, labels by linkage class and the Silver snapshot IDs written. The report SHALL be written whether the run succeeds or fails after reading input.
+Each DP2 run SHALL persist a report with its Bronze snapshot IDs, input rows per table, distinct events, identical duplicates, conflicts, rejected rows by table and source, attempts by outcome, labels by linkage class and the Silver snapshot IDs written. The report SHALL be written whether the run succeeds or fails after reading input.
 
 #### Scenario: Inspect a run
 
 - **WHEN** an operator opens a DP2 run report
-- **THEN** input rows equal distinct events plus identical duplicates plus conflicting deliveries for events
+- **THEN** input rows equal distinct events plus identical duplicates plus the rows of conflicting payments
 
 ### Requirement: Silver contract checks
 After each commit, the Silver tables SHALL pass contract-derived StarRocks SQL checks executed by native OpenMetadata tests: unique keys, zero lifecycle-invalid attempts, zero label violations, non-negative amounts, truth labels with a scenario, chargebacks without one, and availability at or after occurrence. A failed check SHALL fail the run.
@@ -84,6 +89,11 @@ After each commit, the Silver tables SHALL pass contract-derived StarRocks SQL c
 
 - **WHEN** a committed Silver label is classified as `violation`
 - **THEN** the corresponding native test reports a positive violation count and the run fails
+
+#### Scenario: Historical rejections
+
+- **WHEN** rejected rows from the historical source exist
+- **THEN** the Silver rejection check fails
 
 ### Requirement: Optimization benchmark
 The repository SHALL provide an on-demand Spark benchmark that runs one skewed aggregation over a pinned Silver snapshot as a baseline and as an optimized variant with fixed resources, performs one warm-up and three timed runs of each, reports median durations and asserts that both variants produce equal output in both directions. The benchmark SHALL NOT run in the pipeline workflows.

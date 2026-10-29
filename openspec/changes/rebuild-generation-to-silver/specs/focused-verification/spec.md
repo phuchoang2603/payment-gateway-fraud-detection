@@ -13,7 +13,7 @@ CI SHALL reuse coverage and add only distinct wire, identity and retry checks: p
 
 ### Requirement: Rebuilt generator behavior tests
 
-Simulator tests SHALL protect reproducibility for a small fixed configuration across worker counts and interruption, identity vectors, the entity world rebuilt from a recorded configuration, the physical schema change boundary, identical duplicates, the per-day layout and manifest, refusal of a changed configuration or published version, and truth/chargeback separation. They SHALL use local outputs without object storage or network access.
+Simulator tests SHALL protect reproducibility for a small fixed configuration across worker counts and interruption, identity vectors, the entity world rebuilt from a recorded configuration, the schema version change boundary, identical duplicates, the per-day layout and manifest, refusal of a changed configuration or published version, and truth/chargeback separation. They SHALL use local outputs without object storage or network access.
 
 #### Scenario: Offline test run
 

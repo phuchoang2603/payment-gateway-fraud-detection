@@ -2,7 +2,7 @@
 
 ### Requirement: Validated generator configuration
 
-The generator SHALL read one configuration file declaring dataset version, seed, synthetic integration identity, start date and duration (default 90 days), entity counts, purchase behavior including merchant and category skew and the foreign-IP probability, per-scenario rates and parameters, a duplicate-export rate, ordered physical schema changes, label delays, an optional minimum source size and output root. Run settings (mode, shard, worker count and contract directory) SHALL come from the environment, not the configuration file. Invalid or inconsistent configuration, including an unsupported physical schema version or unordered schema changes, SHALL fail before any output is written. Credentials SHALL NOT be accepted in the configuration file.
+The generator SHALL read one configuration file declaring dataset version, seed, synthetic integration identity, start date and duration (default 90 days), entity counts, purchase behavior including merchant and category skew and the foreign-IP probability, per-scenario rates and parameters, a duplicate-export rate, ordered schema changes, label delays, an optional minimum source size and output root. Run settings (mode, shard, worker count and contract directory) SHALL come from the environment, not the configuration file. Invalid or inconsistent configuration, including a schema change to a version below 3 or unordered schema changes, SHALL fail before any output is written. Credentials SHALL NOT be accepted in the configuration file.
 
 #### Scenario: Unknown scenario name
 
@@ -11,17 +11,17 @@ The generator SHALL read one configuration file declaring dataset version, seed,
 
 #### Scenario: Unsupported schema version
 
-- **WHEN** a schema change declares a physical version other than 1 or 2, or changes are not in ascending time order
+- **WHEN** a schema change declares a version below 3, or changes are not in ascending time order, or a version the payment-events contract does not declare
 - **THEN** the generator exits nonzero before writing output
 
 ### Requirement: Ninety-day development population
 
-The maintained development configuration SHALL publish dataset v18: 90 purchase-start dates from 2025-07-01 for a modest US/USD electronics population with repeat behavior and supported fraud scenarios, a 2% duplicate-export rate and a change to physical version 2 on 2025-08-15. It SHALL remain a development source rather than evidence of scale or real-world model quality. Published v8–v17 datasets SHALL remain untouched and are not readable by the rebuilt pipeline.
+The maintained development configuration SHALL publish dataset v18: 90 purchase-start dates from 2025-07-01 for a modest US/USD electronics population with repeat behavior and supported fraud scenarios, a 2% duplicate-export rate and a change to schema version 3 on 2025-08-15. It SHALL remain a development source rather than evidence of scale or real-world model quality. Published v8–v17 datasets SHALL remain untouched and are not readable by the rebuilt pipeline.
 
 #### Scenario: Default development range
 
 - **WHEN** the development configuration is generated
-- **THEN** its last purchase-start date is 2025-09-28, both physical schema versions are present and its manifest records actual rows rather than promised totals
+- **THEN** its last purchase-start date is 2025-09-28, both schema versions (2 and 3) are present and its manifest records actual rows rather than promised totals
 
 ## ADDED Requirements
 
@@ -69,26 +69,26 @@ Each simulated attempt SHALL receive the gateway's policy decision: `HIGH_AMOUNT
 
 ### Requirement: Configured data problems
 
-The configuration SHALL control merchant/category Zipf skew, entity pool sizes, an identical duplicate-export rate and dated physical schema changes. Physical versions SHALL be declared by the historical payment-events contract: a field declared with `sinceSchemaVersion` N SHALL be absent from every physical version below N. Each event's physical version SHALL be chosen by its occurrence time. Every event row SHALL carry its `physical_schema_version` and a `schema_version` of 3, matching the gateway. Duplicate exports SHALL repeat the original event identity, content and physical version.
+The configuration SHALL control merchant/category Zipf skew, entity pool sizes, an identical duplicate-export rate and dated schema changes. Schema versions SHALL be declared by the historical payment-events contract: a field declared with `sinceSchemaVersion` N SHALL be absent from every event whose `schema_version` is below N. Each event's `schema_version` SHALL be chosen by its occurrence time: 2 before the configured change and the change's version from it. Every event row SHALL carry its `schema_version`. Duplicate exports SHALL repeat the original event identity, content and schema version. A version the contract does not declare SHALL be refused before any output is written.
 
 #### Scenario: Schema change boundary
 
-- **WHEN** a payment's risk decisions occur before and after a configured change to version 2
-- **THEN** the earlier events have physical version 1 with the assessment identity fields absent, and the later events have physical version 2 with both fields present
+- **WHEN** a payment's risk decisions occur before and after a configured change to version 3
+- **THEN** the earlier events have schema version 2 with the assessment identity fields absent, and the later events have schema version 3 with both fields present
 
-#### Scenario: Physical version parts
+#### Scenario: Schema version parts
 
-- **WHEN** a version-1 part and a version-2 part are opened
-- **THEN** the version-1 Parquet schema lacks the fields declared with `sinceSchemaVersion` 2, and the version-2 Parquet schema has them
+- **WHEN** a version-2 part and a version-3 part are opened
+- **THEN** the version-2 Parquet schema lacks the fields declared with `sinceSchemaVersion` 3, and the version-3 Parquet schema has them
 
 #### Scenario: Duplicate export
 
 - **WHEN** the duplicate-export rate is greater than zero
-- **THEN** repeated events are byte-identical in business content to their originals, including physical schema version
+- **THEN** repeated events are byte-identical in business content to their originals, including schema version
 
 ### Requirement: Per-day immutable dataset layout
 
-Output SHALL be written under `historical/<dataset_version>/` as `payment_events/date=<purchase-start date>/part-NNNNN.v<physical version>.parquet` and `fraud_labels/date=<purchase-start date>/part-NNNNN.parquet`, keeping each payment's full lifecycle and labels in its purchase-start day. The generator SHALL write the logical configuration, the generator digest and their hash before any data file, and SHALL refuse to continue a version whose stored configuration or digest differs. A day MAY consist of several parts with deterministic names; a day SHALL be complete only when its completion marker lists every part with rows, bytes and SHA-256. A rerun SHALL skip complete days and regenerate incomplete ones. Each data file SHALL become visible only when complete. Memory and local scratch SHALL be bounded by the internal part size and worker count, independent of dataset size. Publication SHALL list every data file with rows, bytes and SHA-256, the total physical bytes, the logical configuration, the generator digest and contract identities in `manifest.json`, written last and only if absent. If the configuration declares a minimum source size and the total is smaller, publication SHALL refuse and report both values. A version with a manifest SHALL be immutable. Output SHALL conform to the `historical-payments` contracts; source publication SHALL NOT claim Bronze or Silver quality acceptance.
+Output SHALL be written under `historical/<dataset_version>/` as `payment_events/date=<purchase-start date>/part-NNNNN.v<schema_version>.parquet` and `fraud_labels/date=<purchase-start date>/part-NNNNN.parquet`, keeping each payment's full lifecycle and labels in its purchase-start day. The generator SHALL write the logical configuration, the generator digest and their hash before any data file, and SHALL refuse to continue a version whose stored configuration or digest differs. A day MAY consist of several parts with deterministic names; a day SHALL be complete only when its completion marker lists every part with rows, bytes and SHA-256. A rerun SHALL skip complete days and regenerate incomplete ones. Each data file SHALL become visible only when complete. Memory and local scratch SHALL be bounded by the internal part size and worker count, independent of dataset size. Publication SHALL list every data file with rows, bytes and SHA-256, the total physical bytes, the logical configuration, the generator digest and contract identities in `manifest.json`, written last and only if absent. If the configuration declares a minimum source size and the total is smaller, publication SHALL refuse and report both values. A version with a manifest SHALL be immutable. Output SHALL conform to the `historical-payments` contracts; source publication SHALL NOT claim Bronze or Silver quality acceptance.
 
 #### Scenario: Rerun after interruption
 
@@ -130,12 +130,12 @@ The repository SHALL provide an on-demand diagnostics job over ingested Bronze d
 
 ### Requirement: Full-scale source generation
 
-A maintained full-scale configuration SHALL publish dataset v19 to the prod bucket: 365 purchase-start days for about 3 million customers, with the same behavior, scenarios, 2% duplicate-export rate and a mid-period change to physical version 2, and a declared minimum of 100,000,000,000 physical Parquet bytes across listed event and label files. It SHALL use the same generator, layout and manifest as v18. Publication establishes only the source; Bronze and Silver at full scale and coursework evidence remain later work.
+A maintained full-scale configuration SHALL publish dataset v19 to the prod bucket: 365 purchase-start days for about 3 million customers, with the same behavior, scenarios, 2% duplicate-export rate and a mid-period change to schema version 3, and a declared minimum of 100,000,000,000 physical Parquet bytes across listed event and label files. It SHALL use the same generator, layout and manifest as v18. Publication establishes only the source; Bronze and Silver at full scale and coursework evidence remain later work.
 
 #### Scenario: Full-scale publication
 
 - **WHEN** the full-scale workflow completes in prod
-- **THEN** `historical/v19/manifest.json` exists with a total of at least 100,000,000,000 physical bytes and both physical schema versions present
+- **THEN** `historical/v19/manifest.json` exists with a total of at least 100,000,000,000 physical bytes and both schema versions (2 and 3) present
 
 #### Scenario: Scale claim from the development source
 
