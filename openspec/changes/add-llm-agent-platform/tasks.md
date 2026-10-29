@@ -11,7 +11,7 @@
 
 ## 1. Chart and application wiring
 
-- [x] 1.1 Create `infra/charts/llm-platform` (Chart.yaml, values.yaml, values-dev.yaml, values-prod.yaml) and add the `llm-platform` application (`ml`) to `infra/argocd/app-of-apps/values.yaml`, disabled in `values-prod.yaml`. Verify locally with `helm lint` and `helm template` for both roots: dev contains the Application and prod does not.
+- [x] 1.1 Create `infra/charts/llm-platform` (Chart.yaml, values.yaml, values-dev.yaml, values-prod.yaml) and add the `llm-platform` application (`llm`) to `infra/argocd/app-of-apps/values.yaml`, disabled in `values-prod.yaml`. Verify locally with `helm lint` and `helm template` for both roots: dev contains the Application and prod does not.
 - [x] 1.2 Add the ExternalSecrets for the client keys (`llm-gateway-agents`, `llm-gateway-benchmark`), labelled for the gateway key selector and carrying the client id. Verify with `helm template` that no secret value is rendered.
 
 ## 2. Model servers
@@ -58,7 +58,7 @@
 
 ## 6. Benchmark harness
 
-- [x] 6.1 Add `infra/llm-benchmark/job.yaml` (`vllm bench serve` concurrency sweep with the `prefix_repetition` workload, results printed as JSON) and `server.yaml` (standalone variant server with its mesh policy), applied with `kubectl`. Verify with a server-side dry run on dev.
+- [x] 6.1 Add `infra/charts/llm-platform/benchmark/job.yaml` (`vllm bench serve` concurrency sweep with the `prefix_repetition` workload, results printed as JSON) and `server.yaml` (standalone variant server with its mesh policy), applied with `kubectl`. Verify with a server-side dry run on dev.
 
 ## 7. Deploy to dev and collect evidence (after the PR is open and CI is green; tell the user first)
 

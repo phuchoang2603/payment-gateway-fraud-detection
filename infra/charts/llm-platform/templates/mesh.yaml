@@ -77,7 +77,7 @@ spec:
         - operation:
             ports: ["15020"]
 ---
-# Identity of the on-demand benchmark in infra/llm-benchmark.
+# Identity of the on-demand benchmark in benchmark/.
 apiVersion: v1
 kind: ServiceAccount
 metadata:

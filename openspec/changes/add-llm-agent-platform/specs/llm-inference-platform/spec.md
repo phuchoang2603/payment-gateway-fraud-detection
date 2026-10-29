@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Self-hosted chat model on vLLM
-The platform SHALL serve `Qwen/Qwen3-8B-FP8` at a pinned revision on a pinned vLLM image through a KServe `LLMInferenceService` in `ml`, under the served model name `qwen3-8b`. The model SHALL expose the OpenAI-compatible chat completions, completions and models APIs, with tool calling enabled and reasoning output off by default. The maximum context length SHALL be 16,384 tokens. No model-provider API key SHALL exist.
+The platform SHALL serve `Qwen/Qwen3-8B-FP8` at a pinned revision on a pinned vLLM image through a KServe `LLMInferenceService` in `llm`, under the served model name `qwen3-8b`. The model SHALL expose the OpenAI-compatible chat completions, completions and models APIs, with tool calling enabled and reasoning output off by default. The maximum context length SHALL be 16,384 tokens. No model-provider API key SHALL exist.
 
 #### Scenario: Chat completion through the platform
 - **WHEN** an authorized client sends a chat completion for model `qwen3-8b`
@@ -12,7 +12,7 @@ The platform SHALL serve `Qwen/Qwen3-8B-FP8` at a pinned revision on a pinned vL
 - **THEN** the request is rejected and no other model is loaded
 
 ### Requirement: Self-hosted embedding model
-The platform SHALL serve `Qwen/Qwen3-Embedding-0.6B` at a pinned revision on the same pinned vLLM image through a second `LLMInferenceService` in `ml`, under the served model name `qwen3-embedding`, exposing the OpenAI-compatible embeddings API.
+The platform SHALL serve `Qwen/Qwen3-Embedding-0.6B` at a pinned revision on the same pinned vLLM image through a second `LLMInferenceService` in `llm`, under the served model name `qwen3-embedding`, exposing the OpenAI-compatible embeddings API.
 
 #### Scenario: Embedding request
 - **WHEN** an authorized client posts text to `/v1/embeddings` with model `qwen3-embedding`

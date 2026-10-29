@@ -9,8 +9,12 @@ modelStore:
   prefix: artifacts/models
   endpoint: https://minio.home.phuchoang.sbs
   virtualAddressing: false
-  # The Kubeflow artifacts identity, platform-owned and scoped to artifacts/, datasets/ and runs/.
-  credentialsSecret: mlpipeline-minio-artifact
+  # The platform's Kubeflow artifacts identity (scoped to artifacts/, datasets/ and runs/), synced into this namespace.
+  credentialsSecret: llm-model-store
+  credentialsStore: doppler
+  credentialsKeys:
+    accesskey: OBJECT_ARTIFACTS_ACCESS_KEY_ID
+    secretkey: OBJECT_ARTIFACTS_SECRET_ACCESS_KEY
   uploadImage: python:3.13-slim-bookworm
   uploadPackages: huggingface-hub==2.2.0 boto3==1.43.114
 
@@ -25,7 +29,7 @@ models:
     repo: Qwen/Qwen3-8B-FP8
     revision: 220b46e3b2180893580a4454f21f22d3ebb187d3
     replicas: 1
-    # Frees the GPU for standalone benchmark servers (infra/llm-benchmark).
+    # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
     stopped: false
     args:
       - --max-model-len=16384
@@ -68,7 +72,7 @@ gateway:
   # Card numbers with spaces or dashes that the CreditCard built-in does not match.
   piiPatterns:
     - '\b(?:\d[ -]?){12,18}\d\b'
-  # Callers outside ml that may reach the gateway: Substrate workers run sandboxed agent actors.
+  # Callers outside this namespace that may reach the gateway: Substrate workers run sandboxed agent actors.
   externalClients:
     - cluster.local/ns/kagent/sa/default
 
@@ -82,8 +86,8 @@ agents:
   modelConfig: default-model-config
   uid: 65532
   sandbox:
-    snapshotRoot: gs://platform-dev/substrate/ml
-  # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
+    snapshotRoot: gs://platform-dev/substrate/llm
+  # Each agent's system prompt is files/prompts/<name>.md until Langfuse manages prompts (phase 2).
   list:
     - name: evidence-agent
       version: 0.1.0

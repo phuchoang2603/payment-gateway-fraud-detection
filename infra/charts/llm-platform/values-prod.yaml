@@ -21,4 +21,4 @@ models:
 
 agents:
   sandbox:
-    snapshotRoot: gs://platform-prod-142737101504-us-east-1/substrate/ml
+    snapshotRoot: gs://platform-prod-142737101504-us-east-1/substrate/llm

@@ -58,11 +58,11 @@ Alternative: llm-d's quickstart (helmfile with `llm-d-infra`, the GIE `inference
 
 ### 2. One agentgateway Gateway for inference, LLM policy, MCP and A2A
 
-agentgateway implements InferencePool backends natively (`inferenceExtension.enabled=true`) and is documented with KServe `LLMInferenceService`. So one Gateway, `agentgateway` in `ml` with an HTTP listener on 80 and a ClusterIP Service, serves as both the inference gateway and the agent gateway. A request takes one hop: client → agentgateway (policy) → EPP pick → vLLM pod.
+agentgateway implements InferencePool backends natively (`inferenceExtension.enabled=true`) and is documented with KServe `LLMInferenceService`. So one Gateway, `agentgateway` in `llm` with an HTTP listener on 80 and a ClusterIP Service, serves as both the inference gateway and the agent gateway. A request takes one hop: client → agentgateway (policy) → EPP pick → vLLM pod.
 
 Istio's Gateway API implementation stays for the payment-gateway ingress. Its inference extension is not enabled, so there is no second InferencePool-capable gateway.
 
-agentgateway coexists with ambient: the proxy pod lives in the ambient `ml` namespace, so ztunnel secures client→gateway and gateway→EPP/vLLM traffic with mTLS. The gateway is not a waypoint, and no waypoint is deployed for `ml`.
+agentgateway coexists with ambient: the proxy pod lives in the ambient `llm` namespace, so ztunnel secures client→gateway and gateway→EPP/vLLM traffic with mTLS. The gateway is not a waypoint, and no waypoint is deployed for `ml`.
 
 Route layout, fixed now so later routes only add rules:
 
@@ -84,7 +84,7 @@ agentgateway applies one policy object per target, so every route gets exactly o
   - vLLM pods admit the gateway's ServiceAccount on 8000 and the EPP's ServiceAccount (metrics scraping on the same port);
   - the EPP admits the gateway (ext-proc);
   - the embedding server admits only the gateway;
-  - the gateway admits `ml` ServiceAccounts labelled as LLM clients (benchmark, later MCP servers) and the Substrate worker identity in `ate-system`, where agent actors run.
+  - the gateway admits `llm` ServiceAccounts labelled as LLM clients (benchmark, later MCP servers) and the Substrate worker identity in `ate-system`, where agent actors run.
 
   vLLM serves inference and `/metrics` on the same port 8000, so the platform enrolls `vmagent` in the ambient mesh (platform change P7). The model servers then admit its identity, `cluster.local/ns/observability/sa/vmagent-vmks`, instead of opening the port. The gateway's 15020 and the EPP's 9090 are dedicated metrics ports, so they stay open to any source. Nothing reaches the model servers around the gateway.
 - **Credentials:** no model-provider key exists. vLLM listens without an API key inside the mesh, and the gateway key is the only credential a client holds.
@@ -127,7 +127,7 @@ The embedding service has no scheduler: one replica needs no endpoint picker, so
 
 ### 5. Image
 
-Pin `vllm/vllm-openai:v0.32.0` (2026-10-18; vLLM requires CC ≥ 7.5 and supports sm_120) in the workload template, overriding the preset's `ghcr.io/llm-d/llm-d-cuda:v0.9.0`. The preset's start script works with any image that has the `vllm` CLI. The `ml` namespace enforces Pod Security `restricted`, so the container runs as UID 1000, with `HOME`, the Hugging Face cache and `/tmp` on emptyDirs and `/dev/shm` as a memory emptyDir, all already in the preset. `USER` is set so libraries that look up the user name work under a UID without a passwd entry. The first dev bring-up verifies FP8 on sm_120 and records the outcome.
+Pin `vllm/vllm-openai:v0.32.0` (2026-10-18; vLLM requires CC ≥ 7.5 and supports sm_120) in the workload template, overriding the preset's `ghcr.io/llm-d/llm-d-cuda:v0.9.0`. The preset's start script works with any image that has the `vllm` CLI. The `llm` namespace enforces Pod Security `restricted`, so the container runs as UID 1000, with `HOME`, the Hugging Face cache and `/tmp` on emptyDirs and `/dev/shm` as a memory emptyDir, all already in the preset. `USER` is set so libraries that look up the user name work under a UID without a passwd entry. The first dev bring-up verifies FP8 on sm_120 and records the outcome.
 
 Serving flags (checked against the vLLM v0.32.0 source):
 
@@ -154,7 +154,7 @@ fastsafetensors and InstantTensor also ship in the image, but they read local fi
 
 ### 6. GPU through DRA, placement per environment
 
-The chart owns one ResourceClaim `llm-gpu` in `ml` (a claim, not a template): one device of class `gpu.nvidia.com`, `ExactCount` 1. Both model pods reference it by `resourceClaimName` in `template.resourceClaims`, together with the container's `resources.claims`. A DRA claim shared by several pods gives them the same allocated GPU on the same node, which is how chat and embedding share the card. The memory split comes from each vLLM's utilization fraction (decision 4), not from the driver. KServe's experimental managed-DRA annotations are not used. The platform's `aws-gpu-training` template is not reused, because its name and lifecycle belong to training.
+The chart owns one ResourceClaim `llm-gpu` in `llm` (a claim, not a template): one device of class `gpu.nvidia.com`, `ExactCount` 1. Both model pods reference it by `resourceClaimName` in `template.resourceClaims`, together with the container's `resources.claims`. A DRA claim shared by several pods gives them the same allocated GPU on the same node, which is how chat and embedding share the card. The memory split comes from each vLLM's utilization fraction (decision 4), not from the driver. KServe's experimental managed-DRA annotations are not used. The platform's `aws-gpu-training` template is not reused, because its name and lifecycle belong to training.
 
 - Dev: no selector is needed, because the only GPU is on `dev-server1`. Chat requests 1 CPU and 8 GiB memory (limit 12 GiB); embedding requests 250m CPU and 2 GiB. Together they fit the node's free capacity.
 - Prod: both pods get node selector `karpenter.sh/nodepool: aws-gpu-training` and the pool's toleration; the pool provides only `g6.xlarge`. Chat requests 2 CPU and 9 GiB memory, and embedding 500m and 2 GiB, which fit a 4 vCPU / 16 GiB node after Talos reservations and DaemonSets. Karpenter launching a node for a pod that references a not-yet-allocated shared claim is verified at prod enablement. If it does not work, embedding moves to the chat pod's node by pod affinity, and the claim stays shared.
@@ -170,7 +170,7 @@ Weights live once per environment in the platform bucket under `artifacts/models
 They stream straight into GPU memory with Run:ai Model Streamer (`--load-format runai_streamer`, already in the vLLM image), so the serving node never writes weights to its disk. That matters because the dev GPU node is also the control plane: writing tens of gigabytes there starves etcd, and the GPU cannot move to a worker because of a physical constraint. On prod, every new Spot node streams in-region from S3, with no volume to reattach.
 
 - **Upload:** an idempotent `model-upload` Job (sync wave -1) copies the pinned Hugging Face revisions file by file. It skips objects already present with the same size and deletes each local copy after upload, so the node only ever holds one file. It runs on the pinned `python:3.13-slim` image with pinned `huggingface-hub` and `boto3` installed at start, so the project builds no image for it.
-- **Credentials:** the platform's Kubeflow artifacts identity (Secret `mlpipeline-minio-artifact` in `ml`, scoped to `artifacts/`, `datasets/` and `runs/`), so no new platform policy is needed.
+- **Credentials:** the platform's Kubeflow artifacts identity (Doppler `OBJECT_ARTIFACTS_*`, scoped to `artifacts/`, `datasets/` and `runs/`), synced into `llm` as Secret `llm-model-store` from the platform `doppler` store, so no new platform policy is needed.
 - **Serving:** the chart sets the container command to `vllm serve s3://…` because KServe's preset start script serves a local `/mnt/models`. `storageInitializer` is off, and `model.uri` records the object location. Because the args are no longer re-parsed by the preset's `eval`, JSON values need no extra quoting.
 
 KServe's `LocalModelCache` and a model PVC were considered and dropped: both write the weights to a node disk.
@@ -188,21 +188,21 @@ The platform installs kagent 0.10.4 with:
 
 Its Helm default provider is disabled or pointed at the gateway (open question 6).
 
-This repo owns, in `ml`:
+This repo owns, in its `llm` namespace:
 
-- **`ModelConfig` `default-model-config`:** `provider: OpenAI`, `model: qwen3-8b`, `openAI.baseUrl: http://agentgateway.ml.svc.cluster.local/v1`, `apiKeySecret: llm-gateway-agents`, `apiKeySecretKey: key`. This is the global model config. Every agent references it, and changing the model, gateway or key for all agents is one edit.
-- **`Agent` `evidence-agent`:** declarative, `modelConfig: default-model-config`, with no tools and a read-only fraud-analyst system prompt that states it has no data access yet and must not invent payment facts. The prompt is `files/prompts/<agent>.md` in the chart, loaded through `systemMessageFrom` from the `agent-prompts` ConfigMap, and published to agentregistry as a versioned `Prompt` (decision 11). `replicas` is left unset: kagent's Deployment mutation sets replicas only when the Agent specifies them, so the phase 2 KEDA ScaledObject can own them. Pod and container security contexts satisfy `restricted`.
-- **`SandboxAgent` `evidence-agent-sandbox`:** the same spec, rendered from one helper, on the platform's default WorkerPool `kagent/kagent-default`, with `sandbox.network.allowedDomains` limited to the gateway Service. Snapshots go under the platform's `substrate/` prefix. kagent 0.10.4's CRD accepts only `gs://`-style locations, which Substrate's S3 backend also uses, so the location is `gs://<environment bucket>/substrate/ml/<agent>/`. Each conversation is an actor in a gVisor sandbox. Idle actors suspend to snapshots and resume on any worker, so a one-worker pool serves several conversations. This is the warm-up ("Agent Fleet Architecture") evidence.
+- **`ModelConfig` `default-model-config`:** `provider: OpenAI`, `model: qwen3-8b`, `openAI.baseUrl: http://agentgateway.llm.svc.cluster.local/v1`, `apiKeySecret: llm-gateway-agents`, `apiKeySecretKey: key`. This is the global model config. Every agent references it, and changing the model, gateway or key for all agents is one edit.
+- **`Agent` `evidence-agent`:** declarative, `modelConfig: default-model-config`, with no tools and a read-only fraud-analyst system prompt that states it has no data access yet and must not invent payment facts. The prompt is `files/prompts/<agent>.md` in the chart, loaded through `systemMessageFrom` from the `agent-prompts` ConfigMap, Prompt management moves to Langfuse in phase 2 (decision 11). `replicas` is left unset: kagent's Deployment mutation sets replicas only when the Agent specifies them, so the phase 2 KEDA ScaledObject can own them. Pod and container security contexts satisfy `restricted`.
+- **`SandboxAgent` `evidence-agent-sandbox`:** the same spec, rendered from one helper, on the platform's default WorkerPool `kagent/kagent-default`, with `sandbox.network.allowedDomains` limited to the gateway Service. Snapshots go under the platform's `substrate/` prefix. kagent 0.10.4's CRD accepts only `gs://`-style locations, which Substrate's S3 backend also uses, so the location is `gs://<environment bucket>/substrate/llm/<agent>/`. Each conversation is an actor in a gVisor sandbox. Idle actors suspend to snapshots and resume on any worker, so a one-worker pool serves several conversations. This is the warm-up ("Agent Fleet Architecture") evidence.
 
-Later agents (risk, coordinator) and MCP tool references are additional entries in the same values list. Each renders both an `Agent` and a `SandboxAgent`. If the prompt-management rubric row needs runtime prompt fetching (Langfuse), only the `systemMessageFrom` source changes. Moving to kagent 1.x later is a platform upgrade plus re-rendering these resources from the same values.
+Later agents (risk, coordinator) and MCP tool references are additional entries in the same values list. Each renders both an `Agent` and a `SandboxAgent`. When Langfuse takes over prompts, only the source of the `agent-prompts` ConfigMap changes. Moving to kagent 1.x later is a platform upgrade plus re-rendering these resources from the same values.
 
 ### 9. Benchmark harness and optimizations
 
-The tool is vLLM's own `vllm bench serve`, run from the same pinned vLLM image, so no benchmark image is built. The benchmark is not part of the chart: `infra/llm-benchmark/` holds plain manifests applied with `kubectl` on dev (user decision):
+The tool is vLLM's own `vllm bench serve`, run from the same pinned vLLM image, so no benchmark image is built. The benchmark is not part of the chart: Plain manifests applied with `kubectl` on dev (user decision):
 - `job.yaml`, a Job that runs the concurrency sweep and prints each result as JSON to its log;
 - `server.yaml`, a standalone vLLM Pod, Service and mesh policy for one model-server variant.
 
-The chart only provides the benchmark's identity (ServiceAccount `llm-benchmark`, admitted by the mesh policies) and its gateway key. Results are copied from the Job log into `docs/llm/benchmark.md`.
+The manifests live with the chart in `infra/charts/llm-platform/benchmark/`, outside `templates/`, so Argo CD never renders them. The chart only provides the benchmark's identity (ServiceAccount `llm-benchmark`, admitted by the mesh policies) and its gateway key. Results are copied from the Job log into `docs/llm/benchmark.md`.
 
 The workload is vLLM's `prefix_repetition` dataset with 3 shared prefixes (future agents): 1,500-token system prompts, 100-token questions and 150 output tokens with `--ignore-eos`. Closed-loop concurrency stages are 1, 2, 4, 8 and 16. The reported metrics are output tokens/s, requests/s, TTFT p50/p90, inter-token latency (TPOT) p50/p90, end-to-end latency, prefix-cache hit share from vLLM's metrics, and failures.
 
@@ -236,9 +236,11 @@ The docs record this mapping the way the roadmap maps Airflow→Argo: Knative wh
 
 ### 11. Registry
 
-agentregistry 0.4.0, the latest stable release, is installed by the platform with an external Postgres on CNPG and RBAC limited to `ml`. It keeps its ClusterIP Service, reached by port-forward in phase 1. This repo owns the catalog, rendered from the same agent values as the kagent resources so name and version have one source. The registry's agent names cannot contain hyphens, so `evidence-agent` is published as `evidenceagent`, tag `0.1.0`, with its model config named in the description; the registry's `Model` kind supports only Bedrock. Each agent's system prompt is published as a `Prompt` (`<agent>-system-prompt`, tagged with the agent version), so the registry versions prompts next to agents; skills use the same mechanism when agents get them. OpenMetadata 2.0.6 also has a `promptTemplate` entity, registered with the AI assets in decision 12. A PostSync Job POSTs the catalog to the registry's `/v0/apply` endpoint, which is what `arctl apply` calls, from a pinned curl image. CI never contacts the cluster, so publication happens at sync. A changed catalog means a new version; later phases add MCP server entries and bump the agent to 0.2.0 with its tools.
+agentregistry 0.4.0, the latest stable release, is installed by the platform with an external Postgres on CNPG and RBAC limited to `llm`. It keeps its ClusterIP Service, reached by port-forward in phase 1. This repo owns the catalog, rendered from the same agent values as the kagent resources so name and version have one source. The registry's agent names cannot contain hyphens, so `evidence-agent` is published as `evidenceagent`, tag `0.1.0`, with its model config named in the description; the registry's `Model` kind supports only Bedrock. A PostSync Job POSTs the catalog to the registry's `/v0/apply` endpoint, which is what `arctl apply` calls, from a pinned curl image. CI never contacts the cluster, so publication happens at sync. A changed catalog means a new version; later phases add MCP server entries and bump the agent to 0.2.0 with its tools.
 
 agentregistry 0.4.0 materializes agents as kagent `v1alpha2` resources, the API kagent 0.10.4 serves. Even so, the agents are deployed by this chart through GitOps, and the registry is the governed catalog (published versions, UI). That keeps one deployment path, so the registry's deploy feature is not used.
+
+**Prompts: Langfuse (phase 2, user decision).** Agent prompts are versioned in Git as `files/prompts/<agent>.md` until then. Langfuse becomes the prompt-management tool the rubric names: prompts are versioned there with labels such as `production`. A sync step renders the labelled version into the `agent-prompts` ConfigMap that kagent reads through `systemMessageFrom`, because kagent cannot fetch from Langfuse itself. Langfuse also provides LLM tracing for the telemetry rows. It is a shared platform component (Postgres, ClickHouse, Redis, object storage) that talos-proxmox installs. Prompts are therefore not published to agentregistry, to keep a single prompt store.
 
 ### 12. OpenMetadata: register the AI assets through the metadata-integrations chart
 
