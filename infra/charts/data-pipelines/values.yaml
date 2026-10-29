@@ -119,9 +119,13 @@ catalog:
   starRocksCatalog: fraud_lakehouse
   openmetadataUrl: http://openmetadata.data.svc.cluster.local:8585/api
   kafkaClient: data-pipelines
-  externalSecret:
-    name: data-pipelines-catalog
-    store: gateway-doppler
+  icebergSecret:
+    name: data-pipelines-iceberg
+    store: doppler
     data:
       ICEBERG_CLIENT_SECRET: ICEBERG_CLIENT_SECRET
+  openmetadataSecret:
+    name: data-pipelines-openmetadata
+    store: gateway-doppler
+    data:
       OPENMETADATA_TOKEN: OPENMETADATA_TOKEN

@@ -86,14 +86,14 @@ container:
 - name: ICEBERG_CLIENT_SECRET
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.catalog.externalSecret.name }}
+      name: {{ .Values.catalog.icebergSecret.name }}
       key: ICEBERG_CLIENT_SECRET
 - name: OPENMETADATA_URL
   value: {{ .Values.catalog.openmetadataUrl | quote }}
 - name: OPENMETADATA_TOKEN
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.catalog.externalSecret.name }}
+      name: {{ .Values.catalog.openmetadataSecret.name }}
       key: OPENMETADATA_TOKEN
 - name: STARROCKS_CATALOG
   value: {{ .Values.catalog.starRocksCatalog | quote }}

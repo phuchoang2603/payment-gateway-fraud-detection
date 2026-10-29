@@ -61,7 +61,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: data-pipelines-spark
-{{- with .Values.catalog.externalSecret }}
+{{- range list .Values.catalog.icebergSecret .Values.catalog.openmetadataSecret }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
