@@ -17,11 +17,10 @@ from simulator.contracts.payments.v1.labels_pb2 import (
     LABEL_SOURCE_SIMULATION_TRUTH,
     FraudLabel,
 )
-from simulator.identity import entity_id
 from simulator.live.faults import run_faults
 from simulator.live.model import card_number
 from simulator.live.source import load_model
-from simulator.profiles import SCENARIO_NAMES
+from simulator.world import entity_id
 
 
 def report(event, **fields):
@@ -127,8 +126,8 @@ async def traffic(config, model, gateway, labels, stop):
         run_id=run_id,
         manifest=config.manifest,
         manifest_sha256=config.manifest_sha256,
-        generation_identity=model.manifest["generation_identity"],
-        calibration_sha256=model.config.calibration_sha256,
+        generator_digest=model.manifest["generator_digest"],
+        world_digest=model.world.digest,
         clock="UTC-wall-clock",
     )
     slots = asyncio.Semaphore(config.concurrency)
@@ -151,7 +150,7 @@ async def traffic(config, model, gateway, labels, stop):
             token = await gateway.request(
                 "POST", "/v1/payment-methods", f"{key}-token", {"card_number": card_number(index, behavior)}
             )
-            if token["fingerprint"] != model.profiles.method_pool[index]:
+            if token["fingerprint"] != model.world.payment_method_fingerprint(index):
                 raise ValueError("vault fingerprint differs from historical identity")
             order["order_reference"] = key
             order["return_url"] = config.return_url
@@ -173,7 +172,7 @@ async def traffic(config, model, gateway, labels, stop):
                 now,
                 fraud,
                 LABEL_SOURCE_SIMULATION_TRUTH,
-                SCENARIO_NAMES[scenario],
+                scenario,
             )
             await labels.schedule(payment["payment_id"], attempt["attempt_id"], now, fraud, friendly, delay)
             completed += 1

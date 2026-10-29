@@ -6,17 +6,32 @@ from uuid import uuid5
 
 import numpy as np
 
-from simulator.identity import IDENTITY_NAMESPACE
-from simulator.profiles import SCENARIO_NAMES
-from simulator.world import Purchase, World
+from simulator.world import CARD_TESTING, IDENTITY_NAMESPACE, SCENARIOS, Purchase, World
 
 Record = dict[str, Any]
 POLICY_VERSION = "rules-v1"
+GATEWAY_SCHEMA_VERSION = 3
 MAX_ATTEMPTS = 3
-HIGH_AMOUNT = 200_000
+HIGH_AMOUNT_MINOR = 200_000
+GEO_MISMATCH_MINOR = 20_000
+NEW_ACCOUNT_WINDOW = timedelta(days=7)
 SHIPPING_COUNTRY = "US"
-CARD_TESTING = "card_testing"
-V4_ASSESSMENT_FIELDS = ("assessment_id", "evidence_sha256")
+
+
+def risk_reasons(
+    amount: int, customer_created_at: datetime, attempted_at: datetime, shipping_country: str, ip_country: str | None
+) -> list[str]:
+    reasons = []
+    if amount > HIGH_AMOUNT_MINOR:
+        reasons.append("HIGH_AMOUNT")
+    if (
+        ip_country is not None
+        and ip_country != shipping_country
+        and attempted_at - customer_created_at < NEW_ACCOUNT_WINDOW
+        and amount > GEO_MISMATCH_MINOR
+    ):
+        reasons.append("NEW_ACCOUNT_GEO_MISMATCH")
+    return reasons
 
 
 def payment_history(
@@ -25,13 +40,13 @@ def payment_history(
     rng: np.random.Generator,
     *,
     day: date,
-    ordinal: int,
-    schema_version_at: Callable[[datetime], int],
+    key: str,
+    physical_version_at: Callable[[datetime], int],
     duplicate_rate: float,
 ) -> tuple[list[Record], list[Record]]:
     behavior = world.config.behavior
     integration_id = str(world.config.integration_id)
-    payment_id = str(uuid5(IDENTITY_NAMESPACE, f"{world.digest}:{day.isoformat()}:{ordinal}:payment"))
+    payment_id = str(uuid5(IDENTITY_NAMESPACE, f"{world.digest}:{day.isoformat()}:{key}:payment"))
     started_at = datetime.combine(day, time.min, tzinfo=UTC) + timedelta(seconds=purchase.started_seconds)
     events: list[Record] = []
     labels: list[Record] = []
@@ -41,18 +56,13 @@ def payment_history(
     def append(payload: str, **fields: Any) -> Record:
         nonlocal aggregate_version
         aggregate_version += 1
-        version = schema_version_at(clock)
-        if payload == "risk_decision_recorded" and version == 3:
-            fields["assessment"] = {
-                key: value for key, value in fields["assessment"].items() if key not in V4_ASSESSMENT_FIELDS
-            }
         row = {
             "event_id": str(uuid5(IDENTITY_NAMESPACE, f"{payment_id}:{len(events) + 1}")),
             "payment_id": payment_id,
             "aggregate_version": aggregate_version,
             "integration_id": integration_id,
-            "schema_version": version,
-            "physical_schema_version": version,
+            "schema_version": GATEWAY_SCHEMA_VERSION,
+            "physical_schema_version": physical_version_at(clock),
             "correlation_id": payment_id,
             "occurred_at": clock,
             "recorded_at": clock,
@@ -72,7 +82,7 @@ def payment_history(
         merchant={"merchant_id": purchase.merchant_id, "external_seller_id": purchase.merchant_external_id},
         customer={"customer_id": purchase.customer_id, "external_buyer_id": purchase.customer_external_id},
         snapshot={
-            "external_order_id": f"order-{day.isoformat()}-{ordinal}",
+            "external_order_id": f"order-{day.isoformat()}-{key}",
             "total": money(amount),
             "items": [
                 {
@@ -107,7 +117,7 @@ def payment_history(
                 "attempted_at": clock,
                 "payment_method": {"type": "card", "fingerprint": purchase.payment_method},
                 "device_fingerprint": purchase.device,
-                "ip_country": None,
+                "ip_country": purchase.ip_country,
                 "ip_network_fingerprint": purchase.network,
                 "user_agent_family": purchase.browser,
             },
@@ -115,13 +125,15 @@ def payment_history(
         )
 
         clock += timedelta(milliseconds=int(rng.integers(50, 400)))
-        risk_reason = "HIGH_AMOUNT" if amount > HIGH_AMOUNT else None
+        reasons = risk_reasons(
+            amount, purchase.customer_created_at, attempt_started, SHIPPING_COUNTRY, purchase.ip_country
+        )
         append(
             "risk_decision_recorded",
             attempt_id=attempt_id,
             assessment={
-                "outcome": "RISK_OUTCOME_DECLINE" if risk_reason else "RISK_OUTCOME_APPROVE",
-                "reason_codes": [risk_reason] if risk_reason else [],
+                "outcome": "RISK_OUTCOME_DECLINE" if reasons else "RISK_OUTCOME_APPROVE",
+                "reason_codes": reasons,
                 "policy_version": POLICY_VERSION,
                 "assessment_id": str(uuid5(IDENTITY_NAMESPACE, f"{payment_id}:assessment:{attempt}")),
                 "evidence_sha256": sha256(f"{payment_id}:{attempt}".encode()).hexdigest(),
@@ -129,8 +141,8 @@ def payment_history(
         )
         clock += timedelta(milliseconds=int(rng.integers(10, 100)))
         succeeded = False
-        if risk_reason:
-            append("attempt_declined", attempt_id=attempt_id, source="DECLINE_SOURCE_RISK", reason="high_amount")
+        if reasons:
+            append("attempt_declined", attempt_id=attempt_id, source="DECLINE_SOURCE_RISK", reason=reasons[0].lower())
         else:
             append("processor_operation_requested", attempt_id=attempt_id, operation_key=f"{payment_id}:{attempt}")
             if rng.random() < behavior.unknown_outcome_rate:
@@ -142,7 +154,7 @@ def payment_history(
             outcome = (
                 purchase.processor_outcome
                 if attempt == 1
-                else world.processor_outcome(rng, SCENARIO_NAMES.index(purchase.scenario))
+                else world.processor_outcome(rng, SCENARIOS.index(purchase.scenario))
             )
             if outcome == "succeeded":
                 append("payment_succeeded", attempt_id=attempt_id, processor_reference=f"sim-{payment_id}-{attempt}")
@@ -178,7 +190,11 @@ def payment_history(
             )
         if succeeded:
             break
-        if attempt == MAX_ATTEMPTS or purchase.scenario == CARD_TESTING or rng.random() >= behavior.retry_rate:
+        if (
+            attempt == MAX_ATTEMPTS
+            or purchase.scenario == SCENARIOS[CARD_TESTING]
+            or rng.random() >= behavior.retry_rate
+        ):
             clock = max(clock + timedelta(seconds=1), started_at + timedelta(minutes=behavior.expiry_minutes))
             append("payment_expired", _present=True)
             break

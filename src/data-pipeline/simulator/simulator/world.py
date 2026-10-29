@@ -1,35 +1,41 @@
+import hmac
+import ipaddress
 import json
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
+from functools import cache, lru_cache
 from hashlib import sha256
-from uuid import UUID
+from importlib.resources import files
+from typing import Self
+from uuid import UUID, uuid5
+from zoneinfo import ZoneInfo
 
 import numpy as np
-from pydantic import Field
+import pytz
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from simulator.calibration import CALIBRATION, REGIONS, hourly_weights, provenance, purchase_seconds
-from simulator.config import EntityCounts, LabelDelays, PurchaseBehavior, Scenarios, StrictModel
-from simulator.identity import entity_id, fingerprint
-from simulator.profiles import (
-    ACCESSORY,
-    ACCOUNT_TAKEOVER,
-    CARD_TESTING,
-    CATEGORIES,
-    CATEGORY_PRICES,
-    CONDITION_PRICE_FACTORS,
-    CONDITION_WEIGHTS,
-    CONDITIONS,
-    LEGITIMATE,
-    OBVIOUS_HIGH_VALUE,
-    SCENARIO_NAMES,
-    STOLEN_CARD_NEW_DEVICE,
-    address_parts,
-    address_value,
-    stage_rng,
-    zipf_weights,
-)
+CALIBRATION_BYTES = files("simulator").joinpath("us-calibration.json").read_bytes()
+CALIBRATION = json.loads(CALIBRATION_BYTES)
+REGIONS = tuple(CALIBRATION["regions"])
+IDENTITY_NAMESPACE = UUID("71088b85-53a3-5ed5-bf27-8ea372bf796d")
 
-SCENARIOS = SCENARIO_NAMES
+CATEGORIES = ("phone", "laptop", "accessory", "tablet", "headphones", "smartwatch", "game_console", "camera")
+CATEGORY_PRICES = np.array(CALIBRATION["category_prices_minor"])
+CONDITIONS = ("excellent", "good", "fair")
+CONDITION_WEIGHTS = np.array(CALIBRATION["condition_weights"])
+CONDITION_PRICE_FACTORS = np.array(CALIBRATION["condition_price_factors"])
+ACCESSORY = CATEGORIES.index("accessory")
+REGION_WEIGHTS = np.array([region[4] for region in REGIONS])
+FOREIGN_COUNTRIES = ("CA", "GB", "DE", "MX")
+HOME_COUNTRY = "US"
+
+LEGITIMATE = 0
+OBVIOUS_HIGH_VALUE = 1
+STOLEN_CARD_NEW_DEVICE = 2
+ACCOUNT_TAKEOVER = 3
+CARD_TESTING = 4
+SCENARIOS = ("legitimate", "obvious_high_value", "stolen_card_new_device", "account_takeover", "card_testing")
+
 ACTIVITY_STAGE = 300
 REGION_STAGE = 301
 MERCHANT_STAGE = 302
@@ -39,9 +45,85 @@ PURCHASE_COUNT_STAGE = 305
 BURST_COUNT_STAGE = 306
 BURST_STAGE = 307
 PURCHASE_STAGE = 308
-
-REGION_WEIGHTS = np.array([region[4] for region in REGIONS])
+BURST_PURCHASE_STAGE = 309
 SECONDS_PER_DAY = 86400
+
+
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+
+class EntityCounts(StrictModel):
+    customers: int = Field(gt=0)
+    merchants: int = Field(gt=0)
+    devices: int = Field(gt=0)
+    ip_networks: int = Field(gt=0, le=65536)
+    addresses: int = Field(gt=0)
+    payment_methods: int = Field(gt=0)
+
+
+class PurchaseBehavior(StrictModel):
+    purchases_per_customer_day: float = Field(gt=0)
+    merchant_zipf_exponent: float = Field(gt=0)
+    category_zipf_exponent: float = Field(gt=0)
+    familiar_merchant_probability: float = Field(ge=0, le=1)
+    familiar_context_probability: float = Field(ge=0, le=1)
+    foreign_ip_probability: float = Field(ge=0, le=1)
+    issuer_decline_rate: float = Field(ge=0, le=1)
+    insufficient_funds_rate: float = Field(ge=0, le=1)
+    unknown_outcome_rate: float = Field(ge=0, le=1)
+    unknown_resolution_minutes: int = Field(gt=0)
+    retry_rate: float = Field(ge=0, le=1)
+    expiry_minutes: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_outcomes(self) -> Self:
+        if self.issuer_decline_rate + self.insufficient_funds_rate + self.unknown_outcome_rate > 1:
+            raise ValueError("processor outcome rates must sum to at most one")
+        return self
+
+
+class HighValueScenario(StrictModel):
+    rate: float = Field(ge=0, le=1)
+    amount_multiplier: float = Field(gt=1)
+
+
+class CompromiseScenario(StrictModel):
+    rate: float = Field(ge=0, le=1, description="Daily probability that a customer becomes compromised")
+    window_days: int = Field(gt=0)
+    attempts_per_day: float = Field(gt=0)
+    amount_multiplier: float = Field(gt=0)
+
+
+class CardTestingScenario(StrictModel):
+    rate: float = Field(ge=0, description="Expected bursts per day")
+    burst_size: int = Field(gt=1)
+    burst_minutes: int = Field(gt=0, le=60)
+    decline_rate: float = Field(ge=0, le=1)
+
+
+class FriendlyFraudScenario(StrictModel):
+    rate: float = Field(ge=0, le=1)
+
+
+class Scenarios(StrictModel):
+    obvious_high_value: HighValueScenario
+    stolen_card_new_device: CompromiseScenario
+    account_takeover: CompromiseScenario
+    card_testing: CardTestingScenario
+    friendly_fraud: FriendlyFraudScenario
+
+
+class LabelDelays(StrictModel):
+    reporting_probability: float = Field(default=0.85, ge=0, le=1)
+    min_days: int = Field(ge=0)
+    max_days: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_range(self) -> Self:
+        if self.min_days > self.max_days:
+            raise ValueError("label delay min_days must not exceed max_days")
+        return self
 
 
 class WorldConfig(StrictModel):
@@ -53,6 +135,77 @@ class WorldConfig(StrictModel):
     behavior: PurchaseBehavior
     scenarios: Scenarios
     label_delays: LabelDelays
+
+
+def entity_id(integration_id: UUID, kind: str, external_id: str) -> str:
+    if kind not in ("merchant", "customer"):
+        raise ValueError(f"unsupported entity kind: {kind}")
+    return str(uuid5(IDENTITY_NAMESPACE, f"{integration_id}:{kind}:{external_id}"))
+
+
+def fingerprint(synthetic_key: str, kind: str, value: str) -> str:
+    if kind == "ip_network":
+        address = ipaddress.ip_address(value)
+        prefix = 24 if address.version == 4 else 48
+        normalized = str(ipaddress.ip_network(f"{address}/{prefix}", strict=False))
+    elif kind == "payment_method":
+        if not value.startswith("tok_") or value.rsplit("_", maxsplit=1)[-1] not in ("ok", "nsf", "issuer", "invalid"):
+            raise ValueError("payment method must be a synthetic token")
+        normalized = value[4:].rsplit("_", maxsplit=1)[0]
+    elif kind in ("address", "device"):
+        normalized = " ".join(value.casefold().split())
+    else:
+        raise ValueError(f"unsupported fingerprint kind: {kind}")
+    return hmac.new(synthetic_key.encode(), normalized.encode(), sha256).hexdigest()
+
+
+def stage_rng(seed: int, stage: int, *keys: int) -> np.random.Generator:
+    return np.random.default_rng(np.random.SeedSequence([seed, stage, *keys]))
+
+
+def zipf_weights(count: int, exponent: float) -> np.ndarray:
+    weights = np.arange(1, count + 1, dtype=float) ** (-exponent)
+    return weights / weights.sum()
+
+
+def address_parts(index: int):
+    region, postal, city, _, _ = REGIONS[index % len(REGIONS)]
+    return f"{index + 1} Market Street", city, region, postal
+
+
+def address_value(index: int) -> str:
+    line, city, region, postal = address_parts(index)
+    return f"{line} {city} {region} {postal} US"
+
+
+@cache
+def zone(index: int) -> ZoneInfo:
+    name = REGIONS[index][3]
+    with files("pytz").joinpath("zoneinfo", name).open("rb") as stream:
+        return ZoneInfo.from_file(stream, key=name)
+
+
+@cache
+def hourly_weights(day: date, region: int):
+    midnight = datetime.combine(day, time.min, UTC)
+    local = [(midnight + timedelta(hours=hour, minutes=30)).astimezone(zone(region)) for hour in range(24)]
+    weights = np.array([CALIBRATION["local_hour_weights"][value.hour] for value in local])
+    intensity = np.array(
+        [
+            CALIBRATION["weekday_multipliers"][value.weekday()] * CALIBRATION["month_multipliers"][value.month - 1]
+            for value in local
+        ]
+    )
+    return weights * intensity / (weights * intensity).sum(), float(np.average(intensity, weights=weights))
+
+
+def purchase_seconds(day: date, regions, rng: np.random.Generator) -> np.ndarray:
+    result = np.empty(len(regions), dtype=np.int64)
+    for region in np.unique(regions):
+        selected = np.flatnonzero(regions == region)
+        weights, _ = hourly_weights(day, int(region))
+        result[selected] = rng.choice(24, len(selected), p=weights) * 3600 + rng.integers(0, 3600, len(selected))
+    return result
 
 
 @dataclass(frozen=True)
@@ -93,10 +246,15 @@ class Purchase:
     device: str | None
     browser: str | None
     network: str | None
+    network_address: str | None
+    ip_country: str | None
+    shipping_line: str
+    shipping_city: str
     shipping_region: str
     postal_code: str
     address_fingerprint: str
     payment_method: str
+    payment_method_index: int
     scenario: str
     processor_outcome: str
     friendly_fraud: bool
@@ -111,7 +269,12 @@ class World:
         self.start_date = config.start_date
         self.digest = sha256(
             json.dumps(
-                {"world": config.model_dump(mode="json"), "calibration": provenance()["sha256"]}, sort_keys=True
+                {
+                    "world": config.model_dump(mode="json"),
+                    "calibration_sha256": sha256(CALIBRATION_BYTES).hexdigest(),
+                    "tzdb": pytz.__version__,
+                },
+                sort_keys=True,
             ).encode()
         ).hexdigest()
         self._anchor = datetime.combine(config.start_date, time.min, tzinfo=UTC)
@@ -127,6 +290,9 @@ class World:
 
     def _rng(self, stage: int, *keys: int) -> np.random.Generator:
         return stage_rng(self.config.seed, stage, *keys)
+
+    def _offset(self, day: date) -> int:
+        return (day - self.start_date).days
 
     def merchant(self, index: int) -> Merchant:
         rng = self._rng(MERCHANT_STAGE, index)
@@ -184,6 +350,9 @@ class World:
     def _zipf_merchant(self, rng: np.random.Generator) -> int:
         return min(int(np.searchsorted(self._merchant_cdf, rng.random())), self.config.counts.merchants - 1)
 
+    def payment_method_fingerprint(self, index: int) -> str:
+        return fingerprint(self.config.synthetic_key, "payment_method", f"tok_card-{index:06d}_ok")
+
     def processor_outcome(self, rng: np.random.Generator, scenario: int) -> str:
         behavior = self.config.behavior
         if scenario == CARD_TESTING:
@@ -195,26 +364,33 @@ class World:
             return "insufficient_funds"
         return "succeeded"
 
-    def purchase_rng(self, day: date, ordinal: int) -> np.random.Generator:
-        return self._rng(PURCHASE_STAGE, (day - self.start_date).days, ordinal)
-
-    def day_customers(self, day: date, customers: range) -> np.ndarray:
-        rng = self._rng(PURCHASE_COUNT_STAGE, (day - self.start_date).days, customers.start, len(customers))
-        window = slice(customers.start, customers.stop)
+    @lru_cache(maxsize=8)
+    def _day_counts(self, day: date) -> np.ndarray:
+        rng = self._rng(PURCHASE_COUNT_STAGE, self._offset(day))
         intensity = np.array([hourly_weights(day, region)[1] for region in range(len(REGIONS))])
-        weights = self._activity[window] * intensity[self._regions[window]]
-        total = weights.sum()
-        count = int(rng.poisson(self.config.behavior.purchases_per_customer_day * total))
-        chosen = rng.choice(len(customers), size=count, p=weights / total)
-        return (customers.start + chosen).astype(np.int64)
+        rates = self.config.behavior.purchases_per_customer_day * self._activity * intensity[self._regions]
+        return rng.poisson(rates)
+
+    def day_purchases(self, day: date, customers: range) -> list[tuple[int, int]]:
+        counts = self._day_counts(day)[customers.start : customers.stop]
+        customer_of = np.repeat(np.arange(customers.start, customers.stop), counts)
+        starts = np.cumsum(counts) - counts
+        number = np.arange(len(customer_of)) - np.repeat(starts, counts)
+        return list(zip(customer_of.tolist(), number.tolist()))
+
+    def purchase_rng(self, day: date, customer: int, number: int) -> np.random.Generator:
+        return self._rng(PURCHASE_STAGE, self._offset(day), customer, number)
 
     def burst_count(self, day: date) -> int:
-        rng = self._rng(BURST_COUNT_STAGE, (day - self.start_date).days)
+        rng = self._rng(BURST_COUNT_STAGE, self._offset(day))
         return int(rng.poisson(self.config.scenarios.card_testing.rate))
 
-    def purchase(self, rng: np.random.Generator, day: date, ordinal: int, customer: int) -> Purchase:
+    def burst_rng(self, day: date, burst: int, number: int) -> np.random.Generator:
+        return self._rng(BURST_PURCHASE_STAGE, self._offset(day), burst, number)
+
+    def purchase(self, rng: np.random.Generator, day: date, customer: int) -> Purchase:
         counts, behavior, scenarios = self.config.counts, self.config.behavior, self.config.scenarios
-        offset = (day - self.start_date).days
+        offset = self._offset(day)
         customer = self.customer(customer)
         scenario, window_start = self._scenario(rng, offset, customer.index)
         compromised = scenario in (STOLEN_CARD_NEW_DEVICE, ACCOUNT_TAKEOVER)
@@ -255,6 +431,11 @@ class World:
         address_change = CALIBRATION["compromise_address_change_probability"] if compromised else 0.02
         if rng.random() < address_change:
             address = int(rng.integers(counts.addresses))
+        ip_country = HOME_COUNTRY
+        if rng.random() < behavior.foreign_ip_probability:
+            ip_country = str(rng.choice(FOREIGN_COUNTRIES))
+        if scenario == ACCOUNT_TAKEOVER or (scenario == STOLEN_CARD_NEW_DEVICE and rng.random() < 0.5):
+            ip_country = str(rng.choice(FOREIGN_COUNTRIES))
 
         return self._assemble(
             rng,
@@ -268,12 +449,13 @@ class World:
             network=network,
             address=address,
             method=customer.payment_methods[int(rng.integers(2))],
+            ip_country=ip_country,
             started_seconds=int(purchase_seconds(day, np.array([customer.region]), rng)[0]),
         )
 
     def card_test(self, rng: np.random.Generator, day: date, burst: int) -> Purchase:
         counts, testing = self.config.counts, self.config.scenarios.card_testing
-        burst_rng = self._rng(BURST_STAGE, (day - self.start_date).days, burst)
+        burst_rng = self._rng(BURST_STAGE, self._offset(day), burst)
         victim = self.customer(int(burst_rng.integers(counts.customers)))
         clock = int(burst_rng.integers(0, SECONDS_PER_DAY - testing.burst_minutes * 60))
         merchant = self.merchant(self._zipf_merchant(rng))
@@ -289,6 +471,7 @@ class World:
             network=int(rng.integers(counts.ip_networks)),
             address=victim.address,
             method=int(rng.integers(counts.payment_methods)),
+            ip_country=HOME_COUNTRY,
             started_seconds=clock + int(rng.integers(0, testing.burst_minutes * 60)),
         )
 
@@ -321,25 +504,19 @@ class World:
         network: int,
         address: int,
         method: int,
+        ip_country: str,
         started_seconds: int,
     ) -> Purchase:
         key = self.config.synthetic_key
         delays = self.config.label_delays
-        _, _, region, postal = address_parts(address)
-        device_value = (
-            fingerprint(key, "device", f"device-{device:06d}")
-            if rng.random() >= CALIBRATION["device_missing_probability"]
-            else None
-        )
-        network_value = (
-            fingerprint(key, "ip_network", f"10.{network // 256}.{network % 256}.1")
-            if rng.random() >= CALIBRATION["network_missing_probability"]
-            else None
-        )
+        line, city, region, postal = address_parts(address)
+        device_missing = rng.random() < CALIBRATION["device_missing_probability"]
+        network_missing = rng.random() < CALIBRATION["network_missing_probability"]
         browser = str(rng.choice(CALIBRATION["browser_families"], p=CALIBRATION["browser_weights"]))
         if rng.random() < CALIBRATION["browser_missing_probability"]:
             browser = None
         friendly = scenario == LEGITIMATE and rng.random() < self.config.scenarios.friendly_fraud.rate
+        network_address = None if network_missing else f"10.{network // 256}.{network % 256}.1"
         return Purchase(
             customer_id=customer.id,
             customer_external_id=customer.external_id,
@@ -351,14 +528,19 @@ class World:
             condition=CONDITIONS[condition],
             quantity=quantity,
             unit_price=unit_price,
-            device=device_value,
+            device=None if device_missing else fingerprint(key, "device", f"device-{device:06d}"),
             browser=browser,
-            network=network_value,
+            network=None if network_missing else fingerprint(key, "ip_network", network_address),
+            network_address=network_address,
+            ip_country=ip_country,
+            shipping_line=line,
+            shipping_city=city,
             shipping_region=region,
             postal_code=postal,
             address_fingerprint=fingerprint(key, "address", address_value(address)),
-            payment_method=fingerprint(key, "payment_method", f"tok_card-{method:06d}_ok"),
-            scenario=SCENARIO_NAMES[scenario],
+            payment_method=self.payment_method_fingerprint(method),
+            payment_method_index=method,
+            scenario=SCENARIOS[scenario],
             processor_outcome=self.processor_outcome(rng, scenario),
             friendly_fraud=friendly,
             label_delay_days=int(rng.integers(delays.min_days, delays.max_days + 1)),

@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 from pydantic import Field, model_validator
 
-from simulator.config import StrictModel
+from simulator.world import StrictModel
 
 
 class Faults(StrictModel):

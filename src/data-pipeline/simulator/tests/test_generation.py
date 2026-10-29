@@ -1,4 +1,5 @@
 import json
+import shutil
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -8,6 +9,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+import simulator.historical as historical
 from simulator.historical import (
     ConfigurationChanged,
     GenerationError,
@@ -20,7 +22,7 @@ from simulator.historical import (
 )
 
 SMALL_GENERATOR = Path(__file__).with_name("small-generator.yaml")
-REVISION = "0123456789abcdef0123456789abcdef01234567"
+CONTRACTS = Path(__file__).resolve().parents[4] / "contracts/data-products/historical-payments"
 
 
 def config_for(output: Path, **overrides) -> GeneratorConfig:
@@ -36,7 +38,7 @@ def config_for(output: Path, **overrides) -> GeneratorConfig:
 
 
 def run(config: GeneratorConfig) -> dict:
-    return generate(config, REVISION)
+    return generate(config, CONTRACTS)
 
 
 def dataset_of(root: Path) -> Path:
@@ -58,17 +60,42 @@ def read_rows(dataset: Path, table: str) -> list[dict]:
     return rows
 
 
+def records(dataset: Path) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = defaultdict(list)
+    for table in ("payment_events", "fraud_labels"):
+        for row in read_rows(dataset, table):
+            result[table].append(json.dumps(row, sort_keys=True, default=str))
+    return {table: sorted(rows) for table, rows in result.items()}
+
+
 def test_worker_count_and_interrupted_day_do_not_change_the_dataset(tmp_path):
     single = run(config_for(tmp_path / "single"))
 
     parallel_root = tmp_path / "parallel"
-    run(config_for(parallel_root, workers=2))
+    generate(config_for(parallel_root), CONTRACTS, workers=2)
     dataset = dataset_of(parallel_root)
     (dataset / "manifest.json").unlink()
     (dataset / "date=2026-07-03" / "_day.json").unlink()
-    (dataset / "payment_events" / "date=2026-07-03" / "part-00001.parquet").unlink()
+    (dataset / "payment_events" / "date=2026-07-03" / "part-00000.v1.parquet").unlink()
 
-    assert run(config_for(parallel_root, workers=1)) == single
+    assert generate(config_for(parallel_root), CONTRACTS, workers=1) == single
+
+
+def test_records_do_not_depend_on_the_split_or_worker_count(tmp_path, monkeypatch):
+    default_root = tmp_path / "default"
+    run(config_for(default_root))
+    default = records(dataset_of(default_root))
+
+    monkeypatch.setattr(historical, "PART_CUSTOMERS", 100)
+    split_root = tmp_path / "split"
+    run(config_for(split_root))
+    monkeypatch.undo()
+
+    pooled_root = tmp_path / "pooled"
+    generate(config_for(pooled_root), CONTRACTS, workers=2)
+
+    assert records(dataset_of(split_root)) == default
+    assert records(dataset_of(pooled_root)) == default
 
 
 def test_changed_configuration_is_refused_without_modifying_the_version(tmp_path):
@@ -79,6 +106,22 @@ def test_changed_configuration_is_refused_without_modifying_the_version(tmp_path
 
     with pytest.raises(ConfigurationChanged):
         run(config_for(root, **{"world.seed": 8}))
+
+    assert files_under(dataset_of(root)) == before
+
+
+def test_changed_contract_is_refused_without_modifying_the_version(tmp_path):
+    root = tmp_path / "out"
+    with pytest.raises(SourceTooSmall):
+        run(config_for(root, minimum_source_bytes=10**12))
+    before = files_under(dataset_of(root))
+    contracts = tmp_path / "contracts"
+    shutil.copytree(CONTRACTS, contracts)
+    product = contracts / "product.odps.yaml"
+    product.write_text(product.read_text() + "\n# revised\n")
+
+    with pytest.raises(ConfigurationChanged):
+        publish(config_for(root), contracts)
 
     assert files_under(dataset_of(root)) == before
 
@@ -109,14 +152,35 @@ def test_schema_change_splits_physical_versions_by_occurrence_time(tmp_path):
     events = read_rows(dataset_of(root), "payment_events")
     change = datetime(2026, 7, 4, tzinfo=UTC)
 
-    assert {row["physical_schema_version"] for row in events} == {3, 4}
+    assert {row["physical_schema_version"] for row in events} == {1, 2}
     for row in events:
-        expected = 4 if row["occurred_at"] >= change else 3
+        expected = 2 if row["occurred_at"] >= change else 1
         assert row["physical_schema_version"] == expected
+        assert row["schema_version"] == 3
         risk = row["risk_decision_recorded"]
         if risk is not None:
             has_assessment_id = risk["assessment"]["assessment_id"] is not None
-            assert has_assessment_id == (expected == 4)
+            assert has_assessment_id == (expected == 2)
+
+
+def test_each_physical_version_has_a_parquet_schema_that_declares_its_fields(tmp_path):
+    root = tmp_path / "out"
+    manifest = run(config_for(root))
+    events = [part for part in manifest["files"] if part["table"] == "payment_events"]
+
+    def fields_of(version: int) -> tuple[set[str], set[str]]:
+        part = next(p for p in events if p["physical_schema_version"] == version and p["rows"] > 0)
+        schema = pq.read_schema(dataset_of(root) / part["path"])
+        assessment = {f.name for f in schema.field("risk_decision_recorded").type["assessment"].type}
+        signals = {f.name for f in schema.field("attempt_started").type["signals"].type}
+        return assessment, signals
+
+    v1_assessment, v1_signals = fields_of(1)
+    v2_assessment, v2_signals = fields_of(2)
+    assert {"assessment_id", "evidence_sha256"}.isdisjoint(v1_assessment)
+    assert {"assessment_id", "evidence_sha256"} <= v2_assessment
+    assert "user_agent_family" not in v1_signals
+    assert "user_agent_family" in v2_signals
 
 
 def test_duplicate_exports_repeat_original_rows(tmp_path):
@@ -135,10 +199,10 @@ def test_duplicate_exports_repeat_original_rows(tmp_path):
     "changes",
     [
         [
-            {"effective_at": "2026-07-04T00:00:00Z", "version": 4},
-            {"effective_at": "2026-07-03T00:00:00Z", "version": 4},
+            {"effective_at": "2026-07-04T00:00:00Z", "version": 2},
+            {"effective_at": "2026-07-03T00:00:00Z", "version": 2},
         ],
-        [{"effective_at": "2026-07-04T00:00:00Z", "version": 5}],
+        [{"effective_at": "2026-07-04T00:00:00Z", "version": 3}],
     ],
 )
 def test_invalid_schema_schedule_is_rejected_before_any_output(tmp_path, changes):
@@ -147,20 +211,22 @@ def test_invalid_schema_schedule_is_rejected_before_any_output(tmp_path, changes
     assert not (tmp_path / "out").exists()
 
 
-def test_generation_requires_a_git_commit_revision(tmp_path):
-    with pytest.raises(GenerationError):
-        generate(config_for(tmp_path / "out"), "dev")
-    assert not (tmp_path / "out").exists()
-
-
-def test_manifest_records_both_physical_versions_and_identities(tmp_path):
+def test_manifest_records_identities_totals_and_the_file_list(tmp_path):
     root = tmp_path / "out"
     manifest = run(config_for(root))
     stored = json.loads((dataset_of(root) / "manifest.json").read_text())
 
     assert stored == manifest
-    assert manifest["generator_revision"] == REVISION
-    assert manifest["physical_schema_versions"] == [3, 4]
+    assert set(manifest) == {
+        "dataset_version",
+        "generator_digest",
+        "configuration_sha256",
+        "configuration",
+        "contracts",
+        "rows",
+        "physical_bytes",
+        "files",
+    }
     assert manifest["physical_bytes"] == sum(part["bytes"] for part in manifest["files"])
     assert manifest["rows"]["payment_events"] == sum(
         part["rows"] for part in manifest["files"] if part["table"] == "payment_events"
@@ -170,16 +236,16 @@ def test_manifest_records_both_physical_versions_and_identities(tmp_path):
 def test_disjoint_shards_then_publish_equal_a_single_run(tmp_path):
     single = run(config_for(tmp_path / "single"))
     sharded = tmp_path / "sharded"
-    produce(config_for(sharded), REVISION, shard=(0, 2))
-    produce(config_for(sharded), REVISION, shard=(1, 2))
+    produce(config_for(sharded), CONTRACTS, shard=(0, 2))
+    produce(config_for(sharded), CONTRACTS, shard=(1, 2))
 
-    assert publish(config_for(sharded), REVISION) == single
+    assert publish(config_for(sharded), CONTRACTS) == single
 
 
 def test_publish_refuses_while_any_shard_is_missing(tmp_path):
     root = tmp_path / "out"
-    produce(config_for(root), REVISION, shard=(0, 2))
+    produce(config_for(root), CONTRACTS, shard=(0, 2))
 
     with pytest.raises(GenerationError):
-        publish(config_for(root), REVISION)
+        publish(config_for(root), CONTRACTS)
     assert not (dataset_of(root) / "manifest.json").exists()

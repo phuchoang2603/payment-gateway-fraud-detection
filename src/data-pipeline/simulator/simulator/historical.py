@@ -1,13 +1,11 @@
 import hashlib
 import json
 import math
-import re
 import tempfile
-from concurrent.futures import ProcessPoolExecutor
-from contextlib import nullcontext
+from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
 from functools import cache
-from itertools import repeat
 from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import urlsplit
@@ -17,25 +15,19 @@ import pyarrow.parquet as pq
 import yaml
 from pydantic import Field, field_validator, model_validator
 
-from simulator.arrow import LABEL_SCHEMA, event_schema
-from simulator.calibration import provenance
-from simulator.config import StrictModel
+from simulator.arrow import LABEL_SCHEMA, payment_event_schema
 from simulator.lifecycle import payment_history
 from simulator.store import ObjectExists, open_store
-from simulator.world import World, WorldConfig
+from simulator.world import StrictModel, World, WorldConfig
 
-REVISION_PATTERN = re.compile(r"[a-f0-9]{40}")
 EVENTS = "payment_events"
 LABELS = "fraud_labels"
-CONTRACTS = {
-    EVENTS: "historical-payments/payment-events@1.0.0",
-    LABELS: "historical-payments/fraud-labels@1.0.0",
-}
-EVENT_SCHEMA = event_schema(4).append(pa.field("physical_schema_version", pa.uint32(), nullable=False))
 CONFIG_KEY = "config.json"
 MANIFEST_KEY = "manifest.json"
-ORDINAL_CHUNK_SHIFT = 48
-ORDINAL_BURST_OFFSET = 1 << 47
+PART_CUSTOMERS = 100_000
+ROW_GROUP_ROWS = 131_072
+GENERATOR_SOURCES = ("world.py", "lifecycle.py", "historical.py", "store.py", "us-calibration.json")
+CONTRACT_FILES = {EVENTS: "payment-events.odcs.yaml", LABELS: "fraud-labels.odcs.yaml"}
 
 
 class GenerationError(Exception):
@@ -56,7 +48,7 @@ class SourceTooSmall(GenerationError):
 
 class SchemaChange(StrictModel):
     effective_at: datetime
-    version: Literal[3, 4]
+    version: Literal[1, 2]
 
     @field_validator("effective_at")
     @classmethod
@@ -69,9 +61,6 @@ class SchemaChange(StrictModel):
 class GeneratorConfig(StrictModel):
     dataset_version: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
     duration_days: int = Field(gt=0)
-    chunk_customers: int = Field(gt=0)
-    workers: int = Field(default=1, gt=0)
-    row_group_rows: int = Field(default=131072, gt=0)
     duplicate_rate: float = Field(default=0, ge=0, lt=1)
     minimum_source_bytes: int = Field(default=0, ge=0)
     schema_changes: tuple[SchemaChange, ...] = ()
@@ -83,7 +72,7 @@ class GeneratorConfig(StrictModel):
         changes = self.schema_changes
         if any(later.effective_at <= earlier.effective_at for earlier, later in zip(changes, changes[1:])):
             raise ValueError("schema_changes must be in ascending effective_at order")
-        versions = [3, *(change.version for change in changes)]
+        versions = [1, *(change.version for change in changes)]
         if any(later < earlier for earlier, later in zip(versions, versions[1:])):
             raise ValueError("schema_changes must not decrease the physical schema version")
         parsed = urlsplit(self.output)
@@ -99,24 +88,23 @@ class GeneratorConfig(StrictModel):
 
     @property
     def customer_chunks(self) -> int:
-        return math.ceil(self.world.counts.customers / self.chunk_customers)
+        return math.ceil(self.world.counts.customers / PART_CUSTOMERS)
 
     def day(self, offset: int) -> date:
         return self.world.start_date + timedelta(days=offset)
 
     def logical(self) -> dict:
-        return self.model_dump(mode="json", exclude={"output", "workers", "row_group_rows"})
+        return self.model_dump(mode="json", exclude={"output"})
 
-    def identity(self, revision: str) -> str:
-        document = {
-            "configuration": self.logical(),
-            "generator_revision": revision,
-            "calibration_sha256": provenance()["sha256"],
-        }
+    def identity(self, generator_digest: str) -> str:
+        document = {"configuration": self.logical(), "generator_digest": generator_digest}
         return hashlib.sha256(json.dumps(document, sort_keys=True).encode()).hexdigest()
 
-    def schema_version_at(self, occurred_at: datetime) -> int:
-        version = 3
+    def physical_versions(self) -> tuple[int, ...]:
+        return tuple(sorted({1, *(change.version for change in self.schema_changes)}))
+
+    def physical_version_at(self, occurred_at: datetime) -> int:
+        version = 1
         for change in self.schema_changes:
             if occurred_at >= change.effective_at:
                 version = change.version
@@ -127,10 +115,79 @@ def load_generator_config(path: Path) -> GeneratorConfig:
     return GeneratorConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
+@cache
+def load_contract(directory: Path) -> tuple[tuple[tuple[tuple[str, ...], int], ...], dict[str, str]]:
+    documents = {
+        table: yaml.safe_load((directory / name).read_text(encoding="utf-8")) for table, name in CONTRACT_FILES.items()
+    }
+    declared: list[tuple[tuple[str, ...], int]] = []
+
+    def walk(properties, prefix: tuple[str, ...]) -> None:
+        for prop in properties or []:
+            path = (*prefix, prop["name"])
+            since = [
+                item["value"]
+                for item in prop.get("customProperties") or []
+                if item["property"] == "sinceSchemaVersion"
+            ]
+            if since:
+                declared.append((path, int(since[0])))
+            walk(prop.get("properties"), path)
+
+    walk(documents[EVENTS]["schema"][0]["properties"], ())
+    identities = {table: f"{doc['id']}@{doc['version']}" for table, doc in documents.items()}
+    return tuple(declared), identities
+
+
+def generator_digest(contracts: Path) -> str:
+    package = Path(__file__).parent
+    digest = hashlib.sha256()
+    for path in [package / name for name in GENERATOR_SOURCES] + sorted(contracts.glob("*.yaml")):
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def _without(record: dict, path: tuple[str, ...]) -> dict:
+    head, *rest = path
+    if head not in record or record[head] is None:
+        return record
+    if not rest:
+        return {key: value for key, value in record.items() if key != head}
+    return {**record, head: _without(record[head], tuple(rest))}
+
+
+def _project(record: dict, version: int, declared) -> dict:
+    result = record
+    for path, since in declared:
+        if version < since:
+            result = _without(result, path)
+    return result
+
+
+def _drop_field(struct: pa.StructType, path: tuple[str, ...]) -> pa.StructType:
+    head, *rest = path
+    fields = []
+    for field in struct:
+        if field.name != head:
+            fields.append(field)
+        elif rest:
+            fields.append(pa.field(field.name, _drop_field(field.type, tuple(rest)), field.nullable))
+    return pa.struct(fields)
+
+
+@cache
+def _schema_for(version: int, declared) -> pa.Schema:
+    struct = pa.struct(list(payment_event_schema()))
+    for path, since in declared:
+        if version < since:
+            struct = _drop_field(struct, path)
+    return pa.schema([*struct, pa.field("physical_schema_version", pa.uint32(), nullable=False)])
+
+
 class _PartWriter:
-    def __init__(self, path: Path, schema: pa.Schema, row_group_rows: int):
+    def __init__(self, path: Path, schema: pa.Schema):
         self.schema = schema
-        self.row_group_rows = row_group_rows
         self.pending: list[dict] = []
         self.rows = 0
         self.writer = pq.ParquetWriter(path, schema, compression="zstd")
@@ -138,7 +195,7 @@ class _PartWriter:
     def extend(self, records: list[dict]) -> None:
         self.pending.extend(records)
         self.rows += len(records)
-        if len(self.pending) >= self.row_group_rows:
+        if len(self.pending) >= ROW_GROUP_ROWS:
             self.flush()
 
     def flush(self) -> None:
@@ -159,65 +216,72 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _chunk_purchases(config: GeneratorConfig, world: World, offset: int, chunk: int):
-    day = config.day(offset)
-    first = chunk * config.chunk_customers
-    customers = range(first, min(first + config.chunk_customers, config.world.counts.customers))
-    for index, customer in enumerate(world.day_customers(day, customers)):
-        ordinal = (chunk << ORDINAL_CHUNK_SHIFT) | index
-        rng = world.purchase_rng(day, ordinal)
-        yield world.purchase(rng, day, ordinal, int(customer)), ordinal, rng
-    testing = config.world.scenarios.card_testing
-    for burst in range(world.burst_count(day)):
-        if burst % config.customer_chunks != chunk:
-            continue
-        for index in range(testing.burst_size):
-            ordinal = ORDINAL_BURST_OFFSET | (burst * testing.burst_size + index)
-            rng = world.purchase_rng(day, ordinal)
-            yield world.card_test(rng, day, burst), ordinal, rng
-
-
 @cache
 def _world(config: WorldConfig) -> World:
     return World.build(config)
 
 
-def write_part(config: GeneratorConfig, offset: int, chunk: int) -> list[dict]:
+def _chunk_purchases(config: GeneratorConfig, world: World, offset: int, chunk: int):
+    day = config.day(offset)
+    first = chunk * PART_CUSTOMERS
+    customers = range(first, min(first + PART_CUSTOMERS, config.world.counts.customers))
+    for customer, number in world.day_purchases(day, customers):
+        rng = world.purchase_rng(day, customer, number)
+        yield world.purchase(rng, day, customer), f"{customer}:{number}", rng
+    testing = config.world.scenarios.card_testing
+    for burst in range(world.burst_count(day)):
+        if burst % config.customer_chunks != chunk:
+            continue
+        for number in range(testing.burst_size):
+            rng = world.burst_rng(day, burst, number)
+            yield world.card_test(rng, day, burst), f"burst{burst}:{number}", rng
+
+
+def write_part(config: GeneratorConfig, contracts: Path, offset: int, chunk: int) -> list[dict]:
     world = _world(config.world)
     day = config.day(offset)
+    declared, _ = load_contract(contracts)
     store = open_store(config.output, config.dataset_version)
     with tempfile.TemporaryDirectory() as scratch:
         scratch_dir = Path(scratch)
-        writers = {
-            EVENTS: _PartWriter(scratch_dir / f"{EVENTS}.parquet", EVENT_SCHEMA, config.row_group_rows),
-            LABELS: _PartWriter(scratch_dir / f"{LABELS}.parquet", LABEL_SCHEMA, config.row_group_rows),
+        writers: dict[tuple[str, int | None], _PartWriter] = {
+            (EVENTS, version): _PartWriter(scratch_dir / f"events-v{version}.parquet", _schema_for(version, declared))
+            for version in config.physical_versions()
         }
-        for purchase, ordinal, rng in _chunk_purchases(config, world, offset, chunk):
+        writers[(LABELS, None)] = _PartWriter(scratch_dir / "labels.parquet", LABEL_SCHEMA)
+        for purchase, key, rng in _chunk_purchases(config, world, offset, chunk):
             events, labels = payment_history(
                 world,
                 purchase,
                 rng,
                 day=day,
-                ordinal=ordinal,
-                schema_version_at=config.schema_version_at,
+                key=key,
+                physical_version_at=config.physical_version_at,
                 duplicate_rate=config.duplicate_rate,
             )
-            writers[EVENTS].extend(events)
-            writers[LABELS].extend(labels)
+            by_version: dict[int, list[dict]] = defaultdict(list)
+            for event in events:
+                version = event["physical_schema_version"]
+                by_version[version].append(_project(event, version, declared))
+            for version, rows in by_version.items():
+                writers[(EVENTS, version)].extend(rows)
+            writers[(LABELS, None)].extend(labels)
         parts = []
-        for table, writer in writers.items():
+        for (table, version), writer in sorted(writers.items(), key=lambda item: (item[0][0], item[0][1] or 0)):
             writer.close()
-            path = scratch_dir / f"{table}.parquet"
-            key = f"{table}/date={day.isoformat()}/part-{chunk:05d}.parquet"
-            store.publish_file(key, path)
+            local = scratch_dir / (f"events-v{version}.parquet" if version is not None else "labels.parquet")
+            suffix = f".v{version}" if version is not None else ""
+            key = f"{table}/date={day.isoformat()}/part-{chunk:05d}{suffix}.parquet"
+            store.publish_file(key, local)
             parts.append(
                 {
                     "table": table,
+                    "physical_schema_version": version,
                     "date": day.isoformat(),
                     "path": key,
                     "rows": writer.rows,
-                    "bytes": path.stat().st_size,
-                    "sha256": _sha256(path),
+                    "bytes": local.stat().st_size,
+                    "sha256": _sha256(local),
                 }
             )
     return parts
@@ -227,12 +291,12 @@ def _marker_key(day: date) -> str:
     return f"date={day.isoformat()}/_day.json"
 
 
-def _claim_configuration(config: GeneratorConfig, revision: str, store) -> None:
+def _claim_configuration(config: GeneratorConfig, digest: str, store) -> None:
     document = json.dumps(
         {
             "configuration": config.logical(),
-            "generator_revision": revision,
-            "configuration_sha256": config.identity(revision),
+            "generator_digest": digest,
+            "configuration_sha256": config.identity(digest),
         },
         sort_keys=True,
     ).encode()
@@ -242,11 +306,17 @@ def _claim_configuration(config: GeneratorConfig, revision: str, store) -> None:
     except ObjectExists:
         pass
     stored = store.read(CONFIG_KEY)
-    if stored is None or json.loads(stored)["configuration_sha256"] != config.identity(revision):
+    if stored is None or json.loads(stored)["configuration_sha256"] != config.identity(digest):
         raise ConfigurationChanged(f"{CONFIG_KEY} differs from the requested configuration")
 
 
-def _publish(config: GeneratorConfig, revision: str, store) -> dict:
+def _refuse_published(store, config: GeneratorConfig) -> None:
+    if store.read(MANIFEST_KEY) is not None:
+        raise VersionPublished(f"{MANIFEST_KEY} already exists for {config.dataset_version}")
+
+
+def _publish(config: GeneratorConfig, contracts: Path, digest: str, store) -> dict:
+    _, identities = load_contract(contracts)
     files: list[dict] = []
     rows = {EVENTS: 0, LABELS: 0}
     for offset in range(config.duration_days):
@@ -264,14 +334,10 @@ def _publish(config: GeneratorConfig, revision: str, store) -> dict:
         )
     manifest = {
         "dataset_version": config.dataset_version,
-        "generator_revision": revision,
-        "configuration_sha256": config.identity(revision),
+        "generator_digest": digest,
+        "configuration_sha256": config.identity(digest),
         "configuration": config.logical(),
-        "seed": config.world.seed,
-        "start_date": config.world.start_date.isoformat(),
-        "days": config.duration_days,
-        "physical_schema_versions": sorted({3, *(change.version for change in config.schema_changes)}),
-        "contracts": CONTRACTS,
+        "contracts": identities,
         "rows": rows,
         "physical_bytes": physical_bytes,
         "files": files,
@@ -283,44 +349,54 @@ def _publish(config: GeneratorConfig, revision: str, store) -> dict:
     return manifest
 
 
-def _check_revision(revision: str) -> None:
-    if not REVISION_PATTERN.fullmatch(revision):
-        raise GenerationError("generator revision must be a 40-character lowercase git commit")
+def _results(config: GeneratorConfig, contracts: Path, pairs, workers: int):
+    if workers > 1:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(write_part, config, contracts, offset, chunk): (offset, chunk) for offset, chunk in pairs
+            }
+            for future in as_completed(futures):
+                offset, chunk = futures[future]
+                yield offset, chunk, future.result()
+    else:
+        for offset, chunk in pairs:
+            yield offset, chunk, write_part(config, contracts, offset, chunk)
 
 
-def produce(config: GeneratorConfig, revision: str, shard: tuple[int, int] = (0, 1)) -> None:
-    _check_revision(revision)
+def produce(config: GeneratorConfig, contracts: Path, shard: tuple[int, int] = (0, 1), workers: int = 1) -> None:
+    digest = generator_digest(contracts)
     index, count = shard
     if not 0 <= index < count:
         raise GenerationError("shard index must be within the shard count")
     store = open_store(config.output, config.dataset_version)
-    if store.read(MANIFEST_KEY) is not None:
-        raise VersionPublished(f"{MANIFEST_KEY} already exists for {config.dataset_version}")
-    _claim_configuration(config, revision, store)
-    pending = [
+    _refuse_published(store, config)
+    _claim_configuration(config, digest, store)
+    chunks = config.customer_chunks
+    offsets = [
         offset
         for offset in range(config.duration_days)
         if offset % count == index and store.read(_marker_key(config.day(offset))) is None
     ]
-    pool = ProcessPoolExecutor(max_workers=config.workers) if config.workers > 1 else nullcontext()
-    with pool as executor:
-        mapper = executor.map if executor else map
-        for offset in pending:
-            chunks = mapper(write_part, repeat(config), repeat(offset), range(config.customer_chunks))
-            parts = [part for chunk_parts in chunks for part in chunk_parts]
-            marker = {"date": config.day(offset).isoformat(), "parts": parts}
-            store.write(_marker_key(config.day(offset)), json.dumps(marker, sort_keys=True).encode())
+    pairs = [(offset, chunk) for offset in offsets for chunk in range(chunks)]
+    collected: dict[int, dict[int, list[dict]]] = defaultdict(dict)
+    for offset, chunk, parts in _results(config, contracts, pairs, workers):
+        collected[offset][chunk] = parts
+        if len(collected[offset]) == chunks:
+            day = config.day(offset)
+            ordered = [part for index in sorted(collected[offset]) for part in collected[offset][index]]
+            marker = {"date": day.isoformat(), "parts": ordered}
+            store.write(_marker_key(day), json.dumps(marker, sort_keys=True).encode())
+            del collected[offset]
 
 
-def publish(config: GeneratorConfig, revision: str) -> dict:
-    _check_revision(revision)
+def publish(config: GeneratorConfig, contracts: Path) -> dict:
+    digest = generator_digest(contracts)
     store = open_store(config.output, config.dataset_version)
-    if store.read(MANIFEST_KEY) is not None:
-        raise VersionPublished(f"{MANIFEST_KEY} already exists for {config.dataset_version}")
-    _claim_configuration(config, revision, store)
-    return _publish(config, revision, store)
+    _refuse_published(store, config)
+    _claim_configuration(config, digest, store)
+    return _publish(config, contracts, digest, store)
 
 
-def generate(config: GeneratorConfig, revision: str) -> dict:
-    produce(config, revision)
-    return publish(config, revision)
+def generate(config: GeneratorConfig, contracts: Path, workers: int = 1) -> dict:
+    produce(config, contracts, workers=workers)
+    return publish(config, contracts)

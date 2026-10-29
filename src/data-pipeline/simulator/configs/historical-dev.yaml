@@ -1,11 +1,9 @@
 dataset_version: v18
 duration_days: 90
-chunk_customers: 2500
-workers: 3
 duplicate_rate: 0.02
 schema_changes:
   - effective_at: "2025-08-15T00:00:00Z"
-    version: 4
+    version: 2
 output: s3://platform-dev/datasets/payment-gateway
 world:
   seed: 2603
@@ -25,6 +23,7 @@ world:
     category_zipf_exponent: 1.2
     familiar_merchant_probability: 0.8
     familiar_context_probability: 0.95
+    foreign_ip_probability: 0.03
     issuer_decline_rate: 0.04
     insufficient_funds_rate: 0.03
     unknown_outcome_rate: 0.02

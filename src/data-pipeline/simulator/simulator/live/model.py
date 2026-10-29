@@ -1,116 +1,71 @@
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timezone
 
-import numpy as np
+from simulator.world import World, WorldConfig, stage_rng
 
-from simulator.behavior import purchase_context
-from simulator.config import HistoricalConfig
-from simulator.profiles import (
-    ACCOUNT_TAKEOVER,
-    CARD_TESTING,
-    CATEGORIES,
-    CONDITIONS,
-    LEGITIMATE,
-    OBVIOUS_HIGH_VALUE,
-    STOLEN_CARD_NEW_DEVICE,
-    Schedule,
-    profiles_from_manifest,
-    stage_rng,
-    zipf_weights,
-)
+LIVE_STAGE = 100
+BEHAVIOR_BY_OUTCOME = {"succeeded": "ok", "issuer_declined": "issuer", "insufficient_funds": "nsf"}
 
 
 class HistoricalModel:
     def __init__(self, manifest):
-        if manifest.get("schema_versions", {}).get("payment_events") != [3]:
-            raise ValueError("live reference requires payment event schema 3")
         self.manifest = manifest
-        self.config = HistoricalConfig.from_manifest(manifest)
-        self.profiles = profiles_from_manifest(manifest)
-        if self.config.counts.payment_methods > 10**11:
-            raise ValueError("payment-method pool exceeds synthetic card encoding")
-        self.merchant_cdf = np.cumsum(
-            zipf_weights(self.config.counts.merchants, self.config.behavior.merchant_zipf_exponent)
-        )
+        self.world = World.build(WorldConfig.model_validate(manifest["world"]))
+        if self.world.digest != manifest["world_digest"]:
+            raise ValueError("world digest differs from the manifest")
+        self.config = self.world.config
         self.anchor = datetime.combine(self.config.start_date, time.min, timezone.utc)
 
     def purchase(self, seed, ordinal, now):
-        cfg, p = self.config, self.profiles
-        offset = (now.date() - cfg.start_date).days
-        random = stage_rng(seed, 100, now.date().toordinal(), ordinal)
-        customer = int(random.integers(cfg.counts.customers))
-        if random.random() < cfg.behavior.familiar_merchant_probability:
-            merchant = int(random.choice(p.familiar_merchants[customer]))
-        else:
-            merchant = int(np.searchsorted(self.merchant_cdf, random.random()))
-        scenario = LEGITIMATE
-        for kind, settings in [
-            (STOLEN_CARD_NEW_DEVICE, cfg.scenarios.stolen_card_new_device),
-            (ACCOUNT_TAKEOVER, cfg.scenarios.account_takeover),
-        ]:
-            for day in range(max(0, offset - settings.window_days + 1), offset + 1):
-                if stage_rng(cfg.seed, 103, kind, day, customer).random() < settings.rate:
-                    scenario = kind
-                    break
-        if scenario == LEGITIMATE and random.random() < cfg.scenarios.obvious_high_value.rate:
-            scenario = OBVIOUS_HIGH_VALUE
-        daily_purchases = cfg.counts.customers * cfg.behavior.purchases_per_customer_day
-        testing_share = (
-            cfg.scenarios.card_testing.rate * cfg.scenarios.card_testing.burst_size / max(daily_purchases, 1)
-        )
-        if random.random() < min(testing_share, 1):
-            scenario = CARD_TESTING
-        schedule = Schedule(
-            np.array([customer]), np.array([merchant]), np.array([0]), np.array([scenario]), np.array([offset])
-        )
-        context = purchase_context(cfg, p, schedule, 0, offset, ordinal, random)
-        method = int(p.payment_methods[customer, int(random.integers(0, 2))])
-        outcome = random.random()
-        behavior = (
-            "nsf"
-            if outcome < cfg.behavior.insufficient_funds_rate
-            else "issuer"
-            if outcome < cfg.behavior.insufficient_funds_rate + cfg.behavior.issuer_decline_rate
-            else "ok"
-        )
-        if scenario == CARD_TESTING and random.random() < cfg.scenarios.card_testing.decline_rate:
-            behavior = "invalid"
+        rng = stage_rng(seed, LIVE_STAGE, now.date().toordinal(), ordinal)
+        customer = int(rng.integers(self.config.counts.customers))
+        purchase = self.world.purchase(rng, now.date(), customer)
+        behavior = BEHAVIOR_BY_OUTCOME[purchase.processor_outcome]
         order = {
             "seller": {
-                "external_id": p.merchant_external_ids[merchant],
-                "account_created_at": (self.anchor - timedelta(days=int(p.merchant_age_days[merchant]))).isoformat(),
+                "external_id": purchase.merchant_external_id,
+                "account_created_at": purchase.merchant_created_at.isoformat(),
             },
             "buyer": {
-                "external_id": p.customer_external_ids[customer],
-                "account_created_at": (self.anchor - timedelta(days=int(p.customer_age_days[customer]))).isoformat(),
+                "external_id": purchase.customer_external_id,
+                "account_created_at": purchase.customer_created_at.isoformat(),
             },
-            "amount": {"minor_units": context.unit_price * context.quantity, "currency": "USD"},
+            "amount": {"minor_units": purchase.unit_price * purchase.quantity, "currency": "USD"},
             "items": [
                 {
-                    "product_id": f"sku-{CATEGORIES[context.category]}-001",
-                    "category": CATEGORIES[context.category],
-                    "condition": CONDITIONS[context.condition],
-                    "quantity": context.quantity,
-                    "unit_price": context.unit_price,
+                    "product_id": f"sku-{purchase.category}-001",
+                    "category": purchase.category,
+                    "condition": purchase.condition,
+                    "quantity": purchase.quantity,
+                    "unit_price": purchase.unit_price,
                 }
             ],
             "shipping_address": {
                 "name": "Synthetic buyer",
-                "line1": context.address_value,
-                "city": context.city,
-                "country": context.shipping_country,
-                "region": context.region,
-                "postal_code": context.postal_code,
+                "line1": f"{purchase.shipping_line} {purchase.shipping_city} {purchase.shipping_region} "
+                f"{purchase.postal_code} US",
+                "city": purchase.shipping_city,
+                "country": "US",
+                "region": purchase.shipping_region,
+                "postal_code": purchase.postal_code,
             },
         }
         signals = {
-            "device_fingerprint": context.device,
-            "user_agent_family": context.browser,
-            "simulated_client": {"ip_country": context.ip_country, "ip_network": context.network_address},
+            "device_fingerprint": purchase.device,
+            "user_agent_family": purchase.browser,
+            "simulated_client": {"ip_country": purchase.ip_country, "ip_network": purchase.network_address},
         }
-        fraud = scenario != LEGITIMATE
-        delay = random.uniform(cfg.label_delays.min_days, cfg.label_delays.max_days) * 86400
-        friendly = not fraud and random.random() < cfg.scenarios.friendly_fraud.rate
-        return order, signals, method, behavior, scenario, fraud, friendly, delay
+        fraud = purchase.scenario != "legitimate"
+        delay = purchase.label_delay_days * 86400
+        return (
+            order,
+            signals,
+            purchase.payment_method_index,
+            behavior,
+            purchase.scenario,
+            fraud,
+            purchase.friendly_fraud,
+            delay,
+        )
 
 
 def card_number(index, behavior):

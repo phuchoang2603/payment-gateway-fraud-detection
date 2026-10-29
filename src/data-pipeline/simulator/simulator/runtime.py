@@ -6,33 +6,35 @@ from pathlib import Path
 from simulator.historical import GenerationError, generate, load_generator_config, produce, publish
 
 MODES = ("generate", "shard", "publish")
+DEFAULT_CONTRACTS = "/app/contracts/historical-payments"
 
 
-def main(arguments: list[str] | None = None) -> int:
-    arguments = sys.argv[1:] if arguments is None else arguments
-    mode = arguments[0] if arguments else "generate"
+def main() -> int:
+    mode = os.environ.get("GENERATOR_MODE", "generate")
     if mode not in MODES:
-        print(f"unknown historical generation mode: {mode}", file=sys.stderr)
+        print(f"unknown GENERATOR_MODE: {mode}", file=sys.stderr)
         return 2
     path = os.environ.get("SIMULATOR_CONFIG")
     if not path:
         print("historical generation requires SIMULATOR_CONFIG", file=sys.stderr)
         return 2
-    revision = os.environ.get("GIT_REVISION", "")
+    contracts = Path(os.environ.get("GENERATOR_CONTRACTS", DEFAULT_CONTRACTS))
     try:
+        workers = int(os.environ.get("GENERATOR_WORKERS", "1"))
         config = load_generator_config(Path(path))
         if mode == "shard":
             index, count = int(os.environ["SHARD_INDEX"]), int(os.environ["SHARD_COUNT"])
-            produce(config, revision, (index, count))
+            produce(config, contracts, (index, count), workers)
             print(json.dumps({"shard": index, "shards": count}))
             return 0
-        manifest = generate(config, revision) if mode == "generate" else publish(config, revision)
+        if mode == "publish":
+            manifest = publish(config, contracts)
+        else:
+            manifest = generate(config, contracts, workers)
     except (GenerationError, KeyError, ValueError, OSError) as error:
         print(f"historical generation failed: {error}", file=sys.stderr)
         return 2
-    print(
-        json.dumps({key: manifest[key] for key in ("dataset_version", "generator_revision", "rows", "physical_bytes")})
-    )
+    print(json.dumps({key: manifest[key] for key in ("dataset_version", "rows", "physical_bytes")}))
     return 0
 
 
