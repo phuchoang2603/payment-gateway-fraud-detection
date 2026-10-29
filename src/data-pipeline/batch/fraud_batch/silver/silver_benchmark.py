@@ -100,7 +100,9 @@ def run_variant(spark, events, variant, salt_buckets):
             frame.unpersist()
         raise
     finally:
-        context.clearJobGroup()
+        context.setLocalProperty("spark.jobGroup.id", None)
+        context.setLocalProperty("spark.job.description", None)
+        context.setLocalProperty("spark.job.interruptOnCancel", None)
     return cached, {
         "variant": variant,
         "runtime_seconds": elapsed,
