@@ -37,7 +37,7 @@ The path from historical generation to curated data has grown into receipts, res
 - **Code:** `src/data-pipeline/simulator/simulator/` is rewritten (except `live/`). `simulator/landing/` is removed. `src/data-pipeline/bronze-ingestion/` is removed in favour of `src/data-pipeline/batch/` (Spark) and `src/data-pipeline/openmetadata_jobs/` (catalog). The `simulator/notebooks/historical-sanity.ipynb` notebook is removed in favour of the diagnostics job.
 - **Contracts:** `contracts/data-products/{historical-payments,bronze-payments}` are reset, `silver-payments` is added, `contracts/landing/` is removed, and `contracts/quality/silver-payments.yaml` moves into the Silver ODCS contracts.
 - **Infra:**
-  - `infra/charts/clickhouse` (the ClickHouse instance, its users and setup Job; the platform owns only the Altinity operator), and `infra/charts/lakehouse-integration` (the `lakehouse` DataLakeCatalog database only)
+  - `infra/charts/clickhouse` (the ClickHouse instance, its users and setup Job; the platform owns only the Altinity operator), and `infra/charts/lakehouse` (the `lakehouse` DataLakeCatalog database only)
   - `infra/charts/data-pipelines` (Bronze and Silver workflows, on-demand generator and benchmark), and `infra/argocd/app-of-apps/values-prod.yaml`, which enables the chart in prod for the generator only.
   - The archiver block in `infra/charts/live-traffic`.
   - `infra/docker/data-platform-*.Dockerfile`, which gain the Kafka and protobuf Spark connectors and a payments descriptor set.

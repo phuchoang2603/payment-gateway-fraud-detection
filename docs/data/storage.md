@@ -20,7 +20,7 @@ Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT
 
 ## Lakehouse
 
-Tables are Iceberg, registered in the platform's Polaris REST catalog through the `lakehouse-integration` chart. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
+Tables are Iceberg, registered in the Polaris REST catalog that the `lakehouse` chart deploys. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
 
 **Status: in progress** in [PR #102](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/102). No dev run has written these tables yet.
 
@@ -38,6 +38,6 @@ A `maintain-lakehouse` workflow runs compaction, the Z-order sort and manifest a
 
 ## Warehouse
 
-ClickHouse reads the Iceberg tables directly through the `lakehouse` DataLakeCatalog database configured by `lakehouse-integration`; queries need no copy of the lake. It runs the contract-derived SQL checks for Bronze and Silver.
+ClickHouse reads the Iceberg tables directly through the `lakehouse` DataLakeCatalog database configured by `lakehouse`; queries need no copy of the lake. It runs the contract-derived SQL checks for Bronze and Silver.
 
 **Planned:** warehouse indexing, not part of PR #102: Gold marts as ClickHouse MergeTree tables with `ORDER BY` keys and skip indexes chosen for the fixed analytical queries, measured before and after on the same data.

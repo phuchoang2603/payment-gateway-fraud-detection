@@ -71,7 +71,7 @@
 ## 10. ClickHouse instance
 
 - [x] 10.1 Add `infra/charts/clickhouse` (ClickHouseInstallation, `clickhouse` Service, one ExternalSecret per user, PostSync setup Job) and its app-of-apps entry for dev and prod. Verify with CI helm lint and template for every values file.
-- [x] 10.2 Move the `openmetadata` user out of `lakehouse-integration`; its setup creates only the `lakehouse` DataLakeCatalog database as admin, after the instance accepts connections. Verify with CI helm template.
+- [x] 10.2 Move the `openmetadata` user out of `lakehouse`; its setup creates only the `lakehouse` DataLakeCatalog database as admin, after the instance accepts connections. Verify with CI helm template.
 - [ ] 10.3 Confirm the chart defines no operator management user and no NetworkPolicy that could block the operator in namespace `operators`. Verify by grep and CI helm template.
 - [ ] 10.4 Cluster, blocked until the dev rebuild and readiness: the instance is ready, the three users exist, `langfuse` exists, the `lakehouse` database is created, and `openmetadata` reads `lakehouse.*` with its profile applied. Run the spike items in design.md section 13, including the exact OpenMetadata FQN and the masked credentials in `SHOW CREATE DATABASE` and `system.query_log`.
 
@@ -80,3 +80,8 @@
 - [x] 9.1 Add the generator documentation (now `docs/data/offline.md`: configuration, schema changes, layout, rerun) and remove landing and old DP1 instructions. Bronze and Silver results go in `docs/data/offline.md`, `storage.md` and `orchestration-governance.md`. Verify that links resolve and generated references match.
 - [ ] 9.2 At archive time, update the Purpose of `historical-bronze-ingestion` and `live-traffic-simulation` to drop landing batches. Verify that `openspec validate --strict` passes.
 - [x] 9.3 Run the local non-test checks (ruff, treefmt, helm lint, `openspec validate rebuild-generation-to-silver --strict`, `git diff --check`), push, and inspect every CI check. Verify that all required checks pass at the pushed head, reporting any pending or failed check honestly.
+
+## 11. Lakehouse catalog
+
+- [ ] 11.1 Merge `lakehouse-integration` and the Polaris component into `infra/charts/lakehouse`: vendored Polaris 1.8.0 with `fullnameOverride: iceberg-catalog`, the CNPG store, the `iceberg-database`, `iceberg-bootstrap`, `iceberg-signing`, `iceberg-storage` and `lakehouse-admin` ExternalSecrets, the network policies, a warehouse registration PostSync job and a ClickHouse `lakehouse` DataLakeCatalog PostSync job. One app-of-apps entry in `data`, sync wave 1, enabled in dev and prod. Verify with CI helm lint and template for every values file and the app-of-apps render for both environments.
+- [ ] 11.2 Push only after the platform's Polaris is pruned from dev. Verify at the pushed head that `deploy/dev` syncs `lakehouse` after `clickhouse`, that the registration and database jobs succeed, and that `iceberg-catalog.data.svc.cluster.local:8181` answers.

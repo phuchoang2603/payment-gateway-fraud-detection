@@ -2,7 +2,7 @@
 
 The system has three layers on one shared Kubernetes platform: the payment gateway that produces authoritative payment events, a data platform that turns them into curated tables and features, and an ML platform that trains and serves the fraud model. An LLM agent layer reads from both. The domain and the AI problem are in the [proposal](proposal.md); the build order and status are in the [roadmap](roadmap.md).
 
-The shared platform (Talos clusters, Argo CD, operators, Polaris, ClickHouse, OpenMetadata, Kubeflow, observability) is owned by [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox/tree/main/docs/architecture). This repository owns the application workloads, their charts, contracts and pipelines. See [infrastructure](../deployment/infra.md).
+The shared platform (Talos clusters, Argo CD, operators, the ClickHouse operator, OpenMetadata, Kubeflow, observability) is owned by [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox/tree/main/docs/architecture). This repository owns the application workloads, their charts (including the Polaris catalog), contracts and pipelines. See [infrastructure](../deployment/infra.md).
 
 ## Deployable units
 

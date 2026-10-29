@@ -17,7 +17,7 @@ The full-scale generator uses the burst pool: one shard per Spot xlarge node, se
 | Owned by the platform | Owned by this repository |
 |---|---|
 | Talos, Cilium, Argo CD, Argo Workflows, Spark and Flink operators, External Secrets, Istio ambient mesh, ingress and Cloudflare tunnels | Application charts and their values |
-| Polaris server, the Altinity ClickHouse operator, OpenMetadata, Kubeflow and the `ml` workspace | Polaris registration, ClickHouse instance and users, ClickHouse `lakehouse` DataLakeCatalog, catalog connections |
+| The Altinity ClickHouse operator, OpenMetadata, Kubeflow and the `ml` workspace | Polaris catalog and its registration, ClickHouse instance and users, ClickHouse `lakehouse` DataLakeCatalog, catalog connections |
 | Victoria metrics and traces stores, Grafana | Application telemetry configuration |
 | Buckets, storage policies and gateway storage identities | Dataset, run and lakehouse prefixes used by workloads |
 
