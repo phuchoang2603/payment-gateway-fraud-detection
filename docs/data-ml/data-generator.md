@@ -15,7 +15,7 @@ Top-level keys hold only the logical dataset:
 
 - `dataset_version`, `duration_days`, `duplicate_rate`
 - `minimum_source_bytes`: publication refuses a dataset whose physical Parquet bytes are below this value
-- `schema_changes`: ordered `{effective_at, version}` entries. Physical versions start at 1; a change to version 2 adds the fields that the payment-events contract declares with `sinceSchemaVersion: 2`
+- `schema_changes`: ordered `{effective_at, version}` entries. Event schema versions start at 2; a change to version 3 makes the fields declared with `sinceSchemaVersion: 3` in the payment-events contract present from `effective_at` (version 3 is the gateway's current shape)
 - `output`: a local directory or an `s3://bucket/prefix` root without credentials
 - `world`: `seed`, `integration_id`, `synthetic_key`, `start_date`, entity `counts`, purchase `behavior`, `scenarios`, `label_delays`
 
@@ -51,7 +51,7 @@ argo submit -n data --from workflowtemplate/generate-historical
 Each dataset is written below `historical/<dataset_version>/`:
 
 - `config.json`: the logical configuration, the generator digest and their hash, written first
-- `payment_events/date=YYYY-MM-DD/part-NNNNN.v1.parquet` and `.v2.parquet`: payment events by physical schema version, so each file's Parquet schema has exactly the fields its version declares
+- `payment_events/date=YYYY-MM-DD/part-NNNNN.v2.parquet` and `.v3.parquet`: payment events by `schema_version`, so each file's Parquet schema has exactly the fields its version declares
 - `fraud_labels/date=YYYY-MM-DD/part-NNNNN.parquet`: labels
 - `date=YYYY-MM-DD/_day.json`: written after all parts of a purchase-start day, listing their rows, bytes and SHA-256
 - `manifest.json`: written last and only if absent, with the configuration, generator digest, contract identities, row and byte totals and the file list
