@@ -240,7 +240,7 @@ agentregistry 0.4.0, the latest stable release, is installed by the platform wit
 
 agentregistry 0.4.0 materializes agents as kagent `v1alpha2` resources, the API kagent 0.10.4 serves. Even so, the agents are deployed by this chart through GitOps, and the registry is the governed catalog (published versions, UI). That keeps one deployment path, so the registry's deploy feature is not used.
 
-**Prompts are versioned in the registry.** Each agent's system prompt is a file, `files/prompts/<agent>.md`. kagent reads it through `systemMessageFrom` from the `agent-prompts` ConfigMap. The same content is published to agentregistry as a `Prompt` (`<agent>-system-prompt`, tagged with the agent version), so every released prompt version is retained and browsable next to its agent. In phase 2 Langfuse becomes the prompt-management tool the rubric names, and the source of truth. It is platform-installed on the shared ClickHouse that also replaces StarRocks. A sync step renders each agent's `production`-labelled prompt into the `agent-prompts` ConfigMap, because kagent cannot fetch from Langfuse itself, and the registry `Prompt` entries are then dropped. Langfuse also receives the gateway's LLM traces (OTLP). Skills use the same registry mechanism when agents get them. OpenMetadata's `promptTemplate` entity catalogues the same prompts with the AI assets (decision 12).
+**Prompts are versioned in the registry.** Each agent's system prompt is a file, `files/prompts/<agent>.md`. kagent reads it through `systemMessageFrom` from the `agent-prompts` ConfigMap. The same content is published to agentregistry as a `Prompt` (`<agent>-system-prompt`, tagged with the agent version), so every released prompt version is retained and browsable next to its agent. In phase 2 Langfuse becomes the prompt-management tool the rubric names, and the source of truth. It is deployed now by this chart (decision 14). A sync step renders each agent's `production`-labelled prompt into the `agent-prompts` ConfigMap, because kagent cannot fetch from Langfuse itself, and the registry `Prompt` entries are then dropped. Langfuse also receives the gateway's LLM traces (OTLP). Skills use the same registry mechanism when agents get them. OpenMetadata's `promptTemplate` entity catalogues the same prompts with the AI assets (decision 12).
 
 ### 12. OpenMetadata: register the AI assets through the metadata-integrations chart
 
@@ -258,6 +258,25 @@ Later phases add `mcpServers` (the evidence and scoring tools, linked to the Fea
 The register code lives where open PR #102 moves it (`src/data-pipeline/openmetadata_jobs/openmetadata_jobs/integrations.py`), so this part is implemented on top of #102 after it merges. The `metadata-integrations` application is enabled in dev and disabled in prod, so AI assets are catalogued in dev until prod metadata integration is enabled. Bring-up checks that the pinned `openmetadata-ingestion` 2.0.6 SDK ships the generated `api.ai` requests and has `create_or_update` routes for them; if not, the Job uses the SDK's REST client against `/v1/services/llmServices`, `/v1/llmModels` and `/v1/aiApplications`.
 
 The catalog facts (model names, revisions, agent version) are values in the metadata chart that must match the llm-platform chart, because one Helm chart cannot read another's files. Both live in the same release, and the agent version is bumped in both places in the same commit as the registry catalog.
+
+### 14. Langfuse, app-owned, on the shared ClickHouse
+
+Langfuse v3 runs in `llm` from the upstream chart `langfuse` 1.5.41 (the last v3 chart), vendored as a dependency of this chart with its own image version `3.224.1`. Every bundled subchart is off, so the backing services are:
+- **ClickHouse:** the shared, app-owned instance that PR #102 adds as chart `infra/charts/clickhouse` in `data`, replacing StarRocks. The contract is fixed with #102:
+  - Service `clickhouse.data.svc.cluster.local`, HTTP 8123 and native 9000;
+  - `clickhouse/clickhouse-server:26.10.2.103`, single shard and replica;
+  - user `langfuse` owning database `langfuse`.
+
+  Langfuse runs its own migrations there with `CLICKHOUSE_CLUSTER_ENABLED=false`.
+- **Postgres:** a CNPG `Cluster` `langfuse-postgres` in `llm`, connected with `sslmode=require`.
+- **Redis:** an opstree `Redis` `langfuse-redis` in `llm`, with `noeviction`.
+- **Object storage:** event uploads go under `artifacts/langfuse/` in the environment bucket through the Kubeflow artifacts identity, the same Secret as the model weights. Batch export and media upload are off.
+
+Secrets:
+- Langfuse's own secrets live in the app's Doppler config through `gateway-doppler`: salt, encryption key, NextAuth secret, Postgres and Redis passwords, and the headless-init project keys and admin password.
+- The ClickHouse `langfuse` password stays the platform key `CLICKHOUSE_LANGFUSE_PASSWORD`, read through the platform `doppler` store. Moving the ClickHouse keys to the app's Doppler is a later ownership decision.
+
+Headless init creates organisation `payment-gateway`, project `payment-gateway-fraud-detection` and an admin user. Sign-up is off. The UI uses the kagent pattern: the app owns a `VirtualService` on `ml/kubeflow-gateway` for `langfuse(-dev).phuchoang.sbs`, and the platform adds the TunnelBinding, the oauth2-proxy hosts and the Dex redirect URIs. The shared proxy is the access control.
 
 ### 13. Platform changes (talos-proxmox, separate approval)
 

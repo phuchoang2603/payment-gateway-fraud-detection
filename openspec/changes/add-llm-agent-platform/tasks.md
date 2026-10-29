@@ -51,6 +51,11 @@
 - [x] 4.2 Add `SandboxAgent` `evidence-agent-sandbox` from the same helper on WorkerPool `kagent-default`, with `sandbox.network` egress limited to the gateway. Verify with a server-side dry run on dev once P5 is live.
 - [x] 4.3 Render the registry catalog from the agent values (`evidenceagent` 0.1.0) and add the PostSync Job that POSTs it to the registry's `/v0/apply`. Verified with `helm template` and a registry `dryRun=true` apply on dev.
 
+## 4b. Langfuse
+
+- [x] 4b.1 Vendor `langfuse` 1.5.41 (v3, image `3.224.1`) into the chart. Add its CNPG Postgres, Redis, ExternalSecrets and UI VirtualService, and point it at the shared ClickHouse contract agreed with #102. Provision its app keys in Doppler `dev` and `prd`. Verify with `helm lint`/`helm template`; live checks wait for the rebuild.
+- [ ] 4b.2 After the rebuild and #102's ClickHouse: the platform adds the tunnel, proxy hosts and Dex redirect URIs; then verify on dev that the migrations complete, login works behind the proxy, and the init project's API keys authenticate.
+
 ## 5. OpenMetadata (after PR #102 merges)
 
 - [ ] 5.1 Rebase onto #102. In `openmetadata_jobs/integrations.py`, add the `llm` service kind (`CreateLLMServiceRequest`, `CustomLLM`) and idempotent registration of the `ai` entries (`llmModels`, `aiApplications`). Verify locally with ruff. CI runs the existing integration tests; add one behaviour test only if the AI registration adds a distinct failure path, such as an application whose primary model is missing.
