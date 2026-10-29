@@ -52,3 +52,9 @@ def test_a_check_counts_only_a_fresh_success():
         "stale",
         "missing",
     ]
+
+
+def test_table_names_include_the_service_and_catalog(monkeypatch):
+    monkeypatch.setenv("STARROCKS_CATALOG", "fraud_lakehouse")
+
+    assert checks.table_fqn("bronze.fraud_labels") == "starrocks.fraud_lakehouse.bronze.fraud_labels"

@@ -20,10 +20,6 @@ class Check:
     description: str
     sql: str
 
-    @property
-    def fqn(self):
-        return f"{SERVICE}.{self.table}.{self.name}"
-
 
 def checks(root=None, catalog=None, products=None):
     root = Path(root or os.environ["DATA_PRODUCTS_ROOT"])
@@ -35,6 +31,10 @@ def checks(root=None, catalog=None, products=None):
                 for rule in table.get("quality", []):
                     found.append(check(contract.name, table["physicalName"], rule, catalog))
     return found
+
+
+def table_fqn(table):
+    return f"{SERVICE}.{os.environ.get('STARROCKS_CATALOG', 'fraud_lakehouse')}.{table}"
 
 
 def check(contract, table, rule, catalog):
@@ -52,7 +52,7 @@ def test_workflow(table, cases):
             "sourceConfig": {
                 "config": {
                     "type": "TestSuite",
-                    "entityFullyQualifiedName": f"{SERVICE}.{table}",
+                    "entityFullyQualifiedName": table_fqn(table),
                     "testCases": [case.name for case in cases],
                 }
             },
@@ -98,7 +98,7 @@ def evaluate(expected, results, prepared_at):
 def readback(table, prepared_at):
     results, after = {}, None
     while True:
-        query = {"entityLink": f"<#E::table::{SERVICE}.{table}>", "fields": "testCaseResult", "limit": PAGE}
+        query = {"entityLink": f"<#E::table::{table_fqn(table)}>", "fields": "testCaseResult", "limit": PAGE}
         if after:
             query["after"] = after
         page = client().client.get("/dataQuality/testCases", query)
