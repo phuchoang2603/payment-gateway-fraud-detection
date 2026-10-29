@@ -45,8 +45,7 @@ def run(spark, run_id):
         "bronze.fraud_labels.snapshot_id": str(labels_snapshot),
     }
     events = spark.read.option("versionAsOf", events_snapshot).table(BRONZE_EVENTS)
-    labels = spark.read.option("versionAsOf", labels_snapshot).table(BRONZE_LABELS)
-
+    hashed = with_event_hash(events)
     cached = []
     phases = {}
 
@@ -55,15 +54,15 @@ def run(spark, run_id):
         return cached[-1]
 
     try:
-        copies = cache(with_event_hash(events))
-        conflicts = cache(conflicting_events(copies))
+        kept = cache(distinct_events(hashed))
+        conflicts = cache(kept.where(F.col("hashes") > 1).select("event_id", *PAYMENT_KEY))
         conflicting_payments = cache(conflicts.select(*PAYMENT_KEY).distinct())
         conflict_reason = cache(conflicts.groupBy(*PAYMENT_KEY).agg(F.min("event_id").alias("reason")))
-        kept = cache(earliest_copies(copies))
         payment_status = cache(payments(kept))
         all_attempts = cache(attempts(kept, payment_status))
-        all_labels = cache(label_observations(labels))
-        linked = cache(link_labels(all_labels, all_attempts, payment_status))
+        labels = spark.read.option("versionAsOf", labels_snapshot).table(BRONZE_LABELS)
+        all_labels = label_observations(labels)
+        linked = link_labels(all_labels, all_attempts, payment_status)
         historical = kept.groupBy(*PAYMENT_KEY).agg(
             F.max(F.when(F.col("_source") == "historical", 1).otherwise(0)).alias("historical")
         )
@@ -82,36 +81,12 @@ def run(spark, run_id):
             reduce(
                 DataFrame.unionByName,
                 [
-                    reject_payment_rows(copies, "payment_events", conflicting_payments, conflict_reason),
+                    reject_payment_rows(hashed, "payment_events", conflicting_payments, conflict_reason),
                     reject_payment_rows(sourced_attempts, "attempts", conflicting_payments, conflict_reason),
                     reject_payment_rows(all_labels, "labels", conflicting_payments, conflict_reason),
                 ],
             ).withColumn("_run_id", F.lit(run_id))
         )
-
-        with phase(spark, phases, "build"):
-            input_events = copies.count()
-            distinct_events = kept.count()
-        report = {
-            "run_id": run_id,
-            "phases": phases,
-            "bronze_snapshots": {"bronze.payment_events": events_snapshot, "bronze.fraud_labels": labels_snapshot},
-            "events": {
-                "input_rows": input_events,
-                "distinct_events": distinct_events,
-                "collapsed_deliveries": input_events - distinct_events,
-                "conflicting_events": conflicts.select("event_id").distinct().count(),
-                "conflicting_payments": conflicting_payments.count(),
-            },
-            "labels": {
-                "input_rows": total_records(spark, BRONZE_LABELS, labels_snapshot),
-                "distinct_observations": all_labels.count(),
-            },
-            "rejected_rows": {
-                "by_table": counts_by(rejected, "rejected_table"),
-                "by_source": counts_by(rejected, "source"),
-            },
-        }
 
         snapshots = {}
         for name, frame, partition in (
@@ -122,10 +97,37 @@ def run(spark, run_id):
         ):
             with phase(spark, phases, f"write {name.split('.')[-1]}"):
                 snapshots[name] = write_table(spark, name, frame, pins, run_id, partition)
-        report["labels"]["linkage"] = counts_by(accepted_labels, "linkage")
-        report["attempts"] = snapshots[ATTEMPTS]["added_records"]
-        report["lifecycle_invalid"] = accepted_attempts.where(~F.col("lifecycle_valid")).count()
-        report["silver_snapshots"] = snapshots
+
+        with phase(spark, phases, "report"):
+            input_events = total_records(spark, BRONZE_EVENTS, events_snapshot)
+            distinct = kept.count()
+            report = {
+                "run_id": run_id,
+                "bronze_snapshots": {
+                    "bronze.payment_events": events_snapshot,
+                    "bronze.fraud_labels": labels_snapshot,
+                },
+                "events": {
+                    "input_rows": input_events,
+                    "distinct_events": distinct,
+                    "collapsed_deliveries": input_events - distinct,
+                    "conflicting_events": conflicts.count(),
+                    "conflicting_payments": conflicting_payments.count(),
+                },
+                "labels": {
+                    "input_rows": total_records(spark, BRONZE_LABELS, labels_snapshot),
+                    "distinct_observations": snapshots[LABELS]["added_records"],
+                    "linkage": counts_by(spark.table(LABELS), "linkage"),
+                },
+                "rejected_rows": {
+                    "by_table": counts_by(spark.table(REJECTED), "rejected_table"),
+                    "by_source": counts_by(spark.table(REJECTED), "source"),
+                },
+                "attempts": snapshots[ATTEMPTS]["added_records"],
+                "lifecycle_invalid": spark.table(ATTEMPTS).where(~F.col("lifecycle_valid")).count(),
+                "silver_snapshots": snapshots,
+                "phases": phases,
+            }
         Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/silver.json", report)
         return report
     finally:
@@ -156,16 +158,17 @@ def with_event_hash(events: DataFrame) -> DataFrame:
     return events.withColumn("event_hash", F.sha2(F.to_json(F.struct(*EVENT_HASH_FIELDS)), 256))
 
 
-def conflicting_events(copies: DataFrame) -> DataFrame:
-    per_event = Window.partitionBy("event_id")
-    return copies.withColumn("hashes", F.size(F.collect_set("event_hash").over(per_event))).where(F.col("hashes") > 1)
-
-
-def earliest_copies(copies: DataFrame) -> DataFrame:
-    per_event = Window.partitionBy("event_id").orderBy("recorded_at", "_ingested_at", "_source")
-    return (
-        copies.withColumn("_position", F.row_number().over(per_event)).where(F.col("_position") == 1).drop("_position")
+def distinct_events(hashed: DataFrame) -> DataFrame:
+    """One shuffle on event_id: the number of distinct hashes per event and its earliest copy."""
+    earliest = F.min_by(
+        F.struct(*hashed.columns),
+        F.struct(F.col("recorded_at"), F.col("_ingested_at"), F.col("_source")),
     )
+    grouped = hashed.groupBy("event_id").agg(
+        F.size(F.collect_set("event_hash")).alias("hashes"),
+        earliest.alias("kept"),
+    )
+    return grouped.select("hashes", "kept.*")
 
 
 def attempt_events(events: DataFrame) -> DataFrame:
