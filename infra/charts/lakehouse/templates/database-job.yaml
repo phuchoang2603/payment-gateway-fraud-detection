@@ -1,42 +1,3 @@
-{{- $ch := .Values.clickhouse }}
-{{- $lh := .Values.lakehouse }}
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: lakehouse-admin
-  annotations:
-    argocd.argoproj.io/sync-wave: "-2"
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: doppler
-  target:
-    name: lakehouse-admin
-  data:
-    - secretKey: ADMIN_PASSWORD
-      remoteRef:
-        key: {{ $ch.adminPasswordKey }}
----
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: lakehouse-storage
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: {{ .Values.storage.secretStore }}
-  target:
-    name: lakehouse-storage
-  data:
-    - secretKey: AWS_ACCESS_KEY_ID
-      remoteRef:
-        key: {{ .Values.storage.accessKey }}
-    - secretKey: AWS_SECRET_ACCESS_KEY
-      remoteRef:
-        key: {{ .Values.storage.secretKey }}
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -82,27 +43,28 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: apply
-          image: {{ $ch.image }}
+          image: {{ .Values.clickhouse.image }}
           command: [bash, /script/setup.sh]
           env:
-            - {name: CLICKHOUSE_HOST, value: {{ $ch.host | quote }}}
-            - {name: CLICKHOUSE_PORT, value: {{ $ch.port | quote }}}
-            - {name: CLICKHOUSE_ADMIN_USER, value: {{ $ch.adminUser | quote }}}
-            - {name: LAKEHOUSE_DATABASE, value: {{ $lh.database | quote }}}
-            - {name: LAKEHOUSE_REST_URI, value: {{ $lh.restCatalogUri | quote }}}
-            - {name: LAKEHOUSE_WAREHOUSE, value: {{ $lh.warehouse | quote }}}
-            - {name: LAKEHOUSE_CLIENT_ID, value: {{ $lh.clientId | quote }}}
-            - {name: LAKEHOUSE_SCOPE, value: {{ $lh.scope | quote }}}
-            - {name: LAKEHOUSE_OAUTH_URI, value: {{ $lh.oauthServerUri | quote }}}
+            - {name: CLICKHOUSE_HOST, value: {{ .Values.clickhouse.host | quote }}}
+            - {name: CLICKHOUSE_PORT, value: {{ .Values.clickhouse.port | quote }}}
+            - {name: CLICKHOUSE_ADMIN_USER, value: {{ .Values.clickhouse.adminUser | quote }}}
+            - {name: LAKEHOUSE_DATABASE, value: {{ .Values.lakehouse.database | quote }}}
+            - {name: LAKEHOUSE_REST_URI, value: {{ .Values.lakehouse.restCatalogUri | quote }}}
+            - {name: LAKEHOUSE_WAREHOUSE, value: {{ .Values.lakehouse.warehouse | quote }}}
+            - {name: LAKEHOUSE_CLIENT_ID, value: {{ .Values.lakehouse.clientId | quote }}}
+            - {name: LAKEHOUSE_SCOPE, value: {{ .Values.lakehouse.scope | quote }}}
+            - {name: LAKEHOUSE_OAUTH_URI, value: {{ .Values.lakehouse.oauthServerUri | quote }}}
             - {name: STORAGE_ENDPOINT, value: {{ printf "%s/%s" .Values.catalog.endpoint .Values.catalog.bucket | quote }}}
             - {name: STORAGE_REGION, value: {{ .Values.catalog.region | quote }}}
+            - name: ICEBERG_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: {name: iceberg-bootstrap, key: client-secret}
           envFrom:
             - secretRef:
                 name: lakehouse-admin
             - secretRef:
-                name: lakehouse-storage
-            - secretRef:
-                name: gateway-catalog-client
+                name: iceberg-storage
           volumeMounts:
             - {name: script, mountPath: /script}
           resources:

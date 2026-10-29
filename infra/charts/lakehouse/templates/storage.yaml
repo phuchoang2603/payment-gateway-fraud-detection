@@ -2,6 +2,8 @@ apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: iceberg-storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   refreshInterval: 1h
   secretStoreRef:
@@ -20,15 +22,17 @@ spec:
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
-  name: gateway-catalog-client
+  name: lakehouse-admin
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   refreshInterval: 1h
   secretStoreRef:
     kind: ClusterSecretStore
     name: doppler
   target:
-    name: gateway-catalog-client
+    name: lakehouse-admin
   data:
-    - secretKey: ICEBERG_CLIENT_SECRET
+    - secretKey: ADMIN_PASSWORD
       remoteRef:
-        key: ICEBERG_CLIENT_SECRET
+        key: {{ .Values.clickhouse.adminPasswordKey }}

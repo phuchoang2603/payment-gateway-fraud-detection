@@ -1,0 +1,9 @@
+apiVersion: v2
+name: lakehouse
+description: Iceberg lakehouse, with the Polaris REST catalog, its PostgreSQL store, the warehouse registration and the ClickHouse lakehouse database
+version: 0.1.0
+type: application
+dependencies:
+  - name: polaris
+    version: 1.8.0
+    repository: https://downloads.apache.org/polaris/helm-chart

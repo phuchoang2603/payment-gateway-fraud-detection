@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: gateway-catalog-setup
+  name: lakehouse-warehouse-registration
 data:
   catalog.json: |
     {{- $location := printf "s3://%s/%s" .Values.catalog.bucket .Values.catalog.prefix }}
@@ -39,13 +39,13 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: gateway-catalog-setup
+  name: lakehouse-warehouse-registration
   annotations:
     argocd.argoproj.io/hook: PostSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
 spec:
-  backoffLimit: 6
-  activeDeadlineSeconds: 600
+  backoffLimit: 20
+  activeDeadlineSeconds: 900
   template:
     spec:
       restartPolicy: OnFailure
@@ -55,10 +55,10 @@ spec:
           command: [python, /setup/setup.py]
           env:
             - name: CLIENT_ID
-              value: platform
+              value: {{ .Values.lakehouse.clientId | quote }}
             - name: CLIENT_SECRET
               valueFrom:
-                secretKeyRef: {name: gateway-catalog-client, key: ICEBERG_CLIENT_SECRET}
+                secretKeyRef: {name: iceberg-bootstrap, key: client-secret}
           resources:
             requests: {cpu: 25m, memory: 32Mi}
             limits: {memory: 128Mi}
@@ -69,4 +69,4 @@ spec:
       volumes:
         - name: setup
           configMap:
-            name: gateway-catalog-setup
+            name: lakehouse-warehouse-registration

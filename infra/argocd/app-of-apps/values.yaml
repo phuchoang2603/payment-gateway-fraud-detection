@@ -38,9 +38,11 @@ applications:
   data-pipelines:
     destinationNamespace: data
     path: infra/charts/data-pipelines
+    syncWave: "2"
+  lakehouse:
+    destinationNamespace: data
+    path: infra/charts/lakehouse
+    syncWave: "1"
   clickhouse:
     destinationNamespace: data
     path: infra/charts/clickhouse
-  lakehouse-integration:
-    destinationNamespace: data
-    path: infra/charts/lakehouse-integration
