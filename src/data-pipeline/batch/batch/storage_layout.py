@@ -22,7 +22,11 @@ def batch_scans(plan):
     found, stack = [], [plan]
     while stack:
         node = stack.pop()
-        if node.getClass().getSimpleName() == "BatchScanExec":
+        kind = node.getClass().getSimpleName()
+        if kind == "AdaptiveSparkPlanExec":
+            stack.append(node.finalPhysicalPlan())
+            continue
+        if kind == "BatchScanExec":
             found.append(node)
             continue
         children = node.children().iterator()
@@ -34,7 +38,10 @@ def batch_scans(plan):
 def scanned(df: DataFrame):
     """Files and bytes the Iceberg scans of df's last execution planned to read."""
     files = size = 0
-    for scan in batch_scans(df._jdf.queryExecution().executedPlan()):
+    scans = batch_scans(df._jdf.queryExecution().executedPlan())
+    if not scans:
+        raise RuntimeError("no Iceberg scan found in the executed plan")
+    for scan in scans:
         partitions = scan.scan().toBatch().planInputPartitions()
         for index in range(len(partitions)):
             tasks = partitions[index].taskGroup().tasks().iterator()
