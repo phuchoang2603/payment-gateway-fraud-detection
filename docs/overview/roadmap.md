@@ -12,7 +12,7 @@ The active plan is the OpenSpec change [`rebuild-generation-to-silver`](../../op
 | Offline generator | Skew, schema evolution, duplicates; ≥ 100 GB stored for Bronze ingestion | [Offline data](../data/offline.md) | Done (v19: 133.5 GB) |
 | Online generator | Late arrivals and streaming duplicates | [Online data](../data/online.md) | In progress |
 | Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline data](../data/offline.md) | In progress |
-| Flink jobs | Baseline, late arrivals, duplicates, windows | [Online data](../data/online.md) | Windows done; late/duplicate handling in progress |
+| Flink jobs | Baseline, late arrivals, duplicates, windows, dead-letter topic; output ends at the feature journal topic | [Online data](../data/online.md) | Windows done; late/duplicate handling and dead-letter topic in progress |
 | Storage | Lakehouse compaction, partitioning, Z-order; warehouse indexing | [Storage](../data/storage.md) | Planned |
 | Orchestration | DP1 (raw → Bronze), DP2 (Bronze → Silver/Gold), DP3 (offline features), each with ingest and validate stages | [Orchestration and governance](../data/orchestration-governance.md) | DP1/DP2 in progress; DP3 planned |
 | Governance | Lineage and validation for DP1–DP3 in the catalog | [Orchestration and governance](../data/orchestration-governance.md) | In progress |
@@ -22,12 +22,24 @@ The active plan is the OpenSpec change [`rebuild-generation-to-silver`](../../op
 
 | Area | Capability | Page | Status |
 |---|---|---|---|
-| Feature store | Streaming features to online and offline stores, incremental materialization, TTL | [Feature store](../ml/feature-store.md) | Online writer done (shadow); offline and materialization planned |
+| Feature store | Streaming features to online and offline stores, incremental materialization, TTL | [Feature store](../ml/feature-store.md) | Planned: see [feature store build order](#feature-store-build-order) |
 | Generator | Data drift and a label table joinable with features | [Offline data](../data/offline.md) | Labels done; drift planned |
 | Model | Notebook baseline from the offline store, training pipeline, distributed training | [Training](../ml/training.md) | Planned |
 | Versioning | Model registry and incremental data versions | [Training](../ml/training.md) | Planned |
 | Serving | Feature-retrieval API, KServe inference, rolling update, autoscaling, A/B traffic split | [Serving](../ml/serving.md) | Planned |
 | Drift | Periodic drift comparison and retraining trigger | [Training](../ml/training.md) | Planned |
+
+## Feature store build order
+
+Feast is built as one change after Bronze and Silver merge. Until then the streaming job ends at the feature journal topic, and the existing online-only Feast writer and Go Fraud's shadow retrieval stay as they are on `main`.
+
+1. **DP3 offline features.** A daily Spark job over Silver writes `feat_customer_*` and `feat_payment_method_*` Iceberg tables keyed by integration, customer or payment method, with `event_timestamp` and `created`. It computes the long 7- and 30-day windows that Flink does not keep.
+2. **Offline store.** Feast reads the `feat_` tables as its offline store, through a Spark source over the Iceberg catalog or a Parquet export, whichever Feast supports reliably. Training builds its dataset with `get_historical_features` against the label table, joining point-in-time on attempt time and label availability.
+3. **Streaming features to offline.** A Kafka batch reader, the same pattern as Bronze Kafka mode, appends the feature journal topic into an Iceberg `feat_stream_*` table that the offline store also reads.
+4. **Streaming features to online.** A Feast writer consumes the feature journal topic and pushes each update to Redis, committing offsets only after the write is accepted.
+5. **Materialization.** An Argo workflow runs `feast materialize-incremental` from the offline store into Redis after each DP3 run, so batch features reach the online store.
+6. **TTL and feature services.** Each feature view gets a TTL equal to its longest window plus the expected pipeline delay, with the reason recorded on the [feature store](../ml/feature-store.md) page. A versioned `FeatureService` (for example `fraud_model_v1`) names the features a model uses; training and Go Fraud both request it.
+7. **Natural keys.** Feature views key on integration-scoped customer and payment-method IDs instead of the current synthetic snapshot key, so offline joins with labels are direct. Go Fraud's feature client moves to the new views and feature service in the same change.
 
 ## LLM and agent platform
 
