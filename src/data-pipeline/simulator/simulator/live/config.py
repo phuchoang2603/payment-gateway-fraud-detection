@@ -6,29 +6,11 @@ from pydantic import Field, model_validator
 from simulator.world import StrictModel
 
 
-class Faults(StrictModel):
+class Redelivery(StrictModel):
     enabled: bool = False
-    group: str = "simulator-delivery-faults-v1"
-    source: str = "payments.events.v1"
-    destination: str = "payments.events.v1.faulty"
-    duplicate_rate: float = Field(default=0, ge=0, le=1)
-    late_rate: float = Field(default=0, ge=0, le=1)
-    late_min_seconds: float = Field(default=1, ge=0)
-    late_max_seconds: float = Field(default=30, ge=0)
-    duplicate_delay_seconds: float = Field(default=1, ge=0)
-    hold_interval_seconds: float = Field(default=60, gt=0)
-    hold_seconds: float = Field(default=0, ge=0)
-    max_records: int = Field(default=10000, gt=0)
-    max_bytes: int = Field(default=64 * 1024**2, gt=0)
-    max_record_bytes: int = Field(default=1024**2, gt=0)
-
-    @model_validator(mode="after")
-    def limits(self):
-        if self.late_min_seconds > self.late_max_seconds or self.hold_seconds >= self.hold_interval_seconds:
-            raise ValueError("invalid fault delay/hold range")
-        if self.max_record_bytes > self.max_bytes or self.source == self.destination:
-            raise ValueError("invalid fault capacity/topic")
-        return self
+    group: str = "simulator-redelivery-v1"
+    topic: str = "payments.events.v1"
+    rate: float = Field(default=0.015, ge=0, le=1)
 
 
 class LiveConfig(StrictModel):
@@ -46,7 +28,17 @@ class LiveConfig(StrictModel):
     request_retries: int = Field(default=4, ge=0, le=20)
     label_time_scale: float = Field(default=1, gt=0)
     max_pending_labels: int = Field(default=10000, gt=0)
-    faults: Faults = Field(default_factory=Faults)
+    late_rate: float = Field(default=0, ge=0, le=1)
+    late_min_seconds: float = Field(default=300, ge=0)
+    late_max_seconds: float = Field(default=600, ge=0)
+    max_held_attempts: int = Field(default=1000, gt=0)
+    redelivery: Redelivery = Field(default_factory=Redelivery)
+
+    @model_validator(mode="after")
+    def late_range(self):
+        if self.late_min_seconds > self.late_max_seconds:
+            raise ValueError("invalid store-and-forward delay range")
+        return self
 
 
 def load_live_config(path: Path) -> LiveConfig:

@@ -9,16 +9,14 @@ from urllib.request import urlopen
 
 from confluent_kafka import Consumer, Producer
 from confluent_kafka.admin import AdminClient, NewTopic
-from fraud_streaming.model import HOUR
-from fraud_streaming.wire import DEFINITION_HASH, PaymentEvent
 from testcontainers.community.kafka import KafkaContainer
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.image import DockerImage
 from testcontainers.core.network import Network
 from testcontainers.core.wait_strategies import HttpWaitStrategy
 
-from fraud_feast import schema
-from fraud_feast.contracts.features.v1 import features_pb2
+from fraud_streaming.model import HOUR, entity_key
+from fraud_streaming.wire import DEFINITION_HASH, PaymentEvent, SnapshotUpdate
 
 
 def await_result(read, *, timeout=120):
@@ -31,7 +29,7 @@ def await_result(read, *, timeout=120):
     raise AssertionError("Flink integration condition did not complete before its deadline")
 
 
-def lifecycle(attempt, started_at, *, customer="customer"):
+def lifecycle(attempt, started_at, *, customer="customer", attempted_at=None):
     event = PaymentEvent(
         event_id=f"start-{attempt}",
         integration_id="integration",
@@ -46,7 +44,10 @@ def lifecycle(attempt, started_at, *, customer="customer"):
     event.attempt_started.context.snapshot.total.currency = "USD"
     event.attempt_started.context.snapshot.total.minor_units = 100
     event.attempt_started.signals.payment_method.fingerprint = "shared-method"
-    event.attempt_started.signals.attempted_at.CopyFrom(event.occurred_at)
+    if attempted_at is None:
+        event.attempt_started.signals.attempted_at.CopyFrom(event.occurred_at)
+    else:
+        event.attempt_started.signals.attempted_at.FromMicroseconds(attempted_at)
     start = event.SerializeToString(deterministic=True)
     event.ClearField("attempt_started")
     event.event_id = f"decision-{attempt}"
@@ -63,7 +64,8 @@ def test_image_kafka_journal_and_checkpoint_recovery():
     epoch = "image-ci"
     source = "payments.image-ci"
     clock = "clock.image-ci"
-    output = f"fraud.feature-updates.v1.{epoch}"
+    output = f"fraud.feature-updates.v2.{epoch}"
+    rejects_topic = f"fraud.feature-rejects.v1.{epoch}"
     anchor = 1_760_000_000_000_000
     root = Path(__file__).resolve().parents[4]
     context = io.BytesIO()
@@ -107,7 +109,12 @@ def test_image_kafka_journal_and_checkpoint_recovery():
             brokers = kafka.get_bootstrap_server()
             admin = AdminClient({"bootstrap.servers": brokers})
             for future in admin.create_topics(
-                [NewTopic(source, 3, 1), NewTopic(clock, 1, 1), NewTopic(output, 3, 1)]
+                [
+                    NewTopic(source, 3, 1),
+                    NewTopic(clock, 1, 1),
+                    NewTopic(output, 3, 1),
+                    NewTopic(rejects_topic, 3, 1),
+                ]
             ).values():
                 future.result(timeout=30)
             producer = Producer({"bootstrap.servers": brokers})
@@ -184,8 +191,10 @@ def test_image_kafka_journal_and_checkpoint_recovery():
 
                         job_id = await_result(running_job)
 
-                        def send(attempt, instant, *, customer="customer"):
-                            records = lifecycle(attempt, instant, customer=customer)
+                        def send(attempt, instant, *, customer="customer", attempted_at=None):
+                            records = lifecycle(
+                                attempt, instant, customer=customer, attempted_at=attempted_at
+                            )
                             for record in records:
                                 producer.produce(source, key=attempt, value=record, partition=0)
                             assert producer.flush(10) == 0
@@ -198,12 +207,14 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                                 message = consumer.poll(1)
                                 if message is not None:
                                     assert not message.error(), message.error()
-                                    value = features_pb2.SnapshotUpdate.FromString(message.value())
-                                    schema.validate(
-                                        value, epoch=epoch, definition_hash=DEFINITION_HASH
+                                    value = SnapshotUpdate.FromString(message.value())
+                                    assert (value.definition.version, value.definition.sha256) == (
+                                        "fraud-snapshot-v2",
+                                        DEFINITION_HASH,
                                     )
+                                    assert value.epoch == epoch
                                     view = "customer" if value.view == 1 else "method"
-                                    assert message.key().decode() == schema.entity_key(
+                                    assert message.key().decode() == entity_key(
                                         epoch,
                                         view,
                                         value.integration_id,
@@ -217,7 +228,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
 
                             await_result(poll)
 
-                        send("one", anchor)
+                        first = send("one", anchor)
                         receive(lambda values: len(values) == 2)
                         producer.produce(
                             clock, value=json.dumps({"clock_us": anchor + HOUR + 2_000_000})
@@ -225,14 +236,21 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                         assert producer.flush(10) == 0
                         receive(
                             lambda values: all(
-                                value.coverage.one_hour == 2 and value.values.assessed_count_1h == 0
+                                value.coverage.one_hour == 2 and value.values.attempt_count_1h == 0
                                 for value in values.values()
                             )
                         )
+                        garbage = b"\xff\xff\xff"
+                        conflict = PaymentEvent.FromString(first[0])
+                        conflict.attempt_started.context.snapshot.total.minor_units = 999
+                        conflict = conflict.SerializeToString(deterministic=True)
+                        for record in (garbage, conflict):
+                            producer.produce(source, key="poison", value=record, partition=0)
+                        assert producer.flush(10) == 0
                         second = send("two", anchor + HOUR + 3_000_000)
                         receive(
                             lambda values: all(
-                                value.values.assessed_count_1h == 1 for value in values.values()
+                                value.values.attempt_count_1h == 1 for value in values.values()
                             )
                         )
                         saved = {entity: value.snapshot_id for entity, value in latest.items()}
@@ -256,11 +274,64 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                         receive(
                             lambda values: (
                                 "other-customer" in values
-                                and values["shared-method"].values.assessed_count_1h == 2
+                                and values["other-customer"].values.attempt_count_1h == 1
+                                and values["shared-method"].values.attempt_count_1h == 2
                             )
                         )
                         assert latest["customer"].snapshot_id == saved["customer"]
-                        assert latest["other-customer"].values.assessed_count_1h == 1
+                        assert latest["other-customer"].values.attempt_count_1h == 1
+                        send(
+                            "late",
+                            anchor + HOUR + 6_000_000,
+                            customer="other-customer",
+                            attempted_at=anchor + HOUR,
+                        )
+                        receive(
+                            lambda values: (
+                                values["other-customer"].values.attempt_count_1h == 2
+                                and values["other-customer"].values.attempt_count_5m == 2
+                            )
+                        )
+                        dead = Consumer(
+                            {
+                                "bootstrap.servers": brokers,
+                                "group.id": "image-ci-rejects",
+                                "auto.offset.reset": "earliest",
+                                "isolation.level": "read_committed",
+                                "enable.auto.commit": False,
+                            }
+                        )
+                        dead.subscribe([rejects_topic])
+                        rejected = []
+
+                        def read_rejects():
+                            message = dead.poll(1)
+                            if message is not None:
+                                assert not message.error(), message.error()
+                                rejected.append(message)
+                            return len(rejected) >= 2
+
+                        try:
+                            await_result(read_rejects)
+                            settle = time.monotonic() + 5
+                            while time.monotonic() < settle:
+                                read_rejects()
+                        finally:
+                            dead.close()
+                        by_class = {}
+                        for message in rejected:
+                            headers = dict(message.headers())
+                            assert headers["x-source-topic"] == source.encode()
+                            assert headers["x-source-partition"] == b"0"
+                            assert headers["x-source-offset"].isdigit()
+                            assert headers["x-source-timestamp"].isdigit()
+                            assert headers["x-reject-message"]
+                            by_class[headers["x-reject-class"]] = (message.key(), message.value())
+                        assert len(rejected) == 2
+                        assert by_class == {
+                            b"undecodable": (None, garbage),
+                            b"conflicting_duplicate": (b"start-one", conflict),
+                        }
                     except BaseException:
                         print(flink.get_logs())
                         print(flink.exec(["bash", "-c", "tail -n 120 log/*.log"])[1].decode())

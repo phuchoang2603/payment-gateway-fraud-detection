@@ -22,6 +22,7 @@ simulator = "simulator.runtime:main"
 dev = [
     "pytest>=9,<10",
     "ruff>=0.14,<1",
+    "testcontainers[kafka]>=4.15,<5",
 ]
 
 [build-system]

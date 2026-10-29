@@ -5,4 +5,5 @@ objectStorage:
 simulator:
   enabled: false
   config:
-    manifest: s3://platform-dev/datasets/payment-gateway/historical/v17/manifest.json
+    manifest: s3://platform-dev/datasets/payment-gateway/historical/v18/manifest.json
+    manifest_sha256: a466e98e66ecd76e2f01b3c76a006f014399407d54308be5fc95044ebc7cb553

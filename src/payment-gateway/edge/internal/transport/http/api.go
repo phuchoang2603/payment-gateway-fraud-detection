@@ -189,8 +189,9 @@ func (s *Server) getPayment(w http.ResponseWriter, r *http.Request) {
 }
 
 type simulatedClientJSON struct {
-	IPCountry string `json:"ip_country"`
-	IPNetwork string `json:"ip_network"`
+	IPCountry   string `json:"ip_country"`
+	IPNetwork   string `json:"ip_network"`
+	AttemptedAt string `json:"attempted_at"`
 }
 
 type createAttemptJSON struct {
@@ -221,6 +222,13 @@ func parseSimulated(in *simulatedClientJSON) (*application.SimulatedClient, erro
 			address = prefix.Addr()
 		}
 		simulated.IPNetwork = address
+	}
+	if in.AttemptedAt != "" {
+		attempted, err := time.Parse(time.RFC3339Nano, in.AttemptedAt)
+		if err != nil {
+			return nil, domain.Invalid("simulated_client.attempted_at must be an RFC 3339 timestamp")
+		}
+		simulated.AttemptedAt = attempted.UTC()
 	}
 	return simulated, nil
 }

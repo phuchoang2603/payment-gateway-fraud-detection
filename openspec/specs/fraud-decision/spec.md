@@ -72,7 +72,7 @@ The pure baseline rules SHALL remain deterministic for their input and policy ve
 
 ### Requirement: Independent bounded dependency semantics
 
-Velocity and historical-feature retrieval SHALL have separate deadlines, statuses and policy modes. Initial velocity checks SHALL be observe-only and Feast retrieval SHALL be shadow-only: their failure SHALL be recorded without changing the existing valid rules decision. A required dependency or assessment execution failure SHALL block authorization with an operational error, not fabricate a fraud decline or silently approve. Future model enforcement SHALL require an explicit compatible missing-feature policy. Counter observations and snapshot values SHALL remain separate populations.
+Velocity and historical-feature retrieval SHALL have separate deadlines, statuses and policy modes. Initial velocity checks SHALL be observe-only. Historical-feature retrieval SHALL be disabled in every environment until the feature-store change; once enabled it SHALL be shadow-only. Failure of either SHALL be recorded without changing the existing valid rules decision. A required dependency or assessment execution failure SHALL block authorization with an operational error, not fabricate a fraud decline or silently approve. Future model enforcement SHALL require an explicit compatible missing-feature policy. Counter observations and snapshot values SHALL remain separate populations.
 
 #### Scenario: Feast unavailable during shadow rollout
 

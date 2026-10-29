@@ -1,6 +1,7 @@
 import sys
 from concurrent.futures import Future
 from dataclasses import replace
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -11,11 +12,13 @@ from pyflink.datastream import StreamExecutionEnvironment
 
 from fraud_streaming import operators
 from fraud_streaming.job import build_updates
-from fraud_streaming.model import DAY, HOUR, Fact, Packet, Progress, entity_key
+from fraud_streaming.model import DAY, HOUR, Fact, Packet, Progress, Rejected, entity_key
 from fraud_streaming.wire import SnapshotUpdate
 
+CREATED = datetime(2025, 10, 9, 8, 53, 20, tzinfo=UTC)
 
-def test_keyed_runtime_matching_shared_method_and_idle_expiration():
+
+def test_keyed_runtime_dedup_shared_method_and_idle_expiration():
     anchor = 1_760_000_000_000_000
     configuration = Configuration()
     configuration.set_string("python.executable", sys.executable)
@@ -29,12 +32,10 @@ def test_keyed_runtime_matching_shared_method_and_idle_expiration():
         "integration",
         "payment-one",
         "one",
-        "start",
         anchor - HOUR,
         anchor,
         "customer-one",
         "shared-method",
-        100,
         "device",
     )
     second = replace(
@@ -47,18 +48,12 @@ def test_keyed_runtime_matching_shared_method_and_idle_expiration():
         started_at=anchor - HOUR + 1000,
     )
     progress = (Progress("isolated-source", 0, 3, 4, anchor),)
-    packets = []
-    for start in (first, second):
-        decision = replace(
-            start,
-            event_id=f"decision-{start.attempt}",
-            digest=f"decision-{start.attempt}",
-            kind="decision",
-            started_at=anchor,
-        )
-        for fact in (decision, start, start):
-            packets.append(Packet(fact, anchor, anchor - 8 * DAY, progress))
-    updates = build_updates(
+    too_late = replace(first, event_id="too-late", digest="too-late", started_at=anchor - 2 * DAY)
+    packets = [
+        Packet(fact, anchor, anchor - 8 * DAY, progress)
+        for fact in (first, first, second, too_late)
+    ]
+    updates, _ = build_updates(
         env.from_collection(packets),
         epoch="runtime-ci",
         logical=True,
@@ -87,15 +82,14 @@ def test_keyed_runtime_matching_shared_method_and_idle_expiration():
         history = [value for value in snapshots if value.entity_id == entity]
         assert [value.revision for value in history] == list(range(1, len(history) + 1))
         assert all(value.coverage.one_hour == 2 for value in history)
-        assert history[0].values.assessed_count_1h == 1
-        assert max(value.values.assessed_count_24h for value in history) == (
+        assert history[0].values.attempt_count_1h == 1
+        assert max(value.values.attempt_count_24h for value in history) == (
             2 if entity == "shared-method" else 1
         )
-        assert history[-1].values.assessed_count_24h == 0
+        assert history[-1].values.attempt_count_24h == 0
         if entity.startswith("customer"):
-            assert history[0].values.distinct_devices_7d == 1
-            assert history[-1].values.distinct_devices_7d == 0
-            assert not history[-1].values.HasField("last_assessed_start_at")
+            assert history[0].values.distinct_devices_24h == 1
+            assert history[-1].values.distinct_devices_24h == 0
 
 
 def test_source_progress_refreshes_crossed_offsets_and_rejects_partial_broker_results(monkeypatch):
@@ -130,8 +124,8 @@ def test_source_progress_refreshes_crossed_offsets_and_rejects_partial_broker_re
     monkeypatch.setattr(operators, "decode", lambda raw: (None, anchor))
     monkeypatch.setattr(operators.time, "monotonic", lambda: 1)
     observer = operators.ObserveSource(brokers="broker", topic="source", partitions=3, logical=True)
-    observer.open(SimpleNamespace(get_state=lambda descriptor: state))
-    first = next(observer.process_element((b"", "source", 0, 3), None))
+    observer.open(SimpleNamespace(get_state=lambda descriptor: state, get_metrics_group=Mock))
+    first = next(observer.process_element((b"", "source", 0, 3, CREATED), None))
     assert [(p.partition, p.consumed, p.high_watermark) for p in first.progress] == [
         (0, 3, 4),
         (1, -1, 8),
@@ -139,25 +133,39 @@ def test_source_progress_refreshes_crossed_offsets_and_rejects_partial_broker_re
     ]
     assert first.bootstrap == first.now == anchor
     high[0] = 6
-    next(observer.process_element((b"", "source", 0, 4), None))
-    cached = next(observer.process_element((b"", "source", 0, 5), None))
+    next(observer.process_element((b"", "source", 0, 4, CREATED), None))
+    cached = next(observer.process_element((b"", "source", 0, 5, CREATED), None))
     assert cached.progress[0].high_watermark == 6
     assert admin.list_offsets.call_count == 2
     high[0], leader_error = 9, True
-    refreshed = next(observer.process_element((b"", "source", 0, 6), None))
+    refreshed = next(observer.process_element((b"", "source", 0, 6, CREATED), None))
     assert refreshed.progress[0].high_watermark == 9
     assert admin.list_topics.call_count == 2 and admin.list_offsets.call_count == 4
     high[0], high[1] = 12, None
     with pytest.raises(RuntimeError, match="broker unavailable"):
-        next(observer.process_element((b"", "source", 0, 9), None))
+        next(observer.process_element((b"", "source", 0, 9, CREATED), None))
     assert observer.watermarks == {0: 9, 1: 8, 2: 12}
 
     high[1] = 8
     high[0] = -1001
     with pytest.raises(RuntimeError, match="source offset observation trails consumed progress"):
-        next(observer.process_element((b"", "source", 0, 10), None))
+        next(observer.process_element((b"", "source", 0, 10, CREATED), None))
     assert observer.watermarks == {0: 9, 1: 8, 2: 12}
     high[0] = 10
     with pytest.raises(RuntimeError, match="source offset observation trails consumed progress"):
-        next(observer.process_element((b"", "source", 0, 11), None))
+        next(observer.process_element((b"", "source", 0, 11, CREATED), None))
     assert observer.watermarks == {0: 9, 1: 8, 2: 12}
+
+    def invalid(raw):
+        raise Rejected("invalid_context", "invalid self-contained attempt context", "event-12")
+
+    monkeypatch.setattr(operators, "decode", invalid)
+    high[0] = 20
+    tag, row = next(observer.process_element((b"bad", "source", 0, 12, CREATED), None))
+    assert tag is operators.REJECTS and (row.key, row.payload) == (b"event-12", b"bad")
+    assert row.headers["x-reject-class"] == b"invalid_context"
+    assert row.headers["x-source-offset"] == b"12"
+    assert row.headers["x-source-timestamp"] == str(int(CREATED.timestamp() * 1000)).encode()
+    assert state.value()["offsets"][0] == 12
+    with pytest.raises(ValueError, match="source offset regressed"):
+        next(observer.process_element((b"bad", "source", 0, 12, CREATED), None))

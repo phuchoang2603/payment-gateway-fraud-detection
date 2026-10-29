@@ -377,9 +377,4 @@ ingress:
     clusterTunnel: talos-proxmox
     hostname: pay-gateway-dev.phuchoang.sbs
 features:
-  enabled: true
-  url: http://feast-server.data.svc.cluster.local:6566
-  epoch: live-v17
-  definitionHash: 8ca9a423f452f8ed7a8d1e8aa082dadb72590498cfd1e8da48f94f6c06b0e50d
-  maxAnchorAge: 30s
-  maxProgressAge: 30s
+  enabled: false

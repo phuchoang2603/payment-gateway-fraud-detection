@@ -1,0 +1,54 @@
+syntax = "proto3";
+package features.v2;
+
+option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/features/v2;featuresv2";
+import "google/protobuf/timestamp.proto";
+
+enum EntityView {
+  ENTITY_VIEW_UNSPECIFIED = 0;
+  ENTITY_VIEW_CUSTOMER = 1;
+  ENTITY_VIEW_METHOD = 2;
+}
+enum Coverage {
+  COVERAGE_UNSPECIFIED = 0;
+  COVERAGE_UNKNOWN = 1;
+  COVERAGE_COMPLETE = 2;
+}
+message WindowCoverage {
+  Coverage five_minutes = 1;
+  Coverage one_hour = 2;
+  Coverage twenty_four_hours = 3;
+}
+message DefinitionIdentity {
+  string version = 1;
+  string sha256 = 2;
+}
+message SourcePartitionProgress {
+  string topic = 1;
+  int32 partition = 2;
+  int64 consumed_offset = 3;
+  int64 observed_high_watermark = 4;
+  google.protobuf.Timestamp observed_at = 5;
+}
+message SnapshotValues {
+  optional int64 attempt_count_5m = 1;
+  optional int64 attempt_count_1h = 2;
+  optional int64 attempt_count_24h = 3;
+  optional int64 distinct_devices_24h = 4;
+}
+message SnapshotUpdate {
+  uint32 schema_version = 1;
+  DefinitionIdentity definition = 2;
+  string epoch = 3;
+  EntityView view = 4;
+  string integration_id = 5;
+  string entity_id = 6;
+  string snapshot_id = 7;
+  uint64 revision = 8;
+  google.protobuf.Timestamp anchor = 9;
+  google.protobuf.Timestamp source_available_at = 10;
+  google.protobuf.Timestamp online_write_at = 11;
+  WindowCoverage coverage = 12;
+  repeated SourcePartitionProgress source_progress = 13;
+  SnapshotValues values = 14;
+}

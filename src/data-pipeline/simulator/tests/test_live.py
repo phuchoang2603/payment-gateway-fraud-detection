@@ -2,7 +2,7 @@ import asyncio
 import io
 import json
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,10 +12,10 @@ import yaml
 
 from simulator.contracts.payments.v1.labels_pb2 import LABEL_SOURCE_SIMULATION_TRUTH, FraudLabel
 from simulator.historical import GeneratorConfig, generate
-from simulator.live.config import Faults, LiveConfig
-from simulator.live.faults import deliveries
+from simulator.live.config import LiveConfig, Redelivery
 from simulator.live.model import HistoricalModel, card_number
-from simulator.live.runtime import Gateway, Labels, run_live, traffic
+from simulator.live.redelivery import selected
+from simulator.live.runtime import Gateway, Labels, hold_seconds, run_live, traffic
 from simulator.live.source import load_model
 from simulator.world import entity_id
 
@@ -122,12 +122,16 @@ def test_label_publication_serialized_and_pending_chargebacks_reported():
     asyncio.run(run())
 
 
-def test_fault_selection_is_order_independent_and_holds_delivery():
-    settings = Faults(duplicate_rate=0.5, late_rate=1, late_min_seconds=2, late_max_seconds=5, hold_seconds=10)
-    original = {name: deliveries(settings, 2603, name, 60) for name in ("a", "b", "c")}
-    assert original == {name: deliveries(settings, 2603, name, 60) for name in ("c", "a", "b")}
-    assert all(t >= 70 for times in original.values() for t in times)
-    assert deliveries(Faults(), 2603, "a", 123) == [123]
+def test_late_and_redelivery_selection_is_seeded_and_rate_bounded():
+    config = live_config(late_rate=0.5, late_min_seconds=300, late_max_seconds=600)
+    delays = [hold_seconds(config, "run", ordinal) for ordinal in range(1000)]
+    assert delays == [hold_seconds(config, "run", ordinal) for ordinal in range(1000)]
+    assert 400 < sum(1 for delay in delays if delay) < 600
+    assert all(300 <= delay <= 600 for delay in delays if delay)
+    assert not any(hold_seconds(live_config(), "run", ordinal) for ordinal in range(100))
+    chosen = [name for name in map(str, range(1000)) if selected(2603, name, 0.5)]
+    assert chosen == [name for name in map(str, reversed(range(1000))) if selected(2603, name, 0.5)][::-1]
+    assert not any(selected(2603, str(name), 0) for name in range(100))
 
 
 def test_traffic_failure_is_visible_and_reports_unfinished(capsys):
@@ -167,9 +171,9 @@ def test_fatal_loop_stops_shared_process_and_fault_thread(monkeypatch, capsys):
     )
     monkeypatch.setattr("simulator.live.runtime.Producer", lambda config: object())
     monkeypatch.setattr("simulator.live.runtime.traffic", failed_traffic)
-    monkeypatch.setattr("simulator.live.runtime.run_faults", fault_loop)
+    monkeypatch.setattr("simulator.live.runtime.run_redelivery", fault_loop)
     with pytest.raises(ValueError, match="traffic failure"):
-        asyncio.run(run_live(live_config(faults=Faults(enabled=True))))
+        asyncio.run(run_live(live_config(redelivery=Redelivery(enabled=True))))
     assert finished.is_set()
     assert "live_stop" in capsys.readouterr().out
 
@@ -230,3 +234,56 @@ def test_continuous_traffic_stops_on_shutdown_and_finishes_admitted_payments(cap
     stopped = next(report for report in reports if report["event"] == "traffic_stop")
     assert stopped["admitted"] == stopped["completed"] == 3
     assert stopped["unfinished"] == 0
+
+
+def test_store_and_forward_sends_original_click_time(capsys):
+    class Model:
+        manifest = {"generator_digest": "generator"}
+        config = SimpleNamespace(integration_id="integration")
+        world = SimpleNamespace(digest="world", payment_method_fingerprint=lambda index: "expected")
+
+        def purchase(self, seed, ordinal, now):
+            order = {"seller": {"external_id": "seller"}, "buyer": {"external_id": "buyer"}}
+            return order, {"simulated_client": {"ip_country": "US"}}, 0, "ok", 0, False, False, 0
+
+    bodies = []
+
+    class GatewayStub:
+        async def request(self, method, path, key, body=None, bearer=None):
+            if path == "/v1/payment-methods":
+                return {"fingerprint": "expected", "payment_method_token": "token"}
+            if path == "/v1/payments":
+                return {
+                    "merchant_id": entity_id("integration", "merchant", "seller"),
+                    "customer_id": entity_id("integration", "customer", "buyer"),
+                    "payment_id": key,
+                    "session_id": "session",
+                    "checkout_token": "checkout",
+                }
+            bodies.append((body, datetime.now(timezone.utc)))
+            return {"attempt_id": key}
+
+    class LabelsStub:
+        occurred = []
+
+        async def publish(self, payment, attempt, occurred_at, *args):
+            self.occurred.append(occurred_at)
+
+        async def schedule(self, *args):
+            pass
+
+    labels = LabelsStub()
+    config = live_config(
+        duration_seconds=0.05, payments_per_second=40, late_rate=1, late_min_seconds=0.2, late_max_seconds=0.2
+    )
+    asyncio.run(asyncio.wait_for(traffic(config, Model(), GatewayStub(), labels, asyncio.Event()), 5))
+    assert bodies
+    clicks = []
+    for body, sent in bodies:
+        clicked = datetime.fromisoformat(body["simulated_client"]["attempted_at"])
+        assert body["simulated_client"]["ip_country"] == "US"
+        assert sent - clicked >= timedelta(seconds=0.2)
+        clicks.append(clicked)
+    assert sorted(labels.occurred) == sorted(clicks)
+    stopped = next(json.loads(line) for line in capsys.readouterr().out.splitlines() if "traffic_stop" in line)
+    assert stopped["late_sent"] == len(bodies) and stopped["late_unsent"] == 0

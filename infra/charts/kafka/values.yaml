@@ -63,17 +63,16 @@ connect:
 entities:
   fraudFeatures:
     topics:
-    - name: fraud.feature-updates.v1.live-v17
-      valueSchema: features/v1/features.proto
+    - name: fraud.feature-updates.v2.live-v18
+      valueSchema: features/v2/features.proto
       partitions: 3
       retention: 1209600000
+    - name: fraud.feature-rejects.v1.live-v18
+      partitions: 3
+      retention: 604800000
   payments:
     topics:
     - name: payments.events.v1
-      valueSchema: payments/v1/events.proto
-      partitions: 3
-      retention: 604800000
-    - name: payments.events.v1.faulty
       valueSchema: payments/v1/events.proto
       partitions: 3
       retention: 604800000

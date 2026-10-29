@@ -6,6 +6,7 @@ import signal
 import threading
 import time
 from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,8 +18,8 @@ from simulator.contracts.payments.v1.labels_pb2 import (
     LABEL_SOURCE_SIMULATION_TRUTH,
     FraudLabel,
 )
-from simulator.live.faults import run_faults
 from simulator.live.model import card_number
+from simulator.live.redelivery import run_redelivery
 from simulator.live.source import load_model
 from simulator.world import entity_id
 
@@ -119,6 +120,14 @@ class Labels:
             await asyncio.sleep(0.1)
 
 
+def hold_seconds(config, run_id, ordinal):
+    digest = sha256(f"{config.seed}:late:{run_id}:{ordinal}".encode()).digest()
+    selection, position = (int.from_bytes(digest[i : i + 8], "big") / 2**64 for i in (0, 8))
+    if selection >= config.late_rate:
+        return 0
+    return config.late_min_seconds + position * (config.late_max_seconds - config.late_min_seconds)
+
+
 async def traffic(config, model, gateway, labels, stop):
     run_id = uuid4().hex
     report(
@@ -129,23 +138,32 @@ async def traffic(config, model, gateway, labels, stop):
         generator_digest=model.manifest["generator_digest"],
         world_digest=model.world.digest,
         clock="UTC-wall-clock",
+        late_rate=config.late_rate,
+        late_seconds=[config.late_min_seconds, config.late_max_seconds],
     )
     slots = asyncio.Semaphore(config.concurrency)
     pending = set()
     failures = []
     started = time.monotonic()
     deadline = started + config.duration_seconds if config.duration_seconds else None
-    ordinal = completed = 0
+    ordinal = completed = held = late_sent = late_unsent = 0
     max_lag = 0.0
+    late_delays = []
 
-    async def purchase(number, due):
-        nonlocal completed, max_lag
+    async def purchase(number, due, clicked=None):
+        nonlocal completed, max_lag, late_sent
         try:
-            now = datetime.now(timezone.utc)
-            max_lag = max(max_lag, time.monotonic() - due)
+            now = clicked or datetime.now(timezone.utc)
+            if clicked is None:
+                max_lag = max(max_lag, time.monotonic() - due)
             order, signals, index, behavior, scenario, fraud, friendly, delay = model.purchase(
                 config.seed, number, now
             )
+            if clicked is not None:
+                signals = {
+                    **signals,
+                    "simulated_client": {**signals["simulated_client"], "attempted_at": now.isoformat()},
+                }
             key = f"live-{run_id}-{number}"
             token = await gateway.request(
                 "POST", "/v1/payment-methods", f"{key}-token", {"card_number": card_number(index, behavior)}
@@ -176,10 +194,32 @@ async def traffic(config, model, gateway, labels, stop):
             )
             await labels.schedule(payment["payment_id"], attempt["attempt_id"], now, fraud, friendly, delay)
             completed += 1
+            if clicked is not None:
+                late_sent += 1
+                late_delays.append((datetime.now(timezone.utc) - clicked).total_seconds())
         except Exception as error:
             failures.append(error)
         finally:
             slots.release()
+
+    async def hold(number, due, seconds):
+        nonlocal held, late_unsent
+        clicked = datetime.now(timezone.utc)
+        held += 1
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=seconds)
+        except TimeoutError:
+            pass
+        except asyncio.CancelledError:
+            late_unsent += 1
+            raise
+        else:
+            late_unsent += 1
+            return
+        finally:
+            held -= 1
+        await slots.acquire()
+        await purchase(number, due, clicked)
 
     try:
         while not stop.is_set() and (deadline is None or time.monotonic() < deadline):
@@ -193,11 +233,17 @@ async def traffic(config, model, gateway, labels, stop):
                 break
             except TimeoutError:
                 pass
-            await slots.acquire()
-            if stop.is_set():
-                slots.release()
-                break
-            task = asyncio.create_task(purchase(ordinal, due))
+            seconds = hold_seconds(config, run_id, ordinal)
+            if seconds:
+                if held >= config.max_held_attempts:
+                    raise RuntimeError("store-and-forward capacity exhausted")
+                task = asyncio.create_task(hold(ordinal, due, seconds))
+            else:
+                await slots.acquire()
+                if stop.is_set():
+                    slots.release()
+                    break
+                task = asyncio.create_task(purchase(ordinal, due))
             pending.add(task)
             task.add_done_callback(pending.discard)
             ordinal += 1
@@ -214,6 +260,9 @@ async def traffic(config, model, gateway, labels, stop):
             completed=completed,
             unfinished=ordinal - completed,
             max_arrival_lag_seconds=max_lag,
+            late_sent=late_sent,
+            late_unsent=late_unsent,
+            late_delay_seconds=[min(late_delays), max(late_delays)] if late_delays else None,
         )
         stop.set()
 
@@ -235,8 +284,8 @@ async def run_live(config):
             asyncio.create_task(traffic(config, model, gateway, labels, stop)),
             asyncio.create_task(labels.run(stop)),
         ]
-        if config.faults.enabled:
-            tasks.append(asyncio.create_task(asyncio.to_thread(run_faults, config, thread_stop)))
+        if config.redelivery.enabled:
+            tasks.append(asyncio.create_task(asyncio.to_thread(run_redelivery, config, thread_stop)))
         stopper = asyncio.create_task(stop.wait())
         try:
             done, _ = await asyncio.wait([*tasks, stopper], return_when=asyncio.FIRST_COMPLETED)

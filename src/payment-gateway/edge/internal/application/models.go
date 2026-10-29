@@ -99,6 +99,7 @@ type Integrations interface {
 }
 
 type SimulatedClient struct {
-	IPCountry string
-	IPNetwork netip.Addr
+	IPCountry   string
+	IPNetwork   netip.Addr
+	AttemptedAt time.Time
 }

@@ -50,7 +50,7 @@ Python components that encode labels or decode payment events SHALL use bindings
 #### Scenario: Cross-language event decoding
 
 - **WHEN** Go emits a contracted payment event
-- **THEN** the Python binding decodes its event identity and payload and the fault loop forwards the original bytes unchanged
+- **THEN** the Python binding decodes its event identity and payload and the redelivery loop republishes the original bytes unchanged
 
 ### Requirement: Live labels with actual availability
 
@@ -149,11 +149,20 @@ New-contract landing SHALL use an explicit epoch and frozen start offsets where 
 - **WHEN** the current-contract exercise starts while earlier-schema records remain retained
 - **THEN** explicit epoch/offset selection isolates the new exercise without deleting topic history or rewriting landed files
 
-### Requirement: Live transport and recovery evidence
+### Requirement: Store-and-forward attempts
 
-The exercise SHALL demonstrate enriched-context/checkout consistency, protobuf-to-Parquet field preservation, provenance, delayed labels, configured delay/duplicate/burst behavior and restart after publication before offset acknowledgment. Completed objects SHALL remain immutable; retry overlap SHALL be reported. Successful source acceptance SHALL NOT claim feature-store parity, cross-system exactly-once or downstream quality acceptance.
+The live runner SHALL optionally hold a seeded share of attempts for a configured delay range and then submit them with their original click time as the client attempt time. A zero rate SHALL send every attempt immediately with no client time. Held attempts SHALL be bounded in number. Held attempts SHALL keep their generated content and idempotency keys. Unsent held attempts at shutdown SHALL be reported. The run report SHALL record the configured and observed late counts and delays.
 
-#### Scenario: Archiver restarts after upload
+#### Scenario: Held attempt
 
-- **WHEN** an archiver stops after publishing a completed batch but before Kafka progress is acknowledged
-- **THEN** recovery preserves the published bytes and source offsets and reports any replay overlap without silently losing source records
+- **WHEN** an attempt is selected with a seven-minute delay
+- **THEN** it is submitted about seven minutes later carrying its original click time
+
+### Requirement: Live late and duplicate evidence
+
+The exercise SHALL demonstrate enriched-context/checkout consistency, provenance, delayed labels, store-and-forward lateness with original click times and redelivered duplicates on the shared topic, including restart after publication before offset commit. Reports SHALL distinguish injected duplicates from restart replay. Successful exercises SHALL NOT claim feature-store parity, cross-system exactly-once or downstream quality acceptance.
+
+#### Scenario: Redelivery restarts before commit
+
+- **WHEN** the redelivery loop stops after publishing a copy but before its offset is committed
+- **THEN** restart may publish another copy, and consumers still count the event once by its identity
