@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-from data_platform.catalog import client, expand, native, server
+from batch.catalog import client, expand, native, server
 
 
 def connectors():

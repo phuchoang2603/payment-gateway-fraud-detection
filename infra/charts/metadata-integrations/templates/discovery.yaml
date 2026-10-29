@@ -30,7 +30,7 @@ spec:
           - name: metadata-{{ $name }}
       container:
         image: {{ include "metadata-integrations.image" (dict "image" $.Values.image "global" $.Values.global) | quote }}
-        command: [python, -m, data_platform.integrations]
+        command: [python, -m, batch.integrations]
         {{- $secretRefs := list }}
         {{- with $connector.externalSecret }}
         {{- $secretRefs = append $secretRefs .name }}
