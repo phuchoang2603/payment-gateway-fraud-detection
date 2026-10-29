@@ -19,7 +19,7 @@ Synthetic data only. Labels with linkage violation are contract violations; the 
 ## Servers
 | Name | Type | Attributes |
 | ---- | ---- | ---------- |
-| starrocks | mysql | *Iceberg table labels in schema silver, read through the StarRocks lakehouse catalog. The rule placeholder {object} stands for the fully qualified table.*<br />• **environment:** dev<br />• **database:** silver<br />• **host:** kube-starrocks-fe-service.starrocks.svc.cluster.local<br />• **port:** 9030 |
+| clickhouse | clickhouse | *Iceberg table labels in schema silver, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.*<br />• **environment:** dev<br />• **database:** lakehouse<br />• **host:** clickhouse.data.svc.cluster.local<br />• **port:** 8123 |
 
 ## Schema
 ### labels

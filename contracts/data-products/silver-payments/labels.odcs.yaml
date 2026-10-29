@@ -17,15 +17,15 @@ team:
 tags: [synthetic, silver, payments]
 customProperties:
   - property: sqlDialect
-    value: starrocks
+    value: clickhouse
 servers:
-  - server: starrocks
-    type: mysql
+  - server: clickhouse
+    type: clickhouse
     environment: dev
-    host: kube-starrocks-fe-service.starrocks.svc.cluster.local
-    port: 9030
-    database: silver
-    description: Iceberg table labels in schema silver, read through the StarRocks lakehouse catalog. The rule placeholder {object} stands for the fully qualified table.
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: lakehouse
+    description: Iceberg table labels in schema silver, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.
 schema:
   - name: labels
     physicalName: silver.labels

@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 
+from openmetadata_jobs.warehouse import table_fqn
+
 SERVICE = "argo"
 KAFKA_SERVICE = "payment-gateway-kafka"
 STORAGE_SERVICE = "platform-object-storage"
-STARROCKS_SERVICE = "starrocks"
-CATALOG = "lakehouse"
 HISTORICAL_PREFIX = "datasets/payment-gateway/historical"
 PAYMENTS_TOPIC = "payments.events.v1"
 LABELS_TOPIC = "fraud.labels.v1"
@@ -23,8 +23,8 @@ class Edge:
     pipeline: str
 
 
-def table(schema, name):
-    return Node("table", f"{STARROCKS_SERVICE}.{CATALOG}.{schema}.{name}")
+def table(name):
+    return Node("table", table_fqn(name))
 
 
 def topic(name):
@@ -43,13 +43,13 @@ def pipeline_fqn(name):
     return f"{SERVICE}.{name}"
 
 
-BRONZE_EVENTS = table("bronze", "payment_events")
-BRONZE_LABELS = table("bronze", "fraud_labels")
-BRONZE_REJECTED = table("bronze", "rejected_records")
-SILVER_EVENTS = table("silver", "payment_events")
-SILVER_ATTEMPTS = table("silver", "attempts")
-SILVER_LABELS = table("silver", "labels")
-SILVER_REJECTED = table("silver", "rejected_events")
+BRONZE_EVENTS = table("bronze.payment_events")
+BRONZE_LABELS = table("bronze.fraud_labels")
+BRONZE_REJECTED = table("bronze.rejected_records")
+SILVER_EVENTS = table("silver.payment_events")
+SILVER_ATTEMPTS = table("silver.attempts")
+SILVER_LABELS = table("silver.labels")
+SILVER_REJECTED = table("silver.rejected_events")
 
 PIPELINES = {
     "dp1-bronze-historical": "Bronze from the v18 historical source",

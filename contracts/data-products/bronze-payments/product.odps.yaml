@@ -22,7 +22,7 @@ customProperties:
   - property: schema
     value: bronze
   - property: runtime
-    value: Spark 4.1.3 on Iceberg tables through the Polaris REST catalog; quality checks run as StarRocks SQL in OpenMetadata.
+    value: Spark 4.1.3 on Iceberg tables through the Polaris REST catalog; quality checks run as ClickHouse SQL in OpenMetadata.
   - property: partitioning
     value: payment_events by _source and days(occurred_at); fraud_labels by _source and days(label_available_at); rejected_records by days(_ingested_at).
 inputPorts:

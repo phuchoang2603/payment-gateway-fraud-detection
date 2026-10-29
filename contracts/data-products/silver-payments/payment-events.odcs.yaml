@@ -17,15 +17,15 @@ team:
 tags: [synthetic, silver, payments]
 customProperties:
   - property: sqlDialect
-    value: starrocks
+    value: clickhouse
 servers:
-  - server: starrocks
-    type: mysql
+  - server: clickhouse
+    type: clickhouse
     environment: dev
-    host: kube-starrocks-fe-service.starrocks.svc.cluster.local
-    port: 9030
-    database: silver
-    description: Iceberg table payment_events in schema silver, read through the StarRocks lakehouse catalog. The rule placeholder {object} stands for the fully qualified table.
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: lakehouse
+    description: Iceberg table payment_events in schema silver, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.
 schema:
   - name: payment_events
     physicalName: silver.payment_events
@@ -69,7 +69,7 @@ schema:
           SELECT count(*) FROM {object}
           WHERE payment_created IS NOT NULL AND (
             payment_created.snapshot.total.minor_units < 0
-            OR payment_created.snapshot.total.currency NOT REGEXP '^[A-Z]{3}$'
+            OR NOT match(payment_created.snapshot.total.currency, '^[A-Z]{3}$')
             OR array_length(payment_created.snapshot.items) = 0
             OR payment_created.snapshot.total.minor_units <> array_sum(
               array_map(item -> item.quantity * item.unit_price.minor_units, payment_created.snapshot.items))

@@ -22,7 +22,7 @@ customProperties:
   - property: schema
     value: silver
   - property: runtime
-    value: Spark 4.1.3 full recompute with overwrite per table; each commit records its Bronze snapshot IDs in snapshot properties. Checks run as StarRocks SQL in OpenMetadata.
+    value: Spark 4.1.3 full recompute with overwrite per table; each commit records its Bronze snapshot IDs in snapshot properties. Checks run as ClickHouse SQL in OpenMetadata.
 inputPorts:
   - name: bronze-payment-events
     version: 1.0.0

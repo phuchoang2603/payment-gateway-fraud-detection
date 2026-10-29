@@ -50,7 +50,7 @@ def test_silver_is_built_only_from_bronze_tables():
 def test_each_silver_table_has_exactly_one_producing_pipeline():
     producers = {}
     for edge in lineage.edges(VERSION):
-        if edge.target.kind == "table" and edge.target.fqn.split(".")[2] == "silver":
+        if edge.target.kind == "table" and '"silver.' in edge.target.fqn:
             producers.setdefault(edge.target.fqn, set()).add(edge.pipeline)
 
     assert producers

@@ -7,9 +7,9 @@ import yaml
 
 from openmetadata_jobs.catalog import client, native, server
 from openmetadata_jobs.integrations import workflow
+from openmetadata_jobs.warehouse import SERVICE, sql_table, table_fqn
 
 PRODUCTS = ("bronze-payments", "silver-payments")
-SERVICE = "starrocks"
 PAGE = 100
 
 
@@ -21,26 +21,21 @@ class Check:
     sql: str
 
 
-def checks(root=None, catalog=None, products=None):
+def checks(root=None, products=None):
     root = Path(root or os.environ["DATA_PRODUCTS_ROOT"])
-    catalog = catalog or os.environ.get("STARROCKS_CATALOG", "lakehouse")
     found = []
     for product in products or PRODUCTS:
         for contract in sorted((root / product).glob("*.odcs.yaml")):
             for table in yaml.safe_load(contract.read_text())["schema"]:
                 for rule in table.get("quality", []):
-                    found.append(check(contract.name, table["physicalName"], rule, catalog))
+                    found.append(check(contract.name, table["physicalName"], rule))
     return found
 
 
-def table_fqn(table):
-    return f"{SERVICE}.{os.environ.get('STARROCKS_CATALOG', 'lakehouse')}.{table}"
-
-
-def check(contract, table, rule, catalog):
+def check(contract, table, rule):
     if rule.get("type") != "sql" or rule.get("mustBe") != 0 or not rule.get("query"):
         raise ValueError(f"{contract} rule {rule.get('id')} is not a scalar count that must be 0")
-    sql = rule["query"].replace("{object}", f"{catalog}.{table}").strip()
+    sql = rule["query"].replace("{object}", sql_table(table)).strip()
     return Check(table=table, name=rule["id"], description=rule.get("description", rule["id"]), sql=sql)
 
 
