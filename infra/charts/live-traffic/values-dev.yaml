@@ -3,14 +3,7 @@ objectStorage:
   pathStyle: true
   bucket: platform-dev
 simulator:
-  enabled: true
+  enabled: false
   config:
-    duration_seconds: 3600
-    late_rate: 0.05
-    late_min_seconds: 300
-    late_max_seconds: 600
-    redelivery:
-      enabled: true
-      rate: 0.015
     manifest: s3://platform-dev/datasets/payment-gateway/historical/v18/manifest.json
     manifest_sha256: a466e98e66ecd76e2f01b3c76a006f014399407d54308be5fc95044ebc7cb553
