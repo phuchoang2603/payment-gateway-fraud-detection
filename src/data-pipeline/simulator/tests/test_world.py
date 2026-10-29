@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 from uuid import UUID
 
-from simulator.identity import IDENTITY_NAMESPACE, entity_id, fingerprint
+from simulator.identity import IDENTITY_NAMESPACE
+from simulator.world import entity_id, fingerprint
 
 VECTORS = json.loads((Path(__file__).resolve().parents[4] / "contracts/synthetic/identity-vectors.json").read_text())
 

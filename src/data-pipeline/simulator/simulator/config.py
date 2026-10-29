@@ -1,12 +1,9 @@
-import json
 from datetime import date, timedelta
-from hashlib import sha256
 from pathlib import Path
 from typing import Self
 from urllib.parse import urlsplit
 from uuid import UUID
 
-import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from simulator.calibration import provenance
@@ -98,7 +95,6 @@ class StorageLayout(StrictModel):
 
 
 ALGORITHM_VERSION = "us-electronics-v2"
-RUN_STATE_VERSION = 2
 
 
 class Execution(StrictModel):
@@ -151,31 +147,6 @@ class HistoricalConfig(StrictModel):
         return cls.model_validate({name: value for name, value in configuration.items() if name in cls.model_fields})
 
     @property
-    def logical_configuration(self) -> dict:
-        values = self.model_dump(
-            mode="json",
-            exclude={
-                "execution",
-                "output",
-                "chunk_purchases",
-            },
-        )
-        return values
-
-    def generation_identity(self, contracts: dict, revision: str) -> str:
-        return sha256(
-            json.dumps(
-                {
-                    "algorithm": ALGORITHM_VERSION,
-                    "configuration": self.logical_configuration,
-                    "contracts": contracts,
-                    "generator_revision": revision,
-                },
-                sort_keys=True,
-            ).encode()
-        ).hexdigest()
-
-    @property
     def end_date(self) -> date:
         return self.start_date + timedelta(days=self.duration_days)
 
@@ -195,7 +166,3 @@ class HistoricalConfig(StrictModel):
         if any(part in ("..", ".") for part in parsed.path.split("/")):
             raise ValueError("output must not contain relative path components")
         return self
-
-
-def load_config(path: Path) -> HistoricalConfig:
-    return HistoricalConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))

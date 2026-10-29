@@ -1,13 +1,12 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import timedelta
 from hashlib import sha256
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
 
-from simulator.calibration import CALIBRATION, REGIONS, hourly_weights, purchase_seconds
+from simulator.calibration import CALIBRATION, REGIONS
 from simulator.config import ALGORITHM_VERSION, HistoricalConfig
 from simulator.identity import entity_id, fingerprint
 
@@ -219,140 +218,6 @@ def build_profiles(config: HistoricalConfig, directory: Path | None = None, *, r
         ),
         identity_digest=identity_digest,
     )
-
-
-@dataclass(frozen=True)
-class GenerationTask:
-    offset: int
-    kind: int
-    block: int
-
-    @property
-    def key(self):
-        return f"day-{self.offset:05d}-kind-{self.kind}-block-{self.block:08d}"
-
-    def ordinal(self, index: int) -> int:
-        if index >= 2**32:
-            raise ValueError("logical task exceeds purchase ordinal capacity")
-        return ((self.block * 2 + self.kind) << 32) + index
-
-
-def tasks_for_day(config: HistoricalConfig, offset: int):
-    for block in range((config.counts.customers + config.customer_block_size - 1) // config.customer_block_size):
-        yield GenerationTask(offset, 0, block)
-    bursts = stage_rng(config.seed, CARD_TESTING_STAGE, offset).poisson(config.scenarios.card_testing.rate)
-    for block in range((int(bursts) + config.card_testing_bursts_per_task - 1) // config.card_testing_bursts_per_task):
-        yield GenerationTask(offset, 1, block)
-
-
-def compromised_on(config: HistoricalConfig, scenario: int, offset: int, block: int | None = None) -> np.ndarray:
-    settings = (
-        config.scenarios.stolen_card_new_device
-        if scenario == STOLEN_CARD_NEW_DEVICE
-        else config.scenarios.account_takeover
-    )
-    if block is None:
-        return np.concatenate(
-            [
-                compromised_on(config, scenario, offset, i)
-                for i in range(
-                    (config.counts.customers + config.customer_block_size - 1) // config.customer_block_size
-                )
-            ]
-        )
-    start = block * config.customer_block_size
-    count = min(config.customer_block_size, config.counts.customers - start)
-    random = stage_rng(config.seed, COMPROMISE_STAGE, scenario, offset, block)
-    return start + np.flatnonzero(random.random(count) < settings.rate)
-
-
-def active_compromises(config: HistoricalConfig, scenario: int, offset: int, block: int) -> np.ndarray:
-    """Recover only this block's active windows without replaying preceding purchases."""
-    settings = (
-        config.scenarios.stolen_card_new_device
-        if scenario == STOLEN_CARD_NEW_DEVICE
-        else config.scenarios.account_takeover
-    )
-    starts = [
-        np.column_stack([selected, np.full(len(selected), start)])
-        for start in range(max(0, offset - settings.window_days + 1), offset + 1)
-        if len(selected := compromised_on(config, scenario, start, block))
-    ]
-    return np.concatenate(starts) if starts else np.empty((0, 2), dtype=np.int64)
-
-
-def schedule_for_task(config: HistoricalConfig, task: GenerationTask, profiles: Profiles) -> Schedule:
-    behavior, scenarios = config.behavior, config.scenarios
-    random = stage_rng(config.seed, SCHEDULE_STAGE, task.offset, task.kind, task.block)
-    weights = zipf_weights(config.counts.merchants, behavior.merchant_zipf_exponent)
-    parts = []
-    if task.kind == 0:
-        start = task.block * config.customer_block_size
-        stop = min(start + config.customer_block_size, config.counts.customers)
-        day = config.start_date + timedelta(days=task.offset)
-        regions = profiles.customer_regions[start:stop]
-        intensities = np.array([hourly_weights(day, int(r))[1] for r in range(len(REGIONS))])
-        rates = behavior.purchases_per_customer_day * profiles.activity_milli[start:stop] / 1000 * intensities[regions]
-        customers = np.repeat(np.arange(start, stop), random.poisson(rates))
-        centers = purchase_seconds(day, regions, random)
-        seconds = (
-            centers[customers - start]
-            + random.integers(
-                -CALIBRATION["session_jitter_seconds"], CALIBRATION["session_jitter_seconds"] + 1, len(customers)
-            )
-        ) % 86400
-        familiar = profiles.familiar_merchants[
-            customers, random.integers(0, profiles.familiar_merchants.shape[1], len(customers))
-        ]
-        merchants = np.where(
-            random.random(len(customers)) < behavior.familiar_merchant_probability,
-            familiar,
-            random.choice(len(weights), len(customers), p=weights),
-        )
-        parts.append(
-            (
-                customers,
-                merchants,
-                seconds,
-                np.where(
-                    random.random(len(customers)) < scenarios.obvious_high_value.rate, OBVIOUS_HIGH_VALUE, LEGITIMATE
-                ),
-                np.full(len(customers), -1),
-            )
-        )
-        for scenario, settings in (
-            (STOLEN_CARD_NEW_DEVICE, scenarios.stolen_card_new_device),
-            (ACCOUNT_TAKEOVER, scenarios.account_takeover),
-        ):
-            active = active_compromises(config, scenario, task.offset, task.block)
-            attempts = random.poisson(settings.attempts_per_day, len(active))
-            victims = np.repeat(active[:, 0], attempts)
-            parts.append(
-                (
-                    victims,
-                    profiles.familiar_merchants[victims, 0],
-                    purchase_seconds(day, profiles.customer_regions[victims], random),
-                    np.full(len(victims), scenario),
-                    np.repeat(active[:, 1], attempts),
-                )
-            )
-    else:
-        bursts = int(stage_rng(config.seed, CARD_TESTING_STAGE, task.offset).poisson(scenarios.card_testing.rate))
-        start = task.block * config.card_testing_bursts_per_task
-        for burst in range(start, min(start + config.card_testing_bursts_per_task, bursts)):
-            testing = scenarios.card_testing
-            clock = int(random.integers(0, 86400 - testing.burst_minutes * 60))
-            parts.append(
-                (
-                    np.full(testing.burst_size, int(random.integers(0, config.counts.customers))),
-                    np.full(testing.burst_size, int(random.choice(len(weights), p=weights))),
-                    np.sort(clock + random.integers(0, testing.burst_minutes * 60, testing.burst_size)),
-                    np.full(testing.burst_size, CARD_TESTING),
-                    np.full(testing.burst_size, burst),
-                )
-            )
-    columns = [np.concatenate(column).astype(np.int64) for column in zip(*parts)]
-    return Schedule(*columns)
 
 
 def profiles_from_manifest(manifest: dict, directory: Path | None = None) -> Profiles:
