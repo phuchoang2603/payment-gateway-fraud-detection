@@ -16,6 +16,8 @@ spec:
     namespace: data
   - server: https://kubernetes.default.svc
     namespace: ml
+  - server: https://kubernetes.default.svc
+    namespace: llm
   clusterResourceWhitelist:
   - group: external-secrets.io
     kind: ClusterSecretStore

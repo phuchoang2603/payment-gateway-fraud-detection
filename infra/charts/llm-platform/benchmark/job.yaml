@@ -1,11 +1,11 @@
 # Agent-shaped load: three shared 1,500-token system prompts, 100-token questions, 150-token answers.
-# TARGET: the chat server (default), http://llm-bench-vllm.ml.svc.cluster.local:8000 or http://agentgateway.ml.svc.cluster.local.
-# kubectl -n ml create -f job.yaml && kubectl -n ml logs -f job/<name>
+# TARGET: the chat server (default), http://llm-bench-vllm.llm.svc.cluster.local:8000 or http://agentgateway.llm.svc.cluster.local.
+# kubectl -n llm create -f job.yaml && kubectl -n llm logs -f job/<name>
 apiVersion: batch/v1
 kind: Job
 metadata:
   generateName: llm-benchmark-
-  namespace: ml
+  namespace: llm
 spec:
   backoffLimit: 0
   template:
@@ -37,7 +37,7 @@ spec:
               done
           env:
             - name: TARGET
-              value: http://qwen3-8b-kserve-workload-svc.ml.svc.cluster.local:8000
+              value: http://qwen3-8b-kserve-workload-svc.llm.svc.cluster.local:8000
             - name: CONCURRENCY
               value: "1 2 4 8 16"
             - name: HOME

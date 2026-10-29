@@ -1,14 +1,14 @@
 ## ADDED Requirements
 
 ### Requirement: Global model config
-A kagent `ModelConfig` named `default-model-config` in `ml` SHALL point at the agent gateway's `/v1` route with the OpenAI provider, model `qwen3-8b` and the agents' gateway key. Every agent defined by this repository SHALL reference it unless a deliberate variant config is declared. No agent SHALL hold a model-server address or a model-provider key.
+A kagent `ModelConfig` named `default-model-config` in `llm` SHALL point at the agent gateway's `/v1` route with the OpenAI provider, model `qwen3-8b` and the agents' gateway key. Every agent defined by this repository SHALL reference it unless a deliberate variant config is declared. No agent SHALL hold a model-server address or a model-provider key.
 
 #### Scenario: Change the model for all agents
 - **WHEN** the model name or gateway address changes
 - **THEN** only `default-model-config` changes and every agent uses the new value after reconciliation
 
 ### Requirement: Read-only fraud-analyst agent
-The repository SHALL define agent `evidence-agent` in `ml` as a declarative kagent agent using the global model config. Its instructions SHALL make it read-only, forbid inventing payment facts it cannot retrieve, and keep it out of any payment decision. Until the evidence tool exists it SHALL have no tools. It SHALL leave the Deployment replica count to an autoscaler and SHALL run under the `restricted` Pod Security level.
+The repository SHALL define agent `evidence-agent` in `llm` as a declarative kagent agent using the global model config. Its instructions SHALL make it read-only, forbid inventing payment facts it cannot retrieve, and keep it out of any payment decision. Until the evidence tool exists it SHALL have no tools. It SHALL leave the Deployment replica count to an autoscaler and SHALL run under the `restricted` Pod Security level.
 
 #### Scenario: Analyst asks about a payment
 - **WHEN** the agent is asked about a specific payment ID in phase 1

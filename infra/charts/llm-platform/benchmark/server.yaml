@@ -4,7 +4,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: llm-bench-vllm
-  namespace: ml
+  namespace: llm
   labels:
     app.kubernetes.io/name: llm-bench-vllm
 spec:
@@ -44,9 +44,9 @@ spec:
         - {name: AWS_EC2_METADATA_DISABLED, value: "true"}
         - {name: RUNAI_STREAMER_S3_USE_VIRTUAL_ADDRESSING, value: "0"}
         - name: AWS_ACCESS_KEY_ID
-          valueFrom: {secretKeyRef: {name: mlpipeline-minio-artifact, key: accesskey}}
+          valueFrom: {secretKeyRef: {name: llm-model-store, key: accesskey}}
         - name: AWS_SECRET_ACCESS_KEY
-          valueFrom: {secretKeyRef: {name: mlpipeline-minio-artifact, key: secretkey}}
+          valueFrom: {secretKeyRef: {name: llm-model-store, key: secretkey}}
       ports:
         - {name: http, containerPort: 8000}
       readinessProbe:
@@ -73,7 +73,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: llm-bench-vllm
-  namespace: ml
+  namespace: llm
 spec:
   selector:
     app.kubernetes.io/name: llm-bench-vllm
@@ -84,7 +84,7 @@ apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: llm-bench-vllm
-  namespace: ml
+  namespace: llm
 spec:
   selector:
     matchLabels:
@@ -93,4 +93,4 @@ spec:
   rules:
     - from:
         - source:
-            principals: [cluster.local/ns/ml/sa/llm-benchmark]
+            principals: [cluster.local/ns/llm/sa/llm-benchmark]

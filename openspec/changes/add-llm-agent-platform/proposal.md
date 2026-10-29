@@ -8,7 +8,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - Both share one GPU through a single DRA claim, each process with a fixed memory fraction: the RTX 5060 Ti on dev, and on prod the shared `aws-gpu-training` Spot pool, which the platform restricts to `g6.xlarge` (L4).
   - One chat replica serves every agent through vLLM's continuous batching. The benchmark measures its capacity, and a second GPU replica behind the same InferencePool is the scale-out path.
   - Model weights live once per environment in the platform bucket (`artifacts/models/`) and stream straight to the GPU with Run:ai Model Streamer. No serving node writes them to disk, which matters because the dev GPU node is also the control plane.
-- Run one agentgateway `Gateway` in `ml`. It is both the inference gateway (an OpenAI-compatible `/v1` route to the chat pool and the embedding service) and the future single entry point for MCP and A2A.
+- Run one agentgateway `Gateway` in the application's own `llm` namespace. It is both the inference gateway (an OpenAI-compatible `/v1` route to the chat pool and the embedding service) and the future single entry point for MCP and A2A.
   - The LLM route requires a per-client API key and applies request and token rate limits and PII masking (card numbers, e-mail, phone) on prompts and responses.
   - Istio ambient stays the mesh: mesh authorization admits only the gateway (and the endpoint picker) to the model servers.
 - Add a global kagent `ModelConfig`, `default-model-config`, that points every agent at the gateway's `/v1` with the agents' gateway key.
@@ -39,7 +39,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 
 ### Modified Capabilities
 
-- `talos-gitops-deployment`: adds the `llm-platform` application in `ml`. It is enabled in dev and disabled in prod until the user confirms launching the prod GPU pool. Its credentials come from `gateway-doppler`.
+- `talos-gitops-deployment`: adds the `llm-platform` application in its own `llm` namespace, which the Application creates. It is enabled in dev and disabled in prod until the user confirms launching the prod GPU pool. Its credentials come from `gateway-doppler`.
 - `data-catalog-governance`: adds AI assets (LLM service, models, agents) to the catalog through the metadata-integrations registration.
 
 ## Impact
