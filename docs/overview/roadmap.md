@@ -9,21 +9,21 @@ The active plan is the OpenSpec change [`rebuild-generation-to-silver`](../../op
 | Area | Capability | Page | Status |
 |---|---|---|---|
 | Engineering fundamentals | Multi-stage Docker images and size comparison | [Docker images](../payment-gateway/docker.md) | Images done; size comparison planned |
-| Offline generator | Skew, schema evolution, duplicates; ≥ 100 GB stored for Bronze ingestion | [Offline generator](../data/offline-generator.md) | Done (v19: 133.5 GB) |
-| Online generator | Late arrivals and streaming duplicates | [Online generator](../data/online-generator.md) | In progress |
-| Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline pipeline](../data/offline-pipeline.md) | In progress |
-| Flink jobs | Baseline, late arrivals, duplicates, windows | [Online pipeline](../data/online-pipeline.md) | Windows done; late/duplicate handling in progress |
+| Offline generator | Skew, schema evolution, duplicates; ≥ 100 GB stored for Bronze ingestion | [Offline data](../data/offline.md) | Done (v19: 133.5 GB) |
+| Online generator | Late arrivals and streaming duplicates | [Online data](../data/online.md) | In progress |
+| Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline data](../data/offline.md) | In progress |
+| Flink jobs | Baseline, late arrivals, duplicates, windows | [Online data](../data/online.md) | Windows done; late/duplicate handling in progress |
 | Storage | Lakehouse compaction, partitioning, Z-order; warehouse indexing | [Storage](../data/storage.md) | Planned |
 | Orchestration | DP1 (raw → Bronze), DP2 (Bronze → Silver/Gold), DP3 (offline features), each with ingest and validate stages | [Orchestration and governance](../data/orchestration-governance.md) | DP1/DP2 in progress; DP3 planned |
 | Governance | Lineage and validation for DP1–DP3 in the catalog | [Orchestration and governance](../data/orchestration-governance.md) | In progress |
-| Schemas | SCD2 dimensions, `feat_` tables with `event_timestamp`/`created`, naming conventions, relationships | [Offline pipeline](../data/offline-pipeline.md) | Planned |
+| Schemas | SCD2 dimensions, `feat_` tables with `event_timestamp`/`created`, naming conventions, relationships | [Offline data](../data/offline.md) | Planned |
 
 ## ML platform
 
 | Area | Capability | Page | Status |
 |---|---|---|---|
 | Feature store | Streaming features to online and offline stores, incremental materialization, TTL | [Feature store](../ml/feature-store.md) | Online writer done (shadow); offline and materialization planned |
-| Generator | Data drift and a label table joinable with features | [Offline generator](../data/offline-generator.md) | Labels done; drift planned |
+| Generator | Data drift and a label table joinable with features | [Offline data](../data/offline.md) | Labels done; drift planned |
 | Model | Notebook baseline from the offline store, training pipeline, distributed training | [Training](../ml/training.md) | Planned |
 | Versioning | Model registry and incremental data versions | [Training](../ml/training.md) | Planned |
 | Serving | Feature-retrieval API, KServe inference, rolling update, autoscaling, A/B traffic split | [Serving](../ml/serving.md) | Planned |

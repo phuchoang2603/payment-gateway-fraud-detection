@@ -47,7 +47,7 @@ The first working slice is hosted checkout → rules-based fraud decision → si
 
 Later gateway work adds authorization/capture and refunds; database sharding follows measured load. Feature serving and model inference arrive through the [ML serving](../ml/serving.md) path.
 
-Requirements are in the [proposal](../overview/proposal.md#functional-requirements); status is in the [roadmap](../overview/roadmap.md).
+The domain is in the [proposal](../overview/proposal.md); status is in the [roadmap](../overview/roadmap.md).
 
 ## Feature-contract boundary
 

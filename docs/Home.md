@@ -14,8 +14,8 @@ An ecommerce payment gateway with real-time fraud decisioning, and the data, ML 
 
 ## Data
 
-- Offline: [generator](data/offline-generator.md), [pipeline](data/offline-pipeline.md)
-- Online: [generator](data/online-generator.md), [pipeline](data/online-pipeline.md)
+- [Offline data](data/offline.md): generator and Bronze/Silver pipeline
+- [Online data](data/online.md): live simulator and streaming features
 - [Storage](data/storage.md), [orchestration and governance](data/orchestration-governance.md)
 
 ## ML

@@ -19,13 +19,13 @@ Event and label contracts: [payment events](../data/products/historical-payments
 
 | Problem | In this domain | Where |
 |---|---|---|
-| Skew | A hot marketplace merchant receives half of all purchases (`hot_merchant_share: 0.5`), on top of Zipf merchant and category popularity | [Offline generator](../data/offline-generator.md) |
-| Schema evolution | The fraud service starts recording `assessment_id` and `evidence_sha256` on risk decisions: events move from `schema_version` 2 to 3 on a configured date, and version-2 Parquet files physically lack those columns | [Offline generator](../data/offline-generator.md) |
-| Offline duplicates | About 2% of events are republished by the export with the same `event_id` and content but a later `recorded_at` | [Offline generator](../data/offline-generator.md) |
-| High cardinality | About 3 million customers, 3.9 million payment methods and 4.2 million devices in the full-scale source | [Offline pipeline](../data/offline-pipeline.md) |
-| Late arrivals | Store-and-forward clients submit attempts minutes after the client `attempted_at` | [Online generator](../data/online-generator.md) |
-| Streaming duplicates | Kafka redelivery and at-least-once CDC deliver the same event more than once | [Online generator](../data/online-generator.md) |
-| Delayed labels | Chargebacks arrive 7–21 days after a successful fraudulent attempt; absent chargebacks are unknown, not negative | [Offline generator](../data/offline-generator.md) |
+| Skew | A hot marketplace merchant receives half of all purchases (`hot_merchant_share: 0.5`), on top of Zipf merchant and category popularity | [Offline data](../data/offline.md) |
+| Schema evolution | The fraud service starts recording `assessment_id` and `evidence_sha256` on risk decisions: events move from `schema_version` 2 to 3 on a configured date, and version-2 Parquet files physically lack those columns | [Offline data](../data/offline.md) |
+| Offline duplicates | About 2% of events are republished by the export with the same `event_id` and content but a later `recorded_at` | [Offline data](../data/offline.md) |
+| High cardinality | About 3 million customers, 3.9 million payment methods and 4.2 million devices in the full-scale source | [Offline data](../data/offline.md) |
+| Late arrivals | Store-and-forward clients submit attempts minutes after the client `attempted_at` | [Online data](../data/online.md) |
+| Streaming duplicates | Kafka redelivery and at-least-once CDC deliver the same event more than once | [Online data](../data/online.md) |
+| Delayed labels | Chargebacks arrive 7–21 days after a successful fraudulent attempt; absent chargebacks are unknown, not negative | [Offline data](../data/offline.md) |
 
 ## What AI problem is solved
 
@@ -33,35 +33,4 @@ Event and label contracts: [payment events](../data/products/historical-payments
 
 **LLM/agent:** a read-only fraud investigation agent that answers analyst questions about a payment by retrieving recorded events, labels, features and model scores, and calling the fraud model as a tool. It never sits in the payment decision path. See [agents](../llm/agents.md).
 
-## Functional requirements
-
-| ID | Requirement | Delivery |
-|---|---|---|
-| FR-01 | Authenticate configured integrations and derive integration-scoped merchant and customer UUIDv5 identities in Payments. | Implemented |
-| FR-02 | Create immutable order snapshots, scoped checkout sessions and idempotent attempts; expose authenticated payment status. | Implemented |
-| FR-03 | Tokenize allow-listed fictional cards in an isolated vault simulator; only the processor identity resolves processing fixtures. | Implemented |
-| FR-04 | Record a versioned fraud decision before any processor effect; fraud errors fail closed. | Implemented |
-| FR-05 | Execute simulated sales through a provider adapter with a durable effect intent and operation key. | Implemented |
-| FR-06 | Recover uncertain operations by status query; expire only payments without unresolved effects. | Implemented |
-| FR-07 | Redis-first idempotency claims with Postgres fallback. | Implemented |
-| FR-08 | Publish committed events through WAL CDC to Kafka and deliver signed, deduplicated webhooks with bounded retries. | Implemented |
-| FR-09 | Synthetic ISO 8583 bank profile behind the provider adapter. | Later |
-| FR-11 | Separate authorization, capture and refund with a balanced journal. | Later |
-| FR-12 | Feed data, feature and model pipelines and read-only investigation from committed evidence, with temporal cutoffs and delayed labels. | In progress |
-
-Reconciliation files, real card custody, live money movement, payouts and FX are out of scope.
-
-## Non-functional requirements
-
-Targets are acceptance goals for the synthetic gateway, not observed results or a PCI certification claim.
-
-| ID | Requirement | Target |
-|---|---|---|
-| NFR-01 | Durable, strongly consistent payment commands | Each transition commits state, one ledger event and idempotency atomically; retries and recovery cause no extra processor effects |
-| NFR-02 | Bounded checkout latency | p95 attempt response ≤ 1 s at 50 attempts/s for 10 minutes; fraud 1 s, processor 3 s, overall 5 s budgets |
-| NFR-03 | Availability with bounded dependency failures | 99.9% monthly valid-request availability measured at Edge; Redis outage keeps correctness through database fallback |
-| NFR-04 | Credential isolation | mTLS service transport, least-privilege roles, vault-only fixture encryption; tokens and card fields never in logs, events or the lake |
-| NFR-05 | Safe recovery and delivery | Known simulator outcomes resolve within 30 s after a restart; at-least-once CDC and webhooks with stable identities |
-| NFR-06 | Horizontal growth | Stateless replicas on one Payments database; merchant-keyed sharding later |
-| NFR-07 | Traceable operations | Correlation IDs and policy, model and feature versions on decisions; metrics for rates, latency, failures and pending age |
-| NFR-08 | Reproducible, independently deployable services | Per-service images, versioned contracts, real persistence tests, rendered GitOps targets |
+Out of scope: settlement and reconciliation files, real card custody, live money movement, payouts and FX.

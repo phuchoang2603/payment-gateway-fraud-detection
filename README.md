@@ -67,7 +67,7 @@ All documentation lives in [`docs/`](docs/Home.md) and is published to the [proj
 |---|---|
 | Overview | [Proposal](docs/overview/proposal.md), [architecture](docs/overview/architecture.md), [roadmap](docs/overview/roadmap.md) |
 | Payment gateway | [Architecture](docs/payment-gateway/architecture.md), [flows](docs/payment-gateway/flows.md), [conventions](docs/payment-gateway/conventions.md), [Docker images](docs/payment-gateway/docker.md) |
-| Data | [Offline generator](docs/data/offline-generator.md), [offline pipeline](docs/data/offline-pipeline.md), [online generator](docs/data/online-generator.md), [online pipeline](docs/data/online-pipeline.md), [storage](docs/data/storage.md), [orchestration and governance](docs/data/orchestration-governance.md) |
+| Data | [Offline data](docs/data/offline.md), [online data](docs/data/online.md), [storage](docs/data/storage.md), [orchestration and governance](docs/data/orchestration-governance.md) |
 | ML | [Feature store](docs/ml/feature-store.md), [training](docs/ml/training.md), [serving](docs/ml/serving.md), [background](docs/ml/background.md) |
 | LLM | [Agents](docs/llm/agents.md) |
 | Deployment | [CI](docs/deployment/ci.md), [CD](docs/deployment/cd.md), [infrastructure](docs/deployment/infra.md), [security](docs/deployment/security.md), [observability](docs/deployment/observability.md) |

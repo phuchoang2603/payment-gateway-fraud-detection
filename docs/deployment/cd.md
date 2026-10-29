@@ -51,8 +51,8 @@ Python services take settings from configuration files and environment variables
 | processor | `PROCESSOR_DATABASE_URL`, `VAULT_ADDRESS` | required | Processor store and vault processing listener |
 | processor | `PROCESSOR_LATENCY_MIN`, `PROCESSOR_LATENCY_MAX`, `PROCESSOR_TIMEOUT_RATE` | prod `20ms`, `150ms`, `0` | Simulated latency and injected lost responses |
 | all Go | `METRICS_ENABLED`, `TRACING_ENABLED`, `OTEL_EXPORTER_OTLP_*_ENDPOINT` | disabled outside Helm | Telemetry export; see [observability](observability.md) |
-| generator | `SIMULATOR_CONFIG`, `GENERATOR_MODE`, `SHARD_INDEX`, `SHARD_COUNT`, `GENERATOR_WORKERS` | set by the workflow | See [offline generator](../data/offline-generator.md) |
-| live simulator | `SIMULATOR_CONFIG` | `/etc/simulator/live.yaml` | See [online generator](../data/online-generator.md) |
+| generator | `SIMULATOR_CONFIG`, `GENERATOR_MODE`, `SHARD_INDEX`, `SHARD_COUNT`, `GENERATOR_WORKERS` | set by the workflow | See [offline data](../data/offline.md) |
+| live simulator | `SIMULATOR_CONFIG` | `/etc/simulator/live.yaml` | See [online data](../data/online.md) |
 
 The gateway chart sets `terminationGracePeriodSeconds: 30` to cover the 10 s drain, two bounded 3 s telemetry shutdowns and scheduling margin.
 

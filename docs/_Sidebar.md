@@ -15,10 +15,8 @@
 
 **Data**
 
-- [Offline generator](data/offline-generator.md)
-- [Offline pipeline](data/offline-pipeline.md)
-- [Online generator](data/online-generator.md)
-- [Online pipeline](data/online-pipeline.md)
+- [Offline data](data/offline.md)
+- [Online data](data/online.md)
 - [Storage](data/storage.md)
 - [Orchestration and governance](data/orchestration-governance.md)
 

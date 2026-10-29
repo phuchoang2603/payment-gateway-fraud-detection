@@ -69,6 +69,6 @@
 
 ## 9. Docs, specs and final checks
 
-- [x] 9.1 Add the generator documentation (now `docs/data/offline-generator.md`: configuration, schema changes, layout, rerun, diagnostics) and remove landing and old DP1 instructions. Bronze and Silver results go in `docs/data/offline-pipeline.md`, `storage.md` and `orchestration-governance.md`. Verify that links resolve and generated references match.
+- [x] 9.1 Add the generator documentation (now `docs/data/offline.md`: configuration, schema changes, layout, rerun, diagnostics) and remove landing and old DP1 instructions. Bronze and Silver results go in `docs/data/offline.md`, `storage.md` and `orchestration-governance.md`. Verify that links resolve and generated references match.
 - [ ] 9.2 At archive time, update the Purpose of `historical-bronze-ingestion` and `live-traffic-simulation` to drop landing batches. Verify that `openspec validate --strict` passes.
 - [ ] 9.3 Run the local non-test checks (ruff, treefmt, helm lint, `openspec validate rebuild-generation-to-silver --strict`, `git diff --check`), push, and inspect every CI check. Verify that all required checks pass at the pushed head, reporting any pending or failed check honestly.

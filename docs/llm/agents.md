@@ -22,6 +22,6 @@ Fraud analysts ask about a specific payment or attempt. Agents assemble the reco
 
 ## Boundaries
 
-- Agents read from the stores in the [platform architecture](../overview/architecture.md) and the curated tables in the [offline pipeline](../data/offline-pipeline.md). They never sit in the payment decision path.
+- Agents read from the stores in the [platform architecture](../overview/architecture.md) and the curated tables in [offline data](../data/offline.md). They never sit in the payment decision path.
 - Customer and merchant data stays access-controlled; agents run in a sandbox with scoped credentials.
 - Telemetry reuses the platform's existing observability stack.

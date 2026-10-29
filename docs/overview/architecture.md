@@ -90,6 +90,6 @@ Only Edge `/checkout/*` is publicly routed. Internal APIs are ClusterIP-only beh
 ## Where to read next
 
 - Gateway: [architecture](../payment-gateway/architecture.md), [flows](../payment-gateway/flows.md), [conventions](../payment-gateway/conventions.md), [Docker images](../payment-gateway/docker.md).
-- Data: [offline generator](../data/offline-generator.md), [offline pipeline](../data/offline-pipeline.md), [online generator](../data/online-generator.md), [online pipeline](../data/online-pipeline.md), [storage](../data/storage.md), [orchestration and governance](../data/orchestration-governance.md).
+- Data: [offline data](../data/offline.md), [online data](../data/online.md), [storage](../data/storage.md), [orchestration and governance](../data/orchestration-governance.md).
 - ML: [feature store](../ml/feature-store.md), [training](../ml/training.md), [serving](../ml/serving.md).
 - Deployment: [CI](../deployment/ci.md), [CD](../deployment/cd.md), [infrastructure](../deployment/infra.md), [security](../deployment/security.md), [observability](../deployment/observability.md).

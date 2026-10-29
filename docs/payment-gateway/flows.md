@@ -1,6 +1,6 @@
 # Payment flows
 
-Identity, checkout and payment-authority contracts, with the checkout and recovery sequence. Deployable units and the deployment view are in the [platform architecture](../overview/architecture.md); the event data these flows produce is described in the [offline generator](../data/offline-generator.md) and [online pipeline](../data/online-pipeline.md).
+Identity, checkout and payment-authority contracts, with the checkout and recovery sequence. Deployable units and the deployment view are in the [platform architecture](../overview/architecture.md); the event data these flows produce is described in the [offline data](../data/offline.md) and [online data](../data/online.md).
 
 ## Identity and checkout contract
 
