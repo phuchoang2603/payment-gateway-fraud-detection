@@ -13,6 +13,10 @@ spec:
   templates:
     - name: generate
       activeDeadlineSeconds: {{ .Values.generator.activeDeadlineSeconds }}
+      {{- with .Values.generator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       retryStrategy:
         limit: {{ .Values.generator.retryLimit }}
         retryPolicy: OnError

@@ -10,6 +10,7 @@ generator:
   config: historical-dev.yaml
   retryLimit: 2
   activeDeadlineSeconds: 21600
+  nodeSelector: {}
   resources:
     requests:
       cpu: "2"

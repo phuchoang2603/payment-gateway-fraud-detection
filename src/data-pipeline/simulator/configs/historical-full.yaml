@@ -1,7 +1,7 @@
 dataset_version: v19
 duration_days: 365
-chunk_customers: 100000
-workers: 4
+chunk_customers: 50000
+workers: 48
 duplicate_rate: 0.02
 minimum_source_bytes: 100000000000
 schema_changes:
