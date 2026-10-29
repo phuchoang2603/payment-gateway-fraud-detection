@@ -1,0 +1,62 @@
+{{- $registry := .Values.registry }}
+{{- $catalog := list }}
+{{- range $agent := .Values.agents.list }}
+{{- $entry := dict
+  "apiVersion" "ar.dev/v1alpha1"
+  "kind" "Agent"
+  "metadata" (dict "name" ($agent.name | replace "-" "") "tag" $agent.version)
+  "spec" (dict
+    "title" $agent.title
+    "description" (printf "%s Model config %s (%s through the agent gateway)." $agent.description $.Values.agents.modelConfig $.Values.models.chat.name)
+    "source" (dict
+      "repository" (dict "url" $registry.repository "subfolder" "infra/charts/llm-platform")
+      "protocol" "A2A")) }}
+{{- $catalog = append $catalog (toYaml $entry) }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-registry-catalog
+data:
+  catalog.yaml: |
+    {{- join "---\n" $catalog | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llm-registry-publish
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "llm-platform.podSecurity" (dict "uid" 100) | nindent 8 }}
+      containers:
+        - name: publish
+          image: {{ $registry.curlImage }}
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              result=$(curl -fsS -X POST -H 'Content-Type: application/yaml' \
+                --data-binary @/etc/catalog/catalog.yaml "$REGISTRY_URL/v0/apply")
+              echo "$result"
+              case "$result" in *'"status":"failed"'*) exit 1 ;; esac
+          env:
+            - name: REGISTRY_URL
+              value: {{ $registry.url }}
+          securityContext:
+            {{- include "llm-platform.containerSecurity" . | nindent 12 }}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 64Mi}
+          volumeMounts:
+            - {name: catalog, mountPath: /etc/catalog}
+      volumes:
+        - name: catalog
+          configMap:
+            name: llm-registry-catalog

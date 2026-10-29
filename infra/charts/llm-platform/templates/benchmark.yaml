@@ -1,0 +1,219 @@
+{{- $bench := .Values.benchmark }}
+{{- $chat := .Values.models.chat }}
+{{- $ns := .Release.Namespace }}
+{{- $chatURL := printf "http://%s-kserve-workload-svc.%s.svc.cluster.local:8000" $chat.name $ns }}
+{{- $variantURL := printf "http://llm-bench-vllm.%s.svc.cluster.local:8000" $ns }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: llm-benchmark
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: llm-benchmark-storage
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $bench.storage.secretStore }}
+  target:
+    name: llm-benchmark-storage
+  data:
+    - secretKey: AWS_ACCESS_KEY_ID
+      remoteRef:
+        key: OBJECT_GATEWAY_ACCESS_KEY_ID
+    - secretKey: AWS_SECRET_ACCESS_KEY
+      remoteRef:
+        key: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-benchmark
+data:
+  run.sh: |
+    {{- .Files.Get "files/benchmark/run.sh" | nindent 4 }}
+  server_metrics.py: |
+    {{- .Files.Get "files/benchmark/server_metrics.py" | nindent 4 }}
+  config.yml: |
+    api:
+      type: chat
+      streaming: true
+    server:
+      type: vllm
+      model_name: {{ $chat.name }}
+      ignore_eos: true
+    tokenizer:
+      pretrained_model_name_or_path: {{ $bench.tokenizer }}
+    data:
+      type: shared_prefix
+      shared_prefix:
+        num_groups: {{ $bench.workload.groups }}
+        num_prompts_per_group: {{ $bench.workload.promptsPerGroup }}
+        system_prompt_len: {{ $bench.workload.systemPromptTokens }}
+        question_len: {{ $bench.workload.questionTokens }}
+        output_len: {{ $bench.workload.outputTokens }}
+    load:
+      type: concurrent
+      base_seed: 20261029
+      request_timeout: 300
+      stages:
+        {{- range $bench.workload.stages }}
+        - {concurrency_level: {{ .concurrency }}, num_requests: {{ .requests }}}
+        {{- end }}
+    storage:
+      local_storage:
+        path: /work/reports
+{{- if $bench.run }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llm-benchmark-{{ $bench.run }}
+  labels:
+    app.kubernetes.io/name: llm-benchmark
+    llm.fraud-detection.dev/run: {{ $bench.run }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: llm-benchmark
+    spec:
+      restartPolicy: Never
+      serviceAccountName: llm-benchmark
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "llm-platform.podSecurity" (dict "uid" 65532) | nindent 8 }}
+      containers:
+        - name: benchmark
+          image: {{ include "llm-platform.image" (dict "image" $bench.image "global" .Values.global) }}
+          command: [/bin/sh, /etc/llm-benchmark/run.sh]
+          env:
+            - name: RUN_NAME
+              value: {{ $bench.run }}
+            - name: TARGET_URL
+              {{- if eq $bench.target "gateway" }}
+              value: http://{{ .Values.gateway.name }}.{{ $ns }}.svc.cluster.local
+              {{- else if eq $bench.target "variant" }}
+              value: {{ $variantURL }}
+              {{- else if eq $bench.target "direct" }}
+              value: {{ $chatURL }}
+              {{- else }}
+              {{- fail "benchmark.target must be gateway, direct or variant" }}
+              {{- end }}
+            - name: METRICS_URL
+              value: {{ ternary $variantURL $chatURL (eq $bench.target "variant") }}/metrics
+            {{- if eq $bench.target "gateway" }}
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef: {name: llm-gateway-benchmark, key: key}
+            {{- end }}
+            - name: S3_ENDPOINT
+              value: {{ $bench.storage.endpoint }}
+            - name: S3_BUCKET
+              value: {{ $bench.storage.bucket }}
+            - name: S3_PREFIX
+              value: {{ $bench.storage.prefix }}
+            - name: HOME
+              value: /work
+            - name: HF_HOME
+              value: /work/hf
+          envFrom:
+            - secretRef:
+                name: llm-benchmark-storage
+          securityContext:
+            {{- include "llm-platform.containerSecurity" . | nindent 12 }}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {memory: 3Gi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/llm-benchmark}
+            - {name: work, mountPath: /work}
+      volumes:
+        - name: config
+          configMap:
+            name: llm-benchmark
+        - name: work
+          emptyDir: {}
+{{- end }}
+{{- with $bench.variant }}
+{{- if .name }}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: llm-bench-vllm
+  labels:
+    app.kubernetes.io/name: llm-bench-vllm
+    llm.fraud-detection.dev/variant: {{ .name }}
+spec:
+  serviceAccountName: llm-benchmark
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  {{- include "llm-platform.gpuPlacement" $ | nindent 2 }}
+  securityContext:
+    {{- include "llm-platform.podSecurity" $.Values.vllm | nindent 4 }}
+  resourceClaims:
+    - name: gpu
+      resourceClaimName: llm-gpu
+  containers:
+    - name: vllm
+      image: {{ $.Values.vllm.image }}
+      command: [vllm, serve, /mnt/models]
+      args:
+        - --served-model-name={{ $chat.name }}
+        - --port=8000
+        {{- /* The chat args are quoted for KServe's eval; this pod execs vllm directly, so the quotes are dropped. */}}
+        {{- range concat $chat.args .args }}
+        - {{ . | replace "'" "" | quote }}
+        {{- end }}
+      env:
+        {{- include "llm-platform.vllmEnv" $ | nindent 8 }}
+        - name: HOME
+          value: /home
+      ports:
+        - {name: http, containerPort: 8000}
+      readinessProbe:
+        httpGet: {path: /health, port: 8000}
+        periodSeconds: 5
+      resources:
+        {{- toYaml $chat.resources | nindent 8 }}
+        claims:
+          - name: gpu
+      securityContext:
+        {{- include "llm-platform.containerSecurity" $ | nindent 8 }}
+      volumeMounts:
+        - {name: models, mountPath: /mnt/models, subPath: {{ .repo }}, readOnly: true}
+        - {name: home, mountPath: /home}
+        - {name: shm, mountPath: /dev/shm}
+        {{- if .compileCache }}
+        - {name: compile-cache, mountPath: /home/.cache/vllm, subPath: llm-bench-vllm}
+        {{- end }}
+  volumes:
+    - name: models
+      persistentVolumeClaim:
+        claimName: llm-models
+        readOnly: true
+    - name: home
+      emptyDir: {}
+    - name: shm
+      emptyDir: {medium: Memory, sizeLimit: 1Gi}
+    {{- if .compileCache }}
+    - name: compile-cache
+      persistentVolumeClaim:
+        claimName: llm-compile-cache
+    {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-bench-vllm
+spec:
+  selector:
+    app.kubernetes.io/name: llm-bench-vllm
+  ports:
+    - {name: http, port: 8000, targetPort: http}
+{{- end }}
+{{- end }}

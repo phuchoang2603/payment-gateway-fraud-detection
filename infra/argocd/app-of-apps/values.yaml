@@ -14,6 +14,7 @@ global:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/inference-perf: dev
 destinationServer: https://kubernetes.default.svc
 namePrefix: payment-gateway
 applications:
@@ -43,3 +44,6 @@ applications:
   clickhouse:
     destinationNamespace: data
     path: infra/charts/clickhouse
+  llm-platform:
+    destinationNamespace: ml
+    path: infra/charts/llm-platform

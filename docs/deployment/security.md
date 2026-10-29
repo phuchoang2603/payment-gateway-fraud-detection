@@ -10,7 +10,8 @@ All credentials live in Doppler and reach Kubernetes through External Secrets; n
   - databases: `GATEWAY_DB_PAYMENTS_PASSWORD`, `GATEWAY_DB_PAYMENTS_APP_PASSWORD`, `GATEWAY_DB_PAYMENTS_CDC_PASSWORD`, `GATEWAY_DB_FRAUD_PASSWORD`, `GATEWAY_DB_FRAUD_APP_PASSWORD`, `GATEWAY_DB_NOTIFIER_PASSWORD`, `GATEWAY_DB_VAULT_PASSWORD`, `GATEWAY_DB_PROCESSOR_PASSWORD`;
   - Redis and keys: `GATEWAY_REDIS_PASSWORD`, `GATEWAY_AUTHORIZATION_REDIS_PASSWORD`, `GATEWAY_FEAST_REDIS_PASSWORD`, `GATEWAY_PAYMENTS_ENCRYPTION_KEY`, `GATEWAY_CHECKOUT_TOKEN_KEY`, `GATEWAY_VAULT_ENCRYPTION_KEY`, `GATEWAY_FINGERPRINT_KEY`, `GATEWAY_CHECKOUT_COOKIE_KEY`;
   - integrations: `GATEWAY_INTEGRATIONS_JSON`, `OPENMETADATA_TOKEN`, and `GATEWAY_SYNTHETIC_API_KEY` when simulation is enabled;
-  - storage and catalog: `OBJECT_GATEWAY_ACCESS_KEY_ID`, `OBJECT_GATEWAY_SECRET_ACCESS_KEY`, `CLICKHOUSE_ADMIN_PASSWORD`, `CLICKHOUSE_OPENMETADATA_PASSWORD`.
+  - storage and catalog: `OBJECT_GATEWAY_ACCESS_KEY_ID`, `OBJECT_GATEWAY_SECRET_ACCESS_KEY`, `CLICKHOUSE_ADMIN_PASSWORD`, `CLICKHOUSE_OPENMETADATA_PASSWORD`;
+  - LLM gateway clients: `LLM_GATEWAY_AGENTS_API_KEY`, `LLM_GATEWAY_BENCHMARK_API_KEY`. The gateway reads them from one labelled Secret with a client id per key. The models are self-hosted, so there is no model-provider key.
 - One gateway storage identity per environment is shared by the generator, Flink, lakehouse runtime and metadata connections, scoped to `datasets/payment-gateway/`, `runs/payment-gateway/` and `lakehouse/`.
 
 `GATEWAY_INTEGRATIONS_JSON` is an array of `integration_id`, `name`, `api_key_sha256`, `synthetic` and an optional `webhook: {url, secret, events}`. The synthetic integration ID must match the historical dataset.

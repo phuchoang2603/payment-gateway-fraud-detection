@@ -1,0 +1,27 @@
+gpu:
+  nodeSelector:
+    karpenter.sh/nodepool: aws-gpu-training
+  tolerations:
+    - {key: burst.talos.dev/gpu-training, operator: Equal, value: "true", effect: NoSchedule}
+
+storage:
+  storageClass: gp3
+
+models:
+  chat:
+    resources:
+      requests: {cpu: "2", memory: 9Gi}
+      limits: {memory: 12Gi}
+  embedding:
+    resources:
+      requests: {cpu: 500m, memory: 2Gi}
+      limits: {memory: 4Gi}
+
+agents:
+  sandbox:
+    snapshotRoot: gs://platform-prod-142737101504-us-east-1/substrate/ml
+
+benchmark:
+  storage:
+    bucket: platform-prod-142737101504-us-east-1
+    endpoint: https://s3.us-east-1.amazonaws.com
