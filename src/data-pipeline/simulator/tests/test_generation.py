@@ -182,7 +182,7 @@ def test_each_schema_version_has_a_parquet_schema_that_declares_its_fields(tmp_p
     assert "user_agent_family" in v3_signals
 
 
-def test_duplicate_exports_repeat_original_rows(tmp_path):
+def test_duplicate_exports_are_republished_with_a_later_recorded_at(tmp_path):
     root = tmp_path / "out"
     run(config_for(root))
     groups: dict[str, list[dict]] = defaultdict(list)
@@ -191,7 +191,23 @@ def test_duplicate_exports_repeat_original_rows(tmp_path):
 
     duplicated = [group for group in groups.values() if len(group) > 1]
     assert duplicated
-    assert all(all(copy == group[0] for copy in group) for group in duplicated)
+    for group in duplicated:
+        original, *republished = sorted(group, key=lambda row: row["recorded_at"])
+        content = {key: value for key, value in original.items() if key != "recorded_at"}
+        for copy in republished:
+            assert {key: value for key, value in copy.items() if key != "recorded_at"} == content
+            assert copy["recorded_at"] > original["recorded_at"]
+
+
+def test_parts_are_never_empty_and_v3_parts_start_at_the_change(tmp_path):
+    root = tmp_path / "out"
+    manifest = run(config_for(root))
+
+    assert all(part["rows"] > 0 for part in manifest["files"])
+    assert not [
+        part for part in manifest["files"] if part["path"].endswith(".v3.parquet") and part["date"] < "2026-07-04"
+    ]
+    assert any(part["path"].endswith(".v3.parquet") for part in manifest["files"])
 
 
 @pytest.mark.parametrize(
@@ -230,6 +246,7 @@ def test_manifest_records_identities_totals_and_the_file_list(tmp_path):
         "generator_digest",
         "configuration_sha256",
         "configuration",
+        "world_digest",
         "contracts",
         "rows",
         "physical_bytes",

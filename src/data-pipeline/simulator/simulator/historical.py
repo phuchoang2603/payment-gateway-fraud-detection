@@ -142,7 +142,9 @@ def load_contract(directory: Path) -> tuple[tuple[tuple[tuple[str, ...], int], .
 def generator_digest(contracts: Path) -> str:
     package = Path(__file__).parent
     digest = hashlib.sha256()
-    for path in [package / name for name in GENERATOR_SOURCES] + sorted(contracts.glob("*.yaml")):
+    for path in [package / name for name in GENERATOR_SOURCES] + [
+        contracts / name for name in CONTRACT_FILES.values()
+    ]:
         digest.update(path.name.encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
@@ -187,6 +189,7 @@ def _schema_for(version: int, declared) -> pa.Schema:
 
 class _PartWriter:
     def __init__(self, path: Path, schema: pa.Schema):
+        self.path = path
         self.schema = schema
         self.pending: list[dict] = []
         self.rows = 0
@@ -244,11 +247,15 @@ def write_part(config: GeneratorConfig, contracts: Path, offset: int, chunk: int
     store = open_store(config.output, config.dataset_version)
     with tempfile.TemporaryDirectory() as scratch:
         scratch_dir = Path(scratch)
-        writers: dict[tuple[str, int | None], _PartWriter] = {
-            (EVENTS, version): _PartWriter(scratch_dir / f"events-v{version}.parquet", _schema_for(version, declared))
-            for version in config.schema_versions()
-        }
-        writers[(LABELS, None)] = _PartWriter(scratch_dir / "labels.parquet", LABEL_SCHEMA)
+        writers: dict[tuple[str, int | None], _PartWriter] = {}
+
+        def writer(table: str, version: int | None) -> _PartWriter:
+            if (table, version) not in writers:
+                schema = _schema_for(version, declared) if table == EVENTS else LABEL_SCHEMA
+                name = f"{table}-{version}.parquet" if version is not None else f"{table}.parquet"
+                writers[(table, version)] = _PartWriter(scratch_dir / name, schema)
+            return writers[(table, version)]
+
         for purchase, key, rng in _chunk_purchases(config, world, offset, chunk):
             events, labels = payment_history(
                 world,
@@ -264,12 +271,13 @@ def write_part(config: GeneratorConfig, contracts: Path, offset: int, chunk: int
                 version = event["schema_version"]
                 by_version[version].append(_project(event, version, declared))
             for version, rows in by_version.items():
-                writers[(EVENTS, version)].extend(rows)
-            writers[(LABELS, None)].extend(labels)
+                writer(EVENTS, version).extend(rows)
+            if labels:
+                writer(LABELS, None).extend(labels)
         parts = []
-        for (table, version), writer in sorted(writers.items(), key=lambda item: (item[0][0], item[0][1] or 0)):
-            writer.close()
-            local = scratch_dir / (f"events-v{version}.parquet" if version is not None else "labels.parquet")
+        for (table, version), part in sorted(writers.items(), key=lambda item: (item[0][0], item[0][1] or 0)):
+            part.close()
+            local = part.path
             suffix = f".v{version}" if version is not None else ""
             key = f"{table}/date={day.isoformat()}/part-{chunk:05d}{suffix}.parquet"
             store.publish_file(key, local)
@@ -279,7 +287,7 @@ def write_part(config: GeneratorConfig, contracts: Path, offset: int, chunk: int
                     "schema_version": version,
                     "date": day.isoformat(),
                     "path": key,
-                    "rows": writer.rows,
+                    "rows": part.rows,
                     "bytes": local.stat().st_size,
                     "sha256": _sha256(local),
                 }
@@ -345,6 +353,7 @@ def _publish(config: GeneratorConfig, contracts: Path, digest: str, store) -> di
         "generator_digest": digest,
         "configuration_sha256": config.identity(digest),
         "configuration": config.logical(),
+        "world_digest": _world(config.world).digest,
         "contracts": identities,
         "rows": rows,
         "physical_bytes": physical_bytes,
@@ -363,9 +372,13 @@ def _results(config: GeneratorConfig, contracts: Path, pairs, workers: int):
             futures = {
                 pool.submit(write_part, config, contracts, offset, chunk): (offset, chunk) for offset, chunk in pairs
             }
-            for future in as_completed(futures):
-                offset, chunk = futures[future]
-                yield offset, chunk, future.result()
+            try:
+                for future in as_completed(futures):
+                    offset, chunk = futures[future]
+                    yield offset, chunk, future.result()
+            except BaseException:
+                pool.shutdown(wait=False, cancel_futures=True)
+                raise
     else:
         for offset, chunk in pairs:
             yield offset, chunk, write_part(config, contracts, offset, chunk)

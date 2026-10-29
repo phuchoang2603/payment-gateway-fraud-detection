@@ -11,16 +11,15 @@ import pytest
 import yaml
 
 from simulator.contracts.payments.v1.labels_pb2 import LABEL_SOURCE_SIMULATION_TRUTH, FraudLabel
+from simulator.historical import GeneratorConfig, generate
 from simulator.live.config import Faults, LiveConfig
 from simulator.live.faults import deliveries
 from simulator.live.model import HistoricalModel, card_number
 from simulator.live.runtime import Gateway, Labels, run_live, traffic
 from simulator.live.source import load_model
-from simulator.world import World, WorldConfig, entity_id
+from simulator.world import entity_id
 
-WORLD = json.loads(
-    json.dumps(yaml.safe_load(Path(__file__).with_name("small-generator.yaml").read_text())["world"], default=str)
-)
+CONTRACTS = Path(__file__).resolve().parents[4] / "contracts/data-products/historical-payments"
 
 
 def live_config(**overrides):
@@ -31,16 +30,14 @@ def live_config(**overrides):
     )
 
 
-def world_manifest():
-    return {
-        "generator_digest": "generator",
-        "world": WORLD,
-        "world_digest": World.build(WorldConfig.model_validate(WORLD)).digest,
-    }
+def real_manifest(tmp_path):
+    data = yaml.safe_load(Path(__file__).with_name("small-generator.yaml").read_text())
+    data["output"] = str(tmp_path / "out")
+    return generate(GeneratorConfig.model_validate(data), CONTRACTS)
 
 
-def test_live_purchases_come_from_the_world_and_card_identity_holds(monkeypatch):
-    manifest = world_manifest()
+def test_live_purchases_come_from_the_world_and_card_identity_holds(monkeypatch, tmp_path):
+    manifest = real_manifest(tmp_path)
     model = HistoricalModel(manifest)
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
     order, signals, index, *_ = model.purchase(2603, 0, now)

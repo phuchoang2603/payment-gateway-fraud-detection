@@ -68,7 +68,9 @@ def payment_history(
         }
         events.append(row)
         if duplicate_rate and rng.random() < duplicate_rate:
-            events.append(dict(row))
+            republished = dict(row)
+            republished["recorded_at"] = row["recorded_at"] + timedelta(seconds=int(rng.integers(1, 301)))
+            events.append(republished)
         return row
 
     def money(minor_units: int) -> Record:

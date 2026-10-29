@@ -9,7 +9,7 @@ BEHAVIOR_BY_OUTCOME = {"succeeded": "ok", "issuer_declined": "issuer", "insuffic
 class HistoricalModel:
     def __init__(self, manifest):
         self.manifest = manifest
-        self.world = World.build(WorldConfig.model_validate(manifest["world"]))
+        self.world = World.build(WorldConfig.model_validate(manifest["configuration"]["world"]))
         if self.world.digest != manifest["world_digest"]:
             raise ValueError("world digest differs from the manifest")
         self.config = self.world.config

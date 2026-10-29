@@ -2,14 +2,14 @@ dataset_version: v18
 duration_days: 90
 duplicate_rate: 0.02
 schema_changes:
-  - effective_at: "2025-08-15T00:00:00Z"
+  - effective_at: "2026-09-15T00:00:00Z"
     version: 3
 output: s3://platform-dev/datasets/payment-gateway
 world:
   seed: 2603
   integration_id: 01234567-89ab-4cde-8fab-0123456789ab
   synthetic_key: synthetic-fingerprint-v1
-  start_date: 2025-07-01
+  start_date: 2026-07-31
   counts:
     customers: 10000
     merchants: 2000
@@ -24,6 +24,7 @@ world:
     familiar_merchant_probability: 0.8
     familiar_context_probability: 0.95
     foreign_ip_probability: 0.03
+    hot_merchant_share: 0.5
     issuer_decline_rate: 0.04
     insufficient_funds_rate: 0.03
     unknown_outcome_rate: 0.02

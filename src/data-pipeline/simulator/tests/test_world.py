@@ -1,8 +1,11 @@
 import json
+from datetime import timedelta
 from pathlib import Path
 from uuid import UUID
 
-from simulator.world import IDENTITY_NAMESPACE, entity_id, fingerprint
+import yaml
+
+from simulator.world import IDENTITY_NAMESPACE, World, WorldConfig, entity_id, fingerprint
 
 VECTORS = json.loads((Path(__file__).resolve().parents[4] / "contracts/synthetic/identity-vectors.json").read_text())
 
@@ -38,3 +41,19 @@ def test_test_card_vectors():
             fingerprint(VECTORS["synthetic_key"], "payment_method", f"tok_{card['card_ref']}_{card['behavior']}")
             == card["expected"]
         )
+
+
+def test_hot_merchant_takes_its_configured_share_of_purchases():
+    data = yaml.safe_load((Path(__file__).with_name("small-generator.yaml")).read_text())["world"]
+    data["behavior"]["hot_merchant_share"] = 0.9
+    world = World.build(WorldConfig.model_validate(data))
+    hot = world.merchant(0).id
+    total = hot_purchases = 0
+    for offset in range(5):
+        day = world.start_date + timedelta(days=offset)
+        for customer, number in world.day_purchases(day, range(data["counts"]["customers"])):
+            purchase = world.purchase(world.purchase_rng(day, customer, number), day, customer)
+            total += 1
+            hot_purchases += purchase.merchant_id == hot
+    assert total > 500
+    assert 0.85 <= hot_purchases / total <= 0.97

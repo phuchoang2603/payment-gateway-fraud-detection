@@ -69,6 +69,7 @@ class PurchaseBehavior(StrictModel):
     familiar_merchant_probability: float = Field(ge=0, le=1)
     familiar_context_probability: float = Field(ge=0, le=1)
     foreign_ip_probability: float = Field(ge=0, le=1)
+    hot_merchant_share: float = Field(default=0, ge=0, lt=1)
     issuer_decline_rate: float = Field(ge=0, le=1)
     insufficient_funds_rate: float = Field(ge=0, le=1)
     unknown_outcome_rate: float = Field(ge=0, le=1)
@@ -395,11 +396,12 @@ class World:
         scenario, window_start = self._scenario(rng, offset, customer.index)
         compromised = scenario in (STOLEN_CARD_NEW_DEVICE, ACCOUNT_TAKEOVER)
         campaign = self._rng(COMPROMISE_STAGE, scenario, window_start, customer.index, 1) if compromised else rng
-        merchant_index = (
-            int(customer.familiar_merchants[int(rng.integers(len(customer.familiar_merchants)))])
-            if rng.random() < behavior.familiar_merchant_probability
-            else self._zipf_merchant(rng)
-        )
+        if rng.random() < behavior.hot_merchant_share:
+            merchant_index = 0
+        elif rng.random() < behavior.familiar_merchant_probability:
+            merchant_index = int(customer.familiar_merchants[int(rng.integers(len(customer.familiar_merchants)))])
+        else:
+            merchant_index = self._zipf_merchant(rng)
         merchant = self.merchant(merchant_index)
         condition = int(rng.choice(len(CONDITIONS), p=CONDITION_WEIGHTS))
         quantity = int(rng.integers(1, 4)) if merchant.category == ACCESSORY else 1
