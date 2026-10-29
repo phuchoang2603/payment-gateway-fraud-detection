@@ -15,6 +15,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - Run `evidence-agent` 0.1.0 on kagent 0.10.4. It is a read-only fraud-analyst agent without tools, and the first version of the evidence agent that later gains the MCP evidence tool.
 - Run the same agent as `evidence-agent-sandbox`, a `SandboxAgent` on Agent Substrate 0.0.9 (gVisor). Its conversations suspend to warm snapshots and resume on a small worker pool, which covers the sandbox and warm-up rubric rows.
 - Publish the agent's catalog entry to agentregistry from Git with a sync hook.
+- Run self-hosted Langfuse v3 in `llm`, on the shared ClickHouse that replaces StarRocks (owned by this repository, added in PR #102), with app-owned Postgres and Redis. In phase 2 it becomes the prompt store and receives LLM traces.
 - Register the AI assets in OpenMetadata through the existing `metadata-integrations` chart: the LLM service (the gateway endpoint), both models, and the agent as an AI application linked to its model. MCP servers, further agents and knowledge bases attach to these later.
 - Add an on-demand benchmark (`vllm bench serve` from the vLLM image, as plain manifests applied with `kubectl`) with an agent-shaped shared-prefix workload. It records throughput, TTFT and inter-token latency before and after each optimization (prefix caching, FP8 KV cache, n-gram speculative decoding, streamed cold start, FP8 vs AWQ weights). Results are recorded only from real dev runs, with the command and date.
 - Record the autoscaling decision against the rubric's KEDA:

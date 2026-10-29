@@ -1,3 +1,5 @@
+storageClass: local-path
+
 gpu:
   deviceClassName: gpu.nvidia.com
   nodeSelector: {}
@@ -9,9 +11,9 @@ modelStore:
   prefix: artifacts/models
   endpoint: https://minio.home.phuchoang.sbs
   virtualAddressing: false
-  # The platform's Kubeflow artifacts identity (scoped to artifacts/, datasets/ and runs/), synced into this namespace.
-  credentialsSecret: llm-model-store
-  credentialsStore: doppler
+  # The platform's Kubeflow artifacts identity (scoped to artifacts/, datasets/ and runs/), synced into this namespace;
+  # model weights and Langfuse event uploads both live under artifacts/.
+  credentialsSecret: llm-object-store
   credentialsKeys:
     accesskey: OBJECT_ARTIFACTS_ACCESS_KEY_ID
     secretkey: OBJECT_ARTIFACTS_SECRET_ACCESS_KEY
@@ -77,6 +79,8 @@ gateway:
     - cluster.local/ns/kagent/sa/default
 
 secretStore: gateway-doppler
+# Platform-owned credentials this app consumes: the Kubeflow artifacts identity and the shared ClickHouse users.
+platformSecretStore: doppler
 
 # The platform's metrics agent, enrolled in the ambient mesh so it can be admitted by identity.
 metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
@@ -98,3 +102,118 @@ registry:
   url: http://agentregistry.agentregistry.svc:12121
   repository: https://github.com/phuchoang2603/payment-gateway-fraud-detection
   curlImage: curlimages/curl:8.17.0
+
+# Langfuse v3 for prompt management and LLM traces. Its ClickHouse is the shared app-owned instance in `data`;
+# Postgres and Redis are instances of the platform operators in this namespace.
+langfuseStores:
+  postgres:
+    name: langfuse-postgres
+    imageName: ghcr.io/cloudnative-pg/postgresql:18.3-system-trixie
+    size: 5Gi
+    nodeSelector: {}
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 1Gi}
+  redis:
+    name: langfuse-redis
+    image: quay.io/opstree/redis:v7.2.16
+    maxmemory: 200mb
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {memory: 256Mi}
+  clickhousePasswordKey: CLICKHOUSE_LANGFUSE_PASSWORD
+  hostname: langfuse-dev.phuchoang.sbs
+
+langfuse:
+  fullnameOverride: langfuse
+  langfuse:
+    salt:
+      secretKeyRef: {name: langfuse, key: salt}
+    encryptionKey:
+      secretKeyRef: {name: langfuse, key: encryption-key}
+    nextauth:
+      url: https://langfuse-dev.phuchoang.sbs
+      secret:
+        secretKeyRef: {name: langfuse, key: nextauth-secret}
+    features:
+      telemetryEnabled: false
+      signUpDisabled: true
+    image:
+      tag: "3.224.1"
+      pullPolicy: IfNotPresent
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1001
+      runAsGroup: 1001
+      fsGroup: 1001
+      seccompProfile: {type: RuntimeDefault}
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities: {drop: [ALL]}
+    additionalEnv:
+      - {name: LANGFUSE_INIT_ORG_ID, value: payment-gateway}
+      - {name: LANGFUSE_INIT_ORG_NAME, value: Payment gateway}
+      - {name: LANGFUSE_INIT_PROJECT_ID, value: payment-gateway-fraud-detection}
+      - {name: LANGFUSE_INIT_PROJECT_NAME, value: payment-gateway-fraud-detection}
+      - name: LANGFUSE_INIT_PROJECT_PUBLIC_KEY
+        valueFrom: {secretKeyRef: {name: langfuse, key: init-public-key}}
+      - name: LANGFUSE_INIT_PROJECT_SECRET_KEY
+        valueFrom: {secretKeyRef: {name: langfuse, key: init-secret-key}}
+      - {name: LANGFUSE_INIT_USER_EMAIL, value: xuanphuc.a1gv@gmail.com}
+      - {name: LANGFUSE_INIT_USER_NAME, value: Operator}
+      - name: LANGFUSE_INIT_USER_PASSWORD
+        valueFrom: {secretKeyRef: {name: langfuse, key: init-user-password}}
+    web:
+      resources:
+        requests: {cpu: 250m, memory: 512Mi}
+        limits: {memory: 1Gi}
+    worker:
+      resources:
+        requests: {cpu: 250m, memory: 512Mi}
+        limits: {memory: 1Gi}
+  postgresql:
+    deploy: false
+    host: langfuse-postgres-rw
+    port: 5432
+    args: sslmode=require
+    auth:
+      username: langfuse
+      database: langfuse
+      existingSecret: langfuse-postgres
+      secretKeys:
+        userPasswordKey: password
+  redis:
+    deploy: false
+    host: langfuse-redis
+    port: 6379
+    auth:
+      existingSecret: langfuse-redis
+      existingSecretPasswordKey: password
+  clickhouse:
+    deploy: false
+    host: clickhouse.data.svc.cluster.local
+    httpPort: 8123
+    nativePort: 9000
+    database: langfuse
+    clusterEnabled: false
+    auth:
+      username: langfuse
+      existingSecret: langfuse-clickhouse
+      existingSecretKey: password
+  s3:
+    deploy: false
+    bucket: platform-dev
+    region: us-east-1
+    endpoint: https://minio.home.phuchoang.sbs
+    forcePathStyle: true
+    accessKeyId:
+      secretKeyRef: {name: llm-object-store, key: accesskey}
+    secretAccessKey:
+      secretKeyRef: {name: llm-object-store, key: secretkey}
+    eventUpload:
+      prefix: artifacts/langfuse/events/
+    batchExport:
+      enabled: false
+    mediaUpload:
+      enabled: false
+      prefix: artifacts/langfuse/media/

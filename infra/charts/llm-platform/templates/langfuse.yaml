@@ -1,0 +1,163 @@
+{{- $stores := .Values.langfuseStores }}
+{{- $postgres := $stores.postgres }}
+{{- $redis := $stores.redis }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: langfuse
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.secretStore }}
+  target:
+    name: langfuse
+  data:
+    {{- range $key, $remote := dict "salt" "LANGFUSE_SALT" "encryption-key" "LANGFUSE_ENCRYPTION_KEY" "nextauth-secret" "LANGFUSE_NEXTAUTH_SECRET" "init-public-key" "LANGFUSE_INIT_PUBLIC_KEY" "init-secret-key" "LANGFUSE_INIT_SECRET_KEY" "init-user-password" "LANGFUSE_INIT_USER_PASSWORD" }}
+    - secretKey: {{ $key }}
+      remoteRef:
+        key: {{ $remote }}
+    {{- end }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: langfuse-postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.secretStore }}
+  target:
+    name: langfuse-postgres
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: langfuse
+        password: '{{ "{{ .password }}" }}'
+  data:
+    - secretKey: password
+      remoteRef:
+        key: LANGFUSE_POSTGRES_PASSWORD
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: langfuse-redis
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.secretStore }}
+  target:
+    name: langfuse-redis
+  data:
+    - secretKey: password
+      remoteRef:
+        key: LANGFUSE_REDIS_PASSWORD
+---
+# The shared ClickHouse in `data` owns the langfuse user; its password stays in the platform store.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: langfuse-clickhouse
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.platformSecretStore }}
+  target:
+    name: langfuse-clickhouse
+  data:
+    - secretKey: password
+      remoteRef:
+        key: {{ $stores.clickhousePasswordKey }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $postgres.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  instances: 1
+  imageName: {{ $postgres.imageName }}
+  {{- with $postgres.nodeSelector }}
+  affinity:
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}
+  bootstrap:
+    initdb:
+      database: langfuse
+      owner: langfuse
+      secret:
+        name: langfuse-postgres
+  storage:
+    storageClass: {{ .Values.storageClass }}
+    size: {{ $postgres.size }}
+  resources:
+    {{- toYaml $postgres.resources | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $redis.name }}-config
+data:
+  redis-additional.conf: |
+    maxmemory {{ $redis.maxmemory }}
+    maxmemory-policy noeviction
+---
+apiVersion: redis.redis.opstreelabs.in/v1beta2
+kind: Redis
+metadata:
+  name: {{ $redis.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile: {type: RuntimeDefault}
+  securityContext:
+    {{- include "llm-platform.containerSecurity" . | nindent 4 }}
+  kubernetesConfig:
+    image: {{ $redis.image }}
+    imagePullPolicy: IfNotPresent
+    redisSecret:
+      name: langfuse-redis
+      key: password
+    resources:
+      {{- toYaml $redis.resources | nindent 6 }}
+  redisConfig:
+    additionalRedisConfig: {{ $redis.name }}-config
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: langfuse-ui
+spec:
+  gateways: [ml/kubeflow-gateway]
+  hosts:
+    - {{ $stores.hostname }}
+  http:
+    - match:
+        - uri: {prefix: /oauth2/}
+      route:
+        - destination:
+            host: oauth2-proxy.auth.svc.cluster.local
+            port: {number: 80}
+    - route:
+        - destination:
+            host: langfuse-web.{{ .Release.Namespace }}.svc.cluster.local
+            port: {number: 3000}

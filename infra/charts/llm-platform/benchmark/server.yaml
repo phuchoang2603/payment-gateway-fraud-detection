@@ -44,9 +44,9 @@ spec:
         - {name: AWS_EC2_METADATA_DISABLED, value: "true"}
         - {name: RUNAI_STREAMER_S3_USE_VIRTUAL_ADDRESSING, value: "0"}
         - name: AWS_ACCESS_KEY_ID
-          valueFrom: {secretKeyRef: {name: llm-model-store, key: accesskey}}
+          valueFrom: {secretKeyRef: {name: llm-object-store, key: accesskey}}
         - name: AWS_SECRET_ACCESS_KEY
-          valueFrom: {secretKeyRef: {name: llm-model-store, key: secretkey}}
+          valueFrom: {secretKeyRef: {name: llm-object-store, key: secretkey}}
       ports:
         - {name: http, containerPort: 8000}
       readinessProbe:

@@ -25,6 +25,13 @@ The repository SHALL define `evidence-agent-sandbox`, a `SandboxAgent` rendered 
 - **WHEN** the sandboxed agent tries to reach a destination other than the agent gateway
 - **THEN** the connection is refused
 
+### Requirement: Self-hosted Langfuse
+The application SHALL run self-hosted Langfuse v3 at a pinned chart and image, using the shared ClickHouse in `data` through its fixed Service contract, and app-owned Postgres and Redis instances. Its secrets SHALL come from Doppler through External Secrets. Public sign-up SHALL be disabled, and its UI SHALL be reachable only through the platform's authenticating proxy.
+
+#### Scenario: First start
+- **WHEN** Langfuse starts against an empty ClickHouse `langfuse` database and Postgres
+- **THEN** it applies its migrations and creates the initial organisation, project and admin user from the provisioned keys
+
 ### Requirement: Agent registry publication
 The registry catalog SHALL live in Git and be published to the platform's agentregistry by a deployment-time job, never by CI. It SHALL record the agent's name, version, description, model config and tools. A behaviour change of a published agent SHALL publish a new version. Agents SHALL be deployed by the application chart, not by the registry.
 
