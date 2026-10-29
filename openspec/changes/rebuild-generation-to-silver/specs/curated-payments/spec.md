@@ -18,7 +18,7 @@ DP2 SHALL read both Bronze tables at snapshot IDs fixed when the run starts and 
 - **THEN** all three Silver tables have equal content after each run
 
 ### Requirement: Event deduplication and conflicts
-`silver.payment_events` SHALL contain one row per `event_id`. Deliveries of the same `event_id` SHALL collapse when they agree on every business field except `recorded_at`, which republished exports advance. The hash that decides this SHALL include `schema_version` and ignore `recorded_at` and provenance. Of the collapsing copies, the one with the earliest `recorded_at` SHALL be kept. Deliveries of the same `event_id` that differ in any other business field SHALL be conflicts: the run SHALL succeed, every row of that payment SHALL be written to `silver.rejected_events` with its conflict reason, and the payment SHALL be excluded from `silver.payment_events`, `silver.attempts` and `silver.labels`.
+`silver.payment_events` SHALL contain one row per `event_id`. Deliveries of the same `event_id` SHALL collapse when they agree on every business field except `recorded_at`, which republished exports advance. The hash that decides this SHALL include `schema_version` and ignore `recorded_at` and provenance. Of the collapsing copies, the one with the earliest `recorded_at` SHALL be kept. Deliveries of the same `event_id` that differ in any other business field SHALL be conflicts: the run SHALL succeed, every row of that payment SHALL be written to `silver.rejected_events` with its conflict reason, and the payment SHALL be excluded from `silver.payment_events`, `silver.attempts` and `silver.labels`. Deduplication SHALL join the duplicated event IDs back to Bronze as a broadcast join when their estimated size is under `SILVER_DEDUP_BROADCAST_BYTES` (default 256 MB) and as a shuffled join otherwise, with identical output; the run report SHALL record the chosen strategy and the number of duplicated event IDs.
 
 #### Scenario: Republished export
 
@@ -135,3 +135,14 @@ The repository SHALL provide an on-demand Spark benchmark that runs one skewed m
 
 - **WHEN** the benchmark completes
 - **THEN** the report lists each variant's duration, stage IDs and task count, and the hot merchant share with its denominator
+
+### Requirement: Silver dedup benchmark
+The benchmark job SHALL run the deduplication of the pinned Bronze events in two variants, each once and timed through the phase helper: a full-width group-by over every row, and a narrow detection of duplicated IDs with a broadcast join. Each variant's output SHALL be reduced to its row count and an order-independent checksum, and the narrow variant SHALL equal the full-width variant on both before any duration is reported. The report SHALL give each variant's duration, its spill in memory and on disk, and its output row count.
+
+#### Scenario: Variant output differs
+- **WHEN** the narrow variant's row count or checksum differs from the full-width variant
+- **THEN** the benchmark fails without reporting a duration for either variant
+
+#### Scenario: Report content
+- **WHEN** the benchmark completes
+- **THEN** the report lists each variant's duration, spill and output row count
