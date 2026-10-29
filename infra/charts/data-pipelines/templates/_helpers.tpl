@@ -57,3 +57,46 @@ container:
     limits:
       {{- toYaml $values.generator.resources.limits | nindent 6 }}
 {{- end -}}
+
+{{- define "data-pipelines.env" -}}
+- name: AWS_REGION
+  value: {{ .Values.config.AWS_REGION | quote }}
+- name: S3_ENDPOINT
+  value: {{ .Values.config.S3_ENDPOINT | quote }}
+- name: S3_PATH_STYLE
+  value: {{ .Values.config.S3_PATH_STYLE | quote }}
+- name: AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.storage.externalSecret.name }}
+      key: AWS_ACCESS_KEY_ID
+- name: AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.storage.externalSecret.name }}
+      key: AWS_SECRET_ACCESS_KEY
+- name: ICEBERG_REST_URI
+  value: {{ .Values.catalog.icebergRestUri | quote }}
+- name: ICEBERG_WAREHOUSE
+  value: {{ .Values.catalog.icebergWarehouse | quote }}
+- name: ICEBERG_CLIENT_ID
+  value: {{ .Values.catalog.icebergClientId | quote }}
+- name: ICEBERG_OAUTH2_URI
+  value: {{ .Values.catalog.icebergOauth2Uri | quote }}
+- name: ICEBERG_CLIENT_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.catalog.externalSecret.name }}
+      key: ICEBERG_CLIENT_SECRET
+- name: OPENMETADATA_URL
+  value: {{ .Values.catalog.openmetadataUrl | quote }}
+- name: OPENMETADATA_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.catalog.externalSecret.name }}
+      key: OPENMETADATA_TOKEN
+- name: STARROCKS_CATALOG
+  value: {{ .Values.catalog.starRocksCatalog | quote }}
+- name: DATA_PRODUCTS_ROOT
+  value: /contracts/data-products
+{{- end -}}

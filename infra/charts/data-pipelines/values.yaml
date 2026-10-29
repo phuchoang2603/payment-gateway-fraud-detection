@@ -1,11 +1,17 @@
 global:
   imageTags:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata: dev
 enabled: false
 namespace: data
 images:
   simulator:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator
+  spark:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark
+  openmetadata:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
 generator:
   config: historical-dev.yaml
   shards: 1
@@ -33,3 +39,40 @@ storage:
     data:
       AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
       AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+bronze:
+  enabled: false
+  datasetVersion: v18
+  historicalRoot: s3://platform-dev/datasets/payment-gateway/historical/v18
+  reportRoot: s3://platform-dev/runs/payment-gateway/dp1
+  executors: 2
+  shufflePartitions: 1024
+  activeDeadlineSeconds: 7200
+  kafka:
+    bootstrapServers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092
+    schedule: "17 */6 * * *"
+silver:
+  enabled: false
+  reportRoot: s3://platform-dev/runs/payment-gateway/dp2
+  executors: 2
+  shufflePartitions: 1024
+  activeDeadlineSeconds: 7200
+analytics:
+  enabled: false
+  reportRoot: s3://platform-dev/runs/payment-gateway/analytics
+  executors: 4
+  shufflePartitions: 1024
+  activeDeadlineSeconds: 14400
+catalog:
+  icebergRestUri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
+  icebergWarehouse: lakehouse
+  icebergClientId: platform
+  icebergOauth2Uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
+  starRocksCatalog: fraud_lakehouse
+  openmetadataUrl: http://openmetadata.data.svc.cluster.local:8585/api
+  kafkaDataClient: data-pipelines
+  externalSecret:
+    name: data-pipelines-catalog
+    store: gateway-doppler
+    data:
+      ICEBERG_CLIENT_SECRET: DP1_ICEBERG_CLIENT_SECRET
+      OPENMETADATA_TOKEN: DP1_OM_INGESTION_TOKEN

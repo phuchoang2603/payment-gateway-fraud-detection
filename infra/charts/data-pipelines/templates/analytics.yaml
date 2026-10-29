@@ -1,0 +1,80 @@
+{{- if .Values.analytics.enabled }}
+{{- range $job := list "diagnostics" "benchmark" }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: {{ if eq $job "diagnostics" }}dp1{{ else }}dp2{{ end }}-{{ $job }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  entrypoint: {{ $job }}
+  activeDeadlineSeconds: {{ $.Values.analytics.activeDeadlineSeconds }}
+  podMetadata:
+    labels:
+      app.kubernetes.io/name: {{ $.Values.catalog.kafkaDataClient }}
+      dp-product: silver-payments
+  templates:
+    - name: {{ $job }}
+      retryStrategy:
+        limit: 2
+        retryPolicy: OnError
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          apiVersion: spark.apache.org/v1
+          kind: SparkApplication
+          metadata:
+            name: {{ printf "dp2-%s-%s" "{{workflow.uid}}" $job }}
+            namespace: {{ $.Values.namespace }}
+            labels:
+              dp-product: silver-payments
+              dp-workflow: {{ "{{workflow.name}}" | quote }}
+          spec:
+            mainApplicationFile: {{ printf "local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/batch/%s.py" (ternary "diagnostics" "benchmark" (eq $job "diagnostics")) | quote }}
+            runtimeVersions:
+              sparkVersion: "4.1.3"
+            sparkConf:
+              spark.kubernetes.container.image: {{ include "data-pipelines.image" (dict "image" $.Values.images.spark "global" $.Values.global) | quote }}
+              spark.kubernetes.authenticate.driver.serviceAccountName: data-pipelines-spark
+              spark.kubernetes.executor.deleteOnTermination: "true"
+              spark.executor.instances: {{ $.Values.analytics.executors | quote }}
+              spark.sql.shuffle.partitions: {{ $.Values.analytics.shufflePartitions | quote }}
+              spark.pyspark.python: /opt/data-pipeline/batch/.venv/bin/python
+            applicationTolerations:
+              restartConfig:
+                restartPolicy: Never
+              resourceRetainPolicy: OnFailure
+              resourceRetainDurationMillis: 300000
+              ttlAfterStopMillis: 3600000
+            driverSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    app.kubernetes.io/name: {{ $.Values.catalog.kafkaDataClient }}
+                    dp-product: silver-payments
+                spec:
+                  containers:
+                    - name: spark-kubernetes-driver
+                      env:
+{{- include "data-pipelines.env" $ | nindent 22 }}
+                        - name: RUN_ID
+                          value: {{ "{{workflow.name}}" | quote }}
+                        - name: RUN_REPORT_ROOT
+                          value: {{ $.Values.analytics.reportRoot | quote }}
+            executorSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    app.kubernetes.io/name: {{ $.Values.catalog.kafkaDataClient }}
+                    dp-product: silver-payments
+                spec:
+                  containers:
+                    - name: spark-kubernetes-executor
+                      env:
+{{- include "data-pipelines.env" $ | nindent 22 }}
+{{- end }}
+{{- end }}

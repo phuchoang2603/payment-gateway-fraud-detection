@@ -1,3 +1,9 @@
 enabled: true
 generator:
   config: historical-dev.yaml
+bronze:
+  enabled: true
+silver:
+  enabled: true
+analytics:
+  enabled: true

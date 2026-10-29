@@ -1,0 +1,126 @@
+{{- if .Values.bronze.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: dp1-bronze
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  entrypoint: bronze
+  arguments:
+    parameters:
+      - name: source
+        value: historical
+        enum: [historical, kafka]
+      - name: dataset-version
+        value: {{ .Values.bronze.datasetVersion | quote }}
+  activeDeadlineSeconds: {{ .Values.bronze.activeDeadlineSeconds }}
+  synchronization:
+    mutexes:
+      - name: dp1-bronze-writer
+  podMetadata:
+    labels:
+      app.kubernetes.io/name: {{ .Values.catalog.kafkaDataClient }}
+      dp-product: bronze-payments
+  templates:
+    - name: bronze
+      dag:
+        tasks:
+          - name: spark
+            template: spark
+          - name: checks
+            template: checks
+            depends: spark
+          - name: publish
+            template: publish
+            depends: "spark.Failed || checks.Succeeded || checks.Failed"
+    - name: spark
+      retryStrategy:
+        limit: 2
+        retryPolicy: OnError
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          apiVersion: spark.apache.org/v1
+          kind: SparkApplication
+          metadata:
+            name: {{ printf "dp1-%s-bronze" "{{workflow.uid}}" }}
+            namespace: {{ .Values.namespace }}
+            labels:
+              dp-product: bronze-payments
+              dp-workflow: {{ "{{workflow.name}}" | quote }}
+          spec:
+            mainApplicationFile: local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/batch/bronze.py
+            runtimeVersions:
+              sparkVersion: "4.1.3"
+            sparkConf:
+              spark.kubernetes.container.image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
+              spark.kubernetes.authenticate.driver.serviceAccountName: data-pipelines-spark
+              spark.kubernetes.executor.deleteOnTermination: "true"
+              spark.executor.instances: {{ .Values.bronze.executors | quote }}
+              spark.sql.shuffle.partitions: {{ .Values.bronze.shufflePartitions | quote }}
+              spark.pyspark.python: /opt/data-pipeline/batch/.venv/bin/python
+            applicationTolerations:
+              restartConfig:
+                restartPolicy: Never
+              resourceRetainPolicy: OnFailure
+              resourceRetainDurationMillis: 300000
+              ttlAfterStopMillis: 3600000
+            driverSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    app.kubernetes.io/name: {{ .Values.catalog.kafkaDataClient }}
+                    dp-product: bronze-payments
+                spec:
+                  containers:
+                    - name: spark-kubernetes-driver
+                      env:
+{{- include "data-pipelines.env" $ | nindent 22 }}
+                        - name: BRONZE_SOURCE
+                          value: {{ "{{workflow.parameters.source}}" | quote }}
+                        - name: DATASET_VERSION
+                          value: {{ "{{workflow.parameters.dataset-version}}" | quote }}
+                        - name: HISTORICAL_ROOT
+                          value: {{ .Values.bronze.historicalRoot | quote }}
+                        - name: KAFKA_BOOTSTRAP_SERVERS
+                          value: {{ .Values.bronze.kafka.bootstrapServers | quote }}
+                        - name: RUN_ID
+                          value: {{ "{{workflow.name}}" | quote }}
+                        - name: RUN_REPORT_ROOT
+                          value: {{ .Values.bronze.reportRoot | quote }}
+            executorSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    app.kubernetes.io/name: {{ .Values.catalog.kafkaDataClient }}
+                    dp-product: bronze-payments
+                spec:
+                  containers:
+                    - name: spark-kubernetes-executor
+                      env:
+{{- include "data-pipelines.env" $ | nindent 22 }}
+    - name: checks
+      retryStrategy:
+        limit: 2
+        retryPolicy: OnError
+      container:
+        image: {{ include "data-pipelines.image" (dict "image" .Values.images.openmetadata "global" .Values.global) | quote }}
+        command: [python, -m, batch.checks]
+        env:
+          - name: CHECK_PRODUCT
+            value: bronze-payments
+{{- include "data-pipelines.env" $ | nindent 10 }}
+    - name: publish
+      retryStrategy:
+        limit: 2
+        retryPolicy: OnError
+      container:
+        image: {{ include "data-pipelines.image" (dict "image" .Values.images.openmetadata "global" .Values.global) | quote }}
+        command: [python, -m, batch.publish]
+        env:
+{{- include "data-pipelines.env" $ | nindent 10 }}
+{{- end }}
