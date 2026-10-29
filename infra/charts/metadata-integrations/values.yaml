@@ -16,34 +16,33 @@ openmetadata:
 schedule: 0 3 * * *
 activeDeadlineSeconds: 1800
 connectors:
-  starrocks:
+  clickhouse:
     externalSecret:
-      name: metadata-starrocks
+      name: metadata-clickhouse
       store: doppler
       data:
-        STARROCKS_PASSWORD: STARROCKS_OPENMETADATA_PASSWORD
+        CLICKHOUSE_PASSWORD: CLICKHOUSE_OPENMETADATA_PASSWORD
     kind: database
     discover: true
     source:
-      type: starrocks
-      serviceName: starrocks
+      type: clickhouse
+      serviceName: clickhouse
       serviceConnection:
         config:
-          type: StarRocks
+          type: Clickhouse
           username: openmetadata
-          password: ${STARROCKS_PASSWORD}
-          hostPort: kube-starrocks-fe-service.data.svc.cluster.local:9030
+          password: ${CLICKHOUSE_PASSWORD}
+          hostPort: clickhouse.data.svc.cluster.local:8123
           databaseName: lakehouse
-          connectionArguments:
-            init_command: SET CATALOG lakehouse
+          https: false
       sourceConfig:
         config:
           type: DatabaseMetadata
-          schemaFilterPattern:
+          tableFilterPattern:
             includes:
-            - ^bronze$
-            - ^silver$
-            - ^gold$
+            - ^bronze\.
+            - ^silver\.
+            - ^gold\.
           markDeletedTables: false
           includeStoredProcedures: false
           overrideMetadata: false

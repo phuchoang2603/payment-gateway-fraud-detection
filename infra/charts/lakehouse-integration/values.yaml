@@ -10,20 +10,22 @@ catalog:
   region: us-east-1
   pathStyle: true
 setup:
-  image: starrocks/fe-ubuntu:4.1.6
-  rootPasswordKey: STARROCKS_ROOT_PASSWORD
-  catalogs:
-    - name: lakehouse
-      uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
-      warehouse: lakehouse
-      region: us-east-1
-      oauthUri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
-      clientId: platform
-      pathStyle: true
-      s3Endpoint: https://minio.home.phuchoang.sbs
+  image: clickhouse/clickhouse-server:26.10.2.103
+  host: clickhouse.data.svc.cluster.local
+  port: 8123
+  adminUser: admin
+  adminPasswordKey: CLICKHOUSE_ADMIN_PASSWORD
+  profile: openmetadata
+  profileSettings:
+    readonly: 2
+    allow_database_iceberg: 1
+  lakehouse:
+    database: lakehouse
+    uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
+    warehouse: lakehouse
+    oauthUri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
+    clientId: platform
+    scope: PRINCIPAL_ROLE:ALL
   users:
     - name: openmetadata
-      passwordKey: STARROCKS_OPENMETADATA_PASSWORD
-      sessionVariables:
-        query_timeout: 3600
-        new_planner_optimize_timeout: 60000
+      passwordKey: CLICKHOUSE_OPENMETADATA_PASSWORD
