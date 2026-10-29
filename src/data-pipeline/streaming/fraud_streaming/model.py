@@ -10,6 +10,31 @@ DAY = 24 * HOUR
 WINDOWS = (5 * MINUTE, HOUR, DAY)
 HORIZON = DAY
 DEDUP_RETENTION = HORIZON + HOUR
+LATENESS_BUCKETS = (
+    (MINUTE, "lt_1m"),
+    (5 * MINUTE, "1m_5m"),
+    (15 * MINUTE, "5m_15m"),
+    (HORIZON, "15m_24h"),
+)
+
+
+def lateness_bucket(lateness):
+    """Bucket processing time minus attempt time; anything beyond the horizon is too late."""
+    for limit, name in LATENESS_BUCKETS:
+        if lateness < limit:
+            return name
+    return "15m_24h" if lateness == HORIZON else "too_late"
+
+
+def dedup_content(scope, fact):
+    return fact.digest if scope == "event" else f"{fact.event_id}:{fact.digest}"
+
+
+def dedup_status(prior, content):
+    """Classify a delivery against the content already seen for its identity."""
+    if prior is None:
+        return "new"
+    return "duplicate" if prior == content else "conflict"
 
 
 class Rejected(ValueError):

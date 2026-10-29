@@ -39,7 +39,7 @@ Python services take settings from configuration files and environment variables
 | fraud | `FRAUD_ASSESSMENT_DEADLINE`, `FRAUD_ASSESSMENT_LEASE`, `FRAUD_ASSESSMENT_RETRY_HORIZON`, `FRAUD_ASSESSMENT_ERROR_BACKOFF` | `1s`, `2s`, `5m`, `250ms` | Fenced completion and bounded recovery |
 | fraud | `FRAUD_AUTH_REDIS_ADDR`, `FRAUD_AUTH_REDIS_PASSWORD`, `FRAUD_VELOCITY_EPOCH` | chart values | Authorization observation store and epoch |
 | fraud | `FRAUD_GUARD_TIMEOUT`, `FRAUD_VELOCITY_THRESHOLD_10S`, `FRAUD_VELOCITY_THRESHOLD_60S` | `100ms`, `10`, `30` | Observe-only thresholds (unmeasured) |
-| fraud | `FRAUD_FEAST_URL`, `FRAUD_FEATURE_EPOCH`, `FRAUD_FEATURE_DEFINITION_SHA256`, `FRAUD_FEATURE_MAX_ANCHOR_AGE`, `FRAUD_FEATURE_MAX_PROGRESS_AGE` | unset unless features enabled; `30s` budgets | Shadow feature retrieval |
+| fraud | `FRAUD_FEAST_URL`, `FRAUD_FEATURE_EPOCH`, `FRAUD_FEATURE_DEFINITION_SHA256`, `FRAUD_FEATURE_MAX_ANCHOR_AGE`, `FRAUD_FEATURE_MAX_PROGRESS_AGE` | unset; feature retrieval is disabled until the feature-store change | Shadow feature retrieval |
 | payments | `PAYMENTS_DATABASE_URL`, `PAYMENTS_MIGRATE_DATABASE_URL` | required | Runtime and migration identities |
 | payments | `PAYMENTS_REDIS_ADDR`, `PAYMENTS_REDIS_PASSWORD`, `PAYMENTS_IDEMPOTENCY_TTL` | chart values, `24h` | Redis-first idempotency with a 50 ms deadline before database fallback |
 | payments | `PAYMENTS_ATTEMPT_BUDGET`, `PAYMENTS_FRAUD_TIMEOUT`, `PAYMENTS_PROCESSOR_TIMEOUT` | `5s`, `1s`, `3s` | Attempt and dependency budgets |

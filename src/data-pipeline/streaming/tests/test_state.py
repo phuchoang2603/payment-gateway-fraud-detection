@@ -8,7 +8,18 @@ import pytest
 from features.reference_v2 import definition_identity
 from features.reference_v2 import snapshot as reference_snapshot
 
-from fraud_streaming.model import DAY, HORIZON, HOUR, MINUTE, Entity, Fact, Packet, Rejected
+from fraud_streaming.model import (
+    DAY,
+    HORIZON,
+    HOUR,
+    MINUTE,
+    Entity,
+    Fact,
+    Packet,
+    Rejected,
+    dedup_status,
+    lateness_bucket,
+)
 from fraud_streaming.wire import PaymentEvent, SnapshotUpdate, decode, snapshot
 
 ANCHOR = 1_760_000_000_000_000
@@ -36,6 +47,17 @@ def packet(value, *, bootstrap=ANCHOR - 2 * DAY, now=ANCHOR):
 def test_horizon_conflicts_and_entity_binding():
     assert not packet(start(when=ANCHOR - HORIZON)).too_late
     assert packet(start(when=ANCHOR - HORIZON - 1)).too_late
+    assert [lateness_bucket(value) for value in (0, MINUTE, HORIZON, HORIZON + 1)] == [
+        "lt_1m",
+        "1m_5m",
+        "15m_24h",
+        "too_late",
+    ]
+    assert [dedup_status(prior, "a") for prior in (None, "a", "b")] == [
+        "new",
+        "duplicate",
+        "conflict",
+    ]
     state = Entity("customer", "integration", "customer", ANCHOR - 2 * DAY)
     state.add(packet(start()))
     state.add(packet(start()))

@@ -34,3 +34,24 @@
 - [x] 7.2 Route rejects through one side output to an exactly-once `fraud.feature-rejects.v1.<epoch>` sink with source-coordinate headers, a per-class `rejected` metric and a log line
 - [x] 7.3 Declare the topic in the Kafka chart; cover malformed and conflicting records and a fatal invariant in the existing runtime and Kafka checkpoint tests
 - [x] 7.4 Update the spec, design and the "Poison records" row in `docs/data/online.md`
+
+## 8. Coursework evidence
+
+- [x] 8.1 Add `duplicates_dropped` per dedup scope and bucketed lateness counters (`lt_1m`, `1m_5m`, `5m_15m`, `15m_24h`, `too_late`) to the streaming job, with shared classification used by the job and the benchmark
+- [x] 8.2 Add the seeded replay benchmark `fraud_streaming.benchmark` with handled, no-dedup, arrival-time and baseline variants compared with `reference_v2`, plus a CI test
+- [x] 8.3 Document the window code, metrics and benchmark in `docs/data/online.md`
+- [ ] 8.4 Record the benchmark report in `docs/data/online.md` from a CI-produced run (`cd src/data-pipeline/streaming && PYTHONPATH=.. uv run --locked python -m fraud_streaming.benchmark`); keep the cells Pending until then
+- [ ] 8.5 Dev live verification (needs explicit approval before running):
+  1. Confirm in dev that Argo synced this change, that `fraud.feature-updates.v2.live-v18` and `fraud.feature-rejects.v1.live-v18` exist, and that the FlinkDeployment `fraud-streaming-live-v18` in namespace `data` is RUNNING with a completed checkpoint. Record the image tag and Flink job ID.
+  2. Through a trusted dev-only PR, set in `infra/charts/live-traffic/values-dev.yaml`: `simulator.enabled: true`, `config.duration_seconds: 3600`, `payments_per_second: 1`, `late_rate: 0.05`, `late_min_seconds: 300`, `late_max_seconds: 600`, `redelivery.enabled: true`, `redelivery.rate: 0.015`. Merge, and record the commit SHA and the simulator's `run_id` from the `traffic_start` log in namespace `payment-gateway` (`kubectl -n payment-gateway logs deploy/live-simulator`).
+  3. After the run, collect configured versus observed counts:
+     - simulator `traffic_stop` (`late_sent`, `late_unsent`, `late_delay_seconds`) and `redelivery_stop` (`consumed`, `selected`, `acknowledged`, `observed_rate`) log lines;
+     - Flink metrics `too_late`, `scope.event.duplicates_dropped`, `scope.attempt.duplicates_dropped`, `lateness.*.attempts` and `reject_class.*.rejected`.
+  4. Port-forward the Flink UI (`kubectl -n data port-forward svc/fraud-streaming-live-v18-rest 8081`) and capture into `docs/data/images/`:
+     - the job graph;
+     - the checkpoints tab;
+     - the dedup operator's metrics showing `too_late`, `duplicates_dropped`, lateness and `rejected`;
+     - backpressure for each operator.
+  5. Once Bronze Kafka mode is deployed, run it over the same offset range, and compute the duplicate delivery rate and the distribution of `recorded_at − attempted_at` from `bronze.payment_events`. Compare these with the simulator and Flink numbers.
+  6. Disable the simulator again with a dev-only PR (`simulator.enabled: false`).
+  7. Record run IDs, SHAs, the configured versus observed table and the screenshots in `docs/data/online.md`.

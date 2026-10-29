@@ -6,7 +6,7 @@ Go Fraud owns the decision. It validates the attempt, applies the versioned rule
 
 - Rules decide; shadow feature retrieval is disabled in every environment until the feature-store change, and authorization counters are observe-only.
 - Payments records the decision before any processor effect; fraud errors fail closed.
-- Bounded live verification observed cold-start timeouts and stale warm snapshots on feature reads, so no ML latency guarantee is claimed yet.
+- No feature-read latency or freshness evidence exists for the v2 features yet, so no ML latency guarantee is claimed.
 
 ## Planned
 

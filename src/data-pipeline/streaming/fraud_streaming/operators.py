@@ -11,12 +11,16 @@ from pyflink.datastream.state import ValueStateDescriptor
 
 from fraud_streaming.model import (
     DEDUP_RETENTION,
+    LATENESS_BUCKETS,
     Entity,
     Packet,
     Progress,
     Rejected,
     Source,
+    dedup_content,
+    dedup_status,
     entity_key,
+    lateness_bucket,
 )
 from fraud_streaming.wire import decode, snapshot
 
@@ -228,12 +232,19 @@ class Deduplicate(KeyedProcessFunction):
             ValueStateDescriptor(f"{self.scope}-identity-v3", Types.STRING())
         )
         self.rejected = reject_counters(runtime_context)
-        self.too_late = runtime_context.get_metrics_group().counter("too_late")
+        metrics = runtime_context.get_metrics_group()
+        self.too_late = metrics.counter("too_late")
+        self.duplicates = metrics.add_group("scope", self.scope).counter("duplicates_dropped")
+        self.lateness = {
+            name: metrics.add_group("lateness", name).counter("attempts")
+            for name in (*(name for _, name in LATENESS_BUCKETS), "too_late")
+        }
 
     def process_element(self, packet, ctx):
         fact = packet.fact
         if self.scope == "event" and packet.too_late:
             self.too_late.inc()
+            self.lateness["too_late"].inc()
             log.warning(
                 json.dumps(
                     {
@@ -245,15 +256,17 @@ class Deduplicate(KeyedProcessFunction):
                 )
             )
             return
-        content = fact.digest if self.scope == "event" else f"{fact.event_id}:{fact.digest}"
-        prior = self.state.value()
-        if prior is not None:
-            if prior != content:
-                error = Rejected(
-                    "conflicting_duplicate", f"conflicting {self.scope} identity/content"
-                )
-                yield reject(self.rejected, error, packet.source, fact.event_id)
+        content = dedup_content(self.scope, fact)
+        status = dedup_status(self.state.value(), content)
+        if status == "duplicate":
+            self.duplicates.inc()
             return
+        if status == "conflict":
+            error = Rejected("conflicting_duplicate", f"conflicting {self.scope} identity/content")
+            yield reject(self.rejected, error, packet.source, fact.event_id)
+            return
+        if self.scope == "event":
+            self.lateness[lateness_bucket(packet.now - fact.started_at)].inc()
         self.state.update(content)
         register(ctx, fact.started_at + DEDUP_RETENTION, self.logical)
         yield packet
