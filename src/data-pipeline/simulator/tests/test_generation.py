@@ -76,7 +76,7 @@ def test_worker_count_and_interrupted_day_do_not_change_the_dataset(tmp_path):
     dataset = dataset_of(parallel_root)
     (dataset / "manifest.json").unlink()
     (dataset / "date=2026-07-03" / "_day.json").unlink()
-    (dataset / "payment_events" / "date=2026-07-03" / "part-00000.v1.parquet").unlink()
+    (dataset / "payment_events" / "date=2026-07-03" / "part-00000.v2.parquet").unlink()
 
     assert generate(config_for(parallel_root), CONTRACTS, workers=1) == single
 
@@ -146,41 +146,40 @@ def test_undersized_source_reports_observed_and_required_bytes_without_manifest(
     assert len(list(dataset_of(root).glob("date=*/_day.json"))) == 6
 
 
-def test_schema_change_splits_physical_versions_by_occurrence_time(tmp_path):
+def test_schema_change_splits_versions_by_occurrence_time(tmp_path):
     root = tmp_path / "out"
     run(config_for(root))
     events = read_rows(dataset_of(root), "payment_events")
     change = datetime(2026, 7, 4, tzinfo=UTC)
 
-    assert {row["physical_schema_version"] for row in events} == {1, 2}
+    assert {row["schema_version"] for row in events} == {2, 3}
     for row in events:
-        expected = 2 if row["occurred_at"] >= change else 1
-        assert row["physical_schema_version"] == expected
-        assert row["schema_version"] == 3
+        expected = 3 if row["occurred_at"] >= change else 2
+        assert row["schema_version"] == expected
         risk = row["risk_decision_recorded"]
         if risk is not None:
             has_assessment_id = risk["assessment"]["assessment_id"] is not None
-            assert has_assessment_id == (expected == 2)
+            assert has_assessment_id == (expected == 3)
 
 
-def test_each_physical_version_has_a_parquet_schema_that_declares_its_fields(tmp_path):
+def test_each_schema_version_has_a_parquet_schema_that_declares_its_fields(tmp_path):
     root = tmp_path / "out"
     manifest = run(config_for(root))
     events = [part for part in manifest["files"] if part["table"] == "payment_events"]
 
     def fields_of(version: int) -> tuple[set[str], set[str]]:
-        part = next(p for p in events if p["physical_schema_version"] == version and p["rows"] > 0)
+        part = next(p for p in events if p["schema_version"] == version and p["rows"] > 0)
         schema = pq.read_schema(dataset_of(root) / part["path"])
         assessment = {f.name for f in schema.field("risk_decision_recorded").type["assessment"].type}
         signals = {f.name for f in schema.field("attempt_started").type["signals"].type}
         return assessment, signals
 
-    v1_assessment, v1_signals = fields_of(1)
     v2_assessment, v2_signals = fields_of(2)
-    assert {"assessment_id", "evidence_sha256"}.isdisjoint(v1_assessment)
-    assert {"assessment_id", "evidence_sha256"} <= v2_assessment
-    assert "user_agent_family" not in v1_signals
-    assert "user_agent_family" in v2_signals
+    v3_assessment, v3_signals = fields_of(3)
+    assert {"assessment_id", "evidence_sha256"}.isdisjoint(v2_assessment)
+    assert {"assessment_id", "evidence_sha256"} <= v3_assessment
+    assert "user_agent_family" not in v2_signals
+    assert "user_agent_family" in v3_signals
 
 
 def test_duplicate_exports_repeat_original_rows(tmp_path):
@@ -199,16 +198,25 @@ def test_duplicate_exports_repeat_original_rows(tmp_path):
     "changes",
     [
         [
-            {"effective_at": "2026-07-04T00:00:00Z", "version": 2},
-            {"effective_at": "2026-07-03T00:00:00Z", "version": 2},
+            {"effective_at": "2026-07-04T00:00:00Z", "version": 3},
+            {"effective_at": "2026-07-03T00:00:00Z", "version": 4},
         ],
-        [{"effective_at": "2026-07-04T00:00:00Z", "version": 3}],
+        [{"effective_at": "2026-07-04T00:00:00Z", "version": 2}],
     ],
 )
 def test_invalid_schema_schedule_is_rejected_before_any_output(tmp_path, changes):
     with pytest.raises(ValidationError):
         config_for(tmp_path / "out", schema_changes=changes)
     assert not (tmp_path / "out").exists()
+
+
+def test_schema_version_the_contract_does_not_declare_is_refused_before_output(tmp_path):
+    root = tmp_path / "out"
+    config = config_for(root, schema_changes=[{"effective_at": "2026-07-04T00:00:00Z", "version": 4}])
+
+    with pytest.raises(GenerationError, match="not declared by the payment-events contract"):
+        run(config)
+    assert not root.exists()
 
 
 def test_manifest_records_identities_totals_and_the_file_list(tmp_path):

@@ -3,7 +3,7 @@ duration_days: 6
 duplicate_rate: 0.05
 schema_changes:
   - effective_at: "2026-07-04T00:00:00Z"
-    version: 2
+    version: 3
 output: unused
 world:
   seed: 7

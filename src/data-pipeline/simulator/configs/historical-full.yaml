@@ -4,7 +4,7 @@ duplicate_rate: 0.02
 minimum_source_bytes: 100000000000
 schema_changes:
   - effective_at: "2025-07-01T00:00:00Z"
-    version: 2
+    version: 3
 output: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway
 world:
   seed: 2603

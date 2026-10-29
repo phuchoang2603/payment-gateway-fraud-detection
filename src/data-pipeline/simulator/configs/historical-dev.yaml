@@ -3,7 +3,7 @@ duration_days: 90
 duplicate_rate: 0.02
 schema_changes:
   - effective_at: "2025-08-15T00:00:00Z"
-    version: 2
+    version: 3
 output: s3://platform-dev/datasets/payment-gateway
 world:
   seed: 2603

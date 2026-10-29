@@ -7,7 +7,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
 from functools import cache
 from pathlib import Path
-from typing import Literal, Self
+from typing import Self
 from urllib.parse import urlsplit
 
 import pyarrow as pa
@@ -48,7 +48,7 @@ class SourceTooSmall(GenerationError):
 
 class SchemaChange(StrictModel):
     effective_at: datetime
-    version: Literal[1, 2]
+    version: int = Field(ge=3)
 
     @field_validator("effective_at")
     @classmethod
@@ -72,9 +72,9 @@ class GeneratorConfig(StrictModel):
         changes = self.schema_changes
         if any(later.effective_at <= earlier.effective_at for earlier, later in zip(changes, changes[1:])):
             raise ValueError("schema_changes must be in ascending effective_at order")
-        versions = [1, *(change.version for change in changes)]
+        versions = [2, *(change.version for change in changes)]
         if any(later < earlier for earlier, later in zip(versions, versions[1:])):
-            raise ValueError("schema_changes must not decrease the physical schema version")
+            raise ValueError("schema_changes must not decrease the schema version")
         parsed = urlsplit(self.output)
         if parsed.scheme and parsed.scheme != "s3":
             raise ValueError("output must be a local directory or s3:// bucket")
@@ -100,11 +100,11 @@ class GeneratorConfig(StrictModel):
         document = {"configuration": self.logical(), "generator_digest": generator_digest}
         return hashlib.sha256(json.dumps(document, sort_keys=True).encode()).hexdigest()
 
-    def physical_versions(self) -> tuple[int, ...]:
-        return tuple(sorted({1, *(change.version for change in self.schema_changes)}))
+    def schema_versions(self) -> tuple[int, ...]:
+        return tuple(sorted({2, *(change.version for change in self.schema_changes)}))
 
-    def physical_version_at(self, occurred_at: datetime) -> int:
-        version = 1
+    def schema_version_at(self, occurred_at: datetime) -> int:
+        version = 2
         for change in self.schema_changes:
             if occurred_at >= change.effective_at:
                 version = change.version
@@ -182,7 +182,7 @@ def _schema_for(version: int, declared) -> pa.Schema:
     for path, since in declared:
         if version < since:
             struct = _drop_field(struct, path)
-    return pa.schema([*struct, pa.field("physical_schema_version", pa.uint32(), nullable=False)])
+    return pa.schema(list(struct))
 
 
 class _PartWriter:
@@ -246,7 +246,7 @@ def write_part(config: GeneratorConfig, contracts: Path, offset: int, chunk: int
         scratch_dir = Path(scratch)
         writers: dict[tuple[str, int | None], _PartWriter] = {
             (EVENTS, version): _PartWriter(scratch_dir / f"events-v{version}.parquet", _schema_for(version, declared))
-            for version in config.physical_versions()
+            for version in config.schema_versions()
         }
         writers[(LABELS, None)] = _PartWriter(scratch_dir / "labels.parquet", LABEL_SCHEMA)
         for purchase, key, rng in _chunk_purchases(config, world, offset, chunk):
@@ -256,12 +256,12 @@ def write_part(config: GeneratorConfig, contracts: Path, offset: int, chunk: int
                 rng,
                 day=day,
                 key=key,
-                physical_version_at=config.physical_version_at,
+                schema_version_at=config.schema_version_at,
                 duplicate_rate=config.duplicate_rate,
             )
             by_version: dict[int, list[dict]] = defaultdict(list)
             for event in events:
-                version = event["physical_schema_version"]
+                version = event["schema_version"]
                 by_version[version].append(_project(event, version, declared))
             for version, rows in by_version.items():
                 writers[(EVENTS, version)].extend(rows)
@@ -276,7 +276,7 @@ def write_part(config: GeneratorConfig, contracts: Path, offset: int, chunk: int
             parts.append(
                 {
                     "table": table,
-                    "physical_schema_version": version,
+                    "schema_version": version,
                     "date": day.isoformat(),
                     "path": key,
                     "rows": writer.rows,
@@ -308,6 +308,14 @@ def _claim_configuration(config: GeneratorConfig, digest: str, store) -> None:
     stored = store.read(CONFIG_KEY)
     if stored is None or json.loads(stored)["configuration_sha256"] != config.identity(digest):
         raise ConfigurationChanged(f"{CONFIG_KEY} differs from the requested configuration")
+
+
+def _check_schema_versions(config: GeneratorConfig, contracts: Path) -> None:
+    declared, _ = load_contract(contracts)
+    allowed = {2, *(since for _, since in declared)}
+    undeclared = {change.version for change in config.schema_changes} - allowed
+    if undeclared:
+        raise GenerationError(f"schema versions {sorted(undeclared)} are not declared by the payment-events contract")
 
 
 def _refuse_published(store, config: GeneratorConfig) -> None:
@@ -365,6 +373,7 @@ def _results(config: GeneratorConfig, contracts: Path, pairs, workers: int):
 
 def produce(config: GeneratorConfig, contracts: Path, shard: tuple[int, int] = (0, 1), workers: int = 1) -> None:
     digest = generator_digest(contracts)
+    _check_schema_versions(config, contracts)
     index, count = shard
     if not 0 <= index < count:
         raise GenerationError("shard index must be within the shard count")
@@ -391,6 +400,7 @@ def produce(config: GeneratorConfig, contracts: Path, shard: tuple[int, int] = (
 
 def publish(config: GeneratorConfig, contracts: Path) -> dict:
     digest = generator_digest(contracts)
+    _check_schema_versions(config, contracts)
     store = open_store(config.output, config.dataset_version)
     _refuse_published(store, config)
     _claim_configuration(config, digest, store)

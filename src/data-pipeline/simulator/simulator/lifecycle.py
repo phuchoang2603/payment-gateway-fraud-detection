@@ -10,7 +10,6 @@ from simulator.world import CARD_TESTING, IDENTITY_NAMESPACE, SCENARIOS, Purchas
 
 Record = dict[str, Any]
 POLICY_VERSION = "rules-v1"
-GATEWAY_SCHEMA_VERSION = 3
 MAX_ATTEMPTS = 3
 HIGH_AMOUNT_MINOR = 200_000
 GEO_MISMATCH_MINOR = 20_000
@@ -41,7 +40,7 @@ def payment_history(
     *,
     day: date,
     key: str,
-    physical_version_at: Callable[[datetime], int],
+    schema_version_at: Callable[[datetime], int],
     duplicate_rate: float,
 ) -> tuple[list[Record], list[Record]]:
     behavior = world.config.behavior
@@ -61,8 +60,7 @@ def payment_history(
             "payment_id": payment_id,
             "aggregate_version": aggregate_version,
             "integration_id": integration_id,
-            "schema_version": GATEWAY_SCHEMA_VERSION,
-            "physical_schema_version": physical_version_at(clock),
+            "schema_version": schema_version_at(clock),
             "correlation_id": payment_id,
             "occurred_at": clock,
             "recorded_at": clock,
