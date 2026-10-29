@@ -52,11 +52,10 @@ def test_every_skewed_join_variant_returns_the_baseline_output(spark, skewed_att
 def test_aqe_skew_join_applies_on_a_skewed_fixture(spark, skewed_attempts):
     settings = {**benchmark.JOIN_VARIANTS["aqe_skew_join"][1], **LOW_SKEW_THRESHOLDS}
 
-    totals = benchmark.materialized_totals(skewed_attempts)
+    totals = benchmark.collected_totals(skewed_attempts)
     _, _, skew = benchmark.run_variant(
         spark, skewed_attempts, totals, "aqe_skew_join", benchmark.join_baseline, settings, {}
     )
-    totals.unpersist()
 
     assert skew["skew_join"] or skew["skewed_shuffle_read"], skew["plan"]
 

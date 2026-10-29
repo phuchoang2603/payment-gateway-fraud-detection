@@ -108,10 +108,11 @@ def same_output(baseline, candidate, name: str) -> None:
         raise AssertionError(f"variant {name} output differs from baseline: {candidate} != {baseline}")
 
 
-def materialized_totals(attempts: DataFrame) -> DataFrame:
-    """Per-merchant totals computed once, before any timed run. Materialized, so each join's right side is a plain
-    shuffle that the AQE skew rule can split, and every variant reads the same totals."""
-    return merchant_totals(attempts).localCheckpoint(eager=True)
+def collected_totals(attempts: DataFrame) -> DataFrame:
+    """Per-merchant totals collected once, before any timed run, and rebuilt as a local relation. Executors hold no
+    blocks of it, so a decommissioned spot executor cannot take the totals with it; the join still shuffles them."""
+    totals = merchant_totals(attempts)
+    return attempts.sparkSession.createDataFrame(totals.collect(), totals.schema)
 
 
 def run_variant(spark, attempts: DataFrame, totals: DataFrame, name: str, build, settings: dict, phases: dict):
@@ -130,26 +131,22 @@ def run_variant(spark, attempts: DataFrame, totals: DataFrame, name: str, build,
 
 def skewed_merchant_join(spark, attempts: DataFrame, phases: dict, aqe_thresholds: dict | None = None) -> dict:
     attempts.count()
-    totals = materialized_totals(attempts)
-    try:
-        results, baseline = {}, None
-        for name, (build, settings) in JOIN_VARIANTS.items():
-            if name == "aqe_skew_join":
-                settings = {**settings, **(aqe_thresholds or {})}
-            rows, checksum, skew = run_variant(spark, attempts, totals, name, build, settings, phases)
-            if name == "aqe_skew_join" and not (skew["skew_join"] or skew["skewed_shuffle_read"]):
-                raise AssertionError(
-                    "aqe_skew_join: the final adaptive plan has no skew-split join or skewed shuffle read\n"
-                    + skew["plan"]
-                )
-            guard = (rows, checksum)
-            if baseline is None:
-                baseline = guard
-            same_output(baseline, guard, name)
-            results[name] = {"output_rows": rows, "checksum": str(checksum), "skew": skew}
-        return results
-    finally:
-        totals.unpersist()
+    totals = collected_totals(attempts)
+    results, baseline = {}, None
+    for name, (build, settings) in JOIN_VARIANTS.items():
+        if name == "aqe_skew_join":
+            settings = {**settings, **(aqe_thresholds or {})}
+        rows, checksum, skew = run_variant(spark, attempts, totals, name, build, settings, phases)
+        if name == "aqe_skew_join" and not (skew["skew_join"] or skew["skewed_shuffle_read"]):
+            raise AssertionError(
+                "aqe_skew_join: the final adaptive plan has no skew-split join or skewed shuffle read\n" + skew["plan"]
+            )
+        guard = (rows, checksum)
+        if baseline is None:
+            baseline = guard
+        same_output(baseline, guard, name)
+        results[name] = {"output_rows": rows, "checksum": str(checksum), "skew": skew}
+    return results
 
 
 def hot_key_share(attempts: DataFrame) -> dict:
