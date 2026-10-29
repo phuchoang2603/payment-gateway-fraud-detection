@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: LLM platform application
-The app-of-apps SHALL deploy chart `infra/charts/llm-platform` as application `llm-platform` into its own `llm` namespace, which the Application creates with ambient-mesh enrollment and the `restricted` Pod Security level. It SHALL be enabled in dev and disabled in prod until the user explicitly confirms enabling it. Its credentials SHALL come from `gateway-doppler`. It SHALL consume the platform's KServe, agentgateway, kagent, agentregistry and Agent Substrate controllers and CRDs, and SHALL NOT install, adopt or delete them, their namespaces or the GPU NodePool.
+The app-of-apps SHALL deploy chart `infra/charts/llm-platform` as application `llm-platform` into the platform-owned `llm` namespace, which is enrolled in the ambient mesh at the `restricted` Pod Security level. It SHALL be enabled in dev and disabled in prod until the user explicitly confirms enabling it. Its credentials SHALL come from `gateway-doppler`. It SHALL consume the platform's KServe, agentgateway, kagent, agentregistry and Agent Substrate controllers and CRDs, and SHALL NOT install, adopt or delete them, their namespaces or the GPU NodePool.
 
 #### Scenario: Render both environments
 - **WHEN** the dev and prod roots are rendered
@@ -9,4 +9,4 @@ The app-of-apps SHALL deploy chart `infra/charts/llm-platform` as application `l
 
 #### Scenario: Remove the application
 - **WHEN** the `llm-platform` application is deleted
-- **THEN** shared controllers, CRDs, GatewayClasses, NodePools and platform namespaces such as `ml` remain
+- **THEN** shared controllers, CRDs, GatewayClasses, NodePools and the `llm` namespace remain
