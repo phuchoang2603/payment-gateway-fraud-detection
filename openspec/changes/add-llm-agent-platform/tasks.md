@@ -18,12 +18,12 @@
 
 - [x] 2.1 Add:
   - the shared ResourceClaim `llm-gpu`;
-  - PVC `llm-models`;
-  - the idempotent `model-fill` sync-hook Job (pinned revisions of `Qwen/Qwen3-8B-FP8`, `Qwen/Qwen3-Embedding-0.6B` and the `Qwen/Qwen3-8B-AWQ` fallback; `restricted` security context).
+  - the compile-cache PVC;
+  - the idempotent `model-upload` Job, which copies the pinned revisions of `Qwen/Qwen3-8B-FP8`, `Qwen/Qwen3-Embedding-0.6B` and the `Qwen/Qwen3-8B-AWQ` fallback into `artifacts/models/` with the Kubeflow artifacts identity, kept off GPU and control-plane nodes.
 
   Verify with `helm template` for both environments (prod renders nothing while disabled).
 - [x] 2.2 Add the chat `LLMInferenceService` `qwen3-8b`:
-  - `pvc://` URI;
+  - `s3://` model location streamed with `runai_streamer`, storage initializer off;
   - pinned `vllm/vllm-openai:v0.32.0` image;
   - args: 16k context, memory fraction 0.80, tool parser, reasoning off;
   - the shared claim;
@@ -70,7 +70,7 @@
 ## 7. Deploy to dev and collect evidence (after the PR is open and CI is green; tell the user first)
 
 - [ ] 7.1 Release to dev through `deploy/dev`. Verify:
-  - the model fill completes;
+  - the model upload completes;
   - both `LLMInferenceService`s are Ready on the shared GPU (record `nvidia-smi` memory per process, FP8 on sm_120 or the AWQ fallback, and the time to Ready).
 - [ ] 7.2 Check the gateway policy live and capture a screenshot:
   - no key and an unknown key get 401;

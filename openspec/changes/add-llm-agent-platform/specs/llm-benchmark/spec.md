@@ -8,7 +8,7 @@ The repository SHALL provide an on-demand benchmark job using inference-perf at 
 - **THEN** its report is written under the run's name in the environment's run storage with the configuration that produced it
 
 ### Requirement: Measured optimizations
-The benchmark SHALL compare each optimization against the previous kept configuration, one change at a time: prefix caching, FP8 KV cache, n-gram speculative decoding, and PVC-cached cold start (and FP8 against AWQ weights where both run). It SHALL include one end-to-end run through the agent gateway with the final configuration.
+The benchmark SHALL compare each optimization against the previous kept configuration, one change at a time: prefix caching, FP8 KV cache, n-gram speculative decoding, and streamed cold start (streamer concurrency, compile cache) (and FP8 against AWQ weights where both run). It SHALL include one end-to-end run through the agent gateway with the final configuration.
 
 #### Scenario: Optimization not kept
 - **WHEN** an optimization lowers throughput or raises latency for the agent workload

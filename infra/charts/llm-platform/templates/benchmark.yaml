@@ -161,16 +161,14 @@ spec:
   containers:
     - name: vllm
       image: {{ $.Values.vllm.image }}
-      command: [vllm, serve, /mnt/models]
+      {{- $variantModel := dict "name" $chat.name "repo" (.repo | default $chat.repo) "revision" (.revision | default $chat.revision) }}
+      command:
+        {{- include "llm-platform.vllmServe" (dict "store" $.Values.modelStore "model" $variantModel "loaderConfig" (.loaderConfig | default $.Values.vllm.loaderConfig)) | nindent 8 }}
       args:
-        - --served-model-name={{ $chat.name }}
-        - --port=8000
-        {{- /* The chat args are quoted for KServe's eval; this pod execs vllm directly, so the quotes are dropped. */}}
-        {{- range concat $chat.args .args }}
-        - {{ . | replace "'" "" | quote }}
-        {{- end }}
+        {{- toYaml (concat $chat.args .args) | nindent 8 }}
       env:
         {{- include "llm-platform.vllmEnv" $ | nindent 8 }}
+        {{- include "llm-platform.modelStoreEnv" $.Values.modelStore | nindent 8 }}
         - name: HOME
           value: /home
       ports:
@@ -185,17 +183,12 @@ spec:
       securityContext:
         {{- include "llm-platform.containerSecurity" $ | nindent 8 }}
       volumeMounts:
-        - {name: models, mountPath: /mnt/models, subPath: {{ .repo }}, readOnly: true}
         - {name: home, mountPath: /home}
         - {name: shm, mountPath: /dev/shm}
         {{- if .compileCache }}
         - {name: compile-cache, mountPath: /home/.cache/vllm, subPath: llm-bench-vllm}
         {{- end }}
   volumes:
-    - name: models
-      persistentVolumeClaim:
-        claimName: llm-models
-        readOnly: true
     - name: home
       emptyDir: {}
     - name: shm

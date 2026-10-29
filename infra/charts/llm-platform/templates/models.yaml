@@ -1,6 +1,7 @@
 {{- $chat := .Values.models.chat }}
 {{- $embedding := .Values.models.embedding }}
-{{- $downloads := concat (list (pick $chat "repo" "revision") (pick $embedding "repo" "revision")) .Values.models.extraDownloads }}
+{{- $store := .Values.modelStore }}
+{{- $uploads := concat (list (pick $chat "repo" "revision") (pick $embedding "repo" "revision")) .Values.models.extraUploads }}
 apiVersion: resource.k8s.io/v1
 kind: ResourceClaim
 metadata:
@@ -17,20 +18,6 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: llm-models
-  annotations:
-    # WaitForFirstConsumer volumes stay Pending until a pod mounts them, so each shares a wave with its first consumer.
-    argocd.argoproj.io/sync-wave: "-1"
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: {{ .Values.storage.storageClass }}
-  resources:
-    requests:
-      storage: {{ .Values.storage.modelCache }}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
   name: llm-compile-cache
 spec:
   accessModes: [ReadWriteOnce]
@@ -42,7 +29,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: model-fill-{{ toJson $downloads | sha256sum | trunc 10 }}
+  name: model-upload-{{ toJson (list $uploads $store) | sha256sum | trunc 10 }}
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
@@ -50,44 +37,72 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: model-fill
+        app.kubernetes.io/name: model-upload
     spec:
       restartPolicy: OnFailure
       automountServiceAccountToken: false
       securityContext:
-        {{- include "llm-platform.podSecurity" .Values.vllm | nindent 8 }}
-      {{- include "llm-platform.gpuPlacement" . | nindent 6 }}
+        {{- include "llm-platform.podSecurity" (dict "uid" 65532) | nindent 8 }}
+      # The dev GPU node is also the control plane; keep the multi-gigabyte transfer off it.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - {key: nvidia.com/gpu.present, operator: DoesNotExist}
+                  - {key: node-role.kubernetes.io/control-plane, operator: DoesNotExist}
       containers:
-        - name: fill
-          image: {{ .Values.vllm.image }}
+        - name: upload
+          image: {{ include "llm-platform.image" (dict "image" .Values.benchmark.image "global" .Values.global) }}
           command: [python3, -c]
           args:
             - |
               import json, os
-              from huggingface_hub import snapshot_download
+              import boto3
+              from botocore.exceptions import ClientError
+              from huggingface_hub import HfApi, hf_hub_download
+
+              api = HfApi()
+              s3 = boto3.client("s3")
+              bucket, prefix = os.environ["BUCKET"], os.environ["PREFIX"]
               for model in json.loads(os.environ["MODELS"]):
-                  path = snapshot_download(model["repo"], revision=model["revision"], local_dir=f"/models/{model['repo']}")
-                  print(f"{model['repo']}@{model['revision']} ready in {path}", flush=True)
+                  repo, revision = model["repo"], model["revision"]
+                  for item in api.list_repo_tree(repo, revision=revision, recursive=True):
+                      if not hasattr(item, "size"):
+                          continue
+                      key = f"{prefix}/{repo}/{revision}/{item.path}"
+                      try:
+                          if s3.head_object(Bucket=bucket, Key=key)["ContentLength"] == item.size:
+                              continue
+                      except ClientError as error:
+                          if error.response["Error"]["Code"] not in ("404", "NoSuchKey"):
+                              raise
+                      path = hf_hub_download(repo, item.path, revision=revision, cache_dir="/work/hf")
+                      s3.upload_file(path, bucket, key)
+                      os.remove(os.path.realpath(path))
+                      print(f"uploaded s3://{bucket}/{key}", flush=True)
+                  print(f"{repo}@{revision} complete", flush=True)
           env:
             - name: MODELS
-              value: {{ toJson $downloads | quote }}
-            - name: HF_HOME
-              value: /tmp/hf
+              value: {{ toJson $uploads | quote }}
+            - name: BUCKET
+              value: {{ $store.bucket }}
+            - name: PREFIX
+              value: {{ $store.prefix }}
+            - name: HOME
+              value: /work
             - name: HF_HUB_DISABLE_TELEMETRY
               value: "1"
+            {{- include "llm-platform.modelStoreEnv" $store | nindent 12 }}
           securityContext:
             {{- include "llm-platform.containerSecurity" . | nindent 12 }}
           resources:
-            requests: {cpu: 250m, memory: 1Gi}
-            limits: {memory: 2Gi}
+            requests: {cpu: 250m, memory: 1Gi, ephemeral-storage: 8Gi}
+            limits: {memory: 2Gi, ephemeral-storage: 12Gi}
           volumeMounts:
-            - {name: models, mountPath: /models}
-            - {name: tmp, mountPath: /tmp}
+            - {name: work, mountPath: /work}
       volumes:
-        - name: models
-          persistentVolumeClaim:
-            claimName: llm-models
-        - name: tmp
+        - name: work
           emptyDir: {}
 {{- range $role, $model := dict "chat" $chat "embedding" $embedding }}
 ---
@@ -102,7 +117,9 @@ metadata:
 spec:
   model:
     name: {{ $model.name }}
-    uri: {{ include "llm-platform.modelURI" $model }}
+    uri: {{ include "llm-platform.modelURI" (dict "store" $store "model" $model) }}
+  storageInitializer:
+    enabled: false
   replicas: {{ $model.replicas }}
   {{- if eq $role "chat" }}
   router:
@@ -126,10 +143,14 @@ spec:
     containers:
       - name: main
         image: {{ $.Values.vllm.image }}
+        # Replaces the preset's start script, which serves a local /mnt/models; weights stream from object storage.
+        command:
+          {{- include "llm-platform.vllmServe" (dict "store" $store "model" $model "loaderConfig" $.Values.vllm.loaderConfig) | nindent 10 }}
         args:
           {{- toYaml $model.args | nindent 10 }}
         env:
           {{- include "llm-platform.vllmEnv" $ | nindent 10 }}
+          {{- include "llm-platform.modelStoreEnv" $store | nindent 10 }}
         resources:
           {{- toYaml $model.resources | nindent 10 }}
           claims:

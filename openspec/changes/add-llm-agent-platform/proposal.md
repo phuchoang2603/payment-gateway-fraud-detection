@@ -7,7 +7,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - Serve Qwen3-8B (FP8) for chat and Qwen3-Embedding-0.6B for embeddings on vLLM through KServe `LLMInferenceService`s. KServe runs llm-d's endpoint picker (EPP) and InferencePool for the chat model.
   - Both share one GPU through a single DRA claim, each process with a fixed memory fraction: the RTX 5060 Ti on dev, and on prod the shared `aws-gpu-training` Spot pool, which the platform restricts to `g6.xlarge` (L4).
   - One chat replica serves every agent through vLLM's continuous batching. The benchmark measures its capacity, and a second GPU replica behind the same InferencePool is the scale-out path.
-  - Model weights are cached on a PVC, so a restart or Spot replacement does not download them again.
+  - Model weights live once per environment in the platform bucket (`artifacts/models/`) and stream straight to the GPU with Run:ai Model Streamer. No serving node writes them to disk, which matters because the dev GPU node is also the control plane.
 - Run one agentgateway `Gateway` in `ml`. It is both the inference gateway (an OpenAI-compatible `/v1` route to the chat pool and the embedding service) and the future single entry point for MCP and A2A.
   - The LLM route requires a per-client API key and applies request and token rate limits and PII masking (card numbers, e-mail, phone) on prompts and responses.
   - Istio ambient stays the mesh: mesh authorization admits only the gateway (and the endpoint picker) to the model servers.
@@ -16,7 +16,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - Run the same agent as `evidence-agent-sandbox`, a `SandboxAgent` on Agent Substrate 0.0.9 (gVisor). Its conversations suspend to warm snapshots and resume on a small worker pool, which covers the sandbox and warm-up rubric rows.
 - Publish the agent's catalog entry to agentregistry from Git with a sync hook.
 - Register the AI assets in OpenMetadata through the existing `metadata-integrations` chart: the LLM service (the gateway endpoint), both models, and the agent as an AI application linked to its model. MCP servers, further agents and knowledge bases attach to these later.
-- Add an on-demand benchmark harness (inference-perf, llm-d's benchmark tool) with an agent-shaped shared-prefix workload. It records throughput, TTFT and inter-token latency before and after each optimization (prefix caching, FP8 KV cache, n-gram speculative decoding, PVC-cached cold start, FP8 vs AWQ weights). Results are recorded only from real dev runs, with the command and date.
+- Add an on-demand benchmark harness (inference-perf, llm-d's benchmark tool) with an agent-shaped shared-prefix workload. It records throughput, TTFT and inter-token latency before and after each optimization (prefix caching, FP8 KV cache, n-gram speculative decoding, streamed cold start, FP8 vs AWQ weights). Results are recorded only from real dev runs, with the command and date.
 - Record the autoscaling decision against the rubric's KEDA:
   - Knative for this repo's own HTTP services (the later MCP servers and web API);
   - KEDA for kagent agent Deployments and the Substrate WorkerPool (from phase 2);
@@ -32,7 +32,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 
 ### New Capabilities
 
-- `llm-inference-platform`: the self-hosted chat and embedding models, their shared GPU claim and memory split, model cache, endpoint picker and InferencePool, serving placement per environment, and model-server telemetry.
+- `llm-inference-platform`: the self-hosted chat and embedding models, their shared GPU claim and memory split, model storage, endpoint picker and InferencePool, serving placement per environment, and model-server telemetry.
 - `agent-gateway`: the agentgateway entry point, the LLM route and its authentication, rate-limit and PII policy, client keys, mesh authorization, and the route layout that MCP and A2A extend.
 - `agent-runtime`: the global model config, the published agent and its sandboxed, warm copy on Agent Substrate, the agent registry catalog, and the autoscaling choice per workload.
 - `llm-benchmark`: the benchmark harness, workload, measured optimizations and evidence rules.
@@ -45,7 +45,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 ## Impact
 
 - **Infra:**
-  - A new chart `infra/charts/llm-platform`: chat and embedding `LLMInferenceService`s, a shared GPU ResourceClaim, the model cache PVC and its fill Job, Gateway, HTTPRoute, AgentgatewayPolicy, API-key ExternalSecrets, Istio AuthorizationPolicies, kagent ModelConfig, Agent and SandboxAgent, the registry catalog and publish hook, scrape configuration, and the benchmark Job template.
+  - A new chart `infra/charts/llm-platform`: chat and embedding `LLMInferenceService`s, a shared GPU ResourceClaim, the model upload Job, the compile-cache PVC, Gateway, HTTPRoute, AgentgatewayPolicy, API-key ExternalSecrets, Istio AuthorizationPolicies, kagent ModelConfig, Agent and SandboxAgent, the registry catalog and publish hook, scrape configuration, and the benchmark Job template.
   - The `llm-platform` entry in `infra/argocd/app-of-apps/values.yaml`, disabled in `values-prod.yaml`.
   - New `llm` and `ai` values in `infra/charts/metadata-integrations`.
 - **Code:** an `llm` service kind and `ai` asset registration in the OpenMetadata register job (`src/data-pipeline/openmetadata_jobs/` after PR #102 merges).

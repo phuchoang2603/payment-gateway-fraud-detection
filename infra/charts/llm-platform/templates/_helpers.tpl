@@ -37,12 +37,37 @@ capabilities:
 {{- define "llm-platform.vllmEnv" -}}
 - name: USER
   value: vllm
-- name: HF_HUB_OFFLINE
-  value: "1"
 - name: VLLM_CACHE_ROOT
   value: /home/.cache/vllm
 {{- end -}}
 
 {{- define "llm-platform.modelURI" -}}
-{{- printf "pvc://llm-models/%s" .repo -}}
+{{- printf "s3://%s/%s/%s/%s" .store.bucket .store.prefix .model.repo .model.revision -}}
+{{- end -}}
+
+{{- define "llm-platform.modelStoreEnv" -}}
+- name: AWS_ENDPOINT_URL
+  value: {{ .endpoint }}
+- name: AWS_DEFAULT_REGION
+  value: us-east-1
+- name: AWS_EC2_METADATA_DISABLED
+  value: "true"
+- name: RUNAI_STREAMER_S3_USE_VIRTUAL_ADDRESSING
+  value: {{ ternary "1" "0" .virtualAddressing | quote }}
+- name: AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef: {name: {{ .credentialsSecret }}, key: accesskey}
+- name: AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef: {name: {{ .credentialsSecret }}, key: secretkey}
+{{- end -}}
+
+{{- define "llm-platform.vllmServe" -}}
+- vllm
+- serve
+- {{ include "llm-platform.modelURI" (dict "store" .store "model" .model) }}
+- --served-model-name={{ .model.name }}
+- --port=8000
+- --load-format=runai_streamer
+- {{ printf "--model-loader-extra-config=%s" .loaderConfig | quote }}
 {{- end -}}
