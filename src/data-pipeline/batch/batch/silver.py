@@ -134,10 +134,11 @@ def attempt_events(events: DataFrame) -> DataFrame:
     return reduce(DataFrame.unionByName, frames)
 
 
-def first_per_attempt(events: DataFrame, columns) -> DataFrame:
+def first_per_attempt(events: DataFrame, payload: str, columns) -> DataFrame:
+    keyed = events.where(F.col(payload).isNotNull()).withColumn("attempt_id", F.col(f"{payload}.attempt_id"))
     ordered = Window.partitionBy(*ATTEMPT_KEY).orderBy("aggregate_version")
     return (
-        events.withColumn("_position", F.row_number().over(ordered))
+        keyed.withColumn("_position", F.row_number().over(ordered))
         .where(F.col("_position") == 1)
         .select(*ATTEMPT_KEY, *columns)
     )
@@ -156,7 +157,8 @@ def attempts(events: DataFrame) -> DataFrame:
         F.max(F.when(F.col("kind") == "declined", F.col("detail"))).alias("decline_source"),
     )
     starts = first_per_attempt(
-        events.where(F.col("attempt_started").isNotNull()),
+        events,
+        "attempt_started",
         [
             F.col("attempt_started.context.merchant.merchant_id").alias("merchant_id"),
             F.col("attempt_started.context.customer.customer_id").alias("customer_id"),
@@ -170,7 +172,8 @@ def attempts(events: DataFrame) -> DataFrame:
         ],
     )
     decisions = first_per_attempt(
-        events.where(F.col("risk_decision_recorded").isNotNull()),
+        events,
+        "risk_decision_recorded",
         [
             F.col("risk_decision_recorded.assessment.outcome").alias("risk_outcome"),
             F.col("risk_decision_recorded.assessment.reason_codes").alias("risk_reason_codes"),

@@ -1,8 +1,11 @@
+import io
 import json
 import shutil
 from datetime import datetime, timezone
 from hashlib import sha256
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 from pyspark.sql import functions as F
 
 from batch import bronze
@@ -64,8 +67,10 @@ def write_part(spark, root, relative, rows, schema):
 
 
 def test_altered_source_file_fails_verification(tmp_path):
-    body = b"not really parquet"
     (tmp_path / "payment_events").mkdir()
+    buffer = io.BytesIO()
+    pq.write_table(pa.table({"event_id": ["evt-1"]}), buffer)
+    body = buffer.getvalue()
     (tmp_path / "payment_events/part.parquet").write_bytes(body)
     part = {
         "table": "payment_events",
