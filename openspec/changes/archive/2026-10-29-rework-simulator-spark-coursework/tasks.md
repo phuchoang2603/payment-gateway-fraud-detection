@@ -1,6 +1,6 @@
 All tasks are verified against the fresh dev baseline. Previous-environment results are not carried forward as acceptance. Tests and image builds run in CI only.
 
-Implementation update: fresh dev v17 generation/notebook, independent Bronze and Silver acceptance, and the standalone equivalent-output benchmark are complete. Screenshots and explanations are in [development verification](../../../docs/data-ml/verification.md); operational receipts remain in object storage. Prod/full-scale acceptance remains deferred.
+Implementation update: fresh dev v17 generation/notebook, independent Bronze and Silver acceptance, and the standalone equivalent-output benchmark are complete. Screenshots and explanations are in [development verification](../../../../docs/data-ml/verification.md); operational receipts remain in object storage. Prod/full-scale acceptance remains deferred.
 
 ## 1. Declared schemas and normalization
 
