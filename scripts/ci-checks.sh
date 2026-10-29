@@ -67,6 +67,19 @@ check_chart() {
 DATACONTRACT_CLI=1.2.7
 DATAPRODUCT_CLI=0.3.2
 
+check_lakehouse_jobs() {
+  local rendered
+  rendered="$(helm template lakehouse infra/charts/lakehouse -f infra/charts/lakehouse/values-prod.yaml)" || return 1
+  if grep -Eq '(^|[^[:alnum:]_-])curl([^[:alnum:]_-]|$)' <<<"$rendered"; then
+    echo "lakehouse: a rendered job calls curl, which the ClickHouse image does not ship" >&2
+    return 1
+  fi
+  if grep -Eq -- '--password([ =]|$)' <<<"$rendered"; then
+    echo "lakehouse: a rendered job passes a password as a command-line argument" >&2
+    return 1
+  fi
+}
+
 case "${1:-}" in
   go)
     report_dir="$(realpath -m "${CI_TEST_REPORTS:-$(mktemp -d)}")"
@@ -99,6 +112,7 @@ case "${1:-}" in
     while IFS= read -r -d '' manifest; do
       check_chart "$(dirname "$manifest")"
     done < <(find infra -type f -name Chart.yaml -print0)
+    check_lakehouse_jobs || exit 1
     ;;
   *)
     printf 'Usage: %s {contracts|python [project]|python-scripts|go [module]|helm}\n' "$0" >&2

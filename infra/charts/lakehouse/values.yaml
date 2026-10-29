@@ -14,7 +14,7 @@ catalog:
 clickhouse:
   image: clickhouse/clickhouse-server:26.10.2.103
   host: clickhouse.data.svc.cluster.local
-  port: 8123
+  nativePort: 9000
   adminUser: admin
   adminPasswordKey: CLICKHOUSE_ADMIN_PASSWORD
 lakehouse:

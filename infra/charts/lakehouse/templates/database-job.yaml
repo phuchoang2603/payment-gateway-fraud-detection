@@ -5,20 +5,25 @@ metadata:
 data:
   setup.sh: |
     set -eu
+    client() {
+      clickhouse-client --host "$CLICKHOUSE_HOST" --port "$CLICKHOUSE_PORT" --user "$CLICKHOUSE_ADMIN_USER" "$@"
+    }
     statement() {
-      code=$(curl -sS -o /dev/null -w '%{http_code}' --user "$CLICKHOUSE_ADMIN_USER:$ADMIN_PASSWORD" --data-binary "$1" "http://$CLICKHOUSE_HOST:$CLICKHOUSE_PORT/") || code=000
-      if [ "$code" != 200 ]; then
-        echo "ClickHouse statement failed with HTTP $code" >&2
+      if ! error=$(printf '%s;\n' "$1" | client --multiquery 2>&1 >/dev/null); then
+        echo "ClickHouse statement failed: $(printf '%s' "$error" | grep -o 'Code: [0-9]*' | head -n 1)" >&2
         return 1
       fi
     }
     query() {
-      curl -fsS --user "$CLICKHOUSE_ADMIN_USER:$ADMIN_PASSWORD" --data-binary "$1" "http://$CLICKHOUSE_HOST:$CLICKHOUSE_PORT/"
+      client --format TSVRaw --query "$1"
     }
-    until statement "SELECT 1"; do sleep 10; done
+    until client --query "SELECT 1" >/dev/null 2>&1; do
+      echo "waiting for ClickHouse" >&2
+      sleep 10
+    done
     definition="CREATE DATABASE $LAKEHOUSE_DATABASE ENGINE = DataLakeCatalog('$LAKEHOUSE_REST_URI') SETTINGS catalog_type = 'rest', catalog_credential = '$LAKEHOUSE_CLIENT_ID:$ICEBERG_CLIENT_SECRET', auth_scope = '$LAKEHOUSE_SCOPE', oauth_server_uri = '$LAKEHOUSE_OAUTH_URI', warehouse = '$LAKEHOUSE_WAREHOUSE', storage_endpoint = '$STORAGE_ENDPOINT', region = '$STORAGE_REGION', aws_access_key_id = '$AWS_ACCESS_KEY_ID', aws_secret_access_key = '$AWS_SECRET_ACCESS_KEY', vended_credentials = false"
     marker="definition-sha256:$(printf '%s' "$definition" | sha256sum | cut -d' ' -f1)"
-    current=$(query "SELECT comment FROM system.databases WHERE name = '$LAKEHOUSE_DATABASE' FORMAT TSVRaw")
+    current=$(query "SELECT comment FROM system.databases WHERE name = '$LAKEHOUSE_DATABASE'")
     if [ "$current" = "$marker" ]; then
       echo "lakehouse database definition is current"
       exit 0
@@ -47,8 +52,11 @@ spec:
           command: [bash, /script/setup.sh]
           env:
             - {name: CLICKHOUSE_HOST, value: {{ .Values.clickhouse.host | quote }}}
-            - {name: CLICKHOUSE_PORT, value: {{ .Values.clickhouse.port | quote }}}
+            - {name: CLICKHOUSE_PORT, value: {{ .Values.clickhouse.nativePort | quote }}}
             - {name: CLICKHOUSE_ADMIN_USER, value: {{ .Values.clickhouse.adminUser | quote }}}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: lakehouse-admin, key: ADMIN_PASSWORD}
             - {name: LAKEHOUSE_DATABASE, value: {{ .Values.lakehouse.database | quote }}}
             - {name: LAKEHOUSE_REST_URI, value: {{ .Values.lakehouse.restCatalogUri | quote }}}
             - {name: LAKEHOUSE_WAREHOUSE, value: {{ .Values.lakehouse.warehouse | quote }}}
@@ -61,8 +69,6 @@ spec:
               valueFrom:
                 secretKeyRef: {name: iceberg-bootstrap, key: client-secret}
           envFrom:
-            - secretRef:
-                name: lakehouse-admin
             - secretRef:
                 name: iceberg-storage
           volumeMounts:
