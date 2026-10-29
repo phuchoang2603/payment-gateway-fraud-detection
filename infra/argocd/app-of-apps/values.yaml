@@ -46,6 +46,3 @@ applications:
   llm-platform:
     destinationNamespace: llm
     path: infra/charts/llm-platform
-    namespaceLabels:
-      istio.io/dataplane-mode: ambient
-      pod-security.kubernetes.io/enforce: restricted
