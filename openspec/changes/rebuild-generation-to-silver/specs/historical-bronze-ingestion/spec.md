@@ -55,7 +55,7 @@ In Kafka mode, DP1 SHALL read `payments.events.v1` into the events table and `fr
 - **THEN** it appears in `bronze.rejected_records` with its raw bytes and an error naming the failed check, the good rows of the same commit are written, and the run report and the rejected-records check show the count
 
 ### Requirement: Bronze contract checks
-After each commit, the persisted Bronze tables SHALL pass the contract-derived StarRocks SQL checks for required and conditional nested fields, enumerations and supported schema versions. A failed check SHALL fail the run; Bronze checks SHALL NOT claim lifecycle, linkage, duplicate-consistency or label-availability validity, which belong to Silver.
+After each commit, the persisted Bronze tables SHALL pass the contract-derived ClickHouse SQL checks for required and conditional nested fields, enumerations and supported schema versions. A failed check SHALL fail the run; Bronze checks SHALL NOT claim lifecycle, linkage, duplicate-consistency or label-availability validity, which belong to Silver.
 
 #### Scenario: Required nested field missing
 
@@ -97,8 +97,8 @@ After each commit, the persisted Bronze tables SHALL pass the contract-derived S
 **Migration**: See the `curated-payments` capability.
 
 ### Requirement: Dataset diagnostics are distinct from ingestion validity
-**Reason**: Diagnostics are a separate on-demand job.
-**Migration**: See "Generator diagnostics" in `historical-data-generation`.
+**Reason**: The diagnostics job is removed; Bronze enforces only its contract rules.
+**Migration**: None.
 
 ### Requirement: Raw-ingestion boundary and recurring delivery acceptance
 **Reason**: Landing manifests, ledgers, epochs and transport envelopes are removed.

@@ -24,7 +24,7 @@ GitOps deploys the same application charts to dev and prod. CI publishes a compl
 | `live-traffic` | `data` | Live simulator |
 | `data-pipelines` | `data` | Generator and pipeline WorkflowTemplates |
 | `metadata-integrations` | `data` | Catalog connections and discovery |
-| `lakehouse-integration` | `data` | Polaris registration, StarRocks external catalog and reader, Iceberg storage secret |
+| `lakehouse-integration` | `data` | Polaris registration, ClickHouse `lakehouse` DataLakeCatalog and `openmetadata` user, Iceberg storage secret |
 
 Prod currently runs the gateway services with their databases, Redis and Kafka, plus the `data-pipelines` chart for the generator only. Live traffic, Flink/Feast, metadata integrations and the Bronze/Silver pipelines are disabled there. Application pods are stateless; Postgres and the authorization and Feast Redis instances own the persistent volumes.
 

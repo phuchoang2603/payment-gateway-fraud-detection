@@ -9,10 +9,10 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 | Workflow | Stages | Status |
 |---|---|---|
 | `generate-historical` | Shards in parallel → publish | Done; prod renders only this template |
-| `dp1-bronze` (historical or Kafka mode) | Spark ingest → StarRocks checks → OpenMetadata publish | In progress (PR #102) |
-| `dp2-silver` | Spark curate → StarRocks checks → OpenMetadata publish | In progress (PR #102) |
+| `dp1-bronze` (historical or Kafka mode) | Spark ingest → ClickHouse checks → OpenMetadata publish | In progress (PR #102) |
+| `dp2-silver` | Spark curate → ClickHouse checks → OpenMetadata publish | In progress (PR #102) |
 | `dp3-features` | Spark features → checks → publish | Planned |
-| `maintain-lakehouse`, `dp1-diagnostics`, `dp2-benchmark`, `dp2-storage-layout` | Single on-demand stage | In progress (PR #102) |
+| `maintain-lakehouse`, `dp2-benchmark` | Single on-demand stage | In progress (PR #102) |
 
 Each pipeline stage retries only on execution errors, never on failed data checks, and each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow. Pending: screenshots of each pipeline graph and run, taken after the first dev run.
 
@@ -37,11 +37,11 @@ Each data product lives in one folder under [`contracts/data-products/`](../../c
 
 Each contract has a generated reference under [`products/<product>/`](products). CI lints every descriptor and contract with the pinned native tools and diffs each reference against a fresh export (`bash scripts/ci-checks.sh contracts`). Regenerate a reference with the export command in [`scripts/ci-checks.sh`](../../scripts/ci-checks.sh) after changing a contract.
 
-Historical source contracts describe schema and meaning only. Bronze and Silver contracts carry executable StarRocks SQL quality rules, each returning a violation count that must be zero; the batch package turns them into native OpenMetadata test cases.
+Historical source contracts describe schema and meaning only. Bronze and Silver contracts carry executable ClickHouse SQL quality rules, each returning a violation count that must be zero; the batch package turns them into native OpenMetadata test cases.
 
 ## Catalog
 
-The `metadata-integrations` application owns the shared catalog connections and a daily 03:00 UTC discovery of StarRocks tables and Kafka topics. Each connector declares its ExternalSecret alongside its connection. Discovery samples no rows and runs no profiling.
+The `metadata-integrations` application owns the shared catalog connections and a daily 03:00 UTC discovery of ClickHouse tables and Kafka topics. Each connector declares its ExternalSecret alongside its connection. Discovery samples no rows and runs no profiling.
 
 Pipelines publish lineage (historical source and Kafka topics → Bronze → Silver), their execution status on success and failure through the workflow exit handler, and native test results. The Kafka CronWorkflow's exit handler records only the Bronze pipeline: its Silver step runs through `templateRef`, which does not run the Silver template's exit handler. A run succeeds only when every expected test reports Success. Pending: lineage and validation screenshots for DP1–DP3, taken after the first dev run.
 

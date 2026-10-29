@@ -30,7 +30,7 @@ Historical Parquet and Kafka-decoded payment events SHALL expose the same typed 
 ## ADDED Requirements
 
 ### Requirement: Contract quality rules
-Bronze and Silver contracts SHALL declare executable quality rules as scalar violation-count StarRocks SQL with a zero threshold and stable rule IDs. Bronze rules SHALL cover raw schema validity only. Silver rules SHALL cover business validity: unique keys, lifecycle validity, label linkage and availability, amounts and label-source semantics. Historical source contracts SHALL describe schema and meanings without a separate executable rule suite.
+Bronze and Silver contracts SHALL declare executable quality rules as scalar violation-count ClickHouse SQL with a zero threshold and stable rule IDs. Bronze rules SHALL cover raw schema validity only. Silver rules SHALL cover business validity: unique keys, lifecycle validity, label linkage and availability, amounts and label-source semantics. Historical source contracts SHALL describe schema and meanings without a separate executable rule suite.
 
 #### Scenario: Conflicting delivery
 
@@ -43,7 +43,7 @@ Bronze and Silver contracts SHALL declare executable quality rules as scalar vio
 - **THEN** the Silver label-linkage rule fails
 
 ### Requirement: Validation ownership
-Spark jobs SHALL own source integrity, row conservation, Kafka offset bookkeeping and duplicate conflicts. Native OpenMetadata test suites SHALL execute the Git-authoritative contract SQL through StarRocks against the committed Bronze and Silver tables. Contract lint SHALL NOT claim to validate data. No source DuckDB rule suite, GX suite, custom result publisher or UI-authored rule source SHALL remain.
+Spark jobs SHALL own source integrity, row conservation, Kafka offset bookkeeping and duplicate conflicts. Native OpenMetadata test suites SHALL execute the Git-authoritative contract SQL through ClickHouse against the committed Bronze and Silver tables. Contract lint SHALL NOT claim to validate data. No source DuckDB rule suite, GX suite, custom result publisher or UI-authored rule source SHALL remain.
 
 #### Scenario: Silver validation
 
@@ -59,7 +59,7 @@ Bronze contracts SHALL define business fields, schema version, provenance for bo
 - **THEN** it can distinguish historical from Kafka rows, source time from ingestion time and version-2 from version-3 events, and determine when labels can be joined
 
 ### Requirement: Contract-derived native checks
-Bronze and Silver validation SHALL derive native OpenMetadata test definitions from Git ODCS rules with stable semantic IDs and explicit StarRocks SQL, without a handwritten parallel suite. Each rule SHALL return a bounded scalar violation count with zero as the passing threshold. A declared rule that cannot be prepared SHALL fail preparation rather than produce a partial passing result.
+Bronze and Silver validation SHALL derive native OpenMetadata test definitions from Git ODCS rules with stable semantic IDs and explicit ClickHouse SQL, without a handwritten parallel suite. Each rule SHALL return a bounded scalar violation count with zero as the passing threshold. A declared rule that cannot be prepared SHALL fail preparation rather than produce a partial passing result.
 
 #### Scenario: Native preparation skips a quality rule
 
@@ -97,8 +97,8 @@ The `silver-payments` folder SHALL contain one ODPS descriptor and ODCS contract
 **Migration**: Feature contracts remain under `contracts/features`, owned by the streaming feature capability.
 
 ### Requirement: Development source evidence
-**Reason**: Evidence capture is deferred; measurements come from the diagnostics job.
-**Migration**: See "Generator diagnostics" in `historical-data-generation`.
+**Reason**: Evidence capture is deferred; measurements come from the Silver run report and the benchmark.
+**Migration**: None.
 
 ### Requirement: Source and bronze semantic agreement
 **Reason**: There is no separate source rule suite to agree with.

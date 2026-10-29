@@ -20,8 +20,8 @@ The platform SHALL use one current environment, codebase, common runtime configu
 **Migration**: See `historical-bronze-ingestion` "Kafka source ingestion".
 
 ### Requirement: Contextual validation and generator diagnostics
-**Reason**: History-dependent validation belongs to Silver and diagnostics are an on-demand job.
-**Migration**: See `curated-payments` and `historical-data-generation` "Generator diagnostics".
+**Reason**: History-dependent validation belongs to Silver.
+**Migration**: See `curated-payments`.
 
 ### Requirement: Schema cutover without shared-data deletion
 **Reason**: Landing epochs are removed; Kafka-mode DP1 starts from configured offsets and then from committed offsets.

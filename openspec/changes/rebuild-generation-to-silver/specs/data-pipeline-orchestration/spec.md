@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Operator-managed Spark stages
-Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for each Spark stage attempt, owned by the workflow so that it is removed with it. Native discovery and StarRocks SQL checks SHALL run as one finite container stage using the server-matched official ingestion runtime. Publication SHALL use the thin metadata image. The platform-owned Apache Spark Operator SHALL manage driver and executor lifecycle with operator restarts disabled. Stage success SHALL require a successful terminal application status; failed applications and deadlines SHALL fail the stage with diagnostics.
+Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for each Spark stage attempt, owned by the workflow so that it is removed with it. Native discovery and ClickHouse SQL checks SHALL run as one finite container stage using the server-matched official ingestion runtime. Publication SHALL use the thin metadata image. The platform-owned Apache Spark Operator SHALL manage driver and executor lifecycle with operator restarts disabled. Stage success SHALL require a successful terminal application status; failed applications and deadlines SHALL fail the stage with diagnostics.
 
 #### Scenario: Stage fails or times out
 
@@ -52,7 +52,7 @@ Each stage SHALL have one bounded Argo retry policy for execution errors; nested
 - **THEN** Kubernetes rejects the request with guidance to use graceful stop
 
 ### Requirement: Readable workflow graph
-The Bronze and Silver workflows SHALL each show the Spark, checks and publish stages with direct dependencies and readable names. Diagnostics and benchmark SHALL be separate on-demand workflow templates with a single Spark stage. Metadata API call details SHALL remain in stage logs.
+The Bronze and Silver workflows SHALL each show the Spark, checks and publish stages with direct dependencies and readable names. The benchmark SHALL be a separate on-demand workflow template with a single Spark stage. Metadata API call details SHALL remain in stage logs.
 
 #### Scenario: Inspect the stage graph
 

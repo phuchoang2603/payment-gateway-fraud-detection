@@ -1,6 +1,6 @@
 # Storage
 
-Three storage roles: immutable source files in object storage, an Iceberg lakehouse for Bronze and Silver (and later Gold and feature tables), and StarRocks as the SQL warehouse over the lakehouse.
+Three storage roles: immutable source files in object storage, an Iceberg lakehouse for Bronze and Silver (and later Gold and feature tables), and ClickHouse as the SQL warehouse over the lakehouse.
 
 ## Object storage
 
@@ -20,7 +20,7 @@ Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT
 
 ## Lakehouse
 
-Tables are Iceberg, registered in the platform's Polaris REST catalog through the `lakehouse-integration` chart. Spark writes them; StarRocks reads them through an external catalog.
+Tables are Iceberg, registered in the platform's Polaris REST catalog through the `lakehouse-integration` chart. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
 
 **Status: in progress** in [PR #102](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/102). No dev run has written these tables yet.
 
@@ -34,10 +34,10 @@ Tables are Iceberg, registered in the platform's Polaris REST catalog through th
 
 Kafka offsets are derived from the Bronze rows themselves, not from snapshot metadata, so compaction and snapshot expiry never lose ingestion progress.
 
-A `maintain-lakehouse` workflow runs compaction, the Z-order sort and manifest and snapshot maintenance as one Spark job. It is on demand, with a suspended daily CronWorkflow at 03:43 UTC. It is a separate schedule, not a step after `dp2-silver`, because every Silver run overwrites all of its files: maintaining after each run would rewrite the same files again. Once a day, after the Silver run, is enough for the layout. The `storage-layout` benchmark measures compaction (file count, average size, scan time), partition pruning (files and bytes scanned for a one-day query) and Z-order (files scanned for one customer's 30-day query), each as a median of 3 runs after a warm-up with equal results asserted. Pending: no storage-layout run has measured v19 Silver yet.
+A `maintain-lakehouse` workflow runs compaction, the Z-order sort and manifest and snapshot maintenance as one Spark job. It is on demand, with a suspended daily CronWorkflow at 03:43 UTC. It is a separate schedule, not a step after `dp2-silver`, because every Silver run overwrites all of its files: maintaining after each run would rewrite the same files again. Once a day, after the Silver run, is enough for the layout. Its report also gives, for one customer's 30-day window on `silver.attempts` before and after the Z-order rewrite, and for partitioned Bronze a one-day filter against no filter, the files, bytes and planning time that Iceberg's planner selects. These are plan-only measurements. Pending: the v19 Silver run has not captured them yet.
 
 ## Warehouse
 
-StarRocks reads the Iceberg tables directly through the external catalog configured by `lakehouse-integration`; queries need no copy of the lake. It runs the contract-derived SQL checks for Bronze and Silver.
+ClickHouse reads the Iceberg tables directly through the `lakehouse` DataLakeCatalog database configured by `lakehouse-integration`; queries need no copy of the lake. It runs the contract-derived SQL checks for Bronze and Silver.
 
-**Planned:** Gold marts as StarRocks tables with sort keys and indexes chosen for the fixed analytical queries, measured before and after on the same data.
+**Planned:** warehouse indexing, not part of PR #102: Gold marts as ClickHouse MergeTree tables with `ORDER BY` keys and skip indexes chosen for the fixed analytical queries, measured before and after on the same data.

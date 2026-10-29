@@ -93,7 +93,7 @@ Each DP2 run SHALL persist a report with its Bronze snapshot IDs, input rows per
 - **THEN** input rows equal distinct events plus identical duplicates plus the rows of conflicting payments
 
 ### Requirement: Silver contract checks
-After each commit, the Silver tables SHALL pass contract-derived StarRocks SQL checks executed by native OpenMetadata tests: unique keys, zero lifecycle-invalid attempts, zero label violations, non-negative amounts, truth labels with a scenario, chargebacks without one, and availability at or after occurrence. A failed check SHALL fail the run.
+After each commit, the Silver tables SHALL pass contract-derived ClickHouse SQL checks executed by native OpenMetadata tests: unique keys, zero lifecycle-invalid attempts, zero label violations, non-negative amounts, truth labels with a scenario, chargebacks without one, and availability at or after occurrence. A failed check SHALL fail the run.
 
 #### Scenario: Linkage violation reaches checks
 
@@ -106,7 +106,7 @@ After each commit, the Silver tables SHALL pass contract-derived StarRocks SQL c
 - **THEN** the Silver rejection check fails
 
 ### Requirement: Lakehouse storage layout and maintenance
-Bronze and Silver Iceberg tables SHALL be partitioned as the design declares and created with hash distribution and a 256 MB target file size. The `maintain-lakehouse` workflow SHALL compact each table with a bin-pack rewrite, rewrite its manifests, and expire snapshots older than seven days while keeping the last ten. Maintenance SHALL NOT change row content, and SHALL NOT change Kafka progress, which lives in the Bronze rows. The on-demand `storage-layout` benchmark SHALL measure compaction, partition pruning and Z-order clustering on fixed inputs, reporting files and bytes planned by each Iceberg scan, medians of three timed runs after one warm-up, and SHALL assert equal output in both directions before reporting any timing.
+Bronze and Silver Iceberg tables SHALL be partitioned as the design declares and created with hash distribution and a 256 MB target file size. The `maintain-lakehouse` workflow SHALL compact each table with a bin-pack rewrite, except `silver.attempts`, which SHALL use a sort rewrite by `zorder(customer_id,payment_method_fingerprint)`. It SHALL rewrite each table's manifests and expire snapshots older than seven days while keeping the last ten. Maintenance SHALL NOT change row content, and SHALL NOT change Kafka progress, which lives in the Bronze rows. The report SHALL give each table's files and bytes before and after from its `files` metadata table. It SHALL also give, for one customer's 30-day window on `silver.attempts` before and after the rewrite, and for partitioned Bronze a one-day filter against no filter, the files and bytes planned by each Iceberg scan and the planning time. These are plan-only measurements and copy no data.
 
 #### Scenario: Compaction between Kafka runs
 
@@ -118,20 +118,20 @@ Bronze and Silver Iceberg tables SHALL be partitioned as the design declares and
 - **WHEN** maintenance expires snapshots
 - **THEN** the last ten snapshots remain, every snapshot not older than seven days remains, and the table content is unchanged
 
-#### Scenario: Layout output differs
+#### Scenario: Probe before and after the rewrite
 
-- **WHEN** a layout's output differs from its baseline in either direction
-- **THEN** the storage benchmark fails without reporting timings for that case
+- **WHEN** maintenance rewrites `silver.attempts`
+- **THEN** the report holds the planned files and bytes for the customer window before and after the rewrite, and the table content is unchanged
 
-### Requirement: Optimization benchmark
-The repository SHALL provide an on-demand Spark benchmark that measures two aggregations over the same pinned Silver snapshot. The first is the skewed merchant aggregation: attempts joined with per-merchant aggregates, grouped by merchant and day. The second is a high-cardinality aggregation: distinct devices and attempt counts per customer and per payment method over 24-hour windows, across about three million customers and 3.9 million payment methods. Each aggregation SHALL run as a baseline with adaptive skew handling off and without salting, and as an optimized variant on fixed resources. Each variant SHALL perform one warm-up and three timed runs, report median durations, and assert equal output in both directions with `exceptAll`. The benchmark SHALL NOT run in the pipeline workflows.
+### Requirement: Skewed merchant join benchmark
+The repository SHALL provide an on-demand Spark benchmark that runs one skewed merchant aggregation over a pinned Silver snapshot: attempts joined with per-merchant totals as a sort-merge join, grouped by merchant and day. It SHALL run three variants, each once: AQE skew join off, AQE skew join on, and salting into 16 buckets. Each variant's output SHALL be reduced to its row count and an order-independent checksum, and every variant SHALL equal the baseline on both before any duration is reported. The report SHALL give each variant's duration, its Spark job, stage and task IDs, and the hot merchant's share with its denominator. The benchmark SHALL NOT run in the pipeline workflows.
 
-#### Scenario: Optimized result differs
+#### Scenario: Variant output differs
 
-- **WHEN** an optimized variant's output differs from its baseline for either aggregation
-- **THEN** the benchmark fails without reporting a speedup for that aggregation
+- **WHEN** a variant's row count or checksum differs from the baseline
+- **THEN** the benchmark fails without reporting a duration for that variant
 
-#### Scenario: High-cardinality measurement
+#### Scenario: Report content
 
-- **WHEN** the benchmark runs against a snapshot with the full customer and payment-method population
-- **THEN** it reports both aggregations' baseline and optimized medians and their output row counts
+- **WHEN** the benchmark completes
+- **THEN** the report lists each variant's duration, stage IDs and task count, and the hot merchant share with its denominator

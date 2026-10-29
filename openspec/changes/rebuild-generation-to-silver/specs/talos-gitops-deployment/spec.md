@@ -2,7 +2,7 @@
 
 ### Requirement: Environment data-pipeline deployment
 
-Dev SHALL enable the historical generator, DP1 Bronze and DP2 Silver workflow templates and the on-demand diagnostics and benchmark templates in `data`. Prod SHALL enable the data-pipeline application with only the historical generator template, using the full-scale configuration and the gateway object identity; Bronze, Silver, schedules and their credentials SHALL stay disabled in prod until explicitly enabled. All templates SHALL use externally supplied credentials, commit-tagged images and explicit resource budgets. Historical source selection SHALL default to v18 in dev. The scheduled Kafka-mode workflow SHALL remain suspended in both environments until explicitly enabled.
+Dev SHALL enable the historical generator, DP1 Bronze and DP2 Silver workflow templates and the on-demand benchmark template in `data`. Prod SHALL enable the data-pipeline application with only the historical generator template, using the full-scale configuration and the gateway object identity; Bronze, Silver, schedules and their credentials SHALL stay disabled in prod until explicitly enabled. All templates SHALL use externally supplied credentials, commit-tagged images and explicit resource budgets. Historical source selection SHALL default to v18 in dev. The scheduled Kafka-mode workflow SHALL remain suspended in both environments until explicitly enabled.
 
 #### Scenario: Fresh environment rollout
 
@@ -42,6 +42,38 @@ Deployment SHALL provide one opt-in single-replica simulator workload running tr
 
 - **WHEN** simulation is disabled
 - **THEN** the simulator workload is absent while existing gateway/Kafka services and completed data remain intact
+
+### Requirement: Data-platform ownership boundary
+Application deployment SHALL own DP1 workloads in the platform-owned data namespace. The shared platform SHALL own Argo, the native Workflow lifecycle admission policy and binding scoped to `data`, Apache Spark Operator and its CRDs, ClickHouse and its Altinity operator and CRDs, OpenMetadata and its PostgreSQL/OpenSearch backing services. ClickHouse SHALL be reconciled in the platform repository through Argo CD and the Altinity operator. Application deployment SHALL own its SQL/contracts and native ingestion workflow configuration, not shared engine installation. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
+
+#### Scenario: Remove the data-pipeline application
+
+- **WHEN** the application-owned DP1 deployment is removed
+- **THEN** shared controllers, OpenMetadata, backing-service persistence, accepted source objects and committed lake data remain under their existing owners
+
+### Requirement: Gateway-owned lakehouse integration
+The gateway repository SHALL own gateway Doppler credential references, Polaris catalog registration and ClickHouse DataLakeCatalog and reader setup. The platform SHALL own storage policies, provision production storage identities and publish credentials to gateway Doppler. The platform SHALL own servers, durable databases, administrative authentication and generated ClickHouse reader passwords. The gateway integration SHALL provide the storage Secret referenced by the platform Polaris Deployment without creating a second storage identity.
+
+#### Scenario: Reconcile the gateway integration
+- **WHEN** the selected environment is reconciled with gateway credentials available
+- **THEN** Polaris and ClickHouse use the same environment gateway storage identity as Flink, metadata storage connections and the synthetic writer
+- **AND** gateway removal does not destroy shared server databases, PVCs or the platform bucket
+
+### Requirement: Separate pipeline credentials
+DP1 SHALL receive the gateway access key scoped to gateway datasets, run evidence and the lakehouse, plus separate ClickHouse query and metadata-publication credentials. ClickHouse catalog/storage credentials SHALL be scoped separately from workload SQL access. Gateway data stages SHALL reuse the gateway object identity; catalog OAuth2 and ClickHouse SQL credentials SHALL remain separate. Rendered configuration SHALL contain secret references rather than secret values.
+
+#### Scenario: Inspect or render pipeline configuration
+
+- **WHEN** the DP1 charts are rendered without live secret values
+- **THEN** source, lake and catalog credentials remain external references with independently scoped access, and no plaintext replacement credentials are embedded
+
+### Requirement: Shared analytical SQL service
+The platform SHALL provide a bounded persistent ClickHouse server for SQL quality and analytics, reading the platform Polaris Iceberg REST catalog through a DataLakeCatalog database with OAuth2 and environment S3 access. Deployment SHALL NOT add Trino, a second analytical engine, a replacement catalog or a signing proxy for this path. Existing observability ClickHouse SHALL remain unaffected. Resource/PVC budgets SHALL be measured with Spark and OpenMetadata; a single-node toy deployment SHALL NOT claim HA. Shared engine deletion SHALL NOT be coupled to pipeline application removal.
+
+#### Scenario: Query accepted lake data
+
+- **WHEN** a native workflow validates a candidate
+- **THEN** ClickHouse reads the recorded Iceberg snapshots directly without a mandatory imported copy and acceptance checks matching native results
 
 ## ADDED Requirements
 
