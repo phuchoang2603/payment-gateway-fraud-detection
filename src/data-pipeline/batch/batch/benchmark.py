@@ -47,19 +47,45 @@ def join_salted(attempts: DataFrame) -> DataFrame:
 
 JOIN_VARIANTS = {
     "baseline_no_skew_join": (join_baseline, {**SORT_MERGE, "spark.sql.adaptive.skewJoin.enabled": "false"}),
-    "aqe_skew_join": (join_baseline, {**SORT_MERGE, "spark.sql.adaptive.skewJoin.enabled": "true"}),
+    "aqe_skew_join": (
+        join_baseline,
+        {
+            **SORT_MERGE,
+            "spark.sql.adaptive.skewJoin.enabled": "true",
+            "spark.sql.adaptive.forceOptimizeSkewedJoin": "true",
+        },
+    ),
     "salted": (join_salted, {**SORT_MERGE, "spark.sql.adaptive.skewJoin.enabled": "false"}),
 }
 
 
 def fingerprint(frame: DataFrame):
-    """Row count and an order-independent checksum of every output row."""
-    row = (
-        frame.select(F.xxhash64(*frame.columns).cast("decimal(38,0)").alias("hash"))
-        .agg(F.count("*").alias("rows"), F.sum("hash").alias("checksum"))
-        .first()
+    """Row count, an order-independent checksum, and the executed plan of the run."""
+    digest = frame.select(F.xxhash64(*frame.columns).cast("decimal(38,0)").alias("hash")).agg(
+        F.count("*").alias("rows"), F.sum("hash").alias("checksum")
     )
-    return row["rows"], row["checksum"]
+    row = digest.first()
+    return row["rows"], row["checksum"], digest._jdf.queryExecution().executedPlan()
+
+
+def skew_report(spark, plan) -> dict:
+    """Whether the final adaptive plan contains a skew-split sort-merge join or a skewed shuffle read."""
+    joins, reads = [], []
+    stack = [plan]
+    while stack:
+        node = stack.pop()
+        name = node.getClass().getSimpleName()
+        if name == "AdaptiveSparkPlanExec":
+            stack.append(node.executedPlan())
+            continue
+        if name == "SortMergeJoinExec":
+            joins.append(bool(node.isSkewJoin()))
+        if name == "AQEShuffleReadExec":
+            reads.append(bool(node.hasSkewedPartition()))
+        children = spark._jvm.scala.collection.JavaConverters.seqAsJavaList(node.children())
+        for index in range(children.size()):
+            stack.append(children.get(index))
+    return {"skew_join": any(joins), "skewed_shuffle_read": any(reads)}
 
 
 def same_output(baseline, candidate, name: str) -> None:
@@ -74,20 +100,29 @@ def run_variant(spark, attempts: DataFrame, name: str, build, settings: dict, ph
     try:
         frame = build(attempts)
         with phase(spark, phases, f"skewed_merchant_join {name}"):
-            return fingerprint(frame)
+            rows, checksum, plan = fingerprint(frame)
+        return rows, checksum, skew_report(spark, plan)
     finally:
         for key, value in previous.items():
             spark.conf.set(key, value)
 
 
-def skewed_merchant_join(spark, attempts: DataFrame, phases: dict) -> dict:
+def skewed_merchant_join(spark, attempts: DataFrame, phases: dict, aqe_thresholds: dict | None = None) -> dict:
+    attempts.count()
     results, baseline = {}, None
     for name, (build, settings) in JOIN_VARIANTS.items():
-        guard = run_variant(spark, attempts, name, build, settings, phases)
+        if name == "aqe_skew_join":
+            settings = {**settings, **(aqe_thresholds or {})}
+        rows, checksum, skew = run_variant(spark, attempts, name, build, settings, phases)
+        if name == "aqe_skew_join" and not (skew["skew_join"] or skew["skewed_shuffle_read"]):
+            raise AssertionError(
+                "aqe_skew_join: the final adaptive plan has no skew-split join or skewed shuffle read"
+            )
+        guard = (rows, checksum)
         if baseline is None:
             baseline = guard
         same_output(baseline, guard, name)
-        results[name] = {"output_rows": guard[0], "checksum": str(guard[1])}
+        results[name] = {"output_rows": rows, "checksum": str(checksum), "skew": skew}
     return results
 
 
