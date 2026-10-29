@@ -12,9 +12,9 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 | `dp1-bronze` (historical or Kafka mode) | Spark ingest → StarRocks checks → OpenMetadata publish | In progress (PR #102) |
 | `dp2-silver` | Spark curate → StarRocks checks → OpenMetadata publish | In progress (PR #102) |
 | `dp3-features` | Spark features → checks → publish | Planned |
-| `maintain-lakehouse`, diagnostics, benchmark, profiling | Single on-demand stage | In progress (PR #102) |
+| `maintain-lakehouse`, `dp1-diagnostics`, `dp2-benchmark`, `dp2-storage-layout` | Single on-demand stage | In progress (PR #102); no profiling template yet |
 
-Each pipeline stage retries only on execution errors, never on failed data checks, and each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow. Screenshots of each pipeline graph and run are added here as runs complete.
+Each pipeline stage retries only on execution errors, never on failed data checks, and each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow. Pending: screenshots of each pipeline graph and run, taken after the first dev run.
 
 ## Data products and contracts
 
@@ -23,7 +23,8 @@ Each data product lives in one folder under [`contracts/data-products/`](../../c
 | Product | Ports | Reference |
 |---|---|---|
 | `historical-payments` | `payment-events`, `fraud-labels` | [payment events](products/historical-payments/payment-events.md), [fraud labels](products/historical-payments/fraud-labels.md) |
-| `bronze-payments`, `silver-payments` | Bronze and Silver tables | Added with PR #102 |
+| `bronze-payments` | `payment-events`, `fraud-labels`, `rejected-records` | [payment events](products/bronze-payments/payment-events.md), [fraud labels](products/bronze-payments/fraud-labels.md), [rejected records](products/bronze-payments/rejected-records.md) |
+| `silver-payments` | `payment-events`, `attempts`, `labels`, `rejected-events` | [payment events](products/silver-payments/payment-events.md), [attempts](products/silver-payments/attempts.md), [labels](products/silver-payments/labels.md), [rejected events](products/silver-payments/rejected-events.md) |
 
 Each contract has a generated reference under [`products/<product>/`](products). CI lints every descriptor and contract with the pinned native tools and diffs each reference against a fresh export (`bash scripts/ci-checks.sh contracts`). Regenerate a reference with the export command in [`scripts/ci-checks.sh`](../../scripts/ci-checks.sh) after changing a contract.
 
@@ -33,7 +34,7 @@ Historical source contracts describe schema and meaning only. Bronze and Silver 
 
 The `metadata-integrations` application owns the shared catalog connections and a daily 03:00 UTC discovery of StarRocks tables and Kafka topics. Each connector declares its ExternalSecret alongside its connection. Discovery samples no rows and runs no profiling.
 
-Pipelines publish their own lineage (historical source and Kafka topics → Bronze → Silver), pipeline execution status and native test results. A run succeeds only when every expected test reports Success. Lineage and validation screenshots for DP1–DP3 are added here.
+Pipelines publish lineage (historical source and Kafka topics → Bronze → Silver) and native test results. Publishing pipeline execution status is not yet implemented. A run succeeds only when every expected test reports Success. Pending: lineage and validation screenshots for DP1–DP3, taken after the first dev run.
 
 ## Schema registry
 
