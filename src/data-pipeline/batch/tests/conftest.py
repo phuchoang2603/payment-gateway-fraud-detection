@@ -30,6 +30,14 @@ def contract_inputs(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
+def brokers():
+    from testcontainers.community.kafka import KafkaContainer
+
+    with KafkaContainer("confluentinc/cp-kafka:7.8.0").with_kraft() as kafka:
+        yield kafka.get_bootstrap_server()
+
+
+@pytest.fixture(scope="session")
 def spark(tmp_path_factory, contract_inputs):
     os.environ["SPARK_JARS_PACKAGES"] = ",".join(
         [

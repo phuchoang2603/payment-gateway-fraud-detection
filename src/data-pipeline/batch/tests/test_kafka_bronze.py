@@ -1,14 +1,17 @@
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient, NewTopic
 from pyspark.sql import functions as F
-from testcontainers.community.kafka import KafkaContainer
 
 from batch import bronze
+from batch.schema import EVENT_COLUMNS, LABEL_COLUMNS, business_schema
+from tests.historical import EVENTS_PART, LABELS_PART, write_manifest, write_part
 
 SECONDS = 1785498000
+MOMENT = datetime.fromtimestamp(SECONDS, tz=timezone.utc)
 
 
 def varint(number):
@@ -54,13 +57,7 @@ def fraud_label(payment_id, attempt_id):
     body = field_bytes(1, b"int-1") + field_bytes(2, payment_id.encode())
     if attempt_id is not None:
         body += field_bytes(3, attempt_id.encode())
-    return body + timestamp() + field_bytes(6, field_varint(1, SECONDS)) + field_varint(7, 2)
-
-
-@pytest.fixture(scope="module")
-def brokers():
-    with KafkaContainer("confluentinc/cp-kafka:7.8.0").with_kraft() as kafka:
-        yield kafka.get_bootstrap_server()
+    return body + timestamp() + field_bytes(6, field_varint(1, SECONDS)) + field_varint(7, 2) + field_bytes(8, b"none")
 
 
 @pytest.fixture
@@ -124,3 +121,71 @@ def test_label_without_attempt_is_rejected_with_its_reason(spark, brokers, topic
 
     assert (report["accepted"], report["rejected"]) == (1, 1)
     assert rejected_errors(spark, labels) == ["missing attempt_id"]
+
+
+def historical_event(index):
+    return {
+        "event_id": f"evt-{index}",
+        "payment_id": f"pay-{index}",
+        "aggregate_version": 1,
+        "integration_id": "int-1",
+        "occurred_at": MOMENT,
+        "recorded_at": MOMENT,
+        "schema_version": 3,
+        "correlation_id": "corr-1",
+        "payment_created": None,
+        "attempt_started": None,
+        "risk_decision_recorded": None,
+        "processor_operation_requested": None,
+        "processor_outcome_unknown": None,
+        "attempt_declined": None,
+        "payment_succeeded": {"attempt_id": "att-1", "processor_reference": "ref-1"},
+        "payment_expired": None,
+    }
+
+
+def historical_label():
+    return {
+        "integration_id": "int-1",
+        "payment_id": "pay-1",
+        "attempt_id": "att-1",
+        "is_fraud": False,
+        "occurred_at": MOMENT,
+        "label_available_at": MOMENT,
+        "source": "LABEL_SOURCE_SIMULATION_TRUTH",
+        "scenario": "none",
+    }
+
+
+def test_kafka_decoding_matches_historical_parquet_for_the_same_events(spark, brokers, topics, tmp_path):
+    events, labels = topics
+    version = f"v-parity-{uuid4().hex}"
+    produce(brokers, events, [payment_event(0), payment_event(1)])
+    produce(brokers, labels, [fraud_label("pay-1", "att-1")])
+    bronze.run_kafka(spark, brokers, "run-parity-kafka")
+
+    files = [
+        write_part(
+            spark,
+            tmp_path,
+            EVENTS_PART,
+            [historical_event(0), historical_event(1)],
+            business_schema(spark, EVENT_COLUMNS),
+        ),
+        write_part(spark, tmp_path, LABELS_PART, [historical_label()], business_schema(spark, LABEL_COLUMNS)),
+    ]
+    write_manifest(tmp_path, files, version)
+    bronze.run_historical(spark, str(tmp_path), version, "run-parity-historical")
+
+    for table, columns, topic in ((bronze.EVENTS, EVENT_COLUMNS, events), (bronze.LABELS, LABEL_COLUMNS, labels)):
+        kafka = (
+            spark.table(table).where((F.col("_source") == "kafka") & (F.col("_kafka_topic") == topic)).select(*columns)
+        )
+        historical = (
+            spark.table(table)
+            .where((F.col("_source") == "historical") & (F.col("_dataset_version") == version))
+            .select(*columns)
+        )
+        assert kafka.count() == historical.count() > 0
+        assert kafka.exceptAll(historical).isEmpty()
+        assert historical.exceptAll(kafka).isEmpty()
