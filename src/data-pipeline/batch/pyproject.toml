@@ -5,6 +5,8 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "boto3==1.43.117",
     "confluent-kafka>=2.12,<3",
+    "pyarrow>=23,<25",
+    "pyyaml>=6,<7",
 ]
 
 [dependency-groups]
