@@ -1,4 +1,5 @@
 {{- if .Values.enabled }}
+{{- $image := include "data-pipelines.image" (dict "image" .Values.images.simulator "global" $.Values.global) }}
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -12,11 +13,25 @@ spec:
       - name: historical-generator-writer
   templates:
     - name: generate
+      dag:
+        tasks:
+          - name: shard
+            template: shard
+            arguments:
+              parameters:
+                - name: index
+                  value: {{ "{{item}}" | quote }}
+            withSequence:
+              start: "0"
+              end: {{ sub .Values.generator.shards 1 | quote }}
+          - name: publish
+            template: publish
+            depends: shard
+    - name: shard
+      inputs:
+        parameters:
+          - name: index
       activeDeadlineSeconds: {{ .Values.generator.activeDeadlineSeconds }}
-      {{- with .Values.generator.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       retryStrategy:
         limit: {{ .Values.generator.retryLimit }}
         retryPolicy: OnError
@@ -24,14 +39,66 @@ spec:
           duration: 30s
           factor: 2
           maxDuration: 10m
+      {{- with .Values.generator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       container:
-        image: {{ include "data-pipelines.image" (dict "image" .Values.images.simulator "global" $.Values.global) | quote }}
+        image: {{ $image | quote }}
         command: [simulator]
+        args: [shard]
         env:
           - name: SIMULATOR_CONFIG
             value: {{ printf "/app/configs/%s" .Values.generator.config | quote }}
           - name: GIT_REVISION
-            value: {{ include "data-pipelines.image" (dict "image" .Values.images.simulator "global" $.Values.global) | regexFind "[a-f0-9]{40}$" | quote }}
+            value: {{ $image | regexFind "[a-f0-9]{40}$" | quote }}
+          - name: SHARD_INDEX
+            value: {{ "{{inputs.parameters.index}}" | quote }}
+          - name: SHARD_COUNT
+            value: {{ .Values.generator.shards | toString | quote }}
+          - name: AWS_REGION
+            value: {{ .Values.config.AWS_REGION | quote }}
+          - name: S3_ENDPOINT
+            value: {{ .Values.config.S3_ENDPOINT | quote }}
+          - name: S3_PATH_STYLE
+            value: {{ .Values.config.S3_PATH_STYLE | quote }}
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.storage.externalSecret.name }}
+                key: AWS_ACCESS_KEY_ID
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.storage.externalSecret.name }}
+                key: AWS_SECRET_ACCESS_KEY
+        resources:
+          requests:
+            {{- toYaml .Values.generator.resources.requests | nindent 12 }}
+          limits:
+            {{- toYaml .Values.generator.resources.limits | nindent 12 }}
+    - name: publish
+      activeDeadlineSeconds: {{ .Values.generator.activeDeadlineSeconds }}
+      retryStrategy:
+        limit: {{ .Values.generator.retryLimit }}
+        retryPolicy: OnError
+        backoff:
+          duration: 30s
+          factor: 2
+          maxDuration: 10m
+      {{- with .Values.generator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      container:
+        image: {{ $image | quote }}
+        command: [simulator]
+        args: [publish]
+        env:
+          - name: SIMULATOR_CONFIG
+            value: {{ printf "/app/configs/%s" .Values.generator.config | quote }}
+          - name: GIT_REVISION
+            value: {{ $image | regexFind "[a-f0-9]{40}$" | quote }}
           - name: AWS_REGION
             value: {{ .Values.config.AWS_REGION | quote }}
           - name: S3_ENDPOINT

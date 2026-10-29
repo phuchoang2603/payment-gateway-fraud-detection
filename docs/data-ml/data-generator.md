@@ -25,7 +25,7 @@ Credentials are never read from the configuration. S3 access uses the standard A
 
 ## Running
 
-In the cluster, the environment selects its configuration through the data-pipelines chart (`generator.config`). Submit a run with:
+In the cluster, the environment selects its configuration and shard count through the data-pipelines chart (`generator.config`, `generator.shards`). Each shard pod generates the purchase-start days whose index modulo the shard count matches its shard, and a final publish pod writes the manifest. Submit a run with:
 
 ```bash
 argo submit -n data --from workflowtemplate/generate-historical

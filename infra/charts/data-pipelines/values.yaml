@@ -8,6 +8,7 @@ images:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator
 generator:
   config: historical-dev.yaml
+  shards: 1
   retryLimit: 2
   activeDeadlineSeconds: 21600
   nodeSelector: {}

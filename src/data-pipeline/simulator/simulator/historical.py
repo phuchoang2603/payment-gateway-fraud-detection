@@ -283,14 +283,25 @@ def _publish(config: GeneratorConfig, revision: str, store) -> dict:
     return manifest
 
 
-def generate(config: GeneratorConfig, revision: str) -> dict:
+def _check_revision(revision: str) -> None:
     if not REVISION_PATTERN.fullmatch(revision):
         raise GenerationError("generator revision must be a 40-character lowercase git commit")
+
+
+def produce(config: GeneratorConfig, revision: str, shard: tuple[int, int] = (0, 1)) -> None:
+    _check_revision(revision)
+    index, count = shard
+    if not 0 <= index < count:
+        raise GenerationError("shard index must be within the shard count")
     store = open_store(config.output, config.dataset_version)
     if store.read(MANIFEST_KEY) is not None:
         raise VersionPublished(f"{MANIFEST_KEY} already exists for {config.dataset_version}")
     _claim_configuration(config, revision, store)
-    pending = [offset for offset in range(config.duration_days) if store.read(_marker_key(config.day(offset))) is None]
+    pending = [
+        offset
+        for offset in range(config.duration_days)
+        if offset % count == index and store.read(_marker_key(config.day(offset))) is None
+    ]
     pool = ProcessPoolExecutor(max_workers=config.workers) if config.workers > 1 else nullcontext()
     with pool as executor:
         mapper = executor.map if executor else map
@@ -299,4 +310,17 @@ def generate(config: GeneratorConfig, revision: str) -> dict:
             parts = [part for chunk_parts in chunks for part in chunk_parts]
             marker = {"date": config.day(offset).isoformat(), "parts": parts}
             store.write(_marker_key(config.day(offset)), json.dumps(marker, sort_keys=True).encode())
+
+
+def publish(config: GeneratorConfig, revision: str) -> dict:
+    _check_revision(revision)
+    store = open_store(config.output, config.dataset_version)
+    if store.read(MANIFEST_KEY) is not None:
+        raise VersionPublished(f"{MANIFEST_KEY} already exists for {config.dataset_version}")
+    _claim_configuration(config, revision, store)
     return _publish(config, revision, store)
+
+
+def generate(config: GeneratorConfig, revision: str) -> dict:
+    produce(config, revision)
+    return publish(config, revision)

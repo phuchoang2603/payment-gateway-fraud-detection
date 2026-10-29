@@ -15,6 +15,8 @@ from simulator.historical import (
     SourceTooSmall,
     VersionPublished,
     generate,
+    produce,
+    publish,
 )
 
 SMALL_GENERATOR = Path(__file__).with_name("small-generator.yaml")
@@ -163,3 +165,21 @@ def test_manifest_records_both_physical_versions_and_identities(tmp_path):
     assert manifest["rows"]["payment_events"] == sum(
         part["rows"] for part in manifest["files"] if part["table"] == "payment_events"
     )
+
+
+def test_disjoint_shards_then_publish_equal_a_single_run(tmp_path):
+    single = run(config_for(tmp_path / "single"))
+    sharded = tmp_path / "sharded"
+    produce(config_for(sharded), REVISION, shard=(0, 2))
+    produce(config_for(sharded), REVISION, shard=(1, 2))
+
+    assert publish(config_for(sharded), REVISION) == single
+
+
+def test_publish_refuses_while_any_shard_is_missing(tmp_path):
+    root = tmp_path / "out"
+    produce(config_for(root), REVISION, shard=(0, 2))
+
+    with pytest.raises(GenerationError):
+        publish(config_for(root), REVISION)
+    assert not (dataset_of(root) / "manifest.json").exists()
