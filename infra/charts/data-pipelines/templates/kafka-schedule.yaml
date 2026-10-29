@@ -5,7 +5,8 @@ metadata:
   name: dp1-bronze-kafka
   namespace: {{ .Values.namespace }}
 spec:
-  schedule: {{ .Values.bronze.kafka.schedule | quote }}
+  schedules:
+    - {{ .Values.bronze.kafka.schedule | quote }}
   suspend: true
   concurrencyPolicy: Forbid
   workflowSpec:

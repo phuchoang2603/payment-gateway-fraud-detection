@@ -35,7 +35,8 @@ metadata:
   name: maintain-lakehouse-daily
   namespace: {{ .Values.namespace }}
 spec:
-  schedule: {{ .Values.maintenance.schedule | quote }}
+  schedules:
+    - {{ .Values.maintenance.schedule | quote }}
   suspend: true
   concurrencyPolicy: Forbid
   workflowSpec:
