@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-from batch.catalog import client, expand, native, server
+from openmetadata_jobs.catalog import client, expand, native, server
 
 
 def connectors():

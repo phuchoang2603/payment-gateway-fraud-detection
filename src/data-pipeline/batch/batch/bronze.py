@@ -1,12 +1,14 @@
 import json
 import os
-from hashlib import sha256
+import time
+from pathlib import Path
 
 from confluent_kafka import Consumer, TopicPartition
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 from batch.lakehouse import TABLE_PROPERTIES
+from batch.metrics import phase
 from batch.schema import (
     EVENT_COLUMNS,
     LABEL_COLUMNS,
@@ -20,7 +22,8 @@ from batch.schema import (
     rejected_ddl,
 )
 from batch.spark import ICEBERG_CATALOG, session
-from batch.store import Store, parquet_rows, read_object
+from batch.store import Store
+from batch.validation import EVENT_PAYLOADS, rejection_reason, required_fields
 
 NAMESPACE = f"{ICEBERG_CATALOG}.bronze"
 EVENTS = f"{NAMESPACE}.payment_events"
@@ -29,20 +32,25 @@ REJECTED = f"{NAMESPACE}.rejected_records"
 
 
 def kafka_sources():
+    contracts = Path(os.environ["DATA_PRODUCTS_ROOT"]) / "bronze-payments"
     return {
         "payment_events": {
             "topic": os.environ.get("PAYMENT_EVENTS_TOPIC", "payments.events.v1"),
             "decode": decode_events,
-            "key": "event_id",
             "table": EVENTS,
             "columns": EVENT_COLUMNS,
+            "required": required_fields(
+                contracts / "payment-events.odcs.yaml", "bronze.payment_events", EVENT_COLUMNS
+            ),
+            "payloads": EVENT_PAYLOADS,
         },
         "fraud_labels": {
             "topic": os.environ.get("FRAUD_LABELS_TOPIC", "fraud.labels.v1"),
             "decode": decode_labels,
-            "key": "integration_id",
             "table": LABELS,
             "columns": LABEL_COLUMNS,
+            "required": required_fields(contracts / "fraud-labels.odcs.yaml", "bronze.fraud_labels", LABEL_COLUMNS),
+            "payloads": (),
         },
     }
 
@@ -52,9 +60,22 @@ def run_historical(spark, root, version, run_id):
     manifest = store.read_json("manifest.json")
     if manifest["dataset_version"] != version:
         raise ValueError("manifest dataset_version differs from DATASET_VERSION")
-    verify_parts(spark, root, manifest["files"])
+    started = time.perf_counter()
+    listed = store.list_sizes()
+    listing_seconds = time.perf_counter() - started
+    problem = inventory_mismatch(listed, manifest["files"])
+    if problem:
+        raise ValueError(problem)
     ensure_tables(spark)
-    report = {"mode": "historical", "dataset_version": version, "run_id": run_id, "tables": {}}
+    phases = {}
+    report = {
+        "mode": "historical",
+        "dataset_version": version,
+        "run_id": run_id,
+        "listing_seconds": round(listing_seconds, 2),
+        "tables": {},
+        "phases": phases,
+    }
     for table, (name, columns) in {
         "payment_events": (EVENTS, EVENT_COLUMNS),
         "fraud_labels": (LABELS, LABEL_COLUMNS),
@@ -77,36 +98,47 @@ def run_historical(spark, root, version, run_id):
             }
         )
         same_version = (F.col("_source") == "historical") & (F.col("_dataset_version") == version)
-        frame.writeTo(name).overwrite(same_version)
-        written = spark.table(name).where(same_version).count()
-        if written != manifest["rows"][table]:
-            raise ValueError(f"{name} holds {written} rows for {version}; manifest lists {manifest['rows'][table]}")
+        with phase(spark, phases, f"write {table}"):
+            frame.writeTo(name).overwrite(same_version)
+        with phase(spark, phases, f"check {table}"):
+            written = check_written_rows(spark, name, same_version, parts)
         report["tables"][name] = {
-            "rows": written,
+            "rows": sum(written.values()),
             "files": len(parts),
             "snapshot_id": current_snapshot(spark, name),
         }
     return report
 
 
-def verify_parts(spark, root, parts):
-    problems = (
-        spark.sparkContext.parallelize(parts, max(1, min(len(parts), 256)))
-        .map(lambda part: verify_part(root, part))
-        .filter(lambda problem: problem is not None)
-        .collect()
-    )
-    if problems:
-        raise ValueError(f"{len(problems)} source files failed verification, first: {problems[0]}")
+def inventory_mismatch(listed: dict[str, int], files) -> str | None:
+    """The first way the dataset root's parquet objects differ from the manifest, or None."""
+    expected = {part["path"]: part["bytes"] for part in files}
+    parquet = {key: size for key, size in listed.items() if key.endswith(".parquet")}
+    problems = [f"missing file: {path}" for path in sorted(expected.keys() - parquet.keys())]
+    problems += [f"extra file: {path}" for path in sorted(parquet.keys() - expected.keys())]
+    problems += [
+        f"size mismatch: {path} is {parquet[path]} bytes, manifest lists {expected[path]}"
+        for path in sorted(expected.keys() & parquet.keys())
+        if parquet[path] != expected[path]
+    ]
+    return problems[0] if problems else None
 
 
-def verify_part(root, part):
-    body = read_object(f"{root.rstrip('/')}/{part['path']}")
-    if len(body) != part["bytes"] or sha256(body).hexdigest() != part["sha256"]:
-        return f"checksum mismatch: {part['path']}"
-    if parquet_rows(body) != part["rows"]:
-        return f"row count mismatch: {part['path']}"
-    return None
+def check_written_rows(spark, name, same_version, parts):
+    """Rows written per source file, compared with the manifest. Reads the written table, not the source."""
+    written = {
+        row["_source_file"]: row["count"]
+        for row in spark.table(name).where(same_version).groupBy("_source_file").count().collect()
+    }
+    expected = {part["path"]: part["rows"] for part in parts}
+    for path in sorted(expected.keys() | written.keys()):
+        if path not in expected:
+            raise ValueError(f"unexpected source file in {name}: {path}")
+        if written.get(path, 0) != expected[path]:
+            raise ValueError(
+                f"row mismatch in {path}: wrote {written.get(path, 0)} rows, manifest lists {expected[path]}"
+            )
+    return written
 
 
 def read_parts(spark, root, table, parts):
@@ -123,7 +155,8 @@ def run_kafka(spark, bootstrap, run_id):
     starting = os.environ.get("KAFKA_STARTING_OFFSETS", "earliest")
     if starting not in ("earliest", "latest"):
         raise ValueError("KAFKA_STARTING_OFFSETS must be earliest or latest")
-    report = {"mode": "kafka", "run_id": run_id, "topics": {}}
+    phases = {}
+    report = {"mode": "kafka", "run_id": run_id, "topics": {}, "phases": phases}
     for source in kafka_sources().values():
         topic, table = source["topic"], source["table"]
         lows, highs = watermarks(bootstrap, topic)
@@ -134,27 +167,35 @@ def run_kafka(spark, bootstrap, run_id):
             report["topics"][topic] = {"table": table, "accepted": 0, "rejected": 0}
             continue
         records = read_records(spark, bootstrap, topic, accepted_starts, highs).cache()
-        decoded = records.withColumn("decoded", source["decode"](F.col("value")))
-        malformed = F.col("value").isNull() | F.col("decoded").isNull() | F.col("decoded")[source["key"]].isNull()
-        accepted = decoded.where(~malformed & _from_offsets(accepted_starts))
-        rejected = decoded.where(malformed & _from_offsets(rejected_starts))
-        accepted_rows = accepted_frame(accepted, source["columns"], run_id).cache()
-        rejected_rows = rejected_frame(rejected, run_id).cache()
+        checked = records.withColumn("decoded", source["decode"](F.col("value"))).withColumn(
+            "reason",
+            rejection_reason(F.col("decoded"), F.col("value"), source["required"], source["payloads"]),
+        )
+        accepted_rows = accepted_frame(
+            checked.where(F.col("reason").isNull() & _from_offsets(accepted_starts)), source["columns"], run_id
+        ).cache()
+        rejected_rows = rejected_frame(
+            checked.where(F.col("reason").isNotNull() & _from_offsets(rejected_starts)), run_id
+        ).cache()
+        with phase(spark, phases, f"read {table}"):
+            accepted_count = accepted_rows.count()
+            rejected_count = rejected_rows.count()
+        with phase(spark, phases, f"write {table}"):
+            if rejected_count:
+                rejected_rows.writeTo(REJECTED).append()
+            if accepted_count:
+                accepted_rows.writeTo(table).append()
         report["topics"][topic] = {
             "table": table,
-            "accepted": accepted_rows.count(),
-            "rejected": rejected_rows.count(),
+            "accepted": accepted_count,
+            "rejected": rejected_count,
             "accepted_starts": _partition_map(accepted_starts),
             "rejected_starts": _partition_map(rejected_starts),
             "ends": _partition_map(highs),
-            "snapshot_ids": {},
-        }
-        # Rejected rows commit first, so the rejected table never lags the accepted one and the read window can start from accepted rows alone.
-        rejected_rows.writeTo(REJECTED).append()
-        accepted_rows.writeTo(table).append()
-        report["topics"][topic]["snapshot_ids"] = {
-            table: current_snapshot(spark, table),
-            REJECTED: current_snapshot(spark, REJECTED),
+            "snapshot_ids": {
+                table: current_snapshot(spark, table),
+                REJECTED: current_snapshot(spark, REJECTED),
+            },
         }
         records.unpersist()
         accepted_rows.unpersist()
@@ -251,7 +292,7 @@ def rejected_frame(rejects: DataFrame, run_id):
         F.col("timestamp").alias("_kafka_timestamp"),
         F.col("key").alias("record_key"),
         F.col("value").alias("record_value"),
-        F.lit("protobuf decoding failed").alias("error"),
+        F.col("reason").alias("error"),
         F.current_timestamp().alias("_ingested_at"),
         F.lit(run_id).alias("_run_id"),
     )

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import yaml
 
-from batch.catalog import client, native, server
-from batch.integrations import workflow
+from openmetadata_jobs.catalog import client, native, server
+from openmetadata_jobs.integrations import workflow
 
 PRODUCTS = ("bronze-payments", "silver-payments")
 SERVICE = "starrocks"

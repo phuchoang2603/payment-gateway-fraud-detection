@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from pyspark.sql import Column, DataFrame, SparkSession
@@ -5,7 +6,11 @@ from pyspark.sql import functions as F
 from pyspark.sql.protobuf.functions import from_protobuf
 from pyspark.sql.types import ArrayType, DataType, StructType
 
-DESCRIPTOR = Path(__file__).with_name("payments.pb")
+
+def descriptor_path() -> Path:
+    return Path(os.environ.get("PAYMENTS_DESCRIPTOR", Path(__file__).with_name("payments.pb")))
+
+
 EVENT_MESSAGE = "payments.v1.PaymentEvent"
 LABEL_MESSAGE = "payments.v1.FraudLabel"
 
@@ -152,6 +157,6 @@ def _decode(value: Column, message: str) -> Column:
     return from_protobuf(
         value,
         message,
-        str(DESCRIPTOR),
+        str(descriptor_path()),
         {"mode": "PERMISSIVE", "emit.default.values": "true", "upcast.unsigned.ints": "true"},
     )

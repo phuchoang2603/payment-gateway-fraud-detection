@@ -5,15 +5,16 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "boto3==1.43.117",
     "confluent-kafka>=2.12,<3",
-    "pyarrow>=23,<25",
     "pyyaml>=6,<7",
 ]
 
 [dependency-groups]
 dev = [
+    "grpcio-tools==1.84.0",
     "pyspark==4.1.3",
     "pytest>=9,<10",
     "ruff>=0.14,<1",
+    "testcontainers==4.15.0",
 ]
 
 [build-system]
@@ -34,7 +35,3 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
-
-[tool.protobuf]
-descriptor = "batch/payments.pb"
-sources = ["payments/v1/events.proto", "payments/v1/labels.proto"]

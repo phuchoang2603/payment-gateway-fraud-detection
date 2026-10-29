@@ -61,7 +61,7 @@ def test_identical_copies_collapse_to_earliest_and_conflicts_leave_the_accepted_
     assert spark.table(silver.PAYMENT_EVENTS).where(F.col("payment_id") == "pay-2").count() == 0
 
 
-def test_attempt_lifecycle_and_label_linkage_cover_pr97_defects(spark, report_root):
+def test_attempt_lifecycle_and_label_linkage(spark, report_root):
     events = [
         created("pay-open", "e-1", minutes=0),
         started("pay-open", "e-2", 2, 1, "att-1"),
@@ -94,22 +94,45 @@ def test_attempt_lifecycle_and_label_linkage_cover_pr97_defects(spark, report_ro
     assert all(a.lifecycle_valid for a in attempts.values())
     linkage = {(r.payment_id, r.attempt_id, r.source): r.linkage for r in spark.table(silver.LABELS).collect()}
     assert linkage[("pay-open", "att-1", "LABEL_SOURCE_SIMULATION_TRUTH")] == "linked"
-    assert linkage[("pay-open", "att-9", "LABEL_SOURCE_SIMULATION_TRUTH")] == "pending"
+    assert linkage[("pay-open", "att-9", "LABEL_SOURCE_SIMULATION_TRUTH")] == "violation"
     assert linkage[("pay-open", "att-1", "LABEL_SOURCE_CHARGEBACK")] == "violation"
     assert linkage[("pay-won", "att-4", "LABEL_SOURCE_SIMULATION_TRUTH")] == "violation"
     assert linkage[("pay-won", "att-2", "LABEL_SOURCE_SIMULATION_TRUTH")] == "violation"
+
+
+def test_labels_without_their_payment_are_orphans_when_historical_and_pending_when_live(spark, report_root):
+    load_bronze(spark, [created("pay-1", "evt-1")], [])
+    historical = provenance(
+        spark.createDataFrame([label("pay-gone", "att-1", available=5)], business_schema(spark, LABEL_COLUMNS)),
+        "historical",
+    )
+    live = provenance(
+        spark.createDataFrame([label("pay-later", "att-2", available=5)], business_schema(spark, LABEL_COLUMNS)),
+        "kafka",
+    )
+    historical.writeTo(bronze.LABELS).append()
+    live.writeTo(bronze.LABELS).append()
+
+    silver.run(spark, "run-orphans")
+
+    linkage = {r.payment_id: r.linkage for r in spark.table(silver.LABELS).collect()}
+    assert linkage == {"pay-gone": "orphan", "pay-later": "pending"}
 
 
 def test_rerun_on_unchanged_bronze_produces_equal_tables(spark, report_root):
     events = [created("pay-1", "evt-1"), started("pay-1", "evt-2", 2, 1, "att-1")]
     load_bronze(spark, events, [label("pay-1", "att-1", available=5)])
 
-    silver.run(spark, "run-3")
+    first_report = silver.run(spark, "run-3")
     first = spark.table(silver.ATTEMPTS)
-    silver.run(spark, "run-4")
+    second_report = silver.run(spark, "run-4")
     second = spark.table(silver.ATTEMPTS)
 
     assert first.exceptAll(second).count() == 0
     assert second.exceptAll(first).count() == 0
-    report = json.loads((report_root / "run-4" / "silver.json").read_text())
-    assert report["lifecycle_invalid"] == 0
+    assert second_report["lifecycle_invalid"] == 0
+    snapshots = json.loads((report_root / "run-4" / "silver.json").read_text())["silver_snapshots"]
+    assert set(snapshots) == {silver.PAYMENT_EVENTS, silver.ATTEMPTS, silver.LABELS, silver.REJECTED}
+    assert (
+        first_report["silver_snapshots"][silver.ATTEMPTS]["snapshot_id"] != snapshots[silver.ATTEMPTS]["snapshot_id"]
+    )

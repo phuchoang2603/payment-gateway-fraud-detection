@@ -1,6 +1,6 @@
 import os
 
-from batch.catalog import client
+from openmetadata_jobs.catalog import client
 
 SERVICE = "starrocks"
 EDGES = [

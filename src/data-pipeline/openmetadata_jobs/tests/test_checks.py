@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from batch import checks
+from openmetadata_jobs import checks
 
 CONTRACTS = Path(__file__).resolve().parents[4] / "contracts" / "data-products"
 

@@ -25,7 +25,7 @@ servers:
     host: kube-starrocks-fe-service.starrocks.svc.cluster.local
     port: 9030
     database: bronze
-    description: Iceberg table rejected_records in schema bronze, read through the StarRocks fraud_lakehouse catalog. The rule placeholder {object} is replaced by the fully qualified table.
+    description: Iceberg table rejected_records in schema bronze, read through the StarRocks fraud_lakehouse catalog. The rule placeholder {object} stands for the fully qualified table.
 schema:
   - name: rejected_records
     physicalName: bronze.rejected_records

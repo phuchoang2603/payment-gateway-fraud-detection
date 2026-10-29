@@ -25,7 +25,7 @@ servers:
     host: kube-starrocks-fe-service.starrocks.svc.cluster.local
     port: 9030
     database: silver
-    description: Iceberg table labels in schema silver, read through the StarRocks fraud_lakehouse catalog. The rule placeholder {object} is replaced by the fully qualified table.
+    description: Iceberg table labels in schema silver, read through the StarRocks fraud_lakehouse catalog. The rule placeholder {object} stands for the fully qualified table.
 schema:
   - name: labels
     physicalName: silver.labels
@@ -46,7 +46,7 @@ schema:
       - {name: label_available_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: Earliest time this label may be used.}
       - {name: source, logicalType: string, physicalType: VARCHAR, required: true, description: LABEL_SOURCE_SIMULATION_TRUTH or LABEL_SOURCE_CHARGEBACK.}
       - {name: scenario, logicalType: string, physicalType: VARCHAR, description: Generating scenario on simulation truth only.}
-      - {name: linkage, logicalType: string, physicalType: VARCHAR, required: true, description: linked, pending or violation against the attempt and its outcome.}
+      - {name: linkage, logicalType: string, physicalType: VARCHAR, required: true, description: linked, pending, orphan or violation against the attempt, its outcome and its payment. Orphan is a historical label whose payment has no events; pending is a live label whose payment or attempt has not arrived yet.}
       - {name: _source, logicalType: string, physicalType: VARCHAR, required: true, description: Source of the kept copy, historical or kafka.}
     quality:
       - id: silver_unique_observation
@@ -60,6 +60,12 @@ schema:
         description: Every label references a started attempt in the same integration and payment, chargebacks reference a succeeded attempt, and no label is available before the attempt starts or, for chargebacks, before its outcome.
         query: |
           SELECT count(*) FROM {object} WHERE linkage = 'violation'
+        mustBe: 0
+      - id: silver_no_orphan_labels
+        type: sql
+        description: Every historical label refers to a payment with events; an orphan label means the complete source is missing a payment.
+        query: |
+          SELECT count(*) FROM {object} WHERE linkage = 'orphan'
         mustBe: 0
       - id: silver_label_availability
         type: sql

@@ -1,18 +1,16 @@
-import io
 import json
 import shutil
 from datetime import datetime, timezone
-from hashlib import sha256
 
-import pyarrow as pa
-import pyarrow.parquet as pq
+import pytest
 from pyspark.sql import functions as F
 
 from batch import bronze
 from batch.schema import EVENT_COLUMNS, LABEL_COLUMNS, business_schema, decode_events
-from batch.store import parquet_rows
 
 MOMENT = datetime(2026, 7, 31, 12, tzinfo=timezone.utc)
+EVENTS_PART = "payment_events/date=2026-07-31/part-00000.v3.parquet"
+LABELS_PART = "fraud_labels/date=2026-07-31/part-00000.parquet"
 
 
 def event(event_id, recorded_at):
@@ -56,38 +54,31 @@ def write_part(spark, root, relative, rows, schema):
     target.parent.mkdir(parents=True, exist_ok=True)
     next(staging.glob("*.parquet")).replace(target)
     shutil.rmtree(staging)
-    body = target.read_bytes()
     return {
         "table": relative.split("/")[0],
         "path": relative,
-        "rows": parquet_rows(body),
-        "bytes": len(body),
-        "sha256": sha256(body).hexdigest(),
+        "rows": spark.read.parquet(str(target)).count(),
+        "bytes": target.stat().st_size,
     }
 
 
-def test_altered_source_file_fails_verification(tmp_path):
-    (tmp_path / "payment_events").mkdir()
-    buffer = io.BytesIO()
-    pq.write_table(pa.table({"event_id": ["evt-1"]}), buffer)
-    body = buffer.getvalue()
-    (tmp_path / "payment_events/part.parquet").write_bytes(body)
-    part = {
-        "table": "payment_events",
-        "path": "payment_events/part.parquet",
-        "rows": 1,
-        "bytes": len(body),
-        "sha256": sha256(body).hexdigest(),
+def write_manifest(root, files):
+    rows = {
+        table: sum(part["rows"] for part in files if part["table"] == table)
+        for table in ("payment_events", "fraud_labels")
     }
-    assert bronze.verify_part(str(tmp_path), part) is None
-    part["sha256"] = sha256(b"other").hexdigest()
-    assert bronze.verify_part(str(tmp_path), part) == "checksum mismatch: payment_events/part.parquet"
+    (root / "manifest.json").write_text(
+        json.dumps({"dataset_version": "v-test", "rows": rows, "files": files}, sort_keys=True)
+    )
 
 
-def test_historical_rerun_is_idempotent_and_keeps_duplicates(spark, tmp_path):
-    schema = business_schema(spark, EVENT_COLUMNS)
-    rows = [event("evt-1", MOMENT), event("evt-1", datetime(2026, 8, 1, tzinfo=timezone.utc)), event("evt-2", MOMENT)]
-    files = [write_part(spark, tmp_path, "payment_events/date=2026-07-31/part-00000.v3.parquet", rows, schema)]
+def read_manifest(root):
+    return json.loads((root / "manifest.json").read_text())
+
+
+@pytest.fixture
+def dataset(spark, tmp_path):
+    later = datetime(2026, 8, 1, tzinfo=timezone.utc)
     label = {
         "integration_id": "int-1",
         "payment_id": "pay-1",
@@ -98,26 +89,63 @@ def test_historical_rerun_is_idempotent_and_keeps_duplicates(spark, tmp_path):
         "source": "LABEL_SOURCE_SIMULATION_TRUTH",
         "scenario": "none",
     }
-    files.append(
+    files = [
         write_part(
             spark,
             tmp_path,
-            "fraud_labels/date=2026-07-31/part-00000.parquet",
-            [label],
-            business_schema(spark, LABEL_COLUMNS),
-        )
-    )
-    (tmp_path / "manifest.json").write_text(
-        json.dumps({"dataset_version": "v-test", "rows": {"payment_events": 3, "fraud_labels": 1}, "files": files})
-    )
+            EVENTS_PART,
+            [event("evt-1", MOMENT), event("evt-1", later), event("evt-2", MOMENT)],
+            business_schema(spark, EVENT_COLUMNS),
+        ),
+        write_part(spark, tmp_path, LABELS_PART, [label], business_schema(spark, LABEL_COLUMNS)),
+    ]
+    write_manifest(tmp_path, files)
+    return tmp_path
 
-    first = bronze.run_historical(spark, str(tmp_path), "v-test", "run-1")
-    second = bronze.run_historical(spark, str(tmp_path), "v-test", "run-2")
+
+def test_rerun_is_idempotent_and_keeps_duplicates(spark, dataset):
+    first = bronze.run_historical(spark, str(dataset), "v-test", "run-1")
+    second = bronze.run_historical(spark, str(dataset), "v-test", "run-2")
 
     assert first["tables"][bronze.EVENTS]["rows"] == 3
     assert second["tables"][bronze.EVENTS]["rows"] == 3
     assert spark.table(bronze.EVENTS).select("event_id").distinct().count() == 2
     assert spark.table(bronze.LABELS).count() == 1
+
+
+def test_missing_source_file_fails_before_reading(spark, dataset):
+    (dataset / LABELS_PART).unlink()
+
+    with pytest.raises(ValueError, match=f"missing file: {LABELS_PART}"):
+        bronze.run_historical(spark, str(dataset), "v-test", "run-missing")
+
+
+def test_extra_source_file_fails_before_reading(spark, dataset):
+    extra = "payment_events/date=2026-07-30/part-00009.v3.parquet"
+    (dataset / extra).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(dataset / EVENTS_PART, dataset / extra)
+
+    with pytest.raises(ValueError, match=f"extra file: {extra}"):
+        bronze.run_historical(spark, str(dataset), "v-test", "run-extra")
+
+
+def test_size_mismatch_fails_before_reading(spark, dataset):
+    with (dataset / LABELS_PART).open("ab") as stream:
+        stream.write(b"\x00")
+
+    with pytest.raises(ValueError, match=f"size mismatch: {LABELS_PART} is"):
+        bronze.run_historical(spark, str(dataset), "v-test", "run-size")
+
+
+def test_per_file_row_mismatch_names_the_file(spark, dataset):
+    manifest = read_manifest(dataset)
+    for part in manifest["files"]:
+        if part["path"] == EVENTS_PART:
+            part["rows"] = 99
+    (dataset / "manifest.json").write_text(json.dumps(manifest, sort_keys=True))
+
+    with pytest.raises(ValueError, match=f"row mismatch in {EVENTS_PART}: wrote 3 rows, manifest lists 99"):
+        bronze.run_historical(spark, str(dataset), "v-test", "run-rows")
 
 
 def test_corrupt_protobuf_bytes_are_flagged_and_empty_message_decodes(spark):

@@ -1,4 +1,3 @@
-import io
 import json
 import os
 from functools import lru_cache
@@ -27,9 +26,6 @@ class Store:
             self._client = s3_client()
         return self._client
 
-    def child(self, relative):
-        return f"{self.uri}/{relative}"
-
     def read(self, relative):
         if self.bucket:
             key = f"{self.prefix}/{relative}"
@@ -38,6 +34,18 @@ class Store:
 
     def read_json(self, relative):
         return json.loads(self.read(relative))
+
+    def list_sizes(self) -> dict[str, int]:
+        """Size of every object under this root, keyed by path relative to it. Metadata only."""
+        if self.bucket:
+            base = f"{self.prefix}/" if self.prefix else ""
+            sizes = {}
+            for page in self.client.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=base):
+                for item in page.get("Contents", []):
+                    sizes[item["Key"][len(base) :]] = item["Size"]
+            return sizes
+        root = Path(self.prefix)
+        return {path.relative_to(root).as_posix(): path.stat().st_size for path in root.rglob("*") if path.is_file()}
 
     def write(self, relative, body):
         if self.bucket:
@@ -66,16 +74,3 @@ def s3_client():
             s3={"addressing_style": "path" if os.environ.get("S3_PATH_STYLE", "false") == "true" else "virtual"},
         ),
     )
-
-
-def read_object(uri):
-    parsed = urlsplit(uri)
-    if parsed.scheme in ("s3", "s3a"):
-        return s3_client().get_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))["Body"].read()
-    return Path(parsed.path or uri).read_bytes()
-
-
-def parquet_rows(body):
-    import pyarrow.parquet as pq
-
-    return pq.ParquetFile(io.BytesIO(body)).metadata.num_rows

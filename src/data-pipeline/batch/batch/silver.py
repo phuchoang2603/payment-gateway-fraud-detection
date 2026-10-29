@@ -2,6 +2,7 @@ import json
 import os
 from functools import reduce
 
+from pyspark import StorageLevel
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
@@ -9,6 +10,7 @@ from batch.bronze import EVENTS as BRONZE_EVENTS
 from batch.bronze import LABELS as BRONZE_LABELS
 from batch.bronze import current_snapshot
 from batch.lakehouse import WRITE_PROPERTIES
+from batch.metrics import phase
 from batch.schema import EVENT_COLUMNS, LABEL_COLUMNS
 from batch.spark import ICEBERG_CATALOG, session
 from batch.store import Store
@@ -32,74 +34,122 @@ ATTEMPT_PAYLOADS = [
 ]
 EVENT_HASH_FIELDS = [column for column in EVENT_COLUMNS if column != "recorded_at"]
 LABEL_HASH_FIELDS = list(LABEL_COLUMNS)
+PERSIST = StorageLevel.MEMORY_AND_DISK
 
 
 def run(spark, run_id):
     events_snapshot = current_snapshot(spark, BRONZE_EVENTS)
     labels_snapshot = current_snapshot(spark, BRONZE_LABELS)
-    events = spark.read.option("versionAsOf", events_snapshot).table(BRONZE_EVENTS)
-    labels = spark.read.option("versionAsOf", labels_snapshot).table(BRONZE_LABELS)
     pins = {
         "bronze.payment_events.snapshot_id": str(events_snapshot),
         "bronze.fraud_labels.snapshot_id": str(labels_snapshot),
     }
+    events = spark.read.option("versionAsOf", events_snapshot).table(BRONZE_EVENTS)
+    labels = spark.read.option("versionAsOf", labels_snapshot).table(BRONZE_LABELS)
 
-    copies = with_event_hash(events)
-    conflicts = conflicting_events(copies)
-    conflicting_payments = conflicts.select(*PAYMENT_KEY).distinct()
-    conflict_reason = conflicts.groupBy(*PAYMENT_KEY).agg(F.min("event_id").alias("reason"))
-    kept = earliest_copies(copies)
-    accepted_events = kept.join(conflicting_payments, PAYMENT_KEY, "left_anti").select(
-        *EVENT_COLUMNS.keys(), "event_hash", "_source"
-    )
-    all_attempts = attempts(kept)
-    accepted_attempts = all_attempts.join(conflicting_payments, PAYMENT_KEY, "left_anti")
-    payment_status = payments(kept).join(conflicting_payments, PAYMENT_KEY, "left_anti")
-    all_labels = label_observations(labels)
-    labelled = link_labels(all_labels, accepted_attempts, payment_status)
+    cached = []
+    phases = {}
 
-    rejected_events = reject_payment_rows(copies, conflicting_payments, conflict_reason, "payment_events", "_source")
-    rejected_attempts = reject_payment_rows(
-        all_attempts, conflicting_payments, conflict_reason, "attempts", None, source_from=kept
-    )
-    rejected_labels = reject_payment_rows(all_labels, conflicting_payments, conflict_reason, "labels", "_source")
-    rejected = reduce(DataFrame.unionByName, [rejected_events, rejected_attempts, rejected_labels]).withColumn(
-        "_run_id", F.lit(run_id)
-    )
+    def cache(frame):
+        cached.append(frame.persist(PERSIST))
+        return cached[-1]
 
-    accepted_labels = labelled.join(conflicting_payments, PAYMENT_KEY, "left_anti")
-    report = {
-        "run_id": run_id,
-        "bronze_snapshots": pins,
-        "events": {
-            "input_rows": events.count(),
-            "distinct_events": kept.count(),
-            "collapsed_deliveries": events.count() - kept.count(),
-            "conflicting_events": conflicts.select("event_id").distinct().count(),
-            "conflicting_payments": conflicting_payments.count(),
-        },
-        "rejected_rows": {
-            table: rejected.where(F.col("rejected_table") == table).count()
-            for table in ("payment_events", "attempts", "labels")
-        },
-        "rejected_by_source": {
-            source: rejected.where(F.col("source") == source).count() for source in ("historical", "kafka")
-        },
-        "labels": {
-            "input_rows": labels.count(),
-            "distinct_observations": all_labels.count(),
-            "linkage": {row["linkage"]: row["count"] for row in accepted_labels.groupBy("linkage").count().collect()},
-        },
-        "attempts": accepted_attempts.count(),
-        "lifecycle_invalid": accepted_attempts.where(~F.col("lifecycle_valid")).count(),
-    }
-    Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/silver.json", report)
+    try:
+        copies = cache(with_event_hash(events))
+        conflicts = cache(conflicting_events(copies))
+        conflicting_payments = cache(conflicts.select(*PAYMENT_KEY).distinct())
+        conflict_reason = cache(conflicts.groupBy(*PAYMENT_KEY).agg(F.min("event_id").alias("reason")))
+        kept = cache(earliest_copies(copies))
+        payment_status = cache(payments(kept))
+        all_attempts = cache(attempts(kept, payment_status))
+        all_labels = cache(label_observations(labels))
+        linked = cache(link_labels(all_labels, all_attempts, payment_status))
+        historical = kept.groupBy(*PAYMENT_KEY).agg(
+            F.max(F.when(F.col("_source") == "historical", 1).otherwise(0)).alias("historical")
+        )
+        sourced_attempts = (
+            all_attempts.join(historical, PAYMENT_KEY, "left")
+            .withColumn("_source", F.when(F.col("historical") == 1, "historical").otherwise("kafka"))
+            .drop("historical")
+        )
 
-    write_table(spark, PAYMENT_EVENTS, accepted_events, pins, run_id, F.days("occurred_at"))
-    write_table(spark, ATTEMPTS, accepted_attempts, pins, run_id, F.days("started_at"))
-    write_table(spark, LABELS, accepted_labels, pins, run_id, F.days("label_available_at"))
-    write_table(spark, REJECTED, rejected, pins, run_id)
-    return report
+        accepted_events = kept.join(conflicting_payments, PAYMENT_KEY, "left_anti").select(
+            *EVENT_COLUMNS.keys(), "event_hash", "_source"
+        )
+        accepted_attempts = all_attempts.join(conflicting_payments, PAYMENT_KEY, "left_anti")
+        accepted_labels = linked.join(conflicting_payments, PAYMENT_KEY, "left_anti")
+        rejected = cache(
+            reduce(
+                DataFrame.unionByName,
+                [
+                    reject_payment_rows(copies, "payment_events", conflicting_payments, conflict_reason),
+                    reject_payment_rows(sourced_attempts, "attempts", conflicting_payments, conflict_reason),
+                    reject_payment_rows(all_labels, "labels", conflicting_payments, conflict_reason),
+                ],
+            ).withColumn("_run_id", F.lit(run_id))
+        )
+
+        with phase(spark, phases, "build"):
+            input_events = copies.count()
+            distinct_events = kept.count()
+        report = {
+            "run_id": run_id,
+            "phases": phases,
+            "bronze_snapshots": {"bronze.payment_events": events_snapshot, "bronze.fraud_labels": labels_snapshot},
+            "events": {
+                "input_rows": input_events,
+                "distinct_events": distinct_events,
+                "collapsed_deliveries": input_events - distinct_events,
+                "conflicting_events": conflicts.select("event_id").distinct().count(),
+                "conflicting_payments": conflicting_payments.count(),
+            },
+            "labels": {
+                "input_rows": total_records(spark, BRONZE_LABELS, labels_snapshot),
+                "distinct_observations": all_labels.count(),
+            },
+            "rejected_rows": {
+                "by_table": counts_by(rejected, "rejected_table"),
+                "by_source": counts_by(rejected, "source"),
+            },
+        }
+
+        snapshots = {}
+        for name, frame, partition in (
+            (PAYMENT_EVENTS, accepted_events, F.days("occurred_at")),
+            (ATTEMPTS, accepted_attempts, F.days("started_at")),
+            (LABELS, accepted_labels, F.days("label_available_at")),
+            (REJECTED, rejected, None),
+        ):
+            with phase(spark, phases, f"write {name.split('.')[-1]}"):
+                snapshots[name] = write_table(spark, name, frame, pins, run_id, partition)
+        report["labels"]["linkage"] = counts_by(accepted_labels, "linkage")
+        report["attempts"] = snapshots[ATTEMPTS]["added_records"]
+        report["lifecycle_invalid"] = accepted_attempts.where(~F.col("lifecycle_valid")).count()
+        report["silver_snapshots"] = snapshots
+        Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/silver.json", report)
+        return report
+    finally:
+        for frame in cached:
+            frame.unpersist()
+
+
+def counts_by(frame: DataFrame, column: str) -> dict:
+    return {row[column]: row["count"] for row in frame.groupBy(column).count().collect()}
+
+
+def total_records(spark, table, snapshot) -> int:
+    row = spark.sql(
+        f"SELECT summary['total-records'] AS total FROM {table}.snapshots WHERE snapshot_id = {snapshot}"
+    ).first()
+    return int(row["total"])
+
+
+def snapshot_info(spark, table) -> dict:
+    row = spark.sql(
+        f"SELECT snapshot_id, summary['added-records'] AS added FROM {table}.snapshots "
+        "ORDER BY committed_at DESC LIMIT 1"
+    ).first()
+    return {"snapshot_id": row["snapshot_id"], "added_records": int(row["added"] or 0)}
 
 
 def with_event_hash(events: DataFrame) -> DataFrame:
@@ -145,7 +195,7 @@ def first_per_attempt(events: DataFrame, payload: str, columns) -> DataFrame:
     )
 
 
-def attempts(events: DataFrame) -> DataFrame:
+def attempts(events: DataFrame, payment_status: DataFrame) -> DataFrame:
     kinds = attempt_events(events)
     per_attempt = kinds.groupBy(*ATTEMPT_KEY).agg(
         F.sum(F.when(F.col("kind") == "start", 1).otherwise(0)).alias("starts"),
@@ -186,12 +236,12 @@ def attempts(events: DataFrame) -> DataFrame:
         ],
     )
     keys = kinds.select(*ATTEMPT_KEY).distinct()
-    payment_order = payments(events).select(*PAYMENT_KEY, "payment_status", "order_violation")
+    order = payment_status.select(*PAYMENT_KEY, "payment_status", "order_violation")
     joined = (
         keys.join(starts, ATTEMPT_KEY, "left")
         .join(decisions, ATTEMPT_KEY, "left")
         .join(per_attempt, ATTEMPT_KEY, "left")
-        .join(payment_order, PAYMENT_KEY, "left")
+        .join(order, PAYMENT_KEY, "left")
     )
     outcome = (
         F.when(F.col("succeeded_at").isNotNull(), F.lit("succeeded"))
@@ -264,19 +314,25 @@ def label_observations(labels: DataFrame) -> DataFrame:
     )
 
 
-def link_labels(labels: DataFrame, accepted_attempts: DataFrame, payment_status: DataFrame) -> DataFrame:
-    attempt = accepted_attempts.select(
+def link_labels(labels: DataFrame, attempts: DataFrame, payment_status: DataFrame) -> DataFrame:
+    attempt = attempts.select(
         *ATTEMPT_KEY,
         F.col("started_at").alias("attempt_started_at"),
         F.col("outcome").alias("attempt_outcome"),
         F.col("outcome_at").alias("attempt_outcome_at"),
     )
-    joined = labels.join(attempt, ATTEMPT_KEY, "left").join(payment_status, PAYMENT_KEY, "left")
-    terminal = F.col("payment_status").isin("succeeded", "expired")
+    state = payment_status.select(*PAYMENT_KEY, F.col("payment_status").alias("payment_state"))
+    joined = labels.join(attempt, ATTEMPT_KEY, "left").join(state, PAYMENT_KEY, "left")
+    known = F.col("payment_state").isNotNull()
+    terminal = F.col("payment_state").isin("succeeded", "expired")
+    historical = F.col("_source") == "historical"
+    missing = F.col("attempt_started_at").isNull()
     chargeback = F.col("source") == "LABEL_SOURCE_CHARGEBACK"
     linkage = (
-        F.when(F.col("attempt_started_at").isNull() & terminal, F.lit("violation"))
-        .when(F.col("attempt_started_at").isNull(), F.lit("pending"))
+        F.when(missing & ~known & historical, F.lit("orphan"))
+        .when(missing & ~known, F.lit("pending"))
+        .when(missing & (historical | terminal), F.lit("violation"))
+        .when(missing, F.lit("pending"))
         .when(F.col("label_available_at") < F.col("attempt_started_at"), F.lit("violation"))
         .when(
             chargeback
@@ -290,29 +346,23 @@ def link_labels(labels: DataFrame, accepted_attempts: DataFrame, payment_status:
         .when(chargeback, F.lit("pending"))
         .otherwise(F.lit("linked"))
     )
-    return joined.withColumn("linkage", linkage).drop("attempt_started_at", "attempt_outcome", "attempt_outcome_at")
+    return joined.withColumn("linkage", linkage).drop(
+        "attempt_started_at", "attempt_outcome", "attempt_outcome_at", "payment_state"
+    )
 
 
-def reject_payment_rows(frame, conflicting_payments, conflict_reason, table, source_column, source_from=None):
+def reject_payment_rows(frame: DataFrame, table: str, conflicting_payments, conflict_reason) -> DataFrame:
     rejected = frame.join(conflicting_payments, PAYMENT_KEY, "left_semi").join(conflict_reason, PAYMENT_KEY, "left")
-    if source_column is None:
-        sources = source_from.groupBy(*PAYMENT_KEY).agg(F.collect_set("_source").alias("sources"))
-        rejected = rejected.join(sources, PAYMENT_KEY, "left").withColumn(
-            "_source", F.when(F.array_contains("sources", "historical"), "historical").otherwise("kafka")
-        )
-        source_column = "_source"
-    elif source_column != "_source":
-        rejected = rejected.withColumn("_source", F.col(source_column))
     return rejected.select(
         F.lit(table).alias("rejected_table"),
         F.col("reason"),
         F.col("_source").alias("source"),
         *PAYMENT_KEY,
-        F.to_json(F.struct(*[F.col(c) for c in frame.columns if c not in ("_source",)])).alias("row_json"),
+        F.to_json(F.struct(*[F.col(c) for c in frame.columns if c != "_source"])).alias("row_json"),
     )
 
 
-def write_table(spark, name, frame, pins, run_id, partition=None):
+def write_table(spark, name, frame, pins, run_id, partition=None) -> dict:
     if not spark.catalog.tableExists(name):
         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {NAMESPACE}")
         creator = frame.limit(0).writeTo(name).using("iceberg")
@@ -325,6 +375,7 @@ def write_table(spark, name, frame, pins, run_id, partition=None):
     for key, value in {**pins, "dp2.run_id": run_id}.items():
         writer = writer.option(f"snapshot-property.{key}", value)
     writer.overwrite(F.lit(True))
+    return snapshot_info(spark, name)
 
 
 def main():
