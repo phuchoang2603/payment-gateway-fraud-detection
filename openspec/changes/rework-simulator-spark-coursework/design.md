@@ -65,7 +65,7 @@ Full 100 GB generation/acceptance remains after the whole pipeline. No container
 
 ### Evidence collected alongside each stage
 
-Keep source configuration, distributions, cardinality, schema null/value results and duplicate plots in the existing generator notebook. Retain useful validation results and run identities in the pipelines without an evidence framework. Use the existing evidence index and capture instructions in `docs/data-ml/data-pipeline.md`. Screenshots belong to the coursework report; do not implement screenshot validation, upload protocols or tests. Captions link actual output to the code revision, manifest/hash, run/application IDs and selected snapshots. Keep useful data diagnostics and Spark event logs. Capture real UI/code and redact credentials; missing captures remain pending without blocking data acceptance.
+Keep source configuration, distributions, cardinality, schema null/value results and duplicate plots in the existing generator notebook. Retain useful validation results and run identities in the pipelines without an evidence framework. Keep selected screenshots and explanations in `docs/data-ml/verification.md`, with operational receipts remaining in object storage rather than copied into OpenSpec. Screenshots support the coursework report; do not implement screenshot validation, upload protocols or tests. Captions link actual output to the code revision, manifest/hash, run/application IDs and selected snapshots. Keep useful data diagnostics and Spark event logs. Capture real UI/code and redact credentials; missing captures remain pending without blocking data acceptance.
 
 | Requirement | Capture and retained evidence | Owner / timing |
 | --- | --- | --- |

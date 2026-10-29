@@ -13,7 +13,7 @@ DATACONTRACT_DUCKDB_DATABASE=/path/to/staging.duckdb \
   --output validation.json --output-format json
 ```
 
-The SQL rules use DuckDB syntax. Source DuckDB rules are distinct from downstream validation. The owning DP1 plan retains Spark ingestion into Iceberg and adopts snapshot-pinned StarRocks SQL with native OpenMetadata quality/governance; Flink feature processing is a later stage.
+The SQL rules use DuckDB syntax. Source DuckDB rules are distinct from downstream validation. DP1 and DP2 use Spark ingestion into Iceberg and snapshot-pinned StarRocks SQL with native OpenMetadata quality/governance.
 
 ## Historical payments
 
@@ -28,18 +28,12 @@ The fraud-labels linkage rule reads `payment_events`, so validate labels in a da
 
 ### Development source
 
-Fresh dev v17 is published at `s3://platform-dev/datasets/payment-gateway/historical/v17/manifest.json`. Its actual digest and measured characteristics are recorded in the [evidence index](../../openspec/changes/rework-simulator-spark-coursework/evidence/index.md) and executed [generator notebook](../../src/data-pipeline/simulator/notebooks/historical-sanity.ipynb); previous-environment sources are not current acceptance.
-
-For configuration, schema schedules, immutable publication, label semantics and diagnostic interpretation, see the [data generator guide](data-generator.md). Source publication does not accept Bronze or Silver. Full-scale generation remains deferred until the whole pipeline is ready.
+Fresh dev v17, independent Bronze and Silver acceptance are documented in [verification](verification.md). Configuration and schema evolution are in the [generator guide](data-generator.md). Full-scale and prod acceptance remain deferred.
 
 ## Bronze payments
 
-`bronze-payments` version `4.0.0` defines `bronze.raw_payment_events` and `bronze.raw_fraud_labels` Iceberg ports. Physical event schemas 3 and 4 preserve enriched AttemptStarted context; schema 4 adds optional assessment references. Label schema 1 retains availability and feature-leakage restrictions. Ingestion preserves source and transport provenance, including physical schema version separately from the event envelope, and preserves identical deliveries. The revised contract is pending development acceptance.
-
-Git bronze contracts define StarRocks COUNT-of-violations SQL and conditional nested requirements. The official version-matched OpenMetadata ingestion image discovers tables and executes native quality rules; Argo performs explicit product/contract/lineage writes and verifies complete results. Spark performs source-integrity checks, ingestion and bidirectional duplicate-aware source/output reconciliation against recorded snapshots. Native per-day counts alone do not establish content equality.
-
-Fresh dev v17 is published; persisted validation remains pending before Bronze acceptance. See the [DP1 operation instructions](data-pipeline.md#historical-dp1). Prod pipeline acceptance remains deferred.
+[`bronze-payments`](../../contracts/data-products/bronze-payments) exposes `bronze.raw_payment_events` and `bronze.raw_fraud_labels`. It preserves identical deliveries, source identity, physical schema version and available transport provenance. Spark verifies source integrity and duplicate-aware conservation; StarRocks/OpenMetadata validate persisted snapshots and governance before acceptance.
 
 ## Silver payments
 
-[`silver-payments`](../../contracts/data-products/silver-payments) defines canonical events, exact event and label delivery provenance, attempt histories and independent label observations. Its [generated contract references](data-products/silver-payments) describe the ports. Candidate snapshots are not accepted until data quality and native governance succeed; the new product remains pending development acceptance.
+[`silver-payments`](../../contracts/data-products/silver-payments) exposes canonical events, event delivery provenance, attempt histories, independent label observations and label delivery provenance. Its [generated references](data-products/silver-payments) define grain, keys and temporal meaning. Separate [DP2 execution](data-pipeline.md#silver-dp2) accepts the five snapshots only after quality and governance succeed.

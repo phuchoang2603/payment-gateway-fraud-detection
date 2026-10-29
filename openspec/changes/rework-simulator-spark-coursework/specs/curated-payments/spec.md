@@ -49,9 +49,9 @@ Coursework evidence SHALL retain an unoptimized baseline and each measured optim
 
 ### Requirement: Reviewable data code and runtime evidence
 
-An evidence index SHALL pair real output/UI screenshots with immutable code/query references and machine-readable receipts. Spark captures SHALL show the relevant baseline problem, changed execution plan/stages and resulting metrics. Argo captures SHALL show DP1/DP2 stage ordering; OpenMetadata captures SHALL show actual lineage, native validation and inspectable contracts.
+A verification page under `docs/data-ml` SHALL pair selected real output/UI screenshots with explanations, immutable code/query references and remote receipt locations. OpenSpec SHALL NOT store screenshot bundles or redundant JSON result copies. Spark captures SHALL show the relevant baseline problem, changed execution plan/stages and resulting metrics. Argo captures SHALL show DP1/DP2 stage ordering; OpenMetadata captures SHALL show actual lineage, native validation and inspectable contracts.
 
-The existing generator notebook SHALL hold source configuration, diagnostics and plots; pipeline code SHALL retain useful data-validation results and run identities without a separate evidence framework. Capture instructions SHALL be documentation for report preparation. Screenshot validation, upload schemas and screenshot-specific tests SHALL NOT be part of the pipeline or its acceptance.
+The existing generator notebook SHALL hold source configuration, diagnostics and plots; pipeline code SHALL retain useful data-validation results and run identities without a separate evidence framework. Screenshots and their explanations SHALL live in domain verification documentation. Screenshot validation, upload schemas and screenshot-specific tests SHALL NOT be part of the pipeline or its acceptance.
 
 #### Scenario: Missing screenshot or measurement
 
