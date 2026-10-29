@@ -52,10 +52,18 @@ def test_kafka_cron_failed_bronze_publishes_both_statuses_and_no_lineage(monkeyp
     assert calls["lineage"] == []
 
 
-def test_kafka_cron_failed_silver_keeps_bronze_lineage(monkeypatch, calls):
+def test_kafka_cron_failed_silver_keeps_bronze_lineage_and_status(monkeypatch, calls):
     publish_with(monkeypatch, "dp1-bronze-kafka,dp2-silver", "Failed", "bronze,silver", failure("silver"))
 
+    assert calls["status"] == [("dp1-bronze-kafka", "Succeeded"), ("dp2-silver", "Failed")]
     assert calls["lineage"] == ["dp1-bronze-kafka"]
+
+
+def test_historical_pipeline_requires_a_dataset_version(monkeypatch, calls):
+    monkeypatch.delenv("DATASET_VERSION", raising=False)
+
+    with pytest.raises(ValueError, match="DATASET_VERSION"):
+        publish_with(monkeypatch, "dp1-bronze-historical", "Succeeded")
 
 
 def test_kafka_cron_success_publishes_lineage_for_both(monkeypatch, calls):
