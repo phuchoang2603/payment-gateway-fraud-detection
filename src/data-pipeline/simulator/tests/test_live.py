@@ -18,7 +18,9 @@ from simulator.live.runtime import Gateway, Labels, run_live, traffic
 from simulator.live.source import load_model
 from simulator.world import World, WorldConfig, entity_id
 
-WORLD = yaml.safe_load(Path(__file__).with_name("small-generator.yaml").read_text())["world"]
+WORLD = json.loads(
+    json.dumps(yaml.safe_load(Path(__file__).with_name("small-generator.yaml").read_text())["world"], default=str)
+)
 
 
 def live_config(**overrides):

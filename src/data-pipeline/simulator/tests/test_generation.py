@@ -158,7 +158,7 @@ def test_schema_change_splits_versions_by_occurrence_time(tmp_path):
         assert row["schema_version"] == expected
         risk = row["risk_decision_recorded"]
         if risk is not None:
-            has_assessment_id = risk["assessment"]["assessment_id"] is not None
+            has_assessment_id = risk["assessment"].get("assessment_id") is not None
             assert has_assessment_id == (expected == 3)
 
 
