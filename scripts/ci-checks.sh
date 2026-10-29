@@ -70,7 +70,7 @@ DATAPRODUCT_CLI=0.3.2
 check_lakehouse_jobs() {
   local rendered
   rendered="$(helm template lakehouse infra/charts/lakehouse -f infra/charts/lakehouse/values-prod.yaml)" || return 1
-  if grep -Eq '(^|[^[:alnum:]_-])curl([^[:alnum:]_-]|$)' <<<"$rendered"; then
+  if grep -qw curl <<<"$rendered"; then
     echo "lakehouse: a rendered job calls curl, which the ClickHouse image does not ship" >&2
     return 1
   fi
