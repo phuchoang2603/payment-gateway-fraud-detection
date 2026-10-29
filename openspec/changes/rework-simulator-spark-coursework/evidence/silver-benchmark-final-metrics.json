@@ -1,0 +1,929 @@
+{
+  "application_id": "dp2-18327-40bbj5h4m9y1ff0nqj3a2e20sjsiielrye73",
+  "workflow": "dev-v17-benchmark-v4hzl",
+  "outcome": "passed",
+  "source": {
+    "uri": "s3://platform-dev/runs/payment-gateway/dp2/spark-events/eventlog_v2_dp2-18327-40bbj5h4m9y1ff0nqj3a2e20sjsiielrye73/events_1_dp2-18327-40bbj5h4m9y1ff0nqj3a2e20sjsiielrye73.zstd",
+    "sha256": "e9067a886af43ce755cd92c9b055425cac708fab71bb7c613b6d8847ac9070d1",
+    "compressed_bytes": 1835714,
+    "application_end_present": true
+  },
+  "method": "Read SparkListenerTaskEnd and StageCompleted events; count each stage once per variant using report stage IDs. Quantiles use nearest-rank order statistics. Skipped stage references have no task events. Failed/killed tasks are counted separately; successful-task metrics are summed. No failed/killed tasks observed in measured variants.",
+  "limits": "Single baseline-first trial; no warmup; filesystem/host caches uncontrolled. Includes shared source reading and canonicalization within each variant. Task peak execution memory is not process RSS. Initial REST collection missed baseline stages; event log supplies complete task metrics. SQL plans/screenshots retain Spark UI metrics, including a spurious 70.96 h codegen duration, which is not used as wall time.",
+  "variants": {
+    "baseline": {
+      "completed_stage_ids": [
+        11,
+        12,
+        13,
+        15,
+        17,
+        22,
+        28,
+        34,
+        41,
+        42,
+        43,
+        44,
+        46,
+        48,
+        53,
+        59,
+        66,
+        73,
+        81
+      ],
+      "successful_tasks": 240,
+      "unsuccessful_tasks": 0,
+      "task_duration_ms_quantiles": {
+        "0": 32,
+        "0.5": 85,
+        "0.95": 3428,
+        "1": 11295
+      },
+      "executor_run_time_ms": 170368,
+      "executor_cpu_time_ns": 133499656864,
+      "input_bytes": 394351086,
+      "shuffle_read_bytes": 761449305,
+      "shuffle_write_bytes": 761449305,
+      "memory_bytes_spilled": 0,
+      "disk_bytes_spilled": 0,
+      "max_task_peak_execution_memory_bytes": 306511808,
+      "job_ids_match_event_log": true,
+      "runtime_seconds": 128.15228595799272,
+      "workload_seconds": {
+        "customer_payment_methods": 62.60342224100168,
+        "merchant_category_counts": 55.22456814599718
+      },
+      "stages": {
+        "11": {
+          "completed_stage_ids": [
+            11
+          ],
+          "successful_tasks": 2,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 537,
+            "0.5": 537,
+            "0.95": 1551,
+            "1": 1551
+          },
+          "executor_run_time_ms": 1886,
+          "executor_cpu_time_ns": 76016431,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        },
+        "12": {
+          "completed_stage_ids": [
+            12
+          ],
+          "successful_tasks": 23,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 541,
+            "0.5": 749,
+            "0.95": 4703,
+            "1": 9063
+          },
+          "executor_run_time_ms": 29249,
+          "executor_cpu_time_ns": 23670983300,
+          "input_bytes": 98465987,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 55812395,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 134512608
+        },
+        "13": {
+          "completed_stage_ids": [
+            13
+          ],
+          "successful_tasks": 23,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 610,
+            "0.5": 938,
+            "0.95": 6404,
+            "1": 11295
+          },
+          "executor_run_time_ms": 34840,
+          "executor_cpu_time_ns": 29523936833,
+          "input_bytes": 98465987,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 255596700,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 136347616
+        },
+        "15": {
+          "completed_stage_ids": [
+            15
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 1270,
+            "0.5": 1270,
+            "0.95": 1270,
+            "1": 1270
+          },
+          "executor_run_time_ms": 1174,
+          "executor_cpu_time_ns": 1125967786,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 55812395,
+          "shuffle_write_bytes": 10233728,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 209715152
+        },
+        "17": {
+          "completed_stage_ids": [
+            17
+          ],
+          "successful_tasks": 4,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 877,
+            "0.5": 893,
+            "0.95": 1437,
+            "1": 1437
+          },
+          "executor_run_time_ms": 3958,
+          "executor_cpu_time_ns": 3877869196,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 255596700,
+          "shuffle_write_bytes": 30279927,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 285212608
+        },
+        "22": {
+          "completed_stage_ids": [
+            22
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 2092,
+            "0.5": 2092,
+            "0.95": 2092,
+            "1": 2092
+          },
+          "executor_run_time_ms": 1934,
+          "executor_cpu_time_ns": 1883997529,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 40513655,
+          "shuffle_write_bytes": 111372,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 239402960
+        },
+        "28": {
+          "completed_stage_ids": [
+            28
+          ],
+          "successful_tasks": 32,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 44,
+            "0.5": 62,
+            "0.95": 97,
+            "1": 256
+          },
+          "executor_run_time_ms": 883,
+          "executor_cpu_time_ns": 460644624,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 111372,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 67370992
+        },
+        "34": {
+          "completed_stage_ids": [
+            34
+          ],
+          "successful_tasks": 32,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 32,
+            "0.5": 43,
+            "0.95": 69,
+            "1": 177
+          },
+          "executor_run_time_ms": 184,
+          "executor_cpu_time_ns": 194841931,
+          "input_bytes": 108933,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 2400,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        },
+        "41": {
+          "completed_stage_ids": [
+            41
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 175,
+            "0.5": 175,
+            "0.95": 175,
+            "1": 175
+          },
+          "executor_run_time_ms": 118,
+          "executor_cpu_time_ns": 36799910,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 2400,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        },
+        "42": {
+          "completed_stage_ids": [
+            42
+          ],
+          "successful_tasks": 2,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 368,
+            "0.5": 368,
+            "0.95": 1025,
+            "1": 1025
+          },
+          "executor_run_time_ms": 1202,
+          "executor_cpu_time_ns": 43953902,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        },
+        "43": {
+          "completed_stage_ids": [
+            43
+          ],
+          "successful_tasks": 23,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 798,
+            "0.5": 941,
+            "0.95": 7512,
+            "1": 7727
+          },
+          "executor_run_time_ms": 52277,
+          "executor_cpu_time_ns": 37668062064,
+          "input_bytes": 98465987,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 255596700,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 136347616
+        },
+        "44": {
+          "completed_stage_ids": [
+            44
+          ],
+          "successful_tasks": 23,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 398,
+            "0.5": 714,
+            "0.95": 3428,
+            "1": 4549
+          },
+          "executor_run_time_ms": 26275,
+          "executor_cpu_time_ns": 21866054459,
+          "input_bytes": 98465987,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 98507957,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 134512608
+        },
+        "46": {
+          "completed_stage_ids": [
+            46
+          ],
+          "successful_tasks": 4,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 979,
+            "0.5": 1005,
+            "0.95": 7675,
+            "1": 7675
+          },
+          "executor_run_time_ms": 10868,
+          "executor_cpu_time_ns": 9171176538,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 255596700,
+          "shuffle_write_bytes": 30278433,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 285212608
+        },
+        "48": {
+          "completed_stage_ids": [
+            48
+          ],
+          "successful_tasks": 2,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 871,
+            "0.5": 871,
+            "0.95": 2109,
+            "1": 2109
+          },
+          "executor_run_time_ms": 2647,
+          "executor_cpu_time_ns": 1456892001,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 98507957,
+          "shuffle_write_bytes": 22313188,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 138412000
+        },
+        "53": {
+          "completed_stage_ids": [
+            53
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 1843,
+            "0.5": 1843,
+            "0.95": 1843,
+            "1": 1843
+          },
+          "executor_run_time_ms": 1778,
+          "executor_cpu_time_ns": 1718949511,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 52591621,
+          "shuffle_write_bytes": 2329566,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 306511808
+        },
+        "59": {
+          "completed_stage_ids": [
+            59
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 282,
+            "0.5": 282,
+            "0.95": 282,
+            "1": 282
+          },
+          "executor_run_time_ms": 188,
+          "executor_cpu_time_ns": 177218582,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 2329566,
+          "shuffle_write_bytes": 384539,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 134741984
+        },
+        "66": {
+          "completed_stage_ids": [
+            66
+          ],
+          "successful_tasks": 32,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 48,
+            "0.5": 60,
+            "0.95": 83,
+            "1": 129
+          },
+          "executor_run_time_ms": 745,
+          "executor_cpu_time_ns": 384097919,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 384539,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 67370992
+        },
+        "73": {
+          "completed_stage_ids": [
+            73
+          ],
+          "successful_tasks": 32,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 33,
+            "0.5": 43,
+            "0.95": 54,
+            "1": 85
+          },
+          "executor_run_time_ms": 130,
+          "executor_cpu_time_ns": 141823940,
+          "input_bytes": 378205,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 2400,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        },
+        "81": {
+          "completed_stage_ids": [
+            81
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 119,
+            "0.5": 119,
+            "0.95": 119,
+            "1": 119
+          },
+          "executor_run_time_ms": 32,
+          "executor_cpu_time_ns": 20370408,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 2400,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        }
+      }
+    },
+    "optimized": {
+      "completed_stage_ids": [
+        82,
+        83,
+        84,
+        86,
+        88,
+        93,
+        99,
+        106,
+        113,
+        121,
+        122,
+        123,
+        124,
+        126,
+        128,
+        133,
+        139,
+        146,
+        153,
+        161
+      ],
+      "successful_tasks": 241,
+      "unsuccessful_tasks": 0,
+      "task_duration_ms_quantiles": {
+        "0": 26,
+        "0.5": 173,
+        "0.95": 3601,
+        "1": 13178
+      },
+      "executor_run_time_ms": 172193,
+      "executor_cpu_time_ns": 136048023748,
+      "input_bytes": 394351396,
+      "shuffle_read_bytes": 762075716,
+      "shuffle_write_bytes": 762075716,
+      "memory_bytes_spilled": 0,
+      "disk_bytes_spilled": 0,
+      "max_task_peak_execution_memory_bytes": 306511808,
+      "job_ids_match_event_log": true,
+      "runtime_seconds": 123.86065015099302,
+      "workload_seconds": {
+        "customer_payment_methods": 49.724619635002455,
+        "merchant_category_counts": 68.1002025869966
+      },
+      "stages": {
+        "82": {
+          "completed_stage_ids": [
+            82
+          ],
+          "successful_tasks": 2,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 504,
+            "0.5": 504,
+            "0.95": 1551,
+            "1": 1551
+          },
+          "executor_run_time_ms": 1947,
+          "executor_cpu_time_ns": 37219980,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        },
+        "83": {
+          "completed_stage_ids": [
+            83
+          ],
+          "successful_tasks": 23,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 423,
+            "0.5": 663,
+            "0.95": 2705,
+            "1": 2803
+          },
+          "executor_run_time_ms": 22879,
+          "executor_cpu_time_ns": 19924208367,
+          "input_bytes": 98465987,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 55812395,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 134512608
+        },
+        "84": {
+          "completed_stage_ids": [
+            84
+          ],
+          "successful_tasks": 23,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 573,
+            "0.5": 920,
+            "0.95": 4246,
+            "1": 4373
+          },
+          "executor_run_time_ms": 39284,
+          "executor_cpu_time_ns": 30173457639,
+          "input_bytes": 98465987,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 255596700,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 136347616
+        },
+        "86": {
+          "completed_stage_ids": [
+            86
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 7945,
+            "0.5": 7945,
+            "0.95": 7945,
+            "1": 7945
+          },
+          "executor_run_time_ms": 7871,
+          "executor_cpu_time_ns": 6010289726,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 55812395,
+          "shuffle_write_bytes": 10235076,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 209715152
+        },
+        "88": {
+          "completed_stage_ids": [
+            88
+          ],
+          "successful_tasks": 4,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 1049,
+            "0.5": 1153,
+            "0.95": 1920,
+            "1": 1920
+          },
+          "executor_run_time_ms": 4937,
+          "executor_cpu_time_ns": 3555385389,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 255596700,
+          "shuffle_write_bytes": 30279967,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 285212608
+        },
+        "93": {
+          "completed_stage_ids": [
+            93
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 13178,
+            "0.5": 13178,
+            "0.95": 13178,
+            "1": 13178
+          },
+          "executor_run_time_ms": 12918,
+          "executor_cpu_time_ns": 11554332110,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 40515043,
+          "shuffle_write_bytes": 621394,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 306511808
+        },
+        "99": {
+          "completed_stage_ids": [
+            99
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 854,
+            "0.5": 854,
+            "0.95": 854,
+            "1": 854
+          },
+          "executor_run_time_ms": 620,
+          "executor_cpu_time_ns": 555446083,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 621394,
+          "shuffle_write_bytes": 111757,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 67895280
+        },
+        "106": {
+          "completed_stage_ids": [
+            106
+          ],
+          "successful_tasks": 32,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 108,
+            "0.5": 154,
+            "0.95": 213,
+            "1": 939
+          },
+          "executor_run_time_ms": 2137,
+          "executor_cpu_time_ns": 1574766981,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 111757,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 67370992
+        },
+        "113": {
+          "completed_stage_ids": [
+            113
+          ],
+          "successful_tasks": 32,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 83,
+            "0.5": 108,
+            "0.95": 173,
+            "1": 360
+          },
+          "executor_run_time_ms": 708,
+          "executor_cpu_time_ns": 649528054,
+          "input_bytes": 109243,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 2400,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        },
+        "121": {
+          "completed_stage_ids": [
+            121
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 160,
+            "0.5": 160,
+            "0.95": 160,
+            "1": 160
+          },
+          "executor_run_time_ms": 108,
+          "executor_cpu_time_ns": 96414524,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 2400,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        },
+        "122": {
+          "completed_stage_ids": [
+            122
+          ],
+          "successful_tasks": 2,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 497,
+            "0.5": 497,
+            "0.95": 1537,
+            "1": 1537
+          },
+          "executor_run_time_ms": 1798,
+          "executor_cpu_time_ns": 30283089,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        },
+        "123": {
+          "completed_stage_ids": [
+            123
+          ],
+          "successful_tasks": 23,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 549,
+            "0.5": 910,
+            "0.95": 3738,
+            "1": 5056
+          },
+          "executor_run_time_ms": 35326,
+          "executor_cpu_time_ns": 30349230760,
+          "input_bytes": 98465987,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 255596700,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 136347616
+        },
+        "124": {
+          "completed_stage_ids": [
+            124
+          ],
+          "successful_tasks": 23,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 408,
+            "0.5": 650,
+            "0.95": 2580,
+            "1": 2657
+          },
+          "executor_run_time_ms": 20298,
+          "executor_cpu_time_ns": 17663066490,
+          "input_bytes": 98465987,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 98507957,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 134512608
+        },
+        "126": {
+          "completed_stage_ids": [
+            126
+          ],
+          "successful_tasks": 4,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 993,
+            "0.5": 1053,
+            "0.95": 5779,
+            "1": 5779
+          },
+          "executor_run_time_ms": 12323,
+          "executor_cpu_time_ns": 7333950593,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 255596700,
+          "shuffle_write_bytes": 30280040,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 285212608
+        },
+        "128": {
+          "completed_stage_ids": [
+            128
+          ],
+          "successful_tasks": 2,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 1391,
+            "0.5": 1391,
+            "0.95": 5273,
+            "1": 5273
+          },
+          "executor_run_time_ms": 6326,
+          "executor_cpu_time_ns": 4422506056,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 98507957,
+          "shuffle_write_bytes": 22314825,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 138412000
+        },
+        "133": {
+          "completed_stage_ids": [
+            133
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 1851,
+            "0.5": 1851,
+            "0.95": 1851,
+            "1": 1851
+          },
+          "executor_run_time_ms": 1765,
+          "executor_cpu_time_ns": 1498881007,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 52594865,
+          "shuffle_write_bytes": 2329566,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 306511808
+        },
+        "139": {
+          "completed_stage_ids": [
+            139
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 263,
+            "0.5": 263,
+            "0.95": 263,
+            "1": 263
+          },
+          "executor_run_time_ms": 200,
+          "executor_cpu_time_ns": 181719236,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 2329566,
+          "shuffle_write_bytes": 384539,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 134741984
+        },
+        "146": {
+          "completed_stage_ids": [
+            146
+          ],
+          "successful_tasks": 32,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 41,
+            "0.5": 51,
+            "0.95": 68,
+            "1": 86
+          },
+          "executor_run_time_ms": 605,
+          "executor_cpu_time_ns": 291512094,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 384539,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 67370992
+        },
+        "153": {
+          "completed_stage_ids": [
+            153
+          ],
+          "successful_tasks": 32,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 26,
+            "0.5": 39,
+            "0.95": 46,
+            "1": 95
+          },
+          "executor_run_time_ms": 112,
+          "executor_cpu_time_ns": 124628122,
+          "input_bytes": 378205,
+          "shuffle_read_bytes": 0,
+          "shuffle_write_bytes": 2400,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        },
+        "161": {
+          "completed_stage_ids": [
+            161
+          ],
+          "successful_tasks": 1,
+          "unsuccessful_tasks": 0,
+          "task_duration_ms_quantiles": {
+            "0": 84,
+            "0.5": 84,
+            "0.95": 84,
+            "1": 84
+          },
+          "executor_run_time_ms": 31,
+          "executor_cpu_time_ns": 21197448,
+          "input_bytes": 0,
+          "shuffle_read_bytes": 2400,
+          "shuffle_write_bytes": 0,
+          "memory_bytes_spilled": 0,
+          "disk_bytes_spilled": 0,
+          "max_task_peak_execution_memory_bytes": 0
+        }
+      }
+    }
+  }
+}

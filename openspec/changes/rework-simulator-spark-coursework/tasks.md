@@ -1,6 +1,6 @@
-Existing implementation is retained after the rebase; all tasks below require reconciliation or verification against the fresh dev baseline. Previous results are not carried forward as acceptance. Tests and image builds run in CI only.
+All tasks are verified against the fresh dev baseline. Previous-environment results are not carried forward as acceptance. Tests and image builds run in CI only.
 
-Implementation update: full-batch curation, shared payment context, standalone workload benchmarks, immutable release references and platform wiring are implemented. Local Ruff, Helm render/lint and OpenSpec validation pass. All 23 checks pass on `dd47299`, including 60 batch tests and scoped simulator mutation testing (9/10, 90%). Fresh dev generation and runtime acceptance are in progress; no prior-environment acceptance is reused.
+Implementation update: fresh dev v17 generation/notebook, independent Bronze acceptance, Silver transformation/native quality/governance acceptance and the standalone equivalent-output benchmark are complete. CI passed all 24 checks on `a22ebd7`; final evidence-only changes await CI. Actual receipts, failed attempts, metrics and UI/code captures are retained in `evidence/index.md`. Prod/full-scale acceptance remains deferred.
 
 ## 1. Declared schemas and normalization
 
@@ -26,10 +26,10 @@ Implementation update: full-batch curation, shared payment context, standalone w
 
 ## 4. Data pipeline integration and relevant evidence
 
-- [ ] 4.1 Provide thin independent DP1 and DP2 Argo entrypoints with separate acceptance and direct-from-accepted-Bronze execution; verify CI workflow checks and deployed stage graph show readable ordering, bounded retries and the same graph for supported version schedules.
-- [ ] 4.2 Reuse shared OpenMetadata connections/runtime/SDK for curated contracts, lineage and native SQL checks; verify readback pins actual accepted inputs/outputs and complete current rule results.
-- [ ] 4.3 Move the optional benchmark out of normal Silver acceptance; preserve a correct unoptimized baseline and measure an observed skewed aggregation or relevant high-cardinality operation using fixed input/resources; verify equal canonical content and retain plans, task durations, shuffle/spill/runtime and honest collection limits with code captures and Spark UI screenshots.
-- [ ] 4.4 Capture Argo DP1/DP2 ingest/validate ordering and OpenMetadata lineage/validation/contracts alongside data diagnostics; verify one concise evidence index resolves actual run/application IDs, selected snapshots, code revisions and results. Exclude Docker, gold/warehouse tuning, Flink and other unrelated evidence tasks.
+- [x] 4.1 Provide thin independent DP1 and DP2 Argo entrypoints with separate acceptance and direct-from-accepted-Bronze execution; verify CI workflow checks and deployed stage graph show readable ordering, bounded retries and the same graph for supported version schedules.
+- [x] 4.2 Reuse shared OpenMetadata connections/runtime/SDK for curated contracts, lineage and native SQL checks; verify readback pins actual accepted inputs/outputs and complete current rule results.
+- [x] 4.3 Move the optional benchmark out of normal Silver acceptance; preserve a correct unoptimized baseline and measure an observed skewed aggregation or relevant high-cardinality operation using fixed input/resources; verify equal canonical content and retain plans, task durations, shuffle/spill/runtime and honest collection limits with code captures and Spark UI screenshots.
+- [x] 4.4 Capture Argo DP1/DP2 ingest/validate ordering and OpenMetadata lineage/validation/contracts alongside data diagnostics; verify one concise evidence index resolves actual run/application IDs, selected snapshots, code revisions and results. Exclude Docker, gold/warehouse tuning, Flink and other unrelated evidence tasks.
 
 ## 5. Domain documentation and cleanup
 
@@ -54,4 +54,4 @@ Implementation update: full-batch curation, shared payment context, standalone w
 - [x] 8.1 Adapt Silver and Spark utility templates to the current image helper and `global.imageTags`; remove equal-revision assumptions and reconcile Bronze/Silver run and benchmark identities with immutable release tags.
 - [x] 8.2 Replace legacy Silver storage secrets with `gateway-storage` and `gateway-catalog-client`, verify Polaris auth and environment-selected S3 settings, and replace stale governance namespace defaults with `data`.
 - [x] 8.3 Configure environment-specific DP2 evidence roots under `runs/payment-gateway/dp2` without prod writes to dev; keep schedules disabled pending source/catalog verification.
-- [ ] 8.4 After CI succeeds, generate fresh dev v17, configure its actual digest, execute the cleared notebook, and accept independent Bronze and Silver runs. Record only new outputs and actual captures; defer prod/full-scale acceptance.
+- [x] 8.4 After CI succeeds, generate fresh dev v17, configure its actual digest, execute the cleared notebook, and accept independent Bronze and Silver runs. Record only new outputs and actual captures; defer prod/full-scale acceptance.
