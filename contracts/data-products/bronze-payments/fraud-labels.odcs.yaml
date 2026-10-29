@@ -25,7 +25,7 @@ servers:
     host: kube-starrocks-fe-service.starrocks.svc.cluster.local
     port: 9030
     database: bronze
-    description: Iceberg table fraud_labels in schema bronze, read through the StarRocks fraud_lakehouse catalog. The rule placeholder {object} stands for the fully qualified table.
+    description: Iceberg table fraud_labels in schema bronze, read through the StarRocks lakehouse catalog. The rule placeholder {object} stands for the fully qualified table.
 schema:
   - name: fraud_labels
     physicalName: bronze.fraud_labels

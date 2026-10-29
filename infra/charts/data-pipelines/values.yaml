@@ -116,7 +116,7 @@ catalog:
   icebergWarehouse: lakehouse
   icebergClientId: platform
   icebergOauth2Uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
-  starRocksCatalog: fraud_lakehouse
+  starRocksCatalog: lakehouse
   openmetadataUrl: http://openmetadata.data.svc.cluster.local:8585/api
   kafkaClient: data-pipelines
   icebergSecret:

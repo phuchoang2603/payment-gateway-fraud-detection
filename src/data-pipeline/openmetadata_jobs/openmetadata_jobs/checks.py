@@ -23,7 +23,7 @@ class Check:
 
 def checks(root=None, catalog=None, products=None):
     root = Path(root or os.environ["DATA_PRODUCTS_ROOT"])
-    catalog = catalog or os.environ.get("STARROCKS_CATALOG", "fraud_lakehouse")
+    catalog = catalog or os.environ.get("STARROCKS_CATALOG", "lakehouse")
     found = []
     for product in products or PRODUCTS:
         for contract in sorted((root / product).glob("*.odcs.yaml")):
@@ -34,7 +34,7 @@ def checks(root=None, catalog=None, products=None):
 
 
 def table_fqn(table):
-    return f"{SERVICE}.{os.environ.get('STARROCKS_CATALOG', 'fraud_lakehouse')}.{table}"
+    return f"{SERVICE}.{os.environ.get('STARROCKS_CATALOG', 'lakehouse')}.{table}"
 
 
 def check(contract, table, rule, catalog):

@@ -19,7 +19,7 @@ Synthetic data only. Scenario is simulation truth and must never become a featur
 ## Servers
 | Name | Type | Attributes |
 | ---- | ---- | ---------- |
-| starrocks | mysql | *Iceberg table fraud_labels in schema bronze, read through the StarRocks fraud_lakehouse catalog. The rule placeholder {object} stands for the fully qualified table.*<br />• **environment:** dev<br />• **database:** bronze<br />• **host:** kube-starrocks-fe-service.starrocks.svc.cluster.local<br />• **port:** 9030 |
+| starrocks | mysql | *Iceberg table fraud_labels in schema bronze, read through the StarRocks lakehouse catalog. The rule placeholder {object} stands for the fully qualified table.*<br />• **environment:** dev<br />• **database:** bronze<br />• **host:** kube-starrocks-fe-service.starrocks.svc.cluster.local<br />• **port:** 9030 |
 
 ## Schema
 ### fraud_labels

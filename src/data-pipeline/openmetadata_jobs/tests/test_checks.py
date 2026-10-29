@@ -8,7 +8,7 @@ CONTRACTS = Path(__file__).resolve().parents[4] / "contracts" / "data-products"
 
 
 def test_every_contract_rule_becomes_a_native_count_check():
-    found = checks.checks(CONTRACTS, catalog="fraud_lakehouse")
+    found = checks.checks(CONTRACTS, catalog="lakehouse")
 
     assert {check.table for check in found} == {
         "bronze.payment_events",
@@ -37,7 +37,7 @@ def test_rule_that_is_not_a_zero_count_fails_preparation(tmp_path):
     )
 
     with pytest.raises(ValueError, match="positive_rows"):
-        checks.checks(tmp_path, catalog="fraud_lakehouse")
+        checks.checks(tmp_path, catalog="lakehouse")
 
 
 def test_a_check_counts_only_a_fresh_success():
@@ -55,6 +55,6 @@ def test_a_check_counts_only_a_fresh_success():
 
 
 def test_table_names_include_the_service_and_catalog(monkeypatch):
-    monkeypatch.setenv("STARROCKS_CATALOG", "fraud_lakehouse")
+    monkeypatch.setenv("STARROCKS_CATALOG", "lakehouse")
 
-    assert checks.table_fqn("bronze.fraud_labels") == "starrocks.fraud_lakehouse.bronze.fraud_labels"
+    assert checks.table_fqn("bronze.fraud_labels") == "starrocks.lakehouse.bronze.fraud_labels"
