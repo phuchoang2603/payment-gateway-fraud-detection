@@ -137,15 +137,6 @@ CI SHALL reuse coverage and add only distinct wire/identity/retry checks: packag
 - **WHEN** CI decodes representative contracted protobuf events/labels through the Python landing adapter
 - **THEN** their Parquet business columns match the existing historical Arrow schemas while original wire bytes remain available without registry framing
 
-### Requirement: Delivery-fault runtime verification
-
-Verification SHALL reuse focused scenarios for deterministic selection, no-fault pass-through, bounded backlog and acknowledged-prefix recovery across shared-process restart. Broker-backed recovery tests SHALL remain opt-in against an explicitly supplied integration broker; default Python CI SHALL NOT start Kafka or require Testcontainers. It SHALL NOT add redundant logging-shape or render-only tests. Evidence SHALL distinguish deliberately injected duplicates from possible restart replay and SHALL NOT claim exactly-once recovery.
-
-#### Scenario: Workload restarted with pending publications
-
-- **WHEN** the integration recovery check restarts the workload while events are held or awaiting acknowledgments
-- **THEN** every clean record is eventually forwarded and no committed position skips unfinished work
-
 ### Requirement: Immutable landing and DP1 interface evidence
 
 Archiver verification SHALL demonstrate historical-compatible Parquet business schemas and byte/provenance preservation, duplicate conservation, low-traffic rotation, completed-object visibility and stable selected objects across retries. The written DP1 handoff SHALL specify late-file discovery, immutable batch retry/readback, contextual history and label maturity; implementation/evidence of DP1 multi-source ingestion is deferred to its next slice. A failed prerequisite SHALL block rollout.
@@ -228,3 +219,12 @@ The rewritten integration SHALL establish fresh v16 historical and recurring acc
 
 - **WHEN** raw checks and conservation pass while the catalog still exposes an unrelated old execution or omits required native contract fields
 - **THEN** data outcomes remain recorded but governance and overall DP1 acceptance remain incomplete
+
+### Requirement: Late and duplicate injection verification
+
+Verification SHALL reuse focused scenarios for seeded late and redelivery selection, zero-rate pass-through, store-and-forward click-time preservation and byte-identical same-partition redelivery that skips its own copies. The broker-backed redelivery test SHALL start its own disposable Kafka through Testcontainers in default Python CI, without externally supplied broker configuration. It SHALL NOT add redundant logging-shape or render-only tests. Evidence SHALL distinguish deliberately injected duplicates from possible restart replay and SHALL NOT claim exactly-once recovery.
+
+#### Scenario: Selected event is redelivered
+
+- **WHEN** the CI broker check publishes one event with redelivery selected
+- **THEN** exactly one marked, byte-identical copy appears on the same partition and is not copied again

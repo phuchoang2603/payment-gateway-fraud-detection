@@ -111,11 +111,9 @@ After all affected application images publish successfully, CI SHALL publish one
 - **WHEN** an image build completes after its source ref has advanced
 - **THEN** it does not replace the environment release
 
-
-
 ### Requirement: Single simulator workload
 
-Deployment SHALL provide one opt-in single-replica simulator workload running traffic, labels and optional delivery faults from one image/configuration. It SHALL use the selected environment root without duplicate source-specific topology. Delivery faults SHALL remain embedded; an independently enabled Python archiver SHALL provide landing.
+Deployment SHALL provide one opt-in single-replica simulator workload running traffic, labels and optional late and duplicate injection from one image/configuration. It SHALL use the selected environment root without duplicate source-specific topology. Late and duplicate injection SHALL remain embedded in that workload.
 
 #### Scenario: Render live workload
 

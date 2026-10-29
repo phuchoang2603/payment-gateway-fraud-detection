@@ -32,6 +32,7 @@ None.
 - `live-traffic-simulation`: store-and-forward attempts and late/duplicate evidence without the archiver.
 - `talos-gitops-deployment`: the simulator workload embeds late and duplicate injection; no archiver statement.
 - `focused-verification`: redelivery verification replaces delivery-fault verification.
+- `fraud-decision`: historical-feature retrieval is disabled until the feature-store change, and shadow-only once enabled.
 
 ## Impact
 

@@ -48,6 +48,3 @@
   - Screenshots of the job graph, checkpoint history and backpressure are in `docs/data/images/`.
   - A controlled TaskManager restart was recorded with the restored checkpoint, the recovery time and a journal revision check.
 - [x] 8.7 Name the streaming operators (`Observe source progress`, `Deduplicate events`, `Deduplicate attempts`, `Aggregate customer windows`, `Aggregate method windows`) without changing their uids
-- [ ] 8.6 Remaining evidence:
-  - Capture the Flink UI metrics panel showing `too_late`, `duplicates_dropped`, `rejected` and the lateness buckets. In this run those values were read from the REST API instead.
-  - Once Bronze Kafka mode is deployed in dev, compare its duplicate share and `recorded_at − attempted_at` distribution with the raw-topic figures.

@@ -1,5 +1,14 @@
 ## MODIFIED Requirements
 
+### Requirement: Replay and live acceptance evidence
+
+Acceptance for this journal-only slice SHALL reuse the existing CI conformance and integration tests, the pinned replay benchmark and recorded bounded live verification. Reports SHALL distinguish tested logical-clock conformance, duplicate and late-input handling, expiration and restart recovery from observed current-time rates, coverage and resource/latency limitations. Full 90-day source replay, sustained-load testing and a broader deployed outage exercise SHALL NOT be prerequisites for closing this slice or be claimed as demonstrated. Any replay SHALL use a distinct output epoch and SHALL NOT seed old events as current live history. Historical source immutability and prior evidence SHALL be preserved.
+
+#### Scenario: Old development source
+
+- **WHEN** the 90-day source is replayed for conformance
+- **THEN** windows use its historical clock and outputs cannot overwrite the current live epoch
+
 ### Requirement: Hybrid snapshot emission
 
 Snapshots SHALL update on contributions and window expirations, including expiration of distinct-device activity. Each window SHALL reflect the declared snapshot anchor and boundary. Exact device counts SHALL retain expiring activity so a device leaves the count only after its last in-window attempt expires. Processing health SHALL be distinguishable from feature changes.
@@ -15,6 +24,15 @@ Snapshots SHALL update on contributions and window expirations, including expira
 - **THEN** the device remains in the distinct count until its last attempt expires
 
 ## ADDED Requirements
+
+### Requirement: Recoverable feature journal publication
+
+Feature updates SHALL carry scoped entity/view identity, definition hash, run epoch, snapshot identity, anchor, monotonic revision, coverage and provenance. The journal SHALL be written through a checkpointed exactly-once Kafka sink, so a restart neither loses nor repeats committed updates for read-committed consumers. Each entity's revisions SHALL increase monotonically, and a consumer SHALL be able to discard an update whose revision is not newer than the one it holds. No transaction spanning Kafka and any feature store SHALL be claimed.
+
+#### Scenario: TaskManager restart during live traffic
+
+- **WHEN** the TaskManager is lost after some updates are committed and the job restores from its last checkpoint
+- **THEN** read-committed journal consumers see each `(key, revision)` at most once with one snapshot identity, and no entity's revision regresses
 
 ### Requirement: Independent scoped attempt aggregation
 
@@ -79,3 +97,15 @@ The processor SHALL route per-record data errors to a dead-letter Kafka topic `f
 **Reason**: Eligibility no longer requires matching attempt starts with risk decisions.
 
 **Migration**: Replaced by "Independent scoped attempt aggregation".
+
+### Requirement: Recoverable ordered feature publication
+
+**Reason**: The online-store writer is disabled in this slice; journal recovery is specified independently of any store.
+
+**Migration**: Replaced by "Recoverable feature journal publication". Online-store write semantics return with the feature-store change.
+
+### Requirement: Separate online state and supported retrieval
+
+**Reason**: The streaming output ends at the feature journal; the online store, its retrieval API and offline materialization move to the later feature-store change, and Feast and the fraud service's retrieval are disabled until then.
+
+**Migration**: The feature-store change in the roadmap build order specifies online and offline stores and retrieval.
