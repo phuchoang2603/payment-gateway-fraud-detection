@@ -17,7 +17,7 @@ func optionalTime(value *time.Time) *timestamppb.Timestamp {
 }
 
 func snapshotValues(value application.SnapshotValues) *featuresv1.SnapshotValues {
-	return &featuresv1.SnapshotValues{AssessedCount_1H: value.Count1h, AssessedCount_24H: value.Count24h, AssessedAmountMinor_24H: value.AmountMinor24h, DistinctDevices_7D: value.Devices7d, LastAssessedStartAt: optionalTime(value.LastAssessedAt)}
+	return &featuresv1.SnapshotValues{AttemptCount_5M: value.Count5m, AttemptCount_1H: value.Count1h, AttemptCount_24H: value.Count24h, DistinctDevices_24H: value.Devices24h}
 }
 
 func viewProto(scope featuresv1.EntityView, entity, integration string, value application.ViewObservation) *featuresv1.ViewEvidence {
@@ -25,7 +25,7 @@ func viewProto(scope featuresv1.EntityView, entity, integration string, value ap
 	if code, ok := featuresv1.ViewStatus_value["VIEW_STATUS_"+strings.ToUpper(value.Status)]; ok {
 		status = featuresv1.ViewStatus(code)
 	}
-	result := &featuresv1.ViewEvidence{View: scope, Status: status, ReadAt: timestamppb.New(value.ReadAt), OnlineAvailableAt: optionalTime(value.AvailableAt), AvailableValues: snapshotValues(value.Values), SecondsSinceLastAssessed_7D: value.ElapsedSeconds}
+	result := &featuresv1.ViewEvidence{View: scope, Status: status, ReadAt: timestamppb.New(value.ReadAt), OnlineAvailableAt: optionalTime(value.AvailableAt), AvailableValues: snapshotValues(value.Values)}
 	if value.ReadAt.IsZero() {
 		result.ReadAt = nil
 	}
@@ -40,8 +40,8 @@ func viewProto(scope featuresv1.EntityView, entity, integration string, value ap
 		result.Observed = &featuresv1.SnapshotUpdate{
 			SchemaVersion: 1, Definition: &featuresv1.DefinitionIdentity{Version: observed.Definition, Sha256: observed.DefinitionHash}, Epoch: observed.Epoch,
 			View: scope, IntegrationId: integration, EntityId: entity, SnapshotId: observed.ID, Revision: observed.Revision,
-			Anchor: timestamppb.New(observed.Anchor), ComputedAt: timestamppb.New(observed.ComputedAt), PublishedAt: timestamppb.New(observed.PublishedAt), SourceAvailableAt: timestamppb.New(observed.SourceAvailableAt), OnlineWriteAt: timestamppb.New(observed.WriteAt),
-			Coverage: &featuresv1.WindowCoverage{OneHour: coverage("1h"), TwentyFourHours: coverage("24h"), SevenDays: coverage("7d")}, Values: snapshotValues(observed.Values),
+			Anchor: timestamppb.New(observed.Anchor), SourceAvailableAt: timestamppb.New(observed.SourceAvailableAt), OnlineWriteAt: timestamppb.New(observed.WriteAt),
+			Coverage: &featuresv1.WindowCoverage{FiveMinutes: coverage("5m"), OneHour: coverage("1h"), TwentyFourHours: coverage("24h")}, Values: snapshotValues(observed.Values),
 		}
 		for _, progress := range observed.SourceProgress {
 			result.Observed.SourceProgress = append(result.Observed.SourceProgress, &featuresv1.SourcePartitionProgress{Topic: progress.Topic, Partition: progress.Partition, ConsumedOffset: progress.ConsumedOffset, ObservedHighWatermark: progress.ObservedHighWatermark, ObservedAt: timestamppb.New(progress.ObservedAt), HeartbeatAt: optionalTime(progress.HeartbeatAt)})

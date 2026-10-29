@@ -422,8 +422,9 @@ func TestSyntheticAttemptCarriesVaultFingerprintAndSimulatedContext(t *testing.T
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
 	token, fingerprint := h.tokenize(syntheticKey, "4111000000000008")
 
+	clicked := h.world.now().Add(-10 * time.Minute)
 	body := fmt.Sprintf(`{"payment_method_token": %q, "device_fingerprint": "device-abc", "user_agent_family": "chrome",
-		"simulated_client": {"ip_country": "VN", "ip_network": %q}}`, token, network.Input)
+		"simulated_client": {"ip_country": "VN", "ip_network": %q, "attempted_at": %q}}`, token, network.Input, clicked.Format(time.RFC3339Nano))
 	res := h.do("POST", attemptPath(payment), apiHeaders(payment.CheckoutToken, "attempt-1"), body)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d: %s", res.StatusCode, res.body)
@@ -448,7 +449,7 @@ func TestSyntheticAttemptCarriesVaultFingerprintAndSimulatedContext(t *testing.T
 	if signals.GetIpCountry() != "VN" || signals.GetIpNetworkFingerprint() != network.Expected {
 		t.Fatalf("simulated context = %v, want network %s", signals, network.Expected)
 	}
-	if signals.GetDeviceFingerprint() != "device-abc" || signals.GetUserAgentFamily() != "chrome" || signals.GetAttemptedAt() == nil {
+	if signals.GetDeviceFingerprint() != "device-abc" || signals.GetUserAgentFamily() != "chrome" || !signals.GetAttemptedAt().AsTime().Equal(clicked) {
 		t.Fatalf("signals = %v", signals)
 	}
 	h.assertLogsExclude(token, payment.CheckoutToken)
@@ -577,9 +578,12 @@ func TestSimulatedClientValidation(t *testing.T) {
 	h := newHarness(t)
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
 	token, _ := h.tokenize(syntheticKey, "4111000000000008")
+	future := h.world.now().Add(time.Second).Format(time.RFC3339Nano)
 	for name, client := range map[string]string{
-		"bad country": `{"ip_country": "United States"}`,
-		"bad network": `{"ip_network": "not-an-ip"}`,
+		"bad country":    `{"ip_country": "United States"}`,
+		"bad network":    `{"ip_network": "not-an-ip"}`,
+		"bad time":       `{"attempted_at": "yesterday"}`,
+		"future attempt": fmt.Sprintf(`{"attempted_at": %q}`, future),
 	} {
 		body := fmt.Sprintf(`{"payment_method_token": %q, "simulated_client": %s}`, token, client)
 		if res := h.do("POST", attemptPath(payment), apiHeaders(payment.CheckoutToken, "a"), body); res.StatusCode != http.StatusBadRequest {

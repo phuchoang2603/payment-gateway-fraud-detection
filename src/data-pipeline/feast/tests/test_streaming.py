@@ -31,7 +31,7 @@ def await_result(read, *, timeout=120):
     raise AssertionError("Flink integration condition did not complete before its deadline")
 
 
-def lifecycle(attempt, started_at, *, customer="customer"):
+def lifecycle(attempt, started_at, *, customer="customer", attempted_at=None):
     event = PaymentEvent(
         event_id=f"start-{attempt}",
         integration_id="integration",
@@ -46,7 +46,10 @@ def lifecycle(attempt, started_at, *, customer="customer"):
     event.attempt_started.context.snapshot.total.currency = "USD"
     event.attempt_started.context.snapshot.total.minor_units = 100
     event.attempt_started.signals.payment_method.fingerprint = "shared-method"
-    event.attempt_started.signals.attempted_at.CopyFrom(event.occurred_at)
+    if attempted_at is None:
+        event.attempt_started.signals.attempted_at.CopyFrom(event.occurred_at)
+    else:
+        event.attempt_started.signals.attempted_at.FromMicroseconds(attempted_at)
     start = event.SerializeToString(deterministic=True)
     event.ClearField("attempt_started")
     event.event_id = f"decision-{attempt}"
@@ -184,8 +187,10 @@ def test_image_kafka_journal_and_checkpoint_recovery():
 
                         job_id = await_result(running_job)
 
-                        def send(attempt, instant, *, customer="customer"):
-                            records = lifecycle(attempt, instant, customer=customer)
+                        def send(attempt, instant, *, customer="customer", attempted_at=None):
+                            records = lifecycle(
+                                attempt, instant, customer=customer, attempted_at=attempted_at
+                            )
                             for record in records:
                                 producer.produce(source, key=attempt, value=record, partition=0)
                             assert producer.flush(10) == 0
@@ -225,14 +230,14 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                         assert producer.flush(10) == 0
                         receive(
                             lambda values: all(
-                                value.coverage.one_hour == 2 and value.values.assessed_count_1h == 0
+                                value.coverage.one_hour == 2 and value.values.attempt_count_1h == 0
                                 for value in values.values()
                             )
                         )
                         second = send("two", anchor + HOUR + 3_000_000)
                         receive(
                             lambda values: all(
-                                value.values.assessed_count_1h == 1 for value in values.values()
+                                value.values.attempt_count_1h == 1 for value in values.values()
                             )
                         )
                         saved = {entity: value.snapshot_id for entity, value in latest.items()}
@@ -256,11 +261,23 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                         receive(
                             lambda values: (
                                 "other-customer" in values
-                                and values["shared-method"].values.assessed_count_1h == 2
+                                and values["shared-method"].values.attempt_count_1h == 2
                             )
                         )
                         assert latest["customer"].snapshot_id == saved["customer"]
-                        assert latest["other-customer"].values.assessed_count_1h == 1
+                        assert latest["other-customer"].values.attempt_count_1h == 1
+                        send(
+                            "late",
+                            anchor + HOUR + 6_000_000,
+                            customer="other-customer",
+                            attempted_at=anchor + HOUR,
+                        )
+                        receive(
+                            lambda values: (
+                                values["other-customer"].values.attempt_count_1h == 2
+                                and values["other-customer"].values.attempt_count_5m == 2
+                            )
+                        )
                     except BaseException:
                         print(flink.get_logs())
                         print(flink.exec(["bash", "-c", "tail -n 120 log/*.log"])[1].decode())

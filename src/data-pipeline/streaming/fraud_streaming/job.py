@@ -5,7 +5,7 @@ from pyflink.common import Configuration, Types, WatermarkStrategy
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import StreamTableEnvironment
 
-from fraud_streaming.operators import Aggregate, Clock, Deduplicate, MatchAttempts, ObserveSource
+from fraud_streaming.operators import Aggregate, Clock, Deduplicate, ObserveSource
 
 
 def sql_literal(value):
@@ -17,14 +17,11 @@ def build_updates(packets, *, epoch, logical, max_entries):
         packets = packets.assign_timestamps_and_watermarks(
             WatermarkStrategy.for_monotonous_timestamps().with_timestamp_assigner(Clock())
         )
-    contributions = (
+    starts = (
         packets.filter(lambda packet: packet.fact is not None)
         .key_by(lambda packet: packet.fact.event_id)
         .process(Deduplicate(logical))
-        .uid("event-deduplication-v2")
-        .key_by(lambda packet: json.dumps(packet.fact.identity))
-        .process(MatchAttempts(logical))
-        .uid("attempt-matching-v1")
+        .uid("event-deduplication-v3")
     )
     row_type = Types.ROW_NAMED(
         ["key", "payload"],
@@ -33,12 +30,9 @@ def build_updates(packets, *, epoch, logical, max_entries):
     branches = []
     for view in ("customer", "method"):
         branch = (
-            contributions.key_by(
-                lambda contribution, view=view: json.dumps(
-                    [
-                        contribution.start.integration,
-                        getattr(contribution.start, view),
-                    ]
+            starts.key_by(
+                lambda packet, view=view: json.dumps(
+                    [packet.fact.integration, getattr(packet.fact, view)]
                 )
             )
             .process(
@@ -50,7 +44,7 @@ def build_updates(packets, *, epoch, logical, max_entries):
                 ),
                 output_type=row_type,
             )
-            .uid(f"{view}-aggregation-v2")
+            .uid(f"{view}-aggregation-v3")
         )
         branches.append(branch)
     return branches[0].union(branches[1])

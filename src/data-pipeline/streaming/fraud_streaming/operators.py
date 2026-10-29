@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 
 from confluent_kafka import IsolationLevel, KafkaError, KafkaException, TopicPartition
@@ -8,8 +9,10 @@ from pyflink.common.watermark_strategy import TimestampAssigner
 from pyflink.datastream import KeyedProcessFunction
 from pyflink.datastream.state import ValueStateDescriptor
 
-from fraud_streaming.model import RETENTION, Attempt, Entity, Packet, Progress, entity_key
+from fraud_streaming.model import DEDUP_RETENTION, Entity, Packet, Progress, entity_key
 from fraud_streaming.wire import decode, snapshot
+
+log = logging.getLogger(__name__)
 
 
 def micros():
@@ -145,51 +148,36 @@ class Deduplicate(KeyedProcessFunction):
 
     def open(self, runtime_context):
         self.state = runtime_context.get_state(
-            ValueStateDescriptor("event-identity-v2", Types.STRING())
+            ValueStateDescriptor("event-identity-v3", Types.STRING())
         )
+        self.too_late = runtime_context.get_metrics_group().counter("too_late")
 
     def process_element(self, packet, ctx):
+        fact = packet.fact
+        if packet.too_late:
+            self.too_late.inc()
+            log.warning(
+                json.dumps(
+                    {
+                        "event": "too_late",
+                        "event_id": fact.event_id,
+                        "attempted_at_us": fact.started_at,
+                        "processed_at_us": packet.now,
+                    }
+                )
+            )
+            return
         prior = self.state.value()
         if prior is not None:
-            if prior != packet.fact.digest:
+            if prior != fact.digest:
                 raise ValueError("conflicting event identity/content")
             return
-        expires = packet.now + RETENTION
-        self.state.update(packet.fact.digest)
-        register(ctx, expires, self.logical)
+        self.state.update(fact.digest)
+        register(ctx, fact.started_at + DEDUP_RETENTION, self.logical)
         yield packet
 
     def on_timer(self, timestamp, ctx):
         self.state.clear()
-        return ()
-
-
-class MatchAttempts(KeyedProcessFunction):
-    def __init__(self, logical):
-        self.logical = logical
-
-    def open(self, runtime_context):
-        self.state = runtime_context.get_state(
-            ValueStateDescriptor("attempt-lifecycle-v1", Types.PICKLED_BYTE_ARRAY())
-        )
-
-    def process_element(self, packet, ctx):
-        state = self.state.value() or Attempt()
-        previous_expiry = state.expires_at
-        contribution = state.accept(packet)
-        self.state.update(state)
-        if state.expires_at != previous_expiry:
-            if previous_expiry:
-                delete_timer(ctx, previous_expiry, self.logical)
-            register(ctx, state.expires_at, self.logical)
-        if contribution is not None:
-            yield contribution
-
-    def on_timer(self, timestamp, ctx):
-        state = self.state.value()
-        if state is not None and timestamp * 1000 >= state.expires_at:
-            state.expire()
-            self.state.clear()
         return ()
 
 
@@ -202,7 +190,7 @@ class Aggregate(KeyedProcessFunction):
 
     def open(self, runtime_context):
         self.state = runtime_context.get_state(
-            ValueStateDescriptor(f"{self.view}-snapshot-v2", Types.PICKLED_BYTE_ARRAY())
+            ValueStateDescriptor(f"{self.view}-snapshot-v3", Types.PICKLED_BYTE_ARRAY())
         )
 
     def emit(self, state, now, ctx):
@@ -219,18 +207,18 @@ class Aggregate(KeyedProcessFunction):
                 payload=snapshot(state, values, epoch=self.epoch, now=now),
             )
 
-    def process_element(self, contribution, ctx):
-        start = contribution.start
-        entity = start.customer if self.view == "customer" else start.method
+    def process_element(self, packet, ctx):
+        fact = packet.fact
+        entity = fact.customer if self.view == "customer" else fact.method
         state = self.state.value() or Entity(
             self.view,
-            start.integration,
+            fact.integration,
             entity,
-            contribution.bootstrap,
+            packet.bootstrap,
             max_entries=self.max_entries,
         )
-        state.add(contribution)
-        now = contribution.available_at if self.logical else micros()
+        state.add(packet)
+        now = packet.now if self.logical else micros()
         yield from self.emit(state, now, ctx)
 
     def on_timer(self, timestamp, ctx):

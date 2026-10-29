@@ -16,7 +16,7 @@ simulator:
       cpu: '1'
       memory: 2Gi
   config:
-    manifest: s3://platform-dev/datasets/payment-gateway/historical/v17/manifest.json
+    manifest: s3://platform-dev/datasets/payment-gateway/historical/v18/manifest.json
     manifest_sha256: ''
     gateway_url: http://edge.payment-gateway.svc:8080
     return_url: https://example.com/checkout/complete
@@ -24,11 +24,12 @@ simulator:
     payments_per_second: 1
     concurrency: 4
     label_time_scale: 1
-    faults:
+    late_rate: 0
+    late_min_seconds: 300
+    late_max_seconds: 600
+    redelivery:
       enabled: false
-      duplicate_rate: 0
-      late_rate: 0
-      hold_seconds: 0
+      rate: 0.015
 objectStorage:
   endpoint: https://minio.home.phuchoang.sbs
   region: us-east-1

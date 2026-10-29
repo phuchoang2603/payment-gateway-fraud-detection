@@ -72,18 +72,18 @@ GUARD_STATUS_CONFLICT: GuardStatus
 GUARD_STATUS_DISABLED: GuardStatus
 
 class WindowCoverage(_message.Message):
-    __slots__ = ("one_hour", "twenty_four_hours", "seven_days")
+    __slots__ = ("five_minutes", "one_hour", "twenty_four_hours")
+    FIVE_MINUTES_FIELD_NUMBER: _ClassVar[int]
     ONE_HOUR_FIELD_NUMBER: _ClassVar[int]
     TWENTY_FOUR_HOURS_FIELD_NUMBER: _ClassVar[int]
-    SEVEN_DAYS_FIELD_NUMBER: _ClassVar[int]
+    five_minutes: Coverage
     one_hour: Coverage
     twenty_four_hours: Coverage
-    seven_days: Coverage
     def __init__(
         self,
+        five_minutes: _Optional[_Union[Coverage, str]] = ...,
         one_hour: _Optional[_Union[Coverage, str]] = ...,
         twenty_four_hours: _Optional[_Union[Coverage, str]] = ...,
-        seven_days: _Optional[_Union[Coverage, str]] = ...,
     ) -> None: ...
 
 class DefinitionIdentity(_message.Message):
@@ -129,31 +129,25 @@ class SourcePartitionProgress(_message.Message):
 
 class SnapshotValues(_message.Message):
     __slots__ = (
-        "assessed_count_1h",
-        "assessed_count_24h",
-        "assessed_amount_minor_24h",
-        "distinct_devices_7d",
-        "last_assessed_start_at",
+        "attempt_count_5m",
+        "attempt_count_1h",
+        "attempt_count_24h",
+        "distinct_devices_24h",
     )
-    ASSESSED_COUNT_1H_FIELD_NUMBER: _ClassVar[int]
-    ASSESSED_COUNT_24H_FIELD_NUMBER: _ClassVar[int]
-    ASSESSED_AMOUNT_MINOR_24H_FIELD_NUMBER: _ClassVar[int]
-    DISTINCT_DEVICES_7D_FIELD_NUMBER: _ClassVar[int]
-    LAST_ASSESSED_START_AT_FIELD_NUMBER: _ClassVar[int]
-    assessed_count_1h: int
-    assessed_count_24h: int
-    assessed_amount_minor_24h: int
-    distinct_devices_7d: int
-    last_assessed_start_at: _timestamp_pb2.Timestamp
+    ATTEMPT_COUNT_5M_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_COUNT_1H_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_COUNT_24H_FIELD_NUMBER: _ClassVar[int]
+    DISTINCT_DEVICES_24H_FIELD_NUMBER: _ClassVar[int]
+    attempt_count_5m: int
+    attempt_count_1h: int
+    attempt_count_24h: int
+    distinct_devices_24h: int
     def __init__(
         self,
-        assessed_count_1h: _Optional[int] = ...,
-        assessed_count_24h: _Optional[int] = ...,
-        assessed_amount_minor_24h: _Optional[int] = ...,
-        distinct_devices_7d: _Optional[int] = ...,
-        last_assessed_start_at: _Optional[
-            _Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]
-        ] = ...,
+        attempt_count_5m: _Optional[int] = ...,
+        attempt_count_1h: _Optional[int] = ...,
+        attempt_count_24h: _Optional[int] = ...,
+        distinct_devices_24h: _Optional[int] = ...,
     ) -> None: ...
 
 class SnapshotUpdate(_message.Message):
@@ -167,8 +161,6 @@ class SnapshotUpdate(_message.Message):
         "snapshot_id",
         "revision",
         "anchor",
-        "computed_at",
-        "published_at",
         "source_available_at",
         "online_write_at",
         "coverage",
@@ -184,8 +176,6 @@ class SnapshotUpdate(_message.Message):
     SNAPSHOT_ID_FIELD_NUMBER: _ClassVar[int]
     REVISION_FIELD_NUMBER: _ClassVar[int]
     ANCHOR_FIELD_NUMBER: _ClassVar[int]
-    COMPUTED_AT_FIELD_NUMBER: _ClassVar[int]
-    PUBLISHED_AT_FIELD_NUMBER: _ClassVar[int]
     SOURCE_AVAILABLE_AT_FIELD_NUMBER: _ClassVar[int]
     ONLINE_WRITE_AT_FIELD_NUMBER: _ClassVar[int]
     COVERAGE_FIELD_NUMBER: _ClassVar[int]
@@ -200,8 +190,6 @@ class SnapshotUpdate(_message.Message):
     snapshot_id: str
     revision: int
     anchor: _timestamp_pb2.Timestamp
-    computed_at: _timestamp_pb2.Timestamp
-    published_at: _timestamp_pb2.Timestamp
     source_available_at: _timestamp_pb2.Timestamp
     online_write_at: _timestamp_pb2.Timestamp
     coverage: WindowCoverage
@@ -218,10 +206,6 @@ class SnapshotUpdate(_message.Message):
         snapshot_id: _Optional[str] = ...,
         revision: _Optional[int] = ...,
         anchor: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...,
-        computed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...,
-        published_at: _Optional[
-            _Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]
-        ] = ...,
         source_available_at: _Optional[
             _Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]
         ] = ...,
@@ -234,29 +218,19 @@ class SnapshotUpdate(_message.Message):
     ) -> None: ...
 
 class ViewEvidence(_message.Message):
-    __slots__ = (
-        "view",
-        "status",
-        "observed",
-        "read_at",
-        "online_available_at",
-        "available_values",
-        "seconds_since_last_assessed_7d",
-    )
+    __slots__ = ("view", "status", "observed", "read_at", "online_available_at", "available_values")
     VIEW_FIELD_NUMBER: _ClassVar[int]
     STATUS_FIELD_NUMBER: _ClassVar[int]
     OBSERVED_FIELD_NUMBER: _ClassVar[int]
     READ_AT_FIELD_NUMBER: _ClassVar[int]
     ONLINE_AVAILABLE_AT_FIELD_NUMBER: _ClassVar[int]
     AVAILABLE_VALUES_FIELD_NUMBER: _ClassVar[int]
-    SECONDS_SINCE_LAST_ASSESSED_7D_FIELD_NUMBER: _ClassVar[int]
     view: EntityView
     status: ViewStatus
     observed: SnapshotUpdate
     read_at: _timestamp_pb2.Timestamp
     online_available_at: _timestamp_pb2.Timestamp
     available_values: SnapshotValues
-    seconds_since_last_assessed_7d: int
     def __init__(
         self,
         view: _Optional[_Union[EntityView, str]] = ...,
@@ -267,7 +241,6 @@ class ViewEvidence(_message.Message):
             _Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]
         ] = ...,
         available_values: _Optional[_Union[SnapshotValues, _Mapping]] = ...,
-        seconds_since_last_assessed_7d: _Optional[int] = ...,
     ) -> None: ...
 
 class GuardEvidence(_message.Message):

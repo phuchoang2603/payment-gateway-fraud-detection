@@ -136,6 +136,12 @@ func (s *Service) StartAttempt(ctx context.Context, req AttemptRequest) (Attempt
 	if req.Simulated != nil {
 		signals.IPCountry = req.Simulated.IPCountry
 		signals.IPNetworkFingerprint = s.networkFingerprint(integration, req.Simulated.IPNetwork)
+		if attempted := req.Simulated.AttemptedAt; !attempted.IsZero() {
+			if attempted.After(signals.AttemptedAt) {
+				return Attempt{}, domain.Invalid("simulated_client.attempted_at must not be after server time")
+			}
+			signals.AttemptedAt = attempted
+		}
 	}
 	return s.payments.StartAttempt(ctx, StartAttemptCommand{
 		IntegrationID:      integration.ID,

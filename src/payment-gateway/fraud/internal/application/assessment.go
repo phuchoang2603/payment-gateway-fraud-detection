@@ -42,8 +42,7 @@ type Store interface {
 	Ready(context.Context) error
 }
 type SnapshotValues struct {
-	Count1h, Count24h, AmountMinor24h, Devices7d *int64
-	LastAssessedAt                               *time.Time
+	Count5m, Count1h, Count24h, Devices24h *int64
 }
 type SourceProgress struct {
 	Topic                                 string
@@ -54,20 +53,19 @@ type SourceProgress struct {
 }
 
 type Snapshot struct {
-	ID, Epoch, Definition, DefinitionHash                       string
-	Revision                                                    uint64
-	Anchor, ComputedAt, PublishedAt, SourceAvailableAt, WriteAt time.Time
-	Coverage                                                    map[string]string
-	SourceProgress                                              []SourceProgress
-	Values                                                      SnapshotValues
+	ID, Epoch, Definition, DefinitionHash string
+	Revision                              uint64
+	Anchor, SourceAvailableAt, WriteAt    time.Time
+	Coverage                              map[string]string
+	SourceProgress                        []SourceProgress
+	Values                                SnapshotValues
 }
 type ViewObservation struct {
-	Status         string
-	ReadAt         time.Time
-	AvailableAt    *time.Time
-	Observed       *Snapshot
-	Values         SnapshotValues
-	ElapsedSeconds *int64
+	Status      string
+	ReadAt      time.Time
+	AvailableAt *time.Time
+	Observed    *Snapshot
+	Values      SnapshotValues
 }
 type GuardObservation struct {
 	Status, Epoch, PolicyVersion string

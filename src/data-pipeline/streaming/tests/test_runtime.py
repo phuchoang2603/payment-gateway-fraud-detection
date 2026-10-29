@@ -15,7 +15,7 @@ from fraud_streaming.model import DAY, HOUR, Fact, Packet, Progress, entity_key
 from fraud_streaming.wire import SnapshotUpdate
 
 
-def test_keyed_runtime_matching_shared_method_and_idle_expiration():
+def test_keyed_runtime_dedup_shared_method_and_idle_expiration():
     anchor = 1_760_000_000_000_000
     configuration = Configuration()
     configuration.set_string("python.executable", sys.executable)
@@ -29,12 +29,10 @@ def test_keyed_runtime_matching_shared_method_and_idle_expiration():
         "integration",
         "payment-one",
         "one",
-        "start",
         anchor - HOUR,
         anchor,
         "customer-one",
         "shared-method",
-        100,
         "device",
     )
     second = replace(
@@ -47,17 +45,11 @@ def test_keyed_runtime_matching_shared_method_and_idle_expiration():
         started_at=anchor - HOUR + 1000,
     )
     progress = (Progress("isolated-source", 0, 3, 4, anchor),)
-    packets = []
-    for start in (first, second):
-        decision = replace(
-            start,
-            event_id=f"decision-{start.attempt}",
-            digest=f"decision-{start.attempt}",
-            kind="decision",
-            started_at=anchor,
-        )
-        for fact in (decision, start, start):
-            packets.append(Packet(fact, anchor, anchor - 8 * DAY, progress))
+    too_late = replace(first, event_id="too-late", digest="too-late", started_at=anchor - 2 * DAY)
+    packets = [
+        Packet(fact, anchor, anchor - 8 * DAY, progress)
+        for fact in (first, first, second, too_late)
+    ]
     updates = build_updates(
         env.from_collection(packets),
         epoch="runtime-ci",
@@ -87,15 +79,14 @@ def test_keyed_runtime_matching_shared_method_and_idle_expiration():
         history = [value for value in snapshots if value.entity_id == entity]
         assert [value.revision for value in history] == list(range(1, len(history) + 1))
         assert all(value.coverage.one_hour == 2 for value in history)
-        assert history[0].values.assessed_count_1h == 1
-        assert max(value.values.assessed_count_24h for value in history) == (
+        assert history[0].values.attempt_count_1h == 1
+        assert max(value.values.attempt_count_24h for value in history) == (
             2 if entity == "shared-method" else 1
         )
-        assert history[-1].values.assessed_count_24h == 0
+        assert history[-1].values.attempt_count_24h == 0
         if entity.startswith("customer"):
-            assert history[0].values.distinct_devices_7d == 1
-            assert history[-1].values.distinct_devices_7d == 0
-            assert not history[-1].values.HasField("last_assessed_start_at")
+            assert history[0].values.distinct_devices_24h == 1
+            assert history[-1].values.distinct_devices_24h == 0
 
 
 def test_source_progress_refreshes_crossed_offsets_and_rejects_partial_broker_results(monkeypatch):

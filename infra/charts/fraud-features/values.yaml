@@ -15,13 +15,13 @@ externalSecrets:
   secretStoreRef:
     kind: ClusterSecretStore
     name: gateway-doppler
-epoch: live-v17
-definitionHash: 8ca9a423f452f8ed7a8d1e8aa082dadb72590498cfd1e8da48f94f6c06b0e50d
-topic: fraud.feature-updates.v1.live-v17
+epoch: live-v18
+definitionHash: 958f9b0fd7e50ba33a22526271ff2e62eafcf827c9f9e0bce1c35c4a016f85a3
+topic: fraud.feature-updates.v1.live-v18
 kafkaBrokers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc.cluster.local:9092
 feast:
   enabled: true
-  writerGroup: fraud-feast-writer-live-v17
+  writerGroup: fraud-feast-writer-live-v18
   resources:
     requests:
       cpu: 100m

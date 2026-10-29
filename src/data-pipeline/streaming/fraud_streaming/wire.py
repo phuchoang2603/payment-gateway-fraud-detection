@@ -3,7 +3,7 @@ from pathlib import Path
 
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 
-from fraud_streaming.model import DAY, HOUR, Fact
+from fraud_streaming.model import DAY, HOUR, MINUTE, Fact
 
 pool = descriptor_pool.DescriptorPool()
 descriptors = descriptor_pb2.FileDescriptorSet.FromString(
@@ -17,7 +17,7 @@ PaymentEvent = message_factory.GetMessageClass(
 SnapshotUpdate = message_factory.GetMessageClass(
     pool.FindMessageTypeByName("features.v1.SnapshotUpdate")
 )
-DEFINITION_HASH = "8ca9a423f452f8ed7a8d1e8aa082dadb72590498cfd1e8da48f94f6c06b0e50d"
+DEFINITION_HASH = "958f9b0fd7e50ba33a22526271ff2e62eafcf827c9f9e0bce1c35c4a016f85a3"
 
 
 def decode(raw):
@@ -35,46 +35,32 @@ def decode(raw):
         raise ValueError("invalid or unsupported payment event")
     for timestamp in (event.occurred_at, event.recorded_at):
         timestamp.ToDatetime()
-    payload = event.WhichOneof("payload")
     recorded_at = event.recorded_at.ToMicroseconds()
-    if payload not in ("attempt_started", "risk_decision_recorded"):
+    if event.WhichOneof("payload") != "attempt_started":
         return None, recorded_at
-    body = getattr(event, payload)
-    if not body.attempt_id:
-        raise ValueError("missing lifecycle attempt identity")
-    context = {}
-    if payload == "attempt_started":
-        total = body.context.snapshot.total
-        if (
-            not body.context.customer.customer_id
-            or not body.signals.payment_method.fingerprint
-            or total.currency != "USD"
-            or total.minor_units < 0
-            or not body.signals.HasField("attempted_at")
-            or (body.signals.HasField("device_fingerprint") and not body.signals.device_fingerprint)
-        ):
-            raise ValueError("invalid self-contained attempt context")
-        body.signals.attempted_at.ToDatetime()
-        context = dict(
-            customer=body.context.customer.customer_id,
-            method=body.signals.payment_method.fingerprint,
-            amount=total.minor_units,
-            device=body.signals.device_fingerprint
-            if body.signals.HasField("device_fingerprint")
-            else None,
-        )
-    elif body.assessment.outcome not in (1, 2) or not body.assessment.policy_version:
-        raise ValueError("decision has no finalized assessment")
+    body = event.attempt_started
+    if (
+        not body.attempt_id
+        or not body.context.customer.customer_id
+        or not body.signals.payment_method.fingerprint
+        or not body.signals.HasField("attempted_at")
+        or (body.signals.HasField("device_fingerprint") and not body.signals.device_fingerprint)
+    ):
+        raise ValueError("invalid self-contained attempt context")
+    body.signals.attempted_at.ToDatetime()
     return Fact(
         event_id=event.event_id,
         digest=hashlib.sha256(event.SerializeToString(deterministic=True)).hexdigest(),
         integration=event.integration_id,
         payment=event.payment_id,
         attempt=body.attempt_id,
-        kind="start" if payload == "attempt_started" else "decision",
-        started_at=event.occurred_at.ToMicroseconds(),
+        started_at=body.signals.attempted_at.ToMicroseconds(),
         recorded_at=recorded_at,
-        **context,
+        customer=body.context.customer.customer_id,
+        method=body.signals.payment_method.fingerprint,
+        device=body.signals.device_fingerprint
+        if body.signals.HasField("device_fingerprint")
+        else None,
     ), recorded_at
 
 
@@ -82,7 +68,7 @@ def snapshot(entity, quantities, *, epoch, now):
     coverage, values = quantities
     update = SnapshotUpdate(
         schema_version=1,
-        definition={"version": "fraud-snapshot-v1", "sha256": DEFINITION_HASH},
+        definition={"version": "fraud-snapshot-v2", "sha256": DEFINITION_HASH},
         epoch=epoch,
         view=1 if entity.view == "customer" else 2,
         integration_id=entity.integration,
@@ -91,24 +77,19 @@ def snapshot(entity, quantities, *, epoch, now):
     )
     for field, instant in (
         ("anchor", now),
-        ("computed_at", now),
-        ("published_at", now),
         ("source_available_at", entity.available_at),
         ("online_write_at", entity.write_at),
     ):
         getattr(update, field).FromMicroseconds(instant)
-    for window, name in ((HOUR, "one_hour"), (DAY, "twenty_four_hours"), (7 * DAY, "seven_days")):
-        if window in coverage:
-            setattr(update.coverage, name, 2 if coverage[window] else 1)
+    for window, name in (
+        (5 * MINUTE, "five_minutes"),
+        (HOUR, "one_hour"),
+        (DAY, "twenty_four_hours"),
+    ):
+        setattr(update.coverage, name, 2 if coverage[window] else 1)
     update.values.SetInParent()
     for name, value in values.items():
-        if value is not None:
-            if name == "last_assessed_start_at":
-                update.values.last_assessed_start_at.FromMicroseconds(value)
-            else:
-                if value > 2**63 - 1:
-                    raise ValueError("snapshot quantity exceeds int64")
-                setattr(update.values, name, value)
+        setattr(update.values, name, value)
     for progress in entity.progress:
         row = update.source_progress.add(
             topic=progress.topic,

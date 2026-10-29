@@ -14,7 +14,7 @@ from fraud_feast.contracts.features.v1 import features_pb2 as wire
 from fraud_feast.writer import Writer, consume
 
 EPOCH = "ci-replay"
-DEFINITION_HASH = "8ca9a423f452f8ed7a8d1e8aa082dadb72590498cfd1e8da48f94f6c06b0e50d"
+DEFINITION_HASH = "958f9b0fd7e50ba33a22526271ff2e62eafcf827c9f9e0bce1c35c4a016f85a3"
 
 
 @pytest.fixture(scope="session")
@@ -59,26 +59,24 @@ def update(*, view=wire.ENTITY_VIEW_CUSTOMER, revision=1, write_delta=0, unknown
     anchor = datetime(2025, 9, 28, tzinfo=UTC)
     value = wire.SnapshotUpdate(
         schema_version=1,
-        definition=wire.DefinitionIdentity(version="fraud-snapshot-v1", sha256=DEFINITION_HASH),
+        definition=wire.DefinitionIdentity(version="fraud-snapshot-v2", sha256=DEFINITION_HASH),
         epoch=EPOCH,
         view=view,
         integration_id="integration-π",
         entity_id=secrets.token_hex(8),
         revision=revision,
         coverage=wire.WindowCoverage(
+            five_minutes=wire.COVERAGE_COMPLETE,
             one_hour=wire.COVERAGE_UNKNOWN if unknown else wire.COVERAGE_COMPLETE,
             twenty_four_hours=wire.COVERAGE_COMPLETE,
-            seven_days=wire.COVERAGE_COMPLETE,
         ),
-        values=wire.SnapshotValues(assessed_count_24h=4),
+        values=wire.SnapshotValues(attempt_count_5m=0, attempt_count_24h=2**53 + 1),
     )
     if not unknown:
-        value.values.assessed_count_1h = 0
+        value.values.attempt_count_1h = 0
     if view == wire.ENTITY_VIEW_CUSTOMER:
-        value.values.assessed_amount_minor_24h = 2**53 + 1
-        value.values.distinct_devices_7d = 2
-        value.values.last_assessed_start_at.FromDatetime(anchor - timedelta(hours=1))
-    for name in ("anchor", "computed_at", "published_at", "source_available_at"):
+        value.values.distinct_devices_24h = 2
+    for name in ("anchor", "source_available_at"):
         getattr(value, name).FromDatetime(anchor)
     value.online_write_at.FromDatetime(anchor + timedelta(microseconds=write_delta))
     progress = value.source_progress.add(
@@ -120,8 +118,8 @@ def test_sdk_readback_replay_and_monotonic_timestamps(store):
     )
     served = convert_response_to_dict(response.proto)
     columns = dict(zip(served["metadata"]["feature_names"], served["results"], strict=True))
-    assert columns["customer_snapshot__assessed_count_1h"]["values"] == [None]
-    assert columns["customer_snapshot__assessed_amount_minor_24h"]["values"] == [2**53 + 1]
+    assert columns["customer_snapshot__attempt_count_1h"]["values"] == [None]
+    assert columns["customer_snapshot__attempt_count_24h"]["values"] == [2**53 + 1]
     packet = base64.b64decode(columns["customer_snapshot__snapshot_metadata"]["values"][0])
     metadata = wire.SnapshotUpdate.FromString(packet)
     assert metadata.snapshot_id == original.snapshot_id and not metadata.HasField("values")
@@ -129,7 +127,7 @@ def test_sdk_readback_replay_and_monotonic_timestamps(store):
     corrected.CopyFrom(original)
     corrected.revision = 2
     corrected.online_write_at.nanos += 1000
-    corrected.values.assessed_count_24h = 5
+    corrected.values.attempt_count_24h = 5
     corrected.snapshot_id = schema.snapshot_id(corrected)
     write(writer, corrected)
     restarted = Writer(store, epoch=EPOCH, definition_hash=DEFINITION_HASH)
@@ -139,7 +137,7 @@ def test_sdk_readback_replay_and_monotonic_timestamps(store):
     store.write_to_online_store("customer_snapshot", schema.row(original))
     equal_time = wire.SnapshotUpdate()
     equal_time.CopyFrom(corrected)
-    equal_time.values.assessed_count_24h = 99
+    equal_time.values.attempt_count_24h = 99
     equal_time.snapshot_id = schema.snapshot_id(equal_time)
     store.write_to_online_store("customer_snapshot", schema.row(equal_time))
     assert restarted.current(original, "customer") == corrected
@@ -165,7 +163,7 @@ def test_sdk_entity_and_epoch_isolation(store):
     other_integration = wire.SnapshotUpdate()
     other_integration.CopyFrom(customer)
     other_integration.integration_id = "other"
-    other_integration.values.assessed_count_24h = 8
+    other_integration.values.attempt_count_24h = 8
     other_integration.snapshot_id = schema.snapshot_id(other_integration)
     write(writer, other_integration)
     other_epoch = wire.SnapshotUpdate()

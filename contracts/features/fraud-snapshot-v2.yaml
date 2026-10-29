@@ -1,0 +1,154 @@
+{
+  "id": "fraud-snapshot-v2",
+  "version": 2,
+  "event_schema": 3,
+  "grain": [
+    "integration_id",
+    "entity_view",
+    "entity_id",
+    "epoch",
+    "snapshot_id",
+    "revision"
+  ],
+  "entity_keys": {
+    "customer": [
+      "integration_id",
+      "context.customer.customer_id"
+    ],
+    "method": [
+      "integration_id",
+      "signals.payment_method.fingerprint"
+    ]
+  },
+  "time": {
+    "precision": "UTC microseconds; window lower bound inclusive, upper bound exclusive",
+    "attempt_time": "attempt_started.signals.attempted_at: client attempt time for synthetic store-and-forward clients, otherwise server time",
+    "anchor": "s: independent customer/method snapshot anchor; t: current attempt time",
+    "availability_cutoff": "q: snapshot computation cutoff; separate from s and serving read time",
+    "window": "[s-window,s)",
+    "eligibility": "unique attempt_started events available at q; risk decisions do not gate eligibility",
+    "observed_availability": "max(recorded_at, observed availability) when known; missing observed mapping fails; idealized replay is explicitly identified",
+    "horizon": "24h: an attempt time before processing anchor minus 24h is counted as too late and contributes nothing",
+    "coverage": "per view and window: complete or unknown; unknown values are null; complete once the source has been observed for the full window",
+    "freshness": "per-view definition/epoch match, anchor <= t and bounded anchor age AND measured source progress; unavailable values never become zero",
+    "emission": "on contributions and first microsecond after each inclusive lower-bound expiration; live UTC or injected historical logical clock",
+    "late_data": "late attempts inside the horizon create new revisions and never revise previously served evidence"
+  },
+  "features": [
+    {
+      "name": "amount_minor",
+      "type": "int64",
+      "units": "USD minor units",
+      "formula": "current.context.snapshot.total.minor_units",
+      "window_seconds": null,
+      "missing": "required current checkout context; invalid or absent context fails",
+      "scope": "request"
+    },
+    {
+      "name": "customer_account_age_hours",
+      "type": "int64",
+      "units": "hours",
+      "formula": "floor((t - customer_account_created_at) / 3600 seconds)",
+      "window_seconds": null,
+      "missing": "required current checkout context; invalid or absent context fails",
+      "scope": "request"
+    },
+    {
+      "name": "ip_shipping_country_mismatch",
+      "type": "nullable_boolean",
+      "units": "boolean",
+      "formula": "observed ip_country != shipping.country; null when IP country is absent",
+      "window_seconds": null,
+      "missing": "null when observed IP country is absent",
+      "scope": "request"
+    },
+    {
+      "name": "customer_snapshot_attempt_count_5m",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "count unique customer attempt starts with attempt time in [s-window,s)",
+      "window_seconds": 300,
+      "missing": "null when view unavailable or window coverage unknown; complete empty count is zero",
+      "scope": "customer"
+    },
+    {
+      "name": "customer_snapshot_attempt_count_1h",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "count unique customer attempt starts with attempt time in [s-window,s)",
+      "window_seconds": 3600,
+      "missing": "null when view unavailable or window coverage unknown; complete empty count is zero",
+      "scope": "customer"
+    },
+    {
+      "name": "customer_snapshot_attempt_count_24h",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "count unique customer attempt starts with attempt time in [s-window,s)",
+      "window_seconds": 86400,
+      "missing": "null when view unavailable or window coverage unknown; complete empty count is zero",
+      "scope": "customer"
+    },
+    {
+      "name": "customer_snapshot_distinct_devices_24h",
+      "type": "nullable_int64",
+      "units": "devices",
+      "formula": "exact count of distinct non-null device fingerprints in customer attempt starts with attempt time in [s-window,s)",
+      "window_seconds": 86400,
+      "missing": "null when view unavailable or window coverage unknown; complete empty count is zero",
+      "scope": "customer"
+    },
+    {
+      "name": "method_snapshot_attempt_count_5m",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "count unique method attempt starts with attempt time in [s-window,s)",
+      "window_seconds": 300,
+      "missing": "null when view unavailable or window coverage unknown; complete empty count is zero",
+      "scope": "method"
+    },
+    {
+      "name": "method_snapshot_attempt_count_1h",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "count unique method attempt starts with attempt time in [s-window,s)",
+      "window_seconds": 3600,
+      "missing": "null when view unavailable or window coverage unknown; complete empty count is zero",
+      "scope": "method"
+    },
+    {
+      "name": "method_snapshot_attempt_count_24h",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "count unique method attempt starts with attempt time in [s-window,s)",
+      "window_seconds": 86400,
+      "missing": "null when view unavailable or window coverage unknown; complete empty count is zero",
+      "scope": "method"
+    }
+  ],
+  "excluded": [
+    "scenario",
+    "is_fraud",
+    "simulation_truth",
+    "chargebacks",
+    "risk_outcome",
+    "risk_score",
+    "reason_codes",
+    "future_processor_results",
+    "hidden_profile_timezone"
+  ],
+  "hash": "SHA256 of exact definition file bytes",
+  "conformance": "fraud-snapshot-v2.examples.json",
+  "snapshot_metadata": [
+    "definition id and SHA256",
+    "epoch",
+    "entity view and scoped key",
+    "snapshot_id",
+    "revision",
+    "anchor",
+    "observed availability time",
+    "online write timestamp",
+    "source progress with partition/offset basis",
+    "per-window coverage"
+  ]
+}

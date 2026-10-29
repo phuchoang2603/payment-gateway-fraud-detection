@@ -1,0 +1,415 @@
+{
+ "format": "Each case recursively overrides defaults; each event recursively overrides its named template. Arrays replace arrays.",
+ "defaults": {
+  "current": {
+   "event_id": "current-start",
+   "integration_id": "i",
+   "payment_id": "current",
+   "schema_version": 3,
+   "occurred_at": "2025-09-01T12:00:00+00:00",
+   "recorded_at": "2025-09-01T12:00:00+00:00",
+   "attempt_started": {
+    "attempt_id": "current-a",
+    "context": {
+     "merchant": {
+      "merchant_id": "m"
+     },
+     "customer": {
+      "customer_id": "c"
+     },
+     "snapshot": {
+      "total": {
+       "minor_units": 100,
+       "currency": "USD"
+      },
+      "customer_account_created_at": "2025-08-01T12:00:00+00:00",
+      "shipping": {
+       "country": "US"
+      }
+     }
+    },
+    "signals": {
+     "payment_method": {
+      "fingerprint": "card"
+     },
+     "device_fingerprint": "d",
+     "ip_country": null,
+     "attempted_at": "2025-09-01T12:00:00+00:00"
+    }
+   }
+  },
+  "cutoff": "2025-09-01T12:00:01+00:00",
+  "views": {
+   "customer": {
+    "anchor": "2025-09-01T12:00:00+00:00",
+    "status": "available",
+    "coverage": {
+     "5m": "complete",
+     "1h": "complete",
+     "24h": "complete"
+    }
+   },
+   "method": {
+    "anchor": "2025-09-01T12:00:00+00:00",
+    "status": "available",
+    "coverage": {
+     "5m": "complete",
+     "1h": "complete",
+     "24h": "complete"
+    }
+   }
+  }
+ },
+ "event_templates": {
+  "start": {
+   "event_id": "prior-start",
+   "integration_id": "i",
+   "payment_id": "prior",
+   "schema_version": 3,
+   "occurred_at": "2025-09-01T11:00:00+00:00",
+   "recorded_at": "2025-09-01T11:00:00+00:00",
+   "attempt_started": {
+    "attempt_id": "prior-a",
+    "context": {
+     "merchant": {
+      "merchant_id": "m"
+     },
+     "customer": {
+      "customer_id": "c"
+     },
+     "snapshot": {
+      "total": {
+       "minor_units": 100,
+       "currency": "USD"
+      },
+      "customer_account_created_at": "2025-08-01T12:00:00+00:00",
+      "shipping": {
+       "country": "US"
+      }
+     }
+    },
+    "signals": {
+     "payment_method": {
+      "fingerprint": "card"
+     },
+     "device_fingerprint": "prior-device",
+     "ip_country": null,
+     "attempted_at": "2025-09-01T11:00:00+00:00"
+    }
+   }
+  }
+ },
+ "cases": [
+  {
+   "name": "duplicate_undecided_start_lower_1h_boundary",
+   "events": [
+    {
+     "use": "start"
+    },
+    {
+     "use": "start"
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": 0,
+     "customer_snapshot_attempt_count_1h": 1,
+     "customer_snapshot_attempt_count_24h": 1,
+     "customer_snapshot_distinct_devices_24h": 1,
+     "method_snapshot_attempt_count_5m": 0,
+     "method_snapshot_attempt_count_1h": 1,
+     "method_snapshot_attempt_count_24h": 1
+    },
+    "definition": {
+     "version": "fraud-snapshot-v2",
+     "sha256": "958f9b0fd7e50ba33a22526271ff2e62eafcf827c9f9e0bce1c35c4a016f85a3"
+    },
+    "availability_basis": "idealized_recorded_at"
+   }
+  },
+  {
+   "name": "lower_5m_boundary",
+   "events": [
+    {
+     "use": "start",
+     "recorded_at": "2025-09-01T11:55:00+00:00",
+     "attempt_started": {
+      "signals": {
+       "attempted_at": "2025-09-01T11:55:00+00:00"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": 1,
+     "customer_snapshot_attempt_count_1h": 1,
+     "customer_snapshot_attempt_count_24h": 1,
+     "customer_snapshot_distinct_devices_24h": 1,
+     "method_snapshot_attempt_count_5m": 1,
+     "method_snapshot_attempt_count_1h": 1,
+     "method_snapshot_attempt_count_24h": 1
+    }
+   }
+  },
+  {
+   "name": "lower_24h_boundary",
+   "events": [
+    {
+     "use": "start",
+     "recorded_at": "2025-08-31T12:00:00+00:00",
+     "attempt_started": {
+      "signals": {
+       "attempted_at": "2025-08-31T12:00:00+00:00"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": 0,
+     "customer_snapshot_attempt_count_1h": 0,
+     "customer_snapshot_attempt_count_24h": 1,
+     "customer_snapshot_distinct_devices_24h": 1,
+     "method_snapshot_attempt_count_5m": 0,
+     "method_snapshot_attempt_count_1h": 0,
+     "method_snapshot_attempt_count_24h": 1
+    }
+   }
+  },
+  {
+   "name": "beyond_24h_horizon",
+   "events": [
+    {
+     "use": "start",
+     "recorded_at": "2025-08-31T11:59:59.999999+00:00",
+     "attempt_started": {
+      "signals": {
+       "attempted_at": "2025-08-31T11:59:59.999999+00:00"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": 0,
+     "customer_snapshot_attempt_count_1h": 0,
+     "customer_snapshot_attempt_count_24h": 0,
+     "customer_snapshot_distinct_devices_24h": 0,
+     "method_snapshot_attempt_count_5m": 0,
+     "method_snapshot_attempt_count_1h": 0,
+     "method_snapshot_attempt_count_24h": 0
+    }
+   }
+  },
+  {
+   "name": "store_and_forward_inside_horizon",
+   "events": [
+    {
+     "use": "start",
+     "recorded_at": "2025-09-01T11:59:59+00:00",
+     "attempt_started": {
+      "signals": {
+       "attempted_at": "2025-09-01T11:50:00+00:00"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": 0,
+     "customer_snapshot_attempt_count_1h": 1,
+     "customer_snapshot_attempt_count_24h": 1,
+     "customer_snapshot_distinct_devices_24h": 1,
+     "method_snapshot_attempt_count_5m": 0,
+     "method_snapshot_attempt_count_1h": 1,
+     "method_snapshot_attempt_count_24h": 1
+    }
+   }
+  },
+  {
+   "name": "upper_boundary_and_current_excluded",
+   "events": [
+    {
+     "use": "start",
+     "recorded_at": "2025-09-01T12:00:00+00:00",
+     "attempt_started": {
+      "signals": {
+       "attempted_at": "2025-09-01T12:00:00+00:00"
+      }
+     }
+    },
+    {
+     "use": "start",
+     "event_id": "current-start",
+     "payment_id": "current",
+     "recorded_at": "2025-09-01T12:00:00+00:00",
+     "attempt_started": {
+      "attempt_id": "current-a",
+      "signals": {
+       "attempted_at": "2025-09-01T12:00:00+00:00",
+       "device_fingerprint": "d"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": 0,
+     "customer_snapshot_attempt_count_1h": 0,
+     "customer_snapshot_attempt_count_24h": 0,
+     "customer_snapshot_distinct_devices_24h": 0,
+     "method_snapshot_attempt_count_5m": 0,
+     "method_snapshot_attempt_count_1h": 0,
+     "method_snapshot_attempt_count_24h": 0
+    }
+   }
+  },
+  {
+   "name": "start_not_yet_available",
+   "events": [
+    {
+     "use": "start",
+     "recorded_at": "2025-09-01T12:00:02+00:00"
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": 0,
+     "customer_snapshot_attempt_count_1h": 0,
+     "customer_snapshot_attempt_count_24h": 0,
+     "customer_snapshot_distinct_devices_24h": 0,
+     "method_snapshot_attempt_count_5m": 0,
+     "method_snapshot_attempt_count_1h": 0,
+     "method_snapshot_attempt_count_24h": 0
+    }
+   }
+  },
+  {
+   "name": "observed_late_start",
+   "input": {
+    "observed_availability": {
+     "prior-start": "2025-09-01T12:00:02+00:00"
+    }
+   },
+   "events": [
+    {
+     "use": "start"
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": 0,
+     "customer_snapshot_attempt_count_1h": 0,
+     "customer_snapshot_attempt_count_24h": 0,
+     "customer_snapshot_distinct_devices_24h": 0,
+     "method_snapshot_attempt_count_5m": 0,
+     "method_snapshot_attempt_count_1h": 0,
+     "method_snapshot_attempt_count_24h": 0
+    }
+   }
+  },
+  {
+   "name": "integration_separation",
+   "events": [
+    {
+     "use": "start",
+     "integration_id": "other"
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": 0,
+     "customer_snapshot_attempt_count_1h": 0,
+     "customer_snapshot_attempt_count_24h": 0,
+     "customer_snapshot_distinct_devices_24h": 0,
+     "method_snapshot_attempt_count_5m": 0,
+     "method_snapshot_attempt_count_1h": 0,
+     "method_snapshot_attempt_count_24h": 0
+    }
+   }
+  },
+  {
+   "name": "unknown_coverage_and_stale_view",
+   "input": {
+    "views": {
+     "customer": {
+      "coverage": {
+       "5m": "unknown"
+      }
+     },
+     "method": {
+      "status": "stale"
+     }
+    }
+   },
+   "events": [
+    {
+     "use": "start"
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": null,
+     "customer_snapshot_attempt_count_1h": 1,
+     "customer_snapshot_attempt_count_24h": 1,
+     "customer_snapshot_distinct_devices_24h": 1,
+     "method_snapshot_attempt_count_5m": null,
+     "method_snapshot_attempt_count_1h": null,
+     "method_snapshot_attempt_count_24h": null
+    }
+   }
+  },
+  {
+   "name": "conflicting_content",
+   "events": [
+    {
+     "use": "start"
+    },
+    {
+     "use": "start",
+     "attempt_started": {
+      "context": {
+       "snapshot": {
+        "total": {
+         "minor_units": 999
+        }
+       }
+      }
+     }
+    }
+   ],
+   "error": "conflicting event identity/content"
+  }
+ ]
+}
