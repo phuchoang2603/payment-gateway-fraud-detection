@@ -37,7 +37,7 @@ schema:
     dataGranularityDescription: One delivered payment lifecycle event.
     customProperties:
       - property: schemaVersions
-        value: [1, 2]
+        value: [2, 3]
     properties:
       - name: event_id
         logicalType: string
@@ -77,12 +77,7 @@ schema:
         logicalType: integer
         physicalType: UINTEGER
         required: true
-        description: Gateway event schema version. Always three; physical_schema_version records the dataset's declared field set.
-      - name: physical_schema_version
-        logicalType: integer
-        physicalType: UINTEGER
-        required: true
-        description: Physical schema version of this row, chosen by occurred_at from the dataset's declared schema changes. Version one lacks fields declared with sinceSchemaVersion two; version two has them.
+        description: Event schema version. Two before the dataset's declared schema change and three from it, chosen by occurred_at. Version three is the gateway's current event shape; fields declared with sinceSchemaVersion three are absent from version two.
       - name: correlation_id
         logicalType: string
         physicalType: VARCHAR
@@ -173,7 +168,7 @@ schema:
                 physicalType: VARCHAR
                 description: Optional observed browser family.
                 customProperties:
-                  - {property: sinceSchemaVersion, value: 2}
+                  - {property: sinceSchemaVersion, value: 3}
           - name: context
             logicalType: object
             required: true
@@ -254,8 +249,8 @@ schema:
               - {name: model_version, logicalType: string, physicalType: VARCHAR, description: Evaluated model version if a model was used.}
               - {name: feature_set_version, logicalType: string, physicalType: VARCHAR, description: Evaluated feature-set version if features were used.}
               - {name: risk_score, logicalType: number, physicalType: DOUBLE, description: Optional model risk score.}
-              - {name: assessment_id, logicalType: string, physicalType: VARCHAR, description: Assessment identity; absent from physical schema version one., customProperties: [{property: sinceSchemaVersion, value: 2}]}
-              - {name: evidence_sha256, logicalType: string, physicalType: VARCHAR, description: SHA-256 digest of the scoring evidence; absent from physical schema version one., customProperties: [{property: sinceSchemaVersion, value: 2}]}
+              - {name: assessment_id, logicalType: string, physicalType: VARCHAR, description: Assessment identity; absent from schema version two., customProperties: [{property: sinceSchemaVersion, value: 3}]}
+              - {name: evidence_sha256, logicalType: string, physicalType: VARCHAR, description: SHA-256 digest of the scoring evidence; absent from schema version two., customProperties: [{property: sinceSchemaVersion, value: 3}]}
       - name: processor_operation_requested
         logicalType: object
         description: Processor authorization request after risk approval.
@@ -302,7 +297,7 @@ schema:
           SELECT count(*) FROM {object}
           WHERE event_id = '' OR payment_id = '' OR integration_id = ''
             OR correlation_id = ''
-            OR schema_version <> 3 OR physical_schema_version NOT IN (1, 2) OR aggregate_version < 1
+            OR schema_version NOT IN (2, 3) OR aggregate_version < 1
             OR recorded_at < occurred_at
             OR (CAST(payment_created IS NOT NULL AS INTEGER)
               + CAST(attempt_started IS NOT NULL AS INTEGER)
@@ -314,15 +309,15 @@ schema:
               + CAST(payment_expired IS NOT NULL AS INTEGER)) <> 1
             OR (payment_expired IS NOT NULL AND NOT payment_expired._present)
         mustBe: 0
-      - id: payment_physical_schema_fields
+      - id: payment_declared_fields_by_schema_version
         type: sql
-        description: Fields declared with sinceSchemaVersion two are present exactly for physical schema versions from two onward.
+        description: Fields declared with sinceSchemaVersion three are present exactly when schema_version is three or later.
         query: |
           SELECT count(*) FROM {object}
           WHERE risk_decision_recorded IS NOT NULL
             AND (
-              (physical_schema_version >= 2) <> (risk_decision_recorded.assessment.assessment_id IS NOT NULL)
-              OR (physical_schema_version >= 2) <> (risk_decision_recorded.assessment.evidence_sha256 IS NOT NULL)
+              (schema_version >= 3) <> (risk_decision_recorded.assessment.assessment_id IS NOT NULL)
+              OR (schema_version >= 3) <> (risk_decision_recorded.assessment.evidence_sha256 IS NOT NULL)
             )
         mustBe: 0
       - id: payment_lifecycle

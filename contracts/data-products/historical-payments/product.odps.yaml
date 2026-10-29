@@ -39,7 +39,7 @@ outputPorts:
       - property: path
         value: payment_events/date={purchase_start_date}/part-{chunk}.parquet
       - property: consumption
-        value: Deduplicate identical event deliveries and read complete histories across occurrence dates. Physical schema version is a row column.
+        value: Deduplicate identical event deliveries and read complete histories across occurrence dates. Schema version is a row column.
   - name: fraud-labels
     version: 1.0.0
     type: files

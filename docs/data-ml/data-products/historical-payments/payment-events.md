@@ -33,8 +33,7 @@ Synthetic data only. Histories are complete across all date partitions. Empty co
 |  integration_id | string | *Dedicated synthetic integration namespace; never share it with a real integration.*<br />• `required` |
 |  occurred_at | timestamp | *Business occurrence time in UTC at microsecond precision.*<br />• **logicalTypeOptions:** {'timezone': True, 'defaultTimezone': 'UTC'}<br />• `required` |
 |  recorded_at | timestamp | *Source recording time, at or after occurred_at; not ingestion time.*<br />• **logicalTypeOptions:** {'timezone': True, 'defaultTimezone': 'UTC'}<br />• `required` |
-|  schema_version | integer | *Gateway event schema version. Always three; physical_schema_version records the dataset's declared field set.*<br />• `required` |
-|  physical_schema_version | integer | *Physical schema version of this row, chosen by occurred_at from the dataset's declared schema changes. Version one lacks fields declared with sinceSchemaVersion two; version two has them.*<br />• `required` |
+|  schema_version | integer | *Event schema version. Two before the dataset's declared schema change and three from it, chosen by occurred_at. Version three is the gateway's current event shape; fields declared with sinceSchemaVersion three are absent from version two.*<br />• `required` |
 |  correlation_id | string | *Correlation identity shared across one payment history.*<br />• `required` |
 |  payment_created | object | *Initial immutable checkout snapshot. Exactly one lifecycle payload is present per event.* |
 | &#x2007;&#x21b3; merchant | object | *Integration-scoped merchant references.*<br />• `required` |
@@ -74,7 +73,7 @@ Synthetic data only. Histories are complete across all date partitions. Empty co
 | &#x2007;&#x2007;&#x21b3; device_fingerprint | string | *Observed synthetic device fingerprint.* |
 | &#x2007;&#x2007;&#x21b3; ip_country | string | *Resolved IP country if available.* |
 | &#x2007;&#x2007;&#x21b3; ip_network_fingerprint | string | *Keyed network fingerprint; never raw IP.* |
-| &#x2007;&#x2007;&#x21b3; user_agent_family | string | *Optional observed browser family.*<br />• **customProperties:** [{'property': 'sinceSchemaVersion', 'value': 2}] |
+| &#x2007;&#x2007;&#x21b3; user_agent_family | string | *Optional observed browser family.*<br />• **customProperties:** [{'property': 'sinceSchemaVersion', 'value': 3}] |
 | &#x2007;&#x21b3; context | object | *Immutable scoring context matching PaymentCreated and the Fraud request.*<br />• `required` |
 | &#x2007;&#x2007;&#x21b3; merchant | object | *Integration-scoped merchant references.*<br />• `required` |
 | &#x2007;&#x2007;&#x2007;&#x21b3; merchant_id | string | *Gateway merchant identity.*<br />• `required` |
@@ -113,8 +112,8 @@ Synthetic data only. Histories are complete across all date partitions. Empty co
 | &#x2007;&#x2007;&#x21b3; model_version | string | *Evaluated model version if a model was used.* |
 | &#x2007;&#x2007;&#x21b3; feature_set_version | string | *Evaluated feature-set version if features were used.* |
 | &#x2007;&#x2007;&#x21b3; risk_score | number | *Optional model risk score.* |
-| &#x2007;&#x2007;&#x21b3; assessment_id | string | *Assessment identity; absent from physical schema version one.*<br />• **customProperties:** [{'property': 'sinceSchemaVersion', 'value': 2}] |
-| &#x2007;&#x2007;&#x21b3; evidence_sha256 | string | *SHA-256 digest of the scoring evidence; absent from physical schema version one.*<br />• **customProperties:** [{'property': 'sinceSchemaVersion', 'value': 2}] |
+| &#x2007;&#x2007;&#x21b3; assessment_id | string | *Assessment identity; absent from schema version two.*<br />• **customProperties:** [{'property': 'sinceSchemaVersion', 'value': 3}] |
+| &#x2007;&#x2007;&#x21b3; evidence_sha256 | string | *SHA-256 digest of the scoring evidence; absent from schema version two.*<br />• **customProperties:** [{'property': 'sinceSchemaVersion', 'value': 3}] |
 |  processor_operation_requested | object | *Processor authorization request after risk approval.* |
 | &#x2007;&#x21b3; attempt_id | string | *Active approved attempt identity.*<br />• `required` |
 | &#x2007;&#x21b3; operation_key | string | *Idempotent processor operation identity.*<br />• `required` |
