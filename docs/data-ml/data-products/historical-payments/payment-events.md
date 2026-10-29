@@ -27,12 +27,12 @@ Synthetic data only. Histories are complete across all date partitions. Empty co
 
 | Field | Type | Attributes |
 | ----- | ---- | ---------- |
-|  event_id | string | *Opaque event identity. Repeated deliveries retain this identity and identical content.*<br />• `required` |
+|  event_id | string | *Opaque event identity. Repeated deliveries retain this identity and identical content apart from recorded_at.*<br />• `required` |
 |  payment_id | string | *Payment aggregate identity within integration_id.*<br />• `required` |
 |  aggregate_version | integer | *Consecutive authoritative transition number starting at one; delivery duplicates do not increment it.*<br />• `required` |
 |  integration_id | string | *Dedicated synthetic integration namespace; never share it with a real integration.*<br />• `required` |
 |  occurred_at | timestamp | *Business occurrence time in UTC at microsecond precision.*<br />• **logicalTypeOptions:** {'timezone': True, 'defaultTimezone': 'UTC'}<br />• `required` |
-|  recorded_at | timestamp | *Source recording time, at or after occurred_at; not ingestion time.*<br />• **logicalTypeOptions:** {'timezone': True, 'defaultTimezone': 'UTC'}<br />• `required` |
+|  recorded_at | timestamp | *Source recording time, at or after occurred_at; not ingestion time. A republished export of an event carries the same event_id and content with a later recorded_at.*<br />• **logicalTypeOptions:** {'timezone': True, 'defaultTimezone': 'UTC'}<br />• `required` |
 |  schema_version | integer | *Event schema version. Two before the dataset's declared schema change and three from it, chosen by occurred_at. Version three is the gateway's current event shape; fields declared with sinceSchemaVersion three are absent from version two.*<br />• `required` |
 |  correlation_id | string | *Correlation identity shared across one payment history.*<br />• `required` |
 |  payment_created | object | *Initial immutable checkout snapshot. Exactly one lifecycle payload is present per event.* |

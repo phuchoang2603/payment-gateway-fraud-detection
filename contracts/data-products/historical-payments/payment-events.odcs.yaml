@@ -43,7 +43,7 @@ schema:
         logicalType: string
         physicalType: VARCHAR
         required: true
-        description: Opaque event identity. Repeated deliveries retain this identity and identical content.
+        description: Opaque event identity. Repeated deliveries retain this identity and identical content apart from recorded_at.
       - name: payment_id
         logicalType: string
         physicalType: VARCHAR
@@ -72,7 +72,7 @@ schema:
         physicalType: TIMESTAMPTZ
         logicalTypeOptions: *utc_timestamp
         required: true
-        description: Source recording time, at or after occurred_at; not ingestion time.
+        description: Source recording time, at or after occurred_at; not ingestion time. A republished export of an event carries the same event_id and content with a later recorded_at.
       - name: schema_version
         logicalType: integer
         physicalType: UINTEGER
@@ -283,10 +283,10 @@ schema:
     quality:
       - id: payment_delivery_consistency
         type: sql
-        description: Repeated event identities must carry identical content.
+        description: Repeated event identities must carry identical content apart from recorded_at, which republished exports advance.
         query: |
           SELECT count(*) FROM (
-            SELECT event_id FROM {object} e
+            SELECT event_id FROM (SELECT * EXCLUDE (recorded_at) FROM {object}) e
             GROUP BY event_id HAVING count(DISTINCT to_json(e)) > 1
           )
         mustBe: 0
