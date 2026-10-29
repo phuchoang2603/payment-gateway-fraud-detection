@@ -35,7 +35,7 @@ Apply the AppProject and the selected environment root once after the release br
 
 ## Runtime configuration
 
-Python services do not accept CLI configuration overrides. Historical generation reads `configs/historical-smoke.yaml` by default; `SIMULATOR_CONFIG` can select a different YAML. Live traffic uses its dedicated `simulator.live.runtime` module and defaults to `/etc/simulator/live.yaml`, also overridable with `SIMULATOR_CONFIG`. Generation controls (`prepare_only`, `takeover_stopped_writer`, `allow_small_dataset`) belong under YAML `execution`.
+Python services do not accept CLI configuration overrides. Historical generation reads the `SIMULATOR_CONFIG` file baked into the simulator image (`historical-dev.yaml` or `historical-full.yaml`, selected by the data-pipelines chart); see [data generator](../data-ml/data-generator.md). Live traffic uses its dedicated `simulator.live.runtime` module and defaults to `/etc/simulator/live.yaml`, also overridable with `SIMULATOR_CONFIG`.
 
 Bronze and its metadata stages use `PIPELINE_STAGE`; metadata integrations use `METADATA_STAGE` and optional `METADATA_CONNECTOR`. Profiling uses `PROFILE_REFRESH=true|false`. `SOURCE_ROOT`, `EVIDENCE_ROOT`, `DATASET_VERSION`, storage endpoint settings and secret references remain environment configuration supplied by Helm. Feast serving and writing use dedicated modules, and the archiver uses `simulator.landing.runtime`; no mode flags are needed.
 
