@@ -3,7 +3,7 @@
 A seeded workload with known late, too-late, duplicate and conflicting deliveries is replayed
 in logical-clock order through the job's own model logic (Entity windows, dedup
 classification and the 24-hour horizon). Each variant is compared with the v2 reference
-calculation at hourly anchors.
+calculation at hourly anchors. The Flink runtime is covered separately by the image test.
 
 Run: cd src/data-pipeline/streaming && PYTHONPATH=.. uv run --locked python -m
 fraud_streaming.benchmark
