@@ -25,11 +25,11 @@ class Check:
         return f"{SERVICE}.{self.table}.{self.name}"
 
 
-def checks(root=None, catalog=None):
+def checks(root=None, catalog=None, products=None):
     root = Path(root or os.environ["DATA_PRODUCTS_ROOT"])
     catalog = catalog or os.environ.get("STARROCKS_CATALOG", "fraud_lakehouse")
     found = []
-    for product in PRODUCTS:
+    for product in products or PRODUCTS:
         for contract in sorted((root / product).glob("*.odcs.yaml")):
             for table in yaml.safe_load(contract.read_text())["schema"]:
                 for rule in table.get("quality", []):
@@ -111,7 +111,7 @@ def readback(table, prepared_at):
 
 def main():
     prepared_at = int(time.time() * 1000)
-    found = checks()
+    found = checks(products=[os.environ["CHECK_PRODUCT"]])
     tables = sorted({check.table for check in found})
     native("ingest", workflow(SERVICE))
     for table in tables:
