@@ -1,13 +1,21 @@
 {{- $registry := .Values.registry }}
 {{- $catalog := list }}
 {{- range $agent := .Values.agents.list }}
+{{- $prompt := dict
+  "apiVersion" "ar.dev/v1alpha1"
+  "kind" "Prompt"
+  "metadata" (dict "name" (printf "%s-system-prompt" $agent.name) "tag" $agent.version)
+  "spec" (dict
+    "description" (printf "System prompt of %s." $agent.name)
+    "content" ($.Files.Get (printf "files/prompts/%s.md" $agent.name))) }}
+{{- $catalog = append $catalog (toYaml $prompt) }}
 {{- $entry := dict
   "apiVersion" "ar.dev/v1alpha1"
   "kind" "Agent"
   "metadata" (dict "name" ($agent.name | replace "-" "") "tag" $agent.version)
   "spec" (dict
     "title" $agent.title
-    "description" (printf "%s Model config %s (%s through the agent gateway)." $agent.description $.Values.agents.modelConfig $.Values.models.chat.name)
+    "description" (printf "%s Model config %s (%s through the agent gateway); system prompt %s-system-prompt." $agent.description $.Values.agents.modelConfig $.Values.models.chat.name $agent.name)
     "source" (dict
       "repository" (dict "url" $registry.repository "subfolder" "infra/charts/llm-platform")
       "protocol" "A2A")) }}
@@ -19,7 +27,7 @@ metadata:
   name: llm-registry-catalog
 data:
   catalog.yaml: |
-    {{- join "---\n" $catalog | nindent 4 }}
+    {{- join "\n---\n" $catalog | nindent 4 }}
 ---
 apiVersion: batch/v1
 kind: Job

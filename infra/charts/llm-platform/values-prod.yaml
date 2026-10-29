@@ -4,9 +4,6 @@ gpu:
   tolerations:
     - {key: burst.talos.dev/gpu-training, operator: Equal, value: "true", effect: NoSchedule}
 
-storage:
-  storageClass: gp3
-
 modelStore:
   bucket: platform-prod-142737101504-us-east-1
   endpoint: https://s3.us-east-1.amazonaws.com
@@ -25,8 +22,3 @@ models:
 agents:
   sandbox:
     snapshotRoot: gs://platform-prod-142737101504-us-east-1/substrate/ml
-
-benchmark:
-  storage:
-    bucket: platform-prod-142737101504-us-east-1
-    endpoint: https://s3.us-east-1.amazonaws.com

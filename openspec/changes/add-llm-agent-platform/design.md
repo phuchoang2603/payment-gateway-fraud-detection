@@ -144,7 +144,6 @@ Serving flags (checked against the vLLM v0.32.0 source):
 | `--performance-mode` | `balanced` (default) vs `interactivity` (small-batch latency, which suits agent turns) | benchmarked |
 | `--speculative-config` n-gram | chat | benchmarked |
 | `--load-format` | `runai_streamer` from object storage; `concurrency` and the CPU buffer `memory_limit` via `--model-loader-extra-config` | benchmarked as cold start |
-| torch.compile / CUDA-graph cache | `VLLM_CACHE_ROOT` on a small writable PVC instead of an emptyDir, so restarts skip recompilation | benchmarked as cold start |
 
 KServe's start script `eval`s the container args, so JSON-valued args are written single-quoted inside the value.
 
@@ -170,10 +169,9 @@ Weights live once per environment in the platform bucket under `artifacts/models
 
 They stream straight into GPU memory with Run:ai Model Streamer (`--load-format runai_streamer`, already in the vLLM image), so the serving node never writes weights to its disk. That matters because the dev GPU node is also the control plane: writing tens of gigabytes there starves etcd, and the GPU cannot move to a worker because of a physical constraint. On prod, every new Spot node streams in-region from S3, with no volume to reattach.
 
-- **Upload:** an idempotent `model-upload` Job (sync wave -1) copies the pinned Hugging Face revisions file by file. It skips objects already present with the same size and deletes each local copy after upload. Node affinity keeps it off GPU and control-plane nodes.
+- **Upload:** an idempotent `model-upload` Job (sync wave -1) copies the pinned Hugging Face revisions file by file. It skips objects already present with the same size and deletes each local copy after upload, so the node only ever holds one file. It runs on the pinned `python:3.13-slim` image with pinned `huggingface-hub` and `boto3` installed at start, so the project builds no image for it.
 - **Credentials:** the platform's Kubeflow artifacts identity (Secret `mlpipeline-minio-artifact` in `ml`, scoped to `artifacts/`, `datasets/` and `runs/`), so no new platform policy is needed.
 - **Serving:** the chart sets the container command to `vllm serve s3://…` because KServe's preset start script serves a local `/mnt/models`. `storageInitializer` is off, and `model.uri` records the object location. Because the args are no longer re-parsed by the preset's `eval`, JSON values need no extra quoting.
-- **Compile cache:** a small RWO PVC keeps torch.compile and CUDA-graph artifacts per model, so restarts skip recompilation.
 
 KServe's `LocalModelCache` and a model PVC were considered and dropped: both write the weights to a node disk.
 
@@ -193,20 +191,24 @@ Its Helm default provider is disabled or pointed at the gateway (open question 6
 This repo owns, in `ml`:
 
 - **`ModelConfig` `default-model-config`:** `provider: OpenAI`, `model: qwen3-8b`, `openAI.baseUrl: http://agentgateway.ml.svc.cluster.local/v1`, `apiKeySecret: llm-gateway-agents`, `apiKeySecretKey: key`. This is the global model config. Every agent references it, and changing the model, gateway or key for all agents is one edit.
-- **`Agent` `evidence-agent`:** declarative, `modelConfig: default-model-config`, with a read-only fraud-analyst system message that states it has no data access yet and must not invent payment facts, and no tools. `replicas` is left unset: kagent's Deployment mutation sets replicas only when the Agent specifies them, so the phase 2 KEDA ScaledObject can own them. Pod and container security contexts satisfy `restricted`.
+- **`Agent` `evidence-agent`:** declarative, `modelConfig: default-model-config`, with no tools and a read-only fraud-analyst system prompt that states it has no data access yet and must not invent payment facts. The prompt is `files/prompts/<agent>.md` in the chart, loaded through `systemMessageFrom` from the `agent-prompts` ConfigMap, and published to agentregistry as a versioned `Prompt` (decision 11). `replicas` is left unset: kagent's Deployment mutation sets replicas only when the Agent specifies them, so the phase 2 KEDA ScaledObject can own them. Pod and container security contexts satisfy `restricted`.
 - **`SandboxAgent` `evidence-agent-sandbox`:** the same spec, rendered from one helper, on the platform's default WorkerPool `kagent/kagent-default`, with `sandbox.network.allowedDomains` limited to the gateway Service. Snapshots go under the platform's `substrate/` prefix. kagent 0.10.4's CRD accepts only `gs://`-style locations, which Substrate's S3 backend also uses, so the location is `gs://<environment bucket>/substrate/ml/<agent>/`. Each conversation is an actor in a gVisor sandbox. Idle actors suspend to snapshots and resume on any worker, so a one-worker pool serves several conversations. This is the warm-up ("Agent Fleet Architecture") evidence.
 
-Later agents (risk, coordinator) and MCP tool references are additional entries in the same values list. Each renders both an `Agent` and a `SandboxAgent`. The prompt source becomes a prompt-management reference (`systemMessageFrom`) when that rubric row lands. Moving to kagent 1.x later is a platform upgrade plus re-rendering these resources from the same values.
+Later agents (risk, coordinator) and MCP tool references are additional entries in the same values list. Each renders both an `Agent` and a `SandboxAgent`. If the prompt-management rubric row needs runtime prompt fetching (Langfuse), only the `systemMessageFrom` source changes. Moving to kagent 1.x later is a platform upgrade plus re-rendering these resources from the same values.
 
 ### 9. Benchmark harness and optimizations
 
-The tool is inference-perf v0.7.0, the harness llm-d's benchmark tooling drives, built into a small image from the PyPI release. The chart renders a disabled-by-default Job template. A dev run is started by rendering it with `helm template --set benchmark.run=<name>` and applying the Job with `kubectl` (user decision); it is deleted after its results are uploaded. Results go to the pod log and `runs/payment-gateway/llm-benchmark/<run>/` in the environment bucket through the existing gateway storage identity, and are copied into `docs/llm/benchmark.md` by hand.
+The tool is vLLM's own `vllm bench serve`, run from the same pinned vLLM image, so no benchmark image is built. The benchmark is not part of the chart: `infra/llm-benchmark/` holds plain manifests applied with `kubectl` on dev (user decision):
+- `job.yaml`, a Job that runs the concurrency sweep and prints each result as JSON to its log;
+- `server.yaml`, a standalone vLLM Pod, Service and mesh policy for one model-server variant.
 
-The workload is a `shared_prefix` dataset of 3 groups (future agents), each with a 1,500-token system prompt, 100-token questions and 150 output tokens with `ignore_eos`. Closed-loop concurrency stages are 1, 2, 4, 8 and 16. The reported metrics are output tokens/s, requests/s, TTFT p50/p90, inter-token latency (TPOT) p50/p90, end-to-end latency, prefix-cache hit share from vLLM's metrics, and failures.
+The chart only provides the benchmark's identity (ServiceAccount `llm-benchmark`, admitted by the mesh policies) and its gateway key. Results are copied from the Job log into `docs/llm/benchmark.md`.
+
+The workload is vLLM's `prefix_repetition` dataset with 3 shared prefixes (future agents): 1,500-token system prompts, 100-token questions and 150 output tokens with `--ignore-eos`. Closed-loop concurrency stages are 1, 2, 4, 8 and 16. The reported metrics are output tokens/s, requests/s, TTFT p50/p90, inter-token latency (TPOT) p50/p90, end-to-end latency, prefix-cache hit share from vLLM's metrics, and failures.
 
 Two targets:
 
-- **Model-server runs** go straight to the vLLM Service, to isolate the server. One variant changes at a time. Argo CD self-heals the chat `LLMInferenceService`, so it can't be stopped with `kubectl`. A dev values flag (`models.chat.stopped`) sets the KServe stop annotation through a normal release. While it is set, standalone vLLM pods rendered from the same values run each variant, applied with `kubectl`. The embedding server keeps running, so the runs measure the shared GPU.
+- **Model-server runs** go straight to the vLLM Service, to isolate the server. One variant changes at a time. Argo CD self-heals the chat `LLMInferenceService`, so it can't be stopped with `kubectl`. A dev values flag (`models.chat.stopped`) sets the KServe stop annotation through a normal release. While it is set, `server.yaml` runs each variant, edited and applied with `kubectl`. The embedding server keeps running, so the runs measure the shared GPU.
 - **One end-to-end run** goes through agentgateway with the chosen configuration, which shows the gateway and EPP overhead.
 
 Optimizations measured, each against the previous kept configuration:
@@ -217,7 +219,6 @@ Optimizations measured, each against the previous kept configuration:
 4. n-gram speculative decoding vs none, on a grounded-answer workload where the answers quote context;
 5. cold start, split into weight-load time and time to Ready:
    - streamer `concurrency` and buffer settings;
-   - with and without a persisted compile cache;
 6. FP8 vs AWQ weights, if FP8 runs on sm_120.
 
 Each result row records the command, image and digest, args, date and environment. Only measured numbers are written down.
@@ -235,7 +236,7 @@ The docs record this mapping the way the roadmap maps Airflow→Argo: Knative wh
 
 ### 11. Registry
 
-agentregistry 0.4.0, the latest stable release, is installed by the platform with an external Postgres on CNPG and RBAC limited to `ml`. It keeps its ClusterIP Service, reached by port-forward in phase 1. This repo owns the catalog, rendered from the same agent values as the kagent resources so name and version have one source. The registry's agent names cannot contain hyphens, so `evidence-agent` is published as `evidenceagent`, tag `0.1.0`, with its model config named in the description; the registry's `Model` kind supports only Bedrock. A PostSync Job POSTs the catalog to the registry's `/v0/apply` endpoint, which is what `arctl apply` calls, from a pinned curl image. CI never contacts the cluster, so publication happens at sync. A changed catalog means a new version; later phases add MCP server entries and bump the agent to 0.2.0 with its tools.
+agentregistry 0.4.0, the latest stable release, is installed by the platform with an external Postgres on CNPG and RBAC limited to `ml`. It keeps its ClusterIP Service, reached by port-forward in phase 1. This repo owns the catalog, rendered from the same agent values as the kagent resources so name and version have one source. The registry's agent names cannot contain hyphens, so `evidence-agent` is published as `evidenceagent`, tag `0.1.0`, with its model config named in the description; the registry's `Model` kind supports only Bedrock. Each agent's system prompt is published as a `Prompt` (`<agent>-system-prompt`, tagged with the agent version), so the registry versions prompts next to agents; skills use the same mechanism when agents get them. OpenMetadata 2.0.6 also has a `promptTemplate` entity, registered with the AI assets in decision 12. A PostSync Job POSTs the catalog to the registry's `/v0/apply` endpoint, which is what `arctl apply` calls, from a pinned curl image. CI never contacts the cluster, so publication happens at sync. A changed catalog means a new version; later phases add MCP server entries and bump the agent to 0.2.0 with its tools.
 
 agentregistry 0.4.0 materializes agents as kagent `v1alpha2` resources, the API kagent 0.10.4 serves. Even so, the agents are deployed by this chart through GitOps, and the registry is the governed catalog (published versions, UI). That keeps one deployment path, so the registry's deploy feature is not used.
 

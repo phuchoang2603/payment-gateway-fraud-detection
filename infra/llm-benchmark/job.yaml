@@ -1,0 +1,52 @@
+# Agent-shaped load: three shared 1,500-token system prompts, 100-token questions, 150-token answers.
+# TARGET: the chat server (default), http://llm-bench-vllm.ml.svc.cluster.local:8000 or http://agentgateway.ml.svc.cluster.local.
+# kubectl -n ml create -f job.yaml && kubectl -n ml logs -f job/<name>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: llm-benchmark-
+  namespace: ml
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: llm-benchmark
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: bench
+          image: vllm/vllm-openai:v0.32.0
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              for concurrency in $CONCURRENCY; do
+                vllm bench serve --backend openai-chat --base-url "$TARGET" --endpoint /v1/chat/completions \
+                  --model qwen3-8b --tokenizer Qwen/Qwen3-8B \
+                  --dataset-name prefix_repetition --prefix-repetition-num-prefixes 3 \
+                  --prefix-repetition-prefix-len 1500 --prefix-repetition-suffix-len 100 \
+                  --prefix-repetition-output-len 150 --ignore-eos --seed 20261029 \
+                  --num-prompts $((concurrency * 8)) --max-concurrency "$concurrency" \
+                  --percentile-metrics ttft,tpot,itl,e2el --metric-percentiles 50,90 \
+                  --save-result --result-dir /tmp/results --result-filename "c$concurrency.json"
+                cat "/tmp/results/c$concurrency.json"; echo
+              done
+          env:
+            - name: TARGET
+              value: http://qwen3-8b-kserve-workload-svc.ml.svc.cluster.local:8000
+            - name: CONCURRENCY
+              value: "1 2 4 8 16"
+            - name: HOME
+              value: /tmp
+            - name: OPENAI_API_KEY
+              valueFrom: {secretKeyRef: {name: llm-gateway-benchmark, key: key}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {memory: 3Gi}

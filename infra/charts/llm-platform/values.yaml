@@ -1,15 +1,7 @@
-global:
-  imageTags:
-    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/inference-perf: dev
-
 gpu:
   deviceClassName: gpu.nvidia.com
   nodeSelector: {}
   tolerations: []
-
-storage:
-  storageClass: local-path
-  compileCache: 5Gi
 
 # Model weights live in the environment bucket and stream straight to the GPU (Run:ai Model Streamer).
 modelStore:
@@ -19,6 +11,8 @@ modelStore:
   virtualAddressing: false
   # The Kubeflow artifacts identity, platform-owned and scoped to artifacts/, datasets/ and runs/.
   credentialsSecret: mlpipeline-minio-artifact
+  uploadImage: python:3.13-slim-bookworm
+  uploadPackages: huggingface-hub==2.2.0 boto3==1.43.114
 
 vllm:
   image: vllm/vllm-openai:v0.32.0
@@ -31,6 +25,7 @@ models:
     repo: Qwen/Qwen3-8B-FP8
     revision: 220b46e3b2180893580a4454f21f22d3ebb187d3
     replicas: 1
+    # Frees the GPU for standalone benchmark servers (infra/llm-benchmark).
     stopped: false
     args:
       - --max-model-len=16384
@@ -54,7 +49,7 @@ models:
     resources:
       requests: {cpu: 250m, memory: 2Gi}
       limits: {memory: 4Gi}
-  # Uploaded with the served models so the benchmark can compare weights without another upload.
+  # Uploaded with the served models so the benchmark can compare weights.
   extraUploads:
     - repo: Qwen/Qwen3-8B-AWQ
       revision: 4da05a8edb55c6046cce958586c33b61da07bb79
@@ -88,58 +83,14 @@ agents:
   uid: 65532
   sandbox:
     snapshotRoot: gs://platform-dev/substrate/ml
+  # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
   list:
     - name: evidence-agent
       version: 0.1.0
       title: Evidence agent
       description: Read-only fraud-analyst agent that explains one payment from recorded evidence. Phase 1 has no tools.
-      systemMessage: |
-        You are a read-only fraud analyst assistant for a synthetic payment gateway.
-        You explain payments and payment attempts to fraud analysts.
-        You cannot change risk decisions, retry payments, issue refunds or promote models, and you never
-        take part in a live payment decision.
-        You do not yet have tools to read payment events, features, labels or model scores. When asked
-        about a specific payment or attempt, say that you cannot retrieve its evidence yet and do not
-        invent identifiers, amounts, timestamps, scores or outcomes.
-        Labels that arrived after a decision were not available to that decision; never present them as
-        information the decision had.
 
 registry:
   url: http://agentregistry.agentregistry.svc:12121
   repository: https://github.com/phuchoang2603/payment-gateway-fraud-detection
   curlImage: curlimages/curl:8.17.0
-
-benchmark:
-  image:
-    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/inference-perf
-  # A run renders only when `run` is set: helm template ... --set benchmark.run=<name> | kubectl apply -f -
-  run: ""
-  # gateway: through agentgateway; direct: the chat server; variant: the standalone variant server below.
-  target: direct
-  tokenizer: Qwen/Qwen3-8B
-  workload:
-    groups: 3
-    promptsPerGroup: 16
-    systemPromptTokens: 1500
-    questionTokens: 100
-    outputTokens: 150
-    stages:
-      - {concurrency: 1, requests: 12}
-      - {concurrency: 2, requests: 16}
-      - {concurrency: 4, requests: 32}
-      - {concurrency: 8, requests: 64}
-      - {concurrency: 16, requests: 96}
-  # Standalone chat server for model-server variants while models.chat.stopped is true.
-  # repo/revision/loaderConfig default to the chat model's; args are appended to the chat args.
-  variant:
-    name: ""
-    repo: ""
-    revision: ""
-    loaderConfig: ""
-    args: []
-    compileCache: true
-  storage:
-    secretStore: gateway-doppler
-    bucket: platform-dev
-    endpoint: https://minio.home.phuchoang.sbs
-    prefix: runs/payment-gateway/llm-benchmark

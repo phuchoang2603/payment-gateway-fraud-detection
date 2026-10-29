@@ -36,7 +36,7 @@ spec:
         - source:
             principals: [{{ $gateway | quote }}, {{ $benchmark | quote }}, {{ $metrics | quote }}]
 ---
-# Separate metrics port stays open to any source; ext-proc stays gateway-only.
+# The scheduler's metrics port stays open to any source; ext-proc stays gateway-only.
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
@@ -76,19 +76,9 @@ spec:
     - to:
         - operation:
             ports: ["15020"]
-{{- if .Values.benchmark.variant.name }}
 ---
-apiVersion: security.istio.io/v1
-kind: AuthorizationPolicy
+# Identity of the on-demand benchmark in infra/llm-benchmark.
+apiVersion: v1
+kind: ServiceAccount
 metadata:
-  name: llm-bench-vllm
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: llm-bench-vllm
-  action: ALLOW
-  rules:
-    - from:
-        - source:
-            principals: [{{ $benchmark | quote }}]
-{{- end }}
+  name: llm-benchmark
