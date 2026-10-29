@@ -1,5 +1,5 @@
 {{- if .Values.analytics.enabled }}
-{{- range $job := list "diagnostics" "benchmark" }}
+{{- range $job := list "diagnostics" "benchmark" "storage-layout" }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
@@ -34,7 +34,7 @@ spec:
               dp-product: silver-payments
               dp-workflow: {{ "{{workflow.name}}" | quote }}
           spec:
-            mainApplicationFile: {{ printf "local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/batch/%s.py" (ternary "diagnostics" "benchmark" (eq $job "diagnostics")) | quote }}
+            mainApplicationFile: {{ printf "local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/batch/%s.py" (index (dict "diagnostics" "diagnostics" "benchmark" "benchmark" "storage-layout" "storage_layout") $job) | quote }}
             runtimeVersions:
               sparkVersion: "4.1.3"
             sparkConf:

@@ -1,0 +1,100 @@
+{{- if .Values.maintenance.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: maintain-lakehouse
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  entrypoint: maintain
+  activeDeadlineSeconds: {{ .Values.maintenance.activeDeadlineSeconds }}
+  synchronization:
+    mutexes:
+      - name: lakehouse-maintenance
+  podMetadata:
+    labels:
+      app.kubernetes.io/name: {{ .Values.catalog.kafkaDataClient }}
+      dp-product: lakehouse
+  templates:
+    - name: maintain
+      retryStrategy:
+        limit: 2
+        retryPolicy: OnError
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          apiVersion: spark.apache.org/v1
+          kind: SparkApplication
+          metadata:
+            name: {{ printf "maintain-%s" "{{workflow.uid}}" }}
+            namespace: {{ .Values.namespace }}
+            labels:
+              dp-product: lakehouse
+              dp-workflow: {{ "{{workflow.name}}" | quote }}
+          spec:
+            mainApplicationFile: local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/batch/maintenance.py
+            runtimeVersions:
+              sparkVersion: "4.1.3"
+            sparkConf:
+              spark.kubernetes.container.image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
+              spark.kubernetes.authenticate.driver.serviceAccountName: data-pipelines-spark
+              spark.kubernetes.executor.deleteOnTermination: "true"
+              spark.executor.instances: {{ .Values.maintenance.executors | quote }}
+              spark.sql.shuffle.partitions: {{ .Values.maintenance.shufflePartitions | quote }}
+              spark.pyspark.python: /opt/data-pipeline/batch/.venv/bin/python
+            applicationTolerations:
+              restartConfig:
+                restartPolicy: Never
+              resourceRetainPolicy: OnFailure
+              resourceRetainDurationMillis: 300000
+              ttlAfterStopMillis: 3600000
+            driverSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    app.kubernetes.io/name: {{ .Values.catalog.kafkaDataClient }}
+                    dp-product: lakehouse
+                spec:
+                  containers:
+                    - name: spark-kubernetes-driver
+                      env:
+{{- include "data-pipelines.env" $ | nindent 22 }}
+                        - name: RUN_ID
+                          value: {{ "{{workflow.name}}" | quote }}
+                        - name: RUN_REPORT_ROOT
+                          value: {{ .Values.maintenance.reportRoot | quote }}
+            executorSpec:
+              podTemplateSpec:
+                metadata:
+                  labels:
+                    app.kubernetes.io/name: {{ .Values.catalog.kafkaDataClient }}
+                    dp-product: lakehouse
+                spec:
+                  containers:
+                    - name: spark-kubernetes-executor
+                      env:
+{{- include "data-pipelines.env" $ | nindent 22 }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: maintain-lakehouse-daily
+  namespace: {{ .Values.namespace }}
+spec:
+  schedule: {{ .Values.maintenance.schedule | quote }}
+  suspend: true
+  concurrencyPolicy: Forbid
+  workflowSpec:
+    serviceAccountName: data-pipelines
+    entrypoint: maintain
+    templates:
+      - name: maintain
+        steps:
+          - - name: maintain
+              templateRef:
+                name: maintain-lakehouse
+                template: maintain
+{{- end }}

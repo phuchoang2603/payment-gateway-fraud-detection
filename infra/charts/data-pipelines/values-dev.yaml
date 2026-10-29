@@ -7,3 +7,5 @@ silver:
   enabled: true
 analytics:
   enabled: true
+maintenance:
+  enabled: true

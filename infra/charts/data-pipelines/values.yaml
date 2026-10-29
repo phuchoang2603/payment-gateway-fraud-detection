@@ -76,3 +76,10 @@ catalog:
     data:
       ICEBERG_CLIENT_SECRET: DP1_ICEBERG_CLIENT_SECRET
       OPENMETADATA_TOKEN: DP1_OM_INGESTION_TOKEN
+maintenance:
+  enabled: false
+  reportRoot: s3://platform-dev/runs/payment-gateway/maintenance
+  executors: 2
+  shufflePartitions: 1024
+  activeDeadlineSeconds: 7200
+  schedule: "43 3 * * *"
