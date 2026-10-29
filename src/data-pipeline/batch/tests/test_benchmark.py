@@ -5,6 +5,7 @@ from batch import benchmark
 from tests.events import at
 
 LOW_SKEW_THRESHOLDS = {
+    "spark.sql.adaptive.coalescePartitions.enabled": "false",
     "spark.sql.adaptive.advisoryPartitionSizeInBytes": "256",
     "spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes": "1",
     "spark.sql.adaptive.skewJoin.skewedPartitionFactor": "1.5",

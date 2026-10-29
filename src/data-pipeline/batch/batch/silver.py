@@ -109,7 +109,7 @@ def run(spark, run_id):
         with phase(spark, phases, "report"):
             input_events = total_records(spark, BRONZE_EVENTS, events_snapshot)
             conflicting_events = conflicts.count()
-            distinct = snapshots[PAYMENT_EVENTS]["added_records"] + conflicting_events
+            distinct = snapshots[PAYMENT_EVENTS]["added_records"] + conflict_events.count()
             report = {
                 "run_id": run_id,
                 "bronze_snapshots": {

@@ -78,6 +78,12 @@ def skew_report(spark, plan) -> dict:
         if name == "AdaptiveSparkPlanExec":
             stack.append(node.executedPlan())
             continue
+        if name.endswith("QueryStageExec"):
+            stack.append(node.plan())
+            continue
+        if name == "ReusedExchangeExec":
+            stack.append(node.child())
+            continue
         if name == "SortMergeJoinExec":
             joins.append(bool(node.isSkewJoin()))
         if name == "AQEShuffleReadExec":
@@ -85,7 +91,7 @@ def skew_report(spark, plan) -> dict:
         children = spark._jvm.scala.collection.JavaConverters.seqAsJavaList(node.children())
         for index in range(children.size()):
             stack.append(children.get(index))
-    return {"skew_join": any(joins), "skewed_shuffle_read": any(reads)}
+    return {"skew_join": any(joins), "skewed_shuffle_read": any(reads), "plan": str(plan)[:4000]}
 
 
 def same_output(baseline, candidate, name: str) -> None:

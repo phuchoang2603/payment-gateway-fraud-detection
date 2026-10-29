@@ -47,17 +47,20 @@ def test_identical_copies_collapse_to_earliest_and_conflicts_leave_the_accepted_
         created("pay-1", "evt-1", recorded=5),
         created("pay-2", "evt-2", amount=100),
         created("pay-2", "evt-2", amount=999),
+        created("pay-2", "evt-3", minutes=1),
     ]
     load_bronze(spark, events, [])
 
-    silver.run(spark, "run-1")
+    report = silver.run(spark, "run-1")
 
     accepted = spark.table(silver.PAYMENT_EVENTS)
     assert [r.event_id for r in accepted.collect()] == ["evt-1"]
     assert accepted.first()["recorded_at"] == at(0).replace(tzinfo=None)
     rejected = spark.table(silver.REJECTED).where(F.col("rejected_table") == "payment_events")
     assert {r.reason for r in rejected.collect()} == {"evt-2"}
-    assert rejected.where(F.col("payment_id") == "pay-2").count() == 2
+    assert rejected.where(F.col("payment_id") == "pay-2").count() == 3
+    assert report["events"]["distinct_events"] == 3
+    assert report["events"]["conflicting_events"] == 1
     assert spark.table(silver.PAYMENT_EVENTS).where(F.col("payment_id") == "pay-2").count() == 0
 
 
