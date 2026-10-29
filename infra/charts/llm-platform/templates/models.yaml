@@ -19,7 +19,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: llm-models
   annotations:
-    argocd.argoproj.io/sync-wave: "-2"
+    # WaitForFirstConsumer volumes stay Pending until a pod mounts them, so each shares a wave with its first consumer.
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: {{ .Values.storage.storageClass }}
@@ -31,8 +32,6 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: llm-compile-cache
-  annotations:
-    argocd.argoproj.io/sync-wave: "-2"
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: {{ .Values.storage.storageClass }}

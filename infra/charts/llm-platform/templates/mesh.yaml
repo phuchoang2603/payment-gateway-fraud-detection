@@ -4,6 +4,7 @@
 {{- $gateway := include "llm-platform.principal" (dict "namespace" $ns "name" .Values.gateway.name) }}
 {{- $benchmark := include "llm-platform.principal" (dict "namespace" $ns "name" "llm-benchmark") }}
 {{- $epp := include "llm-platform.principal" (dict "namespace" $ns "name" (printf "%s-epp-sa" $chat)) }}
+{{- $metrics := .Values.metricsAgent }}
 {{- $agents := include "llm-platform.principal" (dict "namespace" $ns "name" .Values.agents.serviceAccount) }}
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
@@ -18,7 +19,7 @@ spec:
   rules:
     - from:
         - source:
-            principals: [{{ $gateway | quote }}, {{ $epp | quote }}, {{ $benchmark | quote }}]
+            principals: [{{ $gateway | quote }}, {{ $epp | quote }}, {{ $benchmark | quote }}, {{ $metrics | quote }}]
 ---
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
@@ -33,9 +34,9 @@ spec:
   rules:
     - from:
         - source:
-            principals: [{{ $gateway | quote }}, {{ $benchmark | quote }}]
+            principals: [{{ $gateway | quote }}, {{ $benchmark | quote }}, {{ $metrics | quote }}]
 ---
-# The metrics agent is outside the mesh, so its port is opened without an identity; ext-proc stays gateway-only.
+# Separate metrics port stays open to any source; ext-proc stays gateway-only.
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:

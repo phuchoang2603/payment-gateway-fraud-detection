@@ -2,7 +2,7 @@
 
 - [x] 0.1 Get approval for the platform set in design.md decision 13 (P0–P5; P6 is for phase 2).
 - [x] 0.2 Implement P0: restrict `aws-gpu-training` to `g6.xlarge` in `apps/components/karpenter-nodes/environments/prod/values.yaml`, and update the two operations pages that list the types. Verify with read-only `kubectl get nodepool aws-gpu-training` after the prod platform sync (prod sync on user confirmation).
-- [x] 0.3 Implement P1–P5 and sync to dev. Verify read-only that:
+- [x] 0.3 Implement P1–P5 and sync to dev; P7 (vmagent in the mesh) follows. Verify read-only that:
   - the `kserve-config-llm-*` presets exist in `ml`;
   - GatewayClass `agentgateway` is Accepted;
   - kagent 0.10.4 and its UI, agentregistry and Substrate 0.0.9 pods are Ready;
@@ -32,7 +32,7 @@
 
   Verify with `helm template` and a server-side dry run against dev once P1 is live.
 - [x] 2.3 Add the embedding `LLMInferenceService` `qwen3-embedding`: pooling runner, memory fraction 0.12, max length 8192, the shared claim, no scheduler. Verify with a server-side dry run on dev.
-- [x] 2.4 Add VMPodScrape configuration for the endpoint picker and agentgateway (vLLM is not scraped in phase 1; design.md decision 3). Verify with `helm template`.
+- [x] 2.4 Add VMPodScrape configuration for both vLLM servers, the endpoint picker and agentgateway. vLLM scraping needs vmagent enrolled in the mesh (P7). Verify with `helm template`.
 
 ## 3. Agent gateway
 

@@ -71,6 +71,9 @@ gateway:
 
 secretStore: gateway-doppler
 
+# The platform's metrics agent, enrolled in the ambient mesh so it can be admitted by identity.
+metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
+
 agents:
   serviceAccount: llm-agents
   modelConfig: default-model-config

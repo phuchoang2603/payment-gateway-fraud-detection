@@ -22,3 +22,18 @@ spec:
   podMetricsEndpoints:
     - port: metrics
       path: /metrics
+{{- range $model := list .Values.models.chat .Values.models.embedding }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: {{ $model.name }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $model.name }}
+      app.kubernetes.io/component: llminferenceservice-workload
+  podMetricsEndpoints:
+    - portNumber: 8000
+      path: /metrics
+{{- end }}
