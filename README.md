@@ -1,37 +1,77 @@
 # Payment Gateway and Real-Time Fraud Detection
 
-This project builds an ecommerce payment gateway with fraud decisioning. The planned gateway owns hosted checkout, payment execution and risk decisions; the marketplace keeps ownership of customers, sellers, orders and inventory. Initial processing uses synthetic payment-method tokens and a processor simulator.
+An ecommerce payment gateway with real-time fraud decisioning. A refurbished-electronics marketplace sends checkout snapshots; the gateway owns hosted checkout, payment attempts, risk decisions, simulated processing and signed outcome webhooks, using synthetic cards only. Its payment events, together with a reproducible synthetic history, feed a lakehouse, a feature store and a fraud model that predicts, at decision time, whether an attempt is fraudulent. The domain, data problems and AI problem are in the [proposal](docs/overview/proposal.md).
 
-The repository implements six Go services, including the independent fraud decision service at `src/payment-gateway/fraud` with a stateless rules baseline. The [Go fraud and observability change](openspec/changes/go-service-observability/proposal.md) adds correlated telemetry; CI and deployed acceptance remain pending. Later, Go fraud calls Feast feature serving and KServe inference directly; Python remains in training, feature transformations and model runtimes where needed. Data/ML pipelines and production acceptance have their own milestones. Source/configuration presence does not establish a live deployment or completed coursework.
+## Table of contents
+
+- [System overview](#system-overview)
+- [Repository structure](#repository-structure)
+- [Documentation](#documentation)
+- [Getting started](#getting-started)
+
+## System overview
+
+```mermaid
+flowchart LR
+    M["Marketplace"] --> E["Edge / hosted checkout"]
+    E --> P["Payments"]
+    P --> F["Fraud"]
+    P --> X["Processor simulator"]
+    P -.->|"outbox CDC"| K[("Kafka")]
+    K -.-> N["Notifier"] -.->|"webhooks"| M
+    G["Historical generator"] --> S3[("Object storage")]
+    S3 --> B["Bronze / Silver (Spark)"]
+    K -.-> B
+    B --> L[("Iceberg lakehouse")]
+    K -.-> FL["Flink window features"] -.-> FS[("Feast")]
+    F -->|"feature lookup"| FS
+    L --> T["Training (Kubeflow)"] --> KS["KServe"]
+    F -.->|"planned"| KS
+```
+
+Everything runs on two Talos Kubernetes clusters (Proxmox dev, AWS prod), deployed by Argo CD from release branches. The full deployment view is in [architecture](docs/overview/architecture.md).
 
 ## Repository structure
 
 ```text
 .
-├── .github/workflows/      # Independent check jobs, image build workflow, wiki publication
-├── CONTRIBUTING.md         # Initial setup and wiki link
-├── contracts/              # Versioned protobuf service contracts
-├── docs/
-│   ├── architecture/      # Gateway overview, payment and data/ML flows, conventions, roadmap
-│   ├── deployment/        # GitOps, runtime configuration and observability
-│   ├── verification/      # Acceptance criteria and verification guidance
-│   ├── data-products/     # Source interfaces and data contracts
-│   └── research/          # Background, experiments and images
+├── .github/                  # CI workflows, image build paths
+├── contracts/
+│   ├── payments/ fraud/ processor/ vault/   # Versioned protobuf service and event contracts
+│   ├── features/             # Fraud feature definitions and conformance examples
+│   ├── data-products/        # ODPS products and ODCS table contracts
+│   └── synthetic/            # Shared synthetic identity vectors
+├── docs/                     # Project documentation, published to the wiki
 ├── infra/
-│   ├── argocd/            # Application catalog and prod root
-│   ├── charts/            # Application Helm charts
-│   └── docker/            # Service Dockerfiles and reusable Go template
-├── openspec/              # Capability specifications and change plans
-├── src/payment-gateway/   # Go gateway services, shared module and workspace
-├── src/data-pipeline/     # Data workloads
-│   └── simulator/        # Historical data simulator
-├── devenv.nix             # Local development environment
-├── devenv.yaml            # Devenv inputs
-└── devenv.lock            # Locked environment dependencies
+│   ├── argocd/               # App-of-apps, dev and prod roots
+│   ├── charts/               # Application Helm charts
+│   └── docker/               # Dockerfiles for every image
+├── openspec/                 # Capability specifications and change plans
+├── scripts/                  # CI checks, code generation, release planning
+├── src/
+│   ├── payment-gateway/      # Go services: edge, payments, fraud, notifier, vault and processor simulators, shared module
+│   └── data-pipeline/
+│       ├── simulator/        # Historical generator and live simulator
+│       ├── streaming/        # Flink feature job
+│       ├── feast/            # Feast writer and feature server
+│       ├── features/         # Reference feature implementation
+│       └── bronze-ingestion/ # Metadata integration modules (replaced by the batch project)
+└── devenv.nix, devenv.yaml   # Development environment
 ```
 
 ## Documentation
 
-Browse the [project wiki](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki) for architecture, the implementation roadmap, deployment and verification guidance; see [CONTRIBUTING](CONTRIBUTING.md) to work in the repository.
+All documentation lives in [`docs/`](docs/Home.md) and is published to the [project wiki](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki).
 
-Current data work starts with the [90-day development source and shared feature contract](openspec/changes/archive/2026-10-26-finalize-feature-contract-and-90-day-smoke/proposal.md); the [roadmap](docs/overview/roadmap.md#current-implementation-order) defers scale generation until the pipeline is exercised.
+| Section | Pages |
+|---|---|
+| Overview | [Proposal](docs/overview/proposal.md), [architecture](docs/overview/architecture.md), [roadmap](docs/overview/roadmap.md) |
+| Payment gateway | [Architecture](docs/payment-gateway/architecture.md), [flows](docs/payment-gateway/flows.md), [conventions](docs/payment-gateway/conventions.md), [Docker images](docs/payment-gateway/docker.md) |
+| Data | [Offline generator](docs/data/offline-generator.md), [offline pipeline](docs/data/offline-pipeline.md), [online generator](docs/data/online-generator.md), [online pipeline](docs/data/online-pipeline.md), [storage](docs/data/storage.md), [orchestration and governance](docs/data/orchestration-governance.md) |
+| ML | [Feature store](docs/ml/feature-store.md), [training](docs/ml/training.md), [serving](docs/ml/serving.md), [background](docs/ml/background.md) |
+| LLM | [Agents](docs/llm/agents.md) |
+| Deployment | [CI](docs/deployment/ci.md), [CD](docs/deployment/cd.md), [infrastructure](docs/deployment/infra.md), [security](docs/deployment/security.md), [observability](docs/deployment/observability.md) |
+
+## Getting started
+
+See [CONTRIBUTING.md](CONTRIBUTING.md): install Nix and devenv, then run `devenv shell`.

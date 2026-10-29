@@ -1,16 +1,17 @@
 # Payment gateway architecture
 
-This is the **planned target** for the payment gateway and its fraud decisioning path; the [verification evidence](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md) records what the prod deployment currently proves. The implemented slice supplies Edge, Payments, notifier, vault and processor simulators, plus Go fraud decisioning; it takes synthetic payment-method tokens through hosted checkout, evaluates risk, executes simulated processor operations, and delivers durable payment outcomes.
+The gateway and its fraud decisioning path. The [verification evidence](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md) records what the prod deployment proves. It supplies Edge, Payments, notifier, vault and processor simulators, plus Go fraud decisioning; it takes synthetic payment-method tokens through hosted checkout, evaluates risk, executes simulated processor operations, and delivers durable payment outcomes.
 
 ## How the gateway is organized
 
-- [Payment flows](payment-flows.md): identity, checkout and payment-authority contracts, with the checkout and recovery sequence.
-- [Service conventions](service-conventions.md): code layout, dependency direction and per-service ownership rules.
+- [Payment flows](flows.md): identity, checkout and payment-authority contracts, with the checkout and recovery sequence.
+- [Service conventions](conventions.md): code layout, dependency direction and per-service ownership rules.
+- [Docker images](docker.md): image builds for every service.
 - [Platform architecture](../overview/architecture.md): deployable units, ownership boundaries and the full deployment diagram.
 
 ## Gateway design
 
-The minimum gateway implements the following foundation. Production verification and remaining acceptance work are recorded in [GitOps evidence](../deployment/gitops.md#gateway-verification).
+The gateway implements the following foundation. Production verification is recorded in [CD](../deployment/cd.md#gateway-verification).
 
 | Component                     | Design                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -44,15 +45,12 @@ Delivery proceeds from the gRPC operation simulator to a **named synthetic ISO p
 
 The first working slice is hosted checkout → rules-based fraud decision → simulated capture → durable financial outcome → signed webhook delivery → marketplace integration. Demonstrate duplicates, timeouts and recovery before layering in learned risk models. The fraud contract leaves feature retrieval and model inference independently deployable as ML capabilities arrive.
 
-The API-driven first slice includes the isolated vault simulator and Redis result cache. Then accept the mini data baseline, extend it into feature publication/training/serving, and add authorization/capture and refunds. Database sharding follows measured load and migration evidence. Security, infrastructure reproducibility, tests, telemetry and CI/CD begin with the first service and expand with each workload.
+Later gateway work adds authorization/capture and refunds; database sharding follows measured load. Feature serving and model inference arrive through the [ML serving](../ml/serving.md) path.
 
-## Planning and verification
-
-- [Requirements](../overview/requirements.md): functional and non-functional requirements by delivery stage.
-- [Implementation roadmap](../overview/roadmap.md): build order, acceptance stages and deferred decisions.
+Requirements are in the [proposal](../overview/proposal.md#functional-requirements); status is in the [roadmap](../overview/roadmap.md).
 
 ## Feature-contract boundary
 
-The current attempt event carries the immutable checkout context in payload schema 3. See [payment flows](payment-flows.md) and the [shared feature definitions](../../contracts/features/fraud-snapshot-v1.yaml). Rules-only Fraud persists assessment claims and immutable evidence in its own database. Submission counters run in parallel with shadow history retrieval; observation failures preserve valid rules outcomes. Production Feast retrieval is enabled in shadow mode; bounded live verification observed cold timeouts and stale warm snapshots. Broader retrieval acceptance and KServe integration remain pending.
+The attempt event carries the immutable checkout context in event schema 3. See [payment flows](flows.md) and the [feature store](../ml/feature-store.md). Rules-only Fraud persists assessment claims and immutable evidence in its own database. Submission counters run in parallel with shadow history retrieval; observation failures preserve valid rules outcomes. Production Feast retrieval is enabled in shadow mode; bounded live verification observed cold timeouts and stale warm snapshots. Broader retrieval acceptance and KServe integration remain pending.
 
-Authorization counts use Redis millisecond time and `(r-window,r]`; retries retain their original registration. Process changes start a conservative 60 s coverage warmup. Runtime variables and initial observation thresholds are in [GitOps configuration](../deployment/gitops.md#runtime-configuration). The Flink controller is installed through `talos-proxmox`; the feature chart owns epoch-scoped paths below `runs/payment-gateway/flink/` in the environment platform bucket and object credentials from gateway Doppler. Bounded live verification restored populated checkpoint 57 and completed a new checkpoint; cold worker startup delayed recovery by about six minutes. Historical replay and broader outage/load acceptance remain pending.
+Authorization counts use Redis millisecond time and `(r-window,r]`; retries retain their original registration. Process changes start a conservative 60 s coverage warmup. Runtime variables and initial observation thresholds are in [CD runtime configuration](../deployment/cd.md#runtime-configuration). The Flink controller is installed through `talos-proxmox`; the feature chart owns epoch-scoped paths below `runs/payment-gateway/flink/` in the environment platform bucket and object credentials from gateway Doppler. Bounded live verification restored populated checkpoint 57 and completed a new checkpoint; cold worker startup delayed recovery by about six minutes. Historical replay and broader outage/load acceptance remain pending.

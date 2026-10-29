@@ -1,6 +1,27 @@
-# Historical data generator
+# Offline generator
 
-The historical generator writes synthetic payment histories and delayed fraud labels as immutable, per-day Parquet datasets. The same code runs as the `generate-historical` Argo WorkflowTemplate in the cluster and locally for development.
+The historical generator writes synthetic payment histories and delayed fraud labels as immutable, per-day Parquet datasets in object storage, standing in for an export from another department that the Bronze pipeline pulls in. The same code runs as the `generate-historical` Argo WorkflowTemplate in the cluster and locally for development. Code: [`src/data-pipeline/simulator/simulator`](../../src/data-pipeline/simulator/simulator) (`world.py`, `lifecycle.py`, `historical.py`, `store.py`).
+
+## Data problems
+
+| Problem | How it is generated | Configuration |
+|---|---|---|
+| Skew | Half of all ordinary purchases go to one hot merchant; the rest follow Zipf merchant and category popularity and each customer's familiar merchants | `world.behavior.hot_merchant_share`, `merchant_zipf_exponent`, `category_zipf_exponent` |
+| Schema evolution | Events before the change date are written as `schema_version` 2 into `.v2` files that physically lack the fields the contract declares `sinceSchemaVersion: 3`; later events go to `.v3` files with the full shape | `schema_changes`, payment-events contract |
+| Duplicates | A configured share of events is republished with the same `event_id` and content but a `recorded_at` 1–300 seconds later | `duplicate_rate` |
+| High cardinality | Millions of customers, payment methods, devices and addresses | `world.counts` |
+| Delayed labels | Simulation truth is available at the end of an attempt; chargebacks for successful fraud arrive 7–21 days later, reported with a configured probability | `world.label_delays` |
+
+The contracts are the published interface: [payment events](products/historical-payments/payment-events.md) and [fraud labels](products/historical-payments/fraud-labels.md).
+
+## Published datasets
+
+| Dataset | Location | Run | Result |
+|---|---|---|---|
+| v18 (dev) | `s3://platform-dev/datasets/payment-gateway/historical/v18` | `generate-historical-v18-77fzr`, 1 shard, 11m50s | 823,963 events, 161,007 labels, 181 files, 112.4 MB; 1.996% duplicates; top merchant 56.3% of purchases, top 10 merchants 71.1%; 414,059 v2 and 409,904 v3 rows |
+| v19 (prod, full scale) | `s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19` | `generate-historical-v19-nvp7l`, 12 spot shards, 49 minutes | 983,727,083 events, 192,204,996 labels, 2,924 files over 365 days, 133.5 GB; sampled parts show about 2.0% duplicates and a 56% top-merchant share |
+
+Both were checked by reading the manifest and Parquet files back from storage: no empty parts, and every `.v2` file lacks `assessment_id` while `.v3` files have it.
 
 ## Configuration
 
@@ -32,7 +53,7 @@ Run settings come from the environment:
 
 - `GENERATOR_MODE`: `generate` (all days in one process), `shard` (one shard of the days) or `publish` (the manifest, once every day has a marker)
 - `SHARD_INDEX`, `SHARD_COUNT`: the shard, used in `shard` mode
-- `GENERATOR_WORKERS`: parallel processes in one pod; the chart sets it to the CPU request
+- `GENERATOR_WORKERS`: parallel processes in one pod; the chart sets it from `generator.workers`
 - `GENERATOR_CONTRACTS`: the historical-payments contract directory (defaults to `/app/contracts/historical-payments` in the image)
 - `SIMULATOR_CONFIG`: the YAML configuration
 
@@ -45,7 +66,7 @@ SIMULATOR_CONFIG=/path/to/copied.yaml GENERATOR_CONTRACTS=../../../contracts/dat
 
 ## Running
 
-In the cluster, the environment selects its configuration, shard count and CPU through the data-pipelines chart (`generator.config`, `generator.shards`, `generator.resources`). Each shard pod generates the purchase-start days whose index modulo the shard count matches its shard, and a final publish pod writes the manifest. Submit a run with:
+In the cluster, the environment selects its configuration, shard count, workers and resources through the data-pipelines chart (`generator.config`, `generator.shards`, `generator.workers`, `generator.resources`). Prod runs one shard per spot node in the `aws-cpu-burst` pool. Each shard pod generates the purchase-start days whose index modulo the shard count matches its shard, and a final publish pod writes the manifest. Submit a run with:
 
 ```bash
 argo submit -n data --from workflowtemplate/generate-historical

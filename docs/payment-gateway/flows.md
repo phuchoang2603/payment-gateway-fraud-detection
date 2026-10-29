@@ -1,6 +1,6 @@
 # Payment flows
 
-Identity, checkout and payment-authority contracts for the planned gateway, with the checkout and recovery sequence. Deployable units and the deployment view are in the [platform architecture](../overview/architecture.md); data and training flows are in the [data pipeline architecture](../data-ml/data-pipeline.md).
+Identity, checkout and payment-authority contracts, with the checkout and recovery sequence. Deployable units and the deployment view are in the [platform architecture](../overview/architecture.md); the event data these flows produce is described in the [offline generator](../data/offline-generator.md) and [online pipeline](../data/online-pipeline.md).
 
 ## Identity and checkout contract
 
@@ -38,7 +38,7 @@ The [bank adapter](architecture.md#bank-adapter-and-iso-8583) translates gateway
 
 Financial postings are distinct from domain workflow events and integration messages. The Payments-owned journal records balanced confirmed effects per currency in integer minor units; authorization holds differ from captured funds. Source event identity prevents duplicate postings. Refunds cannot cumulatively exceed captured funds, and corrections use compensating postings/events rather than edited history. The transactional/projection boundary belongs to journal work.
 
-Current payment payload schema 3 retains separate lifecycle facts. Each `AttemptStarted` carries an immutable `context` (merchant, customer and checkout snapshot) alongside signals, matching both Payments state and its Fraud request. Consumers can build attempt features without joining `PaymentCreated`; assessed-history features still wait for the committed risk decision. Payments commits the start/idempotency claim before calling Fraud and records its result before processor effects. Kafka/Flink are outside that synchronous path.
+Event schema version 3 retains separate lifecycle facts. Each `AttemptStarted` carries an immutable `context` (merchant, customer and checkout snapshot) alongside signals, matching both Payments state and its Fraud request. Consumers can build attempt features without joining `PaymentCreated`; assessed-history features still wait for the committed risk decision. Payments commits the start/idempotency claim before calling Fraud and records its result before processor effects. Kafka/Flink are outside that synchronous path.
 
 Event schemas and representative Go/Python serialization fixtures live in [`contracts/payments/v1`](../../contracts/payments/v1); compact table-driven domain tests check lifecycle transitions and rejection rules. Refunds and the financial journal remain later work.
 

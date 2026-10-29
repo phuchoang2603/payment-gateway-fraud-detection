@@ -1,35 +1,31 @@
 # Payment Gateway and Real-Time Fraud Detection
 
-Gateway architecture, deployment configuration and implementation plans. Edit these pages in the repository's `docs/` folder; changes publish to the wiki from `main`. Contributor instructions live in the repository's [CONTRIBUTING.md](https://github.com/phuchoang2603/payment-gateway-fraud-detection/blob/main/CONTRIBUTING.md).
+An ecommerce payment gateway with real-time fraud decisioning, and the data, ML and agent platform built on its events. Edit these pages in the repository's `docs/` folder; changes publish to the wiki from `main`. Contributor setup is in [CONTRIBUTING.md](https://github.com/phuchoang2603/payment-gateway-fraud-detection/blob/main/CONTRIBUTING.md).
 
 ## Overview
 
-- [Platform architecture](overview/architecture.md)
-- [Requirements](overview/requirements.md)
-- [Implementation roadmap](overview/roadmap.md)
+- [Proposal](overview/proposal.md): domain, entities and events, data problems, AI problem, requirements
+- [Architecture](overview/architecture.md): deployable units and deployment view
+- [Roadmap](overview/roadmap.md): status by rubric area
 
 ## Payment gateway
 
-- [Gateway design](payment-gateway/architecture.md)
-- [Payment flows](payment-gateway/payment-flows.md)
-- [Service conventions](payment-gateway/service-conventions.md)
+- [Architecture](payment-gateway/architecture.md), [flows](payment-gateway/flows.md), [conventions](payment-gateway/conventions.md), [Docker images](payment-gateway/docker.md)
 
-## Data and ML
+## Data
 
-- [Data pipeline architecture](data-ml/data-pipeline.md)
-- [ML pipeline architecture](data-ml/ml-pipeline.md)
-- [Data products](data-ml/data-products.md)
+- Offline: [generator](data/offline-generator.md), [pipeline](data/offline-pipeline.md)
+- Online: [generator](data/online-generator.md), [pipeline](data/online-pipeline.md)
+- [Storage](data/storage.md), [orchestration and governance](data/orchestration-governance.md)
 
-## RAG
+## ML
 
-- [Fraud investigation architecture](rag/fraud-investigation.md)
+- [Feature store](ml/feature-store.md), [training](ml/training.md), [serving](ml/serving.md), [background](ml/background.md)
+
+## LLM
+
+- [Agents](llm/agents.md)
 
 ## Deployment
 
-- [GitOps and runtime configuration](deployment/gitops.md)
-- [Shared observability](deployment/shared-observability.md)
-
-## Research
-
-- [Background](research/ccfd-background.md)
-- [Historical experiments](research/ccfd-experiements-report.md)
+- [CI](deployment/ci.md), [CD](deployment/cd.md), [infrastructure](deployment/infra.md), [security](deployment/security.md), [observability](deployment/observability.md)

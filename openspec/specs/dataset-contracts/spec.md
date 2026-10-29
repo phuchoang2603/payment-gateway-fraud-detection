@@ -42,7 +42,7 @@ The historical-source contracts SHALL declare executable SQL rules. Identical re
 
 ### Requirement: Native lint and generated references
 
-CI SHALL discover every product folder, lint each descriptor and contract with pinned Data Product CLI and Data Contract CLI, and reject drift between each contract and its generated Markdown reference under `docs/data-ml/data-products/<product>/`. CI lint SHALL NOT claim to validate produced datasets.
+CI SHALL discover every product folder, lint each descriptor and contract with pinned Data Product CLI and Data Contract CLI, and reject drift between each contract and its generated Markdown reference under `docs/data/products/<product>/`. CI lint SHALL NOT claim to validate produced datasets.
 
 #### Scenario: Invalid contract
 

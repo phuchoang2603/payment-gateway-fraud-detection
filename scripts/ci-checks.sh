@@ -36,7 +36,7 @@ check_data_product() {
   local product="$1" name contract reference
   name="$(basename "$product")"
   for contract in "$product"/*.odcs.yaml; do
-    reference="docs/data-ml/data-products/$name/$(basename "$contract" .odcs.yaml).md"
+    reference="docs/data/products/$name/$(basename "$contract" .odcs.yaml).md"
     uvx --from "datacontract-cli==$DATACONTRACT_CLI" datacontract lint "$contract" --all-errors
     uvx --from "datacontract-cli==$DATACONTRACT_CLI" datacontract export markdown "$contract" --output "$TMPDIR_CHECKS/reference.md"
     diff -u "$reference" "$TMPDIR_CHECKS/reference.md"

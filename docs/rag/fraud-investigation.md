@@ -1,7 +1,0 @@
-# Fraud investigation architecture
-
-Plan one internal, read-only fraud investigation agent after authoritative payment histories, recorded fraud decisions and versioned features are available. For a scoped attempt, it assembles the recorded timeline and decision-time evidence, then retrieves versioned investigation procedures to produce a cited analyst summary. Later labels may inform a retrospective investigation but must not be presented as information available to the original decision. The agent cannot change risk decisions, retry payments, issue refunds or promote models; private customer and merchant data remains access-controlled. Reuse the existing service APIs and ClickStack telemetry rather than adding a second payment authority or observability stack.
-
-This is a deliberate single-agent scope, not a claim to fulfill rubric rows calling for two agents, a coordinator and an A2A gateway. Revisit those rows only if the coursework requires literal coverage or a distinct second use case emerges; document the gap rather than counting tools as agents. Design its tools, retrieval corpus, authorization and evaluations in a separate OpenSpec change before implementation.
-
-It reads from the authoritative stores described in the [platform architecture](../overview/architecture.md) and the committed events described in the [data pipeline architecture](../data-ml/data-pipeline.md); see the [roadmap](../overview/roadmap.md#mini-to-final-handoff) for sequencing relative to the mini-to-final handoff.

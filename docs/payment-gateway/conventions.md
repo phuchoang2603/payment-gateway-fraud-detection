@@ -4,7 +4,7 @@ Each service is an independently buildable and deployable unit that owns its run
 
 ## Layout
 
-The layout below includes the independent Go fraud service. The [active change](../../openspec/changes/go-service-observability/proposal.md) tracks common telemetry acceptance; Feast/KServe deployment follows separately.
+The layout below includes the independent Go fraud service. Common telemetry was delivered by the [Go service observability change](../../openspec/changes/archive/2026-10-24-go-service-observability/proposal.md); Feast and KServe integration follow separately.
 
 ```text
 contracts/
