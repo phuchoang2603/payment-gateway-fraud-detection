@@ -122,7 +122,7 @@ def skewed_merchant_join(spark, attempts: DataFrame, phases: dict, aqe_threshold
         rows, checksum, skew = run_variant(spark, attempts, name, build, settings, phases)
         if name == "aqe_skew_join" and not (skew["skew_join"] or skew["skewed_shuffle_read"]):
             raise AssertionError(
-                "aqe_skew_join: the final adaptive plan has no skew-split join or skewed shuffle read"
+                "aqe_skew_join: the final adaptive plan has no skew-split join or skewed shuffle read\n" + skew["plan"]
             )
         guard = (rows, checksum)
         if baseline is None:

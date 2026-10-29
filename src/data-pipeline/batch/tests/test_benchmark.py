@@ -34,19 +34,26 @@ def guard(frame):
     return rows, checksum
 
 
-def test_every_skewed_join_variant_returns_the_baseline_output(spark, attempts):
-    results = benchmark.skewed_merchant_join(spark, attempts, {}, aqe_thresholds=LOW_SKEW_THRESHOLDS)
+@pytest.fixture
+def skewed_attempts(spark):
+    hot = [("m-1", f"c-{n % 9}", "pm-1", f"d-{n % 4}", f"hot-{n}", 100 + n, at(n % 60)) for n in range(2000)]
+    cold = [("m-2", "c-1", "pm-2", "d-9", "cold-1", 500, at(1)), ("m-3", "c-2", "pm-3", None, "cold-2", 700, at(2))]
+    return spark.createDataFrame(hot + cold, COLUMNS)
+
+
+def test_every_skewed_join_variant_returns_the_baseline_output(spark, skewed_attempts):
+    results = benchmark.skewed_merchant_join(spark, skewed_attempts, {}, aqe_thresholds=LOW_SKEW_THRESHOLDS)
 
     assert set(results) == set(benchmark.JOIN_VARIANTS)
     assert len({(r["output_rows"], r["checksum"]) for r in results.values()}) == 1
 
 
-def test_aqe_skew_join_applies_on_a_skewed_fixture(spark, attempts):
+def test_aqe_skew_join_applies_on_a_skewed_fixture(spark, skewed_attempts):
     settings = {**benchmark.JOIN_VARIANTS["aqe_skew_join"][1], **LOW_SKEW_THRESHOLDS}
 
-    _, _, skew = benchmark.run_variant(spark, attempts, "aqe_skew_join", benchmark.join_baseline, settings, {})
+    _, _, skew = benchmark.run_variant(spark, skewed_attempts, "aqe_skew_join", benchmark.join_baseline, settings, {})
 
-    assert skew["skew_join"] or skew["skewed_shuffle_read"]
+    assert skew["skew_join"] or skew["skewed_shuffle_read"], skew["plan"]
 
 
 def test_aqe_variant_that_does_not_skew_fails_the_run(spark, attempts):
