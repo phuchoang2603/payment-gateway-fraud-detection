@@ -18,15 +18,12 @@ SMALL_APPENDS = 40
 ZORDER = "zorder(customer_id,payment_method_fingerprint)"
 
 
-def batch_scans(plan):
+def scan_relations(plan):
+    """Data source scans in the optimized logical plan; their Scan carries the pushed-down filters."""
     found, stack = [], [plan]
     while stack:
         node = stack.pop()
-        kind = node.getClass().getSimpleName()
-        if kind == "AdaptiveSparkPlanExec":
-            stack.append(node.finalPhysicalPlan())
-            continue
-        if kind == "BatchScanExec":
+        if node.getClass().getSimpleName() == "DataSourceV2ScanRelation":
             found.append(node)
             continue
         children = node.children().iterator()
@@ -36,13 +33,13 @@ def batch_scans(plan):
 
 
 def scanned(df: DataFrame):
-    """Files and bytes the Iceberg scans of df's last execution planned to read."""
+    """Files and bytes the Iceberg scans of df planned to read, after filter pushdown."""
     files = size = 0
-    scans = batch_scans(df._jdf.queryExecution().executedPlan())
-    if not scans:
-        raise RuntimeError("no Iceberg scan found in the executed plan")
-    for scan in scans:
-        partitions = scan.scan().toBatch().planInputPartitions()
+    relations = scan_relations(df._jdf.queryExecution().optimizedPlan())
+    if not relations:
+        raise RuntimeError("no Iceberg scan found in the optimized plan")
+    for relation in relations:
+        partitions = relation.scan().toBatch().planInputPartitions()
         for index in range(len(partitions)):
             tasks = partitions[index].taskGroup().tasks().iterator()
             while tasks.hasNext():
