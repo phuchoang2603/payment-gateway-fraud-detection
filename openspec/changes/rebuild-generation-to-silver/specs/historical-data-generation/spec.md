@@ -184,15 +184,15 @@ Purchase-start days SHALL end on the last full day before the dataset is generat
 **Migration**: See "Generator execution".
 
 ### Requirement: Bounded generation resources
-**Reason**: Scratch and in-flight budgeting are replaced by bounded parts.
+**Reason**: Scratch and in-flight budgeting are covered by bounded parts.
 **Migration**: See "Per-day immutable dataset layout".
 
 ### Requirement: Verified resume
-**Reason**: Run-state checkpoints, writer ownership and receipt adoption are replaced by per-day atomic files and a stored configuration hash.
+**Reason**: Run-state checkpoints, writer ownership and receipt adoption are covered by per-day atomic files and a stored configuration hash.
 **Migration**: Rerun the same command; completed days are skipped.
 
 ### Requirement: Bounded task fragments
-**Reason**: Task fragments are replaced by per-day files.
+**Reason**: Task fragments are covered by per-day files.
 **Migration**: See "Per-day immutable dataset layout".
 
 ### Requirement: Completed-source immutability
@@ -208,11 +208,11 @@ Purchase-start days SHALL end on the last full day before the dataset is generat
 **Migration**: None.
 
 ### Requirement: Scale calibration
-**Reason**: Pilot projections are replaced by measuring the dev run before the full-scale run.
+**Reason**: Pilot projections are covered by measuring the dev run before the full-scale run.
 **Migration**: See "Full-scale source generation".
 
 ### Requirement: Offline volume accounting
-**Reason**: Replaced by the configured minimum source size in the manifest-publication rule.
+**Reason**: Covered by the configured minimum source size in the manifest-publication rule.
 **Migration**: See "Full-scale source generation".
 
 ### Requirement: Generation-only simulator boundary
@@ -220,7 +220,7 @@ Purchase-start days SHALL end on the last full day before the dataset is generat
 **Migration**: None; old datasets are untouched.
 
 ### Requirement: Reproducible training source and report
-**Reason**: Replaced by the v18 development configuration and the diagnostics job; the feature-definition identity is no longer part of source provenance.
+**Reason**: Covered by the v18 development configuration and the diagnostics job; the feature-definition identity is no longer part of source provenance.
 **Migration**: See "Ninety-day development population" and "Generator diagnostics".
 
 ### Requirement: Exercise before scale generation

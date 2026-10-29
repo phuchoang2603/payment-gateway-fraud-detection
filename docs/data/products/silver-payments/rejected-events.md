@@ -19,7 +19,7 @@ Synthetic data only. A payment appears here completely or not at all.
 ## Servers
 | Name | Type | Attributes |
 | ---- | ---- | ---------- |
-| starrocks | mysql | *Iceberg table rejected_events in schema silver, read through the StarRocks fraud_lakehouse catalog. The rule placeholder {object} is replaced by the fully qualified table.*<br />• **environment:** dev<br />• **database:** silver<br />• **host:** kube-starrocks-fe-service.starrocks.svc.cluster.local<br />• **port:** 9030 |
+| starrocks | mysql | *Iceberg table rejected_events in schema silver, read through the StarRocks fraud_lakehouse catalog. The rule placeholder {object} stands for the fully qualified table.*<br />• **environment:** dev<br />• **database:** silver<br />• **host:** kube-starrocks-fe-service.starrocks.svc.cluster.local<br />• **port:** 9030 |
 
 ## Schema
 ### rejected_events

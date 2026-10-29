@@ -95,8 +95,8 @@ The generator digest is a SHA-256 over the generator source files, the calibrati
 
 Bronze keeps every delivery, including duplicates, in two tables shared by both sources: `bronze.payment_events` and `bronze.fraud_labels`.
 
-- **Historical mode** reads exactly the files listed in a dataset's `manifest.json`, verifies their SHA-256 and row counts, reads the `.v2` and `.v3` files together with `mergeSchema` (absent version-2 fields become null), casts losslessly to the Bronze contract and replaces only that dataset version's rows. It checks that Bronze row totals equal the manifest.
-- **Kafka mode** reads `payments.events.v1` and `fraud.labels.v1` directly, decodes protobuf with the payments descriptor set, and appends. Each run starts from `max(_kafka_offset) + 1` per partition, read from Bronze itself, so progress and rows commit together and survive compaction. Records that fail protobuf decoding go to `bronze.rejected_records` instead of blocking later runs. A record that decodes but cannot be cast to the Bronze contract is not yet quarantined: it fails the run.
+- **Historical mode** lists the dataset root once (metadata only) and fails before reading if its parquet objects differ from the manifest's paths or sizes. It then reads the `.v2` and `.v3` files once, together, with `mergeSchema` (absent version-2 fields become null), casts losslessly to the Bronze contract and replaces only that dataset version's rows. After writing it groups the rows by source file and fails, naming the file, when a count differs from the manifest. The generator's SHA-256 values are not recomputed.
+- **Kafka mode** reads `payments.events.v1` and `fraud.labels.v1` directly, decodes protobuf with the payments descriptor set, and appends. Each run starts from `max(_kafka_offset) + 1` per partition, read from Bronze itself, so progress and rows commit together and survive compaction. Records that fail protobuf decoding or a required-field check go to `bronze.rejected_records` instead of blocking later runs. The error names the first failing check, and an empty string counts as missing. A record that decodes but cannot be cast to the Bronze schema fails the run.
 - **Provenance columns:** `_source`, `_dataset_version`, `_source_file`, `_kafka_topic`, `_kafka_partition`, `_kafka_offset`, `_kafka_timestamp`, `_ingested_at`, `_run_id`.
 
 ### DP2: Bronze → Silver
@@ -105,13 +105,13 @@ A full recompute from Bronze snapshots fixed at the start of the run writes thre
 
 - **`silver.payment_events`:** one row per `event_id`. Republished copies (same content, later `recorded_at`) collapse to the earliest. Copies that differ in any other business field are conflicts: the whole payment goes to `silver.rejected_events`.
 - **`silver.attempts`:** one row per attempt with `customer_id`, `merchant_id`, `payment_method_fingerprint`, `amount_minor`, server start time, client `attempted_at`, risk decision, outcome and payment status. Lifecycle violations fail the checks.
-- **`silver.labels`:** one row per distinct label observation, classified `linked`, `pending` or `violation` against the attempt's start and success. Violations fail the checks.
+- **`silver.labels`:** one row per distinct label observation, classified `linked`, `pending`, `orphan` or `violation` against the payment, the attempt's start and success. A historical label whose payment has no events is an `orphan`; a live label whose payment has not arrived is `pending`. Violations and orphans fail the checks.
 
-A run report records the Bronze snapshot IDs, input rows, duplicates, conflicts, rejected rows and label linkage counts.
+A run report records the Bronze snapshot IDs, input rows, duplicates, conflicts, rejected rows, label linkage counts, the Silver snapshot IDs with their added records, and the tasks, stages and wall time of each phase. The report is written last, after every table write.
 
 ### Dev runs
 
-Pending: `dp1-bronze` on the v18 historical source, then `dp2-silver` on its snapshots, have not run on dev yet. Run IDs, Bronze and Silver row counts, duplicates collapsed, conflicts and rejected rows, label linkage counts and StarRocks and OpenMetadata check outcomes are recorded here after those runs.
+Pending: `dp1-bronze` on the v18 historical source, then `dp2-silver` on its snapshots, have not run on dev yet. Run IDs, Bronze and Silver row counts, duplicates collapsed, conflicts and rejected rows, label linkage counts, task counts and stage times per phase, and StarRocks and OpenMetadata check outcomes are recorded here after those runs. The task counts confirm or lower the prod executor count.
 
 ### DP3: offline features
 

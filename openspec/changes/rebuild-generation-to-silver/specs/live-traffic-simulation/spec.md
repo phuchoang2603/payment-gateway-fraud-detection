@@ -7,7 +7,7 @@ The platform SHALL use one current environment, codebase, common runtime configu
 #### Scenario: Historical and live inputs
 
 - **WHEN** DP1 ingests a historical dataset and Kafka records
-- **THEN** both land in the same Bronze tables with identifiable origins, without a landing archive or source-specific deployments
+- **THEN** both land in the same Bronze tables with identifiable origins, without an archive stage or source-specific deployments
 
 ## REMOVED Requirements
 
@@ -26,3 +26,7 @@ The platform SHALL use one current environment, codebase, common runtime configu
 ### Requirement: Schema cutover without shared-data deletion
 **Reason**: Landing epochs are removed; Kafka-mode DP1 starts from configured offsets and then from committed offsets.
 **Migration**: Configure the first Kafka-mode run's starting offsets to exclude incompatible retained records.
+
+### Requirement: Live transport and recovery evidence
+**Reason**: The landing archiver is removed, so its restart and replay evidence no longer applies.
+**Migration**: Kafka-mode replay and offset continuity are covered by `historical-bronze-ingestion` "Kafka source ingestion".

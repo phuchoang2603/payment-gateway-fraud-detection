@@ -16,6 +16,15 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 
 Each pipeline stage retries only on execution errors, never on failed data checks, and each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow. Pending: screenshots of each pipeline graph and run, taken after the first dev run.
 
+### Spark sizing and placement
+
+Prod Spark applications run on the `aws-cpu-burst` spot pool that the generator uses, through `spark.nodeSelector` on driver and executor pods. The pool has 12 nodes of 4 vCPU and 16 GiB (about 3.5 vCPU and 14 GiB allocatable) and a 40 GiB root volume. Spark steps retry like the generator (limit 10, `Always`), and executors decommission gracefully, so a spot loss costs one retry; every stage is idempotent.
+
+- **Large jobs (prod Bronze historical, Silver, analytics, maintenance):** 11 executors of 3 cores, 9 GiB and 2 GiB overhead, one per node, with the 12th node for a 1-core driver. Task counts follow the source: v19 has 2,924 files and 133.5 GB, about 1,000 splits at 128 MB, so 2,048 shuffle partitions give about 60 tasks per core before AQE coalesces them (advisory 128 MB). Historical read parallelism is set by the file splits, not by the executor count. Executors request 24 GiB of ephemeral storage, not 40 GiB, because the root volume must also hold the Spark image and shuffle spill.
+- **Kafka mode (dev and prod):** one executor with 3 cores and 3 shuffle partitions. The Spark Kafka source makes one task per topic partition, and `payments.events.v1` and `fraud.labels.v1` each have 3 partitions, so `bronze.kafka.partitions` must follow the Kafka chart's topic partitions.
+- **Dev:** one executor per job, 2 cores and 16 shuffle partitions, sized to fit one dev node; v18 is 112 MB.
+- **Shared pool:** the generator and the Spark jobs need the same 12 nodes, so they should not run at the same time. The first v19 run records each phase's tasks and time in its report, which confirms or lowers the large executor count.
+
 ## Data products and contracts
 
 Each data product lives in one folder under [`contracts/data-products/`](../../contracts/data-products): an [ODPS](https://github.com/bitol-io/open-data-product-standard) descriptor `product.odps.yaml` and one [ODCS](https://github.com/bitol-io/open-data-contract-standard) contract per output port. Contracts are the authoritative schema, field meanings and quality rules; product, contract and dataset versions are independent.

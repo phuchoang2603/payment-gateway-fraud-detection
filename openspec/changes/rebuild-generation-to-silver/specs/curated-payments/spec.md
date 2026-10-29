@@ -54,7 +54,7 @@ DP2 SHALL read both Bronze tables at snapshot IDs fixed when the run starts and 
 - **THEN** the attempt row has outcome `pending`, payment status `open` and is lifecycle-valid
 
 ### Requirement: Label observations and linkage
-`silver.labels` SHALL contain one row per distinct label observation; identical copies SHALL collapse, and distinct reports for the same attempt SHALL remain separate. Each label SHALL be classified as `linked` when its attempt exists (and, for a chargeback, succeeded), `pending` when the attempt or its outcome has not arrived and the payment is not terminal, or `violation` otherwise. Any `violation` SHALL fail the Silver checks. Simulation truth, chargebacks and risk decisions SHALL remain separate, and the absence of a chargeback SHALL NOT be recorded as a negative label.
+`silver.labels` SHALL contain one row per distinct label observation; identical copies SHALL collapse, and distinct reports for the same attempt SHALL remain separate. Each label SHALL be classified as `linked` when its attempt exists (and, for a chargeback, succeeded); `orphan` when it is a historical label whose payment has no events; `pending` when it is a live label whose payment or attempt has not arrived, or whose attempt has started with no outcome while the payment is open; and `violation` otherwise. Any `violation` or `orphan` SHALL fail the Silver checks. Simulation truth, chargebacks and risk decisions SHALL remain separate, and the absence of a chargeback SHALL NOT be recorded as a negative label.
 
 #### Scenario: Chargeback on a declined attempt of a finished payment
 
@@ -66,10 +66,15 @@ DP2 SHALL read both Bronze tables at snapshot IDs fixed when the run starts and 
 - **WHEN** a label references an attempt that does not exist and the payment is `succeeded` or `expired`
 - **THEN** the label is a `violation`
 
-#### Scenario: Label before its attempt arrives
+#### Scenario: Historical label whose payment has no events
 
-- **WHEN** a label references an attempt whose events are not yet in Bronze and the payment is unknown or open
-- **THEN** the label is `pending` and the run succeeds
+- **WHEN** a historical label references a payment that has no events in the complete source
+- **THEN** the label is an `orphan` and the Silver checks fail
+
+#### Scenario: Live label awaiting its payment
+
+- **WHEN** a Kafka label references a payment whose events have not arrived yet
+- **THEN** the label is `pending` and the Silver checks pass
 
 ### Requirement: Label availability
 A label SHALL NOT be available before its occurrence. A label for an attempt that has started SHALL NOT be available before that attempt's start, whether or not the payment is complete, and a chargeback SHALL NOT be available before its attempt succeeded. Violations SHALL be classified as `violation`. Scenario and oracle fields SHALL be documented as excluded from features, and consumers SHALL join labels only at or after `label_available_at`.
@@ -80,7 +85,7 @@ A label SHALL NOT be available before its occurrence. A label for an attempt tha
 - **THEN** the label is a `violation` and the Silver checks fail
 
 ### Requirement: Run report
-Each DP2 run SHALL persist a report with its Bronze snapshot IDs, input rows per table, distinct events, identical duplicates, conflicts, rejected rows by table and source, attempts by outcome, labels by linkage class and the Silver snapshot IDs written. The report SHALL be written whether the run succeeds or fails after reading input.
+Each DP2 run SHALL persist a report with its Bronze snapshot IDs, input rows per table, distinct events, identical duplicates, conflicts, rejected rows by table and source, attempts by outcome, labels by linkage class, the Silver snapshot IDs written with their added-record counts, and the tasks, stages and wall time of each phase. The report SHALL be written whether the run succeeds or fails after reading input.
 
 #### Scenario: Inspect a run
 

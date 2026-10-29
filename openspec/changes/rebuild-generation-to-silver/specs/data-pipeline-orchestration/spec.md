@@ -80,7 +80,7 @@ A DP1 submission SHALL select either a historical dataset version, by source roo
 **Migration**: See "Readable workflow graph".
 
 ### Requirement: Versioned-export batch selection
-**Reason**: Replaced by explicit pipeline inputs without accepted-version reuse.
+**Reason**: Covered by explicit pipeline inputs without accepted-version reuse.
 **Migration**: See "Pipeline inputs".
 
 ### Requirement: Publication despite upstream failure

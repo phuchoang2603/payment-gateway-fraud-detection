@@ -29,6 +29,20 @@ Python services SHALL read runtime settings from configuration files and environ
 - **WHEN** a simulator is started with `SIMULATOR_CONFIG` selecting a valid environment YAML
 - **THEN** it uses that file's output and execution settings without CLI flags, while storage credentials remain external environment secrets
 
+### Requirement: Single simulator workload
+
+Deployment SHALL provide one opt-in single-replica simulator workload running traffic, labels and optional delivery faults from one image/configuration. It SHALL use the selected environment root without duplicate source-specific topology. Delivery faults SHALL remain embedded.
+
+#### Scenario: Render live workload
+
+- **WHEN** simulation is enabled in the configured prod target
+- **THEN** exactly one simulator workload is rendered using a strategy that prevents overlapping replicas, without a separate injector workload or new public route
+
+#### Scenario: Simulation disabled
+
+- **WHEN** simulation is disabled
+- **THEN** the simulator workload is absent while existing gateway/Kafka services and completed data remain intact
+
 ## ADDED Requirements
 
 ### Requirement: Simulator credentials and image delivery
@@ -42,12 +56,12 @@ Application credentials SHALL come from the environment's gateway Doppler config
 - **AND** no bucket-name allowlist or fixed storage endpoint is required by application code
 
 ### Requirement: Shared payment topics
-The Kafka application SHALL declare the payment event and fraud label topics with configured partitions and retention, preserving the authoritative event publisher, CDC Connect worker and notifier. Protobuf payloads SHALL NOT require Avro conversion or registry framing. Topic retention SHALL be documented as the maximum interval between Kafka-mode DP1 runs. No landing archiver workload SHALL be deployed.
+The Kafka application SHALL declare the payment event and fraud label topics with configured partitions and retention, preserving the authoritative event publisher, CDC Connect worker and notifier. Protobuf payloads SHALL NOT require Avro conversion or registry framing. Topic retention SHALL be documented as the maximum interval between Kafka-mode DP1 runs. No workload that copies payment topics to object storage SHALL be deployed.
 
 #### Scenario: Render Kafka topics
 
 - **WHEN** the Kafka application is rendered
-- **THEN** the payment event and label topics are declared with their retention, and no archiver workload, S3 sink connector or registry framing is added
+- **THEN** the payment event and label topics are declared with their retention, and no copy workload, S3 sink connector or registry framing is added
 
 ## REMOVED Requirements
 
