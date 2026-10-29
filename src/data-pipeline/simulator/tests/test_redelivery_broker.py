@@ -1,4 +1,3 @@
-import os
 import threading
 import time
 from uuid import uuid4
@@ -6,15 +5,20 @@ from uuid import uuid4
 import pytest
 from confluent_kafka import Consumer, Producer
 from confluent_kafka.admin import AdminClient, NewTopic
+from testcontainers.community.kafka import KafkaContainer
 
 from simulator.contracts.payments.v1.events_pb2 import PaymentEvent
 from simulator.live import redelivery
 from simulator.live.config import LiveConfig, Redelivery
 
 
-@pytest.mark.skipif(not os.environ.get("KAFKA_TEST_BROKERS"), reason="Kafka redelivery contract runs in CI")
-def test_redelivered_copy_is_identical_on_same_partition_and_not_copied_again():
-    brokers = os.environ["KAFKA_TEST_BROKERS"]
+@pytest.fixture(scope="module")
+def brokers():
+    with KafkaContainer("confluentinc/cp-kafka:7.8.0").with_kraft() as kafka:
+        yield kafka.get_bootstrap_server()
+
+
+def test_redelivered_copy_is_identical_on_same_partition_and_not_copied_again(brokers):
     topic = f"payments-{uuid4().hex}"
     admin = AdminClient({"bootstrap.servers": brokers})
     for result in admin.create_topics([NewTopic(topic, 3, 1)]).values():
