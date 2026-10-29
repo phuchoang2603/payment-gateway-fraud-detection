@@ -100,7 +100,8 @@
       "dockerfile": "infra/docker/live-simulator.Dockerfile",
       "paths": [
         "infra/docker/live-simulator.Dockerfile",
-        "src/data-pipeline/simulator"
+        "src/data-pipeline/simulator",
+        "contracts/data-products/historical-payments"
       ]
     },
     {
