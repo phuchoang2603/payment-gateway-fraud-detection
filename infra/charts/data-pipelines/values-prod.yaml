@@ -2,6 +2,7 @@ enabled: true
 generator:
   config: historical-full.yaml
   shards: 4
+  workers: 3
   retryLimit: 10
   # Unmeasured. Sized to fit one aws-cpu-burst xlarge (about 3.5 allocatable vCPU; root disk about 37Gi).
   activeDeadlineSeconds: 86400

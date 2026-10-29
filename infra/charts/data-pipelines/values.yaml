@@ -9,6 +9,7 @@ images:
 generator:
   config: historical-dev.yaml
   shards: 1
+  workers: 2
   retryLimit: 2
   activeDeadlineSeconds: 21600
   nodeSelector: {}

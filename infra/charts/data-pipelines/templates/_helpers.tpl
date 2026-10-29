@@ -26,7 +26,7 @@ container:
     - name: GENERATOR_MODE
       value: {{ .mode | quote }}
     - name: GENERATOR_WORKERS
-      value: {{ $values.generator.resources.requests.cpu | int | toString | quote }}
+      value: {{ $values.generator.workers | toString | quote }}
     - name: SIMULATOR_CONFIG
       value: {{ printf "/app/configs/%s" $values.generator.config | quote }}
 {{- if .shard }}
