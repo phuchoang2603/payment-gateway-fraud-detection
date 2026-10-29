@@ -17,9 +17,14 @@ check_python() (
   uv run --locked ruff check .
   uv run --locked ruff format --check .
   if [[ -d tests ]]; then
-    uv run --locked pytest -q
+    uv run --locked pytest -q --durations=10
   fi
 )
+
+check_python_scripts() {
+  uvx --from ruff==0.16.6 ruff check --target-version py311 scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
+  uvx --from ruff==0.16.6 ruff format --check scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
+}
 
 check_go() (
   local reports="$report_dir/${1#src/}"
@@ -80,9 +85,15 @@ case "${1:-}" in
     done < <(find contracts/data-products -mindepth 2 -maxdepth 2 -name product.odps.yaml -print0 | sort -z)
     ;;
   python)
-    uvx --from ruff==0.16.6 ruff check --target-version py311 scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
-    uvx --from ruff==0.16.6 ruff format --check scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
-    check_projects pyproject.toml check_python
+    if [[ -n "${2:-}" ]]; then
+      check_python "$2"
+    else
+      check_python_scripts
+      check_projects pyproject.toml check_python
+    fi
+    ;;
+  python-scripts)
+    check_python_scripts
     ;;
   helm)
     while IFS= read -r -d '' manifest; do
@@ -90,7 +101,7 @@ case "${1:-}" in
     done < <(find infra -type f -name Chart.yaml -print0)
     ;;
   *)
-    printf 'Usage: %s {contracts|python|go|helm}\n' "$0" >&2
+    printf 'Usage: %s {contracts|python [project]|python-scripts|go [module]|helm}\n' "$0" >&2
     exit 2
     ;;
 esac

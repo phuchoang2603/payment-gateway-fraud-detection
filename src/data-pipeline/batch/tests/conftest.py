@@ -39,6 +39,7 @@ def brokers():
 
 @pytest.fixture(scope="session")
 def spark(tmp_path_factory, contract_inputs):
+    os.environ.setdefault("SPARK_SHUFFLE_PARTITIONS", "4")
     os.environ["SPARK_JARS_PACKAGES"] = ",".join(
         [
             "org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.12.0",

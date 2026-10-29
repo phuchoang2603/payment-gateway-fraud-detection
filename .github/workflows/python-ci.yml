@@ -13,9 +13,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.1.0
+      - name: Lint and format release scripts
+        run: bash scripts/ci-checks.sh python-scripts
+
   python:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: src/data-pipeline/batch
+            java: true
+            ivy: true
+          - project: src/data-pipeline/feast
+          - project: src/data-pipeline/openmetadata_jobs
+          - project: src/data-pipeline/simulator
+          - project: src/data-pipeline/streaming
+            java: true
+    name: Python ${{ matrix.project }}
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-python@v7.0.0
@@ -26,8 +48,14 @@ jobs:
           enable-cache: true
           cache-dependency-glob: src/**/uv.lock
       - uses: actions/setup-java@v5
+        if: matrix.java
         with:
           distribution: temurin
           java-version: "17"
+      - uses: actions/cache@v4
+        if: matrix.ivy
+        with:
+          path: ~/.ivy2.5.2
+          key: spark-ivy-${{ hashFiles('src/data-pipeline/batch/tests/conftest.py') }}
       - name: Python lint, format and tests
-        run: bash scripts/ci-checks.sh python
+        run: bash scripts/ci-checks.sh python "${{ matrix.project }}"
