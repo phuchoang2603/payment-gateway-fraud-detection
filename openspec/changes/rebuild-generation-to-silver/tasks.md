@@ -84,4 +84,4 @@
 ## 11. Lakehouse catalog
 
 - [ ] 11.1 Merge `lakehouse-integration` and the Polaris component into `infra/charts/lakehouse`: vendored Polaris 1.8.0 with `fullnameOverride: iceberg-catalog`, the CNPG store, the `iceberg-database`, `iceberg-bootstrap`, `iceberg-signing`, `iceberg-storage` and `lakehouse-admin` ExternalSecrets, the network policies, a warehouse registration PostSync job and a ClickHouse `lakehouse` DataLakeCatalog PostSync job. One app-of-apps entry in `data`, sync wave 1, enabled in dev and prod. Verify with CI helm lint and template for every values file and the app-of-apps render for both environments.
-- [ ] 11.2 Push only after the platform's Polaris is pruned from dev. Verify at the pushed head that `deploy/dev` syncs `lakehouse` after `clickhouse`, that the registration and database jobs succeed, and that `iceberg-catalog.data.svc.cluster.local:8181` answers.
+- [ ] 11.2 Push only after the platform's Polaris is pruned from dev. Verify at the pushed head that `deploy/dev` creates `lakehouse` and `clickhouse`, and that the registration and database jobs succeed after retries, and that `iceberg-catalog.data.svc.cluster.local:8181` answers.

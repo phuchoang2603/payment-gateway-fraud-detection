@@ -78,11 +78,11 @@ The Kafka application SHALL declare the payment event and fraud label topics wit
 - **THEN** the payment event and label topics are declared with their retention, and no copy workload, S3 sink connector or registry framing is added
 
 ### Requirement: Lakehouse catalog application
-The `lakehouse` application SHALL own the Polaris REST catalog in `data`, with its PostgreSQL store, signing keys, object-storage secret and network policy, the `lakehouse` warehouse registration and the ClickHouse `lakehouse` DataLakeCatalog database. It SHALL sync in wave 1, after the secret stores and before the data-pipeline application, and SHALL NOT depend on ClickHouse being synced later. Its catalog endpoint `iceberg-catalog.data.svc.cluster.local:8181`, realm `PLATFORM` and client `platform` SHALL NOT change. Its registration and database jobs SHALL be idempotent and SHALL wait or retry until their dependency answers.
+The `lakehouse` application SHALL own the Polaris REST catalog in `data`, with its PostgreSQL store, signing keys, object-storage secret and network policy, the `lakehouse` warehouse registration and the ClickHouse `lakehouse` DataLakeCatalog database. Its wave orders its creation after the secret stores and before the data-pipeline application; Argo CD SHALL NOT be relied on to wait for an earlier wave's health, so its registration and database jobs retry until Polaris and ClickHouse answer. Its catalog endpoint `iceberg-catalog.data.svc.cluster.local:8181`, realm `PLATFORM` and client `platform` SHALL NOT change. Its registration and database jobs SHALL be idempotent and SHALL wait or retry until their dependency answers.
 
 #### Scenario: Sync order
 - **WHEN** the root application reconciles dev or prod
-- **THEN** the catalog secrets and the Polaris store exist before the Polaris Deployment starts, and the registration and database jobs run after Polaris and ClickHouse are reachable
+- **THEN** the catalog secrets and the Polaris store exist before the Polaris Deployment starts, and the registration and database jobs retry until Polaris and ClickHouse are reachable
 
 #### Scenario: Catalog endpoint
 - **WHEN** a client connects to the catalog
