@@ -49,7 +49,7 @@ def test_hot_merchant_takes_its_configured_share_of_purchases():
     world = World.build(WorldConfig.model_validate(data))
     hot = world.merchant(0).id
     total = hot_purchases = 0
-    for offset in range(5):
+    for offset in range(10):
         day = world.start_date + timedelta(days=offset)
         for customer, number in world.day_purchases(day, range(data["counts"]["customers"])):
             purchase = world.purchase(world.purchase_rng(day, customer, number), day, customer)

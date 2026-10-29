@@ -199,14 +199,20 @@ def test_duplicate_exports_are_republished_with_a_later_recorded_at(tmp_path):
             assert copy["recorded_at"] > original["recorded_at"]
 
 
-def test_parts_are_never_empty_and_v3_parts_start_at_the_change(tmp_path):
+def test_parts_are_never_empty_and_rows_sit_on_their_side_of_the_change(tmp_path):
     root = tmp_path / "out"
     manifest = run(config_for(root))
+    change = datetime(2026, 7, 4, tzinfo=UTC)
 
     assert all(part["rows"] > 0 for part in manifest["files"])
-    assert not [
-        part for part in manifest["files"] if part["path"].endswith(".v3.parquet") and part["date"] < "2026-07-04"
-    ]
+    for part in manifest["files"]:
+        if part["table"] != "payment_events":
+            continue
+        rows = pq.read_table(dataset_of(root) / part["path"]).to_pylist()
+        if part["path"].endswith(".v3.parquet"):
+            assert all(row["occurred_at"] >= change for row in rows)
+        else:
+            assert all(row["occurred_at"] < change for row in rows)
     assert any(part["path"].endswith(".v3.parquet") for part in manifest["files"])
 
 

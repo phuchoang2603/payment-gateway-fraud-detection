@@ -24,7 +24,7 @@ EVENTS = "payment_events"
 LABELS = "fraud_labels"
 CONFIG_KEY = "config.json"
 MANIFEST_KEY = "manifest.json"
-PART_CUSTOMERS = 100_000
+PART_CUSTOMERS = 750_000
 ROW_GROUP_ROWS = 131_072
 GENERATOR_SOURCES = ("world.py", "lifecycle.py", "historical.py", "store.py", "us-calibration.json")
 CONTRACT_FILES = {EVENTS: "payment-events.odcs.yaml", LABELS: "fraud-labels.odcs.yaml"}
@@ -99,9 +99,6 @@ class GeneratorConfig(StrictModel):
     def identity(self, generator_digest: str) -> str:
         document = {"configuration": self.logical(), "generator_digest": generator_digest}
         return hashlib.sha256(json.dumps(document, sort_keys=True).encode()).hexdigest()
-
-    def schema_versions(self) -> tuple[int, ...]:
-        return tuple(sorted({2, *(change.version for change in self.schema_changes)}))
 
     def schema_version_at(self, occurred_at: datetime) -> int:
         version = 2
