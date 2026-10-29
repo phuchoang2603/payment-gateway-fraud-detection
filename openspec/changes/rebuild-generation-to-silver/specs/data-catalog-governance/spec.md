@@ -50,14 +50,6 @@ Kafka-mode runs SHALL publish their topic offset ranges, committed snapshots and
 - **WHEN** a Kafka-mode DP1 run completes
 - **THEN** its pipeline execution identifies the topics, partitions, start and end offsets and the Bronze snapshots it committed
 
-### Requirement: On-demand native profiling
-Native profiling SHALL run only through an on-demand workflow and SHALL expose supported scalar-column statistics with explicit columns, sample bounds and collection time. Unsupported nested or binary metrics SHALL be excluded explicitly. Profiles SHALL NOT be reported as quality acceptance.
-
-#### Scenario: Request a profile
-
-- **WHEN** an operator runs the profiling workflow for a Bronze or Silver table
-- **THEN** scalar-column statistics and their sampling scope appear on the canonical asset without affecting pipeline runs
-
 ## REMOVED Requirements
 
 ### Requirement: Product and contract discovery
@@ -81,5 +73,5 @@ Native profiling SHALL run only through an on-demand workflow and SHALL expose s
 **Migration**: See "Kafka run governance identity".
 
 ### Requirement: Meaningful scoped native profiling
-**Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
-**Migration**: See "On-demand native profiling".
+**Reason**: The rebuilt pipelines run no native profiling; the requirement has no implementation in this change.
+**Migration**: None.

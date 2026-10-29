@@ -180,7 +180,7 @@ Retries:
 
 A `CronWorkflow` for `dp1-bronze source=kafka`, followed by `dp2-silver`, exists but is disabled in both environments.
 
-Diagnostics and benchmark are separate on-demand `WorkflowTemplate`s with a single Spark stage. Native profiling keeps its existing on-demand template, pointed at the new tables.
+Diagnostics and benchmark are separate on-demand `WorkflowTemplate`s with a single Spark stage.
 
 *Removed:* select/plan, discover, profile, readback and accept stages; the Spark utility templates (delete pods, cleanup, outcome); nested retries; the publish-only replay entrypoint.
 
@@ -198,11 +198,9 @@ Diagnostics and benchmark are separate on-demand `WorkflowTemplate`s with a sing
   - top merchant share, top-10 merchant share and top category share of purchases; the hot merchant key from `hot_merchant_share` is the expected top merchant;
   - the near-duplicate rate: republished exports over distinct events;
   - `approx_count_distinct` cardinality, with exact counts where cheap, labelled as such.
-- **Benchmark** pins one Silver snapshot and measures two aggregations, each as a baseline and an optimized variant:
-  - **Skewed merchant aggregation:** attempts joined with per-merchant aggregates, grouped by merchant and day. Baseline: AQE skew handling off, no salting. Optimized: AQE skew join on, plus salting of the hot merchant keys.
-  - **High-cardinality aggregation:** distinct devices and attempt counts per customer and per payment method over 24-hour windows, across about 3M customers and 3.9M payment methods. Baseline: default shuffle. Optimized: pre-aggregation by window before the distinct count, with partition count sized from the key cardinality.
-
-  Each variant runs one warm-up, then three timed runs, and reports medians. Each aggregation asserts equal output both ways with `exceptAll`.
+- **Benchmark** pins one Silver snapshot and runs two families. Each variant runs one warm-up, then three timed runs, and reports the median. Every variant's output is compared with the baseline's in both directions with `exceptAll`; a difference fails the run.
+  - **Skewed merchant join:** `silver.attempts` joined with per-merchant totals as a sort-merge join (broadcast disabled), aggregated by merchant and day. The hot merchant takes about half of purchases, and the report records its share with its denominator. Variants: `baseline_no_skew_join` (AQE on, skew join off), `aqe_skew_join` (AQE skew join on) and `salted` (the hot merchant's attempts spread over 16 buckets by `hash(attempt_id)`, the totals replicated to every bucket, AQE skew join off).
+  - **High-cardinality distinct count:** distinct device fingerprints and attempts per customer and payment method per calendar day. Variants: `baseline` (one `countDistinct`) and `per_device_first` (attempts pre-aggregated per device, then counted).
 
 Neither job runs in the pipeline workflows.
 
@@ -265,7 +263,7 @@ The local CLI remains for tests and development only.
 - [Generator and Silver correctness depend on CI only] → Behaviour tests cover:
   - per-day determinism and refused config changes;
   - the schema change boundary and duplicates;
-  - Bronze idempotent historical rerun, plus Kafka offsets and empty runs (against a Kafka test container, opt-in like the existing broker tests);
+  - Bronze idempotent historical rerun, Kafka offsets and empty runs (against a Kafka test container in CI), and decoding parity between Kafka and historical Parquet;
   - Silver conflict quarantine, linkage cases and availability; Kafka records that fail decoding are quarantined, not dropped.
 
 ## Migration Plan

@@ -12,7 +12,7 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 | `dp1-bronze` (historical or Kafka mode) | Spark ingest → StarRocks checks → OpenMetadata publish | In progress (PR #102) |
 | `dp2-silver` | Spark curate → StarRocks checks → OpenMetadata publish | In progress (PR #102) |
 | `dp3-features` | Spark features → checks → publish | Planned |
-| `maintain-lakehouse`, `dp1-diagnostics`, `dp2-benchmark`, `dp2-storage-layout` | Single on-demand stage | In progress (PR #102); no profiling template yet |
+| `maintain-lakehouse`, `dp1-diagnostics`, `dp2-benchmark`, `dp2-storage-layout` | Single on-demand stage | In progress (PR #102) |
 
 Each pipeline stage retries only on execution errors, never on failed data checks, and each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow. Pending: screenshots of each pipeline graph and run, taken after the first dev run.
 
@@ -43,7 +43,7 @@ Historical source contracts describe schema and meaning only. Bronze and Silver 
 
 The `metadata-integrations` application owns the shared catalog connections and a daily 03:00 UTC discovery of StarRocks tables and Kafka topics. Each connector declares its ExternalSecret alongside its connection. Discovery samples no rows and runs no profiling.
 
-Pipelines publish lineage (historical source and Kafka topics → Bronze → Silver) and native test results. Publishing pipeline execution status is not yet implemented. A run succeeds only when every expected test reports Success. Pending: lineage and validation screenshots for DP1–DP3, taken after the first dev run.
+Pipelines publish lineage (historical source and Kafka topics → Bronze → Silver), their execution status on success and failure through the workflow exit handler, and native test results. The Kafka CronWorkflow's exit handler records only the Bronze pipeline: its Silver step runs through `templateRef`, which does not run the Silver template's exit handler. A run succeeds only when every expected test reports Success. Pending: lineage and validation screenshots for DP1–DP3, taken after the first dev run.
 
 ## Schema registry
 

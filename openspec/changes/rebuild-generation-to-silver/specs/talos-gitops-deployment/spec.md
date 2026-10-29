@@ -2,7 +2,7 @@
 
 ### Requirement: Environment data-pipeline deployment
 
-Dev SHALL enable the historical generator, DP1 Bronze and DP2 Silver workflow templates and the on-demand diagnostics, benchmark and profiling templates in `data`. Prod SHALL enable the data-pipeline application with only the historical generator template, using the full-scale configuration and the gateway object identity; Bronze, Silver, schedules and their credentials SHALL stay disabled in prod until explicitly enabled. All templates SHALL use externally supplied credentials, commit-tagged images and explicit resource budgets. Historical source selection SHALL default to v18 in dev. The scheduled Kafka-mode workflow SHALL remain suspended in both environments until explicitly enabled.
+Dev SHALL enable the historical generator, DP1 Bronze and DP2 Silver workflow templates and the on-demand diagnostics and benchmark templates in `data`. Prod SHALL enable the data-pipeline application with only the historical generator template, using the full-scale configuration and the gateway object identity; Bronze, Silver, schedules and their credentials SHALL stay disabled in prod until explicitly enabled. All templates SHALL use externally supplied credentials, commit-tagged images and explicit resource budgets. Historical source selection SHALL default to v18 in dev. The scheduled Kafka-mode workflow SHALL remain suspended in both environments until explicitly enabled.
 
 #### Scenario: Fresh environment rollout
 

@@ -16,6 +16,13 @@ The checks stage SHALL run native OpenMetadata discovery for the run's tables fo
 - **WHEN** the native test container exits successfully but a required result is Failed, Aborted or absent
 - **THEN** the checks stage fails with that result
 
+### Requirement: Shared metadata connections
+Pipeline-specific discovery and native check execution SHALL consume centrally managed connector configuration while retaining their own run context and ordering. Scheduled service discovery SHALL NOT substitute for candidate-specific pipeline checks or mutate their native quality definitions or results.
+
+#### Scenario: Discover a newly created pipeline table
+- **WHEN** ingestion creates candidate tables before scheduled discovery runs
+- **THEN** the pipeline explicitly discovers them through the shared connection before executing its checks
+
 ## ADDED Requirements
 
 ### Requirement: Three-stage pipeline workflows
