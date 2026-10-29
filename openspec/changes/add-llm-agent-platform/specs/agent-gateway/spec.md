@@ -40,7 +40,7 @@ Each gateway route SHALL be governed by exactly one agentgateway policy object h
 - **THEN** every route has exactly one policy targeting it
 
 ### Requirement: No path around the gateway
-Mesh authorization SHALL admit connections to the model servers only from the gateway, the endpoint picker and the benchmark client. Connections to the gateway SHALL be admitted only from labelled LLM-client service accounts in `ml` and the Agent Substrate workers that run agent actors. Identity-less sources SHALL reach only the gateway's and endpoint picker's dedicated metrics ports.
+Mesh authorization SHALL admit connections to the model servers only from the gateway, the endpoint picker, the benchmark client and the metrics agent's mesh identity. Connections to the gateway SHALL be admitted only from labelled LLM-client service accounts in `ml` and the Agent Substrate workers that run agent actors. Identity-less sources SHALL reach only the gateway's and endpoint picker's dedicated metrics ports.
 
 #### Scenario: Direct call to vLLM
 - **WHEN** a pod other than the gateway or endpoint picker connects to the vLLM port

@@ -65,8 +65,8 @@ Each model server SHALL run one replica in dev and zero in prod until the prod d
 - **THEN** no model-server pod, GPU claim or GPU node request exists
 
 ### Requirement: Model-server telemetry
-Gateway and endpoint-picker metrics (requests, token counts, latency, queue and KV-cache state per endpoint) SHALL be scraped by the platform's metrics agent through application-owned scrape configuration, without an application-owned collector, store, dashboard or alert. Only dedicated metrics ports SHALL be opened to the metrics agent, which is outside the mesh. vLLM's own counters (prefix-cache hits, preemptions, speculative acceptance, prompt and generation tokens) SHALL be captured by the benchmark through its admitted identity until the metrics agent can be admitted by identity.
+vLLM, endpoint-picker and gateway metrics (requests, prompt and generation tokens, TTFT, inter-token latency, queue length, KV-cache use, prefix-cache hits, preemptions, speculative acceptance) SHALL be scraped by the platform's metrics agent through application-owned scrape configuration, without an application-owned collector, store, dashboard or alert. The model servers SHALL admit the metrics agent by its mesh identity rather than opening their inference port.
 
 #### Scenario: Metrics after a request
 - **WHEN** a completion has been served
-- **THEN** the gateway's token and latency series for the route are queryable in the platform metrics store
+- **THEN** its vLLM token and latency series and the gateway's series for the route are queryable in the platform metrics store

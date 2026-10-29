@@ -85,7 +85,7 @@ agentgateway applies one policy object per target, so every route gets exactly o
   - the embedding server admits only the gateway;
   - the gateway admits `ml` ServiceAccounts labelled as LLM clients (benchmark, later MCP servers) and the Substrate worker identity in `ate-system`, where agent actors run.
 
-  `vmagent` is outside the mesh, so it has no identity to admit. Only dedicated metrics ports are opened to identity-less sources: the gateway's 15020 and the EPP's 9090. vLLM serves inference and `/metrics` on the same port 8000, so it is not scraped by the platform in phase 1. The benchmark reads vLLM's counters directly through its admitted identity, and platform scraping waits for `vmagent` to join the mesh or for a waypoint to enforce paths. Nothing reaches the model servers around the gateway.
+  vLLM serves inference and `/metrics` on the same port 8000, so the platform enrolls `vmagent` in the ambient mesh (platform change P7). The model servers then admit its identity, `cluster.local/ns/observability/sa/vmagent-vmks`, instead of opening the port. The gateway's 15020 and the EPP's 9090 are dedicated metrics ports, so they stay open to any source. Nothing reaches the model servers around the gateway.
 - **Credentials:** no model-provider key exists. vLLM listens without an API key inside the mesh, and the gateway key is the only credential a client holds.
 
 ### 4. Models: Qwen3-8B FP8 and Qwen3-Embedding-0.6B on one GPU; prod on L4 only
@@ -261,6 +261,7 @@ The catalog facts (model names, revisions, agent version) are values in the meta
 | P4 | agentregistry 0.4.0, CNPG Postgres, `rbac.watchedNamespaces: [ml]` | `agentregistry` | Catalog (decision 11) |
 | P5 | Agent Substrate 0.0.9 (`substrate-crds` and `substrate`, the version kagent 0.10.4 pins), JWT mode, Valkey, snapshots in an S3/MinIO prefix with its own identity (not bundled RustFS) | `ate-system` (privileged Pod Security) | No Kubernetes feature gates needed. Its workers must reach the `ml` gateway in the mesh. |
 | P6 | KEDA (latest stable) | `operators` | Phase 2 only (decision 10) |
+| P7 | Enroll the platform vmagent in Istio ambient (`istio.io/dataplane-mode: ambient` on its pods) | `observability` | Lets app mesh policies admit the metrics agent by identity, rather than opening inference ports to sources with no identity |
 
 The clusters stay on Talos 1.13.9 / Kubernetes 1.36.3. No change is needed to the GPU operator, the DRA driver, Istio or Knative.
 
