@@ -2,6 +2,7 @@ import json
 import os
 import statistics
 import time
+from datetime import date, datetime, timedelta, timezone
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
@@ -18,34 +19,40 @@ SMALL_APPENDS = 40
 ZORDER = "zorder(customer_id,payment_method_fingerprint)"
 
 
-def scan_relations(plan):
-    """Data source scans in the optimized logical plan; their Scan carries the pushed-down filters."""
-    found, stack = [], [plan]
-    while stack:
-        node = stack.pop()
-        if node.getClass().getSimpleName() == "DataSourceV2ScanRelation":
-            found.append(node)
-            continue
-        children = node.children().iterator()
-        while children.hasNext():
-            stack.append(children.next())
-    return found
+def micros(spark: SparkSession, value: datetime):
+    epoch_micros = int(value.replace(tzinfo=timezone.utc).timestamp() * 1_000_000)
+    return spark._jvm.java.lang.Long(epoch_micros)
 
 
-def scanned(df: DataFrame):
-    """Files and bytes the Iceberg scans of df planned to read, after filter pushdown."""
+def day_filter(spark: SparkSession, column: str, day: date):
+    expressions = spark._jvm.org.apache.iceberg.expressions.Expressions
+    start = datetime(day.year, day.month, day.day)
+    return getattr(expressions, "and")(
+        expressions.greaterThanOrEqual(column, micros(spark, start)),
+        expressions.lessThan(column, micros(spark, start + timedelta(days=1))),
+    )
+
+
+def customer_window(spark: SparkSession, customer: str, start: datetime):
+    expressions = spark._jvm.org.apache.iceberg.expressions.Expressions
+    return getattr(expressions, "and")(
+        expressions.equal("customer_id", customer),
+        expressions.greaterThanOrEqual("started_at", micros(spark, start)),
+        expressions.lessThan("started_at", micros(spark, start + timedelta(days=30))),
+    )
+
+
+def planned(spark: SparkSession, name: str, expression):
+    """Files and bytes Iceberg's planner selects for expression on the table's current snapshot."""
+    table = spark._jvm.org.apache.iceberg.spark.Spark3Util.loadIcebergTable(spark._jsparkSession, name)
+    tasks = table.newScan().filter(expression).planFiles()
     files = size = 0
-    relations = scan_relations(df._jdf.queryExecution().optimizedPlan())
-    if not relations:
-        raise RuntimeError("no Iceberg scan found in the optimized plan")
-    for relation in relations:
-        partitions = relation.scan().toBatch().planInputPartitions()
-        for index in range(len(partitions)):
-            tasks = partitions[index].taskGroup().tasks().iterator()
-            while tasks.hasNext():
-                files += 1
-                size += tasks.next().file().fileSizeInBytes()
-    return files, size
+    iterator = tasks.iterator()
+    while iterator.hasNext():
+        files += 1
+        size += iterator.next().file().fileSizeInBytes()
+    tasks.close()
+    return {"files_planned": files, "bytes_planned": size}
 
 
 def profile(df: DataFrame):
@@ -55,8 +62,7 @@ def profile(df: DataFrame):
         started = time.perf_counter()
         df.collect()
         times.append(time.perf_counter() - started)
-    files, size = scanned(df)
-    return {"median_seconds": statistics.median(times), "files_read": files, "bytes_read": size}
+    return {"median_seconds": statistics.median(times)}
 
 
 def create_copy(spark: SparkSession, name: str, source: DataFrame, partition=None) -> None:
@@ -110,10 +116,11 @@ def partition_pruning(spark: SparkSession, source: DataFrame):
     partitioned_df = summary(one_day(spark.table(partitioned)))
     unpartitioned_df = summary(one_day(spark.table(unpartitioned)))
     same_output(partitioned_df, unpartitioned_df)
+    expression = day_filter(spark, "occurred_at", day)
     return {
         "day": str(day),
-        "partitioned": profile(partitioned_df),
-        "unpartitioned": profile(unpartitioned_df),
+        "partitioned": {**profile(partitioned_df), **planned(spark, partitioned, expression)},
+        "unpartitioned": {**profile(unpartitioned_df), **planned(spark, unpartitioned, expression)},
     }
 
 
@@ -144,10 +151,11 @@ def zorder(spark: SparkSession, attempts: DataFrame):
         F.count("*").alias("attempts"), F.sum("amount_minor").alias("amount")
     )
     same_output(default_df, sorted_df)
+    expression = customer_window(spark, customer, start)
     return {
         "customer_id": customer,
-        "default": profile(default_df),
-        "zorder": profile(sorted_df),
+        "default": {**profile(default_df), **planned(spark, default, expression)},
+        "zorder": {**profile(sorted_df), **planned(spark, sorted_table, expression)},
     }
 
 
