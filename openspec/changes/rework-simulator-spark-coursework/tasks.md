@@ -58,4 +58,6 @@ Implementation update: fresh dev v17 generation/notebook, independent Bronze and
 
 ## 9. Streaming timestamp alignment
 
-- [ ] 9.1 Add client `attempted_at` to the versioned Silver attempt-history contract and transformation while preserving lifecycle `attempt_started_at`; extend existing delayed-context coverage, update generated references and distinguish prior deployed acceptance from this additive follow-up. Verify in CI.
+- [x] 9.1 Add client `attempted_at` to the versioned Silver attempt-history contract and transformation while preserving lifecycle `attempt_started_at`; extend existing delayed-context coverage, update generated references and distinguish prior deployed acceptance from this additive follow-up. Verify in CI.
+
+All 24 CI checks passed on `5e5a311` for the additive timestamp follow-up. New deployed Silver 1.1.0 acceptance has not been exercised.
