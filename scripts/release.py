@@ -13,6 +13,15 @@ def git(*arguments):
     return subprocess.check_output(["git", *arguments], text=True).strip()
 
 
+def commit_exists(revision):
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{revision}^{{commit}}"],
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def remote_head(branch):
     result = git("ls-remote", "origin", f"refs/heads/{branch}").split()
     return result[0] if result else ""
@@ -59,7 +68,7 @@ def plan():
         old_tag = tags.get(repository, "")
         match = re.fullmatch(r"(?:pr-[0-9]+|main)-([a-f0-9]{40})", old_tag)
         changed = True
-        if match:
+        if match and commit_exists(match[1]):
             diff = git(
                 "diff",
                 "--name-only",
