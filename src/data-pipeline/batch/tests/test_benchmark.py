@@ -1,7 +1,7 @@
 import pytest
 from pyspark.sql import functions as F
 
-from batch import benchmark
+from batch import benchmark, silver
 from batch.schema import EVENT_COLUMNS, business_schema
 from tests.events import at, created
 
@@ -117,3 +117,14 @@ def test_every_dedup_variant_returns_the_full_width_output(spark, duplicated_eve
     assert set(results) == set(benchmark.DEDUP_VARIANTS)
     assert {r["output_rows"] for r in results.values()} == {301}
     assert len({r["checksum"] for r in results.values()}) == 1
+
+
+def test_narrow_detect_takes_the_strategy_the_threshold_selects(spark, duplicated_events, monkeypatch):
+    monkeypatch.setenv(silver.DEDUP_BROADCAST_ENV, "0")
+    shuffled = benchmark.dedup_family(spark, duplicated_events, {})["narrow_detect"]
+    monkeypatch.setenv(silver.DEDUP_BROADCAST_ENV, str(1 << 40))
+    broadcast = benchmark.dedup_family(spark, duplicated_events, {})["narrow_detect"]
+
+    assert shuffled["strategy"] == "shuffle"
+    assert broadcast["strategy"] == "broadcast"
+    assert shuffled["checksum"] == broadcast["checksum"]

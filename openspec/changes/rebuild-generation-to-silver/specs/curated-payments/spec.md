@@ -137,7 +137,7 @@ The repository SHALL provide an on-demand Spark benchmark that runs one skewed m
 - **THEN** the report lists each variant's duration, stage IDs and task count, and the hot merchant share with its denominator
 
 ### Requirement: Silver dedup benchmark
-The benchmark job SHALL run the deduplication of the pinned Bronze events in two variants, each once and timed through the phase helper: a full-width group-by over every row, and a narrow detection of duplicated IDs with a broadcast join. Each variant's output SHALL be reduced to its row count and an order-independent checksum, and the narrow variant SHALL equal the full-width variant on both before any duration is reported. The report SHALL give each variant's duration, its spill in memory and on disk, and its output row count.
+The benchmark job SHALL run the deduplication of the pinned Bronze events in two variants, each once and timed through the phase helper: a full-width group-by over every row, and a narrow detection of duplicated IDs that joins them back with the strategy Silver chooses for the estimated size. Each variant's output SHALL be reduced to its row count and an order-independent checksum, and the narrow variant SHALL equal the full-width variant on both before any duration is reported. The report SHALL give each variant's duration, its spill in memory and on disk, and its output row count; the narrow variant also reports its strategy and estimated bytes.
 
 #### Scenario: Variant output differs
 - **WHEN** the narrow variant's row count or checksum differs from the full-width variant

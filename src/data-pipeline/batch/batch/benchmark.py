@@ -8,7 +8,14 @@ from pyspark.sql import functions as F
 from batch.bronze import EVENTS as BRONZE_EVENTS
 from batch.bronze import current_snapshot
 from batch.metrics import phase
-from batch.silver import ATTEMPTS, full_width_dedup, narrow_dedup, plan_dedup, with_event_hash
+from batch.silver import (
+    ATTEMPTS,
+    dedup_broadcast_threshold,
+    full_width_dedup,
+    narrow_dedup,
+    plan_dedup,
+    with_event_hash,
+)
 from batch.spark import session
 from batch.store import Store
 
@@ -152,9 +159,6 @@ def hot_key_share(attempts: DataFrame) -> dict:
     return {"merchant_id": top["merchant_id"], "share": top["count"] / total, "denominator": total}
 
 
-ALWAYS_BROADCAST = 1 << 62
-
-
 def spill_bytes(spark, stage_ids: list) -> dict:
     sc = spark.sparkContext
     if not sc.uiWebUrl:
@@ -171,13 +175,13 @@ def full_width_group(hashed: DataFrame):
     return full_width_dedup(hashed), None
 
 
-def narrow_detect_broadcast(hashed: DataFrame):
-    plan = plan_dedup(hashed, ALWAYS_BROADCAST)
+def narrow_detect(hashed: DataFrame):
+    plan = plan_dedup(hashed, dedup_broadcast_threshold())
     distinct, _ = narrow_dedup(hashed, plan)
     return distinct, plan
 
 
-DEDUP_VARIANTS = {"full_width_group": full_width_group, "narrow_detect_broadcast": narrow_detect_broadcast}
+DEDUP_VARIANTS = {"full_width_group": full_width_group, "narrow_detect": narrow_detect}
 
 
 def dedup_variant(spark, events: DataFrame, name: str, build, phases: dict):
@@ -189,14 +193,14 @@ def dedup_variant(spark, events: DataFrame, name: str, build, phases: dict):
         finally:
             if plan is not None:
                 plan["duplicated"].unpersist()
-    return rows, checksum, spill_bytes(spark, phases[f"dedup {name}"]["stage_ids"])
+    return rows, checksum, plan, spill_bytes(spark, phases[f"dedup {name}"]["stage_ids"])
 
 
 def dedup_family(spark, events: DataFrame, phases: dict) -> dict:
     events.count()
     results, baseline = {}, None
     for name, build in DEDUP_VARIANTS.items():
-        rows, checksum, spill = dedup_variant(spark, events, name, build, phases)
+        rows, checksum, plan, spill = dedup_variant(spark, events, name, build, phases)
         guard = (rows, checksum)
         if baseline is None:
             baseline = guard
@@ -207,6 +211,9 @@ def dedup_family(spark, events: DataFrame, phases: dict) -> dict:
             "seconds": phases[f"dedup {name}"]["seconds"],
             "spill": spill,
         }
+        if plan is not None:
+            results[name]["strategy"] = plan["strategy"]
+            results[name]["estimated_bytes"] = plan["estimated_bytes"]
     return results
 
 
