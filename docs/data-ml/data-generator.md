@@ -11,40 +11,49 @@ Configurations are YAML files baked into the simulator image under `/app/configs
 | `historical-dev.yaml` | `v18`, 90 days from 2025-07-01, 10k customers | Development source in `platform-dev` |
 | `historical-full.yaml` | `v19`, 365 days from 2025-01-01, about 3M customers | Full-scale source in the prod bucket; `minimum_source_bytes` is 100 GB |
 
-Top-level keys:
+Top-level keys hold only the logical dataset:
 
-- `dataset_version`, `output` (a local directory or an `s3://bucket/prefix` root without credentials), `duration_days`
-- `chunk_customers`: customers per part; a day is split into `ceil(customers / chunk_customers)` parts per table
-- `workers`, `row_group_rows`: execution settings that do not change records
-- `duplicate_rate`: share of payment events exported twice, byte-identical to the original
+- `dataset_version`, `duration_days`, `duplicate_rate`
 - `minimum_source_bytes`: publication refuses a dataset whose physical Parquet bytes are below this value
-- `schema_changes`: ordered `{effective_at, version}` entries; the physical schema starts at 3 and changes to 4 for events occurring at or after `effective_at`
+- `schema_changes`: ordered `{effective_at, version}` entries. Physical versions start at 1; a change to version 2 adds the fields that the payment-events contract declares with `sinceSchemaVersion: 2`
+- `output`: a local directory or an `s3://bucket/prefix` root without credentials
 - `world`: `seed`, `integration_id`, `synthetic_key`, `start_date`, entity `counts`, purchase `behavior`, `scenarios`, `label_delays`
 
-Credentials are never read from the configuration. S3 access uses the standard AWS environment variables and `S3_ENDPOINT` / `S3_PATH_STYLE`.
+Credentials are never read from the configuration.
 
-## Running
+## Settings
 
-In the cluster, the environment selects its configuration and shard count through the data-pipelines chart (`generator.config`, `generator.shards`). Each shard pod generates the purchase-start days whose index modulo the shard count matches its shard, and a final publish pod writes the manifest. Submit a run with:
+Run settings come from the environment:
 
-```bash
-argo submit -n data --from workflowtemplate/generate-historical
-```
+- `GENERATOR_MODE`: `generate` (all days in one process), `shard` (one shard of the days) or `publish` (the manifest, once every day has a marker)
+- `SHARD_INDEX`, `SHARD_COUNT`: the shard, used in `shard` mode
+- `GENERATOR_WORKERS`: parallel processes in one pod; the chart sets it to the CPU request
+- `GENERATOR_CONTRACTS`: the historical-payments contract directory (defaults to `/app/contracts/historical-payments` in the image)
+- `SIMULATOR_CONFIG`: the YAML configuration
 
-Locally, copy a configuration, set `output` to a local directory, export the commit that the generator runs from, and run from the simulator project:
+The workflow sets these per step. Locally:
 
 ```bash
 cd src/data-pipeline/simulator
-GIT_REVISION=$(git rev-parse HEAD) SIMULATOR_CONFIG=/path/to/copied.yaml uv run --locked simulator
+SIMULATOR_CONFIG=/path/to/copied.yaml GENERATOR_CONTRACTS=../../../contracts/data-products/historical-payments uv run --locked simulator
+```
+
+## Running
+
+In the cluster, the environment selects its configuration, shard count and CPU through the data-pipelines chart (`generator.config`, `generator.shards`, `generator.resources`). Each shard pod generates the purchase-start days whose index modulo the shard count matches its shard, and a final publish pod writes the manifest. Submit a run with:
+
+```bash
+argo submit -n data --from workflowtemplate/generate-historical
 ```
 
 ## Output
 
 Each dataset is written below `historical/<dataset_version>/`:
 
-- `config.json`: the logical configuration and its hash, written first
-- `payment_events/date=YYYY-MM-DD/part-NNNNN.parquet` and `fraud_labels/date=YYYY-MM-DD/part-NNNNN.parquet`: one part per customer chunk and table; each row of events carries `physical_schema_version`
+- `config.json`: the logical configuration, the generator digest and their hash, written first
+- `payment_events/date=YYYY-MM-DD/part-NNNNN.v1.parquet` and `.v2.parquet`: payment events by physical schema version, so each file's Parquet schema has exactly the fields its version declares
+- `fraud_labels/date=YYYY-MM-DD/part-NNNNN.parquet`: labels
 - `date=YYYY-MM-DD/_day.json`: written after all parts of a purchase-start day, listing their rows, bytes and SHA-256
-- `manifest.json`: written last and only if absent, listing every part with its checksum and totals, the configuration, seed, git revision and contract identities
+- `manifest.json`: written last and only if absent, with the configuration, generator digest, contract identities, row and byte totals and the file list
 
-The git revision comes from `GIT_REVISION`, which the workflow takes from the simulator image tag. A rerun with the same configuration and revision skips complete days and regenerates incomplete ones, producing the same bytes. A rerun with a different configuration or revision is refused, and so is any version that already has a manifest. Worker count does not change the output.
+The generator digest is a SHA-256 over the generator source files, the calibration file and the historical contracts. A rerun with the same configuration and digest skips complete days and regenerates incomplete ones, producing the same bytes. A rerun with a different configuration or digest is refused, and so is any version that already has a manifest.
