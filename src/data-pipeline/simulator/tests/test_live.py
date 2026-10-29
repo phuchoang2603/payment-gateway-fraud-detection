@@ -238,9 +238,9 @@ def test_continuous_traffic_stops_on_shutdown_and_finishes_admitted_payments(cap
 
 def test_store_and_forward_sends_original_click_time(capsys):
     class Model:
-        manifest = {"generation_identity": "model"}
-        config = SimpleNamespace(calibration_sha256="calibration", integration_id="integration")
-        profiles = SimpleNamespace(method_pool=["expected"])
+        manifest = {"generator_digest": "generator"}
+        config = SimpleNamespace(integration_id="integration")
+        world = SimpleNamespace(digest="world", payment_method_fingerprint=lambda index: "expected")
 
         def purchase(self, seed, ordinal, now):
             order = {"seller": {"external_id": "seller"}, "buyer": {"external_id": "buyer"}}
