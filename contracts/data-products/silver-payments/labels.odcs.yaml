@@ -33,6 +33,9 @@ schema:
     physicalType: table
     description: One row per distinct label observation; identical copies collapse to one.
     dataGranularityDescription: One label observation for one payment attempt.
+    customProperties:
+      - property: partitioning
+        value: days(label_available_at)
     properties:
       - {name: observation_id, logicalType: string, physicalType: VARCHAR, required: true, description: SHA-256 over every business field of the observation.}
       - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration namespace of the payment.}

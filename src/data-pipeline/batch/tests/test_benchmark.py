@@ -9,7 +9,7 @@ ROWS = [
     ("m-1", "c-2", "pm-2", None, "att-3", 300, at(2)),
     ("m-2", "c-1", "pm-1", "d-1", "att-4", 400, at(3)),
 ]
-COLUMNS = "merchant_id string, customer_id string, payment_method_fingerprint string, device_fingerprint string, attempt_id string, total_minor_units bigint, started_at timestamp"
+COLUMNS = "merchant_id string, customer_id string, payment_method_fingerprint string, device_fingerprint string, attempt_id string, amount_minor bigint, started_at timestamp"
 
 
 @pytest.fixture

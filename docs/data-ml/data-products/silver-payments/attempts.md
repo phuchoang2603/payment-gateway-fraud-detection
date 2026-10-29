@@ -30,12 +30,12 @@ Synthetic data only. Outcome pending means the processor result has not arrived 
 |  integration_id | string | *Integration namespace of the payment.*<br />• `required` |
 |  payment_id | string | *Payment aggregate identity.*<br />• `required` |
 |  attempt_id | string | *Attempt identity unique within the payment.*<br />• `required` |
-|  merchant_id | string | *Gateway merchant identity from the payment creation.* |
-|  customer_id | string | *Gateway customer identity from the payment creation.* |
+|  merchant_id | string | *Gateway merchant identity from the AttemptStarted context.* |
+|  customer_id | string | *Gateway customer identity from the AttemptStarted context.* |
 |  payment_method_type | string | *Payment method category.* |
-|  payment_method_fingerprint | string | *Synthetic method fingerprint.* |
+|  payment_method_fingerprint | string | *Synthetic payment-method fingerprint from the AttemptStarted signals.* |
 |  device_fingerprint | string | *Observed synthetic device fingerprint.* |
-|  total_minor_units | integer | *Checkout total in minor units.* |
+|  amount_minor | integer | *Checkout total in minor units* |
 |  currency | string | *Checkout currency.* |
 |  started_at | timestamp | *AttemptStarted occurrence time.*<br />• `required` |
 |  attempted_at | timestamp | *Client attempt time from the signals.* |

@@ -33,16 +33,19 @@ schema:
     physicalType: table
     description: One row per (integration_id, payment_id, attempt_id).
     dataGranularityDescription: One payment attempt.
+    customProperties:
+      - property: partitioning
+        value: days(started_at)
     properties:
       - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration namespace of the payment.}
       - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: Payment aggregate identity.}
       - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Attempt identity unique within the payment.}
-      - {name: merchant_id, logicalType: string, physicalType: VARCHAR, description: Gateway merchant identity from the payment creation.}
-      - {name: customer_id, logicalType: string, physicalType: VARCHAR, description: Gateway customer identity from the payment creation.}
+      - {name: merchant_id, logicalType: string, physicalType: VARCHAR, description: Gateway merchant identity from the AttemptStarted context.}
+      - {name: customer_id, logicalType: string, physicalType: VARCHAR, description: Gateway customer identity from the AttemptStarted context.}
       - {name: payment_method_type, logicalType: string, physicalType: VARCHAR, description: Payment method category.}
-      - {name: payment_method_fingerprint, logicalType: string, physicalType: VARCHAR, description: Synthetic method fingerprint.}
+      - {name: payment_method_fingerprint, logicalType: string, physicalType: VARCHAR, description: Synthetic payment-method fingerprint from the AttemptStarted signals.}
       - {name: device_fingerprint, logicalType: string, physicalType: VARCHAR, description: Observed synthetic device fingerprint.}
-      - {name: total_minor_units, logicalType: integer, physicalType: BIGINT, description: Checkout total in minor units.}
+      - {name: amount_minor, logicalType: integer, physicalType: BIGINT, description: Checkout total in minor units, from the AttemptStarted context snapshot.}
       - {name: currency, logicalType: string, physicalType: VARCHAR, description: Checkout currency.}
       - {name: started_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: AttemptStarted occurrence time.}
       - {name: attempted_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, description: Client attempt time from the signals.}

@@ -8,6 +8,7 @@ from pyspark.sql import functions as F
 from batch.bronze import EVENTS as BRONZE_EVENTS
 from batch.bronze import LABELS as BRONZE_LABELS
 from batch.bronze import current_snapshot
+from batch.lakehouse import WRITE_PROPERTIES
 from batch.schema import EVENT_COLUMNS, LABEL_COLUMNS
 from batch.spark import ICEBERG_CATALOG, session
 from batch.store import Store
@@ -94,9 +95,9 @@ def run(spark, run_id):
     }
     Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/silver.json", report)
 
-    write_table(spark, PAYMENT_EVENTS, accepted_events, pins, run_id)
-    write_table(spark, ATTEMPTS, accepted_attempts, pins, run_id)
-    write_table(spark, LABELS, accepted_labels, pins, run_id)
+    write_table(spark, PAYMENT_EVENTS, accepted_events, pins, run_id, F.days("occurred_at"))
+    write_table(spark, ATTEMPTS, accepted_attempts, pins, run_id, F.days("started_at"))
+    write_table(spark, LABELS, accepted_labels, pins, run_id, F.days("label_available_at"))
     write_table(spark, REJECTED, rejected, pins, run_id)
     return report
 
@@ -162,7 +163,7 @@ def attempts(events: DataFrame) -> DataFrame:
         [
             F.col("attempt_started.context.merchant.merchant_id").alias("merchant_id"),
             F.col("attempt_started.context.customer.customer_id").alias("customer_id"),
-            F.col("attempt_started.context.snapshot.total.minor_units").alias("total_minor_units"),
+            F.col("attempt_started.context.snapshot.total.minor_units").alias("amount_minor"),
             F.col("attempt_started.context.snapshot.total.currency").alias("currency"),
             F.col("occurred_at").alias("started_at"),
             F.col("attempt_started.signals.attempted_at").alias("attempted_at"),
@@ -205,7 +206,7 @@ def attempts(events: DataFrame) -> DataFrame:
         "payment_method_type",
         "payment_method_fingerprint",
         "device_fingerprint",
-        "total_minor_units",
+        "amount_minor",
         "currency",
         "started_at",
         "attempted_at",
@@ -311,10 +312,15 @@ def reject_payment_rows(frame, conflicting_payments, conflict_reason, table, sou
     )
 
 
-def write_table(spark, name, frame, pins, run_id):
+def write_table(spark, name, frame, pins, run_id, partition=None):
     if not spark.catalog.tableExists(name):
         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {NAMESPACE}")
-        frame.limit(0).writeTo(name).using("iceberg").create()
+        creator = frame.limit(0).writeTo(name).using("iceberg")
+        for key, value in WRITE_PROPERTIES.items():
+            creator = creator.tableProperty(key, value)
+        if partition is not None:
+            creator = creator.partitionedBy(partition)
+        creator.create()
     writer = frame.writeTo(name)
     for key, value in {**pins, "dp2.run_id": run_id}.items():
         writer = writer.option(f"snapshot-property.{key}", value)

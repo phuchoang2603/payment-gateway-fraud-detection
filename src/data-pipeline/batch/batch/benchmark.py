@@ -17,7 +17,7 @@ TIMED_RUNS = 3
 
 def merchant_daily_baseline(attempts: DataFrame) -> DataFrame:
     return attempts.groupBy("merchant_id", F.to_date("started_at").alias("day")).agg(
-        F.count("*").alias("attempts"), F.sum("total_minor_units").alias("amount_minor_units")
+        F.count("*").alias("attempts"), F.sum("amount_minor").alias("amount_minor_units")
     )
 
 
@@ -26,7 +26,7 @@ def merchant_daily_optimized(attempts: DataFrame) -> DataFrame:
         "day", F.to_date("started_at")
     )
     partial = salted.groupBy("merchant_id", "day", "salt").agg(
-        F.count("*").alias("attempts"), F.sum("total_minor_units").alias("amount_minor_units")
+        F.count("*").alias("attempts"), F.sum("amount_minor").alias("amount_minor_units")
     )
     return partial.groupBy("merchant_id", "day").agg(
         F.sum("attempts").alias("attempts"), F.sum("amount_minor_units").alias("amount_minor_units")
