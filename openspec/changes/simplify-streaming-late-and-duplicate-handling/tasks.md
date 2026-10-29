@@ -27,3 +27,10 @@
 
 - [x] 6.1 Remove `payments.events.v1.faulty` and its metadata pattern; add the `live-v18` journal topic; update fraud-features epoch/hash/writer group and live-traffic settings
 - [x] 6.2 Update affected data-pipeline/ML doc passages and run local lint/format/helm/OpenSpec checks
+
+## 7. Dead-letter path
+
+- [x] 7.1 Classify per-record data errors (`Rejected`) in decode and both dedup stages; keep invariant and system errors fatal and too-late attempts on `too_late`
+- [x] 7.2 Route rejects through one side output to an exactly-once `fraud.feature-rejects.v1.<epoch>` sink with source-coordinate headers, a per-class `rejected` metric and a log line
+- [x] 7.3 Declare the topic in the Kafka chart; cover malformed and conflicting records and a fatal invariant in the existing runtime and Kafka checkpoint tests
+- [x] 7.4 Update the spec, design and the "Poison records" row in `docs/data/online.md`

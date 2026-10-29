@@ -13,6 +13,7 @@ The coursework requires late and duplicate events in the stream and processing t
   - customer distinct devices over 24h;
   - no assessed-only eligibility, 24h amount sum or 7-day features.
 - **BREAKING** Flink counts unique attempt starts by client attempt time. Inputs older than the 24h horizon are counted as too late instead of failing the job. Start/decision matching is removed.
+- Per-record data errors (undecodable or invalid events, invalid attempt context, conflicting duplicates) go to an exactly-once dead-letter topic `fraud.feature-rejects.v1.<epoch>` instead of crash-looping the job; invariant and system errors still fail it.
 - Feast views, the Go fraud Feast client and assessment evidence move to the v2 values. The Redis 10s/60s guard is unchanged.
 - A new live feature epoch and journal topic replace the v17 epoch. No existing feature data, offsets or checkpoints are migrated.
 

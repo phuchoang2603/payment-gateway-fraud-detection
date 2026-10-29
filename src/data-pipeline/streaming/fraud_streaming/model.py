@@ -12,6 +12,24 @@ HORIZON = DAY
 DEDUP_RETENTION = HORIZON + HOUR
 
 
+class Rejected(ValueError):
+    """A per-record data error routed to the dead-letter output instead of failing the job."""
+
+    def __init__(self, kind, message, event_id=None):
+        super().__init__(message)
+        self.kind = kind
+        self.event_id = event_id
+
+
+@dataclass(frozen=True)
+class Source:
+    topic: str
+    partition: int
+    offset: int
+    timestamp_ms: int
+    raw: bytes
+
+
 @dataclass(frozen=True)
 class Fact:
     event_id: str
@@ -45,6 +63,7 @@ class Packet:
     now: int
     bootstrap: int
     progress: tuple[Progress, ...]
+    source: Source | None = None
 
     @property
     def too_late(self):

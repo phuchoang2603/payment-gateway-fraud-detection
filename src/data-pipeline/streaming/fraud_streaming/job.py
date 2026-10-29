@@ -5,7 +5,7 @@ from pyflink.common import Configuration, Types, WatermarkStrategy
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import StreamTableEnvironment
 
-from fraud_streaming.operators import Aggregate, Clock, Deduplicate, ObserveSource
+from fraud_streaming.operators import REJECTS, Aggregate, Clock, Deduplicate, ObserveSource
 
 
 def sql_literal(value):
@@ -13,16 +13,25 @@ def sql_literal(value):
 
 
 def build_updates(packets, *, epoch, logical, max_entries):
+    # Every operator that yields to REJECTS must have its side output read, or rejects leak
+    # into its main output.
+    rejects = [packets.get_side_output(REJECTS)]
     if logical:
         packets = packets.assign_timestamps_and_watermarks(
             WatermarkStrategy.for_monotonous_timestamps().with_timestamp_assigner(Clock())
         )
-    starts = (
+    events = (
         packets.filter(lambda packet: packet.fact is not None)
         .key_by(lambda packet: packet.fact.event_id)
-        .process(Deduplicate(logical))
+        .process(Deduplicate(logical, "event"))
         .uid("event-deduplication-v3")
     )
+    starts = (
+        events.key_by(lambda packet: json.dumps(packet.fact.identity))
+        .process(Deduplicate(logical, "attempt"))
+        .uid("attempt-deduplication-v1")
+    )
+    rejects += [events.get_side_output(REJECTS), starts.get_side_output(REJECTS)]
     row_type = Types.ROW_NAMED(
         ["key", "payload"],
         [Types.PRIMITIVE_ARRAY(Types.BYTE()), Types.PRIMITIVE_ARRAY(Types.BYTE())],
@@ -47,7 +56,7 @@ def build_updates(packets, *, epoch, logical, max_entries):
             .uid(f"{view}-aggregation-v3")
         )
         branches.append(branch)
-    return branches[0].union(branches[1])
+    return branches[0].union(branches[1]), rejects[0].union(*rejects[1:])
 
 
 def main():
@@ -61,6 +70,7 @@ def main():
         raise ValueError("logical replay requires isolated input, output epoch and clock topic")
     if output != f"fraud.feature-updates.v1.{epoch}":
         raise ValueError("feature journal must be bound to its epoch")
+    rejects_topic = f"fraud.feature-rejects.v1.{epoch}"
     configuration = Configuration()
     configuration.set_string("pipeline.name", f"fraud-features-{epoch}")
     configuration.set_string("python.execution-mode", "process")
@@ -74,7 +84,8 @@ def main():
             payload BYTES,
             topic STRING METADATA FROM 'topic' VIRTUAL,
             `partition` INT METADATA FROM 'partition' VIRTUAL,
-            `offset` BIGINT METADATA FROM 'offset' VIRTUAL
+            `offset` BIGINT METADATA FROM 'offset' VIRTUAL,
+            `timestamp` TIMESTAMP_LTZ(3) METADATA FROM 'timestamp' VIRTUAL
         ) WITH (
             'connector' = 'kafka',
             'topic' = {sql_literal(topics)},
@@ -100,13 +111,11 @@ def main():
         )
         .uid("observed-source-progress-v1")
     )
-    updates = table.from_data_stream(
-        build_updates(
-            packets,
-            epoch=epoch,
-            logical=logical,
-            max_entries=int(os.environ.get("MAX_ENTITY_ENTRIES", "50000")),
-        )
+    updates, rejects = build_updates(
+        packets,
+        epoch=epoch,
+        logical=logical,
+        max_entries=int(os.environ.get("MAX_ENTITY_ENTRIES", "50000")),
     )
     table.execute_sql(
         f"""CREATE TABLE feature_journal (`key` BYTES, payload BYTES) WITH (
@@ -122,7 +131,28 @@ def main():
             'sink.transactional-id-prefix' = {sql_literal("fraud-features-" + epoch + "-")}
         )"""
     )
-    updates.execute_insert("feature_journal").wait()
+    table.execute_sql(
+        f"""CREATE TABLE feature_rejects (
+            `key` BYTES,
+            payload BYTES,
+            headers MAP<STRING, BYTES> METADATA
+        ) WITH (
+            'connector' = 'kafka',
+            'topic' = {sql_literal(rejects_topic)},
+            'properties.bootstrap.servers' = {sql_literal(brokers)},
+            'key.format' = 'raw',
+            'key.fields' = 'key',
+            'value.format' = 'raw',
+            'value.fields-include' = 'EXCEPT_KEY',
+            'sink.delivery-guarantee' = 'exactly-once',
+            'properties.transaction.timeout.ms' = '900000',
+            'sink.transactional-id-prefix' = {sql_literal("fraud-rejects-" + epoch + "-")}
+        )"""
+    )
+    statements = table.create_statement_set()
+    statements.add_insert("feature_journal", table.from_data_stream(updates))
+    statements.add_insert("feature_rejects", table.from_data_stream(rejects))
+    statements.execute().wait()
 
 
 if __name__ == "__main__":

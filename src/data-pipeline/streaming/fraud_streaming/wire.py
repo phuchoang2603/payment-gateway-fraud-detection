@@ -2,8 +2,9 @@ import hashlib
 from pathlib import Path
 
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
+from google.protobuf.message import DecodeError
 
-from fraud_streaming.model import DAY, HOUR, MINUTE, Fact
+from fraud_streaming.model import DAY, HOUR, MINUTE, Fact, Rejected
 
 pool = descriptor_pool.DescriptorPool()
 descriptors = descriptor_pb2.FileDescriptorSet.FromString(
@@ -21,7 +22,10 @@ DEFINITION_HASH = "958f9b0fd7e50ba33a22526271ff2e62eafcf827c9f9e0bce1c35c4a016f8
 
 
 def decode(raw):
-    event = PaymentEvent.FromString(bytes(raw))
+    try:
+        event = PaymentEvent.FromString(bytes(raw))
+    except DecodeError:
+        raise Rejected("undecodable", "payment event is not decodable protobuf") from None
     if (
         event.schema_version != 3
         or not event.event_id
@@ -32,9 +36,14 @@ def decode(raw):
         or not event.HasField("recorded_at")
         or event.WhichOneof("payload") is None
     ):
-        raise ValueError("invalid or unsupported payment event")
-    for timestamp in (event.occurred_at, event.recorded_at):
-        timestamp.ToDatetime()
+        raise Rejected(
+            "invalid_event", "invalid or unsupported payment event", event.event_id or None
+        )
+    try:
+        for timestamp in (event.occurred_at, event.recorded_at):
+            timestamp.ToDatetime()
+    except (ValueError, OverflowError):
+        raise Rejected("invalid_event", "invalid payment event timestamp", event.event_id) from None
     recorded_at = event.recorded_at.ToMicroseconds()
     if event.WhichOneof("payload") != "attempt_started":
         return None, recorded_at
@@ -46,8 +55,11 @@ def decode(raw):
         or not body.signals.HasField("attempted_at")
         or (body.signals.HasField("device_fingerprint") and not body.signals.device_fingerprint)
     ):
-        raise ValueError("invalid self-contained attempt context")
-    body.signals.attempted_at.ToDatetime()
+        raise Rejected("invalid_context", "invalid self-contained attempt context", event.event_id)
+    try:
+        body.signals.attempted_at.ToDatetime()
+    except (ValueError, OverflowError):
+        raise Rejected("invalid_context", "invalid attempt time", event.event_id) from None
     return Fact(
         event_id=event.event_id,
         digest=hashlib.sha256(event.SerializeToString(deterministic=True)).hexdigest(),

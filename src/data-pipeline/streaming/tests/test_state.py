@@ -8,7 +8,7 @@ import pytest
 from features.reference import definition_identity
 from features.reference import snapshot as reference_snapshot
 
-from fraud_streaming.model import DAY, HORIZON, HOUR, MINUTE, Entity, Fact, Packet
+from fraud_streaming.model import DAY, HORIZON, HOUR, MINUTE, Entity, Fact, Packet, Rejected
 from fraud_streaming.wire import PaymentEvent, SnapshotUpdate, decode, snapshot
 
 ANCHOR = 1_760_000_000_000_000
@@ -203,11 +203,16 @@ def test_decode_uses_client_attempt_time_and_ignores_other_payloads():
     assert fact.device is None
     assert fact.started_at == ANCHOR - 10 * MINUTE and recorded_at == ANCHOR
     event.attempt_started.signals.ClearField("attempted_at")
-    with pytest.raises(ValueError, match="context"):
+    with pytest.raises(Rejected, match="context") as invalid:
         decode(event.SerializeToString())
+    assert (invalid.value.kind, invalid.value.event_id) == ("invalid_context", "event")
     event.ClearField("attempt_started")
     event.risk_decision_recorded.attempt_id = "attempt"
     assert decode(event.SerializeToString()) == (None, ANCHOR)
     event.schema_version = 4
-    with pytest.raises(ValueError, match="unsupported"):
+    with pytest.raises(Rejected, match="unsupported") as unsupported:
         decode(event.SerializeToString())
+    assert unsupported.value.kind == "invalid_event"
+    with pytest.raises(Rejected) as garbage:
+        decode(b"\xff\xff\xff")
+    assert (garbage.value.kind, garbage.value.event_id) == ("undecodable", None)

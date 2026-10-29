@@ -68,8 +68,22 @@ Rejected alternatives:
 - **Horizon:** 24h, the largest window. Accepted late inputs inside it produce new revisions; previously served evidence stays immutable.
 - **Too late:** an input whose attempt time is before `now - 24h` cannot affect any window. It increments a `too_late` counter, is logged with its event identity and is dropped.
 - **Dedup state:** expires one hour after the event's attempt time plus 24h. Any later copy is already too late, so state stays bounded by event time and duplicates can never double count.
-- **Conflicts:** differing content under one `event_id` still fails the job.
+- **Conflicts:** differing content under one `event_id`, or a second start for one attempt identity, is dead-lettered (below). Two small keyed dedup stages, by event then by attempt identity, keep the entity state free of conflicts.
 - **Clock modes:** live processing-time and CI logical-clock replay both remain; the logical mode is test infrastructure.
+
+### Per-record data errors go to a dead-letter topic
+
+- **Problem:** raising on one bad record restores the checkpoint and re-reads the same record, so the job crash-loops and online features stop.
+- **Classification:**
+  - **Dead-lettered data errors:** undecodable protobuf, invalid or unsupported events, invalid attempt context, and conflicting content under one event or attempt identity.
+  - **Still fatal:** entity state limits, clock or offset regression, partition-layout or bootstrap changes, and attempt times after observed availability. Edge prevents the last case, so it signals a bug.
+- **Mechanism:**
+  - `ObserveSource` and both dedup stages yield to one `OutputTag`. The job reads every operator's side output, because PyFlink otherwise leaks tagged values into the main stream.
+  - Rejects go through a Table API Kafka sink in the same statement set and checkpoint as the journal: exactly-once, raw key and value, and the writable `headers` metadata column.
+  - The record timestamp comes from the source table's `timestamp` metadata.
+  - `ObserveSource` still advances offset progress for a rejected record.
+- **Not the durable copy:** Bronze Kafka mode independently keeps every raw delivery in `bronze.rejected_records` or the Bronze tables. The dead-letter topic serves real-time triage.
+- **Rejected alternative:** catching errors and silently dropping records hides data problems and removes the triage path.
 
 ### Bootstrap is a warmup, not HybridSource
 

@@ -6,17 +6,79 @@ from confluent_kafka import IsolationLevel, KafkaError, KafkaException, TopicPar
 from confluent_kafka.admin import AdminClient, OffsetSpec
 from pyflink.common import Row, Types
 from pyflink.common.watermark_strategy import TimestampAssigner
-from pyflink.datastream import KeyedProcessFunction
+from pyflink.datastream import KeyedProcessFunction, OutputTag
 from pyflink.datastream.state import ValueStateDescriptor
 
-from fraud_streaming.model import DEDUP_RETENTION, Entity, Packet, Progress, entity_key
+from fraud_streaming.model import (
+    DEDUP_RETENTION,
+    Entity,
+    Packet,
+    Progress,
+    Rejected,
+    Source,
+    entity_key,
+)
 from fraud_streaming.wire import decode, snapshot
 
 log = logging.getLogger(__name__)
+REJECT_CLASSES = ("undecodable", "invalid_event", "invalid_context", "conflicting_duplicate")
+REJECT_TYPE = Types.ROW_NAMED(
+    ["key", "payload", "headers"],
+    [
+        Types.PRIMITIVE_ARRAY(Types.BYTE()),
+        Types.PRIMITIVE_ARRAY(Types.BYTE()),
+        Types.MAP(Types.STRING(), Types.PRIMITIVE_ARRAY(Types.BYTE())),
+    ],
+)
+REJECTS = OutputTag("feature-rejects-v1", REJECT_TYPE)
 
 
 def micros():
     return time.time_ns() // 1000
+
+
+def epoch_millis(timestamp):
+    # PyFlink surfaces Kafka TIMESTAMP_LTZ metadata as Instant or as a local datetime.
+    if hasattr(timestamp, "to_epoch_milli"):
+        return timestamp.to_epoch_milli()
+    return int(timestamp.timestamp() * 1000)
+
+
+def reject_counters(runtime_context):
+    metrics = runtime_context.get_metrics_group()
+    return {
+        kind: metrics.add_group("reject_class", kind).counter("rejected") for kind in REJECT_CLASSES
+    }
+
+
+def reject(counters, error, source, event_id=None):
+    """Count, log and build the dead-letter row for one per-record data error."""
+    event_id = event_id or error.event_id
+    message = str(error).encode("ascii", "replace")[:200]
+    counters[error.kind].inc()
+    log.warning(
+        json.dumps(
+            {
+                "event": "rejected",
+                "class": error.kind,
+                "event_id": event_id,
+                "topic": source.topic,
+                "partition": source.partition,
+                "offset": source.offset,
+                "message": message.decode(),
+            }
+        )
+    )
+    headers = {
+        "x-reject-class": error.kind.encode(),
+        "x-reject-message": message,
+        "x-source-topic": source.topic.encode(),
+        "x-source-partition": str(source.partition).encode(),
+        "x-source-offset": str(source.offset).encode(),
+        "x-source-timestamp": str(source.timestamp_ms).encode(),
+    }
+    key = event_id.encode() if event_id else None
+    return REJECTS, Row(key=key, payload=source.raw, headers=headers)
 
 
 def timer_at(timestamp):
@@ -65,20 +127,29 @@ class ObserveSource(KeyedProcessFunction):
             raise ValueError("source partition layout changed; explicit bootstrap required")
         self.watermarks = {}
         self.last_poll = 0
+        self.rejected = reject_counters(runtime_context)
 
     def process_element(self, row, ctx):
-        raw, topic, partition, offset = row
-        fact = None
+        raw, topic, partition, offset, timestamp = row
+        fact = rejected = None
+        source = None
         if topic == self.clock_topic:
             if not self.logical:
                 raise ValueError("clock controls are forbidden in live mode")
             observed = int(json.loads(bytes(raw))["clock_us"])
         elif topic == self.topic:
-            fact, recorded_at = decode(raw)
-            if self.logical:
-                observed = recorded_at
+            source = Source(topic, partition, offset, epoch_millis(timestamp), bytes(raw))
+            try:
+                fact, recorded_at = decode(raw)
+            except Rejected as error:
+                rejected = error
+                prior = self.state.value()
+                if self.logical and prior is None:
+                    yield reject(self.rejected, error, source)
+                    return
+                observed = prior["now"] if self.logical else micros()
             else:
-                observed = micros()
+                observed = recorded_at if self.logical else micros()
         else:
             raise ValueError("unexpected source topic")
         state = self.state.value() or {
@@ -112,7 +183,10 @@ class ObserveSource(KeyedProcessFunction):
             for index, consumed in sorted(state["offsets"].items())
         )
         self.state.update(state)
-        yield Packet(fact, now, state["bootstrap"], progress)
+        if rejected is not None:
+            yield reject(self.rejected, rejected, source)
+            return
+        yield Packet(fact, now, state["bootstrap"], progress, source)
 
     def latest_offsets(self, consumed):
         for attempt in range(2):
@@ -143,18 +217,22 @@ class ObserveSource(KeyedProcessFunction):
 
 
 class Deduplicate(KeyedProcessFunction):
-    def __init__(self, logical):
+    """Drop identical redeliveries of one identity and dead-letter conflicting content."""
+
+    def __init__(self, logical, scope):
         self.logical = logical
+        self.scope = scope
 
     def open(self, runtime_context):
         self.state = runtime_context.get_state(
-            ValueStateDescriptor("event-identity-v3", Types.STRING())
+            ValueStateDescriptor(f"{self.scope}-identity-v3", Types.STRING())
         )
+        self.rejected = reject_counters(runtime_context)
         self.too_late = runtime_context.get_metrics_group().counter("too_late")
 
     def process_element(self, packet, ctx):
         fact = packet.fact
-        if packet.too_late:
+        if self.scope == "event" and packet.too_late:
             self.too_late.inc()
             log.warning(
                 json.dumps(
@@ -167,12 +245,16 @@ class Deduplicate(KeyedProcessFunction):
                 )
             )
             return
+        content = fact.digest if self.scope == "event" else f"{fact.event_id}:{fact.digest}"
         prior = self.state.value()
         if prior is not None:
-            if prior != fact.digest:
-                raise ValueError("conflicting event identity/content")
+            if prior != content:
+                error = Rejected(
+                    "conflicting_duplicate", f"conflicting {self.scope} identity/content"
+                )
+                yield reject(self.rejected, error, packet.source, fact.event_id)
             return
-        self.state.update(fact.digest)
+        self.state.update(content)
         register(ctx, fact.started_at + DEDUP_RETENTION, self.logical)
         yield packet
 

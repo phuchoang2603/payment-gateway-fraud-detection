@@ -67,6 +67,9 @@ entities:
       valueSchema: features/v1/features.proto
       partitions: 3
       retention: 1209600000
+    - name: fraud.feature-rejects.v1.live-v18
+      partitions: 3
+      retention: 604800000
   payments:
     topics:
     - name: payments.events.v1

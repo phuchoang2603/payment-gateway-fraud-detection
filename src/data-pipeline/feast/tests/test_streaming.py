@@ -67,6 +67,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
     source = "payments.image-ci"
     clock = "clock.image-ci"
     output = f"fraud.feature-updates.v1.{epoch}"
+    rejects_topic = f"fraud.feature-rejects.v1.{epoch}"
     anchor = 1_760_000_000_000_000
     root = Path(__file__).resolve().parents[4]
     context = io.BytesIO()
@@ -110,7 +111,12 @@ def test_image_kafka_journal_and_checkpoint_recovery():
             brokers = kafka.get_bootstrap_server()
             admin = AdminClient({"bootstrap.servers": brokers})
             for future in admin.create_topics(
-                [NewTopic(source, 3, 1), NewTopic(clock, 1, 1), NewTopic(output, 3, 1)]
+                [
+                    NewTopic(source, 3, 1),
+                    NewTopic(clock, 1, 1),
+                    NewTopic(output, 3, 1),
+                    NewTopic(rejects_topic, 3, 1),
+                ]
             ).values():
                 future.result(timeout=30)
             producer = Producer({"bootstrap.servers": brokers})
@@ -222,7 +228,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
 
                             await_result(poll)
 
-                        send("one", anchor)
+                        first = send("one", anchor)
                         receive(lambda values: len(values) == 2)
                         producer.produce(
                             clock, value=json.dumps({"clock_us": anchor + HOUR + 2_000_000})
@@ -234,6 +240,13 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                                 for value in values.values()
                             )
                         )
+                        garbage = b"\xff\xff\xff"
+                        conflict = PaymentEvent.FromString(first[0])
+                        conflict.attempt_started.context.snapshot.total.minor_units = 999
+                        conflict = conflict.SerializeToString(deterministic=True)
+                        for record in (garbage, conflict):
+                            producer.produce(source, key="poison", value=record, partition=0)
+                        assert producer.flush(10) == 0
                         second = send("two", anchor + HOUR + 3_000_000)
                         receive(
                             lambda values: all(
@@ -279,6 +292,46 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                                 and values["other-customer"].values.attempt_count_5m == 2
                             )
                         )
+                        dead = Consumer(
+                            {
+                                "bootstrap.servers": brokers,
+                                "group.id": "image-ci-rejects",
+                                "auto.offset.reset": "earliest",
+                                "isolation.level": "read_committed",
+                                "enable.auto.commit": False,
+                            }
+                        )
+                        dead.subscribe([rejects_topic])
+                        rejected = []
+
+                        def read_rejects():
+                            message = dead.poll(1)
+                            if message is not None:
+                                assert not message.error(), message.error()
+                                rejected.append(message)
+                            return len(rejected) >= 2
+
+                        try:
+                            await_result(read_rejects)
+                            settle = time.monotonic() + 5
+                            while time.monotonic() < settle:
+                                read_rejects()
+                        finally:
+                            dead.close()
+                        by_class = {}
+                        for message in rejected:
+                            headers = dict(message.headers())
+                            assert headers["x-source-topic"] == source.encode()
+                            assert headers["x-source-partition"] == b"0"
+                            assert headers["x-source-offset"].isdigit()
+                            assert headers["x-source-timestamp"].isdigit()
+                            assert headers["x-reject-message"]
+                            by_class[headers["x-reject-class"]] = (message.key(), message.value())
+                        assert len(rejected) == 2
+                        assert by_class == {
+                            b"undecodable": (None, garbage),
+                            b"conflicting_duplicate": (b"start-one", conflict),
+                        }
                     except BaseException:
                         print(flink.get_logs())
                         print(flink.exec(["bash", "-c", "tail -n 120 log/*.log"])[1].decode())
