@@ -1,0 +1,90 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:silver-attempts
+name: Silver payment attempts
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: One row per payment attempt with its risk decision, outcome, payment status and lifecycle validity.
+  usage: Join labels and features on integration_id, payment_id and attempt_id. Rows with lifecycle_valid false are violations, not usable history.
+  limitations: Synthetic data only. Outcome pending means the processor result has not arrived in the source; it is not a negative label.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, silver, payments]
+customProperties:
+  - property: sqlDialect
+    value: starrocks
+servers:
+  - server: starrocks
+    type: mysql
+    environment: dev
+    host: kube-starrocks-fe-service.starrocks.svc.cluster.local
+    port: 9030
+    database: silver
+    description: Iceberg table attempts in schema silver, read through the StarRocks fraud_lakehouse catalog. The rule placeholder {object} is replaced by the fully qualified table.
+schema:
+  - name: attempts
+    physicalName: silver.attempts
+    logicalType: object
+    physicalType: table
+    description: One row per (integration_id, payment_id, attempt_id).
+    dataGranularityDescription: One payment attempt.
+    properties:
+      - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration namespace of the payment.}
+      - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: Payment aggregate identity.}
+      - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Attempt identity unique within the payment.}
+      - {name: merchant_id, logicalType: string, physicalType: VARCHAR, description: Gateway merchant identity from the payment creation.}
+      - {name: customer_id, logicalType: string, physicalType: VARCHAR, description: Gateway customer identity from the payment creation.}
+      - {name: payment_method_type, logicalType: string, physicalType: VARCHAR, description: Payment method category.}
+      - {name: payment_method_fingerprint, logicalType: string, physicalType: VARCHAR, description: Synthetic method fingerprint.}
+      - {name: device_fingerprint, logicalType: string, physicalType: VARCHAR, description: Observed synthetic device fingerprint.}
+      - {name: total_minor_units, logicalType: integer, physicalType: BIGINT, description: Checkout total in minor units.}
+      - {name: currency, logicalType: string, physicalType: VARCHAR, description: Checkout currency.}
+      - {name: started_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: AttemptStarted occurrence time.}
+      - {name: attempted_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, description: Client attempt time from the signals.}
+      - {name: risk_outcome, logicalType: string, physicalType: VARCHAR, description: RISK_OUTCOME_APPROVE or RISK_OUTCOME_DECLINE when a decision exists.}
+      - {name: risk_reason_codes, logicalType: array, description: Policy reason codes of the decision.}
+      - {name: policy_version, logicalType: string, physicalType: VARCHAR, description: Evaluated policy version.}
+      - {name: model_version, logicalType: string, physicalType: VARCHAR, description: Evaluated model version when a model was used.}
+      - {name: feature_set_version, logicalType: string, physicalType: VARCHAR, description: Evaluated feature-set version when features were used.}
+      - {name: risk_score, logicalType: number, physicalType: DOUBLE, description: Optional model risk score.}
+      - {name: assessment_id, logicalType: string, physicalType: VARCHAR, description: Assessment identity; null in schema version two.}
+      - {name: outcome, logicalType: string, physicalType: VARCHAR, required: true, description: succeeded, declined, unknown or pending.}
+      - {name: decline_source, logicalType: string, physicalType: VARCHAR, description: DECLINE_SOURCE_RISK or DECLINE_SOURCE_PROCESSOR when declined.}
+      - {name: outcome_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, description: Occurrence time of the terminal or unknown outcome event.}
+      - {name: payment_status, logicalType: string, physicalType: VARCHAR, required: true, description: open, succeeded or expired for the whole payment.}
+      - {name: lifecycle_valid, logicalType: boolean, physicalType: BOOLEAN, required: true, description: False when the attempt has more than one start or terminal event, events out of version order, or a terminal event before its start.}
+    quality:
+      - id: silver_unique_attempt
+        type: sql
+        description: Each attempt identity appears once per payment.
+        query: |
+          SELECT count(*) FROM (
+            SELECT integration_id, payment_id, attempt_id FROM {object}
+            GROUP BY integration_id, payment_id, attempt_id HAVING count(*) > 1
+          ) AS duplicates
+        mustBe: 0
+      - id: silver_lifecycle_valid
+        type: sql
+        description: Every attempt follows the lifecycle rules.
+        query: |
+          SELECT count(*) FROM {object} WHERE lifecycle_valid IS NULL OR NOT lifecycle_valid
+        mustBe: 0
+      - id: silver_known_states
+        type: sql
+        description: Attempt outcomes and payment statuses are recognized values.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE outcome NOT IN ('succeeded', 'declined', 'unknown', 'pending')
+            OR payment_status NOT IN ('open', 'succeeded', 'expired')
+        mustBe: 0
+      - id: silver_outcome_after_start
+        type: sql
+        description: Outcomes never precede the attempt start.
+        query: |
+          SELECT count(*) FROM {object} WHERE outcome_at IS NOT NULL AND outcome_at < started_at
+        mustBe: 0

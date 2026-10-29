@@ -1,0 +1,62 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:bronze-rejected-records
+name: Bronze rejected Kafka records
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Kafka records that could not be decoded as their protobuf message, kept with their raw bytes so they can be replayed or investigated.
+  usage: Count rejected records per run and per topic. A record is rejected once; its offset is committed with the accepted rows of its run.
+  limitations: Historical files are never rejected here; an unreadable historical file fails its Bronze run.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, bronze, payments]
+customProperties:
+  - property: sqlDialect
+    value: starrocks
+servers:
+  - server: starrocks
+    type: mysql
+    environment: dev
+    host: kube-starrocks-fe-service.starrocks.svc.cluster.local
+    port: 9030
+    database: bronze
+    description: Iceberg table rejected_records in schema bronze, read through the StarRocks fraud_lakehouse catalog. The rule placeholder {object} is replaced by the fully qualified table.
+schema:
+  - name: rejected_records
+    physicalName: bronze.rejected_records
+    logicalType: object
+    physicalType: table
+    description: One row per Kafka record that failed protobuf decoding.
+    dataGranularityDescription: One raw Kafka record.
+    customProperties:
+      - property: partitioning
+        value: days(_ingested_at)
+    properties:
+      - {name: _kafka_topic, logicalType: string, physicalType: VARCHAR, required: true, description: Topic the record was read from.}
+      - {name: _kafka_partition, logicalType: integer, physicalType: INTEGER, required: true, description: Kafka partition.}
+      - {name: _kafka_offset, logicalType: integer, physicalType: BIGINT, required: true, description: Kafka offset.}
+      - {name: _kafka_timestamp, logicalType: timestamp, physicalType: TIMESTAMPTZ, description: Kafka record timestamp.}
+      - {name: record_key, logicalType: string, physicalType: VARBINARY, description: Raw Kafka key bytes.}
+      - {name: record_value, logicalType: string, physicalType: VARBINARY, description: Raw Kafka value bytes.}
+      - {name: error, logicalType: string, physicalType: VARCHAR, required: true, description: Decoding failure reason.}
+      - {name: _ingested_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: Time the Bronze run wrote the row.}
+      - {name: _run_id, logicalType: string, physicalType: VARCHAR, required: true, description: Bronze run that wrote the row.}
+    quality:
+      - id: rejected_record_identity
+        type: sql
+        description: Each rejected record is identified by its topic, partition and offset.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE nullif(_kafka_topic, '') IS NULL OR _kafka_partition IS NULL OR _kafka_offset IS NULL
+        mustBe: 0
+      - id: rejected_record_reason
+        type: sql
+        description: Each rejected record names its failure.
+        query: |
+          SELECT count(*) FROM {object} WHERE nullif(error, '') IS NULL
+        mustBe: 0
