@@ -6,6 +6,7 @@ from confluent_kafka import Consumer, TopicPartition
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
+from batch.lakehouse import TABLE_PROPERTIES
 from batch.schema import (
     EVENT_COLUMNS,
     LABEL_COLUMNS,
@@ -25,8 +26,6 @@ NAMESPACE = f"{ICEBERG_CATALOG}.bronze"
 EVENTS = f"{NAMESPACE}.payment_events"
 LABELS = f"{NAMESPACE}.fraud_labels"
 REJECTED = f"{NAMESPACE}.rejected_records"
-OFFSETS_PROPERTY = "snapshot-property.kafka.offsets"
-SUMMARY_OFFSETS = "kafka.offsets"
 
 
 def kafka_sources():
@@ -121,46 +120,69 @@ def read_parts(spark, root, table, parts):
 
 def run_kafka(spark, bootstrap, run_id):
     ensure_tables(spark)
+    starting = os.environ.get("KAFKA_STARTING_OFFSETS", "earliest")
+    if starting not in ("earliest", "latest"):
+        raise ValueError("KAFKA_STARTING_OFFSETS must be earliest or latest")
     report = {"mode": "kafka", "run_id": run_id, "topics": {}}
     for source in kafka_sources().values():
         topic, table = source["topic"], source["table"]
-        committed = committed_offsets(spark, table).get(topic, {})
-        rejected_committed = committed_offsets(spark, REJECTED).get(topic, {})
         lows, highs = watermarks(bootstrap, topic)
-        accepted_starts = {p: committed.get(p, lows[p]) for p in highs}
-        rejected_starts = {p: rejected_committed.get(p, lows[p]) for p in highs}
-        if all(highs[p] <= min(accepted_starts[p], rejected_starts[p]) for p in highs):
+        fallback = lows if starting == "earliest" else highs
+        accepted_starts = next_starts(spark, table, topic, fallback, kafka_rows=True)
+        rejected_starts = next_starts(spark, REJECTED, topic, fallback, kafka_rows=False)
+        if all(highs[p] <= accepted_starts[p] for p in highs):
             report["topics"][topic] = {"table": table, "accepted": 0, "rejected": 0}
             continue
-        read_starts = {p: min(accepted_starts[p], rejected_starts[p]) for p in highs}
-        records = read_records(spark, bootstrap, topic, read_starts, highs).cache()
+        records = read_records(spark, bootstrap, topic, accepted_starts, highs).cache()
         decoded = records.withColumn("decoded", source["decode"](F.col("value")))
         malformed = F.col("value").isNull() | F.col("decoded").isNull() | F.col("decoded")[source["key"]].isNull()
         accepted = decoded.where(~malformed & _from_offsets(accepted_starts))
         rejected = decoded.where(malformed & _from_offsets(rejected_starts))
         accepted_rows = accepted_frame(accepted, source["columns"], run_id).cache()
         rejected_rows = rejected_frame(rejected, run_id).cache()
-        accepted_count = accepted_rows.count()
-        rejected_count = rejected_rows.count()
-        topic_progress = {topic: {str(p): highs[p] for p in highs}}
-        accepted_rows.writeTo(table).option(
-            OFFSETS_PROPERTY, json.dumps({**committed_offsets(spark, table), **topic_progress}, sort_keys=True)
-        ).append()
-        rejected_rows.writeTo(REJECTED).option(
-            OFFSETS_PROPERTY, json.dumps({**committed_offsets(spark, REJECTED), **topic_progress}, sort_keys=True)
-        ).append()
         report["topics"][topic] = {
             "table": table,
-            "accepted": accepted_count,
-            "rejected": rejected_count,
-            "starts": {str(p): read_starts[p] for p in sorted(read_starts)},
-            "ends": {str(p): highs[p] for p in sorted(highs)},
-            "snapshot_id": current_snapshot(spark, table),
+            "accepted": accepted_rows.count(),
+            "rejected": rejected_rows.count(),
+            "accepted_starts": _partition_map(accepted_starts),
+            "rejected_starts": _partition_map(rejected_starts),
+            "ends": _partition_map(highs),
+            "snapshot_ids": {},
+        }
+        # Rejected rows commit first, so the rejected table never lags the accepted one and the read window can start from accepted rows alone.
+        rejected_rows.writeTo(REJECTED).append()
+        accepted_rows.writeTo(table).append()
+        report["topics"][topic]["snapshot_ids"] = {
+            table: current_snapshot(spark, table),
+            REJECTED: current_snapshot(spark, REJECTED),
         }
         records.unpersist()
         accepted_rows.unpersist()
         rejected_rows.unpersist()
     return report
+
+
+def next_starts(spark, table, topic, fallback, kafka_rows):
+    """Next offset per partition, from the rows the table already holds for this topic.
+
+    Progress lives in the rows, so compaction and snapshot expiry cannot move it. Partitions
+    without rows start at the fallback.
+    """
+    frame = spark.table(table).where(F.col("_kafka_topic") == topic)
+    if kafka_rows:
+        frame = frame.where(F.col("_source") == "kafka")
+    last = {
+        row["_kafka_partition"]: row["last"]
+        for row in frame.groupBy("_kafka_partition")
+        .agg(F.max("_kafka_offset").alias("last"))
+        .select("_kafka_partition", "last")
+        .collect()
+    }
+    return {p: last[p] + 1 if p in last else fallback[p] for p in fallback}
+
+
+def _partition_map(offsets):
+    return {str(p): offsets[p] for p in sorted(offsets)}
 
 
 def _from_offsets(starts):
@@ -191,24 +213,11 @@ def read_records(spark, bootstrap, topic, starts, ends):
         spark.read.format("kafka")
         .option("kafka.bootstrap.servers", bootstrap)
         .option("subscribe", topic)
-        .option("startingOffsets", json.dumps({topic: {str(p): starts[p] for p in sorted(starts)}}))
-        .option("endingOffsets", json.dumps({topic: {str(p): ends[p] for p in sorted(ends)}}))
+        .option("startingOffsets", json.dumps({topic: _partition_map(starts)}))
+        .option("endingOffsets", json.dumps({topic: _partition_map(ends)}))
         .option("failOnDataLoss", "true")
         .load()
     )
-
-
-def committed_offsets(spark, table):
-    rows = spark.sql(
-        f"SELECT summary['{SUMMARY_OFFSETS}'] AS offsets FROM {table}.snapshots "
-        f"WHERE summary['{SUMMARY_OFFSETS}'] IS NOT NULL ORDER BY committed_at DESC LIMIT 1"
-    ).collect()
-    if not rows:
-        return {}
-    return {
-        topic: {int(partition): offset for partition, offset in partitions.items()}
-        for topic, partitions in json.loads(rows[0]["offsets"]).items()
-    }
 
 
 def accepted_frame(decoded: DataFrame, columns, run_id):
@@ -252,14 +261,15 @@ def ensure_tables(spark):
     spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {NAMESPACE}")
     spark.sql(
         f"CREATE TABLE IF NOT EXISTS {EVENTS} ({event_ddl()}) USING iceberg "
-        "PARTITIONED BY (_source, days(occurred_at))"
+        f"PARTITIONED BY (_source, days(occurred_at)) {TABLE_PROPERTIES}"
     )
     spark.sql(
         f"CREATE TABLE IF NOT EXISTS {LABELS} ({label_ddl()}) USING iceberg "
-        "PARTITIONED BY (_source, days(label_available_at))"
+        f"PARTITIONED BY (_source, days(label_available_at)) {TABLE_PROPERTIES}"
     )
     spark.sql(
-        f"CREATE TABLE IF NOT EXISTS {REJECTED} ({rejected_ddl()}) USING iceberg PARTITIONED BY (days(_ingested_at))"
+        f"CREATE TABLE IF NOT EXISTS {REJECTED} ({rejected_ddl()}) USING iceberg "
+        f"PARTITIONED BY (days(_ingested_at)) {TABLE_PROPERTIES}"
     )
 
 
