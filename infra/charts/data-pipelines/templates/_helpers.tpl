@@ -131,12 +131,16 @@ retryStrategy:
     image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
     command: [python, -m, openmetadata_jobs.publish]
     env:
-      - name: PIPELINE
-        value: {{ .pipeline | quote }}
+      - name: PIPELINES
+        value: {{ .pipelines | quote }}
+      - name: STEPS
+        value: {{ .steps | default "" | quote }}
       - name: DATASET_VERSION
         value: {{ .dataset | quote }}
       - name: WORKFLOW_STATUS
         value: {{ "{{workflow.status}}" | quote }}
+      - name: FAILED_STEPS
+        value: {{ "{{workflow.failures}}" | quote }}
       - name: RUN_ID
         value: {{ "{{workflow.name}}" | quote }}
 {{- include "data-pipelines.env" .root | nindent 6 }}

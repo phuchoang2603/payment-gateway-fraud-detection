@@ -33,7 +33,7 @@ connectors:
           username: openmetadata
           password: ${CLICKHOUSE_PASSWORD}
           hostPort: clickhouse.data.svc.cluster.local:8123
-          databaseName: lakehouse
+          databaseSchema: lakehouse
           https: false
       sourceConfig:
         config:

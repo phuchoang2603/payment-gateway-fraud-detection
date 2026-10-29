@@ -52,7 +52,7 @@ SILVER_LABELS = table("silver.labels")
 SILVER_REJECTED = table("silver.rejected_events")
 
 PIPELINES = {
-    "dp1-bronze-historical": "Bronze from the v18 historical source",
+    "dp1-bronze-historical": "Bronze from the historical source",
     "dp1-bronze-kafka": "Bronze from the payments and labels topics",
     "dp2-silver": "Silver from pinned Bronze snapshots",
     "maintain-lakehouse": "Lakehouse compaction, layout and snapshot expiry",

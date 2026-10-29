@@ -1,3 +1,4 @@
+import json
 import os
 import time
 
@@ -91,16 +92,39 @@ def publish_lineage(sdk, name: str, pipeline_ref, dataset_version: str) -> int:
     return published
 
 
+def failed_steps(failures: str) -> set[str]:
+    names = set()
+    for node in json.loads(failures or "[]"):
+        names.update(node.get("displayName", "").split("."))
+    return names
+
+
+def lineage_allowed(index: int, steps: list[str], workflow_status: str, failed: set[str]) -> bool:
+    if not steps:
+        return workflow_status == "Succeeded"
+    return not failed.intersection(steps[: index + 1])
+
+
 def main() -> int:
-    name = os.environ["PIPELINE"]
-    if name not in PIPELINES:
-        raise ValueError(f"unknown pipeline {name}")
-    argo_status = os.environ["WORKFLOW_STATUS"]
+    names = [name for name in os.environ["PIPELINES"].split(",") if name]
+    steps = [step for step in os.environ.get("STEPS", "").split(",") if step]
+    unknown = [name for name in names if name not in PIPELINES]
+    if unknown or (steps and len(steps) != len(names)):
+        raise ValueError(f"invalid publish request for {names or unknown}")
+    workflow_status = os.environ["WORKFLOW_STATUS"]
+    failed = failed_steps(os.environ.get("FAILED_STEPS", ""))
+    run_id = os.environ["RUN_ID"]
+    dataset_version = os.environ.get("DATASET_VERSION", "v18")
     sdk = client()
-    pipeline_ref = ensure_pipeline(sdk, name)
-    publish_status(sdk, name, argo_status, os.environ["RUN_ID"])
-    published = publish_lineage(sdk, name, pipeline_ref, os.environ.get("DATASET_VERSION", "v18"))
-    print(f"published status {status_for(argo_status)} and {published} lineage edges for {name}")
+    summary = {}
+    for index, name in enumerate(names):
+        pipeline_ref = ensure_pipeline(sdk, name)
+        publish_status(sdk, name, workflow_status, run_id)
+        edges = 0
+        if lineage_allowed(index, steps, workflow_status, failed):
+            edges = publish_lineage(sdk, name, pipeline_ref, dataset_version)
+        summary[name] = {"status": status_for(workflow_status), "lineage_edges": edges}
+    print(json.dumps(summary, sort_keys=True))
     return 0
 
 

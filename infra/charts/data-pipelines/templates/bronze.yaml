@@ -58,5 +58,5 @@ spec:
         manifest: |
           {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp1-bronze-kafka" "main" "bronze" "product" "bronze-payments" "stage" "bronze-kafka" "sizing" $kafka "extraEnv" (list (dict "name" "BRONZE_SOURCE" "value" "kafka") (dict "name" "KAFKA_BOOTSTRAP_SERVERS" "value" .Values.bronze.kafka.bootstrapServers) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.bronze.reportRoot))) | nindent 10 }}
 {{- include "data-pipelines.checks" (dict "root" $ "product" "bronze-payments") | nindent 4 }}
-{{- include "data-pipelines.publish" (dict "root" $ "pipeline" (printf "dp1-bronze-%s" "{{workflow.parameters.source}}") "dataset" "{{workflow.parameters.dataset-version}}") | nindent 4 }}
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" (printf "dp1-bronze-%s" "{{workflow.parameters.source}}") "dataset" "{{workflow.parameters.dataset-version}}") | nindent 4 }}
 {{- end }}

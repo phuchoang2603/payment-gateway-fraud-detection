@@ -27,7 +27,7 @@ spec:
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
         manifest: |
           {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "maintain-lakehouse" "main" "maintenance" "product" "lakehouse" "stage" "maintenance" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.maintenance.reportRoot))) | nindent 10 }}
-{{- include "data-pipelines.publish" (dict "root" $ "pipeline" "maintain-lakehouse" "dataset" .Values.bronze.datasetVersion) | nindent 4 }}
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" "maintain-lakehouse" "dataset" .Values.bronze.datasetVersion) | nindent 4 }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
@@ -50,5 +50,5 @@ spec:
               templateRef:
                 name: maintain-lakehouse
                 template: maintain
-{{- include "data-pipelines.publish" (dict "root" $ "pipeline" "maintain-lakehouse" "dataset" .Values.bronze.datasetVersion) | nindent 6 }}
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" "maintain-lakehouse" "dataset" .Values.bronze.datasetVersion) | nindent 6 }}
 {{- end }}

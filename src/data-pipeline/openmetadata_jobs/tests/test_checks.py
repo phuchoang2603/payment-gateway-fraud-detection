@@ -57,5 +57,5 @@ def test_a_check_counts_only_a_fresh_success():
 def test_table_names_include_the_service_and_database(monkeypatch):
     monkeypatch.setenv("CLICKHOUSE_DATABASE", "lakehouse")
 
-    assert warehouse.table_fqn("bronze.fraud_labels") == 'clickhouse.lakehouse."bronze.fraud_labels"'
+    assert warehouse.table_fqn("bronze.fraud_labels") == 'clickhouse.default.lakehouse."bronze.fraud_labels"'
     assert warehouse.sql_table("bronze.fraud_labels") == "lakehouse.`bronze.fraud_labels`"

@@ -28,5 +28,5 @@ spec:
               templateRef:
                 name: dp2-silver
                 template: silver
-{{- include "data-pipelines.publish" (dict "root" $ "pipeline" "dp1-bronze-kafka" "dataset" .Values.bronze.datasetVersion) | nindent 6 }}
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp1-bronze-kafka,dp2-silver" "steps" "bronze,silver" "dataset" .Values.bronze.datasetVersion) | nindent 6 }}
 {{- end }}

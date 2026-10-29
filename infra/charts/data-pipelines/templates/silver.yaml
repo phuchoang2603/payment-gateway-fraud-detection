@@ -36,5 +36,5 @@ spec:
         manifest: |
           {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp2-silver" "main" "silver" "product" "silver-payments" "stage" "silver" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.silver.reportRoot))) | nindent 10 }}
 {{- include "data-pipelines.checks" (dict "root" $ "product" "silver-payments") | nindent 4 }}
-{{- include "data-pipelines.publish" (dict "root" $ "pipeline" "dp2-silver" "dataset" .Values.bronze.datasetVersion) | nindent 4 }}
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp2-silver" "dataset" .Values.bronze.datasetVersion) | nindent 4 }}
 {{- end }}
