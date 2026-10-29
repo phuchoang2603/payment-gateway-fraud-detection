@@ -1,5 +1,6 @@
 clientNamespaces: [data, ml]
 storageClass: local-path
+setupImage: python:3.13.9-alpine3.22
 storage:
   secretStore: gateway-doppler
   accessKey: OBJECT_GATEWAY_ACCESS_KEY_ID

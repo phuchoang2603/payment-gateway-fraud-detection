@@ -74,7 +74,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: apply
-          image: {{ .Values.setupImage }}
+          image: {{ required "setupImage is required" .Values.setupImage }}
           command: [python, /script/setup.py]
           env:
             - {name: CLICKHOUSE_HOST, value: {{ .Values.clickhouse.host | quote }}}
