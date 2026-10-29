@@ -27,7 +27,7 @@ tables:
     type: sql
     description: Complete canonical histories have consecutive versions, legal transitions, consistent attempt identities
       and correlation. Causation is implied by aggregate_version order.
-    query: "WITH canonical AS (\n  SELECT * FROM {events}\n),\ntyped AS (\n  SELECT c.*,\n    CASE\n\
+    query: "WITH canonical AS (\n  SELECT * FROM {events} AS source_events\n),\ntyped AS (\n  SELECT c.*,\n    CASE\n\
       \      WHEN c.payment_created IS NOT NULL THEN 'created'\n      WHEN c.attempt_started IS NOT NULL THEN 'started'\n\
       \      WHEN c.risk_decision_recorded IS NOT NULL THEN 'decision'\n      WHEN c.processor_operation_requested IS NOT\
       \ NULL THEN 'requested'\n      WHEN c.processor_outcome_unknown IS NOT NULL THEN 'unknown'\n      WHEN c.attempt_declined\
@@ -59,7 +59,7 @@ tables:
     name: payment_attempt_identity
     type: sql
     description: Each canonical attempt identity starts once within its scoped payment.
-    query: "WITH canonical AS (\n  SELECT * FROM {events}\n)\nSELECT COUNT(*) FROM (\n  SELECT c.integration_id,\
+    query: "WITH canonical AS (\n  SELECT * FROM {events} AS source_events\n)\nSELECT COUNT(*) FROM (\n  SELECT c.integration_id,\
       \ c.payment_id, c.attempt_started.attempt_id AS attempt_id\n  FROM canonical AS c\n  WHERE c.attempt_started IS NOT\
       \ NULL\n  GROUP BY c.integration_id, c.payment_id, c.attempt_started.attempt_id\n  HAVING COUNT(*) > 1\n) AS violations\n"
     mustBe: 0

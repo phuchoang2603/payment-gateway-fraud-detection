@@ -34,5 +34,7 @@
     }
   ],
   "failure": "Executor 2 OOMKilled, container exit 137; dependent shuffle fetches retried. No failed business assertion is inferred.",
-  "limits": "Stage metrics are cumulative at collection, not process peak RSS or final acceptance."
+  "limits": "Stage metrics are cumulative at collection, not process peak RSS or final acceptance.",
+  "workflow_outcome": "Failed",
+  "final_application_failure": "Argo resource pod exceeded its deadline; candidate retained transform outcome=error, error_type=Py4JJavaError, no snapshots and no diagnostics."
 }

@@ -166,7 +166,7 @@ def cases(candidate):
                 sql = recurring_lifecycle(tokens["events"])
             elif candidate["completeness"] == "recurring" and rule["id"] == "attempt_context_consistency":
                 sql = (
-                    f"WITH created AS (SELECT DISTINCT integration_id, payment_id, payment_created FROM {tokens['events']} "
+                    f"WITH created AS (SELECT DISTINCT integration_id, payment_id, payment_created FROM {tokens['events']} AS source_events "
                     f"WHERE payment_created IS NOT NULL) SELECT COUNT(*) FROM {tokens['events']} AS e "
                     "JOIN created AS c ON e.integration_id = c.integration_id AND e.payment_id = c.payment_id "
                     "WHERE e.attempt_started IS NOT NULL AND (e.attempt_started.context IS NULL "
@@ -193,7 +193,7 @@ def cases(candidate):
                 "event_delivery_provenance",
                 "source_event_conservation",
                 "Event delivery accounting equals the selected Bronze inputs.",
-                f"SELECT COUNT(*) FROM (SELECT (SELECT COALESCE(SUM(deliveries), 0) FROM {event_provenance}) AS actual, "
+                f"SELECT COUNT(*) FROM (SELECT (SELECT COALESCE(SUM(deliveries), 0) FROM {event_provenance} AS source_deliveries) AS actual, "
                 f"{bronze_count(candidate, 'payment_events')} AS expected) AS counts WHERE actual <> expected",
             ),
             SilverCase(
@@ -208,7 +208,7 @@ def cases(candidate):
                 "canonical_delivery_linkage",
                 "Every canonical event has exactly one representative delivery.",
                 f"SELECT COUNT(*) FROM {events} AS e LEFT JOIN (SELECT integration_id, event_id, "
-                f"SUM(representative_deliveries + pending_context_deliveries) AS representatives FROM {event_provenance} "
+                f"SUM(representative_deliveries + pending_context_deliveries) AS representatives FROM {event_provenance} AS source_deliveries "
                 "GROUP BY integration_id, event_id) AS p ON e.integration_id = p.integration_id "
                 "AND e.event_id = p.event_id WHERE p.representatives IS NULL OR p.representatives <> 1",
             ),
@@ -236,7 +236,7 @@ def cases(candidate):
                 "label_delivery_provenance",
                 "source_label_conservation",
                 "Label delivery accounting equals the selected Bronze inputs.",
-                f"SELECT COUNT(*) FROM (SELECT (SELECT COALESCE(SUM(deliveries), 0) FROM {label_provenance}) AS actual, "
+                f"SELECT COUNT(*) FROM (SELECT (SELECT COALESCE(SUM(deliveries), 0) FROM {label_provenance} AS source_deliveries) AS actual, "
                 f"{bronze_count(candidate, 'fraud_labels')} AS expected) AS counts WHERE actual <> expected",
             ),
             SilverCase(
@@ -244,14 +244,14 @@ def cases(candidate):
                 "label_identity_and_provenance",
                 "Every unique observation has at least one recorded delivery.",
                 f"SELECT COUNT(*) FROM {labels} AS l LEFT JOIN (SELECT observation_id, SUM(deliveries) AS deliveries "
-                f"FROM {label_provenance} GROUP BY observation_id) AS p ON l.observation_id = p.observation_id "
+                f"FROM {label_provenance} AS source_deliveries GROUP BY observation_id) AS p ON l.observation_id = p.observation_id "
                 "WHERE p.deliveries IS NULL OR p.deliveries < 1",
             ),
             SilverCase(
                 "label_observations",
                 "label_identity_unique",
                 "Observation identifiers are unique.",
-                f"SELECT COUNT(*) FROM (SELECT observation_id FROM {labels} GROUP BY observation_id "
+                f"SELECT COUNT(*) FROM (SELECT observation_id FROM {labels} AS source_labels GROUP BY observation_id "
                 "HAVING COUNT(*) > 1) AS duplicates",
             ),
         ]
