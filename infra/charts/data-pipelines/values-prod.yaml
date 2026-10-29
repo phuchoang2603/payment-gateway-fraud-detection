@@ -1,11 +1,12 @@
 enabled: true
 generator:
   config: historical-full.yaml
-  shards: 4
+  shards: 12
   workers: 3
   retryLimit: 10
-  # Unmeasured. Sized to fit one aws-cpu-burst xlarge (about 3.5 allocatable vCPU; root disk about 37Gi).
-  activeDeadlineSeconds: 86400
+  # One shard per aws-cpu-burst spot xlarge (pool limit 12 nodes / 48 vCPU). Dev v18 measured about 115 purchases/s per
+  # worker before the world-table change; v19 is about 190M purchases, so 36 workers need several hours.
+  activeDeadlineSeconds: 64800
   nodeSelector:
     karpenter.sh/nodepool: aws-cpu-burst
     karpenter.sh/capacity-type: spot
