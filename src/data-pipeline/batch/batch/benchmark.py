@@ -1,12 +1,14 @@
 import json
 import os
+import urllib.request
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
+from batch.bronze import EVENTS as BRONZE_EVENTS
 from batch.bronze import current_snapshot
 from batch.metrics import phase
-from batch.silver import ATTEMPTS
+from batch.silver import ATTEMPTS, full_width_dedup, narrow_dedup, plan_dedup, with_event_hash
 from batch.spark import session
 from batch.store import Store
 
@@ -150,11 +152,70 @@ def hot_key_share(attempts: DataFrame) -> dict:
     return {"merchant_id": top["merchant_id"], "share": top["count"] / total, "denominator": total}
 
 
-def benchmark(spark, attempts: DataFrame) -> dict:
+ALWAYS_BROADCAST = 1 << 62
+
+
+def spill_bytes(spark, stage_ids: list) -> dict:
+    sc = spark.sparkContext
+    if not sc.uiWebUrl:
+        return {"memory": None, "disk": None}
+    stages = json.load(urllib.request.urlopen(f"{sc.uiWebUrl}/api/v1/applications/{sc.applicationId}/stages"))
+    chosen = [stage for stage in stages if stage["stageId"] in stage_ids]
+    return {
+        "memory": sum(stage["memoryBytesSpilled"] for stage in chosen),
+        "disk": sum(stage["diskBytesSpilled"] for stage in chosen),
+    }
+
+
+def full_width_group(hashed: DataFrame):
+    return full_width_dedup(hashed), None
+
+
+def narrow_detect_broadcast(hashed: DataFrame):
+    plan = plan_dedup(hashed, ALWAYS_BROADCAST)
+    distinct, _ = narrow_dedup(hashed, plan)
+    return distinct, plan
+
+
+DEDUP_VARIANTS = {"full_width_group": full_width_group, "narrow_detect_broadcast": narrow_detect_broadcast}
+
+
+def dedup_variant(spark, events: DataFrame, name: str, build, phases: dict):
+    hashed = with_event_hash(events)
+    with phase(spark, phases, f"dedup {name}"):
+        frame, plan = build(hashed)
+        try:
+            rows, checksum, _ = fingerprint(frame)
+        finally:
+            if plan is not None:
+                plan["duplicated"].unpersist()
+    return rows, checksum, spill_bytes(spark, phases[f"dedup {name}"]["stage_ids"])
+
+
+def dedup_family(spark, events: DataFrame, phases: dict) -> dict:
+    events.count()
+    results, baseline = {}, None
+    for name, build in DEDUP_VARIANTS.items():
+        rows, checksum, spill = dedup_variant(spark, events, name, build, phases)
+        guard = (rows, checksum)
+        if baseline is None:
+            baseline = guard
+        same_output(baseline, guard, name)
+        results[name] = {
+            "output_rows": rows,
+            "checksum": str(checksum),
+            "seconds": phases[f"dedup {name}"]["seconds"],
+            "spill": spill,
+        }
+    return results
+
+
+def benchmark(spark, attempts: DataFrame, events: DataFrame) -> dict:
     phases: dict = {}
     return {
         "hot_key": hot_key_share(attempts),
         "skewed_merchant_join": skewed_merchant_join(spark, attempts, phases),
+        "dedup": dedup_family(spark, events, phases),
         "phases": phases,
     }
 
@@ -163,9 +224,16 @@ def main():
     run_id = os.environ["RUN_ID"]
     spark = session("dp2-benchmark")
     try:
-        snapshot = current_snapshot(spark, ATTEMPTS)
-        attempts = spark.read.option("versionAsOf", snapshot).table(ATTEMPTS)
-        result = {"run_id": run_id, "silver_snapshot_id": snapshot, **benchmark(spark, attempts)}
+        silver_snapshot = current_snapshot(spark, ATTEMPTS)
+        bronze_snapshot = current_snapshot(spark, BRONZE_EVENTS)
+        attempts = spark.read.option("versionAsOf", silver_snapshot).table(ATTEMPTS)
+        events = spark.read.option("versionAsOf", bronze_snapshot).table(BRONZE_EVENTS)
+        result = {
+            "run_id": run_id,
+            "silver_snapshot_id": silver_snapshot,
+            "bronze_snapshot_id": bronze_snapshot,
+            **benchmark(spark, attempts, events),
+        }
         Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/benchmark.json", result)
         print(json.dumps(result, sort_keys=True, default=str))
     finally:

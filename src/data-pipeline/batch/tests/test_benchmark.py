@@ -2,7 +2,8 @@ import pytest
 from pyspark.sql import functions as F
 
 from batch import benchmark
-from tests.events import at
+from batch.schema import EVENT_COLUMNS, business_schema
+from tests.events import at, created
 
 LOW_SKEW_THRESHOLDS = {
     "spark.sql.adaptive.coalescePartitions.enabled": "false",
@@ -98,3 +99,21 @@ def test_hot_key_share_uses_all_attempts_as_denominator(spark, attempts):
 
     assert share["merchant_id"] == "m-1"
     assert share["denominator"] == 82
+
+
+@pytest.fixture
+def duplicated_events(spark):
+    rows = [created(f"pay-{n}", f"evt-{n}", minutes=n % 60) for n in range(300)]
+    rows += [created(f"pay-{n}", f"evt-{n}", minutes=n % 60, recorded=90) for n in range(0, 300, 3)]
+    rows += [created("pay-x", "evt-x", amount=100), created("pay-x", "evt-x", amount=999)]
+    return spark.createDataFrame(rows, business_schema(spark, EVENT_COLUMNS)).withColumns(
+        {"_source": F.lit("historical"), "_ingested_at": F.current_timestamp()}
+    )
+
+
+def test_every_dedup_variant_returns_the_full_width_output(spark, duplicated_events):
+    results = benchmark.dedup_family(spark, duplicated_events, {})
+
+    assert set(results) == set(benchmark.DEDUP_VARIANTS)
+    assert {r["output_rows"] for r in results.values()} == {301}
+    assert len({r["checksum"] for r in results.values()}) == 1
