@@ -1,0 +1,114 @@
+{{- $ch := .Values.clickhouse }}
+{{- $lh := .Values.lakehouse }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: lakehouse-admin
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: doppler
+  target:
+    name: lakehouse-admin
+  data:
+    - secretKey: ADMIN_PASSWORD
+      remoteRef:
+        key: {{ $ch.adminPasswordKey }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: lakehouse-storage
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.storage.secretStore }}
+  target:
+    name: lakehouse-storage
+  data:
+    - secretKey: AWS_ACCESS_KEY_ID
+      remoteRef:
+        key: {{ .Values.storage.accessKey }}
+    - secretKey: AWS_SECRET_ACCESS_KEY
+      remoteRef:
+        key: {{ .Values.storage.secretKey }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lakehouse-database-script
+data:
+  setup.sh: |
+    set -eu
+    statement() {
+      code=$(curl -sS -o /dev/null -w '%{http_code}' --user "$CLICKHOUSE_ADMIN_USER:$ADMIN_PASSWORD" --data-binary "$1" "http://$CLICKHOUSE_HOST:$CLICKHOUSE_PORT/") || code=000
+      if [ "$code" != 200 ]; then
+        echo "ClickHouse statement failed with HTTP $code" >&2
+        return 1
+      fi
+    }
+    query() {
+      curl -fsS --user "$CLICKHOUSE_ADMIN_USER:$ADMIN_PASSWORD" --data-binary "$1" "http://$CLICKHOUSE_HOST:$CLICKHOUSE_PORT/"
+    }
+    until statement "SELECT 1"; do sleep 10; done
+    definition="CREATE DATABASE $LAKEHOUSE_DATABASE ENGINE = DataLakeCatalog('$LAKEHOUSE_REST_URI') SETTINGS catalog_type = 'rest', catalog_credential = '$LAKEHOUSE_CLIENT_ID:$ICEBERG_CLIENT_SECRET', auth_scope = '$LAKEHOUSE_SCOPE', oauth_server_uri = '$LAKEHOUSE_OAUTH_URI', warehouse = '$LAKEHOUSE_WAREHOUSE', storage_endpoint = '$STORAGE_ENDPOINT', region = '$STORAGE_REGION', aws_access_key_id = '$AWS_ACCESS_KEY_ID', aws_secret_access_key = '$AWS_SECRET_ACCESS_KEY', vended_credentials = false"
+    marker="definition-sha256:$(printf '%s' "$definition" | sha256sum | cut -d' ' -f1)"
+    current=$(query "SELECT comment FROM system.databases WHERE name = '$LAKEHOUSE_DATABASE' FORMAT TSVRaw")
+    if [ "$current" = "$marker" ]; then
+      echo "lakehouse database definition is current"
+      exit 0
+    fi
+    statement "DROP DATABASE IF EXISTS $LAKEHOUSE_DATABASE SYNC"
+    statement "$definition COMMENT '$marker'"
+    echo "lakehouse database created"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lakehouse-database
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 20
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: apply
+          image: {{ $ch.image }}
+          command: [bash, /script/setup.sh]
+          env:
+            - {name: CLICKHOUSE_HOST, value: {{ $ch.host | quote }}}
+            - {name: CLICKHOUSE_PORT, value: {{ $ch.port | quote }}}
+            - {name: CLICKHOUSE_ADMIN_USER, value: {{ $ch.adminUser | quote }}}
+            - {name: LAKEHOUSE_DATABASE, value: {{ $lh.database | quote }}}
+            - {name: LAKEHOUSE_REST_URI, value: {{ $lh.restCatalogUri | quote }}}
+            - {name: LAKEHOUSE_WAREHOUSE, value: {{ $lh.warehouse | quote }}}
+            - {name: LAKEHOUSE_CLIENT_ID, value: {{ $lh.clientId | quote }}}
+            - {name: LAKEHOUSE_SCOPE, value: {{ $lh.scope | quote }}}
+            - {name: LAKEHOUSE_OAUTH_URI, value: {{ $lh.oauthServerUri | quote }}}
+            - {name: STORAGE_ENDPOINT, value: {{ printf "%s/%s" .Values.catalog.endpoint .Values.catalog.bucket | quote }}}
+            - {name: STORAGE_REGION, value: {{ .Values.catalog.region | quote }}}
+          envFrom:
+            - secretRef:
+                name: lakehouse-admin
+            - secretRef:
+                name: lakehouse-storage
+            - secretRef:
+                name: gateway-catalog-client
+          volumeMounts:
+            - {name: script, mountPath: /script}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+      volumes:
+        - name: script
+          configMap:
+            name: lakehouse-database-script
