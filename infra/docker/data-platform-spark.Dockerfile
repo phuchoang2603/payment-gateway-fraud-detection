@@ -24,7 +24,7 @@ RUN uv sync --locked --no-dev --no-editable \
     && find .venv -type d -name __pycache__ -prune -exec rm -rf {} + \
     && rm -rf .venv/lib/python3.12/site-packages/pip* .venv/bin/pip*
 COPY contracts/payments /opt/contracts/payments
-RUN uv run --no-project --with grpcio-tools==1.84.0 python -c "import sys; from grpc_tools import protoc; sys.exit(protoc.main(['protoc', '-I/opt/contracts', '--include_imports', '--descriptor_set_out=/opt/data-pipeline/batch/payments.pb', 'payments/v1/events.proto', 'payments/v1/labels.proto']))"
+RUN uv run --no-project --with grpcio-tools==1.84.0 python -c "import pathlib, sys; import grpc_tools; from grpc_tools import protoc; include = pathlib.Path(grpc_tools.__file__).parent / '_proto'; sys.exit(protoc.main(['protoc', '-I/opt/contracts', f'-I{include}', '--include_imports', '--descriptor_set_out=/opt/data-pipeline/batch/payments.pb', 'payments/v1/events.proto', 'payments/v1/labels.proto']))"
 
 FROM python:3.12.15-slim-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jre-headless procps tini && \

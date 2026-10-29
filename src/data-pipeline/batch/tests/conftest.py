@@ -8,6 +8,7 @@ CONTRACTS = Path(__file__).resolve().parents[4] / "contracts"
 
 @pytest.fixture(scope="session", autouse=True)
 def contract_inputs(tmp_path_factory):
+    import grpc_tools
     from grpc_tools import protoc
 
     descriptor = tmp_path_factory.mktemp("descriptor") / "payments.pb"
@@ -15,6 +16,7 @@ def contract_inputs(tmp_path_factory):
         [
             "protoc",
             f"-I{CONTRACTS}",
+            f"-I{Path(grpc_tools.__file__).parent / '_proto'}",
             "--include_imports",
             f"--descriptor_set_out={descriptor}",
             "payments/v1/events.proto",
