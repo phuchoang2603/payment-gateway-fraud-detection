@@ -122,12 +122,13 @@ def synchronize(sdk, candidate, expected, stages, outcome, report_uri):
     from metadata.generated.schema.entity.services.pipelineService import PipelineService
     from metadata.generated.schema.tests.testCase import TestCase
     from metadata.generated.schema.type.entityReference import EntityReference
+    from metadata.generated.schema.type.entityReferenceList import EntityReferenceList
 
     def merge_references(existing, additions):
-        references = list(existing or [])
+        references = list(existing.root or []) if existing is not None else []
         present = {str(reference.id.root) for reference in references}
         references.extend(EntityReference.model_validate(item) for item in additions if item["id"] not in present)
-        return references
+        return EntityReferenceList(root=references)
 
     product = yaml.safe_load((PRODUCTS / PRODUCT / "product.odps.yaml").read_text())
     if product["team"] != governance.product_document()["team"]:

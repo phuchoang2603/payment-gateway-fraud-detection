@@ -1,0 +1,16 @@
+{
+  "attempt_id": "c30f74cc-1c47-4924-bb9a-2f70c1c3fa7f",
+  "candidate_id": "1aacc2bd7643d860664fe507cf212d4a1587b6c1818f9492f0a197561097601a",
+  "ended_at": 1793236619475,
+  "outcome": "passed",
+  "problem_count": 0,
+  "problems": {},
+  "snapshots": {
+    "attempt_histories": 7330039527206951134,
+    "event_delivery_provenance": 1744261378093110830,
+    "label_delivery_provenance": 5333814728712134820,
+    "label_observations": 9093244332554283895,
+    "payment_events": 134749491064778806
+  },
+  "started_at": 1793236186222
+}
