@@ -1,13 +1,5 @@
 ## MODIFIED Requirements
 
-### Requirement: Operator-managed Spark stages
-Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for each Spark stage attempt, owned by the workflow so that it is removed with it. Native discovery and ClickHouse SQL checks SHALL run as one finite container stage using the server-matched official ingestion runtime. Publication SHALL use the thin metadata image. The platform-owned Apache Spark Operator SHALL manage driver and executor lifecycle with operator restarts disabled. Stage success SHALL require a successful terminal application status; failed applications and deadlines SHALL fail the stage with diagnostics.
-
-#### Scenario: Stage fails or times out
-
-- **WHEN** a SparkApplication fails or its stage exceeds its deadline
-- **THEN** its Argo stage fails with application diagnostics and its driver and executors are removed
-
 ### Requirement: Native metadata workflow execution
 The checks stage SHALL run native OpenMetadata discovery for the run's tables followed by the test suite derived from the contracts, from the server-matched runtime. Process success SHALL NOT imply passing data quality: the stage SHALL succeed only when every expected test for the run reports Success. Credentials and permissions SHALL remain scoped to actual operations.
 
@@ -77,10 +69,6 @@ A DP1 submission SHALL select either a historical dataset version, by source roo
 ### Requirement: Observable ingest and validate stages
 **Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
 **Migration**: See "Three-stage pipeline workflows".
-
-### Requirement: Bounded retry and cancellation
-**Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
-**Migration**: See "Single-level retry and writer serialization".
 
 ### Requirement: Readable stage dependencies
 **Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.

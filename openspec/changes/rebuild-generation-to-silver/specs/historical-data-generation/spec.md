@@ -166,10 +166,6 @@ Purchase-start days SHALL end on the last full day before the dataset is generat
 **Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
 **Migration**: See "Configured data problems".
 
-### Requirement: Contract-gated immutable output
-**Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
-**Migration**: See "Per-day immutable dataset layout".
-
 ### Requirement: Local execution
 **Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
 **Migration**: See "Generator execution".

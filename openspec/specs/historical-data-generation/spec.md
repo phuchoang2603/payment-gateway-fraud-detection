@@ -113,42 +113,6 @@ The generator SHALL emit simulation-truth labels with their scenario for every a
 - **WHEN** a successful fraudulent attempt has not produced an available chargeback
 - **THEN** observed-label evidence does not present it as a confirmed negative
 
-### Requirement: Contract-gated immutable output
-
-Output SHALL publish generation-only raw Parquet under `historical/<dataset_version>/raw/{table}/{task.key}/v{schema_version}.parquet`. The manifest SHALL use `manifest_version: 3` and `source_layout: task-fragments-v1`, with exact inventory entries containing key, checksum, bytes, rows, `schema_version` and `partitions: {date: rows}`. Date counts SHALL derive from event occurrence or label availability timestamps and sum to file rows; files MAY span multiple dates. Publication SHALL promise neither sorting nor compaction and SHALL NOT perform Python/DuckDB finalization or remote analytical scans.
-
-Source completion SHALL require complete generation receipts, verified file integrity, row-count accounting and the configured physical-byte gate before exclusive manifest-last publication. The manifest SHALL record configuration/hashes, seed, original algorithm/revision, product/contract identities/hashes, statistics and an explicit `validation: {result: skipped, gate: dp1-starrocks-openmetadata, reason: ...}` declaration. Product and logical ODCS versions/hashes SHALL advance with the new attempt context and identify its matching physical schema; dataset identity SHALL remain independent. Completed versions SHALL be immutable, with equivalent local/S3 guarantees.
-
-DP1 SHALL validate exactly the listed raw files, preserve duplicate deliveries and delayed labels, and derive Bronze partitions from timestamp columns. Source publication SHALL NOT establish quality acceptance; both persisted Bronze tables SHALL pass their owning DP1 contract/quality checks and verified OpenMetadata governance before acceptance.
-
-#### Scenario: Validated bytes are published
-
-- **WHEN** generation, integrity, row accounting and byte gates pass
-- **THEN** the manifest lists the verified raw task files without sorting or compacting them
-- **AND** its downstream gate does not claim contract checks have passed
-
-#### Scenario: Contract violation
-
-- **WHEN** published rows contain an illegal lifecycle transition or missing label linkage
-- **THEN** DP1 quality acceptance fails even if source publication and integrity checks succeeded
-
-#### Scenario: Existing dataset version
-
-- **WHEN** a compatible completed format-3 dataset is rerun
-- **THEN** the normal command verifies stored configuration, publication settings and raw inventory, then retries transient cleanup without regenerating rows or rewriting completed files or the manifest
-
-#### Scenario: Interrupted run
-
-- **WHEN** generation stops before manifest publication
-- **THEN** consumers identify the dataset as incomplete and a compatible normal command resumes while refusing an active writer
-
-#### Scenario: Multi-date raw file
-
-- **WHEN** a task contains cross-midnight transitions and labels beyond history end
-- **THEN** its file inventory includes all timestamp-derived date counts
-- **AND** DP1 preserves all rows, including duplicate deliveries, and derives Bronze partitions from row timestamps rather than task paths
-
-
 ### Requirement: Local execution
 
 Generation SHALL run as a local CLI from the repository development environment with environment-only credentials and no cluster requirement. `--prepare-only` SHALL leave generated raw files and verified inventory ready without sorting or a completion manifest. A compatible normal command SHALL continue publication without regenerating rows.

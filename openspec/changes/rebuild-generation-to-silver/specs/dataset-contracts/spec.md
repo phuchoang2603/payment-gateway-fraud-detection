@@ -80,17 +80,9 @@ The `silver-payments` folder SHALL contain one ODPS descriptor and ODCS contract
 **Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
 **Migration**: See "Contract quality rules".
 
-### Requirement: Execution boundaries
-**Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
-**Migration**: See "Validation ownership".
-
 ### Requirement: Bronze schema and consumption agreement
 **Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
 **Migration**: See "Bronze schema and provenance".
-
-### Requirement: Complete contract-derived bronze enforcement
-**Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
-**Migration**: See "Contract-derived native checks".
 
 ### Requirement: Feature contract references and source traceability
 **Reason**: Source provenance no longer references the feature definition; feature traceability belongs to the feature pipeline.

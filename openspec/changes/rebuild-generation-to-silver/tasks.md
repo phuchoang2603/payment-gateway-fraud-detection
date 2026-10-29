@@ -73,7 +73,7 @@
 - [x] 10.1 Add `infra/charts/clickhouse` (ClickHouseInstallation, `clickhouse` Service, one ExternalSecret per user, PostSync setup Job) and its app-of-apps entry for dev and prod. Verify with CI helm lint and template for every values file.
 - [x] 10.2 Move the `openmetadata` user out of `lakehouse-integration`; its setup creates only the `lakehouse` DataLakeCatalog database as admin, after the instance accepts connections. Verify with CI helm template.
 - [ ] 10.3 Confirm the chart defines no operator management user and no NetworkPolicy that could block the operator in namespace `operators`. Verify by grep and CI helm template.
-- [ ] 10.4 Cluster, blocked until the dev rebuild and readiness: the instance is ready, the three users exist, `langfuse` exists, the `lakehouse` database is created, and `openmetadata` reads `lakehouse.*` with its profile applied.
+- [ ] 10.4 Cluster, blocked until the dev rebuild and readiness: the instance is ready, the three users exist, `langfuse` exists, the `lakehouse` database is created, and `openmetadata` reads `lakehouse.*` with its profile applied. Run the spike items in design.md section 13, including the exact OpenMetadata FQN and the masked credentials in `SHOW CREATE DATABASE` and `system.query_log`.
 
 ## 9. Docs, specs and final checks
 

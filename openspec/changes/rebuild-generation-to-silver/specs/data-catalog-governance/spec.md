@@ -8,27 +8,6 @@ Implementation SHALL remove obsolete DP1-owned catalog registrations, contracts,
 - **WHEN** obsolete DP1 catalog artifacts are removed
 - **THEN** only the rebuilt pipeline's assets remain for Bronze, and unrelated assets and source objects are intact
 
-### Requirement: Authoritative contract publication
-Git-versioned ODCS contracts SHALL remain authoritative. OpenMetadata SHALL expose native contracts with the complete original ODCS YAML, identities, versions, hashes and artifact references. Native contracts SHALL populate inspectable normalized nested schema, active raw quality-test references, declared owners and supported declared semantics/security/SLA fields, without inventing absent guarantees. Native contract source URLs SHALL use stable canonical repository paths. Contract provenance SHALL retain the full Git revision, immutable artifact URL and content hash separately; execution parameters SHALL retain the publication Git revision. An unrelated deployment revision SHALL NOT change the canonical contract link or require a shared server fork. Original YAML alone SHALL NOT satisfy native mapping. Native schemas and quality-rule metadata SHALL preserve the declared rules without modifying Git contracts or immutable source manifests. Native OpenMetadata quality workflows SHALL execute Git-derived ClickHouse SQL as the sole bronze quality path. Catalog configuration SHALL NOT become an independent rule source or retain a custom GX result projection.
-
-#### Scenario: Inspect a published contract
-
-- **WHEN** a user opens a bronze table's contract in OpenMetadata
-- **THEN** its identity/version/hash match Git, its nested schema and active native quality references are inspectable, its declared owners resolve and its validation evidence traces to the selected contract
-
-#### Scenario: Unsupported contract or validation metadata
-
-- **WHEN** the selected catalog integration cannot represent a required contract or validation outcome
-- **THEN** publication reports incomplete governance rather than silently omitting it or claiming acceptance
-
-### Requirement: Canonical table identities
-Native ClickHouse discovery, profiling, quality execution and lineage SHALL address the same OpenMetadata table entities. ClickHouse SHALL use the existing RustFS REST catalog and separately configured warehouse access. External-catalog selection and nested schema fidelity SHALL be verified for each native workflow connection; no custom discovery, duplicate Spark/custom registrations or mandatory internal-table copies SHALL substitute for native discovery.
-
-#### Scenario: Execute native SQL validation
-
-- **WHEN** a native OpenMetadata SQL workflow checks an Iceberg table discovered through ClickHouse
-- **THEN** its native test definitions and results appear on the discovered entity with matching run, contract and snapshot references
-
 ## ADDED Requirements
 
 ### Requirement: Product discovery

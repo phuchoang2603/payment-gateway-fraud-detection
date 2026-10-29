@@ -68,17 +68,9 @@ After each commit, the persisted Bronze tables SHALL pass the contract-derived C
 **Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
 **Migration**: See "Delivery-preserving Bronze tables".
 
-### Requirement: Completed source selection
-**Reason**: Source-validation declarations, the v16 path and acceptance readback are covered by the listing and per-file row checks.
-**Migration**: See "Historical source ingestion".
-
 ### Requirement: Recoverable ingestion identity
 **Reason**: Covered by idempotent dataset overwrite for files and atomic offset commits for Kafka.
 **Migration**: See "Historical source ingestion" and "Kafka source ingestion".
-
-### Requirement: Persisted snapshot validation
-**Reason**: Bidirectional conservation receipts and per-day count comparisons are covered by per-file row checks and SQL checks on the committed tables.
-**Migration**: See "Historical source ingestion" and "Bronze contract checks".
 
 ### Requirement: Product acceptance boundary
 **Reason**: Accepted-record pointers are removed; a run succeeds only when its checks pass, and consumers read the current tables.

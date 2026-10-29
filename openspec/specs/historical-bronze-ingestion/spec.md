@@ -5,26 +5,6 @@ Publish reproducible bronze payment and label snapshots from immutable historica
 
 ## Requirements
 
-### Requirement: Completed source selection
-In historical mode, DP1 SHALL ingest only files selected by a completed immutable source manifest and its embedded inventory; manifests without an embedded inventory are unsupported. It SHALL verify declared identities, supported schemas, file hashes, sizes and row counts before writing bronze. Source objects and the original manifest SHALL remain unchanged. Source validation SHALL either declare both native ports passed or explicitly declare `result: skipped`, `gate: dp1-starrocks-openmetadata` and a nonblank reason with an embedded inventory and no conflicting port declarations. The latter permits ingestion, not quality acceptance. Current inputs SHALL match schema 3 events, schema 1 labels, current source contracts/product and the pinned feature definition. Run and validation evidence SHALL preserve these declarations unchanged. Bronze acceptance SHALL require both persisted tables passing native SQL checks, matching duplicate-aware conservation evidence and complete rule/run/contract/snapshot/governance readback. Retired GX gate/schema compatibility SHALL NOT be a current path; superseded acceptance SHALL NOT be imported into a fresh reset or relabeled as acceptance of the rewritten integration.
-
-#### Scenario: Accepted historical version
-
-- **WHEN** a published version such as the published 90-day v16 development export is selected with its completed manifest and matching source files
-- **THEN** the run records the manifest digest, source version and exact input files without regenerating or modifying them
-
-#### Scenario: Explicit deferred source validation
-
-- **WHEN** a completed source manifest has an embedded inventory and the supported explicit deferred declaration
-- **THEN** DP1 preflight permits ingestion and persists the declaration in run and validation reports
-- **AND** missing, failed or incomplete table-validation evidence prevents acceptance
-- **AND** unknown or missing downstream gate declarations fail before bronze writes
-
-#### Scenario: Altered or incomplete source
-
-- **WHEN** a manifest is absent, a file fails verification or a known dataset version has a different manifest digest
-- **THEN** the run fails before bronze writes and identifies the input error
-
 ### Requirement: Content-preserving bronze output
 DP1 SHALL retain all delivered business records and identical duplicates in separate event and label tables. It SHALL preserve source times, normalize supported physical schemas without loss and attach source/run provenance. It SHALL NOT perform DP2 curation or deduplication.
 
@@ -50,19 +30,6 @@ DP1 SHALL serialize writes to its bronze product and persist run identity before
 
 - **WHEN** an accepted export with its manifest is submitted again
 - **THEN** the run reuses the accepted table snapshots and reports a replay without adding rows or changing unrelated source-version output
-
-### Requirement: Persisted snapshot validation
-For historical exports, validation SHALL read the recorded event and label snapshots for the selected source version. It SHALL execute StarRocks SQL through native OpenMetadata against both explicit snapshot IDs, preserve complete selected deliveries and delayed labels, and compare persisted per-day row counts with the immutable manifest. Ingestion SHALL verify each source file's checksum and rows before writing and reconcile the selected source frames against recorded persisted snapshots bidirectionally with duplicate multiplicity preserved. A missing, failed or mismatched conservation receipt SHALL prevent acceptance; per-day counts alone SHALL NOT establish content equality.
-
-#### Scenario: History spans source dates
-
-- **WHEN** a payment starts on one date and its lifecycle or label continues on later dates
-- **THEN** DP1 preserves every selected delivery and availability timestamp; DP2 validates full-history lifecycle and linkage
-
-#### Scenario: A later writer changes a table
-
-- **WHEN** current table state advances after the ingest stage records its snapshots
-- **THEN** validation still evaluates the recorded snapshots and reports their identities
 
 ### Requirement: Product acceptance boundary
 A completed DP1 run SHALL expose an accepted record pinning its complete output snapshot set, immutable input identities, contract hashes and governance outcome. Historical runs SHALL pin both validated snapshots and the source manifest digest. Recurring runs SHALL distinguish updated ports from unchanged accepted ports and retain input/progress identity. Partial writes, failed quality checks or incomplete governance SHALL NOT replace the previous accepted record. Referenced snapshots and reports SHALL remain available for reproduction.

@@ -38,14 +38,6 @@ Bounded CI fixtures SHALL protect the distinct behavioral risks: historical list
 - **WHEN** Silver curation runs on fixtures with linked, pending and violating labels
 - **THEN** each label receives its expected class and a violation fails the Silver checks
 
-### Requirement: Native ClickHouse integration evidence
-Implementation SHALL verify direct RustFS SigV4 access, external-catalog discovery, nested schemas, snapshot-specific SQL and native OpenMetadata passing/failing quality results with the selected versions. This SHALL be implementation acceptance rather than a per-batch disposable compatibility stage. Previous GX/native acceptance SHALL NOT establish acceptance of the rewritten integration or survive as an active compatibility path. SQL execution failure or unsupported discovery SHALL be reported without a hidden legacy fallback.
-
-#### Scenario: Native external-catalog discovery is incomplete
-
-- **WHEN** ClickHouse can query a table but OpenMetadata cannot natively discover or profile its external-catalog identity correctly
-- **THEN** integration readiness remains unverified and DP1 does not claim completed native acceptance
-
 ## REMOVED Requirements
 
 ### Requirement: Generator behavior tests
@@ -80,10 +72,6 @@ Implementation SHALL verify direct RustFS SigV4 access, external-catalog discove
 **Reason**: The deferred source gate declaration is removed.
 **Migration**: None.
 
-### Requirement: Live historical and governance acceptance
-**Reason**: v16 acceptance, readback acceptance and evidence capture are out of scope; runtime acceptance follows the whole pipeline.
-**Migration**: None.
-
 ### Requirement: Recurring ingestion verification
 **Reason**: Landing-batch recurring ingestion is removed.
 **Migration**: See "Bronze and Silver behavioral verification".
@@ -91,7 +79,3 @@ Implementation SHALL verify direct RustFS SigV4 access, external-catalog discove
 ### Requirement: Fresh integration acceptance
 **Reason**: Refers to v16 acceptance and readback of the replaced integration.
 **Migration**: None.
-
-### Requirement: Native StarRocks integration evidence
-**Reason**: Replaced by the ClickHouse integration evidence requirement.
-**Migration**: See "Native ClickHouse integration evidence".

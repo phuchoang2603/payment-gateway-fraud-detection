@@ -177,25 +177,6 @@ Bounded CI fixtures SHALL protect the distinct behavioral risks: source integrit
 - **THEN** bronze checks schema, transport and exact conservation without claiming business-rule or as-of acceptance
 - **AND** source business checks and planned silver rules retain their distinct scope and semantic identities
 
-### Requirement: Live historical and governance acceptance
-Production workflows SHALL NOT repeat disposable-table rollout probes. Superseded DP1 data/receipts SHALL be removed only within the inventoried fresh-start boundary; cleanup SHALL NOT relabel past observations or remove separately owned upstream evidence. Live acceptance SHALL separately exercise current-contract native v16 development ingestion now, with later separate full-scale/coursework acceptance, persisted-snapshot validation, replay, partial-commit recovery and OpenMetadata readback. Deliberate isolated failure/outage exercises are not required; no new reset/run SHALL relabel past failed observations as successful integration. Evidence SHALL identify revisions, images, contracts, manifests, snapshots, resource measurements and unverified prerequisites.
-
-#### Scenario: Complete v16 development acceptance
-
-- **WHEN** the configured live DP1 run over the 90-day v16 export succeeds
-- **THEN** it verifies source-to-bronze content/count conservation, safe replay and visible owners/products, native nested contract schema and active quality references, actual source lineage, current pipeline tasks/execution I/O, meaningful scoped profiles and validation results on canonical OpenMetadata assets
-
-#### Scenario: Later full-scale source acceptance
-
-- **WHEN** the live acceptance run ingests a completed current-contract >=100 GB source after the development pipeline is exercised
-- **THEN** it verifies the exact manifest-listed inventory and byte/row totals, preserved duplicates and delayed labels, native OpenMetadata StarRocks SQL results on both persisted tables, separately reported available cardinality and distribution diagnostics, safe replay and OpenMetadata readback
-- **THEN** a failed blocking contract/integrity check or resource exhaustion is reported as failure, while an exceeded generator band alone is informational
-
-#### Scenario: Dependency unavailable
-
-- **WHEN** cluster access, REST catalog compatibility, OpenMetadata readiness or capacity cannot be verified
-- **THEN** planning/local checks are reported separately and no live deployment or end-to-end acceptance is claimed
-
 ### Requirement: Recurring ingestion verification
 CI SHALL cover no-input runs, newly completed files in older date partitions, changed-content rejection, preserved source duplicates, retry/uncertain-commit recovery, metadata-only recovery, independent delayed labels, retained source origin, valid simulation-truth training targets and separation of informational bands from blocking checks using bounded fixtures. Separate live recurring acceptance SHALL demonstrate repeated runs, late input and recovery with exact input/output accounting and catalog readback; historical acceptance SHALL NOT establish recurring readiness.
 
@@ -204,14 +185,13 @@ CI SHALL cover no-input runs, newly completed files in older date partitions, ch
 - **WHEN** two completed input batches, a late file and a retried committed batch are processed
 - **THEN** all original deliveries remain accounted for without ingestion-generated duplicates and accepted snapshot/progress references are reproducible
 
-### Requirement: Native StarRocks integration evidence
+### Requirement: Native ClickHouse integration evidence
 Implementation SHALL verify direct RustFS SigV4 access, external-catalog discovery, nested schemas, snapshot-specific SQL and native OpenMetadata passing/failing quality results with the selected versions. This SHALL be implementation acceptance rather than a per-batch disposable compatibility stage. Previous GX/native acceptance SHALL NOT establish acceptance of the rewritten integration or survive as an active compatibility path. SQL execution failure or unsupported discovery SHALL be reported without a hidden legacy fallback.
 
 #### Scenario: Native external-catalog discovery is incomplete
 
-- **WHEN** StarRocks can query a table but OpenMetadata cannot natively discover or profile its external-catalog identity correctly
+- **WHEN** ClickHouse can query a table but OpenMetadata cannot natively discover or profile its external-catalog identity correctly
 - **THEN** integration readiness remains unverified and DP1 does not claim completed native acceptance
-
 ### Requirement: Fresh integration acceptance
 The rewritten integration SHALL establish fresh v16 historical and recurring acceptance after scoped DP1 cleanup. Readback SHALL reject YAML-only contracts, empty required ownership/task/I/O, fabricated event-to-label lineage, stale executions, missing reverse product membership and falsely snapshot-scoped profiles. UI inspection SHALL verify the contract, product, lineage and pipeline/profile views separately from API correctness. Existing CI checks and the existing image workflow SHALL be reused; no redundant configuration-only suite or new independent check job SHALL be introduced.
 
