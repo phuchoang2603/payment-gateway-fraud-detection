@@ -102,9 +102,7 @@ def same_output(baseline, candidate, name: str) -> None:
 def materialized_totals(attempts: DataFrame) -> DataFrame:
     """Per-merchant totals computed once, before any timed run. Materialized, so each join's right side is a plain
     shuffle that the AQE skew rule can split, and every variant reads the same totals."""
-    totals = merchant_totals(attempts).persist()
-    totals.count()
-    return totals
+    return merchant_totals(attempts).localCheckpoint(eager=True)
 
 
 def run_variant(spark, attempts: DataFrame, totals: DataFrame, name: str, build, settings: dict, phases: dict):
