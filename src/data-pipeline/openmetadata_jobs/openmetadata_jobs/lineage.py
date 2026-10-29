@@ -31,8 +31,12 @@ def topic(name):
     return Node("topic", f'{KAFKA_SERVICE}."{name}"')
 
 
+def dataset_container(version):
+    return f"historical-payments-{version}"
+
+
 def dataset(version):
-    return Node("container", f'{STORAGE_SERVICE}."{HISTORICAL_PREFIX}/{version}"')
+    return Node("container", f"{STORAGE_SERVICE}.{dataset_container(version)}")
 
 
 def pipeline_fqn(name):

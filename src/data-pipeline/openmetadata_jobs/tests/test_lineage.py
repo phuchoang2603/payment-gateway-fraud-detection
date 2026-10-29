@@ -15,8 +15,8 @@ def test_historical_dataset_feeds_bronze_from_its_container():
     sources = {(edge.source.kind, edge.source.fqn, edge.target.fqn) for edge in by_pipeline("dp1-bronze-historical")}
 
     assert sources == {
-        ("container", 'platform-object-storage."datasets/payment-gateway/historical/v18"', lineage.BRONZE_EVENTS.fqn),
-        ("container", 'platform-object-storage."datasets/payment-gateway/historical/v18"', lineage.BRONZE_LABELS.fqn),
+        ("container", "platform-object-storage.historical-payments-v18", lineage.BRONZE_EVENTS.fqn),
+        ("container", "platform-object-storage.historical-payments-v18", lineage.BRONZE_LABELS.fqn),
     }
 
 

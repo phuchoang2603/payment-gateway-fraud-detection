@@ -2,7 +2,15 @@ import os
 import time
 
 from openmetadata_jobs.catalog import client
-from openmetadata_jobs.lineage import PIPELINES, SERVICE, edges, pipeline_fqn
+from openmetadata_jobs.lineage import (
+    HISTORICAL_PREFIX,
+    PIPELINES,
+    SERVICE,
+    STORAGE_SERVICE,
+    dataset_container,
+    edges,
+    pipeline_fqn,
+)
 
 STATUS = {"Succeeded": "Successful"}
 
@@ -40,11 +48,27 @@ def publish_status(sdk, name: str, argo_status: str, run_id: str) -> None:
     )
 
 
+def ensure_dataset(sdk, version: str) -> None:
+    from metadata.generated.schema.api.data.createContainer import CreateContainerRequest
+
+    sdk.create_or_update(
+        CreateContainerRequest(
+            name=dataset_container(version),
+            service=STORAGE_SERVICE,
+            prefix=f"{HISTORICAL_PREFIX}/{version}/",
+            fileFormats=["parquet"],
+            description=f"Historical payments dataset {version}",
+        )
+    )
+
+
 def publish_lineage(sdk, name: str, pipeline_ref, dataset_version: str) -> int:
     from metadata.generated.schema.api.lineage.addLineage import AddLineageRequest
     from metadata.generated.schema.type.entityLineage import EntitiesEdge, LineageDetails
     from metadata.generated.schema.type.entityReference import EntityReference
 
+    if name == "dp1-bronze-historical":
+        ensure_dataset(sdk, dataset_version)
     published = 0
     for edge in edges(dataset_version):
         if edge.pipeline != name:
