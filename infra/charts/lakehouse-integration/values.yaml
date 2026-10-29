@@ -15,10 +15,6 @@ setup:
   port: 8123
   adminUser: admin
   adminPasswordKey: CLICKHOUSE_ADMIN_PASSWORD
-  profile: openmetadata
-  profileSettings:
-    readonly: 2
-    allow_database_iceberg: 1
   lakehouse:
     database: lakehouse
     uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
@@ -26,6 +22,3 @@ setup:
     oauthUri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
     clientId: platform
     scope: PRINCIPAL_ROLE:ALL
-  users:
-    - name: openmetadata
-      passwordKey: CLICKHOUSE_OPENMETADATA_PASSWORD

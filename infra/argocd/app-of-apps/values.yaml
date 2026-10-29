@@ -38,6 +38,9 @@ applications:
   data-pipelines:
     destinationNamespace: data
     path: infra/charts/data-pipelines
+  clickhouse:
+    destinationNamespace: data
+    path: infra/charts/clickhouse
   lakehouse-integration:
     destinationNamespace: data
     path: infra/charts/lakehouse-integration

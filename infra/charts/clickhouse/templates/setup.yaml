@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: clickhouse-setup
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 900
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: setup
+          image: {{ .Values.image }}
+          command: [sh, -c]
+          args:
+            - |
+              set -eu
+              client() { clickhouse-client --host clickhouse --port 9000 --user admin --password "$CLICKHOUSE_PASSWORD" "$@"; }
+              until client --query "SELECT 1" >/dev/null 2>&1; do sleep 10; done
+              client --query "CREATE DATABASE IF NOT EXISTS langfuse"
+          env:
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: clickhouse-admin, key: password}
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {memory: 256Mi}

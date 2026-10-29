@@ -1,9 +1,4 @@
 {{- $s := .Values.setup }}
-{{- $pairs := list }}
-{{- range $key, $value := $s.profileSettings }}
-{{- $pairs = append $pairs (printf "%s = %v" $key $value) }}
-{{- end }}
-{{- $settings := join ", " $pairs }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -21,11 +16,6 @@ spec:
     - secretKey: ADMIN_PASSWORD
       remoteRef:
         key: {{ $s.adminPasswordKey }}
-  {{- range $u := $s.users }}
-    - secretKey: {{ $u.name | upper }}_PASSWORD
-      remoteRef:
-        key: {{ $u.passwordKey }}
-  {{- end }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -59,13 +49,6 @@ data:
     until ch "SELECT 1"; do sleep 10; done
     ch "DROP DATABASE IF EXISTS $LAKEHOUSE_DATABASE SYNC"
     ch "CREATE DATABASE $LAKEHOUSE_DATABASE ENGINE = DataLakeCatalog('$LAKEHOUSE_URI', '$LAKEHOUSE_CLIENT_ID', '$ICEBERG_CLIENT_SECRET') SETTINGS catalog_type = 'rest', warehouse = '$LAKEHOUSE_WAREHOUSE', auth_scope = '$LAKEHOUSE_SCOPE', oauth_server_uri = '$LAKEHOUSE_OAUTH_URI', storage_endpoint = '$STORAGE_ENDPOINT', aws_access_key_id = '$AWS_ACCESS_KEY_ID', aws_secret_access_key = '$AWS_SECRET_ACCESS_KEY', region = '$STORAGE_REGION', vended_credentials = false"
-    ch "CREATE SETTINGS PROFILE IF NOT EXISTS $OPENMETADATA_PROFILE SETTINGS $PROFILE_SETTINGS"
-    ch "ALTER SETTINGS PROFILE $OPENMETADATA_PROFILE SETTINGS $PROFILE_SETTINGS"
-    ch "CREATE USER IF NOT EXISTS $OPENMETADATA_USER IDENTIFIED BY '$OPENMETADATA_PASSWORD' SETTINGS PROFILE '$OPENMETADATA_PROFILE'"
-    ch "ALTER USER $OPENMETADATA_USER IDENTIFIED BY '$OPENMETADATA_PASSWORD' SETTINGS PROFILE '$OPENMETADATA_PROFILE'"
-    ch "GRANT SELECT ON $LAKEHOUSE_DATABASE.* TO $OPENMETADATA_USER"
-    ch "GRANT SELECT ON system.tables TO $OPENMETADATA_USER"
-    ch "GRANT SELECT ON system.columns TO $OPENMETADATA_USER"
 ---
 apiVersion: batch/v1
 kind: Job
@@ -97,10 +80,6 @@ spec:
             - {name: LAKEHOUSE_OAUTH_URI, value: {{ $s.lakehouse.oauthUri | quote }}}
             - {name: STORAGE_ENDPOINT, value: {{ printf "%s/%s" .Values.catalog.endpoint .Values.catalog.bucket | quote }}}
             - {name: STORAGE_REGION, value: {{ .Values.catalog.region | quote }}}
-            - {name: OPENMETADATA_USER, value: {{ (index $s.users 0).name | quote }}}
-            - {name: OPENMETADATA_PROFILE, value: {{ $s.profile | quote }}}
-            - name: PROFILE_SETTINGS
-              value: {{ $settings | quote }}
           envFrom:
             - secretRef:
                 name: gateway-clickhouse-setup
