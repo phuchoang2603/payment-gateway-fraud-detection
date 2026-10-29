@@ -22,6 +22,7 @@
 
   Verify that CI tests for rerun, incomplete-day regeneration, changed-config refusal, published-version refusal and the undersized-source refusal pass.
 - [ ] 3.4 Delete the replaced modules (`profiles`, `behavior`, `identity`, `calibration` if unused, `fragment_index`, `publication`, `resources`, `run_state`, `statistics`, `object_store` as superseded), `notebooks/historical-sanity.ipynb` and their tests, after 1.2. Keep `simulator/landing/` until 7.2 removes its deployment, adapting only its schema import if needed. Verify that `rg` finds no imports of deleted modules and that ruff passes locally.
+  - PR #100 note: deleted the replaced generator modules and their tests, `simulator/landing/`, the sanity notebook and the `notebook` dependency group. Kept `config`, `profiles`, `behavior`, `identity`, `calibration` and `s3` for `live/` until 1.2; `arrow.py` stays because the generator's schema uses it.
 
 - [ ] 3.5 Add the `generate-historical` WorkflowTemplate to `infra/charts/data-pipelines` (simulator image, `SIMULATOR_CONFIG`, gateway object credentials, resources, deadline, retries) and a generator-only values switch. Enable the chart in prod through `infra/argocd/app-of-apps/values-prod.yaml` with only that template. Verify with CI helm lint and template showing only the generator in prod.
 - [ ] 3.6 Land groups 1, 2.1 and 3 as the generator PR to `main` (with user confirmation), leaving old DP1 code, the archiver and the Bronze contracts for the pipeline PR, except for upstream contract references that CI lint requires. Verify that all CI checks pass on the PR and on `main`, and that the dev and prod releases record the new simulator image.
@@ -31,6 +32,7 @@
 ## 4. Batch project and Bronze
 
 - [ ] 4.1 Create `src/data-pipeline/batch` (one pyproject and lockfile, Spark session, catalog and storage settings from the environment, a payments descriptor set via the `codegen:proto` `descriptor` option) and delete `src/data-pipeline/bronze-ingestion`. Verify that `uv lock` and ruff pass locally and the CI Python job imports the package.
+  - PR #100 note: reduced `src/data-pipeline/bronze-ingestion` to `data_platform/integrations.py` and `catalog.py` for metadata integrations, and removed its tests, config and Spark image. The `batch` project replaces it in the pipeline change.
 - [ ] 4.2 Implement Bronze historical mode: manifest verification, `mergeSchema` read, lossless cast to the Bronze schema, overwrite by `_dataset_version`, manifest row-total check, run report. Verify that CI tests for altered-file failure, idempotent rerun and preserved duplicates pass.
 - [ ] 4.3 Implement Bronze Kafka mode: start offsets from the latest snapshot property or configured starting offsets, `from_protobuf` decoding with the same cast, append with the `kafka.offsets` snapshot property, no commit on empty or failed runs, `failOnDataLoss`. Verify Spark 4.1 `from_protobuf` and Kafka options against the official docs; check offset continuity and empty runs with the opt-in broker test, and decoding parity with historical Parquet in CI.
 
@@ -57,6 +59,7 @@
 
   Remove the Spark utility templates and the old graph. Verify with CI helm lint and template for all values files.
 - [ ] 7.2 Delete `simulator/landing/` and its tests, and remove the archiver workload, values and permissions from `infra/charts/live-traffic` and its consumer group configuration. Verify that `helm template` renders no archiver, and coordinate the diff with the live change.
+  - PR #100 note: removed the archiver workload, values, live-source gate for it, its network policy and the `payments-parquet-landing-v17` group from `infra/charts/live-traffic`, and deleted `contracts/landing/`. The live simulator's Deployment and config are unchanged.
 - [ ] 7.3 Update `infra/docker/data-platform-{spark,metadata}.Dockerfile` (pinned checksums for the Kafka and protobuf Spark connectors and their transitive jars, batch package, contracts) and `infra/docker/live-simulator.Dockerfile` (no landing). Make the `.github/service-images.json` paths cover every copied directory, and update `.github/workflows/python-ci.yml` paths. Verify that CI image builds succeed and the release plan rebuilds the images on a contracts-only change.
 
 ## 8. Diagnostics and benchmark
