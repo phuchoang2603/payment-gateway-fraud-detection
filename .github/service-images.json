@@ -104,27 +104,13 @@
       ]
     },
     {
-      "service": "data-platform-spark",
-      "image-suffix": "/data-platform-spark",
-      "context": ".",
-      "dockerfile": "infra/docker/data-platform-spark.Dockerfile",
-      "paths": [
-        "infra/docker/data-platform-spark.Dockerfile",
-        "src/data-pipeline/bronze-ingestion",
-        "contracts/data-products",
-        "contracts/features"
-      ]
-    },
-    {
       "service": "data-platform-metadata",
       "image-suffix": "/data-platform-metadata",
       "context": ".",
       "dockerfile": "infra/docker/data-platform-metadata.Dockerfile",
       "paths": [
         "infra/docker/data-platform-metadata.Dockerfile",
-        "src/data-pipeline/bronze-ingestion/data_platform",
-        "contracts/data-products",
-        "contracts/features"
+        "src/data-pipeline/bronze-ingestion/data_platform"
       ]
     },
     {
