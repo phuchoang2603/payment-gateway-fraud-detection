@@ -69,6 +69,7 @@ spec:
     taskmanager.rpc.port: '6122'
     taskmanager.data.port: '6121'
     blob.server.port: '6124'
+    metrics.internal.query-service.port: '6125'
     python.executable: /app/.venv/bin/python
     python.client.executable: /app/.venv/bin/python
     execution.checkpointing.interval: 10s
@@ -163,6 +164,7 @@ spec:
             - {port: '6122', protocol: TCP}
             - {port: '6123', protocol: TCP}
             - {port: '6124', protocol: TCP}
+            - {port: '6125', protocol: TCP}
             - {port: '8081', protocol: TCP}
     - fromEndpoints:
         - matchLabels:
@@ -180,6 +182,7 @@ spec:
             - {port: '6122', protocol: TCP}
             - {port: '6123', protocol: TCP}
             - {port: '6124', protocol: TCP}
+            - {port: '6125', protocol: TCP}
             - {port: '8081', protocol: TCP}
     - toEndpoints:
         - matchLabels:
