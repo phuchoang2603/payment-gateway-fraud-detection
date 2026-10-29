@@ -1,21 +1,18 @@
 {{- if .Values.analytics.enabled }}
 {{- $sizing := index .Values.spark.profiles .Values.analytics.profile }}
-{{- $jobs := list (dict "name" "dp1-diagnostics" "module" "diagnostics" "product" "bronze-payments") (dict "name" "dp2-benchmark" "module" "benchmark" "product" "silver-payments") (dict "name" "dp2-storage-layout" "module" "storage_layout" "product" "silver-payments") }}
-{{- range $job := $jobs }}
----
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: {{ .name }}
-  namespace: {{ $.Values.namespace }}
+  name: dp2-benchmark
+  namespace: {{ .Values.namespace }}
 spec:
   serviceAccountName: data-pipelines
   entrypoint: run
-  activeDeadlineSeconds: {{ $.Values.analytics.activeDeadlineSeconds }}
+  activeDeadlineSeconds: {{ .Values.analytics.activeDeadlineSeconds }}
   podMetadata:
     labels:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
-      dp-product: {{ .product }}
+      dp-product: silver-payments
   templates:
     - name: run
       {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
@@ -25,6 +22,5 @@ spec:
         successCondition: status.currentState.currentStateSummary == ResourceReleased
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
         manifest: |
-          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" .name "main" .module "product" .product "stage" .name "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" $.Values.analytics.reportRoot))) | nindent 10 }}
-{{- end }}
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp2-benchmark" "main" "benchmark" "product" "silver-payments" "stage" "dp2-benchmark" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" $.Values.analytics.reportRoot))) | nindent 10 }}
 {{- end }}

@@ -1,18 +1,16 @@
 import json
 import os
-import statistics
-import time
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 from batch.bronze import current_snapshot
+from batch.metrics import phase
 from batch.silver import ATTEMPTS
 from batch.spark import session
 from batch.store import Store
 
 SALT_BUCKETS = 16
-TIMED_RUNS = 3
 SORT_MERGE = {
     "spark.sql.adaptive.enabled": "true",
     "spark.sql.autoBroadcastJoinThreshold": "-1",
@@ -54,64 +52,42 @@ JOIN_VARIANTS = {
 }
 
 
-def distinct_devices_baseline(attempts: DataFrame) -> DataFrame:
-    day = F.to_date("started_at")
-    return attempts.groupBy("customer_id", "payment_method_fingerprint", day.alias("day")).agg(
-        F.countDistinct("device_fingerprint").alias("devices"), F.count("*").alias("attempts")
+def fingerprint(frame: DataFrame):
+    """Row count and an order-independent checksum of every output row."""
+    row = (
+        frame.select(F.xxhash64(*frame.columns).cast("decimal(38,0)").alias("hash"))
+        .agg(F.count("*").alias("rows"), F.sum("hash").alias("checksum"))
+        .first()
     )
+    return row["rows"], row["checksum"]
 
 
-def distinct_devices_optimized(attempts: DataFrame) -> DataFrame:
-    per_device = attempts.groupBy(
-        "customer_id", "payment_method_fingerprint", F.to_date("started_at").alias("day"), "device_fingerprint"
-    ).agg(F.count("*").alias("device_attempts"))
-    return per_device.groupBy("customer_id", "payment_method_fingerprint", "day").agg(
-        F.count("device_fingerprint").alias("devices"), F.sum("device_attempts").alias("attempts")
-    )
+def same_output(baseline, candidate, name: str) -> None:
+    if baseline != candidate:
+        raise AssertionError(f"variant {name} output differs from baseline: {candidate} != {baseline}")
 
 
-DISTINCT_VARIANTS = {
-    "baseline": (distinct_devices_baseline, {}),
-    "per_device_first": (distinct_devices_optimized, {}),
-}
-
-
-def same_output(baseline: DataFrame, candidate: DataFrame) -> None:
-    differences = baseline.exceptAll(candidate).count() + candidate.exceptAll(baseline).count()
-    if differences:
-        raise AssertionError(f"variant output differs from baseline in {differences} rows")
-
-
-def measure(spark, build, settings: dict, attempts: DataFrame) -> dict:
+def run_variant(spark, attempts: DataFrame, name: str, build, settings: dict, phases: dict):
     previous = {key: spark.conf.get(key) for key in settings}
     for key, value in settings.items():
         spark.conf.set(key, value)
     try:
         frame = build(attempts)
-        frame.count()
-        times = []
-        for _ in range(TIMED_RUNS):
-            started = time.perf_counter()
-            frame.count()
-            times.append(time.perf_counter() - started)
-        return {
-            "median_seconds": statistics.median(times),
-            "timed_runs": TIMED_RUNS,
-            "output_rows": frame.count(),
-        }, frame
+        with phase(spark, phases, f"skewed_merchant_join {name}"):
+            return fingerprint(frame)
     finally:
         for key, value in previous.items():
             spark.conf.set(key, value)
 
 
-def run_family(spark, variants: dict, attempts: DataFrame):
-    results, frames = {}, {}
-    for name, (build, settings) in variants.items():
-        results[name], frames[name] = measure(spark, build, settings, attempts)
-    baseline_name = next(iter(variants))
-    for name, frame in frames.items():
-        if name != baseline_name:
-            same_output(frames[baseline_name], frame)
+def skewed_merchant_join(spark, attempts: DataFrame, phases: dict) -> dict:
+    results, baseline = {}, None
+    for name, (build, settings) in JOIN_VARIANTS.items():
+        guard = run_variant(spark, attempts, name, build, settings, phases)
+        if baseline is None:
+            baseline = guard
+        same_output(baseline, guard, name)
+        results[name] = {"output_rows": guard[0], "checksum": str(guard[1])}
     return results
 
 
@@ -123,10 +99,11 @@ def hot_key_share(attempts: DataFrame) -> dict:
 
 
 def benchmark(spark, attempts: DataFrame) -> dict:
+    phases: dict = {}
     return {
         "hot_key": hot_key_share(attempts),
-        "skewed_merchant_join": run_family(spark, JOIN_VARIANTS, attempts),
-        "distinct_devices_daily": run_family(spark, DISTINCT_VARIANTS, attempts),
+        "skewed_merchant_join": skewed_merchant_join(spark, attempts, phases),
+        "phases": phases,
     }
 
 

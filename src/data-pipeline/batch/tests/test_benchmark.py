@@ -1,4 +1,5 @@
 import pytest
+from pyspark.sql import functions as F
 
 from batch import benchmark
 from tests.events import at
@@ -22,30 +23,36 @@ def attempts(spark):
 
 
 def test_every_skewed_join_variant_returns_the_baseline_output(spark, attempts):
-    results = benchmark.run_family(spark, benchmark.JOIN_VARIANTS, attempts)
+    results = benchmark.skewed_merchant_join(spark, attempts, {})
 
     assert set(results) == set(benchmark.JOIN_VARIANTS)
-    assert {r["output_rows"] for r in results.values()} == {results["baseline_no_skew_join"]["output_rows"]}
+    assert len({(r["output_rows"], r["checksum"]) for r in results.values()}) == 1
 
 
 def test_unequal_join_variant_fails_the_equal_output_guard(spark, attempts):
-    baseline = benchmark.join_baseline(attempts)
-    truncated = benchmark.join_baseline(attempts).limit(1)
+    baseline = benchmark.fingerprint(benchmark.join_baseline(attempts))
+    truncated = benchmark.fingerprint(benchmark.join_baseline(attempts).limit(1))
 
     with pytest.raises(AssertionError, match="differs"):
-        benchmark.same_output(baseline, truncated)
+        benchmark.same_output(baseline, truncated, "truncated")
 
 
-def test_unequal_distinct_device_variant_fails_the_equal_output_guard(spark, attempts):
-    baseline = benchmark.distinct_devices_baseline(attempts)
-    candidate = benchmark.distinct_devices_optimized(attempts).where("attempts > 1")
+def test_same_row_count_with_a_changed_value_fails_the_equal_output_guard(spark, attempts):
+    baseline = benchmark.fingerprint(benchmark.join_baseline(attempts))
+    changed = benchmark.fingerprint(
+        benchmark.join_baseline(attempts).withColumn("amount_minor", F.col("amount_minor") + 1)
+    )
 
     with pytest.raises(AssertionError, match="differs"):
-        benchmark.same_output(baseline, candidate)
+        benchmark.same_output(baseline, changed, "changed")
 
 
 def test_salted_join_matches_baseline_for_the_hot_merchant(spark, attempts):
-    benchmark.same_output(benchmark.join_baseline(attempts), benchmark.join_salted(attempts))
+    benchmark.same_output(
+        benchmark.fingerprint(benchmark.join_baseline(attempts)),
+        benchmark.fingerprint(benchmark.join_salted(attempts)),
+        "salted",
+    )
 
 
 def test_hot_key_share_uses_all_attempts_as_denominator(spark, attempts):
