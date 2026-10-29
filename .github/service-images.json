@@ -146,15 +146,6 @@
         "infra/docker/streaming.Dockerfile",
         "src/data-pipeline/streaming"
       ]
-    },
-    {
-      "service": "inference-perf",
-      "image-suffix": "/inference-perf",
-      "context": ".",
-      "dockerfile": "infra/docker/inference-perf.Dockerfile",
-      "paths": [
-        "infra/docker/inference-perf.Dockerfile"
-      ]
     }
   ]
 }

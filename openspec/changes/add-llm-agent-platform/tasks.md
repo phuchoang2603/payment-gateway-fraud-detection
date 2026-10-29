@@ -18,8 +18,7 @@
 
 - [x] 2.1 Add:
   - the shared ResourceClaim `llm-gpu`;
-  - the compile-cache PVC;
-  - the idempotent `model-upload` Job, which copies the pinned revisions of `Qwen/Qwen3-8B-FP8`, `Qwen/Qwen3-Embedding-0.6B` and the `Qwen/Qwen3-8B-AWQ` fallback into `artifacts/models/` with the Kubeflow artifacts identity, kept off GPU and control-plane nodes.
+  - the idempotent `model-upload` Job, which copies the pinned revisions of `Qwen/Qwen3-8B-FP8`, `Qwen/Qwen3-Embedding-0.6B` and the `Qwen/Qwen3-8B-AWQ` fallback into `artifacts/models/` with the Kubeflow artifacts identity.
 
   Verify with `helm template` for both environments (prod renders nothing while disabled).
 - [x] 2.2 Add the chat `LLMInferenceService` `qwen3-8b`:
@@ -59,13 +58,7 @@
 
 ## 6. Benchmark harness
 
-- [x] 6.1 Add `infra/docker/inference-perf.Dockerfile` (inference-perf 0.7.0 from PyPI) and its entry in `.github/service-images.json`. Add the disabled-by-default benchmark Job template with:
-  - the shared-prefix workload and the concurrency stages;
-  - target selection (vLLM direct or gateway);
-  - upload to `runs/payment-gateway/llm-benchmark/<run>/`.
-
-  Verify with `helm template` and the CI image build.
-- [x] 6.2 Add the standalone chat vLLM variant pod template used for model-server runs while the chat `LLMInferenceService` is stopped. Embedding keeps running, so runs measure the shared-GPU reality. Verify with `helm template`.
+- [x] 6.1 Add `infra/llm-benchmark/job.yaml` (`vllm bench serve` concurrency sweep with the `prefix_repetition` workload, results printed as JSON) and `server.yaml` (standalone variant server with its mesh policy), applied with `kubectl`. Verify with a server-side dry run on dev.
 
 ## 7. Deploy to dev and collect evidence (after the PR is open and CI is green; tell the user first)
 

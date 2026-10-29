@@ -4,6 +4,16 @@ kind: ServiceAccount
 metadata:
   name: {{ $agents.serviceAccount }}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-prompts
+data:
+  {{- range $agent := $agents.list }}
+  {{ $agent.name }}.md: |
+    {{- $.Files.Get (printf "files/prompts/%s.md" $agent.name) | required (printf "files/prompts/%s.md is missing" $agent.name) | nindent 4 }}
+  {{- end }}
+---
 apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
@@ -16,7 +26,9 @@ spec:
   openAI:
     baseUrl: http://{{ .Values.gateway.name }}.{{ .Release.Namespace }}.svc.cluster.local/v1
 {{- range $agent := $agents.list }}
-{{- $declarative := dict "modelConfig" $agents.modelConfig "systemMessage" $agent.systemMessage }}
+{{- $declarative := dict
+  "modelConfig" $agents.modelConfig
+  "systemMessageFrom" (dict "type" "ConfigMap" "name" "agent-prompts" "key" (printf "%s.md" $agent.name)) }}
 ---
 apiVersion: kagent.dev/v1alpha2
 kind: Agent

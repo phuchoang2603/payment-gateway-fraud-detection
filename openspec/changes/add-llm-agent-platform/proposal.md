@@ -16,7 +16,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - Run the same agent as `evidence-agent-sandbox`, a `SandboxAgent` on Agent Substrate 0.0.9 (gVisor). Its conversations suspend to warm snapshots and resume on a small worker pool, which covers the sandbox and warm-up rubric rows.
 - Publish the agent's catalog entry to agentregistry from Git with a sync hook.
 - Register the AI assets in OpenMetadata through the existing `metadata-integrations` chart: the LLM service (the gateway endpoint), both models, and the agent as an AI application linked to its model. MCP servers, further agents and knowledge bases attach to these later.
-- Add an on-demand benchmark harness (inference-perf, llm-d's benchmark tool) with an agent-shaped shared-prefix workload. It records throughput, TTFT and inter-token latency before and after each optimization (prefix caching, FP8 KV cache, n-gram speculative decoding, streamed cold start, FP8 vs AWQ weights). Results are recorded only from real dev runs, with the command and date.
+- Add an on-demand benchmark (`vllm bench serve` from the vLLM image, as plain manifests applied with `kubectl`) with an agent-shaped shared-prefix workload. It records throughput, TTFT and inter-token latency before and after each optimization (prefix caching, FP8 KV cache, n-gram speculative decoding, streamed cold start, FP8 vs AWQ weights). Results are recorded only from real dev runs, with the command and date.
 - Record the autoscaling decision against the rubric's KEDA:
   - Knative for this repo's own HTTP services (the later MCP servers and web API);
   - KEDA for kagent agent Deployments and the Substrate WorkerPool (from phase 2);
@@ -45,7 +45,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 ## Impact
 
 - **Infra:**
-  - A new chart `infra/charts/llm-platform`: chat and embedding `LLMInferenceService`s, a shared GPU ResourceClaim, the model upload Job, the compile-cache PVC, Gateway, HTTPRoute, AgentgatewayPolicy, API-key ExternalSecrets, Istio AuthorizationPolicies, kagent ModelConfig, Agent and SandboxAgent, the registry catalog and publish hook, scrape configuration, and the benchmark Job template.
+  - A new chart `infra/charts/llm-platform`: chat and embedding `LLMInferenceService`s, a shared GPU ResourceClaim, the model upload Job, Gateway, HTTPRoute, AgentgatewayPolicy, API-key ExternalSecrets, Istio AuthorizationPolicies, kagent ModelConfig, Agent and SandboxAgent, agent prompts as files, the registry catalog (agents and prompts) and publish hook, and scrape configuration. The benchmark manifests live in `infra/llm-benchmark/`.
   - The `llm-platform` entry in `infra/argocd/app-of-apps/values.yaml`, disabled in `values-prod.yaml`.
   - New `llm` and `ai` values in `infra/charts/metadata-integrations`.
 - **Code:** an `llm` service kind and `ai` asset registration in the OpenMetadata register job (`src/data-pipeline/openmetadata_jobs/` after PR #102 merges).

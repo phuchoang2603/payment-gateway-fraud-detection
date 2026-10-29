@@ -1,9 +1,3 @@
-{{- define "llm-platform.image" -}}
-{{- $repository := required "image.repository is required" .image.repository -}}
-{{- $tag := required (printf "image tag missing for %s" $repository) (index .global.imageTags $repository) -}}
-{{- printf "%s:%s" $repository $tag -}}
-{{- end -}}
-
 {{- define "llm-platform.principal" -}}
 {{- printf "cluster.local/ns/%s/sa/%s" .namespace .name -}}
 {{- end -}}
@@ -34,13 +28,6 @@ capabilities:
   drop: [ALL]
 {{- end -}}
 
-{{- define "llm-platform.vllmEnv" -}}
-- name: USER
-  value: vllm
-- name: VLLM_CACHE_ROOT
-  value: /home/.cache/vllm
-{{- end -}}
-
 {{- define "llm-platform.modelURI" -}}
 {{- printf "s3://%s/%s/%s/%s" .store.bucket .store.prefix .model.repo .model.revision -}}
 {{- end -}}
@@ -60,14 +47,4 @@ capabilities:
 - name: AWS_SECRET_ACCESS_KEY
   valueFrom:
     secretKeyRef: {name: {{ .credentialsSecret }}, key: secretkey}
-{{- end -}}
-
-{{- define "llm-platform.vllmServe" -}}
-- vllm
-- serve
-- {{ include "llm-platform.modelURI" (dict "store" .store "model" .model) }}
-- --served-model-name={{ .model.name }}
-- --port=8000
-- --load-format=runai_streamer
-- {{ printf "--model-loader-extra-config=%s" .loaderConfig | quote }}
 {{- end -}}

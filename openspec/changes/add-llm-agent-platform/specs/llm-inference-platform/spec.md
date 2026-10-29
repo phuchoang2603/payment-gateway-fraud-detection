@@ -44,7 +44,7 @@ The model servers SHALL obtain their GPU through a chart-owned ResourceClaim req
 - **THEN** the model server pod stays pending without disturbing the claim holder
 
 ### Requirement: Model weights in object storage
-Model weights SHALL be copied once per environment, at their pinned revisions, into the platform bucket under `artifacts/models/` by an idempotent upload job that runs off GPU and control-plane nodes. Model servers SHALL stream weights from there directly into GPU memory without writing them to the node's disk, using the platform's existing artifacts identity.
+Model weights SHALL be copied once per environment, at their pinned revisions, into the platform bucket under `artifacts/models/` by an idempotent upload job. Model servers SHALL stream weights from there directly into GPU memory without writing them to the node's disk, using the platform's existing artifacts identity.
 
 #### Scenario: Pod restart
 - **WHEN** the model server pod is deleted

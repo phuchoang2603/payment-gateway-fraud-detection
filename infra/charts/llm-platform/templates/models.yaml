@@ -15,17 +15,6 @@ spec:
           allocationMode: ExactCount
           count: 1
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: llm-compile-cache
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: {{ .Values.storage.storageClass }}
-  resources:
-    requests:
-      storage: {{ .Values.storage.compileCache }}
----
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -35,39 +24,29 @@ metadata:
 spec:
   backoffLimit: 3
   template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: model-upload
     spec:
       restartPolicy: OnFailure
       automountServiceAccountToken: false
       securityContext:
         {{- include "llm-platform.podSecurity" (dict "uid" 65532) | nindent 8 }}
-      # The dev GPU node is also the control plane; keep the multi-gigabyte transfer off it.
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - {key: nvidia.com/gpu.present, operator: DoesNotExist}
-                  - {key: node-role.kubernetes.io/control-plane, operator: DoesNotExist}
       containers:
         - name: upload
-          image: {{ include "llm-platform.image" (dict "image" .Values.benchmark.image "global" .Values.global) }}
-          command: [python3, -c]
+          image: {{ $store.uploadImage }}
+          command: [/bin/sh, -ec]
           args:
             - |
+              pip install --quiet --no-cache-dir --target /work/lib $PACKAGES
+              PYTHONPATH=/work/lib exec python3 - <<'EOF'
               import json, os
               import boto3
               from botocore.exceptions import ClientError
               from huggingface_hub import HfApi, hf_hub_download
 
-              api = HfApi()
               s3 = boto3.client("s3")
               bucket, prefix = os.environ["BUCKET"], os.environ["PREFIX"]
               for model in json.loads(os.environ["MODELS"]):
                   repo, revision = model["repo"], model["revision"]
-                  for item in api.list_repo_tree(repo, revision=revision, recursive=True):
+                  for item in HfApi().list_repo_tree(repo, revision=revision, recursive=True):
                       if not hasattr(item, "size"):
                           continue
                       key = f"{prefix}/{repo}/{revision}/{item.path}"
@@ -82,7 +61,10 @@ spec:
                       os.remove(os.path.realpath(path))
                       print(f"uploaded s3://{bucket}/{key}", flush=True)
                   print(f"{repo}@{revision} complete", flush=True)
+              EOF
           env:
+            - name: PACKAGES
+              value: {{ $store.uploadPackages }}
             - name: MODELS
               value: {{ toJson $uploads | quote }}
             - name: BUCKET
@@ -97,8 +79,8 @@ spec:
           securityContext:
             {{- include "llm-platform.containerSecurity" . | nindent 12 }}
           resources:
-            requests: {cpu: 250m, memory: 1Gi, ephemeral-storage: 8Gi}
-            limits: {memory: 2Gi, ephemeral-storage: 12Gi}
+            requests: {cpu: 250m, memory: 1Gi}
+            limits: {memory: 2Gi}
           volumeMounts:
             - {name: work, mountPath: /work}
       volumes:
@@ -145,11 +127,18 @@ spec:
         image: {{ $.Values.vllm.image }}
         # Replaces the preset's start script, which serves a local /mnt/models; weights stream from object storage.
         command:
-          {{- include "llm-platform.vllmServe" (dict "store" $store "model" $model "loaderConfig" $.Values.vllm.loaderConfig) | nindent 10 }}
+          - vllm
+          - serve
+          - {{ include "llm-platform.modelURI" (dict "store" $store "model" $model) }}
+          - --served-model-name={{ $model.name }}
+          - --port=8000
+          - --load-format=runai_streamer
+          - {{ printf "--model-loader-extra-config=%s" $.Values.vllm.loaderConfig | quote }}
         args:
           {{- toYaml $model.args | nindent 10 }}
         env:
-          {{- include "llm-platform.vllmEnv" $ | nindent 10 }}
+          - name: USER
+            value: vllm
           {{- include "llm-platform.modelStoreEnv" $store | nindent 10 }}
         resources:
           {{- toYaml $model.resources | nindent 10 }}
@@ -159,12 +148,4 @@ spec:
           runAsNonRoot: true
           runAsUser: {{ $.Values.vllm.uid }}
           {{- include "llm-platform.containerSecurity" $ | nindent 10 }}
-        volumeMounts:
-          - name: compile-cache
-            mountPath: /home/.cache/vllm
-            subPath: {{ $model.name }}
-    volumes:
-      - name: compile-cache
-        persistentVolumeClaim:
-          claimName: llm-compile-cache
 {{- end }}
