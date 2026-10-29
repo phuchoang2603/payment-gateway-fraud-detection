@@ -37,6 +37,53 @@ LABEL_HASH_FIELDS = list(LABEL_COLUMNS)
 PERSIST = StorageLevel.MEMORY_AND_DISK
 
 
+DEDUP_BROADCAST_ENV = "SILVER_DEDUP_BROADCAST_BYTES"
+DEDUP_BROADCAST_DEFAULT = 256 * 1024 * 1024
+KEY_OVERHEAD_BYTES = 64
+DEDUP_COLUMNS = [*EVENT_COLUMNS.keys(), "event_hash", "_source"]
+
+
+def dedup_broadcast_threshold() -> int:
+    return int(os.environ.get(DEDUP_BROADCAST_ENV, DEDUP_BROADCAST_DEFAULT))
+
+
+def duplicated_ids(hashed: DataFrame) -> DataFrame:
+    return hashed.select("event_id").groupBy("event_id").agg(F.count("*").alias("copies")).where(F.col("copies") > 1)
+
+
+def plan_dedup(hashed: DataFrame, threshold: int) -> dict:
+    duplicated = duplicated_ids(hashed).persist(PERSIST)
+    stats = duplicated.agg(F.count("*").alias("n"), F.avg(F.length("event_id")).alias("key")).first()
+    count = int(stats["n"])
+    estimated = int(count * ((stats["key"] or 0) + KEY_OVERHEAD_BYTES))
+    return {
+        "duplicated": duplicated,
+        "duplicated_event_ids": count,
+        "estimated_bytes": estimated,
+        "strategy": "broadcast" if estimated < threshold else "shuffle",
+        "broadcast_threshold_bytes": threshold,
+    }
+
+
+def against_duplicates(frame: DataFrame, plan: dict, how: str) -> DataFrame:
+    ids = plan["duplicated"].select("event_id")
+    return frame.join(F.broadcast(ids) if plan["strategy"] == "broadcast" else ids, "event_id", how)
+
+
+def collapse_duplicates(hashed: DataFrame, plan: dict) -> DataFrame:
+    return distinct_events(against_duplicates(hashed, plan, "left_semi"))
+
+
+def narrow_dedup(hashed: DataFrame, plan: dict) -> tuple[DataFrame, DataFrame]:
+    collapsed = collapse_duplicates(hashed, plan)
+    unique = against_duplicates(hashed, plan, "left_anti").select(*DEDUP_COLUMNS)
+    return unique.unionByName(collapsed.select(*DEDUP_COLUMNS)), collapsed
+
+
+def full_width_dedup(hashed: DataFrame) -> DataFrame:
+    return distinct_events(hashed).select(*DEDUP_COLUMNS)
+
+
 def run(spark, run_id):
     events_snapshot = current_snapshot(spark, BRONZE_EVENTS)
     labels_snapshot = current_snapshot(spark, BRONZE_LABELS)
@@ -46,7 +93,6 @@ def run(spark, run_id):
     }
     events = spark.read.option("versionAsOf", events_snapshot).table(BRONZE_EVENTS)
     hashed = with_event_hash(events)
-    grouped = distinct_events(hashed)
     cached = []
     phases = {}
 
@@ -55,17 +101,17 @@ def run(spark, run_id):
         return cached[-1]
 
     try:
-        conflicts = cache(grouped.where(F.col("hashes") > 1).select("event_id", *PAYMENT_KEY))
+        plan = plan_dedup(hashed, dedup_broadcast_threshold())
+        cached.append(plan["duplicated"])
+        distinct, collapsed = narrow_dedup(hashed, plan)
+        collapsed = cache(collapsed)
+        conflicts = cache(collapsed.where(F.col("hashes") > 1).select("event_id", *PAYMENT_KEY))
         conflicting_payments = cache(conflicts.select(*PAYMENT_KEY).distinct())
         conflict_reason = cache(conflicts.groupBy(*PAYMENT_KEY).agg(F.min("event_id").alias("reason")))
         conflict_events = cache(
             distinct_events(hashed.join(F.broadcast(conflicting_payments), PAYMENT_KEY, "left_semi"))
         )
-        accepted_events = (
-            grouped.where(F.col("hashes") == 1)
-            .select(*EVENT_COLUMNS.keys(), "event_hash", "_source")
-            .join(F.broadcast(conflicting_payments), PAYMENT_KEY, "left_anti")
-        )
+        accepted_events = distinct.join(F.broadcast(conflicting_payments), PAYMENT_KEY, "left_anti")
 
         snapshots = {}
         with phase(spark, phases, "write payment_events"):
@@ -115,6 +161,12 @@ def run(spark, run_id):
                 "bronze_snapshots": {
                     "bronze.payment_events": events_snapshot,
                     "bronze.fraud_labels": labels_snapshot,
+                },
+                "dedup": {
+                    "strategy": plan["strategy"],
+                    "duplicated_event_ids": plan["duplicated_event_ids"],
+                    "estimated_bytes": plan["estimated_bytes"],
+                    "broadcast_threshold_bytes": plan["broadcast_threshold_bytes"],
                 },
                 "events": {
                     "input_rows": input_events,
