@@ -1,57 +1,24 @@
 ## ADDED Requirements
 
-### Requirement: Causal attempt contributions
+### Requirement: Streaming attempt-history definition v2
 
-History features SHALL count each unique attempt start once, using its attempt time in [s-window,s), with s the snapshot anchor, independently of the scored attempt's time t. Risk decisions SHALL NOT gate eligibility. Serving SHALL use only snapshots with anchor at or before t, so the current attempt never contributes to its own vector. Snapshots SHALL NOT be described as exact request-time windows.
-
-#### Scenario: Current attempt arrives before feature retrieval
-
-- **WHEN** a scored attempt's start event has already reached the stream processor
-- **THEN** any snapshot including it has an anchor after t and is unusable for that attempt
-
-#### Scenario: Duplicate and conflicting events
-
-- **WHEN** the same event identity is delivered repeatedly
-- **THEN** identical deliveries contribute once and conflicting content is rejected rather than counted again
-
-## MODIFIED Requirements
-
-### Requirement: Minimal baseline feature set
-
-The baseline SHALL define request amount, customer account age and nullable IP/shipping mismatch. It SHALL define customer and method attempt snapshot counts over 5m, 1h and 24h, and customer distinct observed devices over 24h. The baseline SHALL contain exactly three current-request, four customer and three method quantities. Authorization submission counters SHALL NOT be model inputs. Keys SHALL include integration identity. Unknown device/IP SHALL remain absent; oracle and outcome fields SHALL NOT be model inputs.
-
-#### Scenario: IP is unavailable
-
-- **WHEN** an attempt lacks an observed IP country
-- **THEN** its country-mismatch value is missing rather than inferred from shipping country
-
-#### Scenario: No known historical snapshot
-
-- **WHEN** the feature source is missing or stale
-- **THEN** its values carry the defined unavailable status rather than representing unknown history as a known zero
-
-### Requirement: Shared conformance examples
-
-The feature contract SHALL include hand-checkable inputs, cutoffs and expected outputs for snapshot boundaries, expiration without new input, duplicate delivery, late input inside and beyond the 24-hour horizon, missing signals, integration separation, replay clocks, coverage and current-attempt exclusion. A framework-independent reference calculation SHALL establish those outputs. Batch and streaming implementations SHALL demonstrate conformance before claiming parity.
+`fraud-snapshot-v2` SHALL define the streaming attempt-history quantities: customer and payment-method attempt counts over 5m, 1h and 24h, and customer distinct observed devices over 24h. It SHALL count each unique attempt start once, using its attempt time in [s-window,s), with s the snapshot anchor; risk decisions SHALL NOT gate eligibility. Keys SHALL include integration identity, unknown devices SHALL remain absent, and unknown coverage SHALL be null rather than zero. Its wire messages SHALL live in the separate `features.v2` protobuf package with their own definition identity. `fraud-snapshot-v1` and the `features.v1` package SHALL remain unchanged for existing serving until the feature-store change replaces it.
 
 #### Scenario: Window lower boundary
 
 - **WHEN** an attempt starts exactly at s-window
 - **THEN** it is included, while an attempt starting at s is excluded
 
-### Requirement: Availability and serving evidence
+#### Scenario: Duplicate and conflicting events
 
-Feature handoffs SHALL distinguish attempt time, source recording time, observed availability and actual serving time. Each view SHALL expose snapshot anchor, source progress with its meaning, window coverage and semantic identity separately. A watermark alone SHALL NOT establish complete source coverage. Serving SHALL retain actual used values, both snapshot identities/revisions and anchors, read time, freshness/missingness and policy identities. Missing, stale, future-dated or incompatible snapshots SHALL NOT become known zeros. Historical reconstruction SHALL use observed serving availability, not just event time.
+- **WHEN** the same event identity is delivered repeatedly
+- **THEN** identical deliveries contribute once and conflicting content is rejected rather than counted again
 
-#### Scenario: Late-arriving fact
+### Requirement: Streaming definition v2 conformance examples
 
-- **WHEN** an attempt becomes available after a decision's cutoff
-- **THEN** it cannot retroactively alter the feature evidence used for that decision
+The v2 definition SHALL include hand-checkable inputs, cutoffs and expected outputs for window boundaries, duplicate delivery, late input inside and beyond the 24-hour horizon, unavailable inputs, integration separation, coverage and current-attempt exclusion. A framework-independent v2 reference calculation, kept alongside the v1 reference, SHALL establish those outputs, and the streaming job SHALL demonstrate conformance with it.
 
-## REMOVED Requirements
+#### Scenario: Store-and-forward attempt inside the horizon
 
-### Requirement: Causal historical contributions
-
-**Reason**: Risk decisions no longer gate history eligibility.
-
-**Migration**: Replaced by "Causal attempt contributions".
+- **WHEN** an attempt with an attempt time ten minutes before the anchor becomes available before the cutoff
+- **THEN** it counts in the 1h and 24h windows and not in the 5m window

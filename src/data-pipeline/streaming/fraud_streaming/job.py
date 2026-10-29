@@ -68,7 +68,7 @@ def main():
     clock_topic = os.environ.get("CLOCK_TOPIC")
     if logical and (not clock_topic or epoch.startswith("live") or source == "payments.events.v1"):
         raise ValueError("logical replay requires isolated input, output epoch and clock topic")
-    if output != f"fraud.feature-updates.v1.{epoch}":
+    if output != f"fraud.feature-updates.v2.{epoch}":
         raise ValueError("feature journal must be bound to its epoch")
     rejects_topic = f"fraud.feature-rejects.v1.{epoch}"
     configuration = Configuration()

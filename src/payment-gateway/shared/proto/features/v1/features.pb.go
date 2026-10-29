@@ -256,9 +256,9 @@ func (GuardStatus) EnumDescriptor() ([]byte, []int) {
 
 type WindowCoverage struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	FiveMinutes     Coverage               `protobuf:"varint,1,opt,name=five_minutes,json=fiveMinutes,proto3,enum=features.v1.Coverage" json:"five_minutes,omitempty"`
-	OneHour         Coverage               `protobuf:"varint,2,opt,name=one_hour,json=oneHour,proto3,enum=features.v1.Coverage" json:"one_hour,omitempty"`
-	TwentyFourHours Coverage               `protobuf:"varint,3,opt,name=twenty_four_hours,json=twentyFourHours,proto3,enum=features.v1.Coverage" json:"twenty_four_hours,omitempty"`
+	OneHour         Coverage               `protobuf:"varint,1,opt,name=one_hour,json=oneHour,proto3,enum=features.v1.Coverage" json:"one_hour,omitempty"`
+	TwentyFourHours Coverage               `protobuf:"varint,2,opt,name=twenty_four_hours,json=twentyFourHours,proto3,enum=features.v1.Coverage" json:"twenty_four_hours,omitempty"`
+	SevenDays       Coverage               `protobuf:"varint,3,opt,name=seven_days,json=sevenDays,proto3,enum=features.v1.Coverage" json:"seven_days,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -293,13 +293,6 @@ func (*WindowCoverage) Descriptor() ([]byte, []int) {
 	return file_features_v1_features_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *WindowCoverage) GetFiveMinutes() Coverage {
-	if x != nil {
-		return x.FiveMinutes
-	}
-	return Coverage_COVERAGE_UNSPECIFIED
-}
-
 func (x *WindowCoverage) GetOneHour() Coverage {
 	if x != nil {
 		return x.OneHour
@@ -310,6 +303,13 @@ func (x *WindowCoverage) GetOneHour() Coverage {
 func (x *WindowCoverage) GetTwentyFourHours() Coverage {
 	if x != nil {
 		return x.TwentyFourHours
+	}
+	return Coverage_COVERAGE_UNSPECIFIED
+}
+
+func (x *WindowCoverage) GetSevenDays() Coverage {
+	if x != nil {
+		return x.SevenDays
 	}
 	return Coverage_COVERAGE_UNSPECIFIED
 }
@@ -451,13 +451,14 @@ func (x *SourcePartitionProgress) GetHeartbeatAt() *timestamppb.Timestamp {
 }
 
 type SnapshotValues struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	AttemptCount_5M     *int64                 `protobuf:"varint,1,opt,name=attempt_count_5m,json=attemptCount5m,proto3,oneof" json:"attempt_count_5m,omitempty"`
-	AttemptCount_1H     *int64                 `protobuf:"varint,2,opt,name=attempt_count_1h,json=attemptCount1h,proto3,oneof" json:"attempt_count_1h,omitempty"`
-	AttemptCount_24H    *int64                 `protobuf:"varint,3,opt,name=attempt_count_24h,json=attemptCount24h,proto3,oneof" json:"attempt_count_24h,omitempty"`
-	DistinctDevices_24H *int64                 `protobuf:"varint,4,opt,name=distinct_devices_24h,json=distinctDevices24h,proto3,oneof" json:"distinct_devices_24h,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	AssessedCount_1H        *int64                 `protobuf:"varint,1,opt,name=assessed_count_1h,json=assessedCount1h,proto3,oneof" json:"assessed_count_1h,omitempty"`
+	AssessedCount_24H       *int64                 `protobuf:"varint,2,opt,name=assessed_count_24h,json=assessedCount24h,proto3,oneof" json:"assessed_count_24h,omitempty"`
+	AssessedAmountMinor_24H *int64                 `protobuf:"varint,3,opt,name=assessed_amount_minor_24h,json=assessedAmountMinor24h,proto3,oneof" json:"assessed_amount_minor_24h,omitempty"`
+	DistinctDevices_7D      *int64                 `protobuf:"varint,4,opt,name=distinct_devices_7d,json=distinctDevices7d,proto3,oneof" json:"distinct_devices_7d,omitempty"`
+	LastAssessedStartAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_assessed_start_at,json=lastAssessedStartAt,proto3,oneof" json:"last_assessed_start_at,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *SnapshotValues) Reset() {
@@ -490,32 +491,39 @@ func (*SnapshotValues) Descriptor() ([]byte, []int) {
 	return file_features_v1_features_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *SnapshotValues) GetAttemptCount_5M() int64 {
-	if x != nil && x.AttemptCount_5M != nil {
-		return *x.AttemptCount_5M
+func (x *SnapshotValues) GetAssessedCount_1H() int64 {
+	if x != nil && x.AssessedCount_1H != nil {
+		return *x.AssessedCount_1H
 	}
 	return 0
 }
 
-func (x *SnapshotValues) GetAttemptCount_1H() int64 {
-	if x != nil && x.AttemptCount_1H != nil {
-		return *x.AttemptCount_1H
+func (x *SnapshotValues) GetAssessedCount_24H() int64 {
+	if x != nil && x.AssessedCount_24H != nil {
+		return *x.AssessedCount_24H
 	}
 	return 0
 }
 
-func (x *SnapshotValues) GetAttemptCount_24H() int64 {
-	if x != nil && x.AttemptCount_24H != nil {
-		return *x.AttemptCount_24H
+func (x *SnapshotValues) GetAssessedAmountMinor_24H() int64 {
+	if x != nil && x.AssessedAmountMinor_24H != nil {
+		return *x.AssessedAmountMinor_24H
 	}
 	return 0
 }
 
-func (x *SnapshotValues) GetDistinctDevices_24H() int64 {
-	if x != nil && x.DistinctDevices_24H != nil {
-		return *x.DistinctDevices_24H
+func (x *SnapshotValues) GetDistinctDevices_7D() int64 {
+	if x != nil && x.DistinctDevices_7D != nil {
+		return *x.DistinctDevices_7D
 	}
 	return 0
+}
+
+func (x *SnapshotValues) GetLastAssessedStartAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastAssessedStartAt
+	}
+	return nil
 }
 
 type SnapshotUpdate struct {
@@ -529,11 +537,13 @@ type SnapshotUpdate struct {
 	SnapshotId        string                     `protobuf:"bytes,7,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"`
 	Revision          uint64                     `protobuf:"varint,8,opt,name=revision,proto3" json:"revision,omitempty"`
 	Anchor            *timestamppb.Timestamp     `protobuf:"bytes,9,opt,name=anchor,proto3" json:"anchor,omitempty"`
-	SourceAvailableAt *timestamppb.Timestamp     `protobuf:"bytes,10,opt,name=source_available_at,json=sourceAvailableAt,proto3" json:"source_available_at,omitempty"`
-	OnlineWriteAt     *timestamppb.Timestamp     `protobuf:"bytes,11,opt,name=online_write_at,json=onlineWriteAt,proto3" json:"online_write_at,omitempty"`
-	Coverage          *WindowCoverage            `protobuf:"bytes,12,opt,name=coverage,proto3" json:"coverage,omitempty"`
-	SourceProgress    []*SourcePartitionProgress `protobuf:"bytes,13,rep,name=source_progress,json=sourceProgress,proto3" json:"source_progress,omitempty"`
-	Values            *SnapshotValues            `protobuf:"bytes,14,opt,name=values,proto3" json:"values,omitempty"`
+	ComputedAt        *timestamppb.Timestamp     `protobuf:"bytes,10,opt,name=computed_at,json=computedAt,proto3" json:"computed_at,omitempty"`
+	PublishedAt       *timestamppb.Timestamp     `protobuf:"bytes,11,opt,name=published_at,json=publishedAt,proto3" json:"published_at,omitempty"`
+	SourceAvailableAt *timestamppb.Timestamp     `protobuf:"bytes,12,opt,name=source_available_at,json=sourceAvailableAt,proto3" json:"source_available_at,omitempty"`
+	OnlineWriteAt     *timestamppb.Timestamp     `protobuf:"bytes,13,opt,name=online_write_at,json=onlineWriteAt,proto3" json:"online_write_at,omitempty"`
+	Coverage          *WindowCoverage            `protobuf:"bytes,14,opt,name=coverage,proto3" json:"coverage,omitempty"`
+	SourceProgress    []*SourcePartitionProgress `protobuf:"bytes,15,rep,name=source_progress,json=sourceProgress,proto3" json:"source_progress,omitempty"`
+	Values            *SnapshotValues            `protobuf:"bytes,16,opt,name=values,proto3" json:"values,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -631,6 +641,20 @@ func (x *SnapshotUpdate) GetAnchor() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *SnapshotUpdate) GetComputedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ComputedAt
+	}
+	return nil
+}
+
+func (x *SnapshotUpdate) GetPublishedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PublishedAt
+	}
+	return nil
+}
+
 func (x *SnapshotUpdate) GetSourceAvailableAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.SourceAvailableAt
@@ -667,15 +691,16 @@ func (x *SnapshotUpdate) GetValues() *SnapshotValues {
 }
 
 type ViewEvidence struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	View              EntityView             `protobuf:"varint,1,opt,name=view,proto3,enum=features.v1.EntityView" json:"view,omitempty"`
-	Status            ViewStatus             `protobuf:"varint,2,opt,name=status,proto3,enum=features.v1.ViewStatus" json:"status,omitempty"`
-	Observed          *SnapshotUpdate        `protobuf:"bytes,3,opt,name=observed,proto3,oneof" json:"observed,omitempty"`
-	ReadAt            *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=read_at,json=readAt,proto3" json:"read_at,omitempty"`
-	OnlineAvailableAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=online_available_at,json=onlineAvailableAt,proto3,oneof" json:"online_available_at,omitempty"`
-	AvailableValues   *SnapshotValues        `protobuf:"bytes,6,opt,name=available_values,json=availableValues,proto3" json:"available_values,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	View                        EntityView             `protobuf:"varint,1,opt,name=view,proto3,enum=features.v1.EntityView" json:"view,omitempty"`
+	Status                      ViewStatus             `protobuf:"varint,2,opt,name=status,proto3,enum=features.v1.ViewStatus" json:"status,omitempty"`
+	Observed                    *SnapshotUpdate        `protobuf:"bytes,3,opt,name=observed,proto3,oneof" json:"observed,omitempty"`
+	ReadAt                      *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=read_at,json=readAt,proto3" json:"read_at,omitempty"`
+	OnlineAvailableAt           *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=online_available_at,json=onlineAvailableAt,proto3,oneof" json:"online_available_at,omitempty"`
+	AvailableValues             *SnapshotValues        `protobuf:"bytes,6,opt,name=available_values,json=availableValues,proto3" json:"available_values,omitempty"`
+	SecondsSinceLastAssessed_7D *int64                 `protobuf:"varint,7,opt,name=seconds_since_last_assessed_7d,json=secondsSinceLastAssessed7d,proto3,oneof" json:"seconds_since_last_assessed_7d,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *ViewEvidence) Reset() {
@@ -748,6 +773,13 @@ func (x *ViewEvidence) GetAvailableValues() *SnapshotValues {
 		return x.AvailableValues
 	}
 	return nil
+}
+
+func (x *ViewEvidence) GetSecondsSinceLastAssessed_7D() int64 {
+	if x != nil && x.SecondsSinceLastAssessed_7D != nil {
+		return *x.SecondsSinceLastAssessed_7D
+	}
+	return 0
 }
 
 type GuardEvidence struct {
@@ -1074,11 +1106,12 @@ var File_features_v1_features_proto protoreflect.FileDescriptor
 
 const file_features_v1_features_proto_rawDesc = "" +
 	"\n" +
-	"\x1afeatures/v1/features.proto\x12\vfeatures.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbf\x01\n" +
-	"\x0eWindowCoverage\x128\n" +
-	"\ffive_minutes\x18\x01 \x01(\x0e2\x15.features.v1.CoverageR\vfiveMinutes\x120\n" +
-	"\bone_hour\x18\x02 \x01(\x0e2\x15.features.v1.CoverageR\aoneHour\x12A\n" +
-	"\x11twenty_four_hours\x18\x03 \x01(\x0e2\x15.features.v1.CoverageR\x0ftwentyFourHours\"F\n" +
+	"\x1afeatures/v1/features.proto\x12\vfeatures.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbb\x01\n" +
+	"\x0eWindowCoverage\x120\n" +
+	"\bone_hour\x18\x01 \x01(\x0e2\x15.features.v1.CoverageR\aoneHour\x12A\n" +
+	"\x11twenty_four_hours\x18\x02 \x01(\x0e2\x15.features.v1.CoverageR\x0ftwentyFourHours\x124\n" +
+	"\n" +
+	"seven_days\x18\x03 \x01(\x0e2\x15.features.v1.CoverageR\tsevenDays\"F\n" +
 	"\x12DefinitionIdentity\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x16\n" +
 	"\x06sha256\x18\x02 \x01(\tR\x06sha256\"\xc0\x02\n" +
@@ -1090,16 +1123,18 @@ const file_features_v1_features_proto_rawDesc = "" +
 	"\vobserved_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"observedAt\x12B\n" +
 	"\fheartbeat_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampH\x00R\vheartbeatAt\x88\x01\x01B\x0f\n" +
-	"\r_heartbeat_at\"\xaf\x02\n" +
-	"\x0eSnapshotValues\x12-\n" +
-	"\x10attempt_count_5m\x18\x01 \x01(\x03H\x00R\x0eattemptCount5m\x88\x01\x01\x12-\n" +
-	"\x10attempt_count_1h\x18\x02 \x01(\x03H\x01R\x0eattemptCount1h\x88\x01\x01\x12/\n" +
-	"\x11attempt_count_24h\x18\x03 \x01(\x03H\x02R\x0fattemptCount24h\x88\x01\x01\x125\n" +
-	"\x14distinct_devices_24h\x18\x04 \x01(\x03H\x03R\x12distinctDevices24h\x88\x01\x01B\x13\n" +
-	"\x11_attempt_count_5mB\x13\n" +
-	"\x11_attempt_count_1hB\x14\n" +
-	"\x12_attempt_count_24hB\x17\n" +
-	"\x15_distinct_devices_24h\"\xbd\x05\n" +
+	"\r_heartbeat_at\"\xbd\x03\n" +
+	"\x0eSnapshotValues\x12/\n" +
+	"\x11assessed_count_1h\x18\x01 \x01(\x03H\x00R\x0fassessedCount1h\x88\x01\x01\x121\n" +
+	"\x12assessed_count_24h\x18\x02 \x01(\x03H\x01R\x10assessedCount24h\x88\x01\x01\x12>\n" +
+	"\x19assessed_amount_minor_24h\x18\x03 \x01(\x03H\x02R\x16assessedAmountMinor24h\x88\x01\x01\x123\n" +
+	"\x13distinct_devices_7d\x18\x04 \x01(\x03H\x03R\x11distinctDevices7d\x88\x01\x01\x12T\n" +
+	"\x16last_assessed_start_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampH\x04R\x13lastAssessedStartAt\x88\x01\x01B\x14\n" +
+	"\x12_assessed_count_1hB\x15\n" +
+	"\x13_assessed_count_24hB\x1c\n" +
+	"\x1a_assessed_amount_minor_24hB\x16\n" +
+	"\x14_distinct_devices_7dB\x19\n" +
+	"\x17_last_assessed_start_at\"\xb9\x06\n" +
 	"\x0eSnapshotUpdate\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12?\n" +
 	"\n" +
@@ -1112,22 +1147,27 @@ const file_features_v1_features_proto_rawDesc = "" +
 	"\vsnapshot_id\x18\a \x01(\tR\n" +
 	"snapshotId\x12\x1a\n" +
 	"\brevision\x18\b \x01(\x04R\brevision\x122\n" +
-	"\x06anchor\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x06anchor\x12J\n" +
-	"\x13source_available_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\x11sourceAvailableAt\x12B\n" +
-	"\x0fonline_write_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\ronlineWriteAt\x127\n" +
-	"\bcoverage\x18\f \x01(\v2\x1b.features.v1.WindowCoverageR\bcoverage\x12M\n" +
-	"\x0fsource_progress\x18\r \x03(\v2$.features.v1.SourcePartitionProgressR\x0esourceProgress\x123\n" +
-	"\x06values\x18\x0e \x01(\v2\x1b.features.v1.SnapshotValuesR\x06values\"\x9d\x03\n" +
+	"\x06anchor\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x06anchor\x12;\n" +
+	"\vcomputed_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"computedAt\x12=\n" +
+	"\fpublished_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\vpublishedAt\x12J\n" +
+	"\x13source_available_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\x11sourceAvailableAt\x12B\n" +
+	"\x0fonline_write_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\ronlineWriteAt\x127\n" +
+	"\bcoverage\x18\x0e \x01(\v2\x1b.features.v1.WindowCoverageR\bcoverage\x12M\n" +
+	"\x0fsource_progress\x18\x0f \x03(\v2$.features.v1.SourcePartitionProgressR\x0esourceProgress\x123\n" +
+	"\x06values\x18\x10 \x01(\v2\x1b.features.v1.SnapshotValuesR\x06values\"\x89\x04\n" +
 	"\fViewEvidence\x12+\n" +
 	"\x04view\x18\x01 \x01(\x0e2\x17.features.v1.EntityViewR\x04view\x12/\n" +
 	"\x06status\x18\x02 \x01(\x0e2\x17.features.v1.ViewStatusR\x06status\x12<\n" +
 	"\bobserved\x18\x03 \x01(\v2\x1b.features.v1.SnapshotUpdateH\x00R\bobserved\x88\x01\x01\x123\n" +
 	"\aread_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x06readAt\x12O\n" +
 	"\x13online_available_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampH\x01R\x11onlineAvailableAt\x88\x01\x01\x12F\n" +
-	"\x10available_values\x18\x06 \x01(\v2\x1b.features.v1.SnapshotValuesR\x0favailableValuesB\v\n" +
+	"\x10available_values\x18\x06 \x01(\v2\x1b.features.v1.SnapshotValuesR\x0favailableValues\x12G\n" +
+	"\x1eseconds_since_last_assessed_7d\x18\a \x01(\x03H\x02R\x1asecondsSinceLastAssessed7d\x88\x01\x01B\v\n" +
 	"\t_observedB\x16\n" +
-	"\x14_online_available_at\"\x96\x05\n" +
+	"\x14_online_available_atB!\n" +
+	"\x1f_seconds_since_last_assessed_7d\"\x96\x05\n" +
 	"\rGuardEvidence\x12+\n" +
 	"\x04view\x18\x01 \x01(\x0e2\x17.features.v1.EntityViewR\x04view\x120\n" +
 	"\x06status\x18\x02 \x01(\x0e2\x18.features.v1.GuardStatusR\x06status\x12%\n" +
@@ -1232,42 +1272,45 @@ var file_features_v1_features_proto_goTypes = []any{
 	(*timestamppb.Timestamp)(nil),   // 12: google.protobuf.Timestamp
 }
 var file_features_v1_features_proto_depIdxs = []int32{
-	1,  // 0: features.v1.WindowCoverage.five_minutes:type_name -> features.v1.Coverage
-	1,  // 1: features.v1.WindowCoverage.one_hour:type_name -> features.v1.Coverage
-	1,  // 2: features.v1.WindowCoverage.twenty_four_hours:type_name -> features.v1.Coverage
+	1,  // 0: features.v1.WindowCoverage.one_hour:type_name -> features.v1.Coverage
+	1,  // 1: features.v1.WindowCoverage.twenty_four_hours:type_name -> features.v1.Coverage
+	1,  // 2: features.v1.WindowCoverage.seven_days:type_name -> features.v1.Coverage
 	12, // 3: features.v1.SourcePartitionProgress.observed_at:type_name -> google.protobuf.Timestamp
 	12, // 4: features.v1.SourcePartitionProgress.heartbeat_at:type_name -> google.protobuf.Timestamp
-	5,  // 5: features.v1.SnapshotUpdate.definition:type_name -> features.v1.DefinitionIdentity
-	0,  // 6: features.v1.SnapshotUpdate.view:type_name -> features.v1.EntityView
-	12, // 7: features.v1.SnapshotUpdate.anchor:type_name -> google.protobuf.Timestamp
-	12, // 8: features.v1.SnapshotUpdate.source_available_at:type_name -> google.protobuf.Timestamp
-	12, // 9: features.v1.SnapshotUpdate.online_write_at:type_name -> google.protobuf.Timestamp
-	4,  // 10: features.v1.SnapshotUpdate.coverage:type_name -> features.v1.WindowCoverage
-	6,  // 11: features.v1.SnapshotUpdate.source_progress:type_name -> features.v1.SourcePartitionProgress
-	7,  // 12: features.v1.SnapshotUpdate.values:type_name -> features.v1.SnapshotValues
-	0,  // 13: features.v1.ViewEvidence.view:type_name -> features.v1.EntityView
-	2,  // 14: features.v1.ViewEvidence.status:type_name -> features.v1.ViewStatus
-	8,  // 15: features.v1.ViewEvidence.observed:type_name -> features.v1.SnapshotUpdate
-	12, // 16: features.v1.ViewEvidence.read_at:type_name -> google.protobuf.Timestamp
-	12, // 17: features.v1.ViewEvidence.online_available_at:type_name -> google.protobuf.Timestamp
-	7,  // 18: features.v1.ViewEvidence.available_values:type_name -> features.v1.SnapshotValues
-	0,  // 19: features.v1.GuardEvidence.view:type_name -> features.v1.EntityView
-	3,  // 20: features.v1.GuardEvidence.status:type_name -> features.v1.GuardStatus
-	12, // 21: features.v1.GuardEvidence.registered_at:type_name -> google.protobuf.Timestamp
-	12, // 22: features.v1.GuardEvidence.read_at:type_name -> google.protobuf.Timestamp
-	5,  // 23: features.v1.AssessmentEvidence.observed_definition:type_name -> features.v1.DefinitionIdentity
-	9,  // 24: features.v1.AssessmentEvidence.customer:type_name -> features.v1.ViewEvidence
-	9,  // 25: features.v1.AssessmentEvidence.method:type_name -> features.v1.ViewEvidence
-	10, // 26: features.v1.AssessmentEvidence.customer_guard:type_name -> features.v1.GuardEvidence
-	10, // 27: features.v1.AssessmentEvidence.method_guard:type_name -> features.v1.GuardEvidence
-	12, // 28: features.v1.AssessmentEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
-	12, // 29: features.v1.AssessmentEvidence.used_customer_created_at:type_name -> google.protobuf.Timestamp
-	12, // 30: features.v1.AssessmentEvidence.used_attempted_at:type_name -> google.protobuf.Timestamp
-	31, // [31:31] is the sub-list for method output_type
-	31, // [31:31] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	12, // 5: features.v1.SnapshotValues.last_assessed_start_at:type_name -> google.protobuf.Timestamp
+	5,  // 6: features.v1.SnapshotUpdate.definition:type_name -> features.v1.DefinitionIdentity
+	0,  // 7: features.v1.SnapshotUpdate.view:type_name -> features.v1.EntityView
+	12, // 8: features.v1.SnapshotUpdate.anchor:type_name -> google.protobuf.Timestamp
+	12, // 9: features.v1.SnapshotUpdate.computed_at:type_name -> google.protobuf.Timestamp
+	12, // 10: features.v1.SnapshotUpdate.published_at:type_name -> google.protobuf.Timestamp
+	12, // 11: features.v1.SnapshotUpdate.source_available_at:type_name -> google.protobuf.Timestamp
+	12, // 12: features.v1.SnapshotUpdate.online_write_at:type_name -> google.protobuf.Timestamp
+	4,  // 13: features.v1.SnapshotUpdate.coverage:type_name -> features.v1.WindowCoverage
+	6,  // 14: features.v1.SnapshotUpdate.source_progress:type_name -> features.v1.SourcePartitionProgress
+	7,  // 15: features.v1.SnapshotUpdate.values:type_name -> features.v1.SnapshotValues
+	0,  // 16: features.v1.ViewEvidence.view:type_name -> features.v1.EntityView
+	2,  // 17: features.v1.ViewEvidence.status:type_name -> features.v1.ViewStatus
+	8,  // 18: features.v1.ViewEvidence.observed:type_name -> features.v1.SnapshotUpdate
+	12, // 19: features.v1.ViewEvidence.read_at:type_name -> google.protobuf.Timestamp
+	12, // 20: features.v1.ViewEvidence.online_available_at:type_name -> google.protobuf.Timestamp
+	7,  // 21: features.v1.ViewEvidence.available_values:type_name -> features.v1.SnapshotValues
+	0,  // 22: features.v1.GuardEvidence.view:type_name -> features.v1.EntityView
+	3,  // 23: features.v1.GuardEvidence.status:type_name -> features.v1.GuardStatus
+	12, // 24: features.v1.GuardEvidence.registered_at:type_name -> google.protobuf.Timestamp
+	12, // 25: features.v1.GuardEvidence.read_at:type_name -> google.protobuf.Timestamp
+	5,  // 26: features.v1.AssessmentEvidence.observed_definition:type_name -> features.v1.DefinitionIdentity
+	9,  // 27: features.v1.AssessmentEvidence.customer:type_name -> features.v1.ViewEvidence
+	9,  // 28: features.v1.AssessmentEvidence.method:type_name -> features.v1.ViewEvidence
+	10, // 29: features.v1.AssessmentEvidence.customer_guard:type_name -> features.v1.GuardEvidence
+	10, // 30: features.v1.AssessmentEvidence.method_guard:type_name -> features.v1.GuardEvidence
+	12, // 31: features.v1.AssessmentEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
+	12, // 32: features.v1.AssessmentEvidence.used_customer_created_at:type_name -> google.protobuf.Timestamp
+	12, // 33: features.v1.AssessmentEvidence.used_attempted_at:type_name -> google.protobuf.Timestamp
+	34, // [34:34] is the sub-list for method output_type
+	34, // [34:34] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_features_v1_features_proto_init() }

@@ -1,9 +1,9 @@
 # Online data
 
-The online path is live gateway traffic. The live simulator drives the gateway's public APIs at current time, Payments writes authoritative events that reach Kafka through outbox CDC, and a PyFlink job turns them into window features in Feast's online store, which Go Fraud reads in shadow mode. Bronze also ingests the same topics in Kafka mode; see [offline data](offline.md).
+The online path is live gateway traffic. The live simulator drives the gateway's public APIs at current time, Payments writes authoritative events that reach Kafka through outbox CDC, and a PyFlink job turns them into v2 window features on the feature journal topic `fraud.feature-updates.v2.<epoch>`, with per-record rejects on `fraud.feature-rejects.v1.<epoch>`. The streaming path ends at those two topics: Feast and Go Fraud's feature retrieval are disabled until the [feature-store change](../overview/roadmap.md#feature-store-build-order). Bronze also ingests the same topics in Kafka mode; see [offline data](offline.md).
 
-- Simulator code: [`src/data-pipeline/simulator/simulator/live`](../../src/data-pipeline/simulator/simulator/live). Streaming code: [`src/data-pipeline/streaming`](../../src/data-pipeline/streaming) and [`src/data-pipeline/feast`](../../src/data-pipeline/feast); deployment: [`infra/charts/fraud-features`](../../infra/charts/fraud-features).
-- Status: the live simulator is disabled in both environments; the Flink job runs in dev in shadow mode and is disabled in prod. Dev simulator values point at the v18 historical manifest and its SHA-256. The Flink job implements feature contract v2 under epoch `live-v18`.
+- Simulator code: [`src/data-pipeline/simulator/simulator/live`](../../src/data-pipeline/simulator/simulator/live). Streaming code: [`src/data-pipeline/streaming`](../../src/data-pipeline/streaming); deployment: [`infra/charts/fraud-features`](../../infra/charts/fraud-features).
+- Status: the live simulator is disabled in both environments; the Flink job runs in dev and is disabled in prod. Dev simulator values point at the v18 historical manifest and its SHA-256. The Flink job implements feature contract v2 under epoch `live-v18`.
 
 ## Data problems and how they are solved
 
@@ -12,7 +12,7 @@ The online path is live gateway traffic. The live simulator drives the gateway's
 | Late arrivals | Store-and-forward clients: a seeded share of attempts is held for a configured delay, then submitted with the original click time as `simulated_client.attempted_at` | Flink counts each attempt in the windows its `attempted_at` falls in, producing a new revision without changing served snapshots. Attempts older than the 24-hour horizon increment the `too_late` metric and are logged, without failing the job | Pending: configured versus observed lateness, Flink UI |
 | Duplicates | Redelivery: a seeded share of committed events is re-published to `payments.events.v1` as byte-identical copies on the same partition, on top of at-least-once CDC | Flink deduplicates by `event_id`, then by attempt identity, dropping identical copies and dead-lettering conflicting content; that state expires 25 hours after the attempt time, so a later copy is already too late. Bronze keeps every delivery and Silver deduplicates | Pending: configured versus observed duplicate rate |
 | Poison records | Malformed or undecodable events, invalid attempt context, or conflicting content under one event or attempt identity | Flink writes them to `fraud.feature-rejects.v1.<epoch>` through a side output while the job keeps running. The value is the original bytes, the key is the `event_id` when decodable, and headers carry the error class, a short message and the source topic, partition, offset and timestamp. Rejects commit exactly-once with the checkpoint, and each one increments a per-class `rejected` metric. Invariant violations such as offset regression or state limits still fail the job | Pending |
-| Restarts | Pod or node loss | Checkpoint recovery restores offsets and state; the Feast writer commits offsets only after reading back accepted writes | Bounded live verification restored a populated checkpoint |
+| Restarts | Pod or node loss | Checkpoint recovery restores offsets and state; journal and reject writes commit exactly-once with the checkpoint | Bounded live verification restored a populated checkpoint |
 
 ## Live simulator
 
@@ -31,7 +31,6 @@ The simulator continues the historical entity world: it rebuilds the world from 
 - Flink and PyFlink 2.2.1 on the platform's Flink operator, Kubernetes HA, checkpoints and savepoints in object storage under `runs/payment-gateway/flink/`.
 - Parallelism one; each manager requests one CPU, the TaskManager 2 GiB.
 - Each epoch has its own feature journal topic and state; a state layout change starts a fresh epoch instead of restoring incompatible state.
-- The Feast writer runs as one replica, reads back accepted revisions, and only then commits Kafka offsets.
 - Per-record data errors go to `fraud.feature-rejects.v1.<epoch>`. This is the real-time triage path, not the durable copy: Bronze Kafka mode independently keeps every raw delivery, in `bronze.rejected_records` or the Bronze tables.
 
 ### Windows

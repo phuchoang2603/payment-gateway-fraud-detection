@@ -19,24 +19,26 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const testHash = "958f9b0fd7e50ba33a22526271ff2e62eafcf827c9f9e0bce1c35c4a016f85a3"
+const testHash = "8ca9a423f452f8ed7a8d1e8aa082dadb72590498cfd1e8da48f94f6c06b0e50d"
 
 var testNow = time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
 
 func update(scope string) *featuresv1.SnapshotUpdate {
-	zero, four, large, devices := int64(0), int64(4), int64(1<<53+1), int64(2)
+	zero, four, amount, devices := int64(0), int64(4), int64(1<<53+1), int64(2)
 	value := &featuresv1.SnapshotUpdate{
 		SchemaVersion: 1, Epoch: "live-v1", Definition: &featuresv1.DefinitionIdentity{Version: definitionVersion, Sha256: testHash},
 		IntegrationId: "integration-π", EntityId: scope, View: featuresv1.EntityView_ENTITY_VIEW_METHOD, Revision: 2,
-		Anchor: timestamppb.New(testNow.Add(-time.Second)), SourceAvailableAt: timestamppb.New(testNow.Add(-time.Second)), OnlineWriteAt: timestamppb.New(testNow.Add(-time.Second)),
-		Coverage:       &featuresv1.WindowCoverage{FiveMinutes: featuresv1.Coverage_COVERAGE_COMPLETE, OneHour: featuresv1.Coverage_COVERAGE_COMPLETE, TwentyFourHours: featuresv1.Coverage_COVERAGE_COMPLETE},
+		Anchor: timestamppb.New(testNow.Add(-time.Second)), ComputedAt: timestamppb.New(testNow.Add(-time.Second)),
+		PublishedAt: timestamppb.New(testNow.Add(-time.Second)), SourceAvailableAt: timestamppb.New(testNow.Add(-time.Second)), OnlineWriteAt: timestamppb.New(testNow.Add(-time.Second)),
+		Coverage:       &featuresv1.WindowCoverage{OneHour: featuresv1.Coverage_COVERAGE_COMPLETE, TwentyFourHours: featuresv1.Coverage_COVERAGE_COMPLETE, SevenDays: featuresv1.Coverage_COVERAGE_COMPLETE},
 		SourceProgress: []*featuresv1.SourcePartitionProgress{{Topic: "payments.events.v1", Partition: 0, ConsumedOffset: 3, ObservedHighWatermark: 4, ObservedAt: timestamppb.New(testNow.Add(-time.Second))}},
-		Values:         &featuresv1.SnapshotValues{AttemptCount_5M: &zero, AttemptCount_1H: &zero, AttemptCount_24H: &four},
+		Values:         &featuresv1.SnapshotValues{AssessedCount_1H: &zero, AssessedCount_24H: &four},
 	}
 	if scope == "customer" {
 		value.View = featuresv1.EntityView_ENTITY_VIEW_CUSTOMER
-		value.Values.AttemptCount_24H = &large
-		value.Values.DistinctDevices_24H = &devices
+		value.Values.AssessedAmountMinor_24H = &amount
+		value.Values.DistinctDevices_7D = &devices
+		value.Values.LastAssessedStartAt = timestamppb.New(testNow.Add(-time.Hour))
 	}
 	return value
 }
@@ -72,14 +74,18 @@ func servingResponse(t *testing.T, value *featuresv1.SnapshotUpdate, scope strin
 		switch field {
 		case "snapshot_metadata":
 			content = base64.StdEncoding.EncodeToString(encoded)
-		case "attempt_count_5m":
-			content = value.Values.AttemptCount_5M
-		case "attempt_count_1h":
-			content = value.Values.AttemptCount_1H
-		case "attempt_count_24h":
-			content = value.Values.AttemptCount_24H
-		case "distinct_devices_24h":
-			content = value.Values.DistinctDevices_24H
+		case "assessed_count_1h":
+			content = value.Values.AssessedCount_1H
+		case "assessed_count_24h":
+			content = value.Values.AssessedCount_24H
+		case "assessed_amount_minor_24h":
+			content = value.Values.AssessedAmountMinor_24H
+		case "distinct_devices_7d":
+			content = value.Values.DistinctDevices_7D
+		case "last_assessed_start_us":
+			if value.Values.LastAssessedStartAt != nil {
+				content = value.Values.LastAssessedStartAt.AsTime().UnixMicro()
+			}
 		}
 		names = append(names, scope+"_snapshot__"+field)
 		results = append(results, map[string]any{"values": []any{content}, "statuses": []string{"PRESENT"}, "event_timestamps": []time.Time{value.OnlineWriteAt.AsTime()}})
@@ -113,7 +119,7 @@ func TestIndependentViewsAndCoverage(t *testing.T) {
 		value := update(scope)
 		if scope == "method" {
 			value.Coverage.OneHour = featuresv1.Coverage_COVERAGE_UNKNOWN
-			value.Values.AttemptCount_1H = nil
+			value.Values.AssessedCount_1H = nil
 		}
 		if err := json.NewEncoder(w).Encode(servingResponse(t, value, scope)); err != nil {
 			t.Error(err)
@@ -127,7 +133,7 @@ func TestIndependentViewsAndCoverage(t *testing.T) {
 	defer client.Close()
 	client.now = func() time.Time { return testNow }
 	customer, method := client.Read(context.Background(), request())
-	if customer.Status != "available" || customer.Values.Count1h == nil || *customer.Values.Count1h != 0 || customer.Values.Count24h == nil || *customer.Values.Count24h != 1<<53+1 || customer.Values.Devices24h == nil || *customer.Values.Devices24h != 2 {
+	if customer.Status != "available" || customer.Values.Count1h == nil || *customer.Values.Count1h != 0 || customer.Values.AmountMinor24h == nil || *customer.Values.AmountMinor24h != 1<<53+1 || customer.ElapsedSeconds == nil || *customer.ElapsedSeconds != 3600 {
 		t.Fatalf("customer=%+v", customer)
 	}
 	if method.Status != "partial" || method.Values.Count1h != nil || method.Values.Count24h == nil || *method.Values.Count24h != 4 {
@@ -143,14 +149,12 @@ func TestUnavailableViewsNeverSupplyQuantities(t *testing.T) {
 		change func(*featuresv1.SnapshotUpdate)
 		status string
 	}{
-		"old anchor": {func(v *featuresv1.SnapshotUpdate) {
-			v.Anchor = timestamppb.New(testNow.Add(-2 * time.Minute))
-			v.SourceAvailableAt = v.Anchor
-			v.SourceProgress[0].ObservedAt = v.Anchor
-		}, "stale"},
+		"old anchor":     {func(v *featuresv1.SnapshotUpdate) { v.Anchor = timestamppb.New(testNow.Add(-2 * time.Minute)) }, "stale"},
 		"lagging source": {func(v *featuresv1.SnapshotUpdate) { v.SourceProgress[0].ObservedHighWatermark = 8 }, "stale"},
 		"future anchor": {func(v *featuresv1.SnapshotUpdate) {
 			v.Anchor = timestamppb.New(testNow.Add(time.Second))
+			v.ComputedAt = v.Anchor
+			v.PublishedAt = v.Anchor
 		}, "future"},
 		"other epoch":      {func(v *featuresv1.SnapshotUpdate) { v.Epoch = "replay" }, "incompatible"},
 		"other definition": {func(v *featuresv1.SnapshotUpdate) { v.Definition.Sha256 = strings.Repeat("0", 64) }, "incompatible"},
@@ -170,7 +174,7 @@ func TestUnavailableViewsNeverSupplyQuantities(t *testing.T) {
 			defer client.Close()
 			client.now = func() time.Time { return testNow }
 			result := client.read(context.Background(), request(), "customer", "customer")
-			if result.Status != tc.status || result.Values.Count1h != nil || result.Values.Devices24h != nil {
+			if result.Status != tc.status || result.Values.Count1h != nil || result.Values.AmountMinor24h != nil || result.ElapsedSeconds != nil {
 				t.Fatalf("observation=%+v", result)
 			}
 		})
@@ -206,6 +210,25 @@ func TestTimeoutAndMalformedResponseRemainIndependent(t *testing.T) {
 				t.Fatalf("customer=%s method=%s", customer.Status, method.Status)
 			}
 		})
+	}
+}
+
+func TestElapsedUsesRequestHorizonWithoutErasingSnapshot(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		value := update("customer")
+		value.Values.LastAssessedStartAt = timestamppb.New(testNow.Add(-7*24*time.Hour - time.Microsecond))
+		_ = json.NewEncoder(w).Encode(servingResponse(t, value, "customer"))
+	}))
+	defer server.Close()
+	client, err := New(Config{URL: server.URL, Epoch: "live-v1", DefinitionHash: testHash, Timeout: time.Second, MaxAnchorAge: time.Minute, MaxProgressAge: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	client.now = func() time.Time { return testNow }
+	result := client.read(context.Background(), request(), "customer", "customer")
+	if result.Status != "available" || result.ElapsedSeconds != nil || result.Values.Count24h == nil || result.Observed.Values.LastAssessedAt == nil {
+		t.Fatalf("elapsed/observed history=%+v", result)
 	}
 }
 
@@ -245,7 +268,7 @@ func TestAbsentSnapshotUsesPinnedFeastNullResponseWithoutHidingIncompleteWrites(
 			}
 			defer client.Close()
 			result := client.read(context.Background(), request(), "customer", "customer")
-			if result.Status != tc.expected || result.Values.Count1h != nil {
+			if result.Status != tc.expected || result.Values.Count1h != nil || result.ElapsedSeconds != nil {
 				t.Fatalf("observation=%+v", result)
 			}
 		})

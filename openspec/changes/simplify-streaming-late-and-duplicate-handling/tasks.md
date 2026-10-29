@@ -1,7 +1,7 @@
 ## 1. Feature contract v2
 
 - [x] 1.1 Replace `fraud-snapshot-v1` definition/examples with `fraud-snapshot-v2` (customer 5m/1h/24h counts + 24h distinct devices; method 5m/1h/24h counts; start-only eligibility; late/too-late examples) and update `features/reference.py` and its conformance test
-- [x] 1.2 Renumber `features/v1/features.proto` for v2 values, coverage and evidence; drop `computed_at`/`published_at`; regenerate Go and Python bindings and the streaming descriptor
+- [x] 1.2 Add `contracts/features/v2/features.proto` for the v2 journal message and generate the streaming descriptor only; keep `features.v1`, its bindings and the v1 reference unchanged, with the v2 reference in `features/reference_v2.py`
 
 ## 2. Flink
 
@@ -9,10 +9,10 @@
 - [x] 2.2 Implement 5m/1h/24h windows and 24h distinct devices; dedup state expiring by event time; too-late counting/logging without job failure
 - [x] 2.3 Update streaming state/runtime tests and the image checkpoint integration test for duplicates, late inside/beyond horizon and restart
 
-## 3. Feast and Go fraud
+## 3. Journal-only output
 
-- [x] 3.1 Update Feast schema/views and writer tests for v2 values
-- [x] 3.2 Update the Go fraud Feast client, application values and evidence for v2; remove 7-day logic; update tests
+- [x] 3.1 Move the Flink image integration test into the streaming project with v2 decoding, leaving Feast unchanged
+- [x] 3.2 Publish to `fraud.feature-updates.v2.<epoch>` with its own registry subject; disable Feast and the fraud service's feature retrieval in every environment
 
 ## 4. Edge client attempt time
 
@@ -25,7 +25,7 @@
 
 ## 6. Infra and docs
 
-- [x] 6.1 Remove `payments.events.v1.faulty` and its metadata pattern; add the `live-v18` journal topic; update fraud-features epoch/hash/writer group and live-traffic settings
+- [x] 6.1 Remove `payments.events.v1.faulty` and its metadata pattern; add the `live-v18` v2 journal topic; update the fraud-features epoch and topic and live-traffic settings
 - [x] 6.2 Update affected data-pipeline/ML doc passages and run local lint/format/helm/OpenSpec checks
 
 ## 7. Dead-letter path

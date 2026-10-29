@@ -44,6 +44,15 @@ An attempt that arrives late but whose attempt time is within 24 hours of the pr
 - **WHEN** an attempt time is 25 hours before the processing anchor
 - **THEN** the too-late count increases and no window changes
 
+### Requirement: Journal-only streaming output
+
+The streaming job SHALL publish `fraud-snapshot-v2` updates only to `fraud.feature-updates.v2.<epoch>`, registered with the schema registry under its own subject, and per-record rejects only to `fraud.feature-rejects.v1.<epoch>`. No online or offline feature store SHALL consume the v2 journal in this slice: the Feast writer and server and the fraud service's feature retrieval SHALL be disabled in every environment, and rules SHALL stay authoritative. Serving from the v2 journal belongs to the later feature-store change.
+
+#### Scenario: Deployed streaming slice
+
+- **WHEN** the charts are rendered for any environment
+- **THEN** Flink targets the v2 journal topic, no Feast workload is rendered and the fraud service receives no feature-retrieval configuration
+
 ### Requirement: Dead-letter output for per-record data errors
 
 The processor SHALL route per-record data errors to a dead-letter Kafka topic `fraud.feature-rejects.v1.<epoch>` while continuing to process later records. Data errors SHALL be undecodable or unsupported events, invalid attempt context, and conflicting content under one event or attempt identity. Each reject SHALL carry the original record bytes, the event identity as key when decodable and otherwise no key, and headers with the error class, a short sanitized message and the source topic, partition, offset and record timestamp; it SHALL carry no card data or tokens. Rejects SHALL commit through the same checkpoint as source offsets and feature updates, so a reject is neither lost nor re-emitted after recovery. Each reject SHALL increment a per-class `rejected` metric and be logged. Invariant and system errors, including entity state limits, clock or offset regression, partition-layout or bootstrap changes and attempt times after observed availability, SHALL still fail the job. Too-late attempts SHALL keep their `too_late` handling and SHALL NOT be dead-lettered. The dead-letter topic is a real-time triage path; durable raw retention remains with Bronze ingestion.

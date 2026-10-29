@@ -9,16 +9,14 @@ from urllib.request import urlopen
 
 from confluent_kafka import Consumer, Producer
 from confluent_kafka.admin import AdminClient, NewTopic
-from fraud_streaming.model import HOUR
-from fraud_streaming.wire import DEFINITION_HASH, PaymentEvent
 from testcontainers.community.kafka import KafkaContainer
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.image import DockerImage
 from testcontainers.core.network import Network
 from testcontainers.core.wait_strategies import HttpWaitStrategy
 
-from fraud_feast import schema
-from fraud_feast.contracts.features.v1 import features_pb2
+from fraud_streaming.model import HOUR, entity_key
+from fraud_streaming.wire import DEFINITION_HASH, PaymentEvent, SnapshotUpdate
 
 
 def await_result(read, *, timeout=120):
@@ -66,7 +64,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
     epoch = "image-ci"
     source = "payments.image-ci"
     clock = "clock.image-ci"
-    output = f"fraud.feature-updates.v1.{epoch}"
+    output = f"fraud.feature-updates.v2.{epoch}"
     rejects_topic = f"fraud.feature-rejects.v1.{epoch}"
     anchor = 1_760_000_000_000_000
     root = Path(__file__).resolve().parents[4]
@@ -209,12 +207,14 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                                 message = consumer.poll(1)
                                 if message is not None:
                                     assert not message.error(), message.error()
-                                    value = features_pb2.SnapshotUpdate.FromString(message.value())
-                                    schema.validate(
-                                        value, epoch=epoch, definition_hash=DEFINITION_HASH
+                                    value = SnapshotUpdate.FromString(message.value())
+                                    assert (value.definition.version, value.definition.sha256) == (
+                                        "fraud-snapshot-v2",
+                                        DEFINITION_HASH,
                                     )
+                                    assert value.epoch == epoch
                                     view = "customer" if value.view == 1 else "method"
-                                    assert message.key().decode() == schema.entity_key(
+                                    assert message.key().decode() == entity_key(
                                         epoch,
                                         view,
                                         value.integration_id,

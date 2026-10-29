@@ -3,7 +3,7 @@ import json
 from datetime import timedelta
 
 import pytest
-from features.reference import DEFINITION_PATH, compute, expiration_anchors, instant
+from features.reference_v2 import DEFINITION_PATH, compute, expiration_anchors, instant
 
 FIXTURES = json.loads(DEFINITION_PATH.with_suffix(".examples.json").read_text())
 EXAMPLES = FIXTURES["cases"]

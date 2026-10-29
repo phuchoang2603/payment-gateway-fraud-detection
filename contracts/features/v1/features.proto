@@ -15,9 +15,9 @@ enum Coverage {
   COVERAGE_COMPLETE = 2;
 }
 message WindowCoverage {
-  Coverage five_minutes = 1;
-  Coverage one_hour = 2;
-  Coverage twenty_four_hours = 3;
+  Coverage one_hour = 1;
+  Coverage twenty_four_hours = 2;
+  Coverage seven_days = 3;
 }
 message DefinitionIdentity {
   string version = 1;
@@ -32,10 +32,11 @@ message SourcePartitionProgress {
   optional google.protobuf.Timestamp heartbeat_at = 6;
 }
 message SnapshotValues {
-  optional int64 attempt_count_5m = 1;
-  optional int64 attempt_count_1h = 2;
-  optional int64 attempt_count_24h = 3;
-  optional int64 distinct_devices_24h = 4;
+  optional int64 assessed_count_1h = 1;
+  optional int64 assessed_count_24h = 2;
+  optional int64 assessed_amount_minor_24h = 3;
+  optional int64 distinct_devices_7d = 4;
+  optional google.protobuf.Timestamp last_assessed_start_at = 5;
 }
 message SnapshotUpdate {
   uint32 schema_version = 1;
@@ -47,11 +48,13 @@ message SnapshotUpdate {
   string snapshot_id = 7;
   uint64 revision = 8;
   google.protobuf.Timestamp anchor = 9;
-  google.protobuf.Timestamp source_available_at = 10;
-  google.protobuf.Timestamp online_write_at = 11;
-  WindowCoverage coverage = 12;
-  repeated SourcePartitionProgress source_progress = 13;
-  SnapshotValues values = 14;
+  google.protobuf.Timestamp computed_at = 10;
+  google.protobuf.Timestamp published_at = 11;
+  google.protobuf.Timestamp source_available_at = 12;
+  google.protobuf.Timestamp online_write_at = 13;
+  WindowCoverage coverage = 14;
+  repeated SourcePartitionProgress source_progress = 15;
+  SnapshotValues values = 16;
 }
 enum ViewStatus {
   VIEW_STATUS_UNSPECIFIED = 0;
@@ -72,6 +75,7 @@ message ViewEvidence {
   google.protobuf.Timestamp read_at = 4;
   optional google.protobuf.Timestamp online_available_at = 5;
   SnapshotValues available_values = 6;
+  optional int64 seconds_since_last_assessed_7d = 7;
 }
 enum GuardStatus {
   GUARD_STATUS_UNSPECIFIED = 0;

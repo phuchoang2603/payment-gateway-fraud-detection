@@ -4,19 +4,15 @@ from hashlib import sha256
 from pathlib import Path
 
 DEFINITION_PATH = (
-    Path(__file__).resolve().parents[3] / "contracts/features/fraud-snapshot-v2.yaml"
+    Path(__file__).resolve().parents[3] / "contracts/features/fraud-snapshot-v1.yaml"
 )
-WINDOWS = {
-    "5m": timedelta(minutes=5),
-    "1h": timedelta(hours=1),
-    "24h": timedelta(days=1),
-}
+WINDOWS = {"1h": timedelta(hours=1), "24h": timedelta(days=1), "7d": timedelta(days=7)}
 PRECISION = timedelta(microseconds=1)
 
 
 def definition_identity():
     content = DEFINITION_PATH.read_bytes()
-    return {"version": "fraud-snapshot-v2", "sha256": sha256(content).hexdigest()}
+    return {"version": "fraud-snapshot-v1", "sha256": sha256(content).hexdigest()}
 
 
 def instant(value):
@@ -26,21 +22,13 @@ def instant(value):
     return value.astimezone(UTC)
 
 
-def attempt_time(event):
-    return instant(event["attempt_started"]["signals"]["attempted_at"])
+def identity(event, attempt):
+    return event["integration_id"], event["payment_id"], attempt["attempt_id"]
 
 
-def identity(event):
-    return (
-        event["integration_id"],
-        event["payment_id"],
-        event["attempt_started"]["attempt_id"],
-    )
-
-
-def available_starts(events, cutoff, observed_availability=None):
+def eligible_starts(events, cutoff, observed_availability=None):
     q = instant(cutoff)
-    starts, seen = [], {}
+    starts, decisions, seen = {}, {}, {}
     for event in events:
         encoded = json.dumps(
             event, sort_keys=True, default=lambda value: instant(value).isoformat()
@@ -56,9 +44,18 @@ def available_starts(events, cutoff, observed_availability=None):
             if event_id not in observed_availability:
                 raise ValueError("missing observed event availability")
             available = max(available, instant(observed_availability[event_id]))
-        if available <= q and event.get("attempt_started") is not None:
-            starts.append(event)
-    return starts
+        if available > q:
+            continue
+        for payload, target in (
+            ("attempt_started", starts),
+            ("risk_decision_recorded", decisions),
+        ):
+            if event.get(payload) is not None:
+                key = identity(event, event[payload])
+                if key in target:
+                    raise ValueError("multiple lifecycle facts for one attempt")
+                target[key] = event
+    return [event for key, event in starts.items() if key in decisions]
 
 
 def entity_key(event, scope):
@@ -72,14 +69,26 @@ def entity_key(event, scope):
     return event["integration_id"], entity
 
 
-def expiration_anchors(starts, *, after):
+def elapsed_seconds(last_assessed_at, attempted_at):
+    if last_assessed_at is None:
+        return None
+    last, t = instant(last_assessed_at), instant(attempted_at)
+    return int((t - last).total_seconds()) if t - WINDOWS["7d"] <= last < t else None
+
+
+def expiration_anchors(starts, *, after, scope):
+    if scope not in {"customer", "method"}:
+        raise ValueError("unknown entity view")
+    windows = (
+        WINDOWS.values() if scope == "customer" else (WINDOWS["1h"], WINDOWS["24h"])
+    )
     after = instant(after)
     return sorted(
         {
-            attempt_time(event) + window + PRECISION
+            instant(event["occurred_at"]) + window + PRECISION
             for event in starts
-            for window in WINDOWS.values()
-            if attempt_time(event) + window + PRECISION > after
+            for window in windows
+            if instant(event["occurred_at"]) + window + PRECISION > after
         }
     )
 
@@ -90,49 +99,76 @@ def snapshot(current, starts, *, scope, anchor, cutoff, coverage, status):
     s, q = instant(anchor), instant(cutoff)
     if s > q:
         raise ValueError("snapshot anchor follows computation cutoff")
-    if set(coverage) != set(WINDOWS) or any(
+    windows = ("1h", "24h", "7d") if scope == "customer" else ("1h", "24h")
+    if set(coverage) != set(windows) or any(
         value not in {"complete", "unknown"} for value in coverage.values()
     ):
         raise ValueError("invalid per-window coverage")
-    fields = [f"{scope}_snapshot_attempt_count_{window}" for window in WINDOWS]
-    if scope == "customer":
-        fields.append("customer_snapshot_distinct_devices_24h")
-    values = dict.fromkeys(fields)
-    if s > attempt_time(current):
-        status = "future"
-    history = [
-        (attempt_time(event), event["attempt_started"])
-        for event in starts
-        if identity(event) != identity(current)
-        and entity_key(event, scope) == entity_key(current, scope)
-        and s - WINDOWS["24h"] <= attempt_time(event) < s
+    fields = [
+        f"{scope}_snapshot_assessed_count_1h",
+        f"{scope}_snapshot_assessed_count_24h",
     ]
+    if scope == "customer":
+        fields.extend(
+            [
+                "customer_snapshot_assessed_amount_minor_24h",
+                "customer_snapshot_distinct_devices_7d",
+            ]
+        )
+    values = dict.fromkeys(fields)
+    last = None
+    if s > instant(current["occurred_at"]):
+        status = "future"
+    history = []
+    for event in starts:
+        started, prior = instant(event["occurred_at"]), event["attempt_started"]
+        if (
+            identity(event, prior) != identity(current, current["attempt_started"])
+            and entity_key(event, scope) == entity_key(current, scope)
+            and s - WINDOWS[windows[-1]] <= started < s
+        ):
+            if prior["context"]["snapshot"]["total"]["currency"] != "USD":
+                raise ValueError("snapshot history requires USD")
+            history.append((started, prior))
     if status == "available":
-        for window, length in WINDOWS.items():
+        for window in ("1h", "24h"):
             if coverage[window] == "complete":
-                values[f"{scope}_snapshot_attempt_count_{window}"] = sum(
-                    started >= s - length for started, _ in history
+                values[f"{scope}_snapshot_assessed_count_{window}"] = sum(
+                    started >= s - WINDOWS[window] for started, _ in history
                 )
-        if scope == "customer" and coverage["24h"] == "complete":
-            values["customer_snapshot_distinct_devices_24h"] = len(
-                {
-                    device
-                    for _, attempt in history
-                    if (device := attempt["signals"].get("device_fingerprint"))
-                    is not None
-                }
-            )
+        if scope == "customer":
+            if coverage["24h"] == "complete":
+                values["customer_snapshot_assessed_amount_minor_24h"] = sum(
+                    int(prior["context"]["snapshot"]["total"]["minor_units"])
+                    for started, prior in history
+                    if started >= s - WINDOWS["24h"]
+                )
+            if coverage["7d"] == "complete":
+                values["customer_snapshot_distinct_devices_7d"] = len(
+                    {
+                        device
+                        for _, prior in history
+                        if (device := prior["signals"].get("device_fingerprint"))
+                        is not None
+                    }
+                )
+                last = max((started for started, _ in history), default=None)
     return {
         "entity_key": list(entity_key(current, scope)),
         "anchor": s.isoformat(),
         "status": status,
         "coverage": dict(coverage),
         "values": values,
+        **(
+            {"last_assessed_at": last.isoformat() if last is not None else None}
+            if scope == "customer"
+            else {}
+        ),
     }
 
 
 def compute(current, events, *, cutoff, views, observed_availability=None):
-    t, q = attempt_time(current), instant(cutoff)
+    t, q = instant(current["occurred_at"]), instant(cutoff)
     if q < t:
         raise ValueError("availability cutoff precedes current attempt")
     attempt = current["attempt_started"]
@@ -155,13 +191,16 @@ def compute(current, events, *, cutoff, views, observed_availability=None):
         if signals.get("ip_country") is not None
         else None,
     }
-    starts = available_starts(events, q, observed_availability)
+    starts = eligible_starts(events, q, observed_availability)
     snapshots = {
         scope: snapshot(current, starts, scope=scope, cutoff=q, **view)
         for scope, view in views.items()
     }
     for view in snapshots.values():
         values.update(view["values"])
+    values["customer_seconds_since_snapshot_last_assessed_7d"] = elapsed_seconds(
+        snapshots["customer"]["last_assessed_at"], t
+    )
     return {
         "definition": definition_identity(),
         "attempted_at": t.isoformat(),

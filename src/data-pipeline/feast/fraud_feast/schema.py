@@ -7,8 +7,16 @@ from feast.types import Bytes, Int64
 
 from fraud_feast.contracts.features.v1 import features_pb2 as wire
 
-COUNTS = ("attempt_count_5m", "attempt_count_1h", "attempt_count_24h")
-FIELDS = {"customer": (*COUNTS, "distinct_devices_24h"), "method": COUNTS}
+FIELDS = {
+    "customer": (
+        "assessed_count_1h",
+        "assessed_count_24h",
+        "assessed_amount_minor_24h",
+        "distinct_devices_7d",
+        "last_assessed_start_us",
+    ),
+    "method": ("assessed_count_1h", "assessed_count_24h"),
+}
 VIEWS = {wire.ENTITY_VIEW_CUSTOMER: "customer", wire.ENTITY_VIEW_METHOD: "method"}
 
 
@@ -47,7 +55,7 @@ def definitions():
 def validate(update, *, epoch, definition_hash):
     if (
         update.schema_version != 1
-        or update.definition.version != "fraud-snapshot-v2"
+        or update.definition.version != "fraud-snapshot-v1"
         or update.definition.sha256 != definition_hash
         or update.epoch != epoch
         or update.view not in VIEWS
@@ -61,12 +69,22 @@ def validate(update, *, epoch, definition_hash):
         raise ValueError("incompatible snapshot identity")
     view = VIEWS[update.view]
     times = {}
-    for name in ("anchor", "source_available_at", "online_write_at"):
+    for name in (
+        "anchor",
+        "computed_at",
+        "published_at",
+        "source_available_at",
+        "online_write_at",
+    ):
         timestamp = getattr(update, name)
         if not update.HasField(name) or timestamp.nanos % 1000:
             raise ValueError("snapshot requires UTC microsecond timestamps")
         times[name] = timestamp.ToDatetime(tzinfo=UTC)
-    if times["source_available_at"] > times["anchor"]:
+    if (
+        times["anchor"] > times["computed_at"]
+        or times["source_available_at"] > times["computed_at"]
+        or times["computed_at"] > times["published_at"]
+    ):
         raise ValueError("inconsistent snapshot timestamps")
     partitions = set()
     if not update.source_progress:
@@ -79,7 +97,7 @@ def validate(update, *, epoch, definition_hash):
             or progress.consumed_offset < -1
             or progress.observed_high_watermark <= progress.consumed_offset
             or not progress.HasField("observed_at")
-            or progress.observed_at.ToDatetime(tzinfo=UTC) > times["anchor"]
+            or progress.observed_at.ToDatetime(tzinfo=UTC) > times["computed_at"]
             or identity in partitions
             or (
                 progress.HasField("heartbeat_at")
@@ -88,14 +106,15 @@ def validate(update, *, epoch, definition_hash):
         ):
             raise ValueError("invalid source progress")
         partitions.add(identity)
-    windows = {
-        "five_minutes": ["attempt_count_5m"],
-        "one_hour": ["attempt_count_1h"],
-        "twenty_four_hours": ["attempt_count_24h"],
-    }
+    windows = {"one_hour": ["assessed_count_1h"], "twenty_four_hours": ["assessed_count_24h"]}
     if view == "customer":
-        windows["twenty_four_hours"].append("distinct_devices_24h")
-    elif update.values.HasField("distinct_devices_24h"):
+        windows["twenty_four_hours"].append("assessed_amount_minor_24h")
+        windows["seven_days"] = ["distinct_devices_7d"]
+    elif (
+        update.values.HasField("assessed_amount_minor_24h")
+        or update.values.HasField("distinct_devices_7d")
+        or update.values.HasField("last_assessed_start_at")
+    ):
         raise ValueError("method view contains customer quantities")
     for window, fields in windows.items():
         coverage = getattr(update.coverage, window)
@@ -107,6 +126,15 @@ def validate(update, *, epoch, definition_hash):
                 raise ValueError("snapshot value conflicts with coverage")
             if present and getattr(update.values, name) < 0:
                 raise ValueError("negative snapshot quantity")
+    if update.values.HasField("last_assessed_start_at"):
+        last = update.values.last_assessed_start_at
+        started = last.ToDatetime(tzinfo=UTC)
+        if (
+            update.coverage.seven_days != wire.COVERAGE_COMPLETE
+            or last.nanos % 1000
+            or not times["anchor"] - timedelta(days=7) <= started < times["anchor"]
+        ):
+            raise ValueError("invalid last assessed start")
     return view
 
 
@@ -117,7 +145,14 @@ def row(update):
     metadata.ClearField("values")
     values = {}
     for name in FIELDS[view]:
-        value = getattr(update.values, name) if update.values.HasField(name) else None
+        if name == "last_assessed_start_us":
+            value = (
+                update.values.last_assessed_start_at.ToMicroseconds()
+                if update.values.HasField("last_assessed_start_at")
+                else None
+            )
+        else:
+            value = getattr(update.values, name) if update.values.HasField(name) else None
         values[name] = pd.Series([value], dtype="Int64")
     return pd.DataFrame(
         {
@@ -138,6 +173,10 @@ def restore(metadata, values):
     update.values.SetInParent()
     for name in FIELDS[VIEWS[update.view]]:
         value = values[name]
-        if value is not None:
+        if value is None:
+            continue
+        if name == "last_assessed_start_us":
+            update.values.last_assessed_start_at.FromMicroseconds(int(value))
+        else:
             setattr(update.values, name, int(value))
     return update

@@ -5,8 +5,8 @@ from datetime import UTC, datetime, timedelta
 from random import Random
 
 import pytest
-from features.reference import definition_identity
-from features.reference import snapshot as reference_snapshot
+from features.reference_v2 import definition_identity
+from features.reference_v2 import snapshot as reference_snapshot
 
 from fraud_streaming.model import DAY, HORIZON, HOUR, MINUTE, Entity, Fact, Packet, Rejected
 from fraud_streaming.wire import PaymentEvent, SnapshotUpdate, decode, snapshot

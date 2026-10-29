@@ -22,11 +22,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const definitionVersion = "fraud-snapshot-v2"
+const definitionVersion = "fraud-snapshot-v1"
 
 var (
-	customerFields = []string{"attempt_count_5m", "attempt_count_1h", "attempt_count_24h", "distinct_devices_24h", "snapshot_metadata"}
-	methodFields   = []string{"attempt_count_5m", "attempt_count_1h", "attempt_count_24h", "snapshot_metadata"}
+	customerFields = []string{"assessed_count_1h", "assessed_count_24h", "assessed_amount_minor_24h", "distinct_devices_7d", "last_assessed_start_us", "snapshot_metadata"}
+	methodFields   = []string{"assessed_count_1h", "assessed_count_24h", "snapshot_metadata"}
 )
 
 type Config struct {
@@ -213,14 +213,16 @@ func (c *Client) read(ctx context.Context, request application.Request, scope, e
 			return observation
 		}
 		switch field {
-		case "attempt_count_5m":
-			values.AttemptCount_5M = &number
-		case "attempt_count_1h":
-			values.AttemptCount_1H = &number
-		case "attempt_count_24h":
-			values.AttemptCount_24H = &number
-		case "distinct_devices_24h":
-			values.DistinctDevices_24H = &number
+		case "assessed_count_1h":
+			values.AssessedCount_1H = &number
+		case "assessed_count_24h":
+			values.AssessedCount_24H = &number
+		case "assessed_amount_minor_24h":
+			values.AssessedAmountMinor_24H = &number
+		case "distinct_devices_7d":
+			values.DistinctDevices_7D = &number
+		case "last_assessed_start_us":
+			values.LastAssessedStartAt = timestamppb.New(time.UnixMicro(number).UTC())
 		}
 	}
 	// Feast 0.67 represents absent entities as PRESENT/null at the Unix epoch.
@@ -247,7 +249,7 @@ func (c *Client) evaluate(update *featuresv1.SnapshotUpdate, writeAt time.Time, 
 	if update.SchemaVersion != 1 || update.GetDefinition().GetVersion() != definitionVersion || update.GetDefinition().GetSha256() != c.config.DefinitionHash || update.Epoch != c.config.Epoch || update.View != view || update.IntegrationId != request.IntegrationID || update.EntityId != entity || update.Revision == 0 || update.Coverage == nil {
 		return observation
 	}
-	for _, timestamp := range []*timestamppb.Timestamp{update.Anchor, update.SourceAvailableAt, update.OnlineWriteAt} {
+	for _, timestamp := range []*timestamppb.Timestamp{update.Anchor, update.ComputedAt, update.PublishedAt, update.SourceAvailableAt, update.OnlineWriteAt} {
 		if timestamp == nil || timestamp.CheckValid() != nil || timestamp.Nanos%1000 != 0 {
 			return observation
 		}
@@ -264,20 +266,30 @@ func (c *Client) evaluate(update *featuresv1.SnapshotUpdate, writeAt time.Time, 
 	}
 	update.SnapshotId = identifier
 	values := update.Values
-	for _, number := range []*int64{values.AttemptCount_5M, values.AttemptCount_1H, values.AttemptCount_24H, values.DistinctDevices_24H} {
+	for _, number := range []*int64{values.AssessedCount_1H, values.AssessedCount_24H, values.AssessedAmountMinor_24H, values.DistinctDevices_7D} {
 		if number != nil && *number < 0 {
 			return observation
 		}
 	}
-	if scope != "customer" && values.DistinctDevices_24H != nil || update.Anchor.AsTime().Before(update.SourceAvailableAt.AsTime()) {
+	if values.LastAssessedStartAt != nil && (values.LastAssessedStartAt.CheckValid() != nil || !values.LastAssessedStartAt.AsTime().Before(update.Anchor.AsTime())) {
+		return observation
+	}
+	if update.ComputedAt.AsTime().Before(update.Anchor.AsTime()) || update.PublishedAt.AsTime().Before(update.ComputedAt.AsTime()) || update.ComputedAt.AsTime().Before(update.SourceAvailableAt.AsTime()) {
 		return observation
 	}
 	observed := &application.Snapshot{
 		ID: identifier, Epoch: update.Epoch, Definition: update.Definition.Version, DefinitionHash: update.Definition.Sha256, Revision: update.Revision,
-		Anchor: update.Anchor.AsTime(), SourceAvailableAt: update.SourceAvailableAt.AsTime(), WriteAt: writeAt,
-		Coverage: map[string]string{}, Values: application.SnapshotValues{Count5m: values.AttemptCount_5M, Count1h: values.AttemptCount_1H, Count24h: values.AttemptCount_24H, Devices24h: values.DistinctDevices_24H},
+		Anchor: update.Anchor.AsTime(), ComputedAt: update.ComputedAt.AsTime(), PublishedAt: update.PublishedAt.AsTime(), SourceAvailableAt: update.SourceAvailableAt.AsTime(), WriteAt: writeAt,
+		Coverage: map[string]string{}, Values: application.SnapshotValues{Count1h: values.AssessedCount_1H, Count24h: values.AssessedCount_24H, AmountMinor24h: values.AssessedAmountMinor_24H, Devices7d: values.DistinctDevices_7D},
 	}
-	windows := map[string]featuresv1.Coverage{"5m": update.Coverage.FiveMinutes, "1h": update.Coverage.OneHour, "24h": update.Coverage.TwentyFourHours}
+	if values.LastAssessedStartAt != nil {
+		last := values.LastAssessedStartAt.AsTime()
+		observed.Values.LastAssessedAt = &last
+	}
+	windows := map[string]featuresv1.Coverage{"1h": update.Coverage.OneHour, "24h": update.Coverage.TwentyFourHours}
+	if scope == "customer" {
+		windows["7d"] = update.Coverage.SevenDays
+	}
 	for window, coverage := range windows {
 		if coverage != featuresv1.Coverage_COVERAGE_COMPLETE && coverage != featuresv1.Coverage_COVERAGE_UNKNOWN {
 			return observation
@@ -290,7 +302,7 @@ func (c *Client) evaluate(update *featuresv1.SnapshotUpdate, writeAt time.Time, 
 	now := c.now().UTC()
 	progressHealthy := len(update.SourceProgress) > 0
 	for _, progress := range update.SourceProgress {
-		if progress.Topic == "" || progress.Partition < 0 || progress.ConsumedOffset < -1 || progress.ObservedHighWatermark <= progress.ConsumedOffset || progress.ObservedAt == nil || progress.ObservedAt.CheckValid() != nil || progress.ObservedAt.AsTime().After(observed.Anchor) {
+		if progress.Topic == "" || progress.Partition < 0 || progress.ConsumedOffset < -1 || progress.ObservedHighWatermark <= progress.ConsumedOffset || progress.ObservedAt == nil || progress.ObservedAt.CheckValid() != nil || progress.ObservedAt.AsTime().After(observed.ComputedAt) {
 			return observation
 		}
 		record := application.SourceProgress{Topic: progress.Topic, Partition: progress.Partition, ConsumedOffset: progress.ConsumedOffset, ObservedHighWatermark: progress.ObservedHighWatermark, ObservedAt: progress.ObservedAt.AsTime()}
@@ -308,7 +320,7 @@ func (c *Client) evaluate(update *featuresv1.SnapshotUpdate, writeAt time.Time, 
 	}
 	observation.Observed = observed
 	observation.AvailableAt = &now
-	if observed.Anchor.After(request.Input.AttemptedAt) || observed.Anchor.After(now) || writeAt.After(now) {
+	if observed.Anchor.After(request.Input.AttemptedAt) || observed.ComputedAt.After(now) || observed.PublishedAt.After(now) || writeAt.After(now) {
 		observation.Status = "future"
 		return observation
 	}
@@ -317,22 +329,39 @@ func (c *Client) evaluate(update *featuresv1.SnapshotUpdate, writeAt time.Time, 
 		return observation
 	}
 	observation.Status = "available"
-	perWindow := map[string][]**int64{"5m": {&observation.Values.Count5m}, "1h": {&observation.Values.Count1h}, "24h": {&observation.Values.Count24h}}
-	sources := map[string][]*int64{"5m": {values.AttemptCount_5M}, "1h": {values.AttemptCount_1H}, "24h": {values.AttemptCount_24H}}
-	if scope == "customer" {
-		perWindow["24h"] = append(perWindow["24h"], &observation.Values.Devices24h)
-		sources["24h"] = append(sources["24h"], values.DistinctDevices_24H)
-	}
 	for window, coverage := range windows {
-		if coverage != featuresv1.Coverage_COVERAGE_COMPLETE {
-			observation.Status = "partial"
-			continue
-		}
-		for i, target := range perWindow[window] {
-			if sources[window][i] == nil {
-				observation.Status = "partial"
+		if coverage == featuresv1.Coverage_COVERAGE_COMPLETE {
+			switch window {
+			case "1h":
+				if values.AssessedCount_1H == nil {
+					observation.Status = "partial"
+				} else {
+					observation.Values.Count1h = values.AssessedCount_1H
+				}
+			case "24h":
+				observation.Values.Count24h = values.AssessedCount_24H
+				if values.AssessedCount_24H == nil {
+					observation.Status = "partial"
+				}
+				if scope == "customer" {
+					observation.Values.AmountMinor24h = values.AssessedAmountMinor_24H
+					if values.AssessedAmountMinor_24H == nil {
+						observation.Status = "partial"
+					}
+				}
+			case "7d":
+				observation.Values.Devices7d = values.DistinctDevices_7D
+				if values.DistinctDevices_7D == nil {
+					observation.Status = "partial"
+				}
+				observation.Values.LastAssessedAt = observed.Values.LastAssessedAt
+				if last := observed.Values.LastAssessedAt; last != nil && request.Input.AttemptedAt.Sub(*last) <= 7*24*time.Hour && last.Before(request.Input.AttemptedAt) {
+					seconds := int64(request.Input.AttemptedAt.Sub(*last) / time.Second)
+					observation.ElapsedSeconds = &seconds
+				}
 			}
-			*target = sources[window][i]
+		} else {
+			observation.Status = "partial"
 		}
 	}
 	return observation

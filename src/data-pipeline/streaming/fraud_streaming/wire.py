@@ -16,7 +16,7 @@ PaymentEvent = message_factory.GetMessageClass(
     pool.FindMessageTypeByName("payments.v1.PaymentEvent")
 )
 SnapshotUpdate = message_factory.GetMessageClass(
-    pool.FindMessageTypeByName("features.v1.SnapshotUpdate")
+    pool.FindMessageTypeByName("features.v2.SnapshotUpdate")
 )
 DEFINITION_HASH = "958f9b0fd7e50ba33a22526271ff2e62eafcf827c9f9e0bce1c35c4a016f85a3"
 

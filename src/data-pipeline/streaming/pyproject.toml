@@ -5,7 +5,7 @@ requires-python = ">=3.11,<3.12"
 dependencies = ["apache-flink==2.2.1", "protobuf==4.25.8", "confluent-kafka==2.12.0"]
 
 [dependency-groups]
-dev = ["pytest==9.0.2", "ruff==0.14.14"]
+dev = ["pytest==9.0.2", "ruff==0.14.14", "testcontainers[kafka]==4.15.0"]
 
 [tool.uv]
 package = false
@@ -27,4 +27,4 @@ select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.protobuf]
 descriptor = "fraud_streaming/contracts.pb"
-sources = ["payments/v1/events.proto", "features/v1/features.proto"]
+sources = ["payments/v1/events.proto", "features/v2/features.proto"]
