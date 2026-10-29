@@ -22,21 +22,22 @@ jobs:
       - name: Lint and format release scripts
         run: bash scripts/ci-checks.sh python-scripts
 
+  projects:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.projects.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - id: projects
+        run: echo "matrix=$(python3 scripts/ci-matrix.py --kind python)" >> "$GITHUB_OUTPUT"
+
   python:
+    needs: projects
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - project: src/data-pipeline/batch
-            java: true
-            ivy: true
-          - project: src/data-pipeline/feast
-          - project: src/data-pipeline/openmetadata_jobs
-          - project: src/data-pipeline/simulator
-          - project: src/data-pipeline/streaming
-            java: true
+      matrix: ${{ fromJSON(needs.projects.outputs.matrix) }}
     name: Python ${{ matrix.project }}
     steps:
       - uses: actions/checkout@v7.0.1
@@ -56,6 +57,8 @@ jobs:
         if: matrix.ivy
         with:
           path: ~/.ivy2.5.2
-          key: spark-ivy-${{ hashFiles('src/data-pipeline/batch/tests/conftest.py') }}
+          key: spark-ivy-${{ hashFiles(format('{0}/tests/conftest.py', matrix.project)) }}
       - name: Python lint, format and tests
-        run: bash scripts/ci-checks.sh python "${{ matrix.project }}"
+        env:
+          PY_PROJECT: ${{ matrix.project }}
+        run: bash scripts/ci-checks.sh python "$PY_PROJECT"
