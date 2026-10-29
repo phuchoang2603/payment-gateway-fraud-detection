@@ -17,7 +17,7 @@ The SQL rules use DuckDB syntax. Source DuckDB rules are distinct from downstrea
 
 ## Historical payments
 
-[`historical-payments`](../../contracts/data-products/historical-payments) is the reproducible synthetic source for DP1 ingestion and downstream feature and training pipelines described in [data pipeline architecture](data-pipeline.md). It stays outside bronze tables and production payment storage.
+[`historical-payments`](../../contracts/data-products/historical-payments) is the reproducible synthetic source for ingestion and downstream feature and training pipelines described in [data pipeline architecture](data-pipeline.md). It stays outside bronze tables and production payment storage.
 
 | Port | Contract | Reference |
 |---|---|---|
@@ -68,10 +68,4 @@ Distribution/scenario/skew counters are informational diagnostics, not source pu
 
 The coursework source is `docs/coursework/rubic/EDAI K11 - DE.xlsx`, sheet `edai-1 (50%)`, cell B5: offline simulation of at least 100 GB. Compression accounting is unspecified there. Full-scale coursework evidence requires at least **100,000,000,000 physical bytes** across inventory-listed raw event and label Parquet files, counted once, excluding `_run`, reports, streaming data, replicas and downstream copies. The v13 smoke export does not satisfy this target. The manifest separately records uncompressed Parquet column-chunk bytes and decimal GB/GiB. A configured full-scale byte gate still prevents undersized publication. Changing logical inputs requires a new dataset version after publication.
 
-## Bronze payments
-
-`bronze-payments` version `2.0.0` exposes `bronze.raw_payment_events` and `bronze.raw_fraud_labels` Iceberg ports. Current event schema 3 preserves enriched AttemptStarted context; label schema 1 retains availability and feature-leakage restrictions. Ingestion appends `_source_dataset_version`, `_source_manifest_sha256`, `_source_file`, `_ingestion_run_id` and `_ingested_at`, preserving identical deliveries.
-
-Git bronze contracts define StarRocks COUNT-of-violations SQL and conditional nested requirements. The official version-matched OpenMetadata ingestion image discovers tables and executes native quality rules; Argo performs explicit product/contract/lineage writes and verifies complete results. Spark performs source-integrity checks, ingestion and bidirectional duplicate-aware source/output reconciliation against recorded snapshots. Native per-day counts alone do not establish content equality.
-
-The fresh platform migration selects v17, which must be generated and validated before ingestion. The v16 observations and manifest below are historical evidence. V16 development acceptance is separate from source/live checks and later full-scale/coursework acceptance. See the [DP1 operation instructions](data-pipeline.md#historical-dp1) for configuration and metadata-only recovery.
+Bronze and Silver contracts are being rebuilt and are not part of `main`.
