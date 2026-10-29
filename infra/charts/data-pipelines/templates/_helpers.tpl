@@ -142,6 +142,33 @@ retryStrategy:
 {{- include "data-pipelines.env" .root | nindent 6 }}
 {{- end -}}
 
+{{- define "data-pipelines.checks" -}}
+- name: checks
+  retryStrategy:
+    limit: 2
+    retryPolicy: OnError
+  container:
+    image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
+    command: [python, -m, openmetadata_jobs.checks]
+    env:
+      - name: CHECK_PRODUCT
+        value: {{ .product | quote }}
+      - name: METADATA_CONNECTORS_FILE
+        value: /etc/metadata/connectors.json
+{{- include "data-pipelines.env" .root | nindent 6 }}
+    envFrom:
+      - secretRef:
+          name: {{ .root.Values.checks.connectorSecret }}
+    volumeMounts:
+      - name: metadata-connectors
+        mountPath: /etc/metadata
+        readOnly: true
+  volumes:
+    - name: metadata-connectors
+      configMap:
+        name: {{ .root.Values.checks.connectorsConfigMap }}
+{{- end -}}
+
 {{- define "data-pipelines.spark-application" -}}
 {{- $sizing := .sizing -}}
 {{- $image := include "data-pipelines.image" (dict "image" .root.Values.images.spark "global" .root.Values.global) -}}

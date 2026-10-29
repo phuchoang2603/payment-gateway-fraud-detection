@@ -129,3 +129,6 @@ catalog:
     store: gateway-doppler
     data:
       OPENMETADATA_TOKEN: OPENMETADATA_TOKEN
+checks:
+  connectorsConfigMap: metadata-connectors
+  connectorSecret: metadata-starrocks
