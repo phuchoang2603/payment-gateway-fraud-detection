@@ -143,7 +143,11 @@ func TestUnavailableViewsNeverSupplyQuantities(t *testing.T) {
 		change func(*featuresv1.SnapshotUpdate)
 		status string
 	}{
-		"old anchor":     {func(v *featuresv1.SnapshotUpdate) { v.Anchor = timestamppb.New(testNow.Add(-2 * time.Minute)) }, "stale"},
+		"old anchor": {func(v *featuresv1.SnapshotUpdate) {
+			v.Anchor = timestamppb.New(testNow.Add(-2 * time.Minute))
+			v.SourceAvailableAt = v.Anchor
+			v.SourceProgress[0].ObservedAt = v.Anchor
+		}, "stale"},
 		"lagging source": {func(v *featuresv1.SnapshotUpdate) { v.SourceProgress[0].ObservedHighWatermark = 8 }, "stale"},
 		"future anchor": {func(v *featuresv1.SnapshotUpdate) {
 			v.Anchor = timestamppb.New(testNow.Add(time.Second))
