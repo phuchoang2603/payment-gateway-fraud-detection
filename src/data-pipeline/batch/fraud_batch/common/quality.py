@@ -27,14 +27,13 @@ def test_workflow(table, case_list, entity_name):
                 "config": {
                     "type": "TestSuite",
                     "entityFullyQualifiedName": entity_name,
-                    "testCases": [c.name for c in case_list if c.table == table],
+                    "testCases": [],
                 }
             },
         },
         "processor": {
             "type": "orm-test-runner",
             "config": {
-                "forceUpdate": True,
                 "testCases": [
                     {
                         "name": c.name,
