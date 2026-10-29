@@ -8,7 +8,7 @@ domain: fraud-detection
 type: sourceAligned
 description:
   purpose: Reproducible synthetic payment histories and delayed fraud labels for pipeline development.
-  usage: Select a completed immutable dataset by its manifest. Each output port's ODCS contract defines its schema and quality rules.
+  usage: Select a completed immutable dataset by its manifest. Each output port's ODCS contract defines its schema and field meanings; the generator tests verify the layout.
   limitations: Synthetic source only; no claim of real-world fraud performance, production model acceptance or processing benchmark scale. Source publication does not claim Bronze or Silver quality acceptance.
 team:
   name: Fraud data platform
