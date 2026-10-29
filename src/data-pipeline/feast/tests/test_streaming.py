@@ -261,6 +261,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                         receive(
                             lambda values: (
                                 "other-customer" in values
+                                and values["other-customer"].values.attempt_count_1h == 1
                                 and values["shared-method"].values.attempt_count_1h == 2
                             )
                         )
