@@ -1,3 +1,6 @@
+# ClickHouse 26.10 needs AVX2, which dev-server3's Pentium G5400 lacks; dev-server1 has it.
+nodeSelector:
+  kubernetes.io/hostname: dev-server1
 resources:
   requests: {cpu: 500m, memory: 2Gi}
   limits: {memory: 3Gi}
