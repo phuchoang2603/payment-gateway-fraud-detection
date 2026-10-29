@@ -87,7 +87,7 @@ agents:
   uid: 65532
   sandbox:
     snapshotRoot: gs://platform-dev/substrate/llm
-  # Each agent's system prompt is files/prompts/<name>.md until Langfuse manages prompts (phase 2).
+  # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
   list:
     - name: evidence-agent
       version: 0.1.0
