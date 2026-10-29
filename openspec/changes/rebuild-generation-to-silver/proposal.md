@@ -44,5 +44,5 @@ The path from historical generation to curated data has grown into receipts, res
   - Python CI paths.
 - **Docs:** minimal updates to `docs/data-ml/data-generator.md` (new), `data-pipeline.md` and `data-products.md`, with regenerated product references.
 - **Parallel work:** the live simulator change (thread `explore live simulator and data drift rework`) owns `simulator/live/`, streaming, Feast, features, `contracts/features` and the Go Edge/Fraud changes. `simulator/world.py` lands on `main` with the generator PR. The live change then moves its imports to it, and this change deletes the old generator modules only after nothing in `live/` imports them. It touches no live behavior.
-- **Out of scope:** running Bronze/Silver at full scale, evidence capture, gold/feature marts, Flink/Feast changes, model training and drift detection.
+- **Out of scope:** running Bronze/Silver at full scale, evidence capture, gold/feature marts, Flink/Feast changes, model training and drift detection. Long-window feature materialization (a daily Spark batch into Feast, with short windows kept in Flink) is handed to the feature change; see design.md, Handoff.
 - **Cost:** the prod run stores about 100+ GB in the prod bucket and runs one bounded generator pod on prod nodes for several hours.

@@ -49,7 +49,7 @@ This PR also switches `live/` to `world.py`. `HistoricalModel` builds a `World` 
 
 - **Keys.** Each purchase is keyed by its purchase-start day, its customer and that customer's purchase number that day. Card-testing bursts are keyed by (day, burst, number). A purchase's random stream and identity depend only on its key, never on how the day is split or how many workers run.
 - **Counts.** A day's purchase counts come from one Poisson draw over all customers, scaled by each customer's activity and the region's local-hour, weekday and seasonal intensity. The draw is computed once per process and is independent of the split.
-- **Parts.** Internal constants size a part: customers per part (`PART_CUSTOMERS`) and rows per Parquet row group. A part holds one table's rows for a customer range. Names are `payment_events/date=D/part-NNNNN.v{2|3}.parquet` (events are split by `schema_version`, see decision 3) and `fraud_labels/date=D/part-NNNNN.parquet`. Part names are deterministic, so regenerating a day overwrites the same keys. The partition date is the purchase-start day, not the row timestamp.
+- **Parts.** Internal constants size a part: customers per part (`PART_CUSTOMERS`, 750,000, so the full dataset has about four parts per day and table, on the order of 70 MB each as an estimate from v8's size) and rows per Parquet row group. A part holds one table's rows for a customer range. Names are `payment_events/date=D/part-NNNNN.v{2|3}.parquet` (events are split by `schema_version`, see decision 3) and `fraud_labels/date=D/part-NNNNN.parquet`. Part names are deterministic, so regenerating a day overwrites the same keys. The partition date is the purchase-start day, not the row timestamp.
 - **Scheduling.** `produce` submits every pending (day, part) pair of a shard to the pool at once. Each day's `_day.json` marker is written as soon as all of that day's parts have finished, with no per-day barrier.
 - **Bounded resources.** A worker holds one part's rows per writer and one local temporary file at a time. It uploads the file and deletes it. Memory and scratch are bounded by part size and worker count, not by day or dataset size.
 - **Atomic files.** A part is written to a local temporary file and uploaded with a single PUT (multipart for large parts), or moved into place locally.
@@ -70,6 +70,15 @@ This PR also switches `live/` to `world.py`. `HistoricalModel` builds a `World` 
 - **Contract rules.** `schema_version` must be in (2, 3). The declared fields are present exactly when `schema_version >= 3`.
 
 *Alternative:* one file per table holding both shapes, with the omitted fields null. Rejected: the Parquet schema would not show which version lacks the fields, so Bronze would have to infer the layout from the rows.
+
+### Handoff: long-window features (plan only)
+
+This belongs to the later feature change and the live simulator thread, not to this PR.
+
+- Long windows (7-day and 30-day) are computed by a daily Spark batch from Silver and materialized into Feast. Flink keeps only the short windows (5 minutes, 1 hour and 24 hours).
+- There is no HybridSource and no Flink state bootstrap. Short windows warm up within 24 hours of live traffic.
+- Offline training features come from the same Spark job, so online and offline long windows match by construction.
+- The history's recent end (decision 11 dates) gives the batch full 30-day lookbacks when live traffic starts.
 
 ### 4. Bronze tables are shared by both sources
 
@@ -139,7 +148,7 @@ The availability comparison uses the attempt start even while the payment is ope
 
 ### 6. Checks are contract-derived StarRocks SQL run by OpenMetadata
 
-Each ODCS contract declares `quality` rules as scalar violation-count SQL with `mustBe: 0`, which the batch package turns into native OpenMetadata test cases.
+Bronze and Silver ODCS contracts declare `quality` rules as scalar violation-count SQL with `mustBe: 0`, which the batch package turns into native OpenMetadata test cases. The historical source contracts declare no executable rules: their semantics live in field descriptions, and the generator tests check them.
 
 - **Bronze rules:** required fields and conditional nested fields, valid enums, and `schema_version` in {2, 3}.
 - **Silver rules:**
