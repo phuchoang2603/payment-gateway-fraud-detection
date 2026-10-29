@@ -8,4 +8,4 @@ applications:
   metadata-integrations:
     enabled: false
   data-pipelines:
-    enabled: false
+    enabled: true

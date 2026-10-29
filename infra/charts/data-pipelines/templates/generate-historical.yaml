@@ -1,0 +1,50 @@
+{{- if .Values.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: generate-historical
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: dp1-workflow
+  entrypoint: generate
+  synchronization:
+    mutexes:
+      - name: historical-generator-writer
+  templates:
+    - name: generate
+      activeDeadlineSeconds: {{ .Values.generator.activeDeadlineSeconds }}
+      retryStrategy:
+        limit: {{ .Values.generator.retryLimit }}
+        retryPolicy: OnError
+        backoff:
+          duration: 30s
+          factor: 2
+          maxDuration: 10m
+      container:
+        image: {{ include "data-pipelines.image" (dict "image" .Values.images.simulator "global" $.Values.global) | quote }}
+        command: [simulator]
+        env:
+          - name: SIMULATOR_CONFIG
+            value: {{ printf "/app/configs/%s" .Values.generator.config | quote }}
+          - name: AWS_REGION
+            value: {{ .Values.config.AWS_REGION | quote }}
+          - name: S3_ENDPOINT
+            value: {{ .Values.config.S3_ENDPOINT | quote }}
+          - name: S3_PATH_STYLE
+            value: {{ .Values.config.S3_PATH_STYLE | quote }}
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.lakehouse.externalSecret.name }}
+                key: AWS_ACCESS_KEY_ID
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.lakehouse.externalSecret.name }}
+                key: AWS_SECRET_ACCESS_KEY
+        resources:
+          requests:
+            {{- toYaml .Values.generator.resources.requests | nindent 12 }}
+          limits:
+            {{- toYaml .Values.generator.resources.limits | nindent 12 }}
+{{- end }}

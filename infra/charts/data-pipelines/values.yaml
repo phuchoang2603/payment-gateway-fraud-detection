@@ -3,13 +3,30 @@ global:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator: dev
 enabled: false
+generatorOnly: false
 namespace: data
 images:
   spark:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark
   openmetadata:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
+  simulator:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator
+generator:
+  config: historical-dev.yaml
+  retryLimit: 2
+  activeDeadlineSeconds: 21600
+  resources:
+    requests:
+      cpu: "2"
+      memory: 4Gi
+      ephemeral-storage: 20Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+      ephemeral-storage: 40Gi
 workflow:
   activeDeadlineSeconds: 7200
 spark:

@@ -1,4 +1,6 @@
 enabled: true
+generator:
+  config: historical-dev.yaml
 config:
   SOURCE_ROOT: s3://platform-dev/datasets/payment-gateway/historical/v17
   EVIDENCE_ROOT: s3://platform-dev/runs/payment-gateway/dp1

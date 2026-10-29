@@ -1,4 +1,4 @@
-{{- if and .Values.enabled .Values.recurring.enabled }}
+{{- if and .Values.enabled .Values.recurring.enabled (not .Values.generatorOnly) }}
 apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:

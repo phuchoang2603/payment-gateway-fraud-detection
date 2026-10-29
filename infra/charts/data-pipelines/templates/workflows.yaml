@@ -1,4 +1,4 @@
-{{- if .Values.enabled }}
+{{- if and .Values.enabled (not .Values.generatorOnly) }}
 {{ .Files.Get "files/workflows.yaml"
   | replace "__WORKFLOW_DEADLINE__" (.Values.workflow.activeDeadlineSeconds | toString)
   | replace "__SPARK_DEADLINE__" (.Values.spark.activeDeadlineSeconds | toString)
