@@ -54,7 +54,7 @@ def test_identical_copies_collapse_to_earliest_and_conflicts_leave_the_accepted_
 
     accepted = spark.table(silver.PAYMENT_EVENTS)
     assert [r.event_id for r in accepted.collect()] == ["evt-1"]
-    assert accepted.first()["recorded_at"] == at(0)
+    assert accepted.first()["recorded_at"] == at(0).replace(tzinfo=None)
     rejected = spark.table(silver.REJECTED).where(F.col("rejected_table") == "payment_events")
     assert {r.reason for r in rejected.collect()} == {"evt-2"}
     assert rejected.where(F.col("payment_id") == "pay-2").count() == 2
