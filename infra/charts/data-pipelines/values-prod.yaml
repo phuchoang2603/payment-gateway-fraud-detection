@@ -1,15 +1,8 @@
 enabled: true
-generatorOnly: true
 generator:
   config: historical-full.yaml
   # Placeholder until the dev v18 run measures throughput (task 3.7).
   activeDeadlineSeconds: 86400
 config:
-  SOURCE_ROOT: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v17
-  EVIDENCE_ROOT: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp1
   S3_ENDPOINT: https://s3.us-east-1.amazonaws.com
   S3_PATH_STYLE: 'false'
-  ARGO_WORKFLOWS_URL: https://workflows.phuchoang.sbs
-recurring:
-  enabled: false
-  sourceRoot: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway

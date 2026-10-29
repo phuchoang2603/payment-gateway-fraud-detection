@@ -2,4 +2,4 @@ apiVersion: v2
 name: live-traffic
 version: 0.1.0
 type: application
-description: Gateway command simulation and immutable Kafka Parquet landing
+description: Gateway command simulation

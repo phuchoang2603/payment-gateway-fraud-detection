@@ -1,17 +1,9 @@
 global:
   imageTags:
-    ghcr.io/phuchoang2603/payment-gateway-fraud-detection: dev
-    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark: dev
-    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator: dev
 enabled: false
-generatorOnly: false
 namespace: data
 images:
-  spark:
-    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark
-  openmetadata:
-    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
   simulator:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator
 generator:
@@ -27,37 +19,14 @@ generator:
       cpu: "4"
       memory: 8Gi
       ephemeral-storage: 40Gi
-workflow:
-  activeDeadlineSeconds: 7200
-spark:
-  activeDeadlineSeconds: 2400
-  executors: 2
-  shufflePartitions: 1024
-native:
-  activeDeadlineSeconds: 1800
 config:
-  SOURCE_ROOT: s3://platform-dev/datasets/payment-gateway/historical/v17
-  DATASET_VERSION: v17
-  EVIDENCE_ROOT: s3://platform-dev/runs/payment-gateway/dp1
-  ICEBERG_REST_URI: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
-  ICEBERG_WAREHOUSE: lakehouse
-  ICEBERG_CLIENT_ID: platform
-  S3_ENDPOINT: https://minio.home.phuchoang.sbs
   AWS_REGION: us-east-1
-  ARGO_WORKFLOWS_URL: https://workflows-dev.phuchoang.sbs
-  PROFILE_MAX_ROWS: '100000'
-  ICEBERG_OAUTH2_URI: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
+  S3_ENDPOINT: https://minio.home.phuchoang.sbs
   S3_PATH_STYLE: 'true'
-lakehouse:
+storage:
   externalSecret:
     name: gateway-storage
     store: gateway-doppler
     data:
       AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
       AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
-recurring:
-  enabled: false
-  schedule: 0 0 * * *
-  sourceRoot: s3://platform-dev/datasets/payment-gateway
-  sourceEpoch: v17
-  maxBatches: 100

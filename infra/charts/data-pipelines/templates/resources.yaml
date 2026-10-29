@@ -1,38 +1,20 @@
 {{- if .Values.enabled }}
-{{- if not .Values.generatorOnly }}
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: dp1-config
-  namespace: {{ .Values.namespace }}
-data:
-  GIT_REVISION: {{ regexFind "[a-f0-9]{40}$" (index .Values.global.imageTags .Values.images.spark.repository) | default "dev" | quote }}
-  LANDING_MAX_BATCHES: {{ .Values.recurring.maxBatches | quote }}
-  {{- toYaml .Values.config | nindent 2 }}
----
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: dp1-spark
-  namespace: {{ .Values.namespace }}
----
-{{- end }}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: dp1-workflow
+  name: historical-generator
   namespace: {{ .Values.namespace }}
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  name: dp1-workflow.service-account-token
+  name: historical-generator.service-account-token
   namespace: {{ .Values.namespace }}
   annotations:
-    kubernetes.io/service-account.name: dp1-workflow
+    kubernetes.io/service-account.name: historical-generator
 type: kubernetes.io/service-account-token
 ---
-{{- with .Values.lakehouse.externalSecret }}
+{{- with .Values.storage.externalSecret }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -61,44 +43,15 @@ spec:
   {{- end }}
 ---
 {{- end }}
-{{- if not .Values.generatorOnly }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: dp1-spark
-  namespace: {{ .Values.namespace }}
-rules:
-  - apiGroups: [""]
-    resources: [pods, services, configmaps, persistentvolumeclaims]
-    verbs: [create, get, list, watch, delete, deletecollection, patch]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: dp1-spark
-  namespace: {{ .Values.namespace }}
-subjects:
-  - kind: ServiceAccount
-    name: dp1-spark
-    namespace: {{ .Values.namespace }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: dp1-spark
----
-{{- end }}
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: dp1-workflow
+  name: historical-generator
   namespace: {{ .Values.namespace }}
 rules:
   - apiGroups: [""]
     resources: [pods]
     verbs: [get, list, watch, delete, deletecollection]
-  - apiGroups: [spark.apache.org]
-    resources: [sparkapplications]
-    verbs: [create, get, list, watch, delete, deletecollection]
   - apiGroups: [argoproj.io]
     resources: [workflows/finalizers]
     verbs: [update]
@@ -109,14 +62,14 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: dp1-workflow
+  name: historical-generator
   namespace: {{ .Values.namespace }}
 subjects:
   - kind: ServiceAccount
-    name: dp1-workflow
+    name: historical-generator
     namespace: {{ .Values.namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: dp1-workflow
+  name: historical-generator
 {{- end }}

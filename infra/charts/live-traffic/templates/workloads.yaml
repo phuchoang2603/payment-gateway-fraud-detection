@@ -1,34 +1,31 @@
-{{- range $name, $settings := dict "live-simulator" .Values.simulator "stream-archiver" .Values.archiver }}
-{{- if $settings.enabled }}
+{{- if .Values.simulator.enabled }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ $name }}
+  name: live-simulator
 automountServiceAccountToken: false
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $name }}
+  name: live-simulator
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ $name }}
+      app.kubernetes.io/name: live-simulator
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ $name }}
-{{- if eq $name "live-simulator" }}
+        app.kubernetes.io/name: live-simulator
         istio.io/dataplane-mode: ambient
-{{- end }}
       annotations:
-        checksum/config: {{ omit $.Values "global" | toJson | sha256sum }}
+        checksum/config: {{ omit .Values "global" | toJson | sha256sum }}
     spec:
-      serviceAccountName: {{ $name }}
+      serviceAccountName: live-simulator
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
       securityContext:
@@ -39,34 +36,29 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: {{ $name }}
-          image: {{ include "live-traffic.image" (dict "image" $.Values.image "global" $.Values.global) | quote }}
+        - name: live-simulator
+          image: {{ include "live-traffic.image" (dict "image" .Values.image "global" .Values.global) | quote }}
           imagePullPolicy: Always
-{{- if eq $name "live-simulator" }}
           command: [python, -m, simulator.live.runtime]
-{{- else }}
-          command: [python, -m, simulator.landing.runtime]
-{{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
           resources:
-            {{- toYaml $settings.resources | nindent 12 }}
+            {{- toYaml .Values.simulator.resources | nindent 12 }}
           envFrom:
             - secretRef:
                 name: live-source
           env:
             - name: S3_ENDPOINT
-              value: {{ $.Values.objectStorage.endpoint | quote }}
+              value: {{ .Values.objectStorage.endpoint | quote }}
             - name: AWS_REGION
-              value: {{ $.Values.objectStorage.region | quote }}
+              value: {{ .Values.objectStorage.region | quote }}
             - name: S3_PATH_STYLE
-              value: {{ $.Values.objectStorage.pathStyle | toString | quote }}
+              value: {{ .Values.objectStorage.pathStyle | toString | quote }}
             - name: KAFKA_BROKERS
-              value: {{ $.Values.kafkaBrokers | quote }}
-{{- if eq $name "live-simulator" }}
+              value: {{ .Values.kafkaBrokers | quote }}
             - name: SIMULATOR_CONFIG
               value: /etc/simulator/live.yaml
             - name: GATEWAY_API_KEY
@@ -80,23 +72,6 @@ spec:
               readOnly: true
             - name: scratch
               mountPath: /tmp
-{{- else }}
-            - name: LANDING_TOPICS
-              value: {{ $settings.topics | quote }}
-            - name: LANDING_GROUP
-              value: {{ $settings.group | quote }}
-            - name: LANDING_SOURCE_EPOCH
-              value: {{ $settings.sourceEpoch | quote }}
-            - name: LANDING_ROOT
-              value: {{ printf "s3://%s/%s" $.Values.objectStorage.bucket $.Values.objectStorage.prefix | quote }}
-            - name: LANDING_MAX_RECORDS
-              value: {{ $settings.maxRecords | int | quote }}
-            - name: LANDING_MAX_BYTES
-              value: {{ $settings.maxBytes | int | quote }}
-            - name: LANDING_FLUSH_INTERVAL
-              value: {{ $settings.flushInterval | quote }}
-{{- end }}
-{{- if eq $name "live-simulator" }}
       volumes:
         - name: config
           configMap:
@@ -104,16 +79,15 @@ spec:
         - name: scratch
           emptyDir:
             sizeLimit: 64Mi
-{{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ $name }}
+  name: live-simulator
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: {{ $name }}
+      app.kubernetes.io/name: live-simulator
   policyTypes: [Ingress, Egress]
   ingress: []
   egress:
@@ -132,7 +106,6 @@ spec:
         - {protocol: TCP, port: 9092}
     - ports:
         - {protocol: TCP, port: 443}
-{{- if eq $name "live-simulator" }}
     - to:
         - podSelector:
             matchLabels:
@@ -140,6 +113,4 @@ spec:
       ports:
         - {protocol: TCP, port: 8080}
         - {protocol: TCP, port: 15008}
-{{- end }}
-{{- end }}
 {{- end }}

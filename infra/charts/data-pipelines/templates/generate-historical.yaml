@@ -5,7 +5,7 @@ metadata:
   name: generate-historical
   namespace: {{ .Values.namespace }}
 spec:
-  serviceAccountName: dp1-workflow
+  serviceAccountName: historical-generator
   entrypoint: generate
   synchronization:
     mutexes:
@@ -26,6 +26,8 @@ spec:
         env:
           - name: SIMULATOR_CONFIG
             value: {{ printf "/app/configs/%s" .Values.generator.config | quote }}
+          - name: GIT_REVISION
+            value: {{ include "data-pipelines.image" (dict "image" .Values.images.simulator "global" $.Values.global) | regexFind "[a-f0-9]{40}$" | quote }}
           - name: AWS_REGION
             value: {{ .Values.config.AWS_REGION | quote }}
           - name: S3_ENDPOINT
@@ -35,12 +37,12 @@ spec:
           - name: AWS_ACCESS_KEY_ID
             valueFrom:
               secretKeyRef:
-                name: {{ .Values.lakehouse.externalSecret.name }}
+                name: {{ .Values.storage.externalSecret.name }}
                 key: AWS_ACCESS_KEY_ID
           - name: AWS_SECRET_ACCESS_KEY
             valueFrom:
               secretKeyRef:
-                name: {{ .Values.lakehouse.externalSecret.name }}
+                name: {{ .Values.storage.externalSecret.name }}
                 key: AWS_SECRET_ACCESS_KEY
         resources:
           requests:

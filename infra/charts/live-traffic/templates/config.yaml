@@ -23,7 +23,7 @@ spec:
       remoteRef:
         key: GATEWAY_SYNTHETIC_API_KEY
 {{- end }}
-{{- if or .Values.simulator.enabled .Values.archiver.enabled }}
+{{- if .Values.simulator.enabled }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
