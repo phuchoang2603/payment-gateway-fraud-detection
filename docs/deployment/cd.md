@@ -27,7 +27,7 @@ GitOps deploys the same application charts to dev and prod. CI publishes a compl
 | `clickhouse` | `data` | ClickHouse instance, its users from Doppler, Service and the `langfuse` setup Job |
 | `lakehouse-integration` | `data` | Polaris registration, ClickHouse `lakehouse` DataLakeCatalog, Iceberg storage secret |
 
-Prod currently runs the gateway services with their databases, Redis and Kafka, plus the `data-pipelines` chart for the generator only. Live traffic, Flink/Feast, metadata integrations and the Bronze/Silver pipelines are disabled there. Application pods are stateless; Postgres and the authorization and Feast Redis instances own the persistent volumes.
+The prod release enables every application except `live-traffic` and `fraud-features`: the gateway services with their databases, Redis and Kafka; `data-pipelines` with the generator, Bronze, Silver, analytics and maintenance workflows; `clickhouse`; `lakehouse-integration`; and `metadata-integrations`, which connects OpenMetadata to ClickHouse and Kafka. Prod is not bootstrapped yet, so this describes its release configuration. Application pods are stateless; Postgres and the authorization and Feast Redis instances own the persistent volumes.
 
 ## Runtime configuration
 

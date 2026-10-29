@@ -6,6 +6,6 @@ applications:
   fraud-features:
     enabled: false
   metadata-integrations:
-    enabled: false
+    enabled: true
   data-pipelines:
     enabled: true
