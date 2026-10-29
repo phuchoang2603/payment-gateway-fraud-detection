@@ -155,7 +155,7 @@ metadata:
     dp-stage: {{ .stage }}
     dp-workflow: {{ "{{workflow.name}}" | quote }}
 spec:
-  mainApplicationFile: {{ printf "local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/batch/%s.py" .main | quote }}
+  pyFiles: {{ printf "local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/batch/%s.py" .main | quote }}
   runtimeVersions:
     sparkVersion: "4.1.3"
   sparkConf:
