@@ -32,16 +32,16 @@ def per_merchant_day(joined: DataFrame) -> DataFrame:
     )
 
 
-def join_baseline(attempts: DataFrame) -> DataFrame:
-    return per_merchant_day(attempts.join(merchant_totals(attempts), "merchant_id"))
+def join_baseline(attempts: DataFrame, totals: DataFrame) -> DataFrame:
+    return per_merchant_day(attempts.join(totals, "merchant_id"))
 
 
-def join_salted(attempts: DataFrame) -> DataFrame:
+def join_salted(attempts: DataFrame, totals: DataFrame) -> DataFrame:
     """Each hot merchant's rows spread over SALT_BUCKETS join keys; the totals are replicated to every bucket."""
     salted = attempts.withColumn("salt", F.pmod(F.hash("attempt_id"), F.lit(SALT_BUCKETS)))
     buckets = F.sequence(F.lit(0), F.lit(SALT_BUCKETS - 1))
-    totals = merchant_totals(attempts).withColumn("salt", F.explode(buckets))
-    joined = salted.join(totals, ["merchant_id", "salt"])
+    replicated = totals.withColumn("salt", F.explode(buckets))
+    joined = salted.join(replicated, ["merchant_id", "salt"])
     return per_merchant_day(joined)
 
 
@@ -99,12 +99,20 @@ def same_output(baseline, candidate, name: str) -> None:
         raise AssertionError(f"variant {name} output differs from baseline: {candidate} != {baseline}")
 
 
-def run_variant(spark, attempts: DataFrame, name: str, build, settings: dict, phases: dict):
+def materialized_totals(attempts: DataFrame) -> DataFrame:
+    """Per-merchant totals computed once, before any timed run. Materialized, so each join's right side is a plain
+    shuffle that the AQE skew rule can split, and every variant reads the same totals."""
+    totals = merchant_totals(attempts).persist()
+    totals.count()
+    return totals
+
+
+def run_variant(spark, attempts: DataFrame, totals: DataFrame, name: str, build, settings: dict, phases: dict):
     previous = {key: spark.conf.get(key) for key in settings}
     for key, value in settings.items():
         spark.conf.set(key, value)
     try:
-        frame = build(attempts)
+        frame = build(attempts, totals)
         with phase(spark, phases, f"skewed_merchant_join {name}"):
             rows, checksum, plan = fingerprint(frame)
         return rows, checksum, skew_report(spark, plan)
@@ -115,21 +123,26 @@ def run_variant(spark, attempts: DataFrame, name: str, build, settings: dict, ph
 
 def skewed_merchant_join(spark, attempts: DataFrame, phases: dict, aqe_thresholds: dict | None = None) -> dict:
     attempts.count()
-    results, baseline = {}, None
-    for name, (build, settings) in JOIN_VARIANTS.items():
-        if name == "aqe_skew_join":
-            settings = {**settings, **(aqe_thresholds or {})}
-        rows, checksum, skew = run_variant(spark, attempts, name, build, settings, phases)
-        if name == "aqe_skew_join" and not (skew["skew_join"] or skew["skewed_shuffle_read"]):
-            raise AssertionError(
-                "aqe_skew_join: the final adaptive plan has no skew-split join or skewed shuffle read\n" + skew["plan"]
-            )
-        guard = (rows, checksum)
-        if baseline is None:
-            baseline = guard
-        same_output(baseline, guard, name)
-        results[name] = {"output_rows": rows, "checksum": str(checksum), "skew": skew}
-    return results
+    totals = materialized_totals(attempts)
+    try:
+        results, baseline = {}, None
+        for name, (build, settings) in JOIN_VARIANTS.items():
+            if name == "aqe_skew_join":
+                settings = {**settings, **(aqe_thresholds or {})}
+            rows, checksum, skew = run_variant(spark, attempts, totals, name, build, settings, phases)
+            if name == "aqe_skew_join" and not (skew["skew_join"] or skew["skewed_shuffle_read"]):
+                raise AssertionError(
+                    "aqe_skew_join: the final adaptive plan has no skew-split join or skewed shuffle read\n"
+                    + skew["plan"]
+                )
+            guard = (rows, checksum)
+            if baseline is None:
+                baseline = guard
+            same_output(baseline, guard, name)
+            results[name] = {"output_rows": rows, "checksum": str(checksum), "skew": skew}
+        return results
+    finally:
+        totals.unpersist()
 
 
 def hot_key_share(attempts: DataFrame) -> dict:

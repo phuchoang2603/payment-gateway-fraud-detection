@@ -51,7 +51,11 @@ def test_every_skewed_join_variant_returns_the_baseline_output(spark, skewed_att
 def test_aqe_skew_join_applies_on_a_skewed_fixture(spark, skewed_attempts):
     settings = {**benchmark.JOIN_VARIANTS["aqe_skew_join"][1], **LOW_SKEW_THRESHOLDS}
 
-    _, _, skew = benchmark.run_variant(spark, skewed_attempts, "aqe_skew_join", benchmark.join_baseline, settings, {})
+    totals = benchmark.materialized_totals(skewed_attempts)
+    _, _, skew = benchmark.run_variant(
+        spark, skewed_attempts, totals, "aqe_skew_join", benchmark.join_baseline, settings, {}
+    )
+    totals.unpersist()
 
     assert skew["skew_join"] or skew["skewed_shuffle_read"], skew["plan"]
 
@@ -62,16 +66,20 @@ def test_aqe_variant_that_does_not_skew_fails_the_run(spark, attempts):
 
 
 def test_unequal_join_variant_fails_the_equal_output_guard(spark, attempts):
-    baseline = guard(benchmark.join_baseline(attempts))
-    truncated = guard(benchmark.join_baseline(attempts).limit(1))
+    baseline = guard(benchmark.join_baseline(attempts, benchmark.merchant_totals(attempts)))
+    truncated = guard(benchmark.join_baseline(attempts, benchmark.merchant_totals(attempts)).limit(1))
 
     with pytest.raises(AssertionError, match="differs"):
         benchmark.same_output(baseline, truncated, "truncated")
 
 
 def test_same_row_count_with_a_changed_value_fails_the_equal_output_guard(spark, attempts):
-    baseline = guard(benchmark.join_baseline(attempts))
-    changed = guard(benchmark.join_baseline(attempts).withColumn("amount_minor", F.col("amount_minor") + 1))
+    baseline = guard(benchmark.join_baseline(attempts, benchmark.merchant_totals(attempts)))
+    changed = guard(
+        benchmark.join_baseline(attempts, benchmark.merchant_totals(attempts)).withColumn(
+            "amount_minor", F.col("amount_minor") + 1
+        )
+    )
 
     with pytest.raises(AssertionError, match="differs"):
         benchmark.same_output(baseline, changed, "changed")
@@ -79,8 +87,8 @@ def test_same_row_count_with_a_changed_value_fails_the_equal_output_guard(spark,
 
 def test_salted_join_matches_baseline_for_the_hot_merchant(spark, attempts):
     benchmark.same_output(
-        guard(benchmark.join_baseline(attempts)),
-        guard(benchmark.join_salted(attempts)),
+        guard(benchmark.join_baseline(attempts, benchmark.merchant_totals(attempts))),
+        guard(benchmark.join_salted(attempts, benchmark.merchant_totals(attempts))),
         "salted",
     )
 
