@@ -11,7 +11,7 @@
 
 ## 3. Historical generator rewrite
 
-- [ ] 3.1 Rewrite the configuration model with dates, counts, skew, `duplicate_rate`, ordered `schema_changes` (dates and version 3 only), label delays, foreign-IP probability, optional `minimum_source_bytes` and output root. Run settings (mode, shard, workers, contract directory) come from the environment, so the YAML holds no chunk, worker or row-group settings. Replace `configs/historical-smoke.yaml` with `historical-dev.yaml` (v18) and `historical-full.yaml` (v19: 365 days, about 3M customers, 100 GB minimum). Reject invalid schedules before writing. Verify with an invalid-schedule behaviour test in CI.
+- [ ] 3.1 Rewrite the configuration model with dates, counts, skew, the hot merchant share, `duplicate_rate` as the republished-export rate, ordered `schema_changes` (dates and version 3 only), label delays, foreign-IP probability, optional `minimum_source_bytes` and output root. Run settings (mode, shard, workers, contract directory) come from the environment, so the YAML holds no chunk, worker or row-group settings. Replace `configs/historical-smoke.yaml` with `historical-dev.yaml` (v18: 2026-07-31 to 2026-10-28) and `historical-full.yaml` (v19: 2025-10-29 to 2026-10-28, 3M customers, 100 GB minimum). Reject invalid schedules before writing. Verify with an invalid-schedule behaviour test in CI.
 - [ ] 3.2 Rewrite generation as per-day units on `world.py` keyed by day, customer and purchase number: lifecycle histories, scenarios, truth and chargeback labels, duplicates, the gateway fraud policy with both reason codes, and schema versions projected from the contract. Verify in CI that records are equal across split and worker count, that interruption does not change them, and that the schema boundary and duplicates hold.
 - [ ] 3.3 Implement storage:
   - write `config.json` first, recording the generator digest, and refuse a changed configuration or digest;
@@ -64,8 +64,8 @@
 
 ## 8. Diagnostics and benchmark
 
-- [ ] 8.1 Implement the diagnostics job (version split and nulls in fields declared since version 3, skew, cardinality labelled exact or estimate, duplicate rate with denominator) writing a JSON report. Verify with a CI test on fixture Bronze data.
-- [ ] 8.2 Implement the benchmark job (pinned Silver snapshot, baseline vs. AQE skew join plus salting, one warm-up and three timed runs each, medians, two-way `exceptAll` equality). Verify with a CI test showing an unequal variant fails.
+- [ ] 8.1 Implement the diagnostics job (per-version row and null counts for fields declared since version 3, top merchant, top-10 merchant and top category shares, near-duplicate rate, cardinality labelled exact or estimate, each with its denominator) writing a JSON report. Verify with a CI test on fixture Bronze data.
+- [ ] 8.2 Implement the benchmark job over one pinned Silver snapshot: the skewed merchant aggregation and the high-cardinality distinct-count aggregation, each as baseline and optimized variants with one warm-up, three timed runs, medians and two-way `exceptAll` equality. Verify with a CI test showing an unequal variant fails for each aggregation.
 
 ## 9. Docs, specs and final checks
 

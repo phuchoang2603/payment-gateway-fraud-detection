@@ -18,16 +18,16 @@ DP2 SHALL read both Bronze tables at snapshot IDs fixed when the run starts and 
 - **THEN** all three Silver tables have equal content after each run
 
 ### Requirement: Event deduplication and conflicts
-`silver.payment_events` SHALL contain one row per `event_id`. Deliveries of the same `event_id` SHALL collapse when their business content, including `schema_version`, is equal, ignoring provenance. When deliveries of one `event_id` differ in business content, the run SHALL succeed: every row of that payment SHALL be written to `silver.rejected_events` with its conflict reason, and the payment SHALL be excluded from `silver.payment_events`, `silver.attempts` and `silver.labels`, so no row of a conflicting payment enters an accepted table.
+`silver.payment_events` SHALL contain one row per `event_id`. Deliveries of the same `event_id` SHALL collapse when they agree on every business field except `recorded_at`, which republished exports advance. The hash that decides this SHALL include `schema_version` and ignore `recorded_at` and provenance. Of the collapsing copies, the one with the earliest `recorded_at` SHALL be kept. Deliveries of the same `event_id` that differ in any other business field SHALL be conflicts: the run SHALL succeed, every row of that payment SHALL be written to `silver.rejected_events` with its conflict reason, and the payment SHALL be excluded from `silver.payment_events`, `silver.attempts` and `silver.labels`.
 
-#### Scenario: Identical duplicate
+#### Scenario: Republished export
 
-- **WHEN** Bronze holds two deliveries of an event with equal business content from different files or offsets
-- **THEN** Silver holds one row for that event and the report counts one identical duplicate
+- **WHEN** Bronze holds an event and a copy with the same business content and a later `recorded_at`
+- **THEN** Silver holds one row with the earliest `recorded_at`, and the report counts one republished export
 
 #### Scenario: Conflicting content
 
-- **WHEN** two deliveries of one `event_id` differ in any business field
+- **WHEN** two deliveries of one `event_id` differ in any business field other than `recorded_at`
 - **THEN** the run succeeds, every row of that payment is in `silver.rejected_events` with the conflict reason, the accepted Silver tables exclude that payment, and the run report counts the conflict and the rejected rows
 
 #### Scenario: Historical conflict
@@ -96,9 +96,14 @@ After each commit, the Silver tables SHALL pass contract-derived StarRocks SQL c
 - **THEN** the Silver rejection check fails
 
 ### Requirement: Optimization benchmark
-The repository SHALL provide an on-demand Spark benchmark that runs one skewed aggregation over a pinned Silver snapshot as a baseline and as an optimized variant with fixed resources, performs one warm-up and three timed runs of each, reports median durations and asserts that both variants produce equal output in both directions. The benchmark SHALL NOT run in the pipeline workflows.
+The repository SHALL provide an on-demand Spark benchmark that measures two aggregations over the same pinned Silver snapshot. The first is the skewed merchant aggregation: attempts joined with per-merchant aggregates, grouped by merchant and day. The second is a high-cardinality aggregation: distinct devices and attempt counts per customer and per payment method over 24-hour windows, across about three million customers and 3.9 million payment methods. Each aggregation SHALL run as a baseline with adaptive skew handling off and without salting, and as an optimized variant on fixed resources. Each variant SHALL perform one warm-up and three timed runs, report median durations, and assert equal output in both directions with `exceptAll`. The benchmark SHALL NOT run in the pipeline workflows.
 
 #### Scenario: Optimized result differs
 
-- **WHEN** the optimized variant's output differs from the baseline
-- **THEN** the benchmark fails without reporting a speedup
+- **WHEN** an optimized variant's output differs from its baseline for either aggregation
+- **THEN** the benchmark fails without reporting a speedup for that aggregation
+
+#### Scenario: High-cardinality measurement
+
+- **WHEN** the benchmark runs against a snapshot with the full customer and payment-method population
+- **THEN** it reports both aggregations' baseline and optimized medians and their output row counts

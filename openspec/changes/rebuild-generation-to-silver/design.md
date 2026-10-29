@@ -63,7 +63,7 @@ This PR also switches `live/` to `world.py`. `HistoricalModel` builds a `World` 
 
 - **Single version column.** `schema_version` (field 7 of `PaymentEvent`) is the only version of a payment event. There is no separate physical-version column.
 - **Declaration.** The historical `payment-events` ODCS contract is the only declaration of which fields exist in which version. Each field added after version 2 carries a property-level `customProperties` entry `sinceSchemaVersion: 3`. Today those are `assessment.assessment_id`, `assessment.evidence_sha256` and `signals.user_agent_family`.
-- **Versions.** The historical source starts at `schema_version` 2. The configuration's `schema_changes: [{effective_at, version}]` declares a change to `version: 3`, dated per dataset: dev on 2025-08-15, full on 2025-07-01. An event's version is chosen by its `occurred_at`. Version 3 is the gateway's current shape, so Kafka rows need no special handling.
+- **Versions.** The historical source starts at `schema_version` 2. The configuration's `schema_changes: [{effective_at, version}]` declares a change to `version: 3`, dated per dataset: dev on 2026-09-15, full on 2026-04-30. An event's version is chosen by its `occurred_at`. Version 3 is the gateway's current shape, so Kafka rows need no special handling.
 - **Meaning of "version 2".** Version 2 is defined by the v18 historical contract, not by the gateway's older wire format. A later gateway change (for example to 4) uses the same mechanism: a new contract field marked `sinceSchemaVersion: 4`, and a configuration change entry to version 4. The config accepts only versions the contract declares, and produce refuses others before writing.
 - **Projection.** The generator builds each event in the full shape and projects it onto the fields available at its `schema_version`, using the paths the contract declares. Field names are not coded.
 - **Files.** Events of each version go to separate part files named `.v2.parquet` or `.v3.parquet`. Their Parquet schemas really differ: v2 parts physically lack the declared columns. A day that spans the change has parts of both versions.
@@ -109,7 +109,7 @@ Events are partitioned by `_source` and `days(occurred_at)`; labels by `_source`
 The job reads both Bronze tables at their current snapshot IDs, which it records, and writes three tables. Each table is fully replaced with `overwrite(true)`, and the snapshot carries the Bronze snapshot IDs as properties. Rerunning on the same Bronze snapshots produces equal content.
 
 **`silver.payment_events`**
-- A business hash covers all columns except provenance, and includes `schema_version`.
+- A business hash covers all columns except provenance and `recorded_at`, and includes `schema_version`. Copies whose hashes agree collapse to the one with the earliest `recorded_at`; republished exports are duplicates, not conflicts.
 - Rows are grouped by `event_id`. More than one distinct hash is a conflict: every row of that event's payment is written to `silver.rejected_events` (below) and the payment is excluded from the accepted tables. The run succeeds.
 - Otherwise one row is kept per event, the earliest `_ingested_at`.
 
@@ -182,16 +182,16 @@ Diagnostics and benchmark are separate on-demand `WorkflowTemplate`s with a sing
 
 ### 9. Diagnostics and benchmark are code only
 
-- **Diagnostics** read Bronze and write JSON with:
+- **Diagnostics** read Bronze and write JSON, each measure with its denominator:
   - per-version row and null counts for fields declared since version 3;
-  - merchant and category top-share and Gini skew;
-  - `approx_count_distinct` cardinality, with exact counts where cheap, labelled as such;
-  - the identical-duplicate rate with its denominator.
-- **Benchmark** pins one Silver snapshot and runs the same skewed aggregation (attempts joined with per-merchant aggregates, grouped by merchant and day) two ways:
-  - **Baseline:** AQE skew handling off, no salting.
-  - **Optimized:** AQE skew join on, plus salting of the hot merchant keys.
+  - top merchant share, top-10 merchant share and top category share of purchases; the hot merchant key from `hot_merchant_share` is the expected top merchant;
+  - the near-duplicate rate: republished exports over distinct events;
+  - `approx_count_distinct` cardinality, with exact counts where cheap, labelled as such.
+- **Benchmark** pins one Silver snapshot and measures two aggregations, each as a baseline and an optimized variant:
+  - **Skewed merchant aggregation:** attempts joined with per-merchant aggregates, grouped by merchant and day. Baseline: AQE skew handling off, no salting. Optimized: AQE skew join on, plus salting of the hot merchant keys.
+  - **High-cardinality aggregation:** distinct devices and attempt counts per customer and per payment method over 24-hour windows, across about 3M customers and 3.9M payment methods. Baseline: default shuffle. Optimized: pre-aggregation by window before the distinct count, with partition count sized from the key cardinality.
 
-  It runs one warm-up, then three timed runs each, and reports medians. It asserts equal output both ways with `exceptAll`.
+  Each variant runs one warm-up, then three timed runs, and reports medians. Each aggregation asserts equal output both ways with `exceptAll`.
 
 Neither job runs in the pipeline workflows.
 
@@ -208,8 +208,8 @@ A `generate-historical` Argo `WorkflowTemplate` in the data-pipelines chart runs
 
 | Environment | Config | Output |
 |---|---|---|
-| dev | `historical-dev.yaml`: v18, 90 days, 10k customers, one shard | `s3://platform-dev/datasets/payment-gateway/historical/v18` |
-| prod | `historical-full.yaml`: v19, 365 days from 2025-01-01, 3M customers, change to version 3 on 2025-07-01, `minimum_source_bytes: 100000000000`, four shards | `s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19` |
+| dev | `historical-dev.yaml`: v18, 90 days from 2026-07-31, 10k customers, one shard | `s3://platform-dev/datasets/payment-gateway/historical/v18` |
+| prod | `historical-full.yaml`: v19, 365 days from 2025-10-29, 3M customers, change to version 3 on 2026-04-30, `minimum_source_bytes: 100000000000`, four shards | `s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19` |
 
 - **Settings:** the YAML holds only the logical dataset. Run settings come from the environment: `GENERATOR_MODE` (`generate`, `shard` or `publish`), `SHARD_INDEX` and `SHARD_COUNT` for shard steps, `GENERATOR_WORKERS` (set from the CPU request), `GENERATOR_CONTRACTS` (the contract directory, baked into the image) and `SIMULATOR_CONFIG`.
 - **Shards:** shard `i` of `n` generates the days whose index modulo `n` is `i`. A publish step refuses until every day has a marker. Prod uses four shards, the `aws-cpu-burst` pool's node limit, with one shard per spot xlarge node.
