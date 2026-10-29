@@ -55,7 +55,7 @@ Everything runs on two Talos Kubernetes clusters (Proxmox dev, AWS prod), deploy
 │       ├── streaming/        # Flink feature job
 │       ├── feast/            # Feast writer and feature server
 │       ├── features/         # Reference feature implementation
-│       └── bronze-ingestion/ # Metadata integration modules (replaced by the batch project)
+│       └── batch/            # Bronze and Silver Spark jobs, contract checks and metadata integrations
 └── devenv.nix, devenv.yaml   # Development environment
 ```
 
