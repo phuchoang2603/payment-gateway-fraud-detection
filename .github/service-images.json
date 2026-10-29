@@ -111,7 +111,7 @@
       "dockerfile": "infra/docker/data-platform-metadata.Dockerfile",
       "paths": [
         "infra/docker/data-platform-metadata.Dockerfile",
-        "src/data-pipeline/batch/batch",
+        "src/data-pipeline/openmetadata_jobs/openmetadata_jobs",
         "contracts/data-products"
       ]
     },
@@ -123,7 +123,8 @@
       "paths": [
         "infra/docker/data-platform-spark.Dockerfile",
         "src/data-pipeline/batch",
-        "contracts/data-products"
+        "contracts/data-products",
+        "contracts/payments"
       ]
     },
     {

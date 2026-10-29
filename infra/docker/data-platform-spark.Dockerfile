@@ -21,8 +21,10 @@ COPY src/data-pipeline/batch/pyproject.toml src/data-pipeline/batch/uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 COPY src/data-pipeline/batch/batch ./batch
 RUN uv sync --locked --no-dev --no-editable \
-    && find .venv -type d -name __pycache__ -prune -exec rm -rf {} + && \
-    rm -rf .venv/lib/python3.12/site-packages/pip* .venv/bin/pip*
+    && find .venv -type d -name __pycache__ -prune -exec rm -rf {} + \
+    && rm -rf .venv/lib/python3.12/site-packages/pip* .venv/bin/pip*
+COPY contracts/payments /opt/contracts/payments
+RUN uv run --no-project --with grpcio-tools==1.84.0 python -c "import sys; from grpc_tools import protoc; sys.exit(protoc.main(['protoc', '-I/opt/contracts', '--include_imports', '--descriptor_set_out=/opt/data-pipeline/batch/payments.pb', 'payments/v1/events.proto', 'payments/v1/labels.proto']))"
 
 FROM python:3.12.15-slim-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jre-headless procps tini && \
@@ -41,11 +43,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH="/opt/spark/python/lib/pyspark.zip:/opt/spark/python/lib/py4j-0.10.9.9-src.zip"
 RUN groupadd --gid 185 spark && useradd --uid 185 --gid 185 --home-dir /opt/spark spark
 COPY --from=build /opt/data-pipeline/batch/.venv /opt/data-pipeline/batch/.venv
+COPY --from=build /opt/data-pipeline/batch/payments.pb /opt/data-pipeline/batch/payments.pb
 COPY --from=jars /jars/ /opt/spark/jars/
 COPY contracts/data-products /contracts/data-products
 ENV PATH="/opt/data-pipeline/batch/.venv/bin:$PATH" \
     PYSPARK_PYTHON="/opt/data-pipeline/batch/.venv/bin/python" \
-    DATA_PRODUCTS_ROOT="/contracts/data-products"
+    DATA_PRODUCTS_ROOT="/contracts/data-products" \
+    PAYMENTS_DESCRIPTOR="/opt/data-pipeline/batch/payments.pb"
 WORKDIR /opt/spark/work-dir
 RUN chown 185:185 /opt/data-pipeline/batch /opt/spark/work-dir
 USER 185

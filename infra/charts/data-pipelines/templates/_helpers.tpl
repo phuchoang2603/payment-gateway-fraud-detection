@@ -100,3 +100,109 @@ container:
 - name: DATA_PRODUCTS_ROOT
   value: /contracts/data-products
 {{- end -}}
+
+{{- define "data-pipelines.kafkaClientLabels" -}}
+app.kubernetes.io/name: {{ .Values.catalog.kafkaClient | quote }}
+{{- end -}}
+
+{{- define "data-pipelines.placement" -}}
+{{- with .Values.spark.nodeSelector }}
+nodeSelector:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .Values.spark.tolerations }}
+tolerations:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end -}}
+
+{{- define "data-pipelines.spark.retry" -}}
+retryStrategy:
+  limit: {{ .Values.spark.retry.limit }}
+  retryPolicy: {{ .Values.spark.retry.policy }}
+{{- end -}}
+
+{{- define "data-pipelines.spark-application" -}}
+{{- $sizing := .sizing -}}
+{{- $image := include "data-pipelines.image" (dict "image" .root.Values.images.spark "global" .root.Values.global) -}}
+apiVersion: spark.apache.org/v1
+kind: SparkApplication
+metadata:
+  name: {{ printf "%s-%s-%s" .stem "{{workflow.uid}}" "{{retries}}" }}
+  namespace: {{ .root.Values.namespace }}
+  labels:
+    dp-product: {{ .product }}
+    dp-stage: {{ .stage }}
+    dp-workflow: {{ "{{workflow.name}}" | quote }}
+spec:
+  mainApplicationFile: {{ printf "local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/batch/%s.py" .main | quote }}
+  runtimeVersions:
+    sparkVersion: "4.1.3"
+  sparkConf:
+    spark.kubernetes.container.image: {{ $image | quote }}
+    spark.kubernetes.authenticate.driver.serviceAccountName: data-pipelines-spark
+    spark.kubernetes.executor.deleteOnTermination: "true"
+    spark.kubernetes.driver.request.cores: {{ $sizing.driver.requestCores | quote }}
+    spark.driver.cores: {{ $sizing.driver.cores | quote }}
+    spark.driver.memory: {{ $sizing.driver.memory | quote }}
+    spark.driver.memoryOverhead: {{ $sizing.driver.memoryOverhead | quote }}
+    spark.executor.instances: {{ $sizing.executors | quote }}
+    spark.executor.cores: {{ $sizing.executor.cores | quote }}
+    spark.executor.memory: {{ $sizing.executor.memory | quote }}
+    spark.executor.memoryOverhead: {{ $sizing.executor.memoryOverhead | quote }}
+    spark.sql.shuffle.partitions: {{ $sizing.shufflePartitions | quote }}
+    spark.sql.adaptive.enabled: "true"
+    spark.sql.adaptive.coalescePartitions.enabled: "true"
+    spark.sql.adaptive.advisoryPartitionSizeInBytes: {{ $sizing.advisoryPartitionSize | quote }}
+    spark.decommission.enabled: "true"
+    spark.storage.decommission.enabled: "true"
+    spark.storage.decommission.shuffleBlocks.enabled: "true"
+    spark.storage.decommission.rddBlocks.enabled: "true"
+    spark.pyspark.python: /opt/data-pipeline/batch/.venv/bin/python
+  applicationTolerations:
+    restartConfig:
+      restartPolicy: Never
+    resourceRetainPolicy: OnFailure
+    resourceRetainDurationMillis: 300000
+    ttlAfterStopMillis: 3600000
+  driverSpec:
+    podTemplateSpec:
+      metadata:
+        labels:
+          {{- include "data-pipelines.kafkaClientLabels" .root | nindent 10 }}
+          dp-product: {{ .product }}
+          dp-stage: {{ .stage }}
+      spec:
+        {{- include "data-pipelines.placement" .root | nindent 8 }}
+        containers:
+          - name: spark-kubernetes-driver
+            resources:
+              requests:
+                ephemeral-storage: {{ $sizing.driver.ephemeralStorage | quote }}
+              limits:
+                ephemeral-storage: {{ $sizing.driver.ephemeralStorage | quote }}
+            env:
+              {{- include "data-pipelines.env" .root | nindent 14 }}
+              {{- range .extraEnv }}
+              - name: {{ .name }}
+                value: {{ .value | quote }}
+              {{- end }}
+  executorSpec:
+    podTemplateSpec:
+      metadata:
+        labels:
+          {{- include "data-pipelines.kafkaClientLabels" .root | nindent 10 }}
+          dp-product: {{ .product }}
+          dp-stage: {{ .stage }}
+      spec:
+        {{- include "data-pipelines.placement" .root | nindent 8 }}
+        containers:
+          - name: spark-kubernetes-executor
+            resources:
+              requests:
+                ephemeral-storage: {{ $sizing.executor.ephemeralStorage | quote }}
+              limits:
+                ephemeral-storage: {{ $sizing.executor.ephemeralStorage | quote }}
+            env:
+              {{- include "data-pipelines.env" .root | nindent 14 }}
+{{- end -}}

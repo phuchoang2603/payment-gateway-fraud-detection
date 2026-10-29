@@ -39,29 +39,78 @@ storage:
     data:
       AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
       AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+spark:
+  nodeSelector: {}
+  tolerations: []
+  retry:
+    limit: 2
+    policy: OnError
+  # Executor sizes for the aws-cpu-burst spot node (aws-cpu root volume 40Gi, allocatable about 3.5 vCPU and 14 GiB).
+  # Each profile names the executor count and shuffle partitions; `dev` fits one dev node and `large` fills the prod
+  # pool: 11 executors of 3 cores, one per node, with the 12th node left for the driver.
+  profiles:
+    dev:
+      executors: 1
+      shufflePartitions: 16
+      advisoryPartitionSize: 128m
+      driver:
+        cores: 1
+        requestCores: 500m
+        memory: 2g
+        memoryOverhead: 512m
+        ephemeralStorage: 5Gi
+      executor:
+        cores: 2
+        memory: 6g
+        memoryOverhead: 1g
+        ephemeralStorage: 10Gi
+    large:
+      executors: 11
+      shufflePartitions: 2048
+      advisoryPartitionSize: 128m
+      driver:
+        cores: 1
+        requestCores: "1"
+        memory: 4g
+        memoryOverhead: 1g
+        ephemeralStorage: 8Gi
+      executor:
+        cores: 3
+        memory: 9g
+        memoryOverhead: 2g
+        ephemeralStorage: 24Gi
 bronze:
   enabled: false
   datasetVersion: v18
   historicalRoot: s3://platform-dev/datasets/payment-gateway/historical/v18
   reportRoot: s3://platform-dev/runs/payment-gateway/dp1
-  executors: 2
-  shufflePartitions: 1024
+  historicalProfile: dev
   activeDeadlineSeconds: 7200
   kafka:
     bootstrapServers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092
     schedule: "17 */6 * * *"
+    # Must match the topic partition count of payments.events.v1 and fraud.labels.v1 in infra/charts/kafka/values.yaml.
+    # The Spark Kafka source makes one task per partition, so executor cores and shuffle partitions follow this value.
+    partitions: 3
+    executorMemory: 6g
+    executorMemoryOverhead: 1g
+    ephemeralStorage: 10Gi
 silver:
   enabled: false
+  profile: dev
   reportRoot: s3://platform-dev/runs/payment-gateway/dp2
-  executors: 2
-  shufflePartitions: 1024
   activeDeadlineSeconds: 7200
 analytics:
   enabled: false
+  profile: dev
   reportRoot: s3://platform-dev/runs/payment-gateway/analytics
-  executors: 4
-  shufflePartitions: 1024
   activeDeadlineSeconds: 14400
+maintenance:
+  enabled: false
+  profile: dev
+  reportRoot: s3://platform-dev/runs/payment-gateway/maintenance
+  activeDeadlineSeconds: 7200
+  schedule: "43 3 * * *"
 catalog:
   icebergRestUri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
   icebergWarehouse: lakehouse
@@ -69,17 +118,10 @@ catalog:
   icebergOauth2Uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
   starRocksCatalog: fraud_lakehouse
   openmetadataUrl: http://openmetadata.data.svc.cluster.local:8585/api
-  kafkaDataClient: data-pipelines
+  kafkaClient: data-pipelines
   externalSecret:
     name: data-pipelines-catalog
     store: gateway-doppler
     data:
       ICEBERG_CLIENT_SECRET: DP1_ICEBERG_CLIENT_SECRET
       OPENMETADATA_TOKEN: DP1_OM_INGESTION_TOKEN
-maintenance:
-  enabled: false
-  reportRoot: s3://platform-dev/runs/payment-gateway/maintenance
-  executors: 2
-  shufflePartitions: 1024
-  activeDeadlineSeconds: 7200
-  schedule: "43 3 * * *"

@@ -1,4 +1,5 @@
 {{- if .Values.silver.enabled }}
+{{- $sizing := index .Values.spark.profiles .Values.silver.profile }}
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -13,7 +14,7 @@ spec:
       - name: dp2-silver-writer
   podMetadata:
     labels:
-      app.kubernetes.io/name: {{ .Values.catalog.kafkaDataClient }}
+      {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
       dp-product: silver-payments
   templates:
     - name: silver
@@ -28,73 +29,21 @@ spec:
             template: publish
             depends: "spark.Failed || checks.Succeeded || checks.Failed"
     - name: spark
-      retryStrategy:
-        limit: 2
-        retryPolicy: OnError
+      {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
       resource:
         action: create
         setOwnerReference: true
         successCondition: status.currentState.currentStateSummary == ResourceReleased
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
         manifest: |
-          apiVersion: spark.apache.org/v1
-          kind: SparkApplication
-          metadata:
-            name: {{ printf "dp2-%s-silver" "{{workflow.uid}}" }}
-            namespace: {{ .Values.namespace }}
-            labels:
-              dp-product: silver-payments
-              dp-workflow: {{ "{{workflow.name}}" | quote }}
-          spec:
-            mainApplicationFile: local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/batch/silver.py
-            runtimeVersions:
-              sparkVersion: "4.1.3"
-            sparkConf:
-              spark.kubernetes.container.image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
-              spark.kubernetes.authenticate.driver.serviceAccountName: data-pipelines-spark
-              spark.kubernetes.executor.deleteOnTermination: "true"
-              spark.executor.instances: {{ .Values.silver.executors | quote }}
-              spark.sql.shuffle.partitions: {{ .Values.silver.shufflePartitions | quote }}
-              spark.pyspark.python: /opt/data-pipeline/batch/.venv/bin/python
-            applicationTolerations:
-              restartConfig:
-                restartPolicy: Never
-              resourceRetainPolicy: OnFailure
-              resourceRetainDurationMillis: 300000
-              ttlAfterStopMillis: 3600000
-            driverSpec:
-              podTemplateSpec:
-                metadata:
-                  labels:
-                    app.kubernetes.io/name: {{ .Values.catalog.kafkaDataClient }}
-                    dp-product: silver-payments
-                spec:
-                  containers:
-                    - name: spark-kubernetes-driver
-                      env:
-{{- include "data-pipelines.env" $ | nindent 22 }}
-                        - name: RUN_ID
-                          value: {{ "{{workflow.name}}" | quote }}
-                        - name: RUN_REPORT_ROOT
-                          value: {{ .Values.silver.reportRoot | quote }}
-            executorSpec:
-              podTemplateSpec:
-                metadata:
-                  labels:
-                    app.kubernetes.io/name: {{ .Values.catalog.kafkaDataClient }}
-                    dp-product: silver-payments
-                spec:
-                  containers:
-                    - name: spark-kubernetes-executor
-                      env:
-{{- include "data-pipelines.env" $ | nindent 22 }}
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp2-silver" "main" "silver" "product" "silver-payments" "stage" "silver" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.silver.reportRoot))) | nindent 10 }}
     - name: checks
       retryStrategy:
         limit: 2
         retryPolicy: OnError
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.openmetadata "global" .Values.global) | quote }}
-        command: [python, -m, batch.checks]
+        command: [python, -m, openmetadata_jobs.checks]
         env:
           - name: CHECK_PRODUCT
             value: silver-payments
@@ -105,7 +54,7 @@ spec:
         retryPolicy: OnError
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.openmetadata "global" .Values.global) | quote }}
-        command: [python, -m, batch.publish]
+        command: [python, -m, openmetadata_jobs.publish]
         env:
 {{- include "data-pipelines.env" $ | nindent 10 }}
 {{- end }}
