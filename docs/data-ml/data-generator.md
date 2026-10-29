@@ -31,11 +31,11 @@ In the cluster, the environment selects its configuration through the data-pipel
 argo submit -n data --from workflowtemplate/generate-historical
 ```
 
-Locally, copy a configuration, set `output` to a local directory and run from the simulator project:
+Locally, copy a configuration, set `output` to a local directory, export the commit that the generator runs from, and run from the simulator project:
 
 ```bash
 cd src/data-pipeline/simulator
-SIMULATOR_CONFIG=/path/to/copied.yaml uv run --locked simulator
+GIT_REVISION=$(git rev-parse HEAD) SIMULATOR_CONFIG=/path/to/copied.yaml uv run --locked simulator
 ```
 
 ## Output
@@ -45,6 +45,6 @@ Each dataset is written below `historical/<dataset_version>/`:
 - `config.json`: the logical configuration and its hash, written first
 - `payment_events/date=YYYY-MM-DD/part-NNNNN.parquet` and `fraud_labels/date=YYYY-MM-DD/part-NNNNN.parquet`: one part per customer chunk and table; each row of events carries `physical_schema_version`
 - `date=YYYY-MM-DD/_day.json`: written after all parts of a purchase-start day, listing their rows, bytes and SHA-256
-- `manifest.json`: written last and only if absent, listing every part with its checksum and totals, the configuration, seed, generator revision and contract identities
+- `manifest.json`: written last and only if absent, listing every part with its checksum and totals, the configuration, seed, git revision and contract identities
 
-A rerun with the same configuration skips complete days and regenerates incomplete ones, producing the same bytes. A rerun with a different configuration is refused, and so is any version that already has a manifest. Worker count does not change the output.
+The git revision comes from `GIT_REVISION`, which the workflow takes from the simulator image tag. A rerun with the same configuration and revision skips complete days and regenerates incomplete ones, producing the same bytes. A rerun with a different configuration or revision is refused, and so is any version that already has a manifest. Worker count does not change the output.

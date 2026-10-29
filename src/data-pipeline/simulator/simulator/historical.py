@@ -1,10 +1,12 @@
 import hashlib
 import json
 import math
+import re
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import nullcontext
 from datetime import date, datetime, timedelta
+from functools import cache
 from itertools import repeat
 from pathlib import Path
 from typing import Literal, Self
@@ -16,12 +18,13 @@ import yaml
 from pydantic import Field, field_validator, model_validator
 
 from simulator.arrow import LABEL_SCHEMA, event_schema
+from simulator.calibration import provenance
 from simulator.config import StrictModel
 from simulator.lifecycle import payment_history
 from simulator.store import ObjectExists, open_store
 from simulator.world import World, WorldConfig
 
-GENERATOR_REVISION = "historical-generator-r1"
+REVISION_PATTERN = re.compile(r"[a-f0-9]{40}")
 EVENTS = "payment_events"
 LABELS = "fraud_labels"
 CONTRACTS = {
@@ -104,8 +107,12 @@ class GeneratorConfig(StrictModel):
     def logical(self) -> dict:
         return self.model_dump(mode="json", exclude={"output", "workers", "row_group_rows"})
 
-    def identity(self) -> str:
-        document = {"configuration": self.logical(), "generator_revision": GENERATOR_REVISION}
+    def identity(self, revision: str) -> str:
+        document = {
+            "configuration": self.logical(),
+            "generator_revision": revision,
+            "calibration_sha256": provenance()["sha256"],
+        }
         return hashlib.sha256(json.dumps(document, sort_keys=True).encode()).hexdigest()
 
     def schema_version_at(self, occurred_at: datetime) -> int:
@@ -156,10 +163,10 @@ def _chunk_purchases(config: GeneratorConfig, world: World, offset: int, chunk: 
     day = config.day(offset)
     first = chunk * config.chunk_customers
     customers = range(first, min(first + config.chunk_customers, config.world.counts.customers))
-    for index in range(world.purchase_count(day, customers)):
+    for index, customer in enumerate(world.day_customers(day, customers)):
         ordinal = (chunk << ORDINAL_CHUNK_SHIFT) | index
         rng = world.purchase_rng(day, ordinal)
-        yield world.purchase(rng, day, ordinal, customers), ordinal, rng
+        yield world.purchase(rng, day, ordinal, int(customer)), ordinal, rng
     testing = config.world.scenarios.card_testing
     for burst in range(world.burst_count(day)):
         if burst % config.customer_chunks != chunk:
@@ -170,8 +177,13 @@ def _chunk_purchases(config: GeneratorConfig, world: World, offset: int, chunk: 
             yield world.card_test(rng, day, burst), ordinal, rng
 
 
+@cache
+def _world(config: WorldConfig) -> World:
+    return World.build(config)
+
+
 def write_part(config: GeneratorConfig, offset: int, chunk: int) -> list[dict]:
-    world = World.build(config.world)
+    world = _world(config.world)
     day = config.day(offset)
     store = open_store(config.output, config.dataset_version)
     with tempfile.TemporaryDirectory() as scratch:
@@ -215,9 +227,14 @@ def _marker_key(day: date) -> str:
     return f"date={day.isoformat()}/_day.json"
 
 
-def _claim_configuration(config: GeneratorConfig, store) -> None:
+def _claim_configuration(config: GeneratorConfig, revision: str, store) -> None:
     document = json.dumps(
-        {"configuration": config.logical(), "configuration_sha256": config.identity()}, sort_keys=True
+        {
+            "configuration": config.logical(),
+            "generator_revision": revision,
+            "configuration_sha256": config.identity(revision),
+        },
+        sort_keys=True,
     ).encode()
     try:
         store.write(CONFIG_KEY, document, if_absent=True)
@@ -225,11 +242,11 @@ def _claim_configuration(config: GeneratorConfig, store) -> None:
     except ObjectExists:
         pass
     stored = store.read(CONFIG_KEY)
-    if stored is None or json.loads(stored)["configuration_sha256"] != config.identity():
+    if stored is None or json.loads(stored)["configuration_sha256"] != config.identity(revision):
         raise ConfigurationChanged(f"{CONFIG_KEY} differs from the requested configuration")
 
 
-def _publish(config: GeneratorConfig, store) -> dict:
+def _publish(config: GeneratorConfig, revision: str, store) -> dict:
     files: list[dict] = []
     rows = {EVENTS: 0, LABELS: 0}
     for offset in range(config.duration_days):
@@ -247,8 +264,8 @@ def _publish(config: GeneratorConfig, store) -> dict:
         )
     manifest = {
         "dataset_version": config.dataset_version,
-        "generator_revision": GENERATOR_REVISION,
-        "configuration_sha256": config.identity(),
+        "generator_revision": revision,
+        "configuration_sha256": config.identity(revision),
         "configuration": config.logical(),
         "seed": config.world.seed,
         "start_date": config.world.start_date.isoformat(),
@@ -266,11 +283,13 @@ def _publish(config: GeneratorConfig, store) -> dict:
     return manifest
 
 
-def generate(config: GeneratorConfig) -> dict:
+def generate(config: GeneratorConfig, revision: str) -> dict:
+    if not REVISION_PATTERN.fullmatch(revision):
+        raise GenerationError("generator revision must be a 40-character lowercase git commit")
     store = open_store(config.output, config.dataset_version)
     if store.read(MANIFEST_KEY) is not None:
         raise VersionPublished(f"{MANIFEST_KEY} already exists for {config.dataset_version}")
-    _claim_configuration(config, store)
+    _claim_configuration(config, revision, store)
     pending = [offset for offset in range(config.duration_days) if store.read(_marker_key(config.day(offset))) is None]
     pool = ProcessPoolExecutor(max_workers=config.workers) if config.workers > 1 else nullcontext()
     with pool as executor:
@@ -280,4 +299,4 @@ def generate(config: GeneratorConfig) -> dict:
             parts = [part for chunk_parts in chunks for part in chunk_parts]
             marker = {"date": config.day(offset).isoformat(), "parts": parts}
             store.write(_marker_key(config.day(offset)), json.dumps(marker, sort_keys=True).encode())
-    return _publish(config, store)
+    return _publish(config, revision, store)

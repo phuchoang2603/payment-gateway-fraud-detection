@@ -7,7 +7,7 @@ from uuid import UUID
 import numpy as np
 from pydantic import Field
 
-from simulator.calibration import CALIBRATION, REGIONS, provenance, purchase_seconds
+from simulator.calibration import CALIBRATION, REGIONS, hourly_weights, provenance, purchase_seconds
 from simulator.config import EntityCounts, LabelDelays, PurchaseBehavior, Scenarios, StrictModel
 from simulator.identity import entity_id, fingerprint
 from simulator.profiles import (
@@ -30,13 +30,15 @@ from simulator.profiles import (
 )
 
 SCENARIOS = SCENARIO_NAMES
-MERCHANT_STAGE = 301
-CUSTOMER_STAGE = 302
-COMPROMISE_STAGE = 303
-PURCHASE_COUNT_STAGE = 304
-BURST_COUNT_STAGE = 305
-BURST_STAGE = 306
-PURCHASE_STAGE = 307
+ACTIVITY_STAGE = 300
+REGION_STAGE = 301
+MERCHANT_STAGE = 302
+CUSTOMER_STAGE = 303
+COMPROMISE_STAGE = 304
+PURCHASE_COUNT_STAGE = 305
+BURST_COUNT_STAGE = 306
+BURST_STAGE = 307
+PURCHASE_STAGE = 308
 
 REGION_WEIGHTS = np.array([region[4] for region in REGIONS])
 SECONDS_PER_DAY = 86400
@@ -115,6 +117,9 @@ class World:
         self._anchor = datetime.combine(config.start_date, time.min, tzinfo=UTC)
         self._merchant_cdf = np.cumsum(zipf_weights(config.counts.merchants, config.behavior.merchant_zipf_exponent))
         self._category_weights = zipf_weights(len(CATEGORIES), config.behavior.category_zipf_exponent)
+        sigma = CALIBRATION["activity_log_sigma"]
+        self._activity = self._rng(ACTIVITY_STAGE).lognormal(-(sigma**2) / 2, sigma, config.counts.customers)
+        self._regions = self._rng(REGION_STAGE).choice(len(REGIONS), config.counts.customers, p=REGION_WEIGHTS)
 
     @classmethod
     def build(cls, config: WorldConfig) -> "World":
@@ -138,7 +143,7 @@ class World:
     def customer(self, index: int) -> Customer:
         counts = self.config.counts
         rng = self._rng(CUSTOMER_STAGE, index)
-        region = int(rng.choice(len(REGIONS), p=REGION_WEIGHTS))
+        region = int(self._regions[index])
         age = int(rng.integers(1, 2500))
         spend = float(rng.lognormal(0, CALIBRATION["spend_log_sigma"]))
         familiar = self._familiar_merchants(rng)
@@ -193,19 +198,25 @@ class World:
     def purchase_rng(self, day: date, ordinal: int) -> np.random.Generator:
         return self._rng(PURCHASE_STAGE, (day - self.start_date).days, ordinal)
 
-    def purchase_count(self, day: date, customers: range) -> int:
+    def day_customers(self, day: date, customers: range) -> np.ndarray:
         rng = self._rng(PURCHASE_COUNT_STAGE, (day - self.start_date).days, customers.start, len(customers))
-        return int(rng.poisson(len(customers) * self.config.behavior.purchases_per_customer_day))
+        window = slice(customers.start, customers.stop)
+        intensity = np.array([hourly_weights(day, region)[1] for region in range(len(REGIONS))])
+        weights = self._activity[window] * intensity[self._regions[window]]
+        total = weights.sum()
+        count = int(rng.poisson(self.config.behavior.purchases_per_customer_day * total))
+        chosen = rng.choice(len(customers), size=count, p=weights / total)
+        return (customers.start + chosen).astype(np.int64)
 
     def burst_count(self, day: date) -> int:
         rng = self._rng(BURST_COUNT_STAGE, (day - self.start_date).days)
         return int(rng.poisson(self.config.scenarios.card_testing.rate))
 
-    def purchase(self, rng: np.random.Generator, day: date, ordinal: int, customers: range | None = None) -> Purchase:
+    def purchase(self, rng: np.random.Generator, day: date, ordinal: int, customer: int) -> Purchase:
         counts, behavior, scenarios = self.config.counts, self.config.behavior, self.config.scenarios
-        pool = range(counts.customers) if customers is None else customers
-        customer = self.customer(pool.start + int(rng.integers(len(pool))))
-        scenario, window_start = self._scenario(rng, (day - self.start_date).days, customer.index)
+        offset = (day - self.start_date).days
+        customer = self.customer(customer)
+        scenario, window_start = self._scenario(rng, offset, customer.index)
         compromised = scenario in (STOLEN_CARD_NEW_DEVICE, ACCOUNT_TAKEOVER)
         campaign = self._rng(COMPROMISE_STAGE, scenario, window_start, customer.index, 1) if compromised else rng
         merchant_index = (
@@ -235,6 +246,8 @@ class World:
             device = int(campaign.integers(counts.devices))
         else:
             device = customer.devices[int(rng.integers(2))]
+            if offset >= CALIBRATION["device_rotation_days"]:
+                device = (device + offset // CALIBRATION["device_rotation_days"]) % counts.devices
         network = customer.home_network
         if rng.random() < CALIBRATION["network_rotation_probability"] or (compromised and new_device):
             network = int(campaign.integers(counts.ip_networks))
