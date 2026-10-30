@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from rag import catalog
+from fraud_rag_pipeline.openmetadata import client as catalog
 
 
 def recorder(tables_present=True):

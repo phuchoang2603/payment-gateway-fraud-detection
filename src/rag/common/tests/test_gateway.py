@@ -1,8 +1,8 @@
 import httpx
 import pytest
 
-from rag import gateway
-from rag.gateway import DIMENSION, QUERY_INSTRUCTION, Embedder
+from fraud_rag_common import gateway
+from fraud_rag_common.gateway import DIMENSION, QUERY_INSTRUCTION, Embedder
 
 
 def vector(value=1.0):

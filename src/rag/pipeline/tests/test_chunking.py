@@ -1,6 +1,6 @@
-from rag import corpus
-from rag.chunking import chunk, sections
-from rag.corpus import Document
+from fraud_rag_pipeline import corpus
+from fraud_rag_pipeline.chunking import chunk, sections
+from fraud_rag_pipeline.corpus import Document
 
 SETTINGS = corpus.settings()["chunker"]
 

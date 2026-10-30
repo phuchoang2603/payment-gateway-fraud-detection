@@ -1,6 +1,6 @@
 import re
 
-from rag import corpus
+from fraud_rag_pipeline import corpus
 
 
 def document(repo, doc_id):

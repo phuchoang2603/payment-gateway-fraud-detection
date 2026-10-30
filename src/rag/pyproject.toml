@@ -2,15 +2,7 @@
 name = "fraud-rag"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = [
-    "feast[postgres]==0.67.0",
-    "pyiceberg[pyarrow]==0.12.0",
-    "fastapi==0.162.0",
-    "uvicorn==0.54.0",
-    "mcp==2.3.0",
-    "httpx==0.28.1",
-    "pyyaml==6.0.3",
-]
+dependencies = []
 
 [dependency-groups]
 dev = ["pytest==9.2.0", "ruff==0.17.3"]
@@ -18,9 +10,8 @@ dev = ["pytest==9.2.0", "ruff==0.17.3"]
 [tool.uv]
 package = false
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]
+[tool.uv.workspace]
+members = ["common", "pipeline", "serving"]
 
 [tool.ruff]
 line-length = 119

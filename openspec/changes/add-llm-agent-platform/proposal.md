@@ -17,7 +17,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - Publish the agent's catalog entry to agentregistry from Git with a sync hook.
 - Run self-hosted Langfuse v3 in `llm`, on the shared ClickHouse that replaces StarRocks (owned by this repository, added in PR #102), with app-owned Postgres and Redis. In phase 2 it becomes the prompt store and receives LLM traces.
 - Build RAG in `llm` (design.md decision 15; corpus in `rag-corpus.md`): a knowledge pipeline, a Web API and an MCP tool. It never reads payment data.
-  - **Corpus:** about 14 documents about gateway behaviour. Most are rendered from the repository's specs and contracts; six are short, hand-written and labelled synthetic (decline codes, risk policy, analyst runbook, chargebacks, merchant terms, FAQ). The corpus ships inside the `rag` image built from `src/rag/`, so CI never writes to the bucket.
+  - **Corpus:** about 14 documents about gateway behaviour. Most are rendered from the repository's specs and contracts; six are short, hand-written and labelled synthetic (decline codes, risk policy, analyst runbook, chargebacks, merchant terms, FAQ). The corpus ships inside the `rag-pipeline` image built from `src/rag/pipeline/`, so CI never writes to the bucket.
   - **Workflow:** an Argo `WorkflowTemplate` in the new `rag-pipeline` chart (Python, no Spark). Each release that changes the image triggers it through a sync hook. It publishes the corpus to an immutable version prefix, chunks it, embeds through the gateway's embedding route and writes through Feast. The offline history is an Iceberg table; the online store is pgvector on an app-owned CNPG Postgres.
   - **Governance:** the run validates its output and records its checks and lineage in OpenMetadata like the other pipelines.
   - **Web API and MCP tool in one service:** FastAPI with pydantic and health checks, as a Deployment whose rolling update keeps the last ready version serving. It fetches chunks by id, searches them, and later returns customer features by id from the online feature store. It also serves the knowledge MCP tools behind the gateway's `/mcp/knowledge` route; they are published to the registry and used by `evidence-agent`.
@@ -70,9 +70,9 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - In `llm-platform`: the `ragingest` and `ragapi` client keys, the `/mcp/knowledge` route and policy, the `knowledge` RemoteMCPServer, and `evidence-agent` 0.2.0 with the knowledge tools.
   - After #102: `llm` admitted by the Polaris, ClickHouse and OpenMetadata network rules.
 - **Code:**
-  - a new `src/rag/` project and `rag` image: corpus sources, renderer, chunker, embed client, Feast definitions, validation, Web API and MCP server, with their CI tests;
-  - the knowledge-base ODPS product and ODCS contract in `infra/charts/rag-pipeline/files/knowledge-base/`.
-  - No change to the data-pipeline code, the `data-pipelines` or `lakehouse` charts, or `contracts/`.
+  - a new `src/rag/` uv workspace (`common`, `pipeline`, `serving`) and images `rag-pipeline` and `rag-serving`: corpus sources, renderer, chunker, embed client, Feast definitions, validation, OpenMetadata client, Web API and MCP server, with their CI tests;
+  - the knowledge-base ODPS product and ODCS contract in `contracts/data-products/knowledge-base/`, and `knowledge.chunks` added to the shared checks test's expected tables.
+  - No change to the data-pipeline code, the `data-pipelines` or `lakehouse` charts, or any existing contract.
 - **Secrets:**
   - new keys in the `payment-gateway-fraud-detection` Doppler configs (`dev`, `prd`): `LLM_GATEWAY_AGENTS_API_KEY` and `LLM_GATEWAY_BENCHMARK_API_KEY`, already provisioned with random values. No model-provider key is needed, because the models are public on Hugging Face.
   - for RAG: `LLM_GATEWAY_RAG_INGEST_API_KEY`, `LLM_GATEWAY_RAG_API_KEY`, `RAG_DB_WRITER_PASSWORD` and `RAG_DB_READER_PASSWORD`, provisioned with random values in `dev` and `prd` on 2026-10-29.

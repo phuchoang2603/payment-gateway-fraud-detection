@@ -28,8 +28,7 @@ spec:
         {{- include "rag-pipeline.podSecurity" . | nindent 8 }}
       containers:
         - name: api
-          image: {{ include "rag-pipeline.image" (dict "image" .Values.images.rag "global" .Values.global) | quote }}
-          args: [rag.service]
+          image: {{ include "rag-pipeline.image" (dict "image" .Values.images.serving "global" .Values.global) | quote }}
           ports:
             - {name: http, containerPort: {{ $api.port }}}
           env:

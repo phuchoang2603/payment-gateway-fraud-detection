@@ -148,18 +148,34 @@
       ]
     },
     {
-      "service": "rag",
-      "image-suffix": "/rag",
+      "service": "rag-pipeline",
+      "image-suffix": "/rag-pipeline",
       "context": ".",
-      "dockerfile": "infra/docker/rag.Dockerfile",
+      "dockerfile": "infra/docker/rag-pipeline.Dockerfile",
       "paths": [
-        "infra/docker/rag.Dockerfile",
-        "src/rag",
+        "infra/docker/rag-pipeline.Dockerfile",
+        "src/rag/pyproject.toml",
+        "src/rag/uv.lock",
+        "src/rag/common",
+        "src/rag/pipeline",
         "openspec/specs",
         "contracts/payments/v1",
         "contracts/features/fraud-snapshot-v2.yaml",
         "docs/payment-gateway/flows.md",
         "docs/data/products/silver-payments"
+      ]
+    },
+    {
+      "service": "rag-serving",
+      "image-suffix": "/rag-serving",
+      "context": ".",
+      "dockerfile": "infra/docker/rag-serving.Dockerfile",
+      "paths": [
+        "infra/docker/rag-serving.Dockerfile",
+        "src/rag/pyproject.toml",
+        "src/rag/uv.lock",
+        "src/rag/common",
+        "src/rag/serving"
       ]
     }
   ]

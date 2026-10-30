@@ -2,8 +2,9 @@ import asyncio
 
 import pytest
 from fastapi.testclient import TestClient
+from fraud_rag_common import store
 
-from rag import service, store
+from fraud_rag_serving import app as service
 
 ROWS = {
     "decline-codes#high-amount": {

@@ -73,8 +73,8 @@
   - CI tests for the code and threshold sync, chunk-id stability, version hashing, gate and contract rule parity, the Feast table name and index DDL, API validation and MCP tool mapping.
 
   Verify locally only with ruff and format.
-- [x] 5b.5 Add the `rag` image to `.github/service-images.json`. Its build paths are `src/rag/` plus every corpus source in `sources.yaml`, and the Dockerfile copies those sources into the image.
-- [x] 5b.6 Add the knowledge-base ODPS product and ODCS contract to `infra/charts/rag-pipeline/files/knowledge-base/`, mounted into the shared checks job. Publish the run status, corpus container and lineage from `src/rag` over OpenMetadata's REST API, without changing `openmetadata_jobs`.
+- [x] 5b.5 Add the `rag-pipeline` and `rag-serving` images to `.github/service-images.json`. The pipeline's build paths are the workspace root, `common`, `pipeline` plus every corpus source in `sources.yaml`, and the Dockerfile copies those sources into the image.
+- [x] 5b.6 Add the knowledge-base ODPS product and ODCS contract to `contracts/data-products/knowledge-base/`, read by the shared checks image. Publish the run status, corpus container and lineage from `src/rag` over OpenMetadata's REST API, without changing `openmetadata_jobs`.
 - [x] 5b.7 Create `infra/charts/rag-pipeline` and the `rag-pipeline` application (dev on, prod off), with:
   - the executor ServiceAccount and Role;
   - the `rag-knowledge` WorkflowTemplate and its PostSync `Workflow` hook with a deadline;

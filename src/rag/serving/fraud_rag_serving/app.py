@@ -8,12 +8,11 @@ import psycopg
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi import Path as PathParam
+from fraud_rag_common import store
+from fraud_rag_common.gateway import Embedder
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
-
-from rag import store
-from rag.gateway import Embedder
 
 Audience = Literal["analyst", "merchant"]
 CHUNK_ID = r"^[a-z0-9-]+#[a-z0-9-]+$"
@@ -167,7 +166,3 @@ app.mount("/", mcp_app)
 
 def main() -> None:
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8080")), access_log=False)
-
-
-if __name__ == "__main__":
-    main()

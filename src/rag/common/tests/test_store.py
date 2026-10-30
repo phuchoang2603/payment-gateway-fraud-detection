@@ -1,5 +1,5 @@
-from rag import store
-from rag.gateway import DIMENSION
+from fraud_rag_common import store
+from fraud_rag_common.gateway import DIMENSION
 
 
 def test_feast_table_name_is_the_one_the_index_step_alters():

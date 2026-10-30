@@ -1,0 +1,22 @@
+[project]
+name = "fraud-rag-serving"
+version = "0.1.0"
+description = "Knowledge API: REST and MCP over the Feast pgvector store"
+requires-python = ">=3.12,<3.13"
+dependencies = ["fraud-rag-common", "fastapi==0.162.0", "uvicorn==0.54.0", "mcp==2.3.0"]
+
+[dependency-groups]
+dev = ["pytest==9.2.0", "ruff==0.17.3"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+fraud-rag-common = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+extend = "../pyproject.toml"

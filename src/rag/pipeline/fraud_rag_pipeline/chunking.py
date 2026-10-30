@@ -2,7 +2,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 
-from rag.corpus import HEADING, Document
+from fraud_rag_pipeline.corpus import HEADING, Document
 
 SPLIT_LEVEL = 3
 

@@ -3,8 +3,7 @@ import re
 from pathlib import Path
 
 import yaml
-
-from rag.gateway import DIMENSION
+from fraud_rag_common.gateway import DIMENSION
 
 MIN_CHUNKS = 50
 MAX_CHUNKS = 5000

@@ -78,7 +78,7 @@ capabilities:
 - name: CLICKHOUSE_DATABASE
   value: {{ .Values.openmetadata.clickhouseDatabase }}
 - name: DATA_PRODUCTS_ROOT
-  value: /contracts
+  value: /contracts/data-products
 - name: HOME
   value: /tmp
 {{- end -}}
