@@ -9,6 +9,7 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   serviceAccountName: data-pipelines
+  {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
   entrypoint: bronze
   onExit: publish
   arguments:

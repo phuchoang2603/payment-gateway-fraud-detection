@@ -39,8 +39,12 @@ storage:
     data:
       AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
       AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+# Node selector for pipeline workflow pods (resource steps, checks, publication); empty schedules them anywhere.
+workflowNodeSelector: {}
 spark:
   nodeSelector: {}
+  # Driver placement when it differs from the executors'; empty uses nodeSelector.
+  driverNodeSelector: {}
   tolerations: []
   retry:
     limit: 2

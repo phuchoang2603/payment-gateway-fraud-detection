@@ -105,6 +105,24 @@ container:
 app.kubernetes.io/name: {{ .Values.catalog.kafkaClient | quote }}
 {{- end -}}
 
+{{- define "data-pipelines.driverPlacement" -}}
+{{- with (.Values.spark.driverNodeSelector | default .Values.spark.nodeSelector) }}
+nodeSelector:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .Values.spark.tolerations }}
+tolerations:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end -}}
+
+{{- define "data-pipelines.workflowPlacement" -}}
+{{- with .Values.workflowNodeSelector }}
+nodeSelector:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end -}}
+
 {{- define "data-pipelines.placement" -}}
 {{- with .Values.spark.nodeSelector }}
 nodeSelector:
@@ -263,7 +281,7 @@ spec:
           dp-product: {{ .product }}
           dp-stage: {{ .stage }}
       spec:
-        {{- include "data-pipelines.placement" .root | nindent 8 }}
+        {{- include "data-pipelines.driverPlacement" .root | nindent 8 }}
         containers:
           - name: spark-kubernetes-driver
             resources:

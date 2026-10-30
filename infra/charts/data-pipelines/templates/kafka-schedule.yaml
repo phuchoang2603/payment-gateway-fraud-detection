@@ -11,6 +11,7 @@ spec:
   concurrencyPolicy: Forbid
   workflowSpec:
     serviceAccountName: data-pipelines
+    {{- include "data-pipelines.workflowPlacement" $ | nindent 4 }}
     podMetadata:
       annotations:
         karpenter.sh/do-not-disrupt: "true"
