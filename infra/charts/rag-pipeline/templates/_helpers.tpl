@@ -79,6 +79,4 @@ capabilities:
   value: {{ .Values.openmetadata.clickhouseDatabase }}
 - name: DATA_PRODUCTS_ROOT
   value: /contracts/data-products
-- name: HOME
-  value: /tmp
 {{- end -}}

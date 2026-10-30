@@ -85,7 +85,9 @@ spec:
           {{- include "rag-pipeline.storageEnv" . | nindent 10 }}
           {{- include "rag-pipeline.gatewayEnv" (dict "root" . "secret" "rag-gateway") | nindent 10 }}
           {{- include "rag-pipeline.dbEnv" (dict "root" . "secret" "rag-db-writer") | nindent 10 }}
+        # The OpenMetadata ingestion image keeps its Python packages in the airflow user's home.
         securityContext:
+          runAsUser: 50000
           {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
         resources:
           {{- toYaml .Values.workflow.resources | nindent 10 }}
