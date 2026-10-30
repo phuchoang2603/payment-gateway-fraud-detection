@@ -22,7 +22,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - **Governance:** the run validates its output and records its checks and lineage in OpenMetadata like the other pipelines.
   - **Web API and MCP tool in one service:** FastAPI with pydantic and health checks, as a Deployment whose rolling update keeps the last ready version serving. It fetches chunks by id, searches them, and later returns customer features by id from the online feature store. It also serves the knowledge MCP tools behind the gateway's `/mcp/knowledge` route; they are published to the registry and used by `evidence-agent`.
   - **Quality gate:** every quality check runs before the write. After the write, the pipeline types the Feast pgvector column and adds an HNSW index, which Feast does not create.
-- Register the AI assets in OpenMetadata through the existing `metadata-integrations` chart: the LLM service (the gateway endpoint), both models, and the agent as an AI application linked to its model. MCP servers, further agents and knowledge bases attach to these later.
+- Register the AI assets in OpenMetadata from the RAG workflow's catalog step: the LLM service (the gateway endpoint), both models, the agent as an AI application linked to its model, and the knowledge MCP server. Further agents attach later.
 - Add an on-demand benchmark (`vllm bench serve` from the vLLM image, as plain manifests applied with `kubectl`) with an agent-shaped shared-prefix workload. It records throughput, TTFT and inter-token latency before and after each optimization (prefix caching, FP8 KV cache, n-gram speculative decoding, streamed cold start, FP8 vs AWQ weights). Results are recorded only from real dev runs, with the command and date.
 - Record the autoscaling decision against the rubric's KEDA:
   - Knative for this repo's own plain HTTP services that need no caller identity (later MCP servers and web APIs); the knowledge API is a Deployment, because its callers are admitted by mesh identity and Knative's cluster-local gateway runs outside the mesh;
@@ -55,27 +55,24 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 ### Modified Capabilities
 
 - `talos-gitops-deployment`: adds the `llm-platform` application in the platform-owned `llm` namespace. It is enabled in dev and disabled in prod until the user confirms launching the prod GPU pool. Its credentials come from `gateway-doppler`.
-- `data-catalog-governance`: adds AI assets (LLM service, models, agents) to the catalog through the metadata-integrations registration, and the knowledge-base product (contract checks and lineage for the RAG run).
+- `data-catalog-governance`: adds AI assets (LLM service, models, agents, MCP server) to the catalog from the RAG workflow, and the knowledge-base product (contract checks and lineage for the RAG run).
 
 ## Impact
 
 - **Infra:**
   - A new chart `infra/charts/llm-platform`: chat and embedding `LLMInferenceService`s, a shared GPU ResourceClaim, the model upload Job, Gateway, HTTPRoute, AgentgatewayPolicy, API-key ExternalSecrets, Istio AuthorizationPolicies, kagent ModelConfig, Agent and SandboxAgent, agent prompts as files, the registry catalog (agents and prompts) and publish hook, and scrape configuration. The benchmark manifests live in `infra/llm-benchmark/`.
   - The `llm-platform` entry in `infra/argocd/app-of-apps/values.yaml`, disabled in `values-prod.yaml`.
-  - New `llm` and `ai` values in `infra/charts/metadata-integrations`.
   - A new chart `infra/charts/rag-pipeline`, application `rag-pipeline` in `llm` (enabled in dev, disabled in prod), containing:
     - the `rag-knowledge` WorkflowTemplate and its PostSync trigger;
     - the CNPG `rag-pgvector` Cluster and `Database`;
     - the `rag-api` Deployment (Web API and MCP tool in one);
     - ExternalSecrets, mesh policies and the registry `MCPServer` entry.
   - In `llm-platform`: the `ragingest` and `ragapi` client keys, the `/mcp/knowledge` route and policy, the `knowledge` RemoteMCPServer, and `evidence-agent` 0.2.0 with the knowledge tools.
-  - In `metadata-integrations`: the `knowledge` tables in the ClickHouse ingestion filter, and its connectors and ClickHouse secret published into `llm` for the RAG checks.
   - After #102: `llm` admitted by the Polaris, ClickHouse and OpenMetadata network rules.
 - **Code:**
-  - an `llm` service kind and `ai` asset registration in the OpenMetadata register job (`src/data-pipeline/openmetadata_jobs/` after PR #102 merges);
-  - the `knowledge-base` checks product and `rag-knowledge` lineage in the same package;
   - a new `src/rag/` project and `rag` image: corpus sources, renderer, chunker, embed client, Feast definitions, validation, Web API and MCP server, with their CI tests;
-  - `contracts/data-products/knowledge-base/` (ODPS and ODCS).
+  - the knowledge-base ODPS product and ODCS contract in `infra/charts/rag-pipeline/files/knowledge-base/`.
+  - No change to the data-pipeline code, the `data-pipelines` or `lakehouse` charts, or `contracts/`.
 - **Secrets:**
   - new keys in the `payment-gateway-fraud-detection` Doppler configs (`dev`, `prd`): `LLM_GATEWAY_AGENTS_API_KEY` and `LLM_GATEWAY_BENCHMARK_API_KEY`, already provisioned with random values. No model-provider key is needed, because the models are public on Hugging Face.
   - for RAG: `LLM_GATEWAY_RAG_INGEST_API_KEY`, `LLM_GATEWAY_RAG_API_KEY`, `RAG_DB_WRITER_PASSWORD` and `RAG_DB_READER_PASSWORD`, provisioned with random values in `dev` and `prd` on 2026-10-29.

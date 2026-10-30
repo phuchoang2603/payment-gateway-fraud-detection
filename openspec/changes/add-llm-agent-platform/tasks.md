@@ -58,14 +58,13 @@
 
 ## 5. OpenMetadata (after PR #102 merges)
 
-- [ ] 5.1 Rebase onto #102. In `openmetadata_jobs/integrations.py`, add the `llm` service kind (`CreateLLMServiceRequest`, `CustomLLM`) and idempotent registration of the `ai` entries (`llmModels`, `aiApplications`). Verify locally with ruff. CI runs the existing integration tests; add one behaviour test only if the AI registration adds a distinct failure path, such as an application whose primary model is missing.
-- [ ] 5.2 Add the `llm` connector and the `ai` section to `infra/charts/metadata-integrations` values (dev), matching the llm-platform chart's model names, revisions and agent version. Verify with `helm template` that `connectors.json` contains them.
+- [ ] 5.1 In `src/rag`, register the AI assets (decision 12) over OpenMetadata's REST API from the workflow's catalog step, with the facts in `rag-pipeline` values matching `llm-platform`. Verify the endpoints against the live OpenMetadata 2.0.6 API first.
 
 ## 5b. RAG: pipeline, Web API and MCP tool (after PR #102 merges; design.md decision 15)
 
 - [x] 5b.1 Research the corpus sources and record the proposed corpus in `rag-corpus.md`.
 - [x] 5b.2 Settle the layout with the user: `src/rag`, chart `rag-pipeline`, namespace `llm`, corpus in the image, release-triggered runs, Iceberg offline, Web API and MCP in scope (2026-10-29).
-- [ ] 5b.3 Ask the platform for P9 (`llm` in the Argo Workflows controller's `workflowNamespaces`). Verify read-only that the controller reconciles a test Workflow in `llm`.
+- [x] 5b.3 Run the workflow in `data`, where Argo, Polaris and OpenMetadata already admit pipelines; record P9 and P10 as optional follow-ups for an all-`llm` layout.
 - [x] 5b.4 Create `src/rag/` (uv project):
   - `corpus/`: the hand-written synthetic documents with front matter, `sources.yaml` and the renderer;
   - `pipeline/`: publish, structure-aware chunker, batched embed client, pre-write validation gate, PyIceberg writer, Feast refresh with HNSW index, post-write verify;
@@ -75,7 +74,7 @@
 
   Verify locally only with ruff and format.
 - [x] 5b.5 Add the `rag` image to `.github/service-images.json`. Its build paths are `src/rag/` plus every corpus source in `sources.yaml`, and the Dockerfile copies those sources into the image.
-- [x] 5b.6 Add `contracts/data-products/knowledge-base/` (ODPS product and ODCS `knowledge-chunks` with the contract checks as SQL counts). In `openmetadata_jobs`, add the `knowledge-base` checks product, the `rag-knowledge` pipeline and lineage edges, and the `rag-api` `mcpServer` entry.
+- [x] 5b.6 Add the knowledge-base ODPS product and ODCS contract to `infra/charts/rag-pipeline/files/knowledge-base/`, mounted into the shared checks job. Publish the run status, corpus container and lineage from `src/rag` over OpenMetadata's REST API, without changing `openmetadata_jobs`.
 - [x] 5b.7 Create `infra/charts/rag-pipeline` and the `rag-pipeline` application (dev on, prod off), with:
   - the executor ServiceAccount and Role;
   - the `rag-knowledge` WorkflowTemplate and its PostSync `Workflow` hook with a deadline;
@@ -86,8 +85,7 @@
   - the registry `MCPServer` entry.
 
   Verify with `helm template` and `helm lint`.
-- [x] 5b.8 Admit `llm` in the `lakehouse` (Polaris) network rule, add `knowledge` tables to the ClickHouse ingestion filter, and publish the checks connectors and ClickHouse secret into `llm` from `metadata-integrations`. ClickHouse has no network rule.
-- [ ] 5b.8b Ask the platform for P10 (OpenMetadata admits `llm` on 8585).
+- [x] 5b.8 Give the chart its own ExternalSecrets in `data` and `llm` and a ClickHouse connector filtered to the `knowledge` tables, so no `lakehouse`, `data-pipelines` or platform change is needed.
 - [x] 5b.9 In `llm-platform`:
   - add the `ragingest` and `ragapi` client keys;
   - add the `/mcp/knowledge` HTTPRoute, MCP backend and policy;

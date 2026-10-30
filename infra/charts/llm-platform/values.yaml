@@ -76,11 +76,12 @@ gateway:
   # Card numbers with spaces or dashes that the CreditCard built-in does not match.
   piiPatterns:
     - '\b(?:\d[ -]?){12,18}\d\b'
-  # Callers outside this namespace that may reach the gateway: Substrate workers run sandboxed agent actors.
+  # Callers outside this namespace: Substrate workers run sandboxed agent actors; the RAG ingest workflow runs in data.
   externalClients:
     - cluster.local/ns/kagent/sa/default
-  # ServiceAccounts of the rag-pipeline application in this namespace: the ingest workflow and the knowledge API.
-  namespaceClients: [rag-pipeline, rag-api]
+    - cluster.local/ns/data/sa/rag-pipeline
+  # ServiceAccounts in this namespace that call the gateway, besides agents and the benchmark: the knowledge API.
+  namespaceClients: [rag-api]
   # MCP servers behind /mcp/<name>. Each target is a Service in this namespace.
   mcpServers:
     knowledge:

@@ -9,7 +9,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from pyarrow import fs
 
-from rag import corpus, offline, store, validation
+from rag import catalog, corpus, offline, store, validation
 from rag.chunking import chunk
 from rag.gateway import Embedder
 
@@ -199,6 +199,17 @@ def verify() -> None:
     )
 
 
+def publish_catalog() -> None:
+    summary = catalog.publish(
+        catalog.Catalog.from_env(),
+        os.environ["WORKFLOW_STATUS"],
+        os.environ["RUN_ID"],
+        os.environ.get("KNOWLEDGE_VERSION", ""),
+        json.loads(os.environ.get("AI_ASSETS", "null")),
+    )
+    print(json.dumps(summary, sort_keys=True))
+
+
 STEPS = {
     "publish": publish,
     "chunk": stage_chunks,
@@ -206,6 +217,7 @@ STEPS = {
     "validate": validate,
     "write": write,
     "verify": verify,
+    "catalog": publish_catalog,
 }
 
 
