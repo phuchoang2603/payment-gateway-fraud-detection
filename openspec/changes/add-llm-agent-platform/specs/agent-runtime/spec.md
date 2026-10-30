@@ -54,8 +54,8 @@ The registry catalog SHALL live in Git and be published to the platform's agentr
 - **THEN** the registry lists `evidence-agent` at 0.1.0 with its model config and no MCP servers
 
 ### Requirement: Autoscaling mechanism per workload
-Workloads whose replicas another controller owns (kagent agent Deployments, Substrate worker pools) SHALL be autoscaled by KEDA from request-rate or active-actor metrics when autoscaling is enabled. Stateless HTTP services owned by this repository (MCP servers, web API) SHALL run as Knative Services. The model servers SHALL NOT be autoscaled while each environment has one GPU. The documentation SHALL record this as the platform equivalent of the rubric's KEDA requirement, with the reason for each choice.
+The agents' Substrate worker pool SHALL be autoscaled by KEDA once Substrate's WorkerPool scale subresource publishes a selector, and SHALL run at a fixed size until then. The knowledge API SHALL run as a Deployment, because its callers are admitted by mesh identity, which Knative's cluster-local gateway cannot carry. The model servers SHALL NOT be autoscaled while each environment has one GPU. The documentation SHALL record this as the platform equivalent of the rubric's KEDA requirement, with the reason for each choice.
 
-#### Scenario: Agent Deployment under autoscaling
-- **WHEN** an agent's Deployment is scaled by its autoscaler
-- **THEN** kagent reconciliation does not reset the replica count
+#### Scenario: Worker pool without a scale selector
+- **WHEN** the pinned Substrate WorkerPool reports no `status.selector` on its scale subresource
+- **THEN** the chart sets a fixed replica count and renders no ScaledObject for it
