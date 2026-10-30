@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
 from fraud_rag_common import store
+from pydantic import ValidationError
 
 from fraud_rag_serving import app as service
 
