@@ -83,6 +83,7 @@ def duplicate_keys(plan: dict):
         finally:
             spark.conf.set(arrow, previous)
         keys = np.unique(frame["event_key"].to_numpy(dtype=np.int64))
+        del frame
         # Raw bytes: PySpark's broadcast serializer cannot write the out-of-band buffers a large array pickles to.
         plan["keys"] = spark.sparkContext.broadcast(keys.tobytes())
     return plan["keys"]
