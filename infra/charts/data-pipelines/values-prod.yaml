@@ -31,6 +31,16 @@ spark:
   retry:
     limit: 10
     policy: Always
+  # aws-cpu-burst allows only large and xlarge, so 12 xlarge is the whole 48 vCPU / 192 GiB limit. An xlarge has
+  # 3500m / 13961Mi allocatable after Talos reservations; DaemonSets take 230m / 744Mi, leaving 3270m / 13217Mi. A
+  # 4-core executor (4000m request) does not fit, so the large profile keeps 11 executors of 3 cores, one per xlarge,
+  # with 10g + 2g of memory, and the 1-core 4g + 1g driver fits a large (12 nodes, 46 vCPU, 184 GiB). Shuffle
+  # partitions are about 4x the 33 executor cores; AQE coalesces them further.
+  profiles:
+    large:
+      shufflePartitions: 128
+      executor:
+        memory: 10g
 bronze:
   enabled: true
   datasetVersion: v19
