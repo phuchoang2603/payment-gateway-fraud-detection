@@ -38,29 +38,38 @@ spec:
       remoteRef:
         key: LANGFUSE_INIT_SECRET_KEY
 {{- end }}
+{{- $egress := $agents.sandbox.egress }}
+{{- $hosts := dict
+  "agent" (printf "%s.%s.svc.cluster.local" .Values.gateway.name .Release.Namespace)
+  "sandbox" (printf "%s.%s.svc.cluster.local" $egress.name .Release.Namespace) }}
+{{- range $kind, $host := $hosts }}
 ---
 apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
-  name: {{ $agents.modelConfig }}
+  name: {{ $kind | eq "agent" | ternary $agents.modelConfig (printf "%s-sandbox" $agents.modelConfig) }}
 spec:
   provider: OpenAI
-  model: {{ .Values.models.chat.name }}
+  model: {{ $.Values.models.chat.name }}
   apiKeySecret: llm-gateway-agents
   apiKeySecretKey: key
   openAI:
-    baseUrl: http://{{ .Values.gateway.name }}.{{ .Release.Namespace }}.svc.cluster.local/v1
+    baseUrl: http://{{ $host }}/v1
+{{- end }}
 {{- range $agent := $agents.list }}
 {{- $tools := list }}
+{{- $sandboxTools := list }}
 {{- range $server := $agent.mcpServers | default list }}
 {{- $spec := required (printf "gateway.mcpServers.%s is not defined" $server) (index $.Values.gateway.mcpServers $server) }}
 {{- $tools = append $tools (dict "type" "McpServer" "mcpServer" (dict "apiGroup" "kagent.dev" "kind" "RemoteMCPServer" "name" $server "toolNames" $spec.tools)) }}
+{{- $sandboxTools = append $sandboxTools (dict "type" "McpServer" "mcpServer" (dict "apiGroup" "kagent.dev" "kind" "RemoteMCPServer" "name" (printf "%s-sandbox" $server) "toolNames" $spec.tools)) }}
 {{- end }}
-{{- $declarative := dict
-  "modelConfig" $agents.modelConfig
-  "systemMessageFrom" (dict "type" "ConfigMap" "name" "agent-prompts" "key" (printf "%s.md" $agent.name)) }}
+{{- $prompt := dict "type" "ConfigMap" "name" "agent-prompts" "key" (printf "%s.md" $agent.name) }}
+{{- $declarative := dict "modelConfig" $agents.modelConfig "systemMessageFrom" $prompt }}
+{{- $sandboxDeclarative := dict "modelConfig" (printf "%s-sandbox" $agents.modelConfig) "systemMessageFrom" $prompt }}
 {{- with $tools }}
 {{- $_ := set $declarative "tools" . }}
+{{- $_ := set $sandboxDeclarative "tools" $sandboxTools }}
 {{- end }}
 ---
 apiVersion: kagent.dev/v1alpha2
@@ -104,11 +113,11 @@ spec:
   description: {{ $agent.description | quote }}
   version: {{ $agent.version | quote }}
   declarative:
-    {{- toYaml $declarative | nindent 4 }}
+    {{- toYaml $sandboxDeclarative | nindent 4 }}
   sandbox:
     network:
       allowedDomains:
-        - {{ $.Values.gateway.name }}.{{ $.Release.Namespace }}.svc.cluster.local
+        - {{ $hosts.sandbox }}
   substrate:
     snapshotsConfig:
       location: {{ printf "%s/%s-sandbox/" $agents.sandbox.snapshotRoot $agent.name }}
@@ -137,7 +146,6 @@ roleRef:
   kind: Role
   name: substrate-sandbox-secrets
 subjects:
-  {{- $sa := splitList ":" $agents.sandbox.apiServer }}
   - kind: ServiceAccount
-    namespace: {{ index $sa 2 }}
-    name: {{ index $sa 3 }}
+    namespace: {{ $agents.sandbox.apiServer.namespace }}
+    name: {{ $agents.sandbox.apiServer.name }}

@@ -80,12 +80,14 @@ gateway:
   # Card numbers with spaces or dashes that the CreditCard built-in does not match.
   piiPatterns:
     - '\b(?:\d[ -]?){12,18}\d\b'
-  # Callers outside this namespace: Substrate workers run sandboxed agent actors; the RAG ingest workflow runs in data.
+  # Callers outside this namespace: the RAG ingest workflow runs in data; the kagent controller discovers the tools of
+  # each RemoteMCPServer.
   externalClients:
-    - cluster.local/ns/kagent/sa/default
     - cluster.local/ns/data/sa/rag-pipeline
-  # ServiceAccounts in this namespace that call the gateway, besides agents and the benchmark: the knowledge API.
-  namespaceClients: [rag-api]
+    - cluster.local/ns/kagent/sa/kagent-controller
+  # ServiceAccounts in this namespace that call the gateway, besides agents and the benchmark: the knowledge API, and
+  # the proxy that sandboxed agent actors reach the gateway through.
+  namespaceClients: [rag-api, sandbox-egress]
   # MCP servers behind /mcp/<name>. Each target is a Service in this namespace.
   mcpServers:
     knowledge:
@@ -128,7 +130,19 @@ agents:
   sandbox:
     snapshotRoot: gs://platform-dev/substrate/llm
     # Substrate's API server resolves the actor's Secret references in this namespace when it starts the golden actor.
-    apiServer: system:serviceaccount:ate-system:ate-api-server
+    apiServer: {namespace: ate-system, name: ate-api-server}
+    # Substrate workers run outside the mesh, so sandboxed actors have no mesh identity. They reach the gateway only
+    # through this proxy, which admits the workers by NetworkPolicy and calls the gateway with its own identity.
+    egress:
+      name: sandbox-egress
+      image: nginxinc/nginx-unprivileged:1.31.7-alpine
+      uid: 101
+      workers:
+        namespace: kagent
+        podLabels: {ate.dev/worker-pool: kagent-default}
+      controller:
+        namespace: kagent
+        podLabels: {app.kubernetes.io/name: kagent, app.kubernetes.io/component: controller}
   # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
   list:
     - name: evidence-agent
