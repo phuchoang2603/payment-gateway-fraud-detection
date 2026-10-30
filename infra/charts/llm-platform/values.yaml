@@ -185,9 +185,17 @@ agents:
   # Substrate's egress gateway carries every actor connection and injects the gateway and Langfuse credentials, so
   # agents never hold them. The gateway admits it by this mesh identity.
   egressGateway: cluster.local/ns/ate-system/sa/atenet-egress
-  # kagent's public A2A endpoint, /agents/<namespace>/<name>, served by its controller.
+  # kagent's public A2A endpoint, /agents/<namespace>/<name>, served by its controller. The platform's waypoint admits
+  # the gateway there by mesh identity; the gateway also signs a short-lived token per request as its machine
+  # principal, with a platform key.
   a2a:
     controller: {host: kagent-controller.kagent.svc.cluster.local, port: 8083}
+    signing:
+      secret: kagent-gateway-signing-key
+      remoteKey: KAGENT_GATEWAY_SIGNING_KEY
+      alg: ES256
+      ttl: 300s
+      claims: {iss: "urn:platform:kagent:gateway", sub: agentgateway, aud: kagent}
   # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
   # `routing` is what the coordinator's routing tool reads to pick the agent; `agents` are its sub-agents, compiled
   # into its runtime from their templates.
