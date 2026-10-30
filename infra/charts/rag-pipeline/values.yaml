@@ -1,11 +1,14 @@
 global:
   imageTags:
-    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-pipeline: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-serving: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata: dev
 
 images:
-  rag:
-    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag
+  pipeline:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-pipeline
+  serving:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-serving
   metadata:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
 

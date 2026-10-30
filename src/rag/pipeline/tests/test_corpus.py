@@ -1,4 +1,4 @@
-from rag import corpus
+from fraud_rag_pipeline import corpus
 
 
 def test_every_document_renders_with_a_unique_id(repo):
@@ -69,8 +69,8 @@ def test_image_build_paths_cover_every_corpus_source(repo):
     import json
 
     images = json.loads((repo / ".github/service-images.json").read_text())["include"]
-    paths = next(image["paths"] for image in images if image["service"] == "rag")
-    dockerfile = (repo / "infra/docker/rag.Dockerfile").read_text()
+    paths = next(image["paths"] for image in images if image["service"] == "rag-pipeline")
+    dockerfile = (repo / "infra/docker/rag-pipeline.Dockerfile").read_text()
 
     for entry in corpus.settings()["documents"]:
         for source in entry["sources"]:

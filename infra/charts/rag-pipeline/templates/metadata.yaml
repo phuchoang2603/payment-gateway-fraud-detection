@@ -26,13 +26,3 @@ metadata:
   namespace: {{ .Values.pipelineNamespace }}
 data:
   connectors.json: {{ $connectors | toJson | quote }}
----
-# The knowledge-base contract this chart owns; the shared checks job reads it from DATA_PRODUCTS_ROOT.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: rag-knowledge-contract
-  namespace: {{ .Values.pipelineNamespace }}
-data:
-  knowledge-chunks.odcs.yaml: |
-    {{- .Files.Get "files/knowledge-base/knowledge-chunks.odcs.yaml" | nindent 4 }}

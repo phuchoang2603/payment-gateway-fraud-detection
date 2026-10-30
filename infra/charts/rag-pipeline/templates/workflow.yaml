@@ -1,5 +1,5 @@
 {{- $root := . }}
-{{- $rag := include "rag-pipeline.image" (dict "image" .Values.images.rag "global" .Values.global) }}
+{{- $rag := include "rag-pipeline.image" (dict "image" .Values.images.pipeline "global" .Values.global) }}
 {{- $metadata := include "rag-pipeline.image" (dict "image" .Values.images.metadata "global" .Values.global) }}
 {{- $pending := "{{tasks.publish-corpus.outputs.parameters.skip}} == false" }}
 {{- $version := "{{tasks.publish-corpus.outputs.parameters.version}}" }}
@@ -20,6 +20,8 @@ spec:
     labels:
       app.kubernetes.io/part-of: rag-pipeline
       app.kubernetes.io/component: workflow
+      # The pipeline namespace is not enrolled in the mesh; the gateway and pgvector admit this workflow by identity.
+      istio.io/dataplane-mode: ambient
   securityContext:
     {{- include "rag-pipeline.podSecurity" . | nindent 4 }}
   # The executor's own containers need the restricted settings too; the namespace enforces them.
@@ -70,7 +72,7 @@ spec:
             valueFrom: {path: /tmp/outputs/skip, default: "false"}
       container:
         image: {{ $rag | quote }}
-        args: [rag.pipeline, "{{ "{{inputs.parameters.step}}" }}"]
+        args: ["{{ "{{inputs.parameters.step}}" }}"]
         env:
           - name: KNOWLEDGE_VERSION
             value: "{{ "{{inputs.parameters.version}}" }}"
@@ -112,16 +114,10 @@ spec:
           - name: metadata-connectors
             mountPath: /etc/metadata
             readOnly: true
-          - name: contracts
-            mountPath: /contracts/knowledge-base
-            readOnly: true
       volumes:
         - name: metadata-connectors
           configMap:
             name: rag-metadata-connectors
-        - name: contracts
-          configMap:
-            name: rag-knowledge-contract
     # The version output defaults to empty, so a run that failed before publishing the corpus records status only.
     - name: publish
       retryStrategy:
@@ -129,7 +125,7 @@ spec:
         retryPolicy: OnError
       container:
         image: {{ $rag | quote }}
-        args: [rag.pipeline, catalog]
+        args: [catalog]
         env:
           - name: AI_ASSETS
             value: {{ .Values.aiAssets | toJson | quote }}

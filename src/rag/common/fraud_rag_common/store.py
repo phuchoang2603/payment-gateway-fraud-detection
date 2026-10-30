@@ -9,7 +9,7 @@ from feast.repo_config import RepoConfig
 from feast.types import Array, Bool, Float32, String
 from psycopg import sql
 
-from rag.gateway import DIMENSION
+from fraud_rag_common.gateway import DIMENSION
 
 PROJECT = "knowledge_base"
 VIEW = "knowledge_chunks"

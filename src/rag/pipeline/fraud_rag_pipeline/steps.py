@@ -7,11 +7,13 @@ from urllib.parse import urlparse
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from fraud_rag_common import store
+from fraud_rag_common.gateway import Embedder
 from pyarrow import fs
 
-from rag import catalog, corpus, offline, store, validation
-from rag.chunking import chunk
-from rag.gateway import Embedder
+from fraud_rag_pipeline import corpus, offline, validation
+from fraud_rag_pipeline.chunking import chunk
+from fraud_rag_pipeline.openmetadata import client as catalog
 
 OUTPUTS = Path(os.environ.get("STEP_OUTPUTS", "/tmp/outputs"))
 
@@ -223,9 +225,5 @@ STEPS = {
 
 def main() -> None:
     if len(sys.argv) != 2 or sys.argv[1] not in STEPS:
-        raise SystemExit(f"usage: python -m rag.pipeline {{{','.join(STEPS)}}}")
+        raise SystemExit(f"usage: python -m fraud_rag_pipeline {{{','.join(STEPS)}}}")
     STEPS[sys.argv[1]]()
-
-
-if __name__ == "__main__":
-    main()

@@ -246,7 +246,7 @@ agentregistry 0.4.0 materializes agents as kagent `v1alpha2` resources, the API 
 
 OpenMetadata 2.0.6 has first-class AI entities: `llmService`, `llmModel`, `aiApplication` and `mcpServer`. It has no ingestion connector for a custom LLM service, so the assets are created through its REST API.
 
-This change must stay independent of the data pipelines, so it does not touch `openmetadata_jobs` or the `data-pipelines` chart, which now holds the OpenMetadata connections. Instead the RAG workflow's `catalog` step (decision 15) registers them on every run with idempotent `PUT`s from the `rag` image. That step already runs in `data`, the namespace OpenMetadata admits.
+This change must stay independent of the data pipelines, so it does not change the `openmetadata_jobs` code (only its checks test learns the new table) or the `data-pipelines` chart, which now holds the OpenMetadata connections. Instead the RAG workflow's `catalog` step (decision 15) registers them on every run with idempotent `PUT`s from the `rag` image. That step already runs in `data`, the namespace OpenMetadata admits.
 - `llmService` `agent-gateway`: `CustomLLM`, base URL the gateway's `/v1`, no key stored.
 - `llmModels` `qwen3-8b` and `qwen3-embedding`: base model, pinned revision as version, capabilities, and the vLLM deployment.
 - `aiApplication` `evidence-agent`: agent, kagent, primary model `qwen3-8b`, the current agent version, and its MCP server.
@@ -281,18 +281,19 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 - Simulator configs are excluded, because they hold the generator's ground truth.
 
 **Layout.**
-- Code: one Python project, `src/rag/`, built into one image, `rag`, with two entrypoints:
-  - `rag.pipeline`: the workflow steps;
-  - `rag.service`: the Web API and the MCP server in one process.
+- Code: a uv workspace in `src/rag/` with one lock file and three members:
+  - `common` (`fraud_rag_common`): the Feast definitions and the embedding client. Both sides must agree on them, so they live once;
+  - `pipeline` (`fraud_rag_pipeline`): the corpus, the workflow steps and the OpenMetadata client, built into image `rag-pipeline`;
+  - `serving` (`fraud_rag_serving`): the Web API and the MCP server in one process, built into image `rag-serving`.
 
-  They share the Feast definitions and the gateway client. Python because Feast and PyIceberg are Python. There is no Spark, since a few hundred rows do not need a cluster.
+  Separate images keep the serving image small (no PyIceberg, no corpus) and let each change release on its own. Python because Feast and PyIceberg are Python. There is no Spark, since a few hundred rows do not need a cluster.
 - Chart: `infra/charts/rag-pipeline`, application `rag-pipeline`, enabled where `llm-platform` is: dev now, prod only with the LLM platform.
 - Namespaces: the store and the knowledge API run in `llm`, next to the embedding model and the gateway. The ingest workflow runs in `data`, because that is where Argo Workflows, Polaris and OpenMetadata already admit pipelines. Running it in `llm` instead would need two platform changes (Argo Workflows watching `llm`; OpenMetadata admitting `llm`) and a `lakehouse` network change; that is recorded as a follow-up.
-- The chart owns everything it needs: its own ExternalSecrets in both namespaces, a ClickHouse connector filtered to the `knowledge` tables, and the knowledge-base contract in `files/knowledge-base/`. It changes no data-pipeline code, chart or contract.
+- The chart owns everything it needs: its own ExternalSecrets in both namespaces, and a ClickHouse connector filtered to the `knowledge` tables. Its knowledge-base product and contract are a new folder, `contracts/data-products/knowledge-base/`, linted by the same CI as the other products and read by the shared checks image. It changes no data-pipeline code or chart, and no existing contract.
 
 **Corpus inside the image.**
-- The hand-written documents (with front matter `doc_id`, title, audience, `synthetic`, source of truth) and `sources.yaml`, which lists the rendered documents, live in `src/rag/corpus/`.
-- The image build copies the listed repository sources in. The image's build paths in `.github/service-images.json` cover every source, so a changed spec, contract or document produces a new `rag` image through the normal release.
+- The hand-written documents (with front matter `doc_id`, title, audience, `synthetic`, source of truth) and `sources.yaml`, which lists the rendered documents, live in `src/rag/pipeline/fraud_rag_pipeline/corpus/`.
+- The image build copies the listed repository sources in. The image's build paths in `.github/service-images.json` cover every source, so a changed spec, contract or document produces a new `rag-pipeline` image through the normal release.
 - CI tests keep the hand-written codes, thresholds and policy version equal to the code. CI never touches the bucket.
 - The workflow's first step renders the corpus from the image and writes it to `datasets/payment-gateway/knowledge/<knowledge_version>/` with a `manifest.json` of per-document SHA-256 hashes. A prefix is immutable once its manifest exists.
 - `knowledge_version` is a hash of the documents, the chunker settings and the embedding model with its revision. Changing the model or the chunker re-embeds everything.
@@ -306,8 +307,8 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
   5. `write` appends to the offline table, then refreshes the online store and rebuilds its ANN index.
   6. `verify` checks that the stores hold exactly what was validated.
   7. `checks` re-runs the contract rules on `knowledge.chunks` with the shared `openmetadata_jobs.checks` image, pointed at this chart's contract and a connector that ingests only the `knowledge` tables, so the results are recorded in the catalog.
-  8. On exit, `catalog` (in the `rag` image, over OpenMetadata's REST API) records the run status, the corpus container, the lineage to `knowledge.chunks` and the AI assets of decision 12.
-- Each release that changes the app runs it: an Argo CD `PostSync` hook in the chart creates a `Workflow` from the template. The app only goes out of sync when its rendered manifests change, which in practice means a new `rag` image, that is, changed documents or code. A run that finds nothing new ends at step 1.
+  8. On exit, `catalog` (in the `rag-pipeline` image, over OpenMetadata's REST API) records the run status, the corpus container, the lineage to `knowledge.chunks` and the AI assets of decision 12.
+- Each release that changes the app runs it: an Argo CD `PostSync` hook in the chart creates a `Workflow` from the template. The app only goes out of sync when its rendered manifests change, which in practice means a new `rag-pipeline` or `rag-serving` image. A run that finds nothing new, such as after a serving-only change, ends at step 1.
 - The hook has a deadline, so a failed run shows as a failed sync instead of hanging. Manual `argo submit --from workflowtemplate/rag-knowledge` stays available. There is no cron.
 - Access to object storage: the gateway storage identity (`OBJECT_GATEWAY_*` from `gateway-doppler`), which already covers `datasets/payment-gateway/`, `runs/payment-gateway/` and `lakehouse/`.
 - Access to Polaris: the same `platform` client as `data-pipelines`. Polaris has STS disabled, so writers bring their own storage credentials.
@@ -347,7 +348,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
   - a golden question set reaches recall@3 against the expected `doc_id`s. The questions are embedded through the gateway and ranked in memory against the staged vectors, so retrieval quality is known before the store changes.
 
   A CI test asserts that the Python gate and the ODCS contract cover the same rule ids.
-- **Contract rules** (ODCS `infra/charts/rag-pipeline/files/knowledge-base/knowledge-chunks.odcs.yaml`, scalar counts that must be 0, on the current version; the catalog records them after the write):
+- **Contract rules** (ODCS `contracts/data-products/knowledge-base/knowledge-chunks.odcs.yaml`, scalar counts that must be 0, on the current version; the catalog records them after the write):
   - row count within the expected range;
   - unique `chunk_id`;
   - text non-empty and within bounds;

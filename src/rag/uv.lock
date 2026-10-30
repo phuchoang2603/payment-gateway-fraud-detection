@@ -2,6 +2,14 @@ version = 1
 revision = 3
 requires-python = "==3.12.*"
 
+[manifest]
+members = [
+    "fraud-rag",
+    "fraud-rag-common",
+    "fraud-rag-pipeline",
+    "fraud-rag-serving",
+]
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.5"
@@ -355,13 +363,85 @@ postgres = [
 name = "fraud-rag"
 version = "0.1.0"
 source = { virtual = "." }
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = "==9.2.0" },
+    { name = "ruff", specifier = "==0.17.3" },
+]
+
+[[package]]
+name = "fraud-rag-common"
+version = "0.1.0"
+source = { editable = "common" }
 dependencies = [
-    { name = "fastapi" },
     { name = "feast", extra = ["postgres"] },
     { name = "httpx" },
-    { name = "mcp" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "feast", extras = ["postgres"], specifier = "==0.67.0" },
+    { name = "httpx", specifier = "==0.28.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = "==9.2.0" },
+    { name = "ruff", specifier = "==0.17.3" },
+]
+
+[[package]]
+name = "fraud-rag-pipeline"
+version = "0.1.0"
+source = { virtual = "pipeline" }
+dependencies = [
+    { name = "fraud-rag-common" },
     { name = "pyiceberg", extra = ["pyarrow"] },
     { name = "pyyaml" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fraud-rag-common", editable = "common" },
+    { name = "pyiceberg", extras = ["pyarrow"], specifier = "==0.12.0" },
+    { name = "pyyaml", specifier = "==6.0.3" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = "==9.2.0" },
+    { name = "ruff", specifier = "==0.17.3" },
+]
+
+[[package]]
+name = "fraud-rag-serving"
+version = "0.1.0"
+source = { virtual = "serving" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "fraud-rag-common" },
+    { name = "mcp" },
     { name = "uvicorn" },
 ]
 
@@ -374,11 +454,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = "==0.162.0" },
-    { name = "feast", extras = ["postgres"], specifier = "==0.67.0" },
-    { name = "httpx", specifier = "==0.28.1" },
+    { name = "fraud-rag-common", editable = "common" },
     { name = "mcp", specifier = "==2.3.0" },
-    { name = "pyiceberg", extras = ["pyarrow"], specifier = "==0.12.0" },
-    { name = "pyyaml", specifier = "==6.0.3" },
     { name = "uvicorn", specifier = "==0.54.0" },
 ]
 

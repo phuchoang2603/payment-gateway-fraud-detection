@@ -2,7 +2,7 @@
 
 ### Requirement: Versioned document corpus
 The RAG corpus SHALL contain only documents about gateway behaviour, never payment, label or customer data, and never simulator configuration or calibration.
-- Documents derived from specs, contracts or docs SHALL be rendered from those sources into the corpus carried by the `rag` image, which is built from `src/rag/`.
+- Documents derived from specs, contracts or docs SHALL be rendered from those sources into the corpus carried by the `rag-pipeline` image, which is built from `src/rag/pipeline/`.
 - Hand-written documents SHALL state in their text that they are synthetic.
 - CI tests SHALL fail when a code-bearing document lists codes, thresholds or the policy version differently from the code and protos.
 
@@ -31,7 +31,7 @@ An Argo CD PostSync hook SHALL start a run whenever the `rag-pipeline` applicati
 The workflow SHALL be enabled only where the LLM platform is enabled.
 
 #### Scenario: Release with a changed document
-- **WHEN** a release publishes a new `rag` image because a corpus source changed
+- **WHEN** a release publishes a new `rag-pipeline` image because a corpus source changed
 - **THEN** the application's sync starts a `rag-knowledge` run that writes a new `knowledge_version`
 
 #### Scenario: Embedding through the gateway
