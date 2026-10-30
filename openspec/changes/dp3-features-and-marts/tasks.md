@@ -124,3 +124,4 @@
   - the evidence and screenshots, with paths;
   - blockers and open questions;
   - for the Feast change, the final names, keys and locations of `gold.feat_customer_daily`, `gold.feat_payment_method_daily`, `gold.dim_customer` and `gold.label_attempt`: Iceberg catalog and namespace, entity key columns, `event_timestamp` and `created` semantics, partitioning, and the SCD2 validity columns.
+- [ ] 10.3 Send the Feast planning thread (threadId `mcp:launch:7ca1eca307dd1025361c2668599d5e1e0680de28f6edec3ffd254c9b9283182b`, branch `plan/feast-store`) the same final table names, keys, locations and semantics with `t3_thread_send`, and tell it to rebase onto `main`. Its implementation starts on that message or the user's go-ahead.
