@@ -27,15 +27,15 @@ The rubric (`edai-2`, LLM rows) asks for: an llm-d based inference platform with
 **Goals:**
 
 - A self-hosted, GPU-backed, OpenAI-compatible chat model and embedding model, reachable only through an authenticated, rate-limited, PII-masking gateway.
-- Agents configured once, through a global ModelConfig, with one published agent running sandboxed and warm on Agent Substrate.
+- Agents configured once, through a global ModelConfig, running sandboxed and warm on Agent Substrate: the evidence agent, the risk agent (without its scoring tools yet) and a coordinator that routes between them with a self-hosted decision model and calls them over A2A through the gateway.
 - The model, the agent and the serving endpoint registered in OpenMetadata next to the data assets they will later read.
 - Measured benchmark results with optimizations, from real runs.
 - Route, key, namespace and catalog layout that the MCP servers, RAG, the three fraud agents and the A2A routes extend without renaming or moving anything.
 
 **Non-Goals:**
 
-- MCP servers other than the knowledge tool (decision 15), the scoring tool, the risk and coordinator agents, MCP/A2A routes, agent autoscaling, prompt management, LLM/agent dashboards and A/B tests. These come after the feature-store change.
-- A self-hosted laya decision model on CPU, for the coordinator's routing and for gateway screening (an agentgateway prompt-guard webhook) of requests that ask agents to act. It belongs with the coordinator in phase 2. The hosted Jev API is not used, because it would send analyst prompts to a third party.
+- MCP servers other than the knowledge tool (decision 15) and the routing tool (decision 16), the risk agent's scoring and feature tools, and agent-pool autoscaling. These come after the feature-store change.
+- An A/B test of LLM versions on the inference platform: each environment has one GPU, which holds one chat model (decision 18).
 - Public exposure of the gateway, kagent UI or registry UI (port-forward only in this phase).
 - Running prod GPU capacity without explicit user confirmation.
 
@@ -71,7 +71,7 @@ Route layout, fixed now so later routes only add rules:
 | `/v1/embeddings` | `llm` rule → Service of `LLMInferenceService` `qwen3-embedding` | 1 |
 | `/v1/*` (chat completions, completions, models) | `llm` rule → InferencePool `qwen3-8b-inference-pool` | 1 |
 | `/mcp/<server>` | one HTTPRoute + AgentgatewayBackend per MCP server | `/mcp/knowledge` in phase 1 (decision 15), others phase 2 |
-| `/a2a/<agent>` | one HTTPRoute per agent | phase 2 |
+| `/a2a/<agent>` and `/api/a2a-sandboxes/llm-agents/<agent>` | one HTTPRoute per agent → kagent controller as an A2A backend | this change (decision 17) |
 
 agentgateway applies one policy object per target, so every route gets exactly one `AgentgatewayPolicy`. The same holds for the reference project's finding that policies overwrite each other.
 
@@ -183,16 +183,16 @@ kagent 0.10.4 pins Substrate v0.0.9 (`replace` in its `go.mod`) and ships it as 
 
 A `SandboxAgent` can only use a WorkerPool in its own namespace, and Substrate workers run privileged gVisor sandboxes as root with a host path. They cannot run in `llm` (Pod Security `restricted`), and ambient redirection breaks a worker's link-local path to its actor. So the agents live in a platform-created namespace `llm-agents`: Pod Security `privileged`, not enrolled in the mesh, holding only the agents and their pool. `llm` stays restricted and meshed. The `llm-platform` chart owns, in `llm-agents`:
 
-- **`WorkerPool` `llm-agents`:** the app's own pool, 2 workers. One worker runs one active conversation; suspended conversations take no worker.
-- **No autoscaling yet:** the pool has a fixed 2 workers. Substrate 0.0.9's WorkerPool scale subresource has no `status.selector`, and the HPA behind KEDA rejects a target without one (`InvalidSelector`), so a ScaledObject on the pool cannot work as pinned. Targeting the pool's generated Deployment is not an option, because the WorkerPool controller reconciles it. Autoscaling waits on a Substrate release (or an approved CRD change) that publishes a selector.
+- **`WorkerPool` `llm-agents`:** the app's own pool, 3 workers. One worker runs one active conversation; suspended conversations take no worker. A coordinator conversation and its delegation hold two at once.
+- **No autoscaling yet:** the pool has a fixed size. Substrate 0.0.9's WorkerPool scale subresource has no `status.selector`, and the HPA behind KEDA rejects a target without one (`InvalidSelector`), so a ScaledObject on the pool cannot work as pinned. Targeting the pool's generated Deployment is not an option, because the WorkerPool controller reconciles it. Autoscaling waits on a Substrate release (or an approved CRD change) that publishes a selector.
 - **`ModelConfig` `default-model-config`:** `provider: OpenAI`, `model: qwen3-8b`, the agents' gateway key, and `openAI.baseUrl` on the sandbox egress proxy's `/v1`, which forwards to the gateway. This is the global model config: every agent references it.
 - **`RemoteMCPServer` per gateway MCP route**, through the egress proxy with the agents' key.
 - **`SandboxAgent` `evidence-agent`:** declarative, `modelConfig: default-model-config`, the knowledge tools, and the read-only fraud-analyst prompt from `files/prompts/<agent>.md` via the `agent-prompts` ConfigMap, published to agentregistry as a versioned `Prompt` (decision 11). `sandbox.network.allowedDomains` holds only the egress proxy. Snapshots go to `gs://<environment bucket>/substrate/llm-agents/<agent>/` (kagent 0.10.4's CRD accepts only `gs://`-style locations, which Substrate's S3 backend also uses).
 - **Role `substrate-actor-secrets`:** Substrate's API server reads the actors' Secret references (the agent's config, the agents' key and the Langfuse header) by name when it starts a golden actor.
 
-Sandboxed actors have no mesh identity. Following the usual sandbox egress-proxy pattern, `sandbox-egress` in `llm` is a small meshed reverse proxy (pinned nginx-unprivileged) that forwards only the gateway's `/v1/` and `/mcp/` routes and Langfuse's trace intake, and calls them with its own identity; the gateway admits it by principal. A NetworkPolicy admits only the `llm-agents` worker pods, the kagent controller (MCP tool discovery, over the mesh tunnel) and kubelet probes.
+Sandboxed actors have no mesh identity. Following the usual sandbox egress-proxy pattern, `sandbox-egress` in `llm` is a small meshed reverse proxy (pinned nginx-unprivileged) that forwards only the gateway's `/v1/` and `/mcp/` routes, kagent's sandbox A2A paths of `llm-agents` (decision 17) and Langfuse's trace intake, and calls them with its own identity; the gateway admits it by principal. A NetworkPolicy admits only the `llm-agents` worker pods, the kagent controller (MCP tool discovery, over the mesh tunnel) and kubelet probes.
 
-Later agents (risk, coordinator) and MCP tool references are additional entries in the same values list, each a `SandboxAgent` on the same pool. A new prompt version is a change to the file and the agent version, released together. Moving to kagent 1.x later is a platform upgrade plus re-rendering these resources from the same values.
+The risk agent, the coordinator and A/B variants are additional entries in the same values list, each a `SandboxAgent` on the same pool (decisions 17 and 18). A new prompt version is a change to the file and the agent version, released together. Moving to kagent 1.x later is a platform upgrade plus re-rendering these resources from the same values.
 
 ### 9. Benchmark harness and optimizations
 
@@ -376,6 +376,28 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 - The gateway routes `/mcp/knowledge` to the service's `/mcp` (decision 2), with its own policy: the agents' key, and tool-call metrics for the agent telemetry rows. Mesh policy admits only the gateway to the service.
 - It is published to agentregistry as an `MCPServer` and catalogued in OpenMetadata as an `mcpServer`. `evidence-agent` gains the tools (kagent `RemoteMCPServer` → gateway), which bumps it to 0.2.0.
 
+### 16. laya decision service: routing and request screening on CPU
+
+The coordinator's routing and the gateway's request screening are classification, not generation, so they run on laya instead of the chat model: `convaiinnovations/laya`, a non-autoregressive decision model (ModernBERT-large, 421M parameters, Apache-2.0) that answers typed questions (`choice`, `score`, `noul`) about a text with calibrated probabilities in one forward pass. It runs on CPU, so it takes nothing from the one GPU, and prompts stay in the cluster; the hosted Jev API is not used, because it would send analyst prompts to a third party.
+
+- **Service:** `src/decision`, image `decision`: FastAPI with the `laya` library (0.4.7, CPU torch), a Deployment `decision` in `llm`. Its English checkpoint (pinned revision, only the four files it loads) is uploaded with the other weights by the model-upload Job and copied from the bucket by an init container from the same image; readiness waits for the model to load.
+- **Routing tool:** the MCP tool `route_question(question)` asks one `choice` question whose options are the coordinator's sub-agents, each described by its `routing` text in the chart values, and returns the agent, its calibrated confidence and every option's probability. The gateway routes it at `/mcp/decision` like the knowledge tool.
+- **Screening:** an agentgateway prompt-guard `webhook` on the LLM route, after the PII regex, calls `POST /request` with the request's messages. The service screens the latest user message with two questions, "act or ask" (approve, block, override or change a risk decision, retry or refund, change a rule, promote a model) and laya's jailbreak question, and rejects with 403 and a read-only refusal when either probability reaches 0.5. Agents re-send the same user turn on every model call, so results are cached per prompt. The guard fails open: agents hold no tools that change anything, so screening is an early, explainable refusal rather than the control that keeps them read-only, and an outage of a CPU service should not stop every agent.
+- **Metrics:** routing and screening decisions and forward-pass latency, scraped like the other services.
+
+### 17. Coordinator, risk agent and the A2A gateway
+
+- **risk-agent** 0.1.0: a declarative `SandboxAgent` with its read-only prompt and no tools; the scoring and feature tools attach in a later change (another MCP server in the values). Until then it says what it cannot retrieve and which signals to check.
+- **coordinator** 0.1.0: the analysts' entry agent. Its tools are the `decision` MCP server and two kagent `Agent` tools, `evidence-agent` and `risk-agent`, each with the agents' gateway key and `isolateSessions`, so each delegation is a fresh, self-contained sub-agent session. Its prompt makes it call `route_question` first and delegate to the agent it names.
+- **A2A through the gateway:** kagent serves every sandboxed agent's A2A endpoint from its controller at `/api/a2a-sandboxes/<namespace>/<agent>/`, and builds the URL of an Agent tool itself. A sandbox can reach only the egress proxy, so the platform sets kagent's proxy URL to the egress proxy: kagent then addresses sub-agents at `http://sandbox-egress.llm.svc.cluster.local/api/a2a-sandboxes/llm-agents/<agent>/`. The proxy forwards that path prefix, and only for `llm-agents`, to the gateway with the caller's Host. The gateway has one HTTPRoute per agent matching both `/a2a/<agent>` (for callers outside kagent) and kagent's path, an `AgentgatewayBackend` of type `a2a` on the controller, and one policy for all A2A routes: strict API key and the per-client rate limit. As an A2A backend the gateway rewrites the agent card's URLs to the address the caller used, so the sub-agent's card points back at the proxy rather than at the controller, which a sandbox cannot reach. Calls per agent are the gateway's request counts on each A2A route.
+- **Registry and catalog:** both agents are published like the evidence agent; the coordinator's entry and its OpenMetadata application name the agents it delegates to. Knowledge tables are linked per MCP server, so only agents with the knowledge tool list `knowledge.chunks`.
+
+### 18. A/B tests and the agent dashboard
+
+- **Agent model configs:** `agents.modelConfigs` declares named kagent ModelConfigs on the same gateway route; `default-model-config` keeps the model's own sampling, `model-config-b` sets temperature 0.2. An agent's `abTest` renders a variant `SandboxAgent` (`evidence-agent-b`) with the same prompt and tools and the other config, and adds it to the agent's A2A route as a second weighted backend (50/50) with its own path rewrite. Each arm is its own gateway backend (`a2a-evidence-agent`, `a2a-evidence-agent-b`), so calls, latency and errors split by the `backend` label, and Langfuse separates their traces by agent name. The split is per request, which is why delegations use isolated sessions. A variant is adopted by changing the agent's model config and deleting the test, never by replacing the agent in place.
+- **LLM versions:** the same weighted-backend mechanism applies to the LLM route (two chat backends, a new version taking a share), but each environment's one GPU holds one 8B chat model at 0.80 of its memory, so a second version cannot run beside the first on dev. It is recorded as blocked on GPU capacity rather than simulated.
+- **Dashboard:** `files/dashboards/llm-agents.json`, shipped as a ConfigMap that the platform's Grafana sidecar loads: calls per agent (A2A message calls per route), A2A failures, MCP tool calls and failures per tool, routing and screening decisions, laya latency, the evidence-agent A/B arms (split, calls, p95 latency, error ratio), tokens, time to first token and generation latency.
+
 ### 13. Platform changes (talos-proxmox, separate approval)
 
 | # | Component | Placement | Notes |
@@ -390,6 +412,8 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 | P8 | Namespace `llm` (ambient, Pod Security `restricted`), with kagent and agentregistry watching it | `llm` | The application's namespace; the app never creates or deletes it |
 | P9 (follow-up, optional) | Add `llm` to the Argo Workflows controller's `workflowNamespaces` | `operators` | Only if the RAG workflow moves from `data` to `llm` (decision 15) |
 | P10 (follow-up, optional) | Admit `llm` to OpenMetadata on 8585 | `data` | Same condition as P9 |
+| P11 | kagent controller proxy URL `http://sandbox-egress.llm.svc.cluster.local` | `kagent` | Sends sandboxed agents' sub-agent calls through the egress proxy to the gateway's A2A routes (decision 17) |
+| P12 | Grafana dashboard sidecar also watches `llm` | `observability` | Loads the app's agent dashboard (decision 18) |
 | P7 | Enroll the platform vmagent in Istio ambient (`istio.io/dataplane-mode: ambient` on its pods) | `observability` | Lets app mesh policies admit the metrics agent by identity, rather than opening inference ports to sources with no identity |
 
 The clusters stay on Talos 1.13.9 / Kubernetes 1.36.3. No change is needed to the GPU operator, the DRA driver, Istio or Knative.
@@ -407,6 +431,8 @@ The clusters stay on Talos 1.13.9 / Kubernetes 1.36.3. No change is needed to th
 - [RAG reuses #102's Polaris, ClickHouse and checks image while staying out of the data-pipeline code] → the workflow runs in `data` with chart-owned secrets, connector and contract, and publishes lineage itself; no platform, lakehouse or data-pipelines change is needed.
 - [The customer-features endpoint needs customer features online] → it lands with or after the DP3 slice; the chunk endpoints do not wait for it.
 - [Hand-written synthetic documents could drift from the code or be mistaken for real policy] → each is labelled synthetic in its text, and CI tests keep the codes and thresholds equal to the code.
+- [laya's base checkpoints are over-confident and near chance zero-shot on some typed-decision tasks (model card)] → it is used for two-option questions and a short list of agents described in plain language; the routing tool returns probabilities, the screen fails open, and the evidence records its decisions on real questions.
+- [kagent's proxy URL is a controller-wide setting] → kagent watches only `llm`, `llm-agents` and `kagent`, every app agent is sandboxed, and the knowledge and decision MCP servers already point at the egress proxy, so their URLs do not change.
 - [Benchmark variants need the GPU] → the `LLMInferenceService` is stopped for the duration of a run, and dev agents are unavailable then.
 
 ## Migration Plan

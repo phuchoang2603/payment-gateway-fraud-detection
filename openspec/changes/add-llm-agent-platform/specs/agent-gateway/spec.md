@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Single agent gateway entry point
-One agentgateway `Gateway` in `llm`, reachable by a ClusterIP Service, SHALL be the only entry point for LLM calls, and later for MCP servers and agent-to-agent calls. The LLM route SHALL serve `/v1/embeddings` from the embedding model server and the rest of `/v1` from the chat model's InferencePool. Later MCP and A2A routes SHALL attach as additional routes under `/mcp/<server>` and `/a2a/<agent>` to the same Gateway, without renaming the Gateway, its Service or the LLM route. The Gateway SHALL NOT be publicly routed.
+One agentgateway `Gateway` in `llm`, reachable by a ClusterIP Service, SHALL be the only entry point for LLM calls, MCP servers and agent-to-agent calls. The LLM route SHALL serve `/v1/embeddings` from the embedding model server and the rest of `/v1` from the chat model's InferencePool. MCP and A2A routes SHALL attach as additional routes under `/mcp/<server>` and `/a2a/<agent>` to the same Gateway, without renaming the Gateway, its Service or the LLM route. The Gateway SHALL NOT be publicly routed.
 
 #### Scenario: Agent reaches the model
 - **WHEN** an agent calls `http://agentgateway.llm.svc.cluster.local/v1/chat/completions`
@@ -61,3 +61,33 @@ Mesh authorization SHALL admit only the gateway to `rag-api`.
 #### Scenario: Direct call
 - **WHEN** a pod other than the gateway calls `rag-api` directly
 - **THEN** the mesh refuses the connection
+
+### Requirement: A2A routes for every agent
+The gateway SHALL be the entry point for agent-to-agent calls. Each agent SHALL have an A2A route at `/a2a/<agent>` and at kagent's sandbox A2A path for that agent, backed by the kagent controller as an A2A backend, with the same strict API key and per-client rate limit as the other routes. A coordinator's sub-agent calls SHALL reach the sub-agent only through this route: kagent's proxy URL sends them to the sandbox egress proxy, which forwards kagent's sandbox A2A paths of the agents' namespace to the gateway and keeps the caller's host, so the agent cards the gateway rewrites point back at the proxy.
+
+#### Scenario: Agent card through the gateway
+- **WHEN** a client with a key fetches `/a2a/<agent>/.well-known/agent-card.json`
+- **THEN** the card's URLs name the address the client used, not the kagent controller
+
+#### Scenario: Call without a key
+- **WHEN** a client sends an A2A message to `/a2a/<agent>/` without a key
+- **THEN** the gateway answers 401 and the agent receives nothing
+
+#### Scenario: Coordinator delegation
+- **WHEN** the coordinator calls a sub-agent
+- **THEN** the call appears on the sub-agent's A2A route in the gateway's request metrics
+
+### Requirement: Request screening with a self-hosted decision model
+The LLM route SHALL screen each request's latest user message with a webhook guard on the app's laya decision service, after PII masking. A message that asks an agent to act (approve, block, override or change a risk decision, retry or refund a payment, change a rule, promote or deploy a model) or tries to make it ignore its rules SHALL be rejected with 403 and a read-only refusal when laya's probability reaches the configured threshold. The guard SHALL fail open, because agents hold no tools that change anything and screening is an early refusal rather than the only control. Prompts SHALL NOT leave the cluster for screening.
+
+#### Scenario: Request to act
+- **WHEN** an analyst asks an agent to refund a payment
+- **THEN** the gateway answers 403 with the refusal and the model server receives nothing
+
+#### Scenario: Question
+- **WHEN** an analyst asks why a payment was declined
+- **THEN** the request passes the screen and reaches the model
+
+#### Scenario: Decision service down
+- **WHEN** the decision service is unavailable
+- **THEN** requests pass without screening and PII masking still applies
