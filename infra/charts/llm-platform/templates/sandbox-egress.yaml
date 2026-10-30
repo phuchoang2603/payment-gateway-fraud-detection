@@ -1,12 +1,13 @@
-{{- $egress := .Values.agents.sandbox.egress }}
+{{- $egress := .Values.agents.egress }}
 {{- $upstream := printf "%s.%s.svc.cluster.local" .Values.gateway.name .Release.Namespace }}
+{{- $langfuse := printf "langfuse-web.%s.svc.cluster.local:3000" .Release.Namespace }}
 {{- $conf := printf `server {
   listen 8080;
   location = /healthz {
     access_log off;
     return 200;
   }
-  # Only the model and MCP routes; everything else on the gateway stays unreachable from a sandbox.
+  # Only the gateway's model and MCP routes and Langfuse's trace intake; nothing else is reachable from a sandbox.
   location ~ ^/(v1|mcp)/ {
     proxy_pass http://%[1]s;
     proxy_set_header Host %[1]s;
@@ -16,10 +17,16 @@
     proxy_request_buffering off;
     proxy_read_timeout 300s;
   }
+  location = /api/public/otel/v1/traces {
+    proxy_pass http://%[2]s;
+    proxy_set_header Host %[2]s;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+  }
   location / {
     return 404;
   }
-}` $upstream }}
+}` $upstream $langfuse }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -91,7 +98,7 @@ spec:
     - {name: http, port: 80, targetPort: http}
 ---
 # Substrate workers run outside the mesh, so they reach the proxy in plaintext and are admitted here by pod selector.
-# The kagent controller discovers the sandbox's MCP tools through the proxy over the mesh tunnel (15008).
+# The kagent controller discovers the agents' MCP tools through the proxy over the mesh tunnel (15008).
 # Ambient rewrites kubelet probes to come from 169.254.7.127.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -106,10 +113,10 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: {{ $egress.workers.namespace }}
+              kubernetes.io/metadata.name: {{ .Values.agents.namespace }}
           podSelector:
             matchLabels:
-              {{- toYaml $egress.workers.podLabels | nindent 14 }}
+              {{- toYaml $egress.workerLabels | nindent 14 }}
       ports:
         - {port: 8080, protocol: TCP}
     - from:

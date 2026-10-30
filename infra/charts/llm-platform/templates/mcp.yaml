@@ -54,21 +54,4 @@ spec:
           burst: {{ $gateway.limits.burst }}
           unit: Minutes
           key: apiKey.client
-{{- range $suffix, $host := dict "" $gateway.name "-sandbox" $.Values.agents.sandbox.egress.name }}
----
-apiVersion: kagent.dev/v1alpha2
-kind: RemoteMCPServer
-metadata:
-  name: {{ $name }}{{ $suffix }}
-spec:
-  description: {{ $server.description | quote }}
-  url: http://{{ $host }}.{{ $.Release.Namespace }}.svc.cluster.local/mcp/{{ $name }}
-  protocol: STREAMABLE_HTTP
-  headersFrom:
-    - name: Authorization
-      valueFrom:
-        type: Secret
-        name: llm-gateway-agents
-        key: authorization
-{{- end }}
 {{- end }}

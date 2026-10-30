@@ -59,6 +59,7 @@
 - [x] 4b.3 Send `evidence-agent`'s traces from kagent straight to Langfuse's OTLP endpoint with a basic-auth header from the init project keys (ExternalSecret `langfuse-otlp`), and the gateway's straight to VictoriaTraces through `vtagent`, with no collector. Verified with `helm template` and a server-side dry-run on dev.
 - [x] 4b.4 Confirm on dev that a question to `evidence-agent` produces one Langfuse trace with the agent span, one generation per model call with token usage, and the `search_knowledge` tool call, and that the gateway's chat and MCP spans reach VictoriaTraces. Recorded 2026-10-30 on a0f29e6: Langfuse trace with 6 observations (generations 802/41 and 2316/401 tokens), and the matching gateway chat, MCP and embedding spans in VictoriaTraces.
 - [x] 4b.5 Sandbox access on dev: Role `substrate-sandbox-secrets` lets Substrate's API server read the sandbox's two Secrets by name; the platform fixed gVisor user namespaces (talos-proxmox 3c238f1) and opted the Substrate workers out of ambient (6d3be1e); the `sandbox-egress` proxy forwards only the model and MCP routes and calls the gateway with its own identity, with the sandbox's own model config and RemoteMCPServers. Recorded 2026-10-30 on cf38423: both RemoteMCPServers report their tools; a new sandbox session answered with `search_knowledge` in 16.8 s and resumed after suspend in 8.3 s with its context.
+- [ ] 4b.6 Run agents only as `SandboxAgent`s in `llm-agents` (platform: namespace with Pod Security `privileged`, outside the mesh, Argo CD and secret-store access; Substrate accepting an app WorkerPool there). Chart: WorkerPool `llm-agents` (2 workers), KEDA ScaledObject on it (2 to 4 on chat request rate), the model config, RemoteMCPServers and Secrets there, tracing to Langfuse through `sandbox-egress`; drop the Deployment `Agent` and the `llm-agents` gateway client; `evidence-agent` 0.3.0. Then confirm on dev an answer with the knowledge tool, a warm resume, a Langfuse trace, and KEDA scaling the pool under load.
 
 ## 5. OpenMetadata (after PR #102 merges)
 
@@ -114,8 +115,8 @@
   - a card number, phone and e-mail are masked;
   - a burst gets 429;
   - a direct call to vLLM is refused by the mesh.
-- [ ] 7.3 Chat with `evidence-agent` and `evidence-agent-sandbox` in the kagent UI (port-forward), and capture the ModelConfig and agent pages. Run three concurrent sandboxed conversations on one worker and capture the worker count, actor states and answer times.
-- [ ] 7.4 Verify that the registry lists `evidence-agent` 0.2.0, its system prompt and the `knowledge` MCP server, and capture the registry UI.
+- [ ] 7.3 Chat with `evidence-agent` in the kagent UI (port-forward), and capture the ModelConfig and agent pages. Run three concurrent sandboxed conversations on one worker and capture the worker count, actor states and answer times.
+- [ ] 7.4 Verify that the registry lists `evidence-agent` 0.3.0, its system prompt and the `knowledge` MCP server, and capture the registry UI.
 - [ ] 7.5 After section 5, verify that OpenMetadata shows the LLM service, both models and the agent application linked to `qwen3-8b`, and capture it.
 - [ ] 7.6 Run the benchmark baseline and each optimization (design.md decision 9) on dev by applying the rendered Job with `kubectl`, plus the gateway end-to-end run. Keep only improving settings, and set the gateway limits from the measured capacity. Record each run's command, image digest, args and date.
 
@@ -126,7 +127,7 @@
   - a run with a deliberately broken document that fails at `validate` and leaves both stores unchanged;
   - the `EXPLAIN` showing the HNSW index;
   - the OpenMetadata lineage and test results, with screenshots.
-- [ ] 7.8 Exercise the Web API (chunk by id, the 404 and 422 paths) and run a Locust load test, keeping its HTML report. Chat with `evidence-agent` 0.2.0 so that it calls the knowledge tools through the gateway. Capture the tool-call metrics, a stalled rollout of a deliberately broken `rag-serving` image with the previous pods still serving (the automatic fallback), and the registry entry for the MCP server.
+- [ ] 7.8 Exercise the Web API (chunk by id, the 404 and 422 paths) and run a Locust load test, keeping its HTML report. Chat with `evidence-agent` 0.3.0 so that it calls the knowledge tools through the gateway. Capture the tool-call metrics, a stalled rollout of a deliberately broken `rag-serving` image with the previous pods still serving (the automatic fallback), and the registry entry for the MCP server.
 
 ## 7b. Rubric screenshots (dev; stored in `docs/llm/images/`, each embedded in the page named, with a sentence on what it proves)
 
@@ -137,7 +138,7 @@
 - [ ] 7b.5 Global ModelConfig and agent (`agents.md`): the kagent UI's ModelConfig page pointing at the gateway, and a chat with `evidence-agent` that calls the knowledge tools and cites chunk ids, plus links to the Agent YAML.
 - [ ] 7b.6 Agent UI authentication (`agents.md`): the kagent UI behind the platform's Dex login.
 - [ ] 7b.7 Registry (`agents.md`): the agentregistry UI showing `evidence-agent`, its prompt and the `knowledge` MCP server, plus a link to the registry catalog template.
-- [ ] 7b.8 Sandbox and warm-up (`agents.md`): `evidence-agent-sandbox` on Agent Substrate, with several conversations served by few workers (worker count, actor states, answer times), plus a link to the SandboxAgent YAML.
+- [ ] 7b.8 Sandbox, warm-up and autoscaling (`agents.md`): `evidence-agent` on Agent Substrate, with several conversations served by few workers (worker count, actor states, answer times), plus a link to the SandboxAgent YAML.
 - [ ] 7b.9 RAG pipeline (`rag.md`): the Argo Workflows graph of a successful `rag-knowledge` run, the validate and verify reports, the OpenMetadata lineage from the corpus container through `rag-knowledge` to `knowledge.chunks`, and the knowledge-base contract test results.
 - [ ] 7b.10 Web API (`rag.md`): the FastAPI OpenAPI page, chunk-by-id responses, the 404 and 422 paths, the readiness probe, and the Locust HTML report (throughput and latency).
 - [ ] 7b.11 Web API tests (`rag.md`): the `rag-serving` test run from CI with coverage above 90%, showing the fixtures and mocks used. The serving member's pytest options enforce `--cov-fail-under=90` with `pytest-cov`.
