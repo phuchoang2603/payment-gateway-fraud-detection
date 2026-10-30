@@ -83,6 +83,13 @@ A DBeaver ER export of the ClickHouse `marts` and `lakehouse.gold` tables is cap
   - the coverage start date;
   - per-phase tasks and time, through `batch.metrics.phase`.
 
+**Where Apache Arrow helps, and where it does not.** Arrow speeds up a pipeline where data crosses between the JVM and Python, or between processes, in columnar form. DP3 avoids that crossing on purpose:
+
+- **Spark:** the job is DataFrame and SQL only, with no Python UDFs, `toPandas` or `collect` of data. Rows stay in the JVM and the vectorized Parquet reader, so `spark.sql.execution.arrow.pyspark.enabled` would change nothing. A review rule for the implementation: any future Python UDF in `batch` must be an Arrow-based `pandas_udf` or `mapInArrow`, never a row-at-a-time `udf`.
+- **ClickHouse marts:** `INSERT … SELECT` runs entirely inside ClickHouse, which reads Iceberg Parquet with its own native reader. No data passes through Python.
+- **Benchmark and report code:** results are small aggregates, so Arrow transfer would save nothing measurable.
+- **Where it does matter (follow-ups):** Feast `get_historical_features` and training read large point-in-time joins into Python. That change should enable Arrow transfer (`spark.sql.execution.arrow.pyspark.enabled`, `to_arrow()`), and it can measure the gain against the non-Arrow path. The generator already writes Parquet through `pyarrow`.
+
 *Alternative:* `MERGE INTO` SCD2 and incremental feature days. Rejected: Silver can rewrite history, so a merge-based dimension would drift from it.
 
 ### 3. Feature grain: daily anchors, change-point rows
