@@ -328,7 +328,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 
   What works:
   - Right after Feast re-applies the table, the `write` step runs `ALTER TABLE … ALTER COLUMN vector_value TYPE vector(1024)` and builds `USING hnsw (vector_value vector_cosine_ops)`. The other features' rows have a NULL `vector_value`, and HNSW skips NULLs.
-  - The service searches with `retrieve_online_documents(…, distance_metric="cosine")`, the v1 call. Its query is `ORDER BY vector_value <=> q LIMIT k`, which the index serves.
+  - The service runs the nearest-neighbour query itself on Feast's table, `ORDER BY vector_value <=> q LIMIT k`, which the index serves. It decodes the chunk ids with Feast's entity-key deserializer and reads the features through Feast. On dev, Feast 0.67's v1 `retrieve_online_documents` on Postgres returned only the embedding column, with no ids or distances, and v2 can pair ids with the wrong rows.
   - `verify` asserts with `EXPLAIN` (with sequential scans disabled, since the planner rightly prefers a sequential scan on a table this small) that the search uses the index.
   - The table name and column come from Feast's internals, so the step resolves the name through Feast's own `compute_table_id`, and a CI test pins the behaviour, so an upgrade that changes it fails CI.
 
@@ -364,7 +364,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 **Web API and MCP tool in one service (`rag-api`).** One FastAPI process serves both the REST API and the MCP tools, so there is one deployment, one reader identity and no extra hop.
 - REST: pydantic models, async handlers, and `/healthz` and `/readyz` probes for Kubernetes. Endpoints:
   - `GET /v1/chunks/{chunk_id}`;
-  - `POST /v1/chunks/search`: embeds the query through the gateway with Qwen3-Embedding's query instruction and the `ragapi` client key, then runs the indexed v1 search. Results are read back by id, which also sidesteps the id and feature mismatch the reference recorded with `retrieve_online_documents_v2(...).to_df()` on Feast 0.66;
+  - `POST /v1/chunks/search`: embeds the query through the gateway with Qwen3-Embedding's query instruction and the `ragapi` client key, then runs the indexed nearest-neighbour query and reads the results back by id through Feast;
   - `GET /v1/customers/{customer_id}/features`: online customer features from the fraud Feast project, once the DP3 slice puts customer features online.
 - MCP: the official `mcp` SDK's streamable-HTTP app, mounted at `/mcp`, with two tools, `search_knowledge(query, top_k, audience)` and `get_knowledge_chunk(chunk_id)`. They call the same functions as the REST endpoints. It runs in stateless mode, so any replica or revision can answer any request with no session affinity.
 - It is the only Feast reader of the knowledge store, through `rag_reader`.
