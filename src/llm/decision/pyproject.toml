@@ -20,25 +20,13 @@ dev = ["pytest==9.2.0", "pytest-cov==7.1.0", "ruff==0.17.3"]
 [tool.uv]
 package = false
 
-[tool.uv.sources]
-torch = { index = "pytorch-cpu" }
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "--cov=fraud_decision --cov-report=term-missing --cov-fail-under=90"
 
 [tool.ruff]
-line-length = 119
-target-version = "py312"
-
-[tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+extend = "../pyproject.toml"
 
 [tool.coverage.run]
 omit = ["fraud_decision/__main__.py"]

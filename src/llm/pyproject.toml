@@ -1,5 +1,5 @@
 [project]
-name = "fraud-rag"
+name = "fraud-llm"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = []
@@ -11,7 +11,15 @@ dev = ["pytest==9.2.0", "ruff==0.17.3"]
 package = false
 
 [tool.uv.workspace]
-members = ["common", "pipeline", "serving"]
+members = ["common", "rag_pipeline", "rag_serving", "decision"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 line-length = 119

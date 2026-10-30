@@ -35,7 +35,7 @@ The rubric (`edai-2`, LLM rows) asks for: an llm-d based inference platform with
 **Non-Goals:**
 
 - MCP servers other than the knowledge tool (decision 15) and the routing tool (decision 16), the risk agent's scoring and feature tools, and agent-pool autoscaling. These come after the feature-store change.
-- An A/B test of LLM versions on the inference platform: each environment has one GPU, which holds one chat model (decision 18).
+- An A/B test of LLM versions on the inference platform: dev's one GPU holds one chat model, so it is left for prod (decision 18).
 - Public exposure of the gateway, kagent UI or registry UI (port-forward only in this phase).
 - Running prod GPU capacity without explicit user confirmation.
 
@@ -279,10 +279,12 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 - Simulator configs are excluded, because they hold the generator's ground truth.
 
 **Layout.**
-- Code: a uv workspace in `src/rag/` with one lock file and three members:
+- Code: the uv workspace `src/llm/`, with one lock file, holds the LLM services; the RAG members are:
   - `common` (`fraud_rag_common`): the Feast definitions and the embedding client. Both sides must agree on them, so they live once;
-  - `pipeline` (`fraud_rag_pipeline`): the corpus, the workflow steps and the OpenMetadata client, built into image `rag-pipeline`;
-  - `serving` (`fraud_rag_serving`): the Web API and the MCP server in one process, built into image `rag-serving`.
+  - `rag_pipeline` (`fraud_rag_pipeline`): the corpus, the workflow steps and the OpenMetadata client, built into image `rag-pipeline`;
+  - `rag_serving` (`fraud_rag_serving`): the Web API and the MCP server in one process, built into image `rag-serving`.
+
+  The fourth member, `decision`, is the laya service (decision 16).
 
   Separate images keep the serving image small (no PyIceberg, no corpus) and let each change release on its own. Python because Feast and PyIceberg are Python. There is no Spark, since a few hundred rows do not need a cluster.
 - Chart: `infra/charts/rag-pipeline`, application `rag-pipeline`, enabled where `llm-platform` is: dev now, prod only with the LLM platform.
@@ -290,7 +292,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 - The chart owns everything it needs: its own ExternalSecrets in both namespaces, and a ClickHouse connector filtered to the `knowledge` tables. Its knowledge-base product and contract are a new folder, `contracts/data-products/knowledge-base/`, linted by the same CI as the other products and read by the shared checks image. It changes no data-pipeline code or chart, and no existing contract.
 
 **Corpus inside the image.**
-- The hand-written documents (with front matter `doc_id`, title, audience, `synthetic`, source of truth) and `sources.yaml`, which lists the rendered documents, live in `src/rag/pipeline/fraud_rag_pipeline/corpus/`.
+- The hand-written documents (with front matter `doc_id`, title, audience, `synthetic`, source of truth) and `sources.yaml`, which lists the rendered documents, live in `src/llm/rag_pipeline/fraud_rag_pipeline/corpus/`.
 - The image build copies the listed repository sources in. The image's build paths in `.github/service-images.json` cover every source, so a changed spec, contract or document produces a new `rag-pipeline` image through the normal release.
 - CI tests keep the hand-written codes, thresholds and policy version equal to the code. CI never touches the bucket.
 - The workflow's first step renders the corpus from the image and writes it to `datasets/payment-gateway/knowledge/<knowledge_version>/` with a `manifest.json` of per-document SHA-256 hashes. A prefix is immutable once its manifest exists.
@@ -380,7 +382,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 
 The coordinator's routing and the gateway's request screening are classification, not generation, so they run on laya instead of the chat model: `convaiinnovations/laya`, a non-autoregressive decision model (ModernBERT-large, 421M parameters, Apache-2.0) that answers typed questions (`choice`, `score`, `noul`) about a text with calibrated probabilities in one forward pass. It runs on CPU, so it takes nothing from the one GPU, and prompts stay in the cluster; the hosted Jev API is not used, because it would send analyst prompts to a third party.
 
-- **Service:** `src/decision`, image `decision`: FastAPI with the `laya` library (0.4.7, CPU torch), a Deployment `decision` in `llm`. Its English checkpoint (pinned revision, only the four files it loads) is uploaded with the other weights by the model-upload Job and copied from the bucket by an init container from the same image; readiness waits for the model to load.
+- **Service:** `src/llm/decision` (a member of the `src/llm` workspace), image `decision`: FastAPI with the `laya` library (0.4.7, CPU torch), a Deployment `decision` in `llm`. Its English checkpoint (pinned revision, only the four files it loads) is uploaded with the other weights by the model-upload Job and copied from the bucket by an init container from the same image; readiness waits for the model to load.
 - **Routing tool:** the MCP tool `route_question(question)` asks one `choice` question whose options are the coordinator's sub-agents, each described by its `routing` text in the chart values, and returns the agent, its calibrated confidence and every option's probability. The gateway routes it at `/mcp/decision` like the knowledge tool.
 - **Screening:** an agentgateway prompt-guard `webhook` on the LLM route, after the PII regex, calls `POST /request` with the request's messages. The service screens the latest user message with two questions, "act or ask" (approve, block, override or change a risk decision, retry or refund, change a rule, promote a model) and laya's jailbreak question, and rejects with 403 and a read-only refusal when either probability reaches 0.5. Agents re-send the same user turn on every model call, so results are cached per prompt. The guard fails open: agents hold no tools that change anything, so screening is an early, explainable refusal rather than the control that keeps them read-only, and an outage of a CPU service should not stop every agent.
 - **Metrics:** routing and screening decisions and forward-pass latency, scraped like the other services.
@@ -395,7 +397,7 @@ The coordinator's routing and the gateway's request screening are classification
 ### 18. A/B tests and the agent dashboard
 
 - **Agent model configs:** `agents.modelConfigs` declares named kagent ModelConfigs on the same gateway route; `default-model-config` keeps the model's own sampling, `model-config-b` sets temperature 0.2. An agent's `abTest` renders a variant `SandboxAgent` (`evidence-agent-b`) with the same prompt and tools and the other config, and adds it to the agent's A2A route as a second weighted backend (50/50) with its own path rewrite. Each arm is its own gateway backend (`a2a-evidence-agent`, `a2a-evidence-agent-b`), so calls, latency and errors split by the `backend` label, and Langfuse separates their traces by agent name. The split is per request, which is why delegations use isolated sessions. A variant is adopted by changing the agent's model config and deleting the test, never by replacing the agent in place.
-- **LLM versions:** the same weighted-backend mechanism applies to the LLM route (two chat backends, a new version taking a share), but each environment's one GPU holds one 8B chat model at 0.80 of its memory, so a second version cannot run beside the first on dev. It is recorded as blocked on GPU capacity rather than simulated.
+- **LLM versions:** the same weighted-backend mechanism applies to the LLM route (two chat backends, a new version taking a share), but each environment's one GPU holds one 8B chat model at 0.80 of its memory, so a second version cannot run beside the first on dev. It is left for prod (user decision, 2026-10-30), where it runs when prod's GPU capacity is launched; nothing is simulated on dev.
 - **Dashboard:** `files/dashboards/llm-agents.json`, shipped as a ConfigMap that the platform's Grafana sidecar loads: calls per agent (A2A message calls per route), A2A failures, MCP tool calls and failures per tool, routing and screening decisions, laya latency, the evidence-agent A/B arms (split, calls, p95 latency, error ratio), tokens, time to first token and generation latency.
 
 ### 13. Platform changes (talos-proxmox, separate approval)

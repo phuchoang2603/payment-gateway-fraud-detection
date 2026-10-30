@@ -154,10 +154,10 @@
       "dockerfile": "infra/docker/rag-pipeline.Dockerfile",
       "paths": [
         "infra/docker/rag-pipeline.Dockerfile",
-        "src/rag/pyproject.toml",
-        "src/rag/uv.lock",
-        "src/rag/common",
-        "src/rag/pipeline",
+        "src/llm/pyproject.toml",
+        "src/llm/uv.lock",
+        "src/llm/common",
+        "src/llm/rag_pipeline",
         "openspec/specs",
         "contracts/payments/v1",
         "contracts/features/fraud-snapshot-v2.yaml",
@@ -172,10 +172,10 @@
       "dockerfile": "infra/docker/rag-serving.Dockerfile",
       "paths": [
         "infra/docker/rag-serving.Dockerfile",
-        "src/rag/pyproject.toml",
-        "src/rag/uv.lock",
-        "src/rag/common",
-        "src/rag/serving"
+        "src/llm/pyproject.toml",
+        "src/llm/uv.lock",
+        "src/llm/common",
+        "src/llm/rag_serving"
       ]
     },
     {
@@ -185,9 +185,10 @@
       "dockerfile": "infra/docker/decision.Dockerfile",
       "paths": [
         "infra/docker/decision.Dockerfile",
-        "src/decision/pyproject.toml",
-        "src/decision/uv.lock",
-        "src/decision/fraud_decision"
+        "src/llm/pyproject.toml",
+        "src/llm/uv.lock",
+        "src/llm/common/pyproject.toml",
+        "src/llm/decision"
       ]
     }
   ]

@@ -2,7 +2,7 @@
 
 The agents answer from a small knowledge base about the payment gateway: decline codes, risk policy, the payment lifecycle, the checkout API, fraud features and support guidance. A pipeline turns documents into embedded chunks in a feature store, and one service serves them as a Web API (by id) and as MCP tools (search and read). It never reads payment data.
 
-- Code: [`src/rag`](../../src/rag), a uv workspace: [`common`](../../src/rag/common) (Feast store, gateway embedding client), [`pipeline`](../../src/rag/pipeline) (corpus, chunking, validation, steps, OpenMetadata), [`serving`](../../src/rag/serving) (FastAPI + MCP).
+- Code: [`src/llm`](../../src/llm), a uv workspace: [`common`](../../src/llm/common) (Feast store, gateway embedding client), [`rag_pipeline`](../../src/llm/rag_pipeline) (corpus, chunking, validation, steps, OpenMetadata), [`rag_serving`](../../src/llm/rag_serving) (FastAPI + MCP) and [`decision`](../../src/llm/decision) (laya routing and screening).
 - Deployment: [`infra/charts/rag-pipeline`](../../infra/charts/rag-pipeline), application `rag-pipeline` (workflow in `data`, store and API in `llm`). Images `rag-pipeline` and `rag-serving`.
 - Contract: [`contracts/data-products/knowledge-base`](../../contracts/data-products/knowledge-base).
 
@@ -93,7 +93,7 @@ The MCP checks (tools/list, `search_knowledge`, 401 without a key, refused when 
 
 ### Load test and autoscaling
 
-[`src/rag/serving/loadtest/locustfile.py`](../../src/rag/serving/loadtest/locustfile.py) requests chunks by id (19 of 20 requests real ids, 1 an unknown id that must return 404). It runs in the cluster as an on-demand Job, [`infra/charts/rag-pipeline/loadtest/job.yaml`](../../infra/charts/rag-pipeline/loadtest/job.yaml), against `rag-api` directly as the `llm-benchmark` identity, so it measures the API rather than the gateway's per-client rate limit. Run on 2026-10-30 with 60 users for 5 minutes; the full report is [`loadtest/knowledge-api-locust.html`](loadtest/knowledge-api-locust.html).
+[`src/llm/rag_serving/loadtest/locustfile.py`](../../src/llm/rag_serving/loadtest/locustfile.py) requests chunks by id (19 of 20 requests real ids, 1 an unknown id that must return 404). It runs in the cluster as an on-demand Job, [`infra/charts/rag-pipeline/loadtest/job.yaml`](../../infra/charts/rag-pipeline/loadtest/job.yaml), against `rag-api` directly as the `llm-benchmark` identity, so it measures the API rather than the gateway's per-client rate limit. Run on 2026-10-30 with 60 users for 5 minutes; the full report is [`loadtest/knowledge-api-locust.html`](loadtest/knowledge-api-locust.html).
 
 ```text
 Name                     # reqs   # fails |  Avg  Min   Max  Med |  req/s
@@ -118,7 +118,7 @@ KEDA scales `rag-api` from 2 to 4 replicas on its combined REST and MCP request 
 
 ### Tests
 
-[`src/rag/serving/tests/test_service.py`](../../src/rag/serving/tests/test_service.py) uses pytest fixtures and mocks for the store and the embedding client (a fake embedder counts gateway calls, the store functions are monkeypatched), and covers the REST paths (200, 404, 422), the MCP tools, validation before any gateway call, readiness, lazy loading, metrics and the app lifespan. The serving member enforces `--cov-fail-under=90`; in CI (Python CI run 41112821278, job `src/rag/serving`, commit 724831f): 14 passed, 98.52% coverage.
+[`src/llm/rag_serving/tests/test_service.py`](../../src/llm/rag_serving/tests/test_service.py) uses pytest fixtures and mocks for the store and the embedding client (a fake embedder counts gateway calls, the store functions are monkeypatched), and covers the REST paths (200, 404, 422), the MCP tools, validation before any gateway call, readiness, lazy loading, metrics and the app lifespan. The serving member enforces `--cov-fail-under=90`; in CI (Python CI run 41112821278, job `src/llm/rag_serving`, commit 724831f): 14 passed, 98.52% coverage.
 
 ```text
 Name                            Stmts   Miss  Cover   Missing
@@ -134,6 +134,6 @@ Required test coverage of 90% reached. Total coverage: 98.52%
 - CI runs lint, format and tests for each workspace member and builds the `rag-pipeline` and `rag-serving` images when their sources change (including the corpus sources the image copies in).
 - The release publishes `deploy/dev`; Argo CD syncs the chart, and the new pipeline image starts its run.
 
-![GitHub Actions Python CI: all jobs green, including src/rag/common, pipeline and serving](images/cicd-python-ci.png)
+![GitHub Actions Python CI: all jobs green, including src/rag/common, pipeline and serving (before the move to src/llm)](images/cicd-python-ci.png)
 
 ![GitHub Actions service images: rag-pipeline and rag-serving built, and the deploy job](images/cicd-images-and-deploy.png)

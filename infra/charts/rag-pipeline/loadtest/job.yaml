@@ -1,6 +1,6 @@
 # On-demand Locust load test of the knowledge Web API, applied with kubectl outside the application:
 #   kubectl -n llm create configmap knowledge-loadtest \
-#     --from-file=src/rag/serving/loadtest/locustfile.py --from-file=chunk-ids.txt
+#     --from-file=src/llm/rag_serving/loadtest/locustfile.py --from-file=chunk-ids.txt
 #   kubectl -n llm apply -f infra/charts/rag-pipeline/loadtest/job.yaml
 # It calls rag-api directly as the llm-benchmark identity, which rag-api's mesh rule admits, so the result is the API's
 # own throughput and latency rather than the gateway's per-client rate limit. The HTML report is printed between
