@@ -54,7 +54,7 @@ schema:
         type: sql
         description: The current version has between 50 and 5000 chunks.
         query: |
-          SELECT if(count() BETWEEN 50 AND 5000, 0, 1) FROM {object} WHERE knowledge_version = (SELECT argMax(knowledge_version, event_timestamp) FROM {object})
+          SELECT count(*) FROM (SELECT count() AS chunks FROM {object} WHERE knowledge_version = (SELECT argMax(knowledge_version, event_timestamp) FROM {object})) AS current WHERE chunks NOT BETWEEN 50 AND 5000
         mustBe: 0
       - id: knowledge_unique_chunk_id
         type: sql
