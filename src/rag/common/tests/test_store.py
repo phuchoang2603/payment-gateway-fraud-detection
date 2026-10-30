@@ -17,3 +17,19 @@ def test_feature_view_exposes_every_field_and_a_cosine_vector():
     assert fields["embedding"].vector_index and fields["embedding"].vector_length == DIMENSION
     assert fields["embedding"].vector_search_metric == "COSINE"
     assert view.ttl.total_seconds() == 0
+
+
+def test_repo_config_validates_with_a_vector_enabled_postgres_store(monkeypatch):
+    for name, value in {
+        "RAG_DB_HOST": "rag-pgvector-rw",
+        "RAG_DB_NAME": "rag",
+        "RAG_DB_USER": "rag_reader",
+        "RAG_DB_PASSWORD": "p@ss:word",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    config = store.config()
+
+    assert config.online_store.vector_enabled
+    assert config.project == store.PROJECT
+    assert "p%40ss%3Aword" in config.registry.path

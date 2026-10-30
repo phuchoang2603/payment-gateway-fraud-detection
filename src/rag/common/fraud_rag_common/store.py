@@ -56,7 +56,6 @@ def config() -> RepoConfig:
             "password": db["password"],
             "sslmode": "require",
             "vector_enabled": True,
-            "vector_len": DIMENSION,
         },
         entity_key_serialization_version=3,
     )
