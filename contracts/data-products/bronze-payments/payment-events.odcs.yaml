@@ -95,18 +95,18 @@ schema:
         description: Exactly one lifecycle payload is present per event, and an expiry marker is true.
         query: |
           SELECT count(*) FROM {object}
-          WHERE if(payment_created IS NULL, 0, 1) + if(attempt_started IS NULL, 0, 1)
-            + if(risk_decision_recorded IS NULL, 0, 1) + if(processor_operation_requested IS NULL, 0, 1)
-            + if(processor_outcome_unknown IS NULL, 0, 1) + if(attempt_declined IS NULL, 0, 1)
-            + if(payment_succeeded IS NULL, 0, 1) + if(payment_expired IS NULL, 0, 1) <> 1
-            OR (payment_expired IS NOT NULL AND NOT payment_expired._present)
+          WHERE (payment_created.merchant.merchant_id IS NOT NULL) + (attempt_started.attempt_id IS NOT NULL)
+            + (risk_decision_recorded.attempt_id IS NOT NULL) + (processor_operation_requested.attempt_id IS NOT NULL)
+            + (processor_outcome_unknown.attempt_id IS NOT NULL) + (attempt_declined.attempt_id IS NOT NULL)
+            + (payment_succeeded.attempt_id IS NOT NULL) + (payment_expired._present IS NOT NULL) <> 1
+            OR (payment_expired._present IS NOT NULL AND NOT payment_expired._present)
         mustBe: 0
       - id: raw_declared_fields_by_schema_version
         type: sql
         description: Assessment fields declared with sinceSchemaVersion three are present exactly when schema_version is three or later.
         query: |
           SELECT count(*) FROM {object}
-          WHERE risk_decision_recorded IS NOT NULL AND (
+          WHERE risk_decision_recorded.attempt_id IS NOT NULL AND (
             (schema_version >= 3) <> (risk_decision_recorded.assessment.assessment_id IS NOT NULL)
             OR (schema_version >= 3) <> (risk_decision_recorded.assessment.evidence_sha256 IS NOT NULL)
           )
@@ -116,14 +116,14 @@ schema:
         description: Each present payload carries its attempt identity, and a payment creation carries its merchant, customer and checkout snapshot.
         query: |
           SELECT count(*) FROM {object}
-          WHERE (attempt_started IS NOT NULL AND nullif(attempt_started.attempt_id, '') IS NULL)
-            OR (risk_decision_recorded IS NOT NULL AND nullif(risk_decision_recorded.attempt_id, '') IS NULL)
-            OR (processor_operation_requested IS NOT NULL AND nullif(processor_operation_requested.attempt_id, '') IS NULL)
-            OR (processor_outcome_unknown IS NOT NULL AND nullif(processor_outcome_unknown.attempt_id, '') IS NULL)
-            OR (attempt_declined IS NOT NULL AND nullif(attempt_declined.attempt_id, '') IS NULL)
-            OR (payment_succeeded IS NOT NULL AND nullif(payment_succeeded.attempt_id, '') IS NULL)
-            OR (payment_created IS NOT NULL AND (
-              payment_created.merchant IS NULL OR payment_created.customer IS NULL OR payment_created.snapshot IS NULL))
+          WHERE (attempt_started.attempt_id = '')
+            OR (risk_decision_recorded.attempt_id = '')
+            OR (processor_operation_requested.attempt_id = '')
+            OR (processor_outcome_unknown.attempt_id = '')
+            OR (attempt_declined.attempt_id = '')
+            OR (payment_succeeded.attempt_id = '')
+            OR (payment_created.merchant.merchant_id IS NOT NULL AND (
+              payment_created.customer.customer_id IS NULL OR payment_created.snapshot.external_order_id IS NULL))
         mustBe: 0
       - id: raw_enums
         type: sql

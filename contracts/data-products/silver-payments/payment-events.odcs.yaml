@@ -67,16 +67,17 @@ schema:
         description: Checkout totals are nonnegative in one currency, have line items, and equal the sum of quantity times unit price.
         query: |
           SELECT count(*) FROM {object}
-          WHERE payment_created IS NOT NULL AND (
+          WHERE payment_created.merchant.merchant_id IS NOT NULL AND (
             payment_created.snapshot.total.minor_units < 0
             OR NOT match(payment_created.snapshot.total.currency, '^[A-Z]{3}$')
-            OR array_length(payment_created.snapshot.items) = 0
-            OR payment_created.snapshot.total.minor_units <> array_sum(
-              array_map(item -> item.quantity * item.unit_price.minor_units, payment_created.snapshot.items))
-            OR array_contains(array_map(item ->
-              item.quantity <= 0 OR item.unit_price.minor_units < 0
+            OR length(payment_created.snapshot.items) = 0
+            OR payment_created.snapshot.total.minor_units <> arraySum(
+              item -> coalesce(item.quantity * item.unit_price.minor_units, 0), payment_created.snapshot.items)
+            OR arrayExists(item ->
+              item.quantity IS NULL OR item.unit_price.minor_units IS NULL
+              OR item.quantity <= 0 OR item.unit_price.minor_units < 0
               OR item.unit_price.currency <> payment_created.snapshot.total.currency,
-              payment_created.snapshot.items), true)
+              payment_created.snapshot.items)
           )
         mustBe: 0
       - id: silver_risk_assessment
@@ -84,12 +85,12 @@ schema:
         description: Decisions declare an approve or decline outcome and a policy version. Declines require a reason; reason codes are nonempty strings.
         query: |
           SELECT count(*) FROM {object}
-          WHERE risk_decision_recorded IS NOT NULL AND (
+          WHERE risk_decision_recorded.attempt_id IS NOT NULL AND (
             risk_decision_recorded.assessment.outcome NOT IN ('RISK_OUTCOME_APPROVE', 'RISK_OUTCOME_DECLINE')
             OR nullif(risk_decision_recorded.assessment.policy_version, '') IS NULL
             OR (risk_decision_recorded.assessment.outcome = 'RISK_OUTCOME_DECLINE'
-              AND array_length(risk_decision_recorded.assessment.reason_codes) = 0)
-            OR array_contains(risk_decision_recorded.assessment.reason_codes, '')
+              AND length(risk_decision_recorded.assessment.reason_codes) = 0)
+            OR has(risk_decision_recorded.assessment.reason_codes, '')
           )
         mustBe: 0
       - id: silver_attempt_amount_context
@@ -99,7 +100,7 @@ schema:
           SELECT count(*) FROM {object} AS attempt
           JOIN {object} AS created
             ON created.integration_id = attempt.integration_id AND created.payment_id = attempt.payment_id
-          WHERE attempt.attempt_started IS NOT NULL AND created.payment_created IS NOT NULL
+          WHERE attempt.attempt_started.attempt_id IS NOT NULL AND created.payment_created.merchant.merchant_id IS NOT NULL
             AND (attempt.attempt_started.context.snapshot.total.minor_units
                 <> created.payment_created.snapshot.total.minor_units
               OR attempt.attempt_started.context.snapshot.total.currency
