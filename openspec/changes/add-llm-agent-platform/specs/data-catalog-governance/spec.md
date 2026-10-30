@@ -15,3 +15,13 @@ Registration SHALL be idempotent, and SHALL run from the same chart, image and c
 #### Scenario: Agent version bump
 - **WHEN** the agent's version changes and registration runs again
 - **THEN** the existing application entity is updated to the new version instead of a duplicate being created
+
+### Requirement: Knowledge-base product in the catalog
+The RAG knowledge pipeline SHALL be governed like the other data pipelines:
+- an ODPS product and ODCS contract under `contracts/data-products/knowledge-base/`, whose SQL quality rules the shared checks job runs against `knowledge.chunks`;
+- the Argo pipeline `rag-knowledge` with its run status;
+- lineage from the corpus version container through `rag-knowledge` to `knowledge.chunks`.
+
+#### Scenario: Successful knowledge run
+- **WHEN** a `rag-knowledge` run completes
+- **THEN** OpenMetadata shows the run status, the passing contract test results on `knowledge.chunks`, and lineage from the corpus version container to that table
