@@ -1,0 +1,32 @@
+{{- if .Values.bronze.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: dp1-bronze-kafka
+  namespace: {{ .Values.namespace }}
+spec:
+  schedules:
+    - {{ .Values.bronze.kafka.schedule | quote }}
+  suspend: true
+  concurrencyPolicy: Forbid
+  workflowSpec:
+    serviceAccountName: data-pipelines
+    entrypoint: kafka
+    onExit: publish
+    templates:
+      - name: kafka
+        steps:
+          - - name: bronze
+              templateRef:
+                name: dp1-bronze
+                template: bronze
+              arguments:
+                parameters:
+                  - name: source
+                    value: kafka
+          - - name: silver
+              templateRef:
+                name: dp2-silver
+                template: silver
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp1-bronze-kafka,dp2-silver" "dataset" .Values.bronze.datasetVersion) | nindent 6 }}
+{{- end }}

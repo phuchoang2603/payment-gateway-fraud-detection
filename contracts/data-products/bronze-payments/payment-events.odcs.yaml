@@ -1,0 +1,145 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:bronze-payment-events
+name: Bronze payment events
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Every delivered payment event from the historical v18 files and the payments Kafka topic, with provenance.
+  usage: Keep every delivery. Silver collapses identical deliveries and quarantines conflicting payments. Business columns are the payments.v1.PaymentEvent fields; nested payloads keep the protobuf names.
+  limitations: Synthetic data only. Rows from both sources share one shape; _source tells them apart.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, bronze, payments]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+  - property: physicalSchema
+    value: Iceberg table bronze.payment_events in the lakehouse catalog, read through ClickHouse.
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: lakehouse
+    description: Iceberg table payment_events in schema bronze, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.
+schema:
+  - name: payment_events
+    physicalName: bronze.payment_events
+    logicalType: object
+    physicalType: table
+    description: One row per delivered PaymentEvent. Repeated deliveries of one event_id are expected and kept.
+    dataGranularityDescription: One delivery of one payment lifecycle event.
+    customProperties:
+      - property: schemaVersions
+        value: [2, 3]
+      - property: partitioning
+        value: _source, days(occurred_at)
+    properties:
+      - {name: event_id, logicalType: string, physicalType: VARCHAR, required: true, description: Opaque event identity shared by every delivery of the event.}
+      - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: Payment aggregate identity within integration_id.}
+      - {name: aggregate_version, logicalType: integer, physicalType: BIGINT, required: true, description: Consecutive authoritative transition number starting at one.}
+      - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: Dedicated synthetic integration namespace.}
+      - {name: occurred_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: Business occurrence time in UTC.}
+      - {name: recorded_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: Source recording time; a republished export advances it.}
+      - {name: schema_version, logicalType: integer, physicalType: INTEGER, required: true, description: Event schema version, two or three. Fields declared with sinceSchemaVersion three are null in version two.}
+      - {name: correlation_id, logicalType: string, physicalType: VARCHAR, required: true, description: Correlation identity shared across one payment history.}
+      - {name: payment_created, logicalType: object, description: payments.v1.PaymentCreated. Present only for the PaymentCreated event.}
+      - {name: attempt_started, logicalType: object, description: payments.v1.AttemptStarted with signals and context.}
+      - {name: risk_decision_recorded, logicalType: object, description: payments.v1.RiskDecisionRecorded with the assessment. Assessment fields assessment_id and evidence_sha256 are declared with sinceSchemaVersion three.}
+      - {name: processor_operation_requested, logicalType: object, description: payments.v1.ProcessorOperationRequested.}
+      - {name: processor_outcome_unknown, logicalType: object, description: payments.v1.ProcessorOutcomeUnknown.}
+      - {name: attempt_declined, logicalType: object, description: payments.v1.AttemptDeclined with source and reason.}
+      - {name: payment_succeeded, logicalType: object, description: payments.v1.PaymentSucceeded.}
+      - {name: payment_expired, logicalType: object, description: payments.v1.PaymentExpired with the _present marker.}
+      - {name: payload_case, logicalType: string, physicalType: VARCHAR, description: The protobuf oneof member the event carries or null when it carries none. Derived during ingestion from the decoded payload fields}
+      - {name: _source, logicalType: string, physicalType: VARCHAR, required: true, description: historical or kafka.}
+      - {name: _dataset_version, logicalType: string, physicalType: VARCHAR, description: Historical dataset version such as v18; null for Kafka rows.}
+      - {name: _source_file, logicalType: string, physicalType: VARCHAR, description: Historical Parquet object key; null for Kafka rows.}
+      - {name: _kafka_topic, logicalType: string, physicalType: VARCHAR, description: Kafka topic; null for historical rows.}
+      - {name: _kafka_partition, logicalType: integer, physicalType: INTEGER, description: Kafka partition; null for historical rows.}
+      - {name: _kafka_offset, logicalType: integer, physicalType: BIGINT, description: Kafka offset; null for historical rows.}
+      - {name: _kafka_timestamp, logicalType: timestamp, physicalType: TIMESTAMPTZ, description: Kafka record timestamp; null for historical rows.}
+      - {name: _ingested_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: Time the Bronze run wrote the row.}
+      - {name: _run_id, logicalType: string, physicalType: VARCHAR, required: true, description: Bronze run that wrote the row.}
+    quality:
+      - id: raw_envelope_identity
+        type: sql
+        description: Envelope identities are nonempty and the aggregate version starts at one.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE nullif(event_id, '') IS NULL OR nullif(payment_id, '') IS NULL
+            OR nullif(integration_id, '') IS NULL OR nullif(correlation_id, '') IS NULL
+            OR aggregate_version IS NULL OR aggregate_version < 1
+        mustBe: 0
+      - id: raw_envelope_timestamps
+        type: sql
+        description: Occurrence and recording times are present and recording is not before occurrence.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE occurred_at IS NULL OR recorded_at IS NULL OR recorded_at < occurred_at
+        mustBe: 0
+      - id: raw_supported_schema
+        type: sql
+        description: Schema versions are two or three.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE schema_version IS NULL OR schema_version NOT IN (2, 3)
+        mustBe: 0
+      - id: raw_single_payload
+        type: sql
+        description: Exactly one lifecycle payload is present per event, and an expiry marker is true.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE payload_case IS NULL
+            OR (payload_case = 'payment_expired' AND NOT payment_expired._present)
+        mustBe: 0
+      - id: raw_declared_fields_by_schema_version
+        type: sql
+        description: Assessment fields declared with sinceSchemaVersion three are present exactly when schema_version is three or later.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE payload_case = 'risk_decision_recorded' AND (
+            (schema_version >= 3) <> (risk_decision_recorded.assessment.assessment_id IS NOT NULL)
+            OR (schema_version >= 3) <> (risk_decision_recorded.assessment.evidence_sha256 IS NOT NULL)
+          )
+        mustBe: 0
+      - id: raw_conditional_required
+        type: sql
+        description: Each present payload carries its attempt identity, and a payment creation carries its merchant, customer and checkout snapshot.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE (payload_case = 'attempt_started' AND nullif(attempt_started.attempt_id, '') IS NULL)
+            OR (payload_case = 'risk_decision_recorded' AND nullif(risk_decision_recorded.attempt_id, '') IS NULL)
+            OR (payload_case = 'processor_operation_requested' AND nullif(processor_operation_requested.attempt_id, '') IS NULL)
+            OR (payload_case = 'processor_outcome_unknown' AND nullif(processor_outcome_unknown.attempt_id, '') IS NULL)
+            OR (payload_case = 'attempt_declined' AND nullif(attempt_declined.attempt_id, '') IS NULL)
+            OR (payload_case = 'payment_succeeded' AND nullif(payment_succeeded.attempt_id, '') IS NULL)
+            OR (payload_case = 'payment_created' AND (
+              payment_created.merchant.merchant_id IS NULL OR payment_created.customer.customer_id IS NULL
+              OR payment_created.snapshot.external_order_id IS NULL))
+        mustBe: 0
+      - id: raw_enums
+        type: sql
+        description: Risk outcomes and decline sources are recognized enum values.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE (payload_case = 'risk_decision_recorded'
+              AND risk_decision_recorded.assessment.outcome NOT IN ('RISK_OUTCOME_APPROVE', 'RISK_OUTCOME_DECLINE'))
+            OR (payload_case = 'attempt_declined'
+              AND attempt_declined.source NOT IN ('DECLINE_SOURCE_RISK', 'DECLINE_SOURCE_PROCESSOR'))
+        mustBe: 0
+      - id: raw_source_provenance
+        type: sql
+        description: Each row names a known source, historical rows carry their dataset version and file, and Kafka rows carry their record position.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE _source NOT IN ('historical', 'kafka')
+            OR (_source = 'historical' AND (_dataset_version IS NULL OR _source_file IS NULL))
+            OR (_source = 'kafka' AND (_kafka_topic IS NULL OR _kafka_offset IS NULL))
+        mustBe: 0

@@ -9,12 +9,21 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 | Workflow | Stages | Status |
 |---|---|---|
 | `generate-historical` | Shards in parallel → publish | Done; prod renders only this template |
-| `dp1-bronze` (historical or Kafka mode) | Spark ingest → StarRocks checks → OpenMetadata publish | In progress (PR #102) |
-| `dp2-silver` | Spark curate → StarRocks checks → OpenMetadata publish | In progress (PR #102) |
+| `dp1-bronze` (historical or Kafka mode) | Spark ingest → ClickHouse checks → OpenMetadata publish | In progress (PR #102) |
+| `dp2-silver` | Spark curate → ClickHouse checks → OpenMetadata publish | In progress (PR #102) |
 | `dp3-features` | Spark features → checks → publish | Planned |
-| `maintain-lakehouse`, diagnostics, benchmark, profiling | Single on-demand stage | In progress (PR #102) |
+| `maintain-lakehouse`, `dp2-benchmark` | Single on-demand stage | In progress (PR #102) |
 
-Each pipeline stage retries only on execution errors, never on failed data checks, and each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow. Screenshots of each pipeline graph and run are added here as runs complete.
+Each pipeline stage retries only on execution errors, never on failed data checks, and each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow. Pending: screenshots of each pipeline graph and run, taken after the first dev run.
+
+### Spark sizing and placement
+
+Prod Spark applications run on the `aws-cpu-burst` spot pool that the generator uses, through `spark.nodeSelector` on driver and executor pods. The pool has 12 nodes of 4 vCPU and 16 GiB (about 3.5 vCPU and 14 GiB allocatable) and a 40 GiB root volume. Spark steps retry like the generator (limit 10, `Always`), and executors decommission gracefully, so a spot loss costs one retry; every stage is idempotent.
+
+- **Large jobs (prod Bronze historical, Silver, analytics, maintenance):** 11 executors of 3 cores, 9 GiB and 2 GiB overhead, one per node, with the 12th node for a 1-core driver. Task counts follow the source: v19 has 2,924 files and 133.5 GB, about 1,000 splits at 128 MB, so 2,048 shuffle partitions give about 60 tasks per core before AQE coalesces them (advisory 128 MB). Historical read parallelism is set by the file splits, not by the executor count. Executors request 24 GiB of ephemeral storage, not 40 GiB, because the root volume must also hold the Spark image and shuffle spill.
+- **Kafka mode (dev and prod):** one executor with 3 cores and 3 shuffle partitions. The Spark Kafka source makes one task per topic partition, and `payments.events.v1` and `fraud.labels.v1` each have 3 partitions, so `bronze.kafka.partitions` must follow the Kafka chart's topic partitions.
+- **Dev:** one executor per job, 2 cores and 16 shuffle partitions, sized to fit one dev node; v18 is 112 MB.
+- **Shared pool:** the generator and the Spark jobs need the same 12 nodes, so they should not run at the same time. The first v19 run records each phase's tasks and time in its report, which confirms or lowers the large executor count.
 
 ## Data products and contracts
 
@@ -23,17 +32,18 @@ Each data product lives in one folder under [`contracts/data-products/`](../../c
 | Product | Ports | Reference |
 |---|---|---|
 | `historical-payments` | `payment-events`, `fraud-labels` | [payment events](products/historical-payments/payment-events.md), [fraud labels](products/historical-payments/fraud-labels.md) |
-| `bronze-payments`, `silver-payments` | Bronze and Silver tables | Added with PR #102 |
+| `bronze-payments` | `payment-events`, `fraud-labels`, `rejected-records` | [payment events](products/bronze-payments/payment-events.md), [fraud labels](products/bronze-payments/fraud-labels.md), [rejected records](products/bronze-payments/rejected-records.md) |
+| `silver-payments` | `payment-events`, `attempts`, `labels`, `rejected-events` | [payment events](products/silver-payments/payment-events.md), [attempts](products/silver-payments/attempts.md), [labels](products/silver-payments/labels.md), [rejected events](products/silver-payments/rejected-events.md) |
 
 Each contract has a generated reference under [`products/<product>/`](products). CI lints every descriptor and contract with the pinned native tools and diffs each reference against a fresh export (`bash scripts/ci-checks.sh contracts`). Regenerate a reference with the export command in [`scripts/ci-checks.sh`](../../scripts/ci-checks.sh) after changing a contract.
 
-Historical source contracts describe schema and meaning only. Bronze and Silver contracts carry executable StarRocks SQL quality rules, each returning a violation count that must be zero; the batch package turns them into native OpenMetadata test cases.
+Historical source contracts describe schema and meaning only. Bronze and Silver contracts carry executable ClickHouse SQL quality rules, each returning a violation count that must be zero; the batch package turns them into native OpenMetadata test cases.
 
 ## Catalog
 
-The `metadata-integrations` application owns the shared catalog connections and a daily 03:00 UTC discovery of StarRocks tables and Kafka topics. Each connector declares its ExternalSecret alongside its connection. Discovery samples no rows and runs no profiling.
+The `data-pipelines` application owns the shared catalog connections. A PostSync register job creates the OpenMetadata services on each deploy. Every checks run ingests the ClickHouse tables, and Kafka topics are ingested by the on-demand `metadata-discovery` template. Each connector declares its ExternalSecret alongside its connection. Discovery samples no rows and runs no profiling.
 
-Pipelines publish their own lineage (historical source and Kafka topics → Bronze → Silver), pipeline execution status and native test results. A run succeeds only when every expected test reports Success. Lineage and validation screenshots for DP1–DP3 are added here.
+Pipelines publish lineage (historical source and Kafka topics → Bronze → Silver), their execution status on success and failure through the workflow exit handler, and native test results. The Kafka CronWorkflow's exit handler records only the Bronze pipeline: its Silver step runs through `templateRef`, which does not run the Silver template's exit handler. A run succeeds only when every expected test reports Success. Pending: lineage and validation screenshots for DP1–DP3, taken after the first dev run.
 
 ## Schema registry
 

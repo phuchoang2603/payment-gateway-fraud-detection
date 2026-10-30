@@ -1,0 +1,73 @@
+apiVersion: clickhouse.altinity.com/v1
+kind: ClickHouseInstallation
+metadata:
+  name: clickhouse
+  namespace: {{ .Values.namespace }}
+spec:
+  defaults:
+    templates:
+      podTemplate: clickhouse
+      dataVolumeClaimTemplate: data
+  configuration:
+    clusters:
+      - name: shared
+        layout:
+          shardsCount: 1
+          replicasCount: 1
+    profiles:
+      default/allow_database_iceberg: 1
+      openmetadata/readonly: 2
+      openmetadata/allow_database_iceberg: 1
+      openmetadata/show_data_lake_catalogs_in_system_tables: 1
+    users:
+      default/networks/ip: [127.0.0.1, "::1"]
+      admin/password:
+        valueFrom: {secretKeyRef: {name: clickhouse-admin, key: password}}
+      admin/networks/ip: ["10.0.0.0/8"]
+      admin/profile: default
+      admin/access_management: 1
+      langfuse/password:
+        valueFrom: {secretKeyRef: {name: clickhouse-langfuse, key: password}}
+      langfuse/networks/ip: ["10.0.0.0/8"]
+      langfuse/profile: default
+      langfuse/grants/query:
+        - GRANT ALL ON langfuse.*
+        - GRANT SELECT ON system.*
+      openmetadata/password:
+        valueFrom: {secretKeyRef: {name: clickhouse-openmetadata, key: password}}
+      openmetadata/networks/ip: ["10.0.0.0/8"]
+      openmetadata/profile: openmetadata
+      openmetadata/grants/query:
+        - GRANT SELECT ON lakehouse.*
+        - GRANT SELECT ON system.tables
+        - GRANT SELECT ON system.columns
+    settings:
+      logger/level: warning
+      timezone: UTC
+      max_server_memory_usage_to_ram_ratio: 0.85
+      mark_cache_size: 536870912
+  templates:
+    podTemplates:
+      - name: clickhouse
+        spec:
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: clickhouse
+              image: {{ .Values.image }}
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+    volumeClaimTemplates:
+      - name: data
+        spec:
+          accessModes: [ReadWriteOnce]
+          storageClassName: {{ .Values.storageClass }}
+          resources:
+            requests:
+              storage: {{ .Values.storageSize }}

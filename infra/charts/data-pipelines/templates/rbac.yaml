@@ -1,0 +1,85 @@
+{{- if or .Values.bronze.enabled .Values.silver.enabled .Values.analytics.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: data-pipelines
+  namespace: {{ .Values.namespace }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: data-pipelines-spark
+  namespace: {{ .Values.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: data-pipelines
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [workflowtaskresults]
+    verbs: [create, patch]
+  - apiGroups: [spark.apache.org]
+    resources: [sparkapplications]
+    verbs: [create, get, list, watch, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: data-pipelines
+  namespace: {{ .Values.namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: data-pipelines
+    namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: data-pipelines
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: data-pipelines-spark
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, configmaps, persistentvolumeclaims]
+    verbs: [create, get, list, watch, patch, delete, deletecollection]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: data-pipelines-spark
+  namespace: {{ .Values.namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: data-pipelines-spark
+    namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: data-pipelines-spark
+{{- range list .Values.catalog.icebergSecret .Values.catalog.openmetadataSecret }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .store }}
+  target:
+    name: {{ .name }}
+  data:
+  {{- range $local, $remote := .data }}
+    - secretKey: {{ $local }}
+      remoteRef:
+        key: {{ $remote }}
+  {{- end }}
+{{- end }}
+{{- end }}

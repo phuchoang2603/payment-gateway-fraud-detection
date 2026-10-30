@@ -154,7 +154,7 @@ Dev SHALL enable DP1 workflow templates in `data`; prod SHALL keep the DP1 appli
 - **THEN** workflow templates are available without enabling simulation or scheduled ingestion
 
 ### Requirement: Data-platform ownership boundary
-Application deployment SHALL own DP1 workloads in the platform-owned data namespace. The shared platform SHALL own Argo, the native Workflow lifecycle admission policy and binding scoped to `data`, Apache Spark Operator and its CRDs, StarRocks and its official operator/CRDs, OpenMetadata and its PostgreSQL/OpenSearch backing services. StarRocks SHALL be reconciled in the platform repository through Argo CD and the official operator/Helm chart. Application deployment SHALL own its SQL/contracts and native ingestion workflow configuration, not shared engine installation. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
+Application deployment SHALL own DP1 workloads in the platform-owned data namespace. The shared platform SHALL own Argo, the native Workflow lifecycle admission policy and binding scoped to `data`, Apache Spark Operator and its CRDs, the Altinity ClickHouse operator 0.27.4 and its CRDs watching `data`, OpenMetadata and its PostgreSQL/OpenSearch backing services. The operator SHALL be reconciled in the platform repository through Argo CD. Application deployment SHALL own its SQL/contracts, native ingestion workflow configuration and the ClickHouse instance and users it queries, but not the operator. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
 
 #### Scenario: Remove the data-pipeline application
 
@@ -162,7 +162,7 @@ Application deployment SHALL own DP1 workloads in the platform-owned data namesp
 - **THEN** shared controllers, OpenMetadata, backing-service persistence, accepted source objects and committed lake data remain under their existing owners
 
 ### Requirement: Separate pipeline credentials
-DP1 SHALL receive the gateway access key scoped to gateway datasets, run evidence and the lakehouse, plus separate StarRocks query and metadata-publication credentials. StarRocks catalog/storage credentials SHALL be scoped separately from workload SQL access. Gateway data stages SHALL reuse the gateway object identity; catalog OAuth2 and StarRocks SQL credentials SHALL remain separate. Rendered configuration SHALL contain secret references rather than secret values.
+DP1 SHALL receive the gateway access key scoped to gateway datasets, run evidence and the lakehouse, plus separate ClickHouse query and metadata-publication credentials. ClickHouse catalog/storage credentials SHALL be scoped separately from workload SQL access. Gateway data stages SHALL reuse the gateway object identity; catalog OAuth2 and ClickHouse SQL credentials SHALL remain separate. Rendered configuration SHALL contain secret references rather than secret values.
 
 #### Scenario: Inspect or render pipeline configuration
 
@@ -186,12 +186,12 @@ The application deployment SHALL own explicitly configured DP1 CronWorkflows, pe
 - **THEN** completed input tracking and accepted evidence remain intact, with no accidental full replay or concurrent unguarded writers
 
 ### Requirement: Shared analytical SQL service
-The platform SHALL provide bounded persistent StarRocks FE/BE resources for SQL quality and analytics, using the platform Polaris Iceberg REST catalog with OAuth2 and environment S3 access. Deployment SHALL NOT add Trino, analytical ClickHouse, a replacement catalog or a signing proxy for this path. Existing observability ClickHouse SHALL remain unaffected. Resource/PVC budgets SHALL be measured with Spark and OpenMetadata; a single-node toy deployment SHALL NOT claim HA. Shared engine deletion SHALL NOT be coupled to pipeline application removal.
+The data-pipelines application SHALL run one bounded persistent ClickHouse instance for SQL quality, analytics and Langfuse, reading the platform Polaris Iceberg REST catalog through a DataLakeCatalog database with OAuth2 and environment S3 access. Deployment SHALL NOT add Trino, a second analytical engine, a replacement catalog or a signing proxy for this path. Existing observability ClickHouse SHALL remain unaffected. Resource budgets SHALL be checked against node allocatable capacity before rollout; a single-node instance SHALL NOT claim HA. Removing the application SHALL NOT delete the lake data, the Polaris catalog or the operator.
 
 #### Scenario: Query accepted lake data
 
 - **WHEN** a native workflow validates a candidate
-- **THEN** StarRocks reads the recorded Iceberg snapshots directly without a mandatory imported copy and acceptance checks matching native results
+- **THEN** ClickHouse reads the recorded Iceberg snapshots directly without a mandatory imported copy and acceptance checks matching native results
 
 ### Requirement: Matched metadata runtime ownership
 The application SHALL own the thin metadata image and workflow configuration, use its own service commit tag and match its official ingestion base/SDK to the shared OpenMetadata server. Generic externally managed metadata and lakehouse credential references SHALL remain reusable across pipeline stages. Shared platform services SHALL NOT be replaced or removed to reset DP1-owned application data.
@@ -202,11 +202,11 @@ The application SHALL own the thin metadata image and workflow configuration, us
 - **THEN** native workflows and SDK synchronization use the matched version through external secret references without installing a second catalog or retaining a parallel HTTP publisher
 
 ### Requirement: Gateway-owned lakehouse integration
-The gateway repository SHALL own gateway Doppler credential references, Polaris catalog registration and StarRocks catalog/reader setup. The platform SHALL own storage policies, provision production storage identities and publish credentials to gateway Doppler. The platform SHALL own servers, durable databases, administrative authentication and generated StarRocks reader passwords. The gateway integration SHALL provide the storage Secret referenced by the platform Polaris Deployment without creating a second storage identity.
+The gateway repository SHALL own gateway Doppler credential references, Polaris catalog registration and the ClickHouse `lakehouse` DataLakeCatalog database, which SHALL be created as admin after the instance accepts connections and re-created only when its definition changes. The platform SHALL own storage policies, provision production storage identities and publish credentials to gateway Doppler. The platform SHALL own the Polaris and PostgreSQL servers, durable databases and the Altinity operator's management credential. The gateway integration SHALL provide the storage Secret referenced by the platform Polaris Deployment without creating a second storage identity.
 
 #### Scenario: Reconcile the gateway integration
 - **WHEN** the selected environment is reconciled with gateway credentials available
-- **THEN** Polaris and StarRocks use the same environment gateway storage identity as Flink, metadata storage connections and the synthetic writer
+- **THEN** Polaris and ClickHouse use the same environment gateway storage identity as Flink, metadata storage connections and the synthetic writer
 - **AND** gateway removal does not destroy shared server databases, PVCs or the platform bucket
 
 ### Requirement: Environment-configurable Python entrypoints

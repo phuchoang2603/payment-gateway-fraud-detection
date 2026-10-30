@@ -2,7 +2,7 @@
 
 The system has three layers on one shared Kubernetes platform: the payment gateway that produces authoritative payment events, a data platform that turns them into curated tables and features, and an ML platform that trains and serves the fraud model. An LLM agent layer reads from both. The domain and the AI problem are in the [proposal](proposal.md); the build order and status are in the [roadmap](roadmap.md).
 
-The shared platform (Talos clusters, Argo CD, operators, Polaris, StarRocks, OpenMetadata, Kubeflow, observability) is owned by [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox/tree/main/docs/architecture). This repository owns the application workloads, their charts, contracts and pipelines. See [infrastructure](../deployment/infra.md).
+The shared platform (Talos clusters, Argo CD, operators, the ClickHouse operator, OpenMetadata, Kubeflow, observability) is owned by [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox/tree/main/docs/architecture). This repository owns the application workloads, their charts (including the Polaris catalog), contracts and pipelines. See [infrastructure](../deployment/infra.md).
 
 ## Deployable units
 
@@ -17,7 +17,7 @@ The shared platform (Talos clusters, Argo CD, operators, Polaris, StarRocks, Ope
 | Kafka, Debezium, Karapace | Outbox CDC, internal event transport, schema registry | Topics, registered schemas | Deployed |
 | Historical generator | Python; per-day synthetic history to object storage | Immutable datasets v18 (dev), v19 (prod) | Deployed |
 | Live simulator | Python; current-time gateway traffic and labels | None | Deployed, disabled |
-| Bronze and Silver pipelines (DP1, DP2) | Spark on the Spark Operator, StarRocks checks, OpenMetadata | Iceberg tables, run reports | In progress |
+| Bronze and Silver pipelines (DP1, DP2) | Spark on the Spark Operator, ClickHouse checks, OpenMetadata | Iceberg tables, run reports | In progress |
 | Flink streaming features, Feast writer and server | Python; window features to the online store | Checkpoints, Feast Redis | Deployed in dev (shadow) |
 | Offline features (DP3), training, KServe, drift | Spark, Kubeflow, KServe | Feature tables, models | Planned |
 | Fraud investigation agent | LLM agent over recorded evidence | Audited retrievals | Planned |
@@ -48,7 +48,7 @@ flowchart TB
         S3[("Object storage: datasets")]
         BR["Bronze / Silver Spark jobs"]
         IC[("Iceberg lakehouse via Polaris")]
-        SR["StarRocks"]
+        CH["ClickHouse"]
         OM["OpenMetadata"]
         FL["Flink window features"]
         FE["Feast writer and server"]
@@ -75,8 +75,8 @@ flowchart TB
     S3 --> BR
     K -.->|"Kafka mode"| BR
     BR --> IC
-    IC --> SR
-    SR -.->|"quality checks"| OM
+    IC --> CH
+    CH -.->|"quality checks"| OM
     K -.-> FL
     FL -.-> FE
     F -->|"shadow feature lookup"| FE

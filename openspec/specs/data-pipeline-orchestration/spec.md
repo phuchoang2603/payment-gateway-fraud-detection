@@ -27,37 +27,12 @@ Each historical-mode workflow submission SHALL select one completed, immutable s
 - **THEN** the run reuses its recorded snapshots without adding deliveries or treating the submission as new source data
 
 ### Requirement: Operator-managed Spark stages
-Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for each ingestion attempt. Native discovery, profiling and StarRocks SQL validation SHALL run as finite container stages using the server-matched official ingestion runtime, not SparkApplications. A thin derived metadata image SHALL provide the single supported SDK governance path without Spark dependencies. No second Spark validation application, custom discovery or custom result publisher SHALL remain. The platform-owned Apache Spark Operator SHALL manage driver and executor lifecycle. Stage success SHALL require a successful terminal application status; failed applications and deadlines SHALL fail the stage with diagnostics. Operator restarts SHALL be disabled so Argo remains the bounded retry authority.
+Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for each Spark stage attempt, owned by the workflow so that it is removed with it. Native discovery and ClickHouse SQL checks SHALL run as one finite container stage using the server-matched official ingestion runtime. Publication SHALL use the thin metadata image. The platform-owned Apache Spark Operator SHALL manage driver and executor lifecycle with operator restarts disabled. Stage success SHALL require a successful terminal application status; failed applications and deadlines SHALL fail the stage with diagnostics.
 
 #### Scenario: Stage fails or times out
 
 - **WHEN** a SparkApplication fails or its stage exceeds its deadline
 - **THEN** its Argo stage fails with application diagnostics and its driver and executors are removed
-
-### Requirement: Bounded retry and cancellation
-Argo SHALL own bounded stage retries with stable logical run identity and distinct execution attempts. Deterministic quality failures SHALL NOT be retried for acceptance. Graceful cancellation and deadlines SHALL delete active SparkApplications, verify driver/executor cleanup, and only then release writer serialization without deleting durable evidence. StarRocks queries SHALL have bounded timeouts and run-owned identification. Cleanup SHALL stop or await run-owned queries and verify quiescence as well as Spark cleanup before writer handoff; elapsed timeout alone SHALL NOT establish cleanup. Unconfirmed cleanup SHALL block writer handoff. A platform-owned native Kubernetes admission policy SHALL reject Workflow deletion in `data` unless its recorded phase is Succeeded, Failed or Error. It SHALL reject setting `spec.shutdown: Terminate` unless the existing phase is Pending or terminal. Operators SHALL stop active Workflows gracefully and verify completed cleanup before deletion. Missing phase SHALL NOT permit deletion or hard termination. Workflows in other namespaces SHALL remain unaffected. Terminal status alone SHALL NOT be considered proof of successful Spark cleanup.
-
-#### Scenario: Retry after transient driver failure
-
-- **WHEN** Argo retries an ingest stage after a transient execution error
-- **THEN** the attempt reuses durable ingestion context and safe recovery semantics rather than appending another delivery set
-
-#### Scenario: Cancel an active run
-
-- **WHEN** a workflow is cancelled while Spark is running
-- **THEN** active applications are terminated, cleanup is confirmed before writer serialization is released and persisted reports/run context remain available
-
-#### Scenario: Delete or hard-terminate an active workflow
-
-- **WHEN** a user requests deletion or hard termination of a running Workflow in `data`
-- **THEN** Kubernetes rejects the request with guidance to use graceful stop and wait for completion
-- **AND** graceful stop remains permitted, completed Workflows can be deleted, and other workflow namespaces are unaffected
-
-#### Scenario: Cleanup fails
-
-- **WHEN** exit cleanup fails and Spark resources remain
-- **THEN** the next workflow removes previous workflow pods, SparkApplications and Spark pods under the writer mutex before ingestion
-- **AND** a failed recovery prevents ingestion, and a Spark retry clears its prior stage resources before creating another application
 
 ### Requirement: Publication despite upstream failure
 The workflow SHALL persist validation evidence before signaling failed quality checks and attempt governance publication on success and failure paths. Missing reports SHALL be recorded as execution errors. Publication failure SHALL preserve the original data outcome and support metadata-only replay.

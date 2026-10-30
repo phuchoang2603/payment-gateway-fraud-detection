@@ -1,0 +1,62 @@
+{{- if .Values.bronze.enabled }}
+{{- $historical := index .Values.spark.profiles .Values.bronze.historicalProfile }}
+{{- $dev := index .Values.spark.profiles "dev" }}
+{{- $kafka := dict "executors" 1 "shufflePartitions" .Values.bronze.kafka.partitions "advisoryPartitionSize" $dev.advisoryPartitionSize "driver" $dev.driver "executor" (dict "cores" .Values.bronze.kafka.partitions "memory" .Values.bronze.kafka.executorMemory "memoryOverhead" .Values.bronze.kafka.executorMemoryOverhead "ephemeralStorage" .Values.bronze.kafka.ephemeralStorage) }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: dp1-bronze
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  entrypoint: bronze
+  onExit: publish
+  arguments:
+    parameters:
+      - name: source
+        value: historical
+        enum: [historical, kafka]
+      - name: dataset-version
+        value: {{ .Values.bronze.datasetVersion | quote }}
+  activeDeadlineSeconds: {{ .Values.bronze.activeDeadlineSeconds }}
+  synchronization:
+    mutexes:
+      - name: dp1-bronze-writer
+  podMetadata:
+    labels:
+      {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
+      dp-product: bronze-payments
+  templates:
+    - name: bronze
+      dag:
+        tasks:
+          - name: spark-historical
+            template: spark-historical
+            when: {{ printf "'%s' == 'historical'" "{{workflow.parameters.source}}" | quote }}
+          - name: spark-kafka
+            template: spark-kafka
+            when: {{ printf "'%s' == 'kafka'" "{{workflow.parameters.source}}" | quote }}
+          - name: checks
+            template: checks
+            depends: "spark-historical.Succeeded || spark-kafka.Succeeded"
+    - name: spark-historical
+      {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp1-bronze-historical" "main" "bronze" "product" "bronze-payments" "stage" "bronze-historical" "sizing" $historical "extraEnv" (list (dict "name" "BRONZE_SOURCE" "value" "historical") (dict "name" "DATASET_VERSION" "value" "{{workflow.parameters.dataset-version}}") (dict "name" "HISTORICAL_ROOT" "value" .Values.bronze.historicalRoot) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.bronze.reportRoot))) | nindent 10 }}
+    - name: spark-kafka
+      {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp1-bronze-kafka" "main" "bronze" "product" "bronze-payments" "stage" "bronze-kafka" "sizing" $kafka "extraEnv" (list (dict "name" "BRONZE_SOURCE" "value" "kafka") (dict "name" "KAFKA_BOOTSTRAP_SERVERS" "value" .Values.bronze.kafka.bootstrapServers) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.bronze.reportRoot))) | nindent 10 }}
+{{- include "data-pipelines.checks" (dict "root" $ "product" "bronze-payments") | nindent 4 }}
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" (printf "dp1-bronze-%s" "{{workflow.parameters.source}}") "dataset" "{{workflow.parameters.dataset-version}}") | nindent 4 }}
+{{- end }}

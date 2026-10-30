@@ -1,0 +1,84 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:silver-labels
+name: Silver fraud labels
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: One row per distinct label observation with its linkage to a payment attempt and its availability.
+  usage: Join labels to silver.attempts and use a label only after label_available_at and only when linkage is linked or pending is resolved by a later run. Never use scenario as a feature.
+  limitations: Synthetic data only. Labels with linkage violation are contract violations; the Silver checks fail while any exist.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, silver, payments]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: lakehouse
+    description: Iceberg table labels in schema silver, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.
+schema:
+  - name: labels
+    physicalName: silver.labels
+    logicalType: object
+    physicalType: table
+    description: One row per distinct label observation; identical copies collapse to one.
+    dataGranularityDescription: One label observation for one payment attempt.
+    customProperties:
+      - property: partitioning
+        value: days(label_available_at)
+    properties:
+      - {name: observation_id, logicalType: string, physicalType: VARCHAR, required: true, description: SHA-256 over every business field of the observation.}
+      - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration namespace of the payment.}
+      - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: Payment aggregate identity.}
+      - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Referenced attempt identity.}
+      - {name: is_fraud, logicalType: boolean, physicalType: BOOLEAN, required: true, description: Fraud truth according to this source.}
+      - {name: occurred_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: Time of the labeled business occurrence.}
+      - {name: label_available_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: Earliest time this label may be used.}
+      - {name: source, logicalType: string, physicalType: VARCHAR, required: true, description: LABEL_SOURCE_SIMULATION_TRUTH or LABEL_SOURCE_CHARGEBACK.}
+      - {name: scenario, logicalType: string, physicalType: VARCHAR, description: Generating scenario on simulation truth only.}
+      - {name: linkage, logicalType: string, physicalType: VARCHAR, required: true, description: linked, pending, orphan or violation against the attempt, its outcome and its payment. Orphan is a historical label whose payment has no events; pending is a live label whose payment or attempt has not arrived yet.}
+      - {name: _source, logicalType: string, physicalType: VARCHAR, required: true, description: Source of the kept copy, historical or kafka.}
+    quality:
+      - id: silver_unique_observation
+        type: sql
+        description: Each label observation appears once.
+        query: |
+          SELECT count(*) FROM (SELECT observation_id FROM {object} GROUP BY observation_id HAVING count(*) > 1) AS duplicates
+        mustBe: 0
+      - id: silver_linkage
+        type: sql
+        description: Every label references a started attempt in the same integration and payment, chargebacks reference a succeeded attempt, and no label is available before the attempt starts or, for chargebacks, before its outcome.
+        query: |
+          SELECT count(*) FROM {object} WHERE linkage = 'violation'
+        mustBe: 0
+      - id: silver_no_orphan_labels
+        type: sql
+        description: Every historical label refers to a payment with events; an orphan label means the complete source is missing a payment.
+        query: |
+          SELECT count(*) FROM {object} WHERE linkage = 'orphan'
+        mustBe: 0
+      - id: silver_label_availability
+        type: sql
+        description: Labels cannot be available before their occurrence.
+        query: |
+          SELECT count(*) FROM {object} WHERE label_available_at < occurred_at
+        mustBe: 0
+      - id: silver_label_source_rules
+        type: sql
+        description: Truth labels carry a scenario, chargebacks are fraud and carry no scenario, and each source is recognized.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE source NOT IN ('LABEL_SOURCE_SIMULATION_TRUTH', 'LABEL_SOURCE_CHARGEBACK')
+            OR (source = 'LABEL_SOURCE_SIMULATION_TRUTH' AND nullif(scenario, '') IS NULL)
+            OR (source = 'LABEL_SOURCE_CHARGEBACK' AND (NOT is_fraud OR scenario IS NOT NULL))
+        mustBe: 0

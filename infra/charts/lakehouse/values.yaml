@@ -1,0 +1,107 @@
+clientNamespaces: [data, ml]
+storageClass: local-path
+setupImage: python:3.13.9-alpine3.22
+storage:
+  secretStore: gateway-doppler
+  accessKey: OBJECT_GATEWAY_ACCESS_KEY_ID
+  secretKey: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+catalog:
+  name: lakehouse
+  bucket: platform-dev
+  prefix: lakehouse
+  endpoint: https://minio.home.phuchoang.sbs
+  region: us-east-1
+  pathStyle: true
+clickhouse:
+  image: clickhouse/clickhouse-server:26.10.2.103
+  host: clickhouse.data.svc.cluster.local
+  httpPort: 8123
+  adminUser: admin
+  adminPasswordKey: CLICKHOUSE_ADMIN_PASSWORD
+lakehouse:
+  database: lakehouse
+  warehouse: lakehouse
+  clientId: platform
+  scope: PRINCIPAL_ROLE:ALL
+  restCatalogUri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
+  oauthServerUri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
+polaris:
+  fullnameOverride: iceberg-catalog
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  livenessProbe:
+    initialDelaySeconds: 60
+    failureThreshold: 6
+  readinessProbe:
+    initialDelaySeconds: 30
+  envFrom:
+  - secretRef:
+      name: iceberg-storage
+  extraEnv:
+  - name: JAVA_TOOL_OPTIONS
+    value: -Xms128m -Xmx512m
+  persistence:
+    type: relational-jdbc
+    relationalJdbc:
+      additionalProperties:
+        currentSchema: public
+      secret:
+        name: iceberg-database
+  realmContext:
+    realms:
+    - PLATFORM
+  authentication:
+    type: internal
+    tokenBroker:
+      secret:
+        name: iceberg-signing
+  storage:
+    secret:
+      name: iceberg-storage
+      awsAccessKeyId: AWS_ACCESS_KEY_ID
+      awsSecretAccessKey: AWS_SECRET_ACCESS_KEY
+  extraVolumes:
+  - name: bootstrap-credentials
+    secret:
+      secretName: iceberg-bootstrap
+  extraInitContainers:
+  - name: bootstrap
+    image: apache/polaris-admin-tool:1.8.0
+    args:
+    - bootstrap
+    - --credentials-file=/bootstrap/credentials.yaml
+    env:
+    - name: POLARIS_PERSISTENCE_TYPE
+      value: relational-jdbc
+    - name: QUARKUS_DATASOURCE_JDBC_ADDITIONAL_JDBC_PROPERTIES_CURRENTSCHEMA
+      value: public
+    - name: QUARKUS_DATASOURCE_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: iceberg-database
+          key: username
+    - name: QUARKUS_DATASOURCE_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: iceberg-database
+          key: password
+    - name: QUARKUS_DATASOURCE_JDBC_URL
+      valueFrom:
+        secretKeyRef:
+          name: iceberg-database
+          key: jdbcUrl
+    volumeMounts:
+    - name: bootstrap-credentials
+      mountPath: /bootstrap
+      readOnly: true
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        memory: 768Mi

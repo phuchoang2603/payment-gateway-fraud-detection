@@ -1,13 +1,5 @@
 ## MODIFIED Requirements
 
-### Requirement: Operator-managed Spark stages
-Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for each Spark stage attempt, owned by the workflow so that it is removed with it. Native discovery and StarRocks SQL checks SHALL run as one finite container stage using the server-matched official ingestion runtime. Publication SHALL use the thin metadata image. The platform-owned Apache Spark Operator SHALL manage driver and executor lifecycle with operator restarts disabled. Stage success SHALL require a successful terminal application status; failed applications and deadlines SHALL fail the stage with diagnostics.
-
-#### Scenario: Stage fails or times out
-
-- **WHEN** a SparkApplication fails or its stage exceeds its deadline
-- **THEN** its Argo stage fails with application diagnostics and its driver and executors are removed
-
 ### Requirement: Native metadata workflow execution
 The checks stage SHALL run native OpenMetadata discovery for the run's tables followed by the test suite derived from the contracts, from the server-matched runtime. Process success SHALL NOT imply passing data quality: the stage SHALL succeed only when every expected test for the run reports Success. Credentials and permissions SHALL remain scoped to actual operations.
 
@@ -15,6 +7,13 @@ The checks stage SHALL run native OpenMetadata discovery for the run's tables fo
 
 - **WHEN** the native test container exits successfully but a required result is Failed, Aborted or absent
 - **THEN** the checks stage fails with that result
+
+### Requirement: Shared metadata connections
+Pipeline-specific discovery and native check execution SHALL consume centrally managed connector configuration while retaining their own run context and ordering. Scheduled service discovery SHALL NOT substitute for candidate-specific pipeline checks or mutate their native quality definitions or results.
+
+#### Scenario: Discover a newly created pipeline table
+- **WHEN** ingestion creates candidate tables before scheduled discovery runs
+- **THEN** the pipeline explicitly discovers them through the shared connection before executing its checks
 
 ## ADDED Requirements
 
@@ -45,7 +44,7 @@ Each stage SHALL have one bounded Argo retry policy for execution errors; nested
 - **THEN** Kubernetes rejects the request with guidance to use graceful stop
 
 ### Requirement: Readable workflow graph
-The Bronze and Silver workflows SHALL each show the Spark, checks and publish stages with direct dependencies and readable names. Diagnostics and benchmark SHALL be separate on-demand workflow templates with a single Spark stage. Metadata API call details SHALL remain in stage logs.
+The Bronze and Silver workflows SHALL each show the Spark, checks and publish stages with direct dependencies and readable names. The benchmark SHALL be a separate on-demand workflow template with a single Spark stage. Metadata API call details SHALL remain in stage logs.
 
 #### Scenario: Inspect the stage graph
 
@@ -65,22 +64,25 @@ A DP1 submission SHALL select either a historical dataset version, by source roo
 - **WHEN** the charts are rendered with default values
 - **THEN** the scheduled workflow exists but is suspended
 
+### Requirement: Catalog registration and discovery
+The data-pipelines application SHALL own the OpenMetadata connector configuration, its ExternalSecrets and the service registration. A PostSync register job SHALL create the OpenMetadata services on each deploy. Every checks run SHALL ingest the ClickHouse tables before its native tests. Kafka topics SHALL be ingested by the on-demand `metadata-discovery` WorkflowTemplate, not by a schedule. Registration SHALL NOT import contracts or data products.
+
+#### Scenario: Deploy registers services
+- **WHEN** data-pipelines syncs
+- **THEN** the register job creates or updates the OpenMetadata services, and no discovery CronWorkflow exists
+
 ## REMOVED Requirements
 
 ### Requirement: Observable ingest and validate stages
 **Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
 **Migration**: See "Three-stage pipeline workflows".
 
-### Requirement: Bounded retry and cancellation
-**Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
-**Migration**: See "Single-level retry and writer serialization".
-
 ### Requirement: Readable stage dependencies
 **Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
 **Migration**: See "Readable workflow graph".
 
 ### Requirement: Versioned-export batch selection
-**Reason**: Replaced by explicit pipeline inputs without accepted-version reuse.
+**Reason**: Covered by explicit pipeline inputs without accepted-version reuse.
 **Migration**: See "Pipeline inputs".
 
 ### Requirement: Publication despite upstream failure

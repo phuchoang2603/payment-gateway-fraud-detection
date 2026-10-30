@@ -6,6 +6,10 @@ kind: Application
 metadata:
   name: {{ printf "%s-%s" $.Values.namePrefix $name }}
   namespace: argo-cd
+  {{- with $application.syncWave }}
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ . | quote }}
+  {{- end }}
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:

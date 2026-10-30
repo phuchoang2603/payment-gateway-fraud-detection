@@ -22,3 +22,41 @@ generator:
 config:
   S3_ENDPOINT: https://s3.us-east-1.amazonaws.com
   S3_PATH_STYLE: 'false'
+spark:
+  # Spark pods share the generator's spot burst pool. Its 12-node limit means a Spark run and a generator run cannot both
+  # hold their full node counts, so run them one after the other.
+  nodeSelector:
+    karpenter.sh/nodepool: aws-cpu-burst
+    karpenter.sh/capacity-type: spot
+  retry:
+    limit: 10
+    policy: Always
+bronze:
+  enabled: true
+  datasetVersion: v19
+  historicalRoot: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19
+  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp1
+  historicalProfile: large
+silver:
+  enabled: true
+  profile: large
+  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp2
+analytics:
+  enabled: true
+  profile: large
+  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/analytics
+maintenance:
+  enabled: true
+  profile: large
+  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/maintenance
+sparkEventLogDir: s3a://platform-prod-142737101504-us-east-1/runs/payment-gateway/spark-events/
+catalog:
+  connectors:
+    object-storage:
+      source:
+        serviceConnection:
+          config:
+            awsConfig:
+              endPointURL: https://s3.us-east-1.amazonaws.com
+            bucketNames:
+              - platform-prod-142737101504-us-east-1

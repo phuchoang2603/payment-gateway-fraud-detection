@@ -1,0 +1,26 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: iceberg-postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  instances: 1
+  {{- with .Values.databaseNodeSelector }}
+  affinity:
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.13
+  bootstrap:
+    initdb:
+      database: iceberg
+      owner: iceberg
+      secret:
+        name: iceberg-database
+  storage:
+    storageClass: {{ .Values.storageClass | quote }}
+    size: 5Gi
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {memory: 1Gi}

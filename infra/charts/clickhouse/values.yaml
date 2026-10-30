@@ -1,0 +1,14 @@
+namespace: data
+image: clickhouse/clickhouse-server:26.10.2.103
+setupImage: python:3.13.9-alpine3.22
+storageClass: local-path
+storageSize: 30Gi
+nodeSelector: {}
+resources:
+  requests: {cpu: "2", memory: 8Gi}
+  limits: {memory: 12Gi}
+externalSecretStore: doppler
+passwordKeys:
+  admin: CLICKHOUSE_ADMIN_PASSWORD
+  langfuse: CLICKHOUSE_LANGFUSE_PASSWORD
+  openmetadata: CLICKHOUSE_OPENMETADATA_PASSWORD

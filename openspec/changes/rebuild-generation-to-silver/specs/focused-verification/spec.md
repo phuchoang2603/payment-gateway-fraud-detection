@@ -26,7 +26,7 @@ Simulator tests SHALL protect reproducibility for a small fixed configuration ac
 - **THEN** its records and manifest equal those of an uninterrupted run
 
 ### Requirement: Bronze and Silver behavioral verification
-Bounded CI fixtures SHALL protect the distinct behavioral risks: historical manifest integrity and idempotent rerun, Kafka offset continuity, empty runs and atomic offset commits, lossless casting, Silver identical-duplicate collapse and conflict failure, attempt outcomes and lifecycle validity, every label linkage class and availability violation, rerun equality, and contract-to-native-test preparation. Broker-backed checks SHALL stay opt-in like existing broker tests. No configuration-only suites, per-option matrices, new CI jobs or duplicate layer assertions SHALL be added. Tests and image builds SHALL run only in CI; local checks SHALL be limited to lint, format, schema and OpenSpec validation and diff review. Ordinary CI SHALL NOT require live credentials.
+Bounded CI fixtures SHALL protect the distinct behavioral risks: historical listing, per-file row checks and idempotent rerun, Kafka offset continuity, empty runs, Kafka and historical decoding parity, and atomic offset commits, lossless casting, Silver identical-duplicate collapse and conflict failure, attempt outcomes and lifecycle validity, every label linkage class and availability violation, rerun equality, and contract-to-native-test preparation. Broker-backed checks SHALL stay opt-in like existing broker tests. No configuration-only suites, per-option matrices, new CI jobs or duplicate layer assertions SHALL be added. Tests and image builds SHALL run only in CI; local checks SHALL be limited to lint, format, schema and OpenSpec validation and diff review. Ordinary CI SHALL NOT require live credentials.
 
 #### Scenario: Verify changes without infrastructure access
 
@@ -53,7 +53,7 @@ Bounded CI fixtures SHALL protect the distinct behavioral risks: historical mani
 **Migration**: See `historical-data-generation` "Full-scale source generation".
 
 ### Requirement: Raw inventory behavior tests
-**Reason**: The task-fragment inventory is replaced by per-day files.
+**Reason**: The task-fragment inventory is covered by per-day files.
 **Migration**: See "Rebuilt generator behavior tests".
 
 ### Requirement: Historical evidence boundary
@@ -70,10 +70,6 @@ Bounded CI fixtures SHALL protect the distinct behavioral risks: historical mani
 
 ### Requirement: Deferred source gate verification
 **Reason**: The deferred source gate declaration is removed.
-**Migration**: None.
-
-### Requirement: Live historical and governance acceptance
-**Reason**: v16 acceptance, readback acceptance and evidence capture are out of scope; runtime acceptance follows the whole pipeline.
 **Migration**: None.
 
 ### Requirement: Recurring ingestion verification

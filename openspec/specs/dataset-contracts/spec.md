@@ -54,19 +54,6 @@ CI SHALL discover every product folder, lint each descriptor and contract with p
 - **WHEN** a field meaning changes without regenerating its reference
 - **THEN** the documentation comparison fails
 
-### Requirement: Execution boundaries
-Documentation SHALL distinguish source DuckDB publication checks, bronze StarRocks SQL checks, contract lint and native catalog ingestion. Producing and ingesting jobs SHALL own data preparation and physical file safeguards. Official OpenMetadata ingestion workflows SHALL execute Git-authoritative bronze SQL quality rules through StarRocks and expose native results. Argo SHALL verify acceptance separately; no GX suite, custom result publisher or independent UI-authored rule source SHALL remain. Flink integration SHALL remain with its pipeline.
-
-#### Scenario: Dataset validation
-
-- **WHEN** a job exposes `payment_events` and `fraud_labels` in a DuckDB database
-- **THEN** the documented `datacontract test` command checks each source contract and writes a report
-
-#### Scenario: Bronze validation
-
-- **WHEN** DP1 exposes its selected persisted bronze snapshots
-- **THEN** native OpenMetadata tests execute contract-derived StarRocks SQL against the recorded snapshots and acceptance verifies their complete results separately
-
 ### Requirement: Current attempt context across source formats
 
 New historical exports and decoded live landing SHALL expose the same typed attempt-context business fields and optionality as the current payment contract. Product/port/physical schema versions and hashes SHALL identify the new shape independently of dataset version. Generated schema references SHALL describe it. Live-only transport metadata SHALL remain separate from business fields.
@@ -114,19 +101,6 @@ Bronze contracts SHALL define business fields, ingestion provenance, normalized 
 
 - **WHEN** a consumer reads the bronze contracts
 - **THEN** it can distinguish source recording time from ingestion time, interpret schema-3 enriched AttemptStarted context, identify source/run provenance and determine when labels can be joined
-
-### Requirement: Complete contract-derived bronze enforcement
-Bronze validation SHALL derive native OpenMetadata test definitions and schema checks from Git ODCS with stable semantic rule IDs and explicit StarRocks SQL, without a handwritten parallel suite. Custom SQL SHALL return bounded scalar violation counts with zero as the passing threshold; validation SHALL NOT collect all invalid rows. Each quality rule and required schema constraint SHALL have a verified execution path. Unsupported or omitted checks SHALL fail preparation rather than produce a partial passing result.
-
-#### Scenario: Native preparation skips a quality rule
-
-- **WHEN** native test preparation omits a declared rule or cannot enforce a nested constraint
-- **THEN** validation preparation fails with the uncovered rule or field identified
-
-#### Scenario: Duplicate comparison includes provenance
-
-- **WHEN** repeated business events carry different file or ingestion provenance
-- **THEN** DP1 preserves both deliveries; DP2 duplicate-consistency compares business content independently of audit fields
 
 ### Requirement: Source and bronze semantic agreement
 Source business checks and the planned silver SQL SHALL retain traceable semantic rule identities. Bronze SHALL enforce raw schema/integrity/conservation rather than duplicate the source business rule suite. Engine-specific SQL SHALL use its execution dialect; preparing test definitions SHALL NOT be treated as SQL translation or data validation.

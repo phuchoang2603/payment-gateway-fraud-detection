@@ -1,0 +1,71 @@
+import os
+from pathlib import Path
+
+import pytest
+
+CONTRACTS = Path(__file__).resolve().parents[4] / "contracts"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def contract_inputs(tmp_path_factory):
+    import grpc_tools
+    from grpc_tools import protoc
+
+    descriptor = tmp_path_factory.mktemp("descriptor") / "payments.pb"
+    status = protoc.main(
+        [
+            "protoc",
+            f"-I{CONTRACTS}",
+            f"-I{Path(grpc_tools.__file__).parent / '_proto'}",
+            "--include_imports",
+            f"--descriptor_set_out={descriptor}",
+            "payments/v1/events.proto",
+            "payments/v1/labels.proto",
+        ]
+    )
+    if status != 0:
+        raise RuntimeError("protoc could not build the payments descriptor set")
+    os.environ["PAYMENTS_DESCRIPTOR"] = str(descriptor)
+    os.environ["DATA_PRODUCTS_ROOT"] = str(CONTRACTS / "data-products")
+
+
+@pytest.fixture(scope="session")
+def brokers():
+    from testcontainers.community.kafka import KafkaContainer
+
+    with KafkaContainer("confluentinc/cp-kafka:7.8.0").with_kraft() as kafka:
+        yield kafka.get_bootstrap_server()
+
+
+@pytest.fixture(scope="session")
+def clickhouse():
+    from testcontainers.core.container import DockerContainer
+    from testcontainers.core.wait_strategies import HttpWaitStrategy
+
+    container = (
+        DockerContainer("clickhouse/clickhouse-server:26.10.2.103")
+        .with_exposed_ports(8123)
+        .with_env("CLICKHOUSE_USER", "test")
+        .with_env("CLICKHOUSE_PASSWORD", "test")
+    )
+    with container:
+        HttpWaitStrategy(8123, "/ping").for_response_predicate(lambda body: "Ok" in body).wait_until_ready(container)
+        yield container
+
+
+@pytest.fixture(scope="session")
+def spark(tmp_path_factory, contract_inputs):
+    os.environ.setdefault("SPARK_SHUFFLE_PARTITIONS", "4")
+    os.environ["SPARK_JARS_PACKAGES"] = ",".join(
+        [
+            "org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.12.0",
+            "org.apache.spark:spark-protobuf_2.13:4.1.3",
+            "org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.3",
+        ]
+    )
+    os.environ["BATCH_LOCAL_WAREHOUSE"] = str(tmp_path_factory.mktemp("warehouse"))
+    from batch.spark import session
+
+    session_ = session("batch-tests")
+    yield session_
+    session_.stop()

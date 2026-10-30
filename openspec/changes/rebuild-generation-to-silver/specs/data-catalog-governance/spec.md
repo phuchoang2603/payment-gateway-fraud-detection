@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Clean native catalog artifacts
-Implementation SHALL remove obsolete DP1-owned catalog registrations, contracts, products, pipelines, test definitions, results, lineage and executions from the replaced pipeline, including landing-archive assets. Deletion SHALL be limited to explicitly owned DP1 assets and SHALL NOT remove the catalog service, shared backing services, unrelated assets, historical source objects or Kafka topics. Current artifacts SHALL be recreated without migration or imported results. The publication SDK path SHALL own explicit governance metadata; native workflows SHALL own discovery and quality results.
+Implementation SHALL remove obsolete DP1-owned catalog registrations, contracts, products, pipelines, test definitions, results, lineage and executions from the previous pipeline, including archive assets. Deletion SHALL be limited to explicitly owned DP1 assets and SHALL NOT remove the catalog service, shared backing services, unrelated assets, historical source objects or Kafka topics. Current artifacts SHALL be recreated without migration or imported results. The publication SDK path SHALL own explicit governance metadata; native workflows SHALL own discovery and quality results.
 
 #### Scenario: Replace old DP1 registrations
 
@@ -11,12 +11,12 @@ Implementation SHALL remove obsolete DP1-owned catalog registrations, contracts,
 ## ADDED Requirements
 
 ### Requirement: Product discovery
-The catalog SHALL expose the historical source, Bronze and Silver products, owners, classifications and output assets with their ODPS/ODCS identities, versions and artifact references. Historical source assets SHALL identify the dataset manifest without creating a catalog entity for every file.
+The catalog SHALL expose the Bronze and Silver tables with their schemas, the native quality test results written by each run, and their lineage from the historical source and the payment topics through DP1 and DP2. ODCS contracts and ODPS data products SHALL NOT be imported into OpenMetadata until its importer accepts the ODCS v3 files as written. Git SHALL remain the authority for contracts and products.
 
-#### Scenario: Discover a Silver output
+#### Scenario: Discover a Silver table
 
-- **WHEN** a user opens a Silver product output
-- **THEN** they can identify its owner, table schema, contract version and Bronze input products
+- **WHEN** a user opens a Silver table in OpenMetadata
+- **THEN** they can see its schema, its native test results from the latest run, and its lineage to the Bronze tables
 
 ### Requirement: Bronze and Silver lineage
 The catalog SHALL expose lineage from the historical source and from the `payments.events.v1` and `fraud.labels.v1` topics through the DP1 pipeline to the corresponding Bronze tables, and from the Bronze tables through the DP2 pipeline to the Silver tables. Events and labels SHALL be independent Bronze outputs; the catalog SHALL NOT fabricate an events-to-labels ingestion edge. The run's dataset version, Kafka offsets or Bronze snapshot IDs SHALL be available from the associated pipeline execution.
@@ -50,14 +50,6 @@ Kafka-mode runs SHALL publish their topic offset ranges, committed snapshots and
 - **WHEN** a Kafka-mode DP1 run completes
 - **THEN** its pipeline execution identifies the topics, partitions, start and end offsets and the Bronze snapshots it committed
 
-### Requirement: On-demand native profiling
-Native profiling SHALL run only through an on-demand workflow and SHALL expose supported scalar-column statistics with explicit columns, sample bounds and collection time. Unsupported nested or binary metrics SHALL be excluded explicitly. Profiles SHALL NOT be reported as quality acceptance.
-
-#### Scenario: Request a profile
-
-- **WHEN** an operator runs the profiling workflow for a Bronze or Silver table
-- **THEN** scalar-column statistics and their sampling scope appear on the canonical asset without affecting pipeline runs
-
 ## REMOVED Requirements
 
 ### Requirement: Product and contract discovery
@@ -81,5 +73,5 @@ Native profiling SHALL run only through an on-demand workflow and SHALL expose s
 **Migration**: See "Kafka run governance identity".
 
 ### Requirement: Meaningful scoped native profiling
-**Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.
-**Migration**: See "On-demand native profiling".
+**Reason**: The rebuilt pipelines run no native profiling; the requirement has no implementation in this change.
+**Migration**: None.

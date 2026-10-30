@@ -1,0 +1,82 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:bronze-fraud-labels
+name: Bronze fraud labels
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Every delivered fraud label from the historical v18 files and the labels Kafka topic, with provenance.
+  usage: Keep every delivery. Silver collapses identical observations and checks each label against its attempt. Business columns are the payments.v1.FraudLabel fields.
+  limitations: Synthetic data only. Scenario is simulation truth and must never become a feature.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, bronze, payments]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: lakehouse
+    description: Iceberg table fraud_labels in schema bronze, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.
+schema:
+  - name: fraud_labels
+    physicalName: bronze.fraud_labels
+    logicalType: object
+    physicalType: table
+    description: One row per delivered label observation.
+    dataGranularityDescription: One label source observation for one scoped payment attempt.
+    customProperties:
+      - property: partitioning
+        value: _source, days(label_available_at)
+    properties:
+      - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: Same dedicated synthetic namespace as the referenced payment.}
+      - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: Referenced payment aggregate identity.}
+      - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Referenced attempt identity.}
+      - {name: is_fraud, logicalType: boolean, physicalType: BOOLEAN, required: true, description: Fraud truth according to this source.}
+      - {name: occurred_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: Time of the labeled business occurrence.}
+      - {name: label_available_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: Earliest time this label may be used.}
+      - {name: source, logicalType: string, physicalType: VARCHAR, required: true, description: LABEL_SOURCE_SIMULATION_TRUTH or LABEL_SOURCE_CHARGEBACK.}
+      - {name: scenario, logicalType: string, physicalType: VARCHAR, description: Synthetic generating scenario on simulation truth only.}
+      - {name: _source, logicalType: string, physicalType: VARCHAR, required: true, description: historical or kafka.}
+      - {name: _dataset_version, logicalType: string, physicalType: VARCHAR, description: Historical dataset version; null for Kafka rows.}
+      - {name: _source_file, logicalType: string, physicalType: VARCHAR, description: Historical Parquet object key; null for Kafka rows.}
+      - {name: _kafka_topic, logicalType: string, physicalType: VARCHAR, description: Kafka topic; null for historical rows.}
+      - {name: _kafka_partition, logicalType: integer, physicalType: INTEGER, description: Kafka partition; null for historical rows.}
+      - {name: _kafka_offset, logicalType: integer, physicalType: BIGINT, description: Kafka offset; null for historical rows.}
+      - {name: _kafka_timestamp, logicalType: timestamp, physicalType: TIMESTAMPTZ, description: Kafka record timestamp; null for historical rows.}
+      - {name: _ingested_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: Time the Bronze run wrote the row.}
+      - {name: _run_id, logicalType: string, physicalType: VARCHAR, required: true, description: Bronze run that wrote the row.}
+    quality:
+      - id: raw_required_fields
+        type: sql
+        description: Identities and times are present.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE nullif(integration_id, '') IS NULL OR nullif(payment_id, '') IS NULL
+            OR nullif(attempt_id, '') IS NULL OR is_fraud IS NULL
+            OR occurred_at IS NULL OR label_available_at IS NULL
+        mustBe: 0
+      - id: raw_enums
+        type: sql
+        description: Label sources are recognized enum values.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE source NOT IN ('LABEL_SOURCE_SIMULATION_TRUTH', 'LABEL_SOURCE_CHARGEBACK')
+        mustBe: 0
+      - id: raw_source_provenance
+        type: sql
+        description: Each row names a known source, historical rows carry their dataset version and file, and Kafka rows carry their record position.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE _source NOT IN ('historical', 'kafka')
+            OR (_source = 'historical' AND (_dataset_version IS NULL OR _source_file IS NULL))
+            OR (_source = 'kafka' AND (_kafka_topic IS NULL OR _kafka_offset IS NULL))
+        mustBe: 0

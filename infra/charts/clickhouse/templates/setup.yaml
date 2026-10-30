@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-setup-script
+  namespace: {{ .Values.namespace }}
+data:
+  setup.py: |
+    import base64
+    import os
+    import sys
+    import time
+    import urllib.error
+    import urllib.request
+
+    url = f"http://{os.environ['CLICKHOUSE_HOST']}:{os.environ['CLICKHOUSE_HTTP_PORT']}/"
+    token = base64.b64encode(f"admin:{os.environ['CLICKHOUSE_PASSWORD']}".encode()).decode()
+
+
+    def send(sql):
+        request = urllib.request.Request(url, data=sql.encode(), headers={"Authorization": f"Basic {token}"}, method="POST")
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return response.read().decode()
+
+
+    while True:
+        try:
+            send("SELECT 1")
+            break
+        except (urllib.error.URLError, OSError):
+            print("waiting for ClickHouse", file=sys.stderr)
+            time.sleep(10)
+
+    send("CREATE DATABASE IF NOT EXISTS langfuse")
+    print("langfuse database exists")
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: clickhouse-setup
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 900
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: setup
+          image: {{ required "setupImage is required" .Values.setupImage }}
+          command: [python, /script/setup.py]
+          env:
+            - {name: CLICKHOUSE_HOST, value: clickhouse}
+            - {name: CLICKHOUSE_HTTP_PORT, value: "8123"}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: clickhouse-admin, key: password}
+          volumeMounts:
+            - {name: script, mountPath: /script}
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {memory: 256Mi}
+      volumes:
+        - name: script
+          configMap:
+            name: clickhouse-setup-script

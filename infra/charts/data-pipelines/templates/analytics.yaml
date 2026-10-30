@@ -1,0 +1,26 @@
+{{- if .Values.analytics.enabled }}
+{{- $sizing := index .Values.spark.profiles .Values.analytics.profile }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: dp2-benchmark
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  entrypoint: run
+  activeDeadlineSeconds: {{ .Values.analytics.activeDeadlineSeconds }}
+  podMetadata:
+    labels:
+      {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
+      dp-product: silver-payments
+  templates:
+    - name: run
+      {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp2-benchmark" "main" "benchmark" "product" "silver-payments" "stage" "dp2-benchmark" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" $.Values.analytics.reportRoot))) | nindent 10 }}
+{{- end }}

@@ -1,0 +1,40 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: iceberg-postgres-private
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: iceberg-postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - {port: 5432, protocol: TCP}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: operators
+      ports:
+        - {port: 8000, protocol: TCP}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: iceberg-catalog-private
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: polaris
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+        {{- range .Values.clientNamespaces }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . | quote }}
+        {{- end }}
+      ports:
+        - {port: 8181, protocol: TCP}

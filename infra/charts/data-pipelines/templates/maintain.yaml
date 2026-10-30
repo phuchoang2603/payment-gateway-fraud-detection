@@ -1,0 +1,54 @@
+{{- if .Values.maintenance.enabled }}
+{{- $sizing := index .Values.spark.profiles .Values.maintenance.profile }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: maintain-lakehouse
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  entrypoint: maintain
+  onExit: publish
+  activeDeadlineSeconds: {{ .Values.maintenance.activeDeadlineSeconds }}
+  synchronization:
+    mutexes:
+      - name: lakehouse-maintenance
+  podMetadata:
+    labels:
+      {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
+      dp-product: lakehouse
+  templates:
+    - name: maintain
+      {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "maintain-lakehouse" "main" "maintenance" "product" "lakehouse" "stage" "maintenance" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.maintenance.reportRoot))) | nindent 10 }}
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" "maintain-lakehouse" "dataset" .Values.bronze.datasetVersion) | nindent 4 }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: maintain-lakehouse-daily
+  namespace: {{ .Values.namespace }}
+spec:
+  schedules:
+    - {{ .Values.maintenance.schedule | quote }}
+  suspend: true
+  concurrencyPolicy: Forbid
+  workflowSpec:
+    serviceAccountName: data-pipelines
+    entrypoint: maintain
+    onExit: publish
+    templates:
+      - name: maintain
+        steps:
+          - - name: maintain
+              templateRef:
+                name: maintain-lakehouse
+                template: maintain
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" "maintain-lakehouse" "dataset" .Values.bronze.datasetVersion) | nindent 6 }}
+{{- end }}

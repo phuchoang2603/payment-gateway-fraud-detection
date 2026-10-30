@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lakehouse-database-script
+data:
+  setup.py: |
+    import base64
+    import hashlib
+    import os
+    import re
+    import sys
+    import time
+    import urllib.error
+    import urllib.request
+
+    env = os.environ
+    database = env["LAKEHOUSE_DATABASE"]
+    url = f"http://{env['CLICKHOUSE_HOST']}:{env['CLICKHOUSE_HTTP_PORT']}/"
+    token = base64.b64encode(f"{env['CLICKHOUSE_ADMIN_USER']}:{env['CLICKHOUSE_PASSWORD']}".encode()).decode()
+
+
+    def send(sql):
+        request = urllib.request.Request(url, data=sql.encode(), headers={"Authorization": f"Basic {token}"}, method="POST")
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return response.read().decode()
+
+
+    def statement(sql):
+        try:
+            send(sql)
+        except urllib.error.HTTPError as error:
+            code = re.search(r"Code: (\d+)", error.read().decode(errors="replace"))
+            sys.exit(f"ClickHouse statement failed: HTTP {error.code}, exception code {code.group(1) if code else 'unknown'}")
+
+
+    while True:
+        try:
+            send("SELECT 1")
+            break
+        except (urllib.error.URLError, OSError):
+            print("waiting for ClickHouse", file=sys.stderr)
+            time.sleep(10)
+
+    definition = (
+        f"CREATE DATABASE {database} ENGINE = DataLakeCatalog('{env['LAKEHOUSE_REST_URI']}') SETTINGS "
+        f"catalog_type = 'rest', catalog_credential = '{env['LAKEHOUSE_CLIENT_ID']}:{env['ICEBERG_CLIENT_SECRET']}', "
+        f"auth_scope = '{env['LAKEHOUSE_SCOPE']}', oauth_server_uri = '{env['LAKEHOUSE_OAUTH_URI']}', "
+        f"warehouse = '{env['LAKEHOUSE_WAREHOUSE']}', storage_endpoint = '{env['STORAGE_ENDPOINT']}', "
+        f"region = '{env['STORAGE_REGION']}', aws_access_key_id = '{env['AWS_ACCESS_KEY_ID']}', "
+        f"aws_secret_access_key = '{env['AWS_SECRET_ACCESS_KEY']}', vended_credentials = false"
+    )
+    marker = "definition-sha256:" + hashlib.sha256(definition.encode()).hexdigest()
+    current = send(f"SELECT comment FROM system.databases WHERE name = '{database}' FORMAT TSVRaw").rstrip("\n")
+    if current == marker:
+        print("lakehouse database definition is current")
+    else:
+        statement(f"DROP DATABASE IF EXISTS {database} SYNC")
+        statement(f"{definition} COMMENT '{marker}'")
+        print("lakehouse database created")
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lakehouse-database
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 20
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: apply
+          image: {{ required "setupImage is required" .Values.setupImage }}
+          command: [python, /script/setup.py]
+          env:
+            - {name: CLICKHOUSE_HOST, value: {{ .Values.clickhouse.host | quote }}}
+            - {name: CLICKHOUSE_HTTP_PORT, value: {{ .Values.clickhouse.httpPort | quote }}}
+            - {name: CLICKHOUSE_ADMIN_USER, value: {{ .Values.clickhouse.adminUser | quote }}}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: lakehouse-admin, key: ADMIN_PASSWORD}
+            - {name: LAKEHOUSE_DATABASE, value: {{ .Values.lakehouse.database | quote }}}
+            - {name: LAKEHOUSE_REST_URI, value: {{ .Values.lakehouse.restCatalogUri | quote }}}
+            - {name: LAKEHOUSE_WAREHOUSE, value: {{ .Values.lakehouse.warehouse | quote }}}
+            - {name: LAKEHOUSE_CLIENT_ID, value: {{ .Values.lakehouse.clientId | quote }}}
+            - {name: LAKEHOUSE_SCOPE, value: {{ .Values.lakehouse.scope | quote }}}
+            - {name: LAKEHOUSE_OAUTH_URI, value: {{ .Values.lakehouse.oauthServerUri | quote }}}
+            - {name: STORAGE_ENDPOINT, value: {{ printf "%s/%s" .Values.catalog.endpoint .Values.catalog.bucket | quote }}}
+            - {name: STORAGE_REGION, value: {{ .Values.catalog.region | quote }}}
+            - name: ICEBERG_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: {name: iceberg-bootstrap, key: client-secret}
+          envFrom:
+            - secretRef:
+                name: iceberg-storage
+          volumeMounts:
+            - {name: script, mountPath: /script}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+      volumes:
+        - name: script
+          configMap:
+            name: lakehouse-database-script

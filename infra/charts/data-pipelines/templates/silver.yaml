@@ -1,0 +1,40 @@
+{{- if .Values.silver.enabled }}
+{{- $sizing := index .Values.spark.profiles .Values.silver.profile }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: dp2-silver
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  entrypoint: silver
+  onExit: publish
+  activeDeadlineSeconds: {{ .Values.silver.activeDeadlineSeconds }}
+  synchronization:
+    mutexes:
+      - name: dp2-silver-writer
+  podMetadata:
+    labels:
+      {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
+      dp-product: silver-payments
+  templates:
+    - name: silver
+      dag:
+        tasks:
+          - name: spark
+            template: spark
+          - name: checks
+            template: checks
+            depends: spark
+    - name: spark
+      {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp2-silver" "main" "silver" "product" "silver-payments" "stage" "silver" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.silver.reportRoot))) | nindent 10 }}
+{{- include "data-pipelines.checks" (dict "root" $ "product" "silver-payments") | nindent 4 }}
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp2-silver" "dataset" .Values.bronze.datasetVersion) | nindent 4 }}
+{{- end }}

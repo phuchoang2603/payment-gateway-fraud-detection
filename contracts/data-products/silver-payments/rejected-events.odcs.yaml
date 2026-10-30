@@ -1,0 +1,57 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:silver-rejected-events
+name: Silver rejected payment rows
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Every row of each payment whose deliveries conflict, with the reason, so conflicts stay visible without entering accepted tables.
+  usage: Investigate by payment_id and reason. Conflicts from the historical source mean the published dataset is wrong and the run must not be accepted.
+  limitations: Synthetic data only. A payment appears here completely or not at all.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, silver, payments]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: lakehouse
+    description: Iceberg table rejected_events in schema silver, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.
+schema:
+  - name: rejected_events
+    physicalName: silver.rejected_events
+    logicalType: object
+    physicalType: table
+    description: One row per rejected Bronze row, carrying its content as JSON.
+    dataGranularityDescription: One row of a conflicting payment.
+    properties:
+      - {name: rejected_table, logicalType: string, physicalType: VARCHAR, required: true, description: payment_events, attempts or labels.}
+      - {name: reason, logicalType: string, physicalType: VARCHAR, required: true, description: The conflicting event_id, or the linkage rule that failed.}
+      - {name: source, logicalType: string, physicalType: VARCHAR, required: true, description: historical or kafka, from Bronze.}
+      - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration namespace of the payment.}
+      - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: Rejected payment identity.}
+      - {name: row_json, logicalType: string, physicalType: VARCHAR, required: true, description: Row content as JSON.}
+      - {name: _run_id, logicalType: string, physicalType: VARCHAR, required: true, description: Silver run that rejected the row.}
+    quality:
+      - id: no_historical_rejections
+        type: sql
+        description: Published historical sources are immutable and must have no conflicting payments.
+        query: |
+          SELECT count(*) FROM {object} WHERE source = 'historical'
+        mustBe: 0
+      - id: rejected_row_identity
+        type: sql
+        description: Each rejected row names its payment and reason.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE nullif(payment_id, '') IS NULL OR nullif(reason, '') IS NULL
+        mustBe: 0

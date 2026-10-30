@@ -1,0 +1,69 @@
+apiVersion: v1.1.0
+kind: DataProduct
+id: urn:dataproduct:fraud:silver-payments
+name: Silver payments
+version: 1.0.0
+status: active
+domain: fraud-detection
+type: aggregate
+description:
+  purpose: Curated payment events, one row per payment attempt and one row per distinct label observation, rebuilt from pinned Bronze snapshots.
+  usage: Use silver.attempts and silver.labels for analytics and offline features. Read labels only after label_available_at and only where linkage is linked. Quarantined payments are listed in rejected-events, not in the accepted tables.
+  limitations: Synthetic data only. Each run is a full recompute, so Silver grows with history and does not track late Bronze changes until the next run.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, silver, payments]
+customProperties:
+  - property: catalog
+    value: lakehouse
+  - property: schema
+    value: silver
+  - property: runtime
+    value: Spark 4.1.3 full recompute with overwrite per table; each commit records its Bronze snapshot IDs in snapshot properties. Checks run as ClickHouse SQL in OpenMetadata.
+inputPorts:
+  - name: bronze-payment-events
+    version: 1.0.0
+    contractId: urn:datacontract:fraud:bronze-payment-events
+  - name: bronze-fraud-labels
+    version: 1.0.0
+    contractId: urn:datacontract:fraud:bronze-fraud-labels
+outputPorts:
+  - name: payment-events
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:silver-payment-events
+    description: One row per distinct event_id, the earliest copy of each identical delivery, for payments without conflicts.
+    customProperties:
+      - property: table
+        value: silver.payment_events
+  - name: attempts
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:silver-attempts
+    description: One row per payment attempt with its risk decision, outcome, payment status and lifecycle validity.
+    customProperties:
+      - property: table
+        value: silver.attempts
+  - name: labels
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:silver-labels
+    description: One row per distinct label observation with its linkage to an attempt.
+    customProperties:
+      - property: table
+        value: silver.labels
+  - name: rejected-events
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:silver-rejected-events
+    description: Every row of each payment whose events conflict, with the reason. Historical sources must have none.
+    customProperties:
+      - property: table
+        value: silver.rejected_events
+support:
+  - channel: GitHub maintainer
+    url: https://github.com/phuchoang2603
+    scope: support

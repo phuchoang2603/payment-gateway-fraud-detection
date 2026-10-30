@@ -1,0 +1,38 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: iceberg-storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.storage.secretStore }}
+  target:
+    name: iceberg-storage
+  data:
+    - secretKey: AWS_ACCESS_KEY_ID
+      remoteRef:
+        key: {{ .Values.storage.accessKey }}
+    - secretKey: AWS_SECRET_ACCESS_KEY
+      remoteRef:
+        key: {{ .Values.storage.secretKey }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: lakehouse-admin
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: doppler
+  target:
+    name: lakehouse-admin
+  data:
+    - secretKey: ADMIN_PASSWORD
+      remoteRef:
+        key: {{ .Values.clickhouse.adminPasswordKey }}

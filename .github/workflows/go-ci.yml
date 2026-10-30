@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - id: projects
-        run: echo "matrix=$(python3 scripts/go-ci-matrix.py)" >> "$GITHUB_OUTPUT"
+        run: echo "matrix=$(python3 scripts/ci-matrix.py --kind go)" >> "$GITHUB_OUTPUT"
 
   go:
     name: go (${{ matrix.project }})

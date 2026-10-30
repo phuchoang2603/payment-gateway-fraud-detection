@@ -111,7 +111,20 @@
       "dockerfile": "infra/docker/data-platform-metadata.Dockerfile",
       "paths": [
         "infra/docker/data-platform-metadata.Dockerfile",
-        "src/data-pipeline/bronze-ingestion/data_platform"
+        "src/data-pipeline/openmetadata_jobs/openmetadata_jobs",
+        "contracts/data-products"
+      ]
+    },
+    {
+      "service": "data-platform-spark",
+      "image-suffix": "/data-platform-spark",
+      "context": ".",
+      "dockerfile": "infra/docker/data-platform-spark.Dockerfile",
+      "paths": [
+        "infra/docker/data-platform-spark.Dockerfile",
+        "src/data-pipeline/batch",
+        "contracts/data-products",
+        "contracts/payments"
       ]
     },
     {

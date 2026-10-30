@@ -17,9 +17,14 @@ check_python() (
   uv run --locked ruff check .
   uv run --locked ruff format --check .
   if [[ -d tests ]]; then
-    uv run --locked pytest -q
+    uv run --locked pytest -q --durations=10
   fi
 )
+
+check_python_scripts() {
+  uvx --from ruff==0.16.6 ruff check --target-version py311 scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
+  uvx --from ruff==0.16.6 ruff format --check scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
+}
 
 check_go() (
   local reports="$report_dir/${1#src/}"
@@ -62,6 +67,23 @@ check_chart() {
 DATACONTRACT_CLI=1.2.7
 DATAPRODUCT_CLI=0.3.2
 
+check_sql_jobs() {
+  local rendered
+  rendered="$(helm template lakehouse infra/charts/lakehouse -f infra/charts/lakehouse/values-prod.yaml && helm template clickhouse infra/charts/clickhouse -f infra/charts/clickhouse/values-prod.yaml)" || return 1
+  if grep -qw curl <<<"$rendered"; then
+    echo "lakehouse: a rendered job calls curl, which the ClickHouse image does not ship" >&2
+    return 1
+  fi
+  if grep -qw clickhouse-client <<<"$rendered"; then
+    echo "lakehouse: a rendered SQL job runs the ClickHouse binary, which needs AVX2 on the node" >&2
+    return 1
+  fi
+  if grep -Eq -- '--password([ =]|$)' <<<"$rendered"; then
+    echo "lakehouse: a rendered job passes a password as a command-line argument" >&2
+    return 1
+  fi
+}
+
 case "${1:-}" in
   go)
     report_dir="$(realpath -m "${CI_TEST_REPORTS:-$(mktemp -d)}")"
@@ -80,17 +102,24 @@ case "${1:-}" in
     done < <(find contracts/data-products -mindepth 2 -maxdepth 2 -name product.odps.yaml -print0 | sort -z)
     ;;
   python)
-    uvx --from ruff==0.16.6 ruff check --target-version py311 scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
-    uvx --from ruff==0.16.6 ruff format --check scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
-    check_projects pyproject.toml check_python
+    if [[ -n "${2:-}" ]]; then
+      check_python "$2"
+    else
+      check_python_scripts
+      check_projects pyproject.toml check_python
+    fi
+    ;;
+  python-scripts)
+    check_python_scripts
     ;;
   helm)
     while IFS= read -r -d '' manifest; do
       check_chart "$(dirname "$manifest")"
     done < <(find infra -type f -name Chart.yaml -print0)
+    check_sql_jobs || exit 1
     ;;
   *)
-    printf 'Usage: %s {contracts|python|go|helm}\n' "$0" >&2
+    printf 'Usage: %s {contracts|python [project]|python-scripts|go [module]|helm}\n' "$0" >&2
     exit 2
     ;;
 esac
