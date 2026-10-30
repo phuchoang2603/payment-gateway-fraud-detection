@@ -33,7 +33,8 @@ class Catalog:
     def _put(self, path: str, body: dict) -> dict:
         response = self.client.put(path, json=body)
         response.raise_for_status()
-        return response.json()
+        # Lineage and pipeline-status writes succeed with an empty body.
+        return response.json() if response.content else {}
 
     def _get(self, path: str) -> dict:
         response = self.client.get(path)

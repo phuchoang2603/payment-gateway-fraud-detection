@@ -16,6 +16,8 @@ def recorder(tables_present=True):
             if not tables_present:
                 return httpx.Response(404, json={})
             return httpx.Response(200, json={"id": "table-id"})
+        if request.url.path.endswith(("/lineage", "/status")):
+            return httpx.Response(200)
         name = (body or {}).get("name", "")
         fqn = f"{body['service']}.{name}" if body and "service" in body else name
         return httpx.Response(200, json={"id": f"{name or 'x'}-id", "name": name, "fullyQualifiedName": fqn})
