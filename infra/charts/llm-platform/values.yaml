@@ -23,6 +23,8 @@ modelStore:
 vllm:
   image: vllm/vllm-openai:v0.32.0
   uid: 1000
+  # 180 x 10 s = 30 minutes to load, compile and capture CUDA graphs before the kubelet restarts the server.
+  startupFailureThreshold: 180
   loaderConfig: '{"concurrency":16,"memory_limit":2147483648}'
 
 models:
