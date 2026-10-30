@@ -1,0 +1,28 @@
+{
+  "recorded_at": "2026-10-30",
+  "environment": "prod",
+  "clickhouse_version": "26.10.2.103",
+  "contract": "contracts/data-products/silver-payments/payment-events.odcs.yaml",
+  "rule": "silver_attempt_amount_context",
+  "source_workflow": "dp2-silver-cxjgf",
+  "scope": "Full historical audit snapshot; independent clickhouse-client diagnostic, not native workflow acceptance.",
+  "result_source": "clickhouse-client scalar result and system.query_log QueryFinish",
+  "result": {
+    "query_id": "silver-full-join-merge-v19",
+    "audit_snapshot_id": 8514390407709950043,
+    "mismatches": 0,
+    "query_duration_ms": 1128528,
+    "read_rows": 377909828,
+    "read_bytes": 11314568660,
+    "peak_memory_bytes": 1898138700,
+    "sort_spill_written_bytes": 19085161916
+  },
+  "sql": "SELECT count(*) FROM lakehouse.`silver.payment_events` AS attempt\nJOIN lakehouse.`silver.payment_events` AS created\n  ON created.integration_id = attempt.integration_id AND created.payment_id = attempt.payment_id\nWHERE attempt.payload_case = 'attempt_started' AND created.payload_case = 'payment_created'\n  AND (attempt.attempt_started.context.snapshot.total.minor_units\n      <> created.payment_created.snapshot.total.minor_units\n    OR attempt.attempt_started.context.snapshot.total.currency\n      <> created.payment_created.snapshot.total.currency)\nSETTINGS iceberg_snapshot_id = 8514390407709950043, max_bytes_before_external_group_by = 800000000, max_bytes_before_external_sort = 400000000, join_algorithm = 'full_sorting_merge', max_threads = 2, max_block_size = 16384",
+  "explain_indexes": "Output: count()\n\nAggregating\n\u2502  Keys:\n\u2502  Aggregates: count()\n\u2502  Skip merging: 0\n\u2514\u2500\u2500Filter (WHERE)\n   \u2502  Filter column: attempt_started.context.snapshot.total.minor_units != payment_created.snapshot.total.minor_units OR attempt_started.context.snapshot.total.currency != payment_created.snapshot.total.currency\n   \u2514\u2500\u2500Join (JOIN YShaped)\n      \u2502  attempt \u22c8 created\n      \u2502  Type: inner | Strictness: all | Algorithm: FullSortingMergeJoin\n      \u2502  Cost: estimated 1.00\n      \u2502  Selectivity: estimated (NDV) 1\n      \u2502  Output rows: estimated no stats\n      \u2502  Left: rows estimated no stats\n      \u2502  Right: rows estimated no stats\n      \u2502  Join conditions: integration_id = integration_id AND payment_id = payment_id\n      \u2502  Input (left): integration_id, payment_id, `attempt_started.context.snapshot.total.minor_units`, `attempt_started.context.snapshot.total.currency`\n      \u2502  Input (right): integration_id, payment_id, `payment_created.snapshot.total.minor_units`, `payment_created.snapshot.total.currency`\n      \u251c\u2500\u2500Sorting (Sort Left before JOIN)\n      \u2502  \u2502  Sort description: integration_id ASC, payment_id ASC\n      \u2502  \u2514\u2500\u2500ReadFromObjectStorage\n      \u2502        Output: payload_case, integration_id, payment_id, attempt_started.context.snapshot.total.minor_units, attempt_started.context.snapshot.total.currency\n      \u2502        Prewhere filter\n      \u2502        Prewhere filter column:  payload_case = \\'attempt_started\\'\n      \u2514\u2500\u2500Sorting (Sort Right before JOIN)\n         \u2502  Sort description: integration_id ASC, payment_id ASC\n         \u2514\u2500\u2500ReadFromObjectStorage\n               Output: payload_case, integration_id, payment_id, payment_created.snapshot.total.minor_units, payment_created.snapshot.total.currency\n               Prewhere filter\n               Prewhere filter column:  payload_case = \\'payment_created\\'",
+  "limitations": [
+    "The hash-join diagnostic failed; no completed-baseline speedup can be calculated.",
+    "read_bytes is a query metric, not measured S3 network traffic.",
+    "ExternalSortCompressedBytes is cumulative sort output, not peak disk occupancy.",
+    "Whole-workflow acceptance requires every native OpenMetadata check and table publication to succeed."
+  ]
+}

@@ -3,7 +3,7 @@
 The offline path turns a reproducible synthetic history into curated tables. The historical generator writes immutable per-day Parquet datasets to object storage, standing in for an export from another department; DP1 ingests them into Bronze, DP2 curates Silver, and DP3 (planned) computes offline features. Each data problem the generator introduces is solved by a pipeline stage.
 
 - Generator code: [`src/data-pipeline/simulator/simulator`](../../src/data-pipeline/simulator/simulator) (`world.py`, `lifecycle.py`, `historical.py`, `store.py`).
-- Pipeline status: **in progress** in [PR #102](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/102), designed by the [`rebuild-generation-to-silver`](../../openspec/changes/rebuild-generation-to-silver/design.md) change. Each pipeline is an Argo workflow that writes, audits and publishes: the Spark stage writes to an audit branch of each Iceberg table, the checks stage runs the ClickHouse SQL checks against that branch, and only when every check passes does `publish-tables` fast-forward the tables' main branch. An exit handler publishes the run to OpenMetadata; see [orchestration and governance](orchestration-governance.md).
+- Pipeline code merged in [PR #102](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/102); prod Bronze is published and Silver evidence is in progress under the [`rebuild-generation-to-silver`](../../openspec/changes/rebuild-generation-to-silver/design.md) change. Each pipeline is an Argo workflow that writes, audits and publishes: the Spark stage writes to an audit branch of each Iceberg table, the checks stage runs the ClickHouse SQL checks against that branch, and only when every check passes does `publish-tables` fast-forward the tables' main branch. An exit handler publishes the run to OpenMetadata; see [orchestration and governance](orchestration-governance.md).
 
 ## Data problems and how they are solved
 
@@ -109,9 +109,25 @@ DP2 has two modes. `historical`, the default, is a full recompute from Bronze sn
 
 A run report records the Bronze snapshot IDs, input rows, duplicates, conflicts, rejected rows, label linkage counts, the Silver snapshot IDs with their added records, and the tasks, stages and wall time of each phase. The report is written last, after every table write.
 
-### Dev runs
+### Prod v19 evidence
 
-Pending: `dp1-bronze` on the v18 historical source, then `dp2-silver` on its snapshots, have not run on dev yet. Run IDs, Bronze and Silver row counts, duplicates collapsed, conflicts and rejected rows, label linkage counts, task counts and stage times per phase, and ClickHouse and OpenMetadata check outcomes are recorded here after those runs. The task counts confirm or lower the prod executor count.
+`dp1-bronze-mngks` succeeded on 2026-10-30 (07:18:57–08:20:59 UTC), publishing 983,727,083 Bronze events and 192,204,996 Bronze labels. The Spark report for `dp2-silver-cxjgf` records 19,293,494 collapsed deliveries, 964,433,589 distinct events, 191,148,630 attempts, zero conflicting payments or rejected rows, and 192,204,996 linked labels. Its Spark stage succeeded but the ClickHouse checks failed, so these Silver counts describe unpublished audit data. The [full-load validation optimization](storage.md#full-load-check-optimization-on-v19) subsequently passed the amount/context join independently; it does not substitute for all pipeline checks. Rerun `dp2-silver-cnr27` is in progress, and its final report and publish result remain to be recorded.
+
+### Remaining optimization evidence
+
+The coursework rubric requires a Spark baseline, a Spark UI explanation of skew, the optimization steps and their measured effect. The ClickHouse validation fix is additional execution evidence; the separate `dp2-benchmark` job is still required. Run the existing WorkflowTemplates in order: successful `dp2-silver`, then `maintain-lakehouse`, then `dp2-benchmark`, sharing the existing Spark pool sequentially.
+
+| Evidence | Measurement and explanation | Where it is recorded |
+|---|---|---|
+| Baseline and skew | On one pinned Silver snapshot, compare `baseline_no_skew_join`, `aqe_skew_join` and 16-bucket `salted`; retain equal row counts/checksums, hot-key share, phase times and stage/task IDs. Explain the baseline straggler distribution and show the final AQE skew-split plan and salted stage. Compute gain only from completed, equivalent variants. | This page, with Spark UI images under `images/` |
+| Duplicate handling | Compare `full_width_group` and `narrow_detect` on one pinned Bronze snapshot, with equal row counts/checksums, time, shuffle read/write, memory/disk spill and the selected join strategy. Use the accepted Silver report for collapse/conflict counts. | This page, with both Spark UI stage views |
+| Schema evolution | Record v2/v3 row counts and null counts for fields introduced in v3, scoped to the payload carrying those fields; show the query result or read plan. | This page |
+| Storage layout | Record maintenance files/bytes before and after, the customer-window Z-order probe, and one-day versus full-history partition probes. Distinguish planned files/bytes from executed query latency. | [Storage](storage.md), with the rendered report |
+| Pipeline integration and governance | Successful DP1/DP2 and maintenance/benchmark graphs; table schemas, lineage, pipeline status and native validation results. | [Orchestration and governance](orchestration-governance.md) |
+
+Each benchmark variant runs once under the existing benchmark design. Record the executor allocation and any spot interruption, and treat the timing as an observed run rather than a statistical guarantee. If the AQE assertion fails, inspect actual partition sizes and the final plan before changing a threshold; retain the failed run and explain the finding. No gain is assumed in advance.
+
+Live traffic is disabled in prod, so the suspended Kafka CronWorkflow definition can be captured, but a Kafka run and incremental Silver timing are deferred until new Kafka-mode Bronze data exists. This does not change the full-data scope of the SQL checks. Gold MergeTree indexing before/after evidence remains with DP3 and is not satisfied by the ClickHouse join fix.
 
 ### Viewing Spark event logs
 
