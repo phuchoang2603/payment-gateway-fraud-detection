@@ -8,7 +8,7 @@
   - kagent 0.10.4 and its UI, agentregistry and Substrate 0.0.9 pods are Ready;
   - WorkerPool `kagent-default` reports one ready worker.
 - [x] 0.4 Provision the Doppler keys `LLM_GATEWAY_AGENTS_API_KEY` and `LLM_GATEWAY_BENCHMARK_API_KEY` in `payment-gateway-fraud-detection` `dev` and `prd`. Done 2026-10-29 with random 64-hex values, distinct per config, verified by name and length only.
-- [ ] 0.5 Platform: set `otel.tracing.enabled: true` (no exporter endpoint) in talos-proxmox `apps/components/kagent/values.yaml`, so agents export to the endpoint each sets (the collector in `llm`). Until then kagent injects `OTEL_TRACING_ENABLED=false` after each agent's own variables.
+- [x] 0.5 Platform: set `otel.tracing.enabled: true` (no exporter endpoint) in talos-proxmox's kagent values, so agents export to the endpoint each sets (the collector in `llm`). Done on dev in talos-proxmox 93080a9; `kagent-controller` reports `OTEL_TRACING_ENABLED=true`.
 
 ## 1. Chart and application wiring
 
@@ -57,7 +57,7 @@
 - [x] 4b.1 Vendor `langfuse` 1.5.41 (v3, image `3.225.11`) into the chart. Add its CNPG Postgres, Redis, ExternalSecrets and UI VirtualService, and point it at the shared ClickHouse contract agreed with #102. Provision its app keys in Doppler `dev` and `prd`. Verify with `helm lint`/`helm template`; live checks wait for the rebuild.
 - [ ] 4b.2 After the rebuild and #102's ClickHouse: the platform adds the tunnel, proxy hosts and Dex redirect URIs; then verify on dev that the migrations complete, login works behind the proxy, and the init project's API keys authenticate.
 - [x] 4b.3 Run an OpenTelemetry Collector in `llm` that receives OTLP from the gateway and `evidence-agent` and exports every span to Langfuse (basic auth from the init project keys) and to VictoriaTraces through `vtagent`. Verified with `helm template` and a server-side dry-run on dev.
-- [ ] 4b.4 Confirm on dev that a gateway request's spans reach both Langfuse and VictoriaTraces; after 0.5, ask the agent a question and confirm its trace (LLM generations, the `search_knowledge` tool call and the gateway spans under one trace id) in both.
+- [x] 4b.4 Confirm on dev that a question to `evidence-agent` produces its trace in both Langfuse and VictoriaTraces (agent span, two `qwen3-8b` generations with token usage, the `search_knowledge` tool call), and that the gateway's chat and MCP spans reach both. Recorded 2026-10-30 on 7c44415. The gateway spans are separate traces, because the kagent runtime does not propagate `traceparent`.
 
 ## 5. OpenMetadata (after PR #102 merges)
 

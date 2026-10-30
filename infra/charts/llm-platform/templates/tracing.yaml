@@ -22,11 +22,11 @@ data:
     processors:
       batch: {}
     exporters:
-      otlphttp/langfuse:
+      otlp_http/langfuse:
         endpoint: http://langfuse-web.{{ $ns }}.svc.cluster.local:3000/api/public/otel
         auth:
           authenticator: basicauth/langfuse
-      otlphttp/victoriatraces:
+      otlp_http/victoriatraces:
         endpoint: {{ .Values.tracing.victoriaTraces }}
     service:
       extensions: [health_check, basicauth/langfuse]
@@ -34,7 +34,7 @@ data:
         traces:
           receivers: [otlp]
           processors: [batch]
-          exporters: [otlphttp/langfuse, otlphttp/victoriatraces]
+          exporters: [otlp_http/langfuse, otlp_http/victoriatraces]
 ---
 apiVersion: v1
 kind: ServiceAccount
