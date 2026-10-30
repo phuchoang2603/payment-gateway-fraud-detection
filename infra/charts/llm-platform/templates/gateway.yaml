@@ -124,6 +124,11 @@ spec:
           key: apiKey.client
   backend:
     ai:
+      # Without this map every request is parsed as a chat completion, which rejects embedding requests.
+      routes:
+        /v1/chat/completions: Completions
+        /v1/embeddings: Embeddings
+        /v1/models: Models
       promptGuard:
         request:
           - regex:
