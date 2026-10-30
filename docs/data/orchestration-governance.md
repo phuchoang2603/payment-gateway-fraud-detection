@@ -10,20 +10,23 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 |---|---|---|
 | `generate-historical` | Shards in parallel → publish | Done; v18 and v19 published |
 | `dp1-bronze` (historical or Kafka mode) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Historical v19 succeeded; Kafka schedule suspended |
-| `dp2-silver` | Spark curate to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Implemented; prod v19 validation rerun in progress |
+| `dp2-silver` | Spark curate to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Published; full validation remains incomplete |
 | `dp3-features` | Spark features → checks → publish | Planned |
 | `maintain-lakehouse`, `dp2-benchmark` | Single on-demand stage | Implemented; prod v19 evidence pending |
 
-Bronze and Silver use write-audit-publish: a run's rows stay on its `audit-<workflow>` Iceberg branch until every check passes, so DP2 and other readers of `main` never see unaudited data, and a failed run leaves its branch for diagnosis. Check and publication stages retry only on execution errors, never on failed data checks; Spark uses the bounded retry policy below. Each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow that runs `dp1-bronze` with `source=kafka`, then `dp2-silver` with `mode=incremental`. Pending: the complete prod graph and run screenshot set described in [offline evidence](offline.md#remaining-optimization-evidence).
+Bronze and Silver normally publish audit branches to `main` only after all native tests pass. Failed runs retain their branches; the exit handler records pipeline status in OpenMetadata. Silver is currently published with incomplete validation; see [run outcomes](offline.md#prod-v19-evidence). Writers use a mutex. Checks retry execution errors, not failed data rules. The suspended Kafka CronWorkflow runs Bronze followed by incremental Silver.
 
 ### Spark sizing and placement
 
-Prod Spark executors run on the `aws-cpu-burst` spot pool that the generator uses, through `spark.nodeSelector`. Drivers use `spark.driverNodeSelector` and workflow step pods use `workflowNodeSelector` to stay on the existing `aws-workers` on-demand pool: losing a driver restarts the application, and losing an Argo resource-step pod can submit another SparkApplication. The spot pool has 12 nodes of 4 vCPU and 16 GiB (about 3.5 vCPU and 14 GiB allocatable) and a 40 GiB root volume. Spark steps retry like the generator (limit 10, `Always`), and executors decommission gracefully; writes are idempotent, but a spot loss can still repeat computation.
+| Workload | Prod placement and sizing |
+|---|---|
+| Large Spark jobs | Spot `aws-cpu-burst`: 11 executors × 3 cores = 33 executor cores; each 9 GiB heap + 3 GiB overhead, 24 GiB ephemeral storage |
+| Driver | Existing on-demand workers; 1 core (500m request), 4 GiB heap + 1.5 GiB overhead |
+| Shuffle | 1,024 partitions, AQE coalescing with 128 MB advisory size; large v19 shuffles require more than 3–4× core count |
+| Kafka mode | One 3-core executor, three shuffle partitions matching the topics |
+| Argo steps / SQL checks | Steps on on-demand workers; SQL executes on shared ClickHouse |
 
-- **Large jobs (prod Bronze historical, Silver, analytics, maintenance):** 11 executors of 3 cores, 9 GiB and 3 GiB overhead (DP2's Python workers hold the broadcast duplicate keys in overhead memory), one per spot node. The on-demand driver has 1 core (500m requested), 4 GiB heap and 1.5 GiB overhead; DP2 now collects about 20M duplicate-ID keys as a sorted int64 array (about 154 MB in the recorded v19 report), avoiding the earlier large broadcast hash relation. The pool allows only `large` and `xlarge` instances, so 12 xlarge nodes are its whole 48 vCPU limit; after Talos reservations and DaemonSets an xlarge has 3,270m CPU for pods, which fits one 3-core executor but not a 4-core one. Shuffle disk is the binding limit: a hash-distributed v19 Bronze write shuffled about 217 GB into 24 GiB of ephemeral storage per executor, which fits only when all 11 executors run, so the historical Bronze and Silver event writes no longer shuffle (see [storage](storage.md)). Executors need a 16 GiB node: 5 GiB executors that fit an 8 GiB c-family xlarge were OOM-killed in the Iceberg write. When Karpenter picks 32 GiB r-family spot nodes, the pool's 192 GiB memory limit stops it before 12 nodes. Shuffle partitions are 1,024 with AQE coalescing (advisory 128 MB), not 3–4× the cores, because v19 shuffles reach hundreds of GB. Historical read parallelism is set by the file splits (about 1,000 at 128 MB for v19), not by the executor count. Executors request 24 GiB of ephemeral storage, not 40 GiB, because the root volume must also hold the Spark image and shuffle spill.
-- **Kafka mode (dev and prod):** one executor with 3 cores and 3 shuffle partitions. The Spark Kafka source makes one task per topic partition, and `payments.events.v1` and `fraud.labels.v1` each have 3 partitions, so `bronze.kafka.partitions` must follow the Kafka chart's topic partitions.
-- **Dev:** one executor per job, 2 cores and 16 shuffle partitions, sized to fit one dev node; v18 is 112 MB.
-- **Shared pool:** the generator and the Spark jobs need the same 12 nodes, so they should not run at the same time. The first v19 run records each phase's tasks and time in its report, which confirms or lowers the large executor count.
+The spot pool is capped at 12 nodes / 48 vCPU / 192 GiB. Allowed sizes are `large` and `xlarge`; an xlarge has about 3,270m pod CPU after reservations, so one 3-core executor fits. A 16 GiB node fits the executor memory; 32 GiB instances can hit the pool memory cap early. Keep generator and Spark jobs sequential. Spark retains graceful decommission and its bounded 10-retry policy.
 
 ## Data products and contracts
 
@@ -43,15 +46,15 @@ Historical source contracts describe schema and meaning only. Bronze and Silver 
 
 The checks stage pins each rule to its table's audit snapshot and evaluates the full relevant table contents, including after incremental curation. Incremental SQL validation is not implemented. The checks pod submits SQL to the shared ClickHouse server; moving that pod onto Spark's spot nodes would not distribute SQL execution or increase server memory.
 
-At v19 scale, the attempt-uniqueness rule initially aborted at ClickHouse's memory limit, so `dp2-silver-cxjgf` failed and did not publish its Silver audit branches. External aggregation and a disk-backed sort-merge join now bound check execution; the full-history amount/context join independently passed with zero mismatches at 1.77 GiB peak query memory. The [storage optimization evidence](storage.md#full-load-check-optimization-on-v19) records the SQL plan, settings, failures and successful diagnostic. That diagnostic is separate from the workflow's native OpenMetadata results. Historical rerun `dp2-silver-cnr27`, submitted on 2026-10-30 with release `91a35cc`, is still awaiting its full Spark → checks → publish outcome in this evidence record.
+Saved test definitions are excluded from execution; the processor upserts the current contract rules. This fixes stale snapshot SQL, but full-data checks still need to fit ClickHouse's limits. The amount/context join passed independently; the incremental rerun's event-uniqueness query aborted at the server memory limit. See [measured settings and limits](storage.md#full-load-check-optimization-on-v19).
 
-For coursework, capture the successful Argo graph and each table's native OpenMetadata test results from that completed workflow, plus the historical source → DP1 → Bronze → DP2 → Silver lineage and pipeline execution status. Retain the failed run as evidence that a resource-aborted check blocks publication; a Spark report alone does not establish a successful pipeline.
+Successful Argo graphs, per-table native results, pipeline statuses and historical source → DP1 → Bronze → DP2 → Silver lineage screenshots remain in the [verification checklist](../../openspec/changes/rebuild-generation-to-silver/tasks.md).
 
 ## Catalog
 
 The `data-pipelines` application owns the shared catalog connections. A PostSync register job creates the OpenMetadata services on each deploy. Every checks run ingests the ClickHouse tables, and Kafka topics are ingested by the on-demand `metadata-discovery` template. Each connector declares its ExternalSecret alongside its connection. Discovery samples no rows and runs no profiling.
 
-Pipelines publish lineage (historical source and Kafka topics → Bronze → Silver), their execution status on success and failure through the workflow exit handler, and native test results. The Kafka CronWorkflow's exit handler records only the Bronze pipeline: its Silver step runs through `templateRef`, which does not run the Silver template's exit handler. A run succeeds only when every expected test reports Success. Pending: lineage and validation screenshots for DP1–DP3, taken after the first dev run.
+Pipelines publish lineage (historical source and Kafka topics → Bronze → Silver), their execution status on success and failure through the workflow exit handler, and native test results. The Kafka CronWorkflow's exit handler records only the Bronze pipeline: its Silver step runs through `templateRef`, which does not run the Silver template's exit handler. A run succeeds only when every expected test reports Success. Pending: prod lineage and validation screenshots; DP3 evidence belongs to the Gold/features change.
 
 ## Schema registry
 
