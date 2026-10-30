@@ -1,0 +1,86 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:marts-fact-merchant-day
+name: Merchant day fact
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: One row per integration, merchant and UTC start day, with attempt, outcome, amount and label counts and their rates.
+  usage: Use for dashboards and network-wide daily KPIs. Each rate states its denominator and is null when the denominator is zero. Treat chargeback_rate as provisional while chargeback_window_complete is false.
+  limitations: Synthetic data only. truth_* columns aggregate a synthetic oracle.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, gold, marts, aggregate]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: marts
+    description: Native MergeTree table in the ClickHouse marts database. The rule placeholder {object} stands for the table and {table:name} for another table of the same build.
+schema:
+  - name: fact_merchant_day
+    physicalName: fact_merchant_day
+    logicalType: object
+    physicalType: table
+    description: One row per (integration_id, merchant_id, day); ordered by (integration_id, day, merchant_id).
+    dataGranularityDescription: One merchant on one UTC day.
+    customProperties:
+      - property: partitioning
+        value: toYYYYMM(day)
+    properties:
+      - {name: integration_id, logicalType: string, physicalType: LowCardinality(String), required: true, description: 'Integration namespace.'}
+      - {name: merchant_id, logicalType: string, physicalType: String, required: true, description: 'Gateway merchant identity.'}
+      - {name: day, logicalType: date, physicalType: Date, required: true, description: 'UTC day of started_at.'}
+      - {name: attempts, logicalType: integer, physicalType: UInt64, required: true, description: 'Attempts started on the day.'}
+      - {name: decided, logicalType: integer, physicalType: UInt64, required: true, description: 'Attempts that succeeded or were declined.'}
+      - {name: succeeded, logicalType: integer, physicalType: UInt64, required: true, description: 'Attempts that succeeded.'}
+      - {name: risk_declined, logicalType: integer, physicalType: UInt64, required: true, description: 'Attempts declined by the risk policy.'}
+      - {name: processor_declined, logicalType: integer, physicalType: UInt64, required: true, description: 'Attempts declined for any other source.'}
+      - {name: amount_attempted_minor, logicalType: integer, physicalType: Int64, required: true, description: 'Sum of amount_minor over attempts.'}
+      - {name: amount_succeeded_minor, logicalType: integer, physicalType: Int64, required: true, description: 'Sum of amount_minor over succeeded attempts.'}
+      - {name: distinct_customers, logicalType: integer, physicalType: UInt64, required: true, description: 'Distinct customers with an attempt on the day.'}
+      - {name: truth_labelled, logicalType: integer, physicalType: UInt64, required: true, description: 'Attempts with a simulation-truth label.'}
+      - {name: truth_fraud, logicalType: integer, physicalType: UInt64, required: true, description: 'Attempts whose simulation-truth label is fraud.'}
+      - {name: chargebacks, logicalType: integer, physicalType: UInt64, required: true, description: 'Attempts with a linked chargeback.'}
+      - {name: approval_rate, logicalType: number, physicalType: Nullable(Float64), description: 'succeeded / decided; null when decided is 0.'}
+      - {name: risk_decline_rate, logicalType: number, physicalType: Nullable(Float64), description: 'risk_declined / decided; null when decided is 0.'}
+      - {name: truth_fraud_rate, logicalType: number, physicalType: Nullable(Float64), description: 'truth_fraud / truth_labelled; null when truth_labelled is 0.'}
+      - {name: chargeback_rate, logicalType: number, physicalType: Nullable(Float64), description: 'chargebacks / succeeded; null when succeeded is 0.'}
+      - {name: chargeback_window_complete, logicalType: boolean, physicalType: Bool, required: true, description: 'True when day plus 21 days, the longest chargeback delay, is at or before the Silver commit day.'}
+    quality:
+      - id: marts_merchant_day_sums
+        type: sql
+        description: On the days the build rebuilt, attempt and success counts equal the fact's.
+        query: |
+          SELECT
+            abs(toInt64((SELECT sum(attempts) FROM {object} WHERE day IN (SELECT arrayJoin(rebuilt_days) FROM {table:build_info})))
+              - toInt64((SELECT count() FROM {table:fact_payment_attempt})))
+            + abs(toInt64((SELECT sum(succeeded) FROM {object} WHERE day IN (SELECT arrayJoin(rebuilt_days) FROM {table:build_info})))
+              - toInt64((SELECT countIf(outcome = 'succeeded') FROM {table:fact_payment_attempt})))
+        mustBe: 0
+      - id: marts_merchant_day_decided
+        type: sql
+        description: Decided attempts are exactly the successes plus both kinds of decline, and never exceed attempts.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE decided != succeeded + risk_declined + processor_declined OR decided > attempts
+        mustBe: 0
+      - id: marts_merchant_day_rates
+        type: sql
+        description: Each rate lies in [0, 1] and is null exactly when its denominator is zero.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE (approval_rate IS NULL) != (decided = 0) OR approval_rate < 0 OR approval_rate > 1
+            OR (risk_decline_rate IS NULL) != (decided = 0) OR risk_decline_rate < 0 OR risk_decline_rate > 1
+            OR (truth_fraud_rate IS NULL) != (truth_labelled = 0) OR truth_fraud_rate < 0 OR truth_fraud_rate > 1
+            OR (chargeback_rate IS NULL) != (succeeded = 0) OR chargeback_rate < 0 OR chargeback_rate > 1
+        mustBe: 0

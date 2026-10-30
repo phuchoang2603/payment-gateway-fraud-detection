@@ -1,0 +1,265 @@
+{
+  "format": "Each attempt overrides defaults.attempt; attempted_at defaults to started_at. history attempts set H and belong to another customer and card. expected lists every row of the case's entity in order; values name only the columns the case checks, and null means null.",
+  "defaults": {
+    "attempt": {
+      "integration_id": "i",
+      "customer_id": "c",
+      "payment_method_fingerprint": "card",
+      "merchant_id": "m",
+      "device_fingerprint": "d",
+      "amount_minor": 100,
+      "currency": "USD",
+      "outcome": "pending",
+      "outcome_at": null,
+      "decline_source": null
+    },
+    "history": [
+      {
+        "customer_id": "h",
+        "payment_method_fingerprint": "h-card",
+        "started_at": "2025-06-01T12:00:00+00:00"
+      }
+    ],
+    "cutoff": "2026-01-01T06:00:00+00:00",
+    "view": "customer",
+    "entity": {
+      "integration_id": "i",
+      "customer_id": "c"
+    }
+  },
+  "cases": [
+    {
+      "name": "expiry_without_input",
+      "attempts": [
+        {"started_at": "2025-09-01T12:00:00+00:00"}
+      ],
+      "expected": [
+        {
+          "event_timestamp": "2025-09-02T00:00:00+00:00",
+          "values": {
+            "attempt_count_7d": 1,
+            "attempt_count_30d": 1,
+            "amount_sum_minor_7d": 100,
+            "decided_count_7d": 0,
+            "decline_rate_7d": null,
+            "distinct_merchant_count_7d": 1,
+            "distinct_device_count_7d": 1,
+            "distinct_payment_method_count_7d": 1
+          }
+        },
+        {
+          "event_timestamp": "2025-09-09T00:00:00+00:00",
+          "values": {
+            "attempt_count_7d": 0,
+            "amount_sum_minor_7d": 0,
+            "distinct_merchant_count_7d": 0,
+            "attempt_count_30d": 1
+          }
+        },
+        {
+          "event_timestamp": "2025-10-02T00:00:00+00:00",
+          "values": {
+            "attempt_count_7d": 0,
+            "attempt_count_30d": 0,
+            "distinct_merchant_count_30d": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "lower_and_upper_boundary",
+      "attempts": [
+        {"started_at": "2025-08-31T23:59:59.999999+00:00"},
+        {"started_at": "2025-09-01T00:00:00+00:00"}
+      ],
+      "expected": [
+        {"event_timestamp": "2025-09-01T00:00:00+00:00", "values": {"attempt_count_7d": 1, "attempt_count_30d": 1}},
+        {"event_timestamp": "2025-09-02T00:00:00+00:00", "values": {"attempt_count_7d": 2, "attempt_count_30d": 2}},
+        {
+          "event_timestamp": "2025-09-08T00:00:00+00:00",
+          "values": {"attempt_count_7d": 1, "distinct_merchant_count_7d": 1, "attempt_count_30d": 2}
+        },
+        {
+          "event_timestamp": "2025-09-09T00:00:00+00:00",
+          "values": {"attempt_count_7d": 0, "distinct_merchant_count_7d": 0, "attempt_count_30d": 2}
+        },
+        {"event_timestamp": "2025-10-01T00:00:00+00:00", "values": {"attempt_count_30d": 1}},
+        {"event_timestamp": "2025-10-02T00:00:00+00:00", "values": {"attempt_count_30d": 0}}
+      ]
+    },
+    {
+      "name": "client_clock_behind_server",
+      "attempts": [
+        {"attempted_at": "2025-08-31T23:00:00+00:00", "started_at": "2025-09-01T01:00:00+00:00"}
+      ],
+      "expected": [
+        {"event_timestamp": "2025-09-02T00:00:00+00:00", "values": {"attempt_count_7d": 1}},
+        {"event_timestamp": "2025-09-08T00:00:00+00:00", "values": {"attempt_count_7d": 0, "attempt_count_30d": 1}},
+        {"event_timestamp": "2025-10-01T00:00:00+00:00", "values": {"attempt_count_30d": 0}}
+      ]
+    },
+    {
+      "name": "client_clock_ahead_of_server",
+      "attempts": [
+        {"attempted_at": "2025-09-01T01:00:00+00:00", "started_at": "2025-08-31T23:00:00+00:00"}
+      ],
+      "expected": [
+        {"event_timestamp": "2025-09-02T00:00:00+00:00", "values": {"attempt_count_7d": 1}},
+        {"event_timestamp": "2025-09-09T00:00:00+00:00", "values": {"attempt_count_7d": 0, "attempt_count_30d": 1}},
+        {"event_timestamp": "2025-10-02T00:00:00+00:00", "values": {"attempt_count_30d": 0}}
+      ]
+    },
+    {
+      "name": "outcome_after_anchor",
+      "attempts": [
+        {
+          "started_at": "2025-09-01T12:00:00+00:00",
+          "outcome": "declined",
+          "outcome_at": "2025-09-03T05:00:00+00:00",
+          "decline_source": "DECLINE_SOURCE_RISK"
+        }
+      ],
+      "expected": [
+        {
+          "event_timestamp": "2025-09-02T00:00:00+00:00",
+          "values": {"attempt_count_7d": 1, "decided_count_7d": 0, "declined_count_7d": 0, "decline_rate_7d": null}
+        },
+        {
+          "event_timestamp": "2025-09-04T00:00:00+00:00",
+          "values": {
+            "attempt_count_7d": 1,
+            "decided_count_7d": 1,
+            "declined_count_7d": 1,
+            "risk_declined_count_7d": 1,
+            "decline_rate_7d": 1.0
+          }
+        },
+        {
+          "event_timestamp": "2025-09-09T00:00:00+00:00",
+          "values": {"attempt_count_7d": 0, "decided_count_7d": 0, "decline_rate_7d": null, "decline_rate_30d": 1.0}
+        },
+        {"event_timestamp": "2025-10-02T00:00:00+00:00", "values": {"attempt_count_30d": 0, "decline_rate_30d": null}}
+      ]
+    },
+    {
+      "name": "empty_denominator",
+      "attempts": [
+        {"started_at": "2025-09-01T10:00:00+00:00"},
+        {"started_at": "2025-09-01T11:00:00+00:00", "outcome": "unknown", "outcome_at": "2025-09-01T11:05:00+00:00"}
+      ],
+      "expected": [
+        {
+          "event_timestamp": "2025-09-02T00:00:00+00:00",
+          "values": {"attempt_count_7d": 2, "decided_count_7d": 0, "declined_count_7d": 0, "decline_rate_7d": null}
+        },
+        {"event_timestamp": "2025-09-09T00:00:00+00:00", "values": {"attempt_count_7d": 0}},
+        {"event_timestamp": "2025-10-02T00:00:00+00:00", "values": {"attempt_count_30d": 0}}
+      ]
+    },
+    {
+      "name": "coverage_before_7_and_30_days",
+      "history": [],
+      "attempts": [
+        {"started_at": "2025-09-01T12:00:00+00:00"}
+      ],
+      "expected": [
+        {
+          "event_timestamp": "2025-09-02T00:00:00+00:00",
+          "values": {"attempt_count_7d": null, "decline_rate_7d": null, "attempt_count_30d": null}
+        },
+        {"event_timestamp": "2025-09-08T00:00:00+00:00", "values": {"attempt_count_7d": 1, "attempt_count_30d": null}},
+        {"event_timestamp": "2025-09-09T00:00:00+00:00", "values": {"attempt_count_7d": 0, "attempt_count_30d": null}},
+        {"event_timestamp": "2025-10-01T00:00:00+00:00", "values": {"attempt_count_7d": 0, "attempt_count_30d": 1}},
+        {"event_timestamp": "2025-10-02T00:00:00+00:00", "values": {"attempt_count_30d": 0}}
+      ]
+    },
+    {
+      "name": "integration_separation",
+      "attempts": [
+        {"started_at": "2025-09-01T12:00:00+00:00"},
+        {"integration_id": "j", "started_at": "2025-09-03T12:00:00+00:00"}
+      ],
+      "expected": [
+        {"event_timestamp": "2025-09-02T00:00:00+00:00", "values": {"attempt_count_7d": 1}},
+        {"event_timestamp": "2025-09-09T00:00:00+00:00", "values": {"attempt_count_7d": 0}},
+        {"event_timestamp": "2025-10-02T00:00:00+00:00", "values": {"attempt_count_30d": 0}}
+      ]
+    },
+    {
+      "name": "unknown_device",
+      "attempts": [
+        {"started_at": "2025-09-01T12:00:00+00:00", "device_fingerprint": null}
+      ],
+      "expected": [
+        {"event_timestamp": "2025-09-02T00:00:00+00:00", "values": {"attempt_count_7d": 1, "distinct_device_count_7d": 0}},
+        {"event_timestamp": "2025-09-09T00:00:00+00:00", "values": {"attempt_count_7d": 0}},
+        {"event_timestamp": "2025-10-02T00:00:00+00:00", "values": {"attempt_count_30d": 0}}
+      ]
+    },
+    {
+      "name": "distinct_values_merge",
+      "attempts": [
+        {"started_at": "2025-09-01T12:00:00+00:00", "device_fingerprint": "d1"},
+        {"started_at": "2025-09-04T12:00:00+00:00", "device_fingerprint": "d2"}
+      ],
+      "expected": [
+        {
+          "event_timestamp": "2025-09-02T00:00:00+00:00",
+          "values": {"attempt_count_7d": 1, "distinct_merchant_count_7d": 1, "distinct_device_count_7d": 1}
+        },
+        {
+          "event_timestamp": "2025-09-05T00:00:00+00:00",
+          "values": {"attempt_count_7d": 2, "distinct_merchant_count_7d": 1, "distinct_device_count_7d": 2}
+        },
+        {
+          "event_timestamp": "2025-09-09T00:00:00+00:00",
+          "values": {"attempt_count_7d": 1, "distinct_merchant_count_7d": 1, "distinct_device_count_7d": 1}
+        },
+        {
+          "event_timestamp": "2025-09-12T00:00:00+00:00",
+          "values": {
+            "attempt_count_7d": 0,
+            "distinct_merchant_count_7d": 0,
+            "distinct_device_count_7d": 0,
+            "attempt_count_30d": 2
+          }
+        },
+        {
+          "event_timestamp": "2025-10-02T00:00:00+00:00",
+          "values": {"attempt_count_30d": 1, "distinct_merchant_count_30d": 1, "distinct_device_count_30d": 1}
+        },
+        {
+          "event_timestamp": "2025-10-05T00:00:00+00:00",
+          "values": {"attempt_count_30d": 0, "distinct_merchant_count_30d": 0, "distinct_device_count_30d": 0}
+        }
+      ]
+    },
+    {
+      "name": "card_shared_by_customers",
+      "view": "payment_method",
+      "entity": {"integration_id": "i", "payment_method_fingerprint": "card-x"},
+      "attempts": [
+        {"customer_id": "c1", "payment_method_fingerprint": "card-x", "started_at": "2025-09-01T12:00:00+00:00"},
+        {"customer_id": "c2", "payment_method_fingerprint": "card-x", "started_at": "2025-09-02T12:00:00+00:00"}
+      ],
+      "expected": [
+        {"event_timestamp": "2025-09-02T00:00:00+00:00", "values": {"attempt_count_7d": 1, "distinct_customer_count_7d": 1}},
+        {"event_timestamp": "2025-09-03T00:00:00+00:00", "values": {"attempt_count_7d": 2, "distinct_customer_count_7d": 2}},
+        {"event_timestamp": "2025-09-09T00:00:00+00:00", "values": {"attempt_count_7d": 1, "distinct_customer_count_7d": 1}},
+        {"event_timestamp": "2025-09-10T00:00:00+00:00", "values": {"attempt_count_7d": 0, "distinct_customer_count_7d": 0}},
+        {"event_timestamp": "2025-10-02T00:00:00+00:00", "values": {"attempt_count_30d": 1, "distinct_customer_count_30d": 1}},
+        {"event_timestamp": "2025-10-03T00:00:00+00:00", "values": {"attempt_count_30d": 0, "distinct_customer_count_30d": 0}}
+      ]
+    },
+    {
+      "name": "anchors_stop_at_the_silver_commit_day",
+      "cutoff": "2025-09-05T03:00:00+00:00",
+      "attempts": [
+        {"started_at": "2025-09-01T12:00:00+00:00"}
+      ],
+      "expected": [
+        {"event_timestamp": "2025-09-02T00:00:00+00:00", "values": {"attempt_count_7d": 1}}
+      ]
+    }
+  ]
+}

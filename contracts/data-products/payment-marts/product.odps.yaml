@@ -1,0 +1,61 @@
+apiVersion: v1.1.0
+kind: DataProduct
+id: urn:dataproduct:fraud:payment-marts
+name: Payment marts
+version: 1.0.0
+status: active
+domain: fraud-detection
+type: consumer-aligned
+description:
+  purpose: Native ClickHouse MergeTree marts of payment attempts and merchant days for dashboards and analytical queries, built from Silver inside a rolling retention window.
+  usage: Filter on started_at or day; the sort keys put time first. Read marts.build_info for the window a build covers before treating missing days as zero.
+  limitations: Synthetic data only. The marts keep a rolling 180-day window by table TTL, so they shrink while no new data arrives. Truth and scenario columns are a synthetic oracle.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, gold, marts]
+customProperties:
+  - property: catalog
+    value: clickhouse
+  - property: schema
+    value: marts
+  - property: runtime
+    value: ClickHouse 26.10 INSERT ... SELECT from the lakehouse database into staging tables, audited, then exchanged or partition-replaced into the live tables.
+inputPorts:
+  - name: silver-attempts
+    version: 1.0.0
+    contractId: urn:datacontract:fraud:silver-attempts
+  - name: silver-labels
+    version: 1.0.0
+    contractId: urn:datacontract:fraud:silver-labels
+outputPorts:
+  - name: fact-payment-attempt
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:marts-fact-payment-attempt
+    description: One row per lifecycle-valid attempt with its decision, outcome and labels.
+    customProperties:
+      - property: table
+        value: marts.fact_payment_attempt
+  - name: fact-merchant-day
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:marts-fact-merchant-day
+    description: Daily attempt, outcome, amount and label counts and rates per merchant.
+    customProperties:
+      - property: table
+        value: marts.fact_merchant_day
+  - name: build-info
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:marts-build-info
+    description: The window, rebuilt days and Silver snapshots of the latest build.
+    customProperties:
+      - property: table
+        value: marts.build_info
+support:
+  - channel: GitHub maintainer
+    url: https://github.com/phuchoang2603
+    scope: support

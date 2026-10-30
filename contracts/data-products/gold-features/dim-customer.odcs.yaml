@@ -1,0 +1,97 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:gold-dim-customer
+name: Gold customer dimension
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: SCD2 versions of each customer's observed profile, opened at the attempt where a tracked attribute changes.
+  usage: Join on integration_id and customer_id with valid_from_ts <= t and (valid_to_ts is null or t < valid_to_ts). The current version has valid_to_ts null and is_current true.
+  limitations: Synthetic data only. The profile is observed from attempt_started contexts, so a change is visible from the first attempt that carries it. Versions are rebuilt from Silver on every run.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, gold, dimension, scd2]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: lakehouse
+    description: Iceberg table dim_customer in schema gold, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.
+schema:
+  - name: dim_customer
+    physicalName: gold.dim_customer
+    logicalType: object
+    physicalType: table
+    description: One row per customer profile version; valid_to_ts is exclusive.
+    dataGranularityDescription: One version of one customer's observed profile.
+    customProperties:
+      - property: partitioning
+        value: months(valid_from_ts)
+    properties:
+      - {name: customer_sk, logicalType: string, physicalType: VARCHAR, required: true, description: 'SHA-256 of integration_id, customer_id and valid_from_ts.'}
+      - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Integration namespace of the customer.'}
+      - {name: customer_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Gateway customer identity.'}
+      - {name: version_number, logicalType: integer, physicalType: INTEGER, required: true, description: 'Version position for the customer, from 1.'}
+      - {name: external_buyer_id, logicalType: string, physicalType: VARCHAR, description: 'Merchant-side buyer identity from the attempt context.'}
+      - {name: customer_account_created_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, description: 'Account creation time from the checkout snapshot.'}
+      - {name: shipping_country, logicalType: string, physicalType: VARCHAR, description: 'Shipping country of the checkout.'}
+      - {name: shipping_region, logicalType: string, physicalType: VARCHAR, description: 'Shipping region of the checkout.'}
+      - {name: shipping_postal_code, logicalType: string, physicalType: VARCHAR, description: 'Shipping postal code of the checkout.'}
+      - {name: shipping_address_fingerprint, logicalType: string, physicalType: VARCHAR, description: 'Synthetic fingerprint of the shipping address.'}
+      - {name: familiar_device_fingerprints, logicalType: array, description: 'Sorted devices the customer used on at least two attempts in the 90 days up to and including the version''s attempt.'}
+      - {name: profile_hash, logicalType: string, physicalType: VARCHAR, required: true, description: 'SHA-256 over the JSON of every tracked attribute.'}
+      - {name: valid_from_ts, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: 'started_at of the attempt that opened the version.'}
+      - {name: valid_to_ts, logicalType: timestamp, physicalType: TIMESTAMPTZ, description: 'valid_from_ts of the next version; null for the current version.'}
+      - {name: is_current, logicalType: boolean, physicalType: BOOLEAN, required: true, description: 'True only for the version with valid_to_ts null.'}
+      - {name: source_payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Payment of the attempt that opened the version.'}
+      - {name: source_attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Attempt that opened the version.'}
+    quality:
+      - id: gold_dim_one_current
+        type: sql
+        description: Each customer has exactly one current version.
+        query: |
+          SELECT count(*) FROM (
+            SELECT sipHash128(integration_id, customer_id) AS k FROM {object}
+            GROUP BY k HAVING countIf(is_current) != 1
+          ) AS customers
+        mustBe: 0
+      - id: gold_dim_contiguous
+        type: sql
+        description: Versions neither overlap nor leave gaps; each valid_to_ts is the next version's valid_from_ts and only the last version is open.
+        query: |
+          SELECT count(*) FROM (
+            SELECT
+              valid_to_ts,
+              leadInFrame(valid_from_ts) OVER (
+                PARTITION BY integration_id, customer_id ORDER BY valid_from_ts
+                ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) AS next_from,
+              row_number() OVER (PARTITION BY integration_id, customer_id ORDER BY valid_from_ts) AS position,
+              count() OVER (PARTITION BY integration_id, customer_id) AS versions
+            FROM {object}
+          ) AS ordered
+          WHERE (position < versions AND (valid_to_ts IS NULL OR valid_to_ts != next_from))
+            OR (position = versions AND valid_to_ts IS NOT NULL)
+        mustBe: 0
+      - id: gold_dim_valid_range
+        type: sql
+        description: A closed version ends after it starts, and is_current marks exactly the open version.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE (valid_to_ts IS NOT NULL AND valid_to_ts <= valid_from_ts)
+            OR is_current != (valid_to_ts IS NULL)
+        mustBe: 0
+      - id: gold_dim_unique_sk
+        type: sql
+        description: Each surrogate key appears once.
+        query: |
+          SELECT count(*) FROM (SELECT sipHash128(customer_sk) AS k FROM {object} GROUP BY k HAVING count(*) > 1) AS duplicates
+        mustBe: 0

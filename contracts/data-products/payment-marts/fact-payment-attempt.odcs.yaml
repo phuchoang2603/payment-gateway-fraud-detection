@@ -1,0 +1,103 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:marts-fact-payment-attempt
+name: Payment attempt fact
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: One row per lifecycle-valid Silver attempt inside the retention window, with its risk decision, outcome, earliest simulation-truth label and earliest chargeback.
+  usage: Filter on started_at for time ranges, which prunes by partition and primary key; filter on customer_id or payment_method_fingerprint for investigations, which uses the bloom-filter indexes. Join dim_customer point-in-time on started_at.
+  limitations: Synthetic data only. truth_is_fraud and truth_scenario are a synthetic oracle. A missing chargeback is not a negative, and recent attempts may still receive one.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, gold, marts, fact]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: marts
+    description: Native MergeTree table in the ClickHouse marts database. The rule placeholder {object} stands for the table and {table:name} for another table of the same build.
+schema:
+  - name: fact_payment_attempt
+    physicalName: fact_payment_attempt
+    logicalType: object
+    physicalType: table
+    description: One row per (integration_id, payment_id, attempt_id); ordered by (integration_id, toDate(started_at), merchant_id, started_at).
+    dataGranularityDescription: One payment attempt.
+    customProperties:
+      - property: partitioning
+        value: toDate(started_at)
+      - property: ttl
+        value: started_at plus the retention days, whole partitions dropped
+    properties:
+      - {name: integration_id, logicalType: string, physicalType: LowCardinality(String), required: true, description: 'Integration namespace of the payment.'}
+      - {name: payment_id, logicalType: string, physicalType: String, required: true, description: 'Payment aggregate identity.'}
+      - {name: attempt_id, logicalType: string, physicalType: String, required: true, description: 'Attempt identity within the payment.'}
+      - {name: merchant_id, logicalType: string, physicalType: String, required: true, description: 'Gateway merchant identity.'}
+      - {name: customer_id, logicalType: string, physicalType: String, required: true, description: 'Gateway customer identity; bloom-filter indexed.'}
+      - {name: payment_method_fingerprint, logicalType: string, physicalType: String, required: true, description: 'Synthetic payment-method fingerprint; bloom-filter indexed.'}
+      - {name: payment_method_type, logicalType: string, physicalType: LowCardinality(String), required: true, description: 'Payment method category.'}
+      - {name: device_fingerprint, logicalType: string, physicalType: Nullable(String), description: 'Observed synthetic device fingerprint.'}
+      - {name: amount_minor, logicalType: integer, physicalType: Int64, required: true, description: 'Checkout total in minor units.'}
+      - {name: currency, logicalType: string, physicalType: LowCardinality(String), required: true, description: 'Checkout currency.'}
+      - {name: started_at, logicalType: timestamp, physicalType: "DateTime64(6, 'UTC')", required: true, description: 'AttemptStarted occurrence time.'}
+      - {name: attempted_at, logicalType: timestamp, physicalType: "Nullable(DateTime64(6, 'UTC'))", description: 'Client attempt time from the signals.'}
+      - {name: risk_outcome, logicalType: string, physicalType: LowCardinality(Nullable(String)), description: 'RISK_OUTCOME_APPROVE or RISK_OUTCOME_DECLINE when a decision exists.'}
+      - {name: risk_score, logicalType: number, physicalType: Nullable(Float64), description: 'Optional model risk score; minmax indexed.'}
+      - {name: policy_version, logicalType: string, physicalType: LowCardinality(Nullable(String)), description: 'Evaluated policy version.'}
+      - {name: model_version, logicalType: string, physicalType: LowCardinality(Nullable(String)), description: 'Evaluated model version when a model was used.'}
+      - {name: outcome, logicalType: string, physicalType: LowCardinality(String), required: true, description: 'succeeded, declined, unknown or pending; set indexed.'}
+      - {name: decline_source, logicalType: string, physicalType: LowCardinality(Nullable(String)), description: 'DECLINE_SOURCE_RISK or DECLINE_SOURCE_PROCESSOR when declined.'}
+      - {name: outcome_at, logicalType: timestamp, physicalType: "Nullable(DateTime64(6, 'UTC'))", description: 'Time of the terminal or unknown outcome.'}
+      - {name: payment_status, logicalType: string, physicalType: LowCardinality(String), required: true, description: 'open, succeeded or expired for the whole payment.'}
+      - {name: truth_is_fraud, logicalType: boolean, physicalType: Nullable(Bool), description: 'is_fraud of the earliest linked simulation-truth label.'}
+      - {name: truth_scenario, logicalType: string, physicalType: LowCardinality(Nullable(String)), description: 'Scenario of that label; synthetic oracle, never a feature.'}
+      - {name: chargeback_available_at, logicalType: timestamp, physicalType: "Nullable(DateTime64(6, 'UTC'))", description: 'Earliest availability of a linked chargeback.'}
+    quality:
+      - id: marts_fact_unique_attempt
+        type: sql
+        description: Each attempt appears once.
+        query: |
+          SELECT count(*) FROM (
+            SELECT sipHash128(integration_id, payment_id, attempt_id) AS k FROM {object}
+            GROUP BY k HAVING count(*) > 1
+          ) AS duplicates
+        mustBe: 0
+      - id: marts_fact_reconciles_with_silver
+        type: sql
+        description: The fact holds exactly the lifecycle-valid Silver attempts of the days the build rebuilt.
+        query: |
+          SELECT abs(
+            toInt64((SELECT count() FROM {object}))
+            - toInt64((
+              SELECT count() FROM lakehouse.`silver.attempts`
+              WHERE lifecycle_valid AND toDate(started_at) IN (SELECT arrayJoin(rebuilt_days) FROM {table:build_info})
+            ))
+          )
+        mustBe: 0
+      - id: marts_fact_window
+        type: sql
+        description: Every attempt starts on a day the build rebuilt, inside its window.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE toDate(started_at) NOT IN (SELECT arrayJoin(rebuilt_days) FROM {table:build_info})
+            OR toDate(started_at) < (SELECT window_start FROM {table:build_info})
+        mustBe: 0
+      - id: marts_fact_known_states
+        type: sql
+        description: Outcomes and payment statuses are recognized values, and chargebacks never precede the attempt.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE outcome NOT IN ('succeeded', 'declined', 'unknown', 'pending')
+            OR payment_status NOT IN ('open', 'succeeded', 'expired')
+            OR chargeback_available_at < started_at
+        mustBe: 0

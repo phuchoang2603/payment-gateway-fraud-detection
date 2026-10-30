@@ -1,0 +1,125 @@
+{
+  "id": "fraud-history-batch-v1",
+  "version": 1,
+  "source": "silver.attempts at a pinned snapshot; lifecycle-valid attempts only",
+  "grain": [
+    "integration_id",
+    "entity_key",
+    "event_timestamp"
+  ],
+  "entity_keys": {
+    "customer": [
+      "integration_id",
+      "customer_id"
+    ],
+    "payment_method": [
+      "integration_id",
+      "payment_method_fingerprint"
+    ]
+  },
+  "tables": {
+    "customer": "gold.feat_customer_daily",
+    "payment_method": "gold.feat_payment_method_daily"
+  },
+  "time": {
+    "precision": "UTC microseconds; window lower bound inclusive, upper bound exclusive",
+    "attempt_time": "coalesce(attempted_at, started_at)",
+    "anchor": "s: each UTC midnight; event_timestamp = s",
+    "window": "[s-window,s)",
+    "eligibility": "lifecycle-valid attempt with s-window <= attempt_time < s and started_at < s; outcome-based quantities also need outcome_at < s",
+    "history_start": "H: UTC midnight of the earliest started_at in the pinned silver.attempts",
+    "coverage": "per window: complete when s-window >= H; otherwise every column of that window is null",
+    "cutoff": "anchors stop at the UTC midnight at or before the commit time of the pinned silver.attempts snapshot",
+    "emission": "a row only at anchors where a value changes: an attempt enters, an attempt leaves a window, or a window's coverage completes; the latest row at or before t is the value at t",
+    "created": "commit time of the pinned silver.attempts snapshot that last recomputed the row; Feast tie-breaker only",
+    "availability": "a row at anchor s is available once the DP3 run after s publishes; serving reads the last published anchor, so training and serving differ by the DP3 delay after midnight",
+    "unknown": "an entity with no row at or before t is unknown, not zero"
+  },
+  "windows": {
+    "7d": 604800,
+    "30d": 2592000
+  },
+  "features": [
+    {
+      "name": "attempt_count_{w}",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "count of eligible attempts",
+      "scope": "customer, payment_method"
+    },
+    {
+      "name": "amount_sum_minor_{w}",
+      "type": "nullable_int64",
+      "units": "minor units of the single synthetic currency",
+      "formula": "sum of amount_minor over eligible attempts",
+      "scope": "customer, payment_method"
+    },
+    {
+      "name": "decided_count_{w}",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "eligible attempts with outcome succeeded or declined and outcome_at < s",
+      "scope": "customer, payment_method"
+    },
+    {
+      "name": "declined_count_{w}",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "eligible attempts with outcome declined and outcome_at < s",
+      "scope": "customer, payment_method"
+    },
+    {
+      "name": "risk_declined_count_{w}",
+      "type": "nullable_int64",
+      "units": "attempts",
+      "formula": "eligible attempts declined with decline_source DECLINE_SOURCE_RISK and outcome_at < s",
+      "scope": "customer, payment_method"
+    },
+    {
+      "name": "decline_rate_{w}",
+      "type": "nullable_double",
+      "units": "ratio",
+      "formula": "declined_count_{w} / decided_count_{w}; null when decided_count_{w} is 0",
+      "scope": "customer, payment_method"
+    },
+    {
+      "name": "distinct_merchant_count_{w}",
+      "type": "nullable_int64",
+      "units": "merchants",
+      "formula": "distinct merchant_id over eligible attempts",
+      "scope": "customer, payment_method"
+    },
+    {
+      "name": "distinct_device_count_{w}",
+      "type": "nullable_int64",
+      "units": "devices",
+      "formula": "distinct non-null device_fingerprint over eligible attempts",
+      "scope": "customer"
+    },
+    {
+      "name": "distinct_payment_method_count_{w}",
+      "type": "nullable_int64",
+      "units": "payment methods",
+      "formula": "distinct payment_method_fingerprint over eligible attempts",
+      "scope": "customer"
+    },
+    {
+      "name": "distinct_customer_count_{w}",
+      "type": "nullable_int64",
+      "units": "customers",
+      "formula": "distinct customer_id over eligible attempts",
+      "scope": "payment_method"
+    }
+  ],
+  "excluded": [
+    "is_fraud",
+    "scenario",
+    "simulation_truth",
+    "chargebacks",
+    "risk_score",
+    "risk_outcome",
+    "reason_codes",
+    "the scored attempt itself"
+  ],
+  "conformance": "fraud-history-batch-v1.examples.json"
+}
