@@ -22,7 +22,7 @@ models:
       limits: {memory: 4Gi}
 
 agents:
-  snapshotRoot: gs://platform-prod-142737101504-us-east-1/substrate/llm-agents
+  snapshotRoot: s3://platform-prod-142737101504-us-east-1/substrate/llm-agents/
 
 langfuseStores:
   postgres:

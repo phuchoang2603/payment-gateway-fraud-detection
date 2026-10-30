@@ -15,7 +15,7 @@
 {{- range $agent := .Values.agents.list }}
 {{- $notes := list (printf "Model config %s (%s through the agent gateway); system prompt %s-system-prompt in Langfuse." $.Values.agents.modelConfig $.Values.models.chat.name $agent.name) }}
 {{- with $agent.agents }}
-{{- $notes = append $notes (printf "Delegates to %s over A2A through the agent gateway." (join ", " .)) }}
+{{- $notes = append $notes (printf "Runs %s as sub-agents in its own runtime." (join ", " .)) }}
 {{- end }}
 {{- with $agent.abTest }}
 {{- $notes = append $notes (printf "A/B test: %d%% of its A2A traffic goes to %s with model config %s." (int .weight) .variant .modelConfig) }}

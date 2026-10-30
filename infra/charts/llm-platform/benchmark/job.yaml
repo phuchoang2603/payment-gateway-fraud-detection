@@ -13,6 +13,9 @@ spec:
       restartPolicy: Never
       serviceAccountName: llm-benchmark
       automountServiceAccountToken: false
+      # The GPU node already holds the vLLM image the client runs from.
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

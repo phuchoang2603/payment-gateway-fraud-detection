@@ -98,7 +98,7 @@ def list_tools(url: str) -> list[dict]:
     """The tools an MCP server lists through the gateway, so the catalog always matches the server."""
     headers = {
         "Accept": MCP_ACCEPT,
-        "Authorization": f"Bearer {os.environ['GATEWAY_API_KEY']}",
+        "x-api-key": os.environ["GATEWAY_API_KEY"],
     }
     initialize = {
         "jsonrpc": "2.0",
@@ -228,7 +228,7 @@ def publish_openmetadata(assets: dict, agents: list[dict]) -> None:
     for agent in agents:
         primary = models[assets["primaryModel"]]
         delegates = (
-            f" Delegates to {', '.join(agent['agents'])} over A2A."
+            f" Runs {', '.join(agent['agents'])} as sub-agents."
             if agent["agents"]
             else ""
         )

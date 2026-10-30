@@ -46,6 +46,11 @@ applications:
   llm-platform:
     destinationNamespace: llm
     path: infra/charts/llm-platform
+    # KEDA owns the agents' worker pool size; the chart only sets its starting size.
+    ignoreDifferences:
+      - group: ate.dev
+        kind: WorkerPool
+        jsonPointers: [/spec/replicas]
   rag-pipeline:
     destinationNamespace: llm
     path: infra/charts/rag-pipeline
