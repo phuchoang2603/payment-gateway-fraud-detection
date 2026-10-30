@@ -102,10 +102,11 @@ gateway:
       service: rag-api
       port: 8080
 
-# LLM traces: agentgateway sends OTLP spans to a collector, which forwards them to Langfuse with the project keys.
+# LLM traces: agentgateway posts OTLP spans straight to the platform's trace store, next to the services' traces.
 tracing:
   enabled: true
-  collectorImage: otel/opentelemetry-collector-contrib:0.162.0
+  url: http://vtagent-vmks.observability.svc.cluster.local:10429
+  path: /insert/opentelemetry/v1/traces
   sampling: "true"
 
 secretStore: gateway-doppler
