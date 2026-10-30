@@ -111,6 +111,8 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ $redis.name }}-config
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 data:
   redis-additional.conf: |
     maxmemory {{ $redis.maxmemory }}
