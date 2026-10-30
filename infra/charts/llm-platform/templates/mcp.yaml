@@ -43,8 +43,12 @@ spec:
       kind: HTTPRoute
       name: mcp-{{ $name }}
   traffic:
+    # MCP clients send their key in x-api-key, so agents' model and tool credentials stay on separate headers.
     apiKeyAuthentication:
       mode: Strict
+      location:
+        header:
+          name: x-api-key
       secretSelector:
         matchLabels:
           {{ $gateway.keyLabel }}: "true"

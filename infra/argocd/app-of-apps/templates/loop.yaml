@@ -29,6 +29,10 @@ spec:
         global:
           imageTags:
 {{ toYaml $.Values.global.imageTags | indent 12 }}
+  {{- with $application.ignoreDifferences }}
+  ignoreDifferences:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   syncPolicy:
     automated:
       prune: true
@@ -41,5 +45,8 @@ spec:
         maxDuration: 3m
     syncOptions:
       - ServerSideApply=true
+      {{- if $application.ignoreDifferences }}
+      - RespectIgnoreDifferences=true
+      {{- end }}
 {{- end }}
 {{- end }}

@@ -113,13 +113,12 @@ gateway:
   piiPatterns:
     - '\b(?:\d[ -]?){12,18}\d\b'
   # Callers outside this namespace: the RAG ingest workflow runs in data; the kagent controller discovers the tools of
-  # each RemoteMCPServer.
+  # each RemoteMCPServer. Agents arrive through Substrate's egress gateway (agents.egressGateway).
   externalClients:
     - cluster.local/ns/data/sa/rag-pipeline
     - cluster.local/ns/kagent/sa/kagent-controller
-  # ServiceAccounts in this namespace that call the gateway, besides agents and the benchmark: the knowledge API, and
-  # the proxy that sandboxed agent actors reach the gateway through.
-  namespaceClients: [rag-api, sandbox-egress, llm-catalog]
+  # ServiceAccounts in this namespace that call the gateway, besides the benchmark: the knowledge API and the catalog.
+  namespaceClients: [rag-api, llm-catalog]
   # MCP servers behind /mcp/<name>. Each target is a Service in this namespace.
   mcpServers:
     knowledge:
@@ -151,8 +150,8 @@ platformSecretStore: doppler
 # The platform's metrics agent, enrolled in the ambient mesh so it can be admitted by identity.
 metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
 
-# Agents run only as kagent SandboxAgents on Agent Substrate, in their own namespace: Substrate workers run privileged
-# gVisor sandboxes outside the mesh, and a SandboxAgent can only use a WorkerPool in its own namespace.
+# Agents run as kagent Agents on Agent Substrate, in their own namespace: Substrate workers run privileged gVisor
+# sandboxes outside the mesh, and an Agent's Harness can only use a WorkerPool in its own namespace.
 agents:
   namespace: llm-agents
   # The global model config every agent uses unless an A/B variant names another one. Each entry is a kagent
@@ -166,38 +165,32 @@ agents:
   # project keys.
   tracing:
     enabled: true
-  snapshotRoot: gs://platform-dev/substrate/llm-agents
+  harness: llm-agents
+  snapshotRoot: s3://platform-dev/substrate/llm-agents/
   workerPool:
     name: llm-agents
-    image: ghcr.io/kagent-dev/substrate/ateom-gvisor:v0.0.9
+    image: ghcr.io/kagent-dev/substrate/ateworker-gvisor:v1.0.0-rc1
     sandboxClass: gvisor
-    # Fixed: one worker runs one active conversation. Substrate 0.0.9's WorkerPool scale subresource has no
-    # status.selector, which the HPA behind KEDA requires, so the pool cannot be autoscaled yet. A coordinator
-    # conversation holds one worker and its delegation a second.
-    replicas: 3
+    sandboxConfig: gvisor-default
     resources:
       requests: {cpu: 100m, memory: 256Mi}
       limits: {memory: 2Gi}
-  # Substrate's API server resolves the actors' Secret references when it starts a golden actor.
-  substrateApiServer: {namespace: ate-system, name: ate-api-server}
-  # Sandboxed actors have no mesh identity. They leave the sandbox only through this proxy in the release namespace,
-  # which admits the workers by NetworkPolicy and calls the gateway and Langfuse with its own identity.
-  egress:
-    name: sandbox-egress
-    image: nginxinc/nginx-unprivileged:1.31.7-alpine
-    uid: 101
-    workerLabels: {ate.dev/worker-pool: llm-agents}
-    controller:
-      namespace: kagent
-      podLabels: {app.kubernetes.io/name: kagent, app.kubernetes.io/component: controller}
-  # Agents call each other over A2A through the gateway: kagent's proxy URL sends a sandbox's sub-agent calls to the
-  # egress proxy, which forwards kagent's sandbox A2A paths to the gateway's A2A routes and on to the controller.
+    # KEDA scales the pool on busy workers from Substrate's own fleet metric; one worker runs one active
+    # conversation. `replicas` is the starting size, and Argo CD leaves it to KEDA afterwards.
+    autoscaling:
+      minReplicas: 2
+      maxReplicas: 6
+      busyWorkersPerReplica: "0.7"
+      prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
+  # Substrate's egress gateway carries every actor connection and injects the gateway and Langfuse credentials, so
+  # agents never hold them. The gateway admits it by this mesh identity.
+  egressGateway: cluster.local/ns/ate-system/sa/atenet-egress
+  # kagent's public A2A endpoint, /agents/<namespace>/<name>, served by its controller.
   a2a:
     controller: {host: kagent-controller.kagent.svc.cluster.local, port: 8083}
-    # The controller's A2A base URL (kagent's A2A_BASE_URL), which it writes into agent cards.
-    controllerBaseUrl: http://kagent-controller.kagent.svc:8083
   # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
-  # `routing` is what the coordinator's routing tool reads to pick the agent; `agents` are its A2A sub-agents.
+  # `routing` is what the coordinator's routing tool reads to pick the agent; `agents` are its sub-agents, compiled
+  # into its runtime from their templates.
   # `abTest` runs a variant with another model config behind the same A2A route and splits its traffic by weight.
   list:
     - name: evidence-agent

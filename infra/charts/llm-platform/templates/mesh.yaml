@@ -74,6 +74,7 @@ spec:
               {{- range .Values.gateway.externalClients }}
               - {{ . | quote }}
               {{- end }}
+              - {{ .Values.agents.egressGateway | quote }}
     - to:
         - operation:
             ports: ["15020"]
