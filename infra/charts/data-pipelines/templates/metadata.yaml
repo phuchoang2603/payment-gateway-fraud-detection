@@ -118,11 +118,11 @@ spec:
           - name: NATIVE_TIMEOUT_SECONDS
             value: "3000"
           {{- include "data-pipelines.env" $ | nindent 10 }}
+        {{- with $connector.externalSecret }}
         envFrom:
-          {{- with $connector.externalSecret }}
           - secretRef:
               name: {{ .name }}
-          {{- end }}
+        {{- end }}
         volumeMounts:
           - name: connectors
             mountPath: /etc/metadata
