@@ -23,7 +23,7 @@ No CI job SHALL write to the bucket. The first step of every run SHALL write the
 ### Requirement: Chunk, embed and write workflow
 An Argo `WorkflowTemplate` `rag-knowledge` in the `rag-pipeline` chart, in namespace `data`, SHALL run these steps in order: publish corpus, chunk, embed, validate, write, verify, contract checks. No store SHALL be written before validation passes. On exit it SHALL publish the run status and lineage. Steps SHALL hand each other object paths, not data, and SHALL run without Spark.
 
-An Argo CD PostSync hook SHALL start a run whenever the `rag-pipeline` application syncs a change, and the hook SHALL have a deadline. Manual submission from the template SHALL remain possible. There SHALL be no schedule.
+The chart SHALL render one `Workflow` per `rag-pipeline` image tag, so each new pipeline image starts exactly one run. A failed run SHALL NOT fail or retry the application's sync. Runs SHALL have a deadline, manual submission from the template SHALL remain possible, and there SHALL be no schedule.
 - Chunks SHALL follow the document structure (requirement, clause, section or FAQ entry), split longer sections on paragraph boundaries with overlap, and start with the document title and section.
 - `chunk_id` SHALL be `<doc_id>#<section-slug>[-n]`, and each chunk SHALL carry a `content_sha256`.
 - Embedding SHALL use the platform's embedding model through the agent gateway's `/v1/embeddings` route with the `ragingest` client key, never by calling the model server directly. It SHALL produce 1024-dimension vectors, and documents SHALL be embedded without a query instruction.
@@ -33,6 +33,10 @@ The workflow SHALL be enabled only where the LLM platform is enabled.
 #### Scenario: Release with a changed document
 - **WHEN** a release publishes a new `rag-pipeline` image because a corpus source changed
 - **THEN** the application's sync starts a `rag-knowledge` run that writes a new `knowledge_version`
+
+#### Scenario: Failed run
+- **WHEN** a `rag-knowledge` run fails
+- **THEN** the application's sync still completes, the next release still syncs, and the failure is visible in Argo Workflows and as a failed run in OpenMetadata
 
 #### Scenario: Embedding through the gateway
 - **WHEN** the embed step runs

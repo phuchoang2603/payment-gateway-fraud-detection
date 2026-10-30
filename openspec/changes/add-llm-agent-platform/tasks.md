@@ -77,7 +77,7 @@
 - [x] 5b.6 Add the knowledge-base ODPS product and ODCS contract to `contracts/data-products/knowledge-base/`, read by the shared checks image. Publish the run status, corpus container and lineage from `src/rag` over OpenMetadata's REST API, without changing `openmetadata_jobs`.
 - [x] 5b.7 Create `infra/charts/rag-pipeline` and the `rag-pipeline` application (dev on, prod off), with:
   - the executor ServiceAccount and Role;
-  - the `rag-knowledge` WorkflowTemplate and its PostSync `Workflow` hook with a deadline;
+  - the `rag-knowledge` WorkflowTemplate and a `Workflow` per `rag-pipeline` image tag, in the last sync wave, never a sync hook;
   - the CNPG `rag-pgvector` Cluster (`18.3-standard-trixie`) and `Database` with the `vector` extension and the writer and reader roles;
   - the `rag-api` Deployment (REST and MCP);
   - ExternalSecrets (gateway storage identity, Polaris client, DB roles, gateway keys, OpenMetadata token, ClickHouse checks user);
@@ -115,7 +115,7 @@
 - [ ] 7.5 After section 5, verify that OpenMetadata shows the LLM service, both models and the agent application linked to `qwen3-8b`, and capture it.
 - [ ] 7.6 Run the benchmark baseline and each optimization (design.md decision 9) on dev by applying the rendered Job with `kubectl`, plus the gateway end-to-end run. Keep only improving settings, and set the gateway limits from the measured capacity. Record each run's command, image digest, args and date.
 
-- [ ] 7.7 Release `rag-pipeline` to dev and let its sync hook run `rag-knowledge`. Record:
+- [ ] 7.7 Release `rag-pipeline` to dev and let its per-image `Workflow` run `rag-knowledge`. Record:
   - the version, chunk count, step durations and check results;
   - a re-sync that exits early;
   - a run after deleting a section, showing the stale id gone online;
