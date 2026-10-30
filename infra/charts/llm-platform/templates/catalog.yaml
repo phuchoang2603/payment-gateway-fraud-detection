@@ -61,7 +61,8 @@
 {{- range $agent := .Values.agents.list }}
 {{- $_ := set $data (printf "prompt-%s.md" $agent.name) ($.Files.Get (printf "files/prompts/%s.md" $agent.name)) }}
 {{- end }}
-{{- $hash := toJson $data | sha256sum | trunc 10 }}
+{{- /* Release image tags are part of the hash, so a new MCP server image (new tools) re-runs the catalog. */}}
+{{- $hash := list $data (.Values.global | default dict).imageTags | toJson | sha256sum | trunc 10 }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
