@@ -30,6 +30,10 @@
 **LLM**
 
 - [Agents](llm/agents.md)
+- [Inference](llm/inference.md)
+- [Agent gateway](llm/gateway.md)
+- [RAG](llm/rag.md)
+- [Observability](llm/observability.md)
 
 **Deployment**
 
