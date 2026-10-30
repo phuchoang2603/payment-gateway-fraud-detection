@@ -21,7 +21,7 @@ No CI job SHALL write to the bucket. The first step of every run SHALL write the
 - **THEN** a new `knowledge_version` is produced and every chunk is embedded again
 
 ### Requirement: Chunk, embed and write workflow
-An Argo `WorkflowTemplate` `rag-knowledge` in the `rag-pipeline` chart, in namespace `llm`, SHALL run these steps in order: publish corpus, chunk, embed, write, validate, contract checks. On exit it SHALL publish the run status and lineage. Steps SHALL hand each other object paths, not data, and SHALL run without Spark.
+An Argo `WorkflowTemplate` `rag-knowledge` in the `rag-pipeline` chart, in namespace `llm`, SHALL run these steps in order: publish corpus, chunk, embed, validate, write, verify, contract checks. No store SHALL be written before validation passes. On exit it SHALL publish the run status and lineage. Steps SHALL hand each other object paths, not data, and SHALL run without Spark.
 
 An Argo CD PostSync hook SHALL start a run whenever the `rag-pipeline` application syncs a change, and the hook SHALL have a deadline. Manual submission from the template SHALL remain possible. There SHALL be no schedule.
 - Chunks SHALL follow the document structure (requirement, clause, section or FAQ entry), split longer sections on paragraph boundaries with overlap, and start with the document title and section.
@@ -52,6 +52,12 @@ It SHALL write the same chunks through Feast, project `knowledge_base`, feature 
 
 A new version SHALL replace the online contents completely, so chunks removed from the corpus are not retrievable. Every version SHALL stay in the offline table.
 
+After each refresh, the write step SHALL type the Feast table's vector column to 1024 dimensions and build an HNSW cosine index on it. The service SHALL search with the Feast query that this index serves.
+
+#### Scenario: Index after refresh
+- **WHEN** the online store has been refreshed for a new version
+- **THEN** with sequential scans disabled, the plan for the service's search query uses the HNSW index
+
 #### Scenario: Section deleted from a document
 - **WHEN** a section is removed and the next version is written
 - **THEN** its `chunk_id` is no longer returned by the online store, and the offline table still holds it under the earlier version
@@ -61,7 +67,7 @@ A new version SHALL replace the online contents completely, so chunks removed fr
 - **THEN** Postgres rejects it
 
 ### Requirement: Knowledge run validation
-A run SHALL fail when any check fails. The contract checks SHALL run on the current version through the catalog's test runner, as the other data products do:
+A run SHALL fail when any check fails. Every quality check SHALL pass on the staged, embedded chunks before anything is written. The same contract rules SHALL then run on the current version of `knowledge.chunks` through the catalog's test runner, as for the other data products. The rules are:
 - row count within the expected range;
 - unique `chunk_id`;
 - no empty text, and text length within bounds;
@@ -69,28 +75,39 @@ A run SHALL fail when any check fails. The contract checks SHALL run on the curr
 - synthetic documents flagged;
 - no card-number or e-mail patterns in the text.
 
-The pipeline checks SHALL verify that:
+Before the write, the gate SHALL also verify that:
 - every manifest document has at least one chunk;
-- every current chunk is readable from the online store by id with the same `content_sha256`, and no other ids are online;
-- a golden question set reaches the configured recall@3 against the expected documents.
+- a golden question set, ranked against the staged vectors, reaches the configured recall@3 against the expected documents.
+
+After the write, the verify step SHALL check that every current chunk is readable from the online store by id with the same `content_sha256`, and that no other ids are online.
 
 Each run SHALL keep a report under `runs/payment-gateway/knowledge/<run>/`.
 
 #### Scenario: Stale online chunk
 - **WHEN** the online store holds a `chunk_id` that is not in the current version
-- **THEN** the validate step fails the run and names the extra id
+- **THEN** the verify step fails the run and names the extra id
 
 #### Scenario: Retrieval regression
 - **WHEN** a corpus or chunker change makes the golden recall@3 fall below its threshold
-- **THEN** the run fails before the change is reported as successful
+- **THEN** the run fails before either store is written
 
-### Requirement: Knowledge Web API
-The `rag-api` service SHALL be a FastAPI application with pydantic request and response models, async handlers, and liveness and readiness endpoints used by its Kubernetes probes. It SHALL be the only reader of the knowledge online store, and SHALL connect with the reader role. It SHALL provide:
+### Requirement: Knowledge Web API and MCP tool in one service
+The `rag-api` service SHALL be one FastAPI application that serves both REST endpoints and MCP tools. It SHALL be the only reader of the knowledge online store, and SHALL connect with the reader role.
+
+REST: pydantic request and response models, async handlers, and liveness and readiness endpoints used by its Kubernetes probes. It SHALL provide:
 - chunk retrieval by `chunk_id`;
-- search that embeds the query through the gateway with the embedding model's query instruction and its own client key, takes candidate ids from Feast vector search, then reads the chunks by id and ranks them by distance;
+- search that embeds the query through the gateway with the embedding model's query instruction and its own client key, runs the indexed Feast vector search, and reads the chunks back by id;
 - customer feature retrieval by `customer_id` from the online feature store, once customer features are online.
 
-It SHALL run as a Knative Service in `llm`, and SHALL be load-tested for throughput and latency.
+MCP: the streamable-HTTP tools `search_knowledge` and `get_knowledge_chunk` at `/mcp`, in stateless mode, backed by the same functions as the REST endpoints.
+
+Deployment:
+- It SHALL run as a Knative Service in `llm` with revision-based rolling updates and automatic fallback to the last ready revision.
+- It SHALL be load-tested for throughput and latency.
+- Agents SHALL reach the MCP tools only through the gateway route `/mcp/knowledge`.
+- It SHALL be published to the agent registry as an MCP server.
+
+`evidence-agent` SHALL use these tools through the gateway, as version 0.2.0.
 
 #### Scenario: Unknown chunk id
 - **WHEN** a client requests a `chunk_id` that is not in the current version
@@ -100,18 +117,10 @@ It SHALL run as a Knative Service in `llm`, and SHALL be load-tested for through
 - **WHEN** a search request has an empty query or `top_k` outside the allowed range
 - **THEN** the API returns 422 without calling the gateway or the store
 
-### Requirement: Knowledge MCP tool
-The `rag-mcp` server SHALL expose the streamable-HTTP MCP tools `search_knowledge` and `get_knowledge_chunk`, implemented by calling the Web API. It SHALL hold no database credentials.
-- It SHALL run as a Knative Service with revision-based rolling updates and automatic fallback to the last ready revision.
-- It SHALL be reachable by agents only through the gateway route `/mcp/knowledge`.
-- It SHALL be published to the agent registry as an MCP server.
-
-`evidence-agent` SHALL use these tools through the gateway, as version 0.2.0.
-
 #### Scenario: Agent cites a chunk
 - **WHEN** an analyst asks `evidence-agent` what `NEW_ACCOUNT_GEO_MISMATCH` means
 - **THEN** the agent calls `search_knowledge` through the gateway and answers citing the returned `chunk_id`
 
 #### Scenario: Failed revision
-- **WHEN** a new `rag-mcp` revision fails its readiness check
+- **WHEN** a new `rag-api` revision fails its readiness check
 - **THEN** traffic stays on the last ready revision
