@@ -68,8 +68,8 @@ No breaking changes. Nothing downstream consumes gold today. The feature-store p
 - **Infra:**
   - `infra/charts/data-pipelines`: the `dp3-gold` and `warehouse-benchmark` templates, the schedule step, values, and dashboard ConfigMaps;
   - `infra/charts/clickhouse`: the `grafana` and `marts` users and profiles, the new databases, and their ExternalSecrets;
-  - `infra/charts/metadata-integrations`: connector schemas, and the Grafana connector, gated on its token.
+  - `infra/charts/data-pipelines` `catalog.connectors` (which owns OpenMetadata registration since #102): ClickHouse schemas for `lakehouse` and `marts`, and the Grafana connector, gated on its token.
 - **Images:** the Spark image ships the SQL files and the ClickHouse client library. Rebuild paths are unchanged, because the batch package is already covered.
 - **Docs:** `docs/data/offline.md`, `storage.md`, `orchestration-governance.md`, `docs/ml/feature-store.md`, `docs/overview/roadmap.md`, and the generated product references.
-- **Sequencing:** this branch stacks on PR #102 and is not pushed until #102 merges, because a trusted-PR push would replace #102's dev deployment. After that it is rebased onto `main`. The platform requests block only the Grafana evidence and the dashboard lineage, not DP3.
+- **Sequencing:** this branch is rebased onto `main` after #102 merged. Implementation waits until the prod v19 Bronze and Silver evidence run finishes. The PR's dev deployment is then a v18 smoke run, and DP3 is tested and evidenced on prod v19 after merge. The platform requests block only the Grafana evidence and the dashboard lineage, not DP3.
 - **Out of scope, as follow-ups:** Feast wiring, streaming features into the offline store, materialization and TTLs (roadmap steps 2–7); training; the LLM platform (#103), including the read-only ClickHouse analytics MCP tool, which will reuse the `grafana` user's model over `marts.*`; and incremental gold.

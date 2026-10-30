@@ -64,7 +64,7 @@ It SHALL check that every variant of a query returns the same result. It SHALL w
 
 #### Scenario: Evidence report
 
-- **WHEN** the benchmark completes on dev
+- **WHEN** the benchmark completes on the prod v19 marts
 - **THEN** its report holds the per-variant measurements for every fixed query, with the data snapshot it read
 
 ### Requirement: Least-privilege warehouse users

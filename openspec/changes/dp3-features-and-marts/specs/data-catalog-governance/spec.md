@@ -17,7 +17,7 @@ The pipeline execution SHALL identify the Silver snapshot IDs the run read.
 - **THEN** they can trace it through DP3 to `silver.attempts`, and from there through DP2 and DP1 to the historical source and Kafka topics
 
 ### Requirement: Gold validation evidence
-Every quality rule in the `gold-features` and `payment-marts` contracts SHALL run as a native OpenMetadata test case on its table, through the shared ClickHouse connection. A DP3 run SHALL succeed only when every expected test for its tables reports Success after the run started.
+Every quality rule in the `gold-features` and `payment-marts` contracts SHALL run as a native OpenMetadata test case on its table, through the shared ClickHouse connection. A DP3 run SHALL succeed only when the latest result of every expected test for its tables is Success.
 
 #### Scenario: Overlapping dimension versions
 

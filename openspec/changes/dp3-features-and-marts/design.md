@@ -66,7 +66,7 @@ Constraints:
 - `label_attempt` → `feat_customer_daily` and `feat_payment_method_daily` on the entity key, with `feat.event_timestamp <= label.event_timestamp`, taking the latest row.
 - `dim_customer` → `feat_customer_daily` on the customer key.
 
-A DBeaver ER export of the ClickHouse `marts` and `lakehouse.gold` tables is captured as evidence after the first dev run.
+A DBeaver ER export of the ClickHouse `marts` and `lakehouse.gold` tables is captured as evidence after the prod v19 DP3 run.
 
 *Alternative:* gold facts in Iceberg, built by Spark. Rejected by the agreed scope: ClickHouse already reads the lake, and a Spark mart would add a write path without adding evidence.
 
@@ -347,9 +347,10 @@ The marts container requests 100m CPU and 256 Mi, because ClickHouse does the wo
 
 ### 11. Catalog and lineage
 
-- **Connector.** The ClickHouse connector in `metadata-integrations` drops `databaseSchema: lakehouse`, which limits ingestion to one schema, and uses `schemaFilterPattern: {includes: ["^lakehouse$", "^marts$"]}`. Its table filter adds `^fact_`. `marts_benchmark` and the `__staging` tables are excluded.
+- **Where connectors live.** Since #102, `data-pipelines` owns the OpenMetadata connector configuration (`catalog.connectors`), its ExternalSecrets and a PostSync register job. Every checks run ingests the ClickHouse tables before its tests, and other connectors are ingested by the on-demand `metadata-discovery` WorkflowTemplate. Contracts and products are not imported into OpenMetadata (its 2.0.6 ODCS importer rejects them), so Git stays the authority for the gold contracts too.
+- **Connector.** The ClickHouse connector in `catalog.connectors` drops `databaseSchema: lakehouse`, which limits ingestion to one schema, and uses `schemaFilterPattern: {includes: ["^lakehouse$", "^marts$"]}`. Its table filter adds `^fact_`. `marts_benchmark` and the `__staging` tables are excluded.
 - **Pipelines.** `openmetadata_jobs.lineage` adds the pipelines `dp3-features` ("Gold features, dimension and labels from pinned Silver") and `dp3-marts` ("ClickHouse marts from Silver"), with the edges listed in the governance delta. `publish` records the Silver snapshot IDs from the run report in the pipeline status.
-- **Dashboard connector.** OpenMetadata's native Grafana connector has existed since 1.9.1, so 2.0.6 has it. It runs as a `metadata-integrations` connector:
+- **Dashboard connector.** OpenMetadata's native Grafana connector has existed since 1.9.1, so 2.0.6 has it. It is a `catalog.connectors.grafana` entry: the register job creates the service, and `metadata-discovery` ingests it on demand after a dashboard change. There is no schedule. Its configuration:
   - `kind: dashboard`, type `Grafana`;
   - `hostPort` set to the platform's in-cluster Grafana URL;
   - `apiKey` set to a service-account token (`glsa_…`) from `GRAFANA_OPENMETADATA_TOKEN`; the docs require the Admin role;
@@ -453,23 +454,26 @@ Requests 1–6 block only the dashboard evidence, and request 7 only dashboard l
 - **[Snapshot pinning on DataLakeCatalog tables is undocumented]** → Dev spike first. The mutex alone guarantees consistency, and a failed spike falls back to comparing snapshot IDs.
 - **[The OpenMetadata 2.0.6 Grafana lineage gap]** → SDK edges until the platform runs 2.1.
 - **[The `marts` user can read all query-log entries]** → In-cluster only; no credentials appear in query text.
-- **[Stacking on an unmerged PR]** → Branch only, no pushes, rebase after #102 merges. Shared spec deltas use ADDED requirements only, so they do not collide with #102's MODIFIED deltas.
+- **[#102's change is not archived yet]** → Shared spec deltas use ADDED requirements only, so they do not collide with #102's deltas, whichever change archives first.
+- **[Prod is the first full-scale test]** → The prod ClickHouse is the tightest resource. The prod run records the marts stage's peak memory and disk, and open question 3 decides the PVC before that run.
 - **[The platform requests are not met]** → DP3, the marts and the evidence run anyway. Only the Grafana screenshots and the dashboard lineage wait.
 
 ## Migration Plan
 
-1. Implement on this branch and run local non-test checks only. No push while #102 is open.
-2. After #102 merges, rebase onto `main`, push, and open a PR. The trusted PR deploys to dev: the new ClickHouse users and databases, the `dp3-gold` and `warehouse-benchmark` templates, and the dashboards.
-3. In dev: run `dp1-bronze` (v18), then `dp2-silver`, then `dp3-gold`, then `warehouse-benchmark`. Record the results in the docs.
-4. Send the platform requests in decision 13. Once they are met, capture the dashboard and lineage screenshots.
+#102 is merged to `main`, and this branch is rebased onto it.
 
-**Rollback:** revert the PR, then drop `marts`, `marts_benchmark` and the `gold` namespace in dev. Silver is untouched.
+1. **Start gate.** Implementation starts only after the prod Bronze and Silver v19 evidence run finishes. A prod-evidence thread will send the start instruction. Until then the branch holds only this proposal, unpushed.
+2. **Implement and open the PR.** Implement on this branch with local non-test checks only, then push and open a PR. The trusted PR deploys to dev, which serves as a v18 smoke run: `dp3-gold`, then `warehouse-benchmark`, on the existing v18 Silver. The new Doppler keys must exist in dev before that deploy.
+3. **Prod evidence after merge.** Prod releases come only from `main`. Run `dp3-gold`, then `warehouse-benchmark`, on the pinned v19 Silver, on the `large` profile and the prod ClickHouse. Record the results in the docs: Spark event logs and UI through the History Server pattern of #102, Argo graphs, OpenMetadata lineage, tests and profiles, the benchmark tables, and the ER export.
+4. **Platform requests.** Send the requests in decision 13. Once they are met, capture the dashboard and lineage screenshots in prod.
+
+**Rollback:** revert the PR, then drop `marts`, `marts_benchmark` and the `gold` namespace in the affected environment. Silver is untouched.
 
 ## Open Questions
 
 1. **Marts writer key.** Is a dedicated `marts` writer user with its own Doppler key acceptable, or should DP3 use `admin`? A dedicated user is recommended.
 2. **Database name.** Should the ClickHouse native database be `marts` (proposed) or `gold`?
-3. **Prod ClickHouse PVC.** Raise it from 30 Gi to 60 Gi in `values-prod.yaml`, or limit the prod marts to a trailing 180 days?
-4. **Prod enablement.** Should DP3 be enabled in prod together with Silver now, or stay dev-only until v19 Bronze and Silver have run?
+3. **Prod ClickHouse PVC.** Raise it from 30 Gi to 60 Gi in `values-prod.yaml`, or limit the prod marts to a trailing 180 days? This must be decided before the prod run, which is now the first full-scale test.
+4. **Prod enablement.** Resolved: DP3 is enabled in prod and tested there after the v19 Bronze and Silver evidence run.
 5. **Grafana connector.** OpenMetadata 2.0.6 catalogs dashboards but produces no ClickHouse panel lineage, because of a datasource-type mismatch fixed in 2.1.0-rc1. Do you accept SDK-published mart → dashboard edges until the platform upgrades? And will the platform issue an Admin-role Grafana token, as the connector docs require, or should a Viewer token be tried first?
 6. **Tracked SCD2 attributes.** Is shipping address plus account metadata enough, or should the customer's device set be added? Adding devices would mean a version every 120 days per customer in v19.
