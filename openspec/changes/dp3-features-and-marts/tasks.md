@@ -25,7 +25,7 @@
 
 - [ ] 3.1 Add `clickhouse-connect` (pinned) to `src/data-pipeline/batch` and lock it. Add `batch/sql/marts/{fact_payment_attempt,fact_merchant_day}.sql` (decision 6 DDL) and `batch/marts.py`:
   - drop leftover staging tables;
-  - compute the data-anchored window from `MARTS_RETENTION_DAYS` (prod 180, unset in dev for all of Silver) and write `build_info`;
+  - compute the rolling window from `MARTS_RETENTION_DAYS` (180), render it into the DDL `TTL`, insert only rows inside the window, and write `build_info`;
   - run monthly `INSERT … SELECT` from `lakehouse` with the Spark report's snapshot IDs (decision 7);
   - aggregate the merchant-day table;
   - reconcile the row count within the window before the swap;
@@ -37,7 +37,7 @@
   - the build's rates are null on zero denominators;
   - a failed insert leaves the live tables unchanged;
   - two builds give equal content;
-  - a retention window keeps exactly the last N start days and reconciles against Silver within that window;
+  - the build keeps only start days inside the rolling window, and reconciles against Silver within that window; a day older than the window is dropped by the `TTL` after `OPTIMIZE … FINAL`;
   - leftover staging is dropped.
 
   The lakehouse source is replaced by local MergeTree fixture tables named like the lakehouse tables, because CI has no Polaris.
@@ -76,7 +76,7 @@
   - mutexes `dp3-gold-writer` and `dp2-silver-writer`;
   - the `dev` and `large` profiles through `dp3.profile`.
 
-  Add the `clickhouse-marts` ExternalSecret and the values `dp3.*` and `marts.*`, including `marts.retentionDays: 180` in `values-prod.yaml`. Add the `gold` step and publish names to the suspended Kafka CronWorkflow. Verify with CI helm lint and template for all values files.
+  Add the `clickhouse-marts` ExternalSecret and the values `dp3.*` and `marts.*`, including `marts.retentionDays: 180` in `values.yaml`. Add the `gold` step and publish names to the suspended Kafka CronWorkflow. Verify with CI helm lint and template for all values files.
 - [ ] 6.2 Add the on-demand `warehouse-benchmark` WorkflowTemplate (one container step, `dp3-gold-writer` mutex, `warehouseBenchmark.reportRoot`). Verify with CI helm template.
 - [ ] 6.3 Add `infra/charts/data-pipelines/dashboards/{payments-overview,merchant-drilldown,fraud-outcomes}.json` (decision 13 panels):
   - datasource `{"type": "grafana-clickhouse-datasource", "uid": "clickhouse-marts"}`;
@@ -106,7 +106,7 @@
 ## 9. Runs and evidence (cluster)
 
 - [ ] 9.1 Dev smoke, after the PR deploys to dev. As `marts`, confirm that `SETTINGS iceberg_snapshot_id` pins a ``lakehouse.`silver.attempts` `` read, that the `SELECT ON lakehouse.*` grant and pruning on monthly filters work, and that `grafana`'s profile accepts the plugin's settings. Record the results in design.md decision 7, and choose the snapshot fallback if pinning fails. Then run `dp3-gold` and `warehouse-benchmark` on the existing v18 Silver.
-- [ ] 9.2 Prod evidence, after the PR merges and `main` releases to prod. Run `dp3-gold`, then `warehouse-benchmark`, on the v19 Silver. Record in the docs:
+- [ ] 9.2 Prod evidence, after the PR merges and `main` releases to prod. Capture it promptly, because the rolling `TTL` shrinks the marts until the live simulator runs. Run `dp3-gold`, then `warehouse-benchmark`, on the v19 Silver. Record in the docs:
   - run IDs, gold and mart row counts, DP3 phase tasks and times;
   - marts peak memory and disk;
   - check and profile outcomes, and lineage screenshots;

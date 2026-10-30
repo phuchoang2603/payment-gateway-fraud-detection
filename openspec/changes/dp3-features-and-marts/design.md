@@ -235,8 +235,10 @@ CREATE TABLE marts.fact_payment_attempt (
   INDEX ix_score risk_score TYPE minmax GRANULARITY 4,
   INDEX ix_outcome outcome TYPE set(8) GRANULARITY 4
 ) ENGINE = MergeTree
-PARTITION BY toYYYYMM(started_at)
-ORDER BY (integration_id, toDate(started_at), merchant_id, started_at);
+PARTITION BY toDate(started_at)
+ORDER BY (integration_id, toDate(started_at), merchant_id, started_at)
+TTL toDateTime(started_at) + INTERVAL {retention_days} DAY DELETE
+SETTINGS ttl_only_drop_parts = 1;
 
 CREATE TABLE marts.fact_merchant_day (
   integration_id LowCardinality(String), merchant_id String, day Date,
@@ -250,7 +252,8 @@ CREATE TABLE marts.fact_merchant_day (
   chargeback_window_complete Bool        -- day + 21 days <= build cutoff (max chargeback delay)
 ) ENGINE = MergeTree
 PARTITION BY toYYYYMM(day)
-ORDER BY (integration_id, day, merchant_id);
+ORDER BY (integration_id, day, merchant_id)
+TTL day + INTERVAL {retention_days} DAY DELETE;
 ```
 
 **Fixed queries and the structure that serves each one:**
@@ -269,7 +272,7 @@ ORDER BY (integration_id, day, merchant_id);
 - **Time first, as ClickHouse recommends.** Key columns go in ascending cardinality and by how often queries filter on them. Almost every dashboard and tool query has a time range. A day has 365 values in v19 and a merchant has 20,000, so the key is `(integration_id, toDate(started_at), merchant_id, started_at)`.
   - The key uses the expression `toDate(started_at)` rather than a separate date column. ClickHouse analyses monotonic functions, so a plain `started_at >= … AND started_at < …` filter, which is what Grafana's `$__timeFilter(started_at)` produces, prunes through the primary key with no rewriting.
   - Inside each day, rows are ordered by merchant and then by time. One merchant's range is a contiguous slice per day, and "latest attempts" reads stay ordered.
-  - Monthly partitions drop whole months for longer ranges and keep the part count low: about 6 partitions in prod with the 180-day window.
+  - Daily partitions line up with the day-granular TTL (decision 7), so expiry drops whole partitions instead of rewriting parts. That gives about 180 partitions at the 180-day retention, within ClickHouse's guidance of keeping the partition count in the hundreds to low thousands. Each partition holds about 0.5M rows in prod and about 9k in dev. `fact_merchant_day` is small, so it keeps monthly partitions and row-level TTL.
 - **Integration first.** `integration_id` has one value today, but it leads the key so per-integration queries stay correct.
 - **Hot merchant.** One merchant takes about 56% of rows, so Q1 on the hot merchant still reads about half of each day. The evidence reports Q1 for both the hot merchant and a median merchant, so the skew is visible instead of hidden.
 - **Key choice considered:** `(merchant_id, day)` first. It is slightly faster for one merchant over a long range, but every network-wide time query would scan whole partitions. A time-first key serves both.
@@ -283,7 +286,9 @@ ORDER BY (integration_id, day, merchant_id);
 **Steps:**
 
 1. Drop any `marts.*__staging` tables left by a failed run, then create empty staging tables from the DDL.
-2. Compute the window. `window_end` is the latest Silver start day. `window_start` is `window_end − (marts.retentionDays − 1)` when `marts.retentionDays` is set (prod: 180), and otherwise the first Silver start day (dev keeps all of v18's 90 days). The window is anchored to the data, not to `now()`, so a MergeTree `TTL` is not used: it would empty the marts while no new data arrives. Production systems usually use `TTL started_at + INTERVAL 180 DAY DELETE` with `ttl_only_drop_parts = 1` on append-only tables, so expired data leaves as whole monthly parts. That becomes the right choice when the marts turn incremental and live Kafka data flows; for full rebuilds over a fixed synthetic history, the build-time filter does the same job.
+2. Compute the window from the wall clock, matching the tables' `TTL`. `window_start = today − (marts.retentionDays − 1)`, with 180 days in dev and prod. `window_end` is the latest Silver start day. The build inserts only attempts inside the window, so it never writes rows that the `TTL` would expire straight away.
+
+   **Why a wall-clock `TTL`.** This is the standard ClickHouse retention for event data: `TTL … + INTERVAL N DAY DELETE`, with `ttl_only_drop_parts = 1` on day partitions, so expired days leave as whole partitions with no part rewrites. It is the right shape once the live simulator feeds Bronze, then Silver and DP3, continuously. Rebuilds and the background `TTL` then agree on one rolling 180-day window. The `{retention_days}` placeholder in the DDL comes from `marts.retentionDays`.
 3. For each month in the window, run one `INSERT INTO marts.fact_payment_attempt__staging SELECT … FROM lakehouse.`silver.attempts` LEFT JOIN (labels aggregated per attempt) …`:
    - Attempts are filtered to the month and the window, so Iceberg partition pruning applies.
    - Labels are filtered to `occurred_at` within the month and `label_available_at >= month start`, which prunes earlier partitions and uses file statistics to skip later ones.
@@ -298,7 +303,9 @@ ORDER BY (integration_id, day, merchant_id);
 
 **Storage.** With the 180-day prod window, `fact_payment_attempt` holds about 100M rows, estimated at 3–4 GB compressed, or 6–8 GB while a build holds both copies. That fits the existing 30 Gi PVC beside Langfuse, so the PVC is unchanged.
 
-**Dashboards and tools.** Dashboards and the later analytics tool read `build_info` to show the window, so a 180-day prod history is not mistaken for missing data.
+**Dashboards and tools.** Dashboards and the later analytics tool read `build_info` to show the window, so a 180-day history is not mistaken for missing data.
+
+**Consequence while live data is off.** v19 and v18 end on 2026-10-28. Until the live simulator feeds new days, each rebuild and each `TTL` merge drops the oldest days. The marts empty out about 180 days after the last generated day, around 2027-04-26. The prod evidence (the benchmark, dashboards and profiles) must therefore be captured soon after the v19 DP3 run, and each report records `build_info`'s window. The Iceberg gold tables are unaffected: they keep all of Silver.
 
 *Alternative:* incremental `REPLACE PARTITION` by month, after comparing per-month fingerprints between Iceberg and the mart. Deferred: a full rebuild is simpler, and Silver itself is not yet incremental.
 
@@ -344,7 +351,7 @@ publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, l
 - **RBAC.** No new RBAC is needed. The marts and benchmark containers mount a new `clickhouse-marts` secret, an ExternalSecret in the data-pipelines chart for `CLICKHOUSE_MARTS_PASSWORD`.
 - **Values:**
   - `dp3.enabled`, `dp3.profile`, `dp3.reportRoot`, `dp3.activeDeadlineSeconds`;
-  - `marts.clickhouseUrl`, `marts.resources`, `marts.retentionDays` (prod 180);
+  - `marts.clickhouseUrl`, `marts.resources`, `marts.retentionDays` (180 in `values.yaml`, so in both environments);
   - `warehouseBenchmark.enabled`, `warehouseBenchmark.reportRoot`;
   - `dashboards.enabled`.
 - **Prod enablement.** `values-prod.yaml` sets DP3 enablement the same way as Silver's.
@@ -467,7 +474,7 @@ These requests block only the dashboard evidence.
 
 ## Risks / Trade-offs
 
-- **[The prod ClickHouse is small (4 GiB, 30 Gi)]** → Monthly batches, `grace_hash` joins and the 2 GiB `marts` profile limit bound memory. The staging copy doubles storage during a build. The first v19 build records its peak memory and disk. Prod marts keep a 180-day window, which fits the existing PVC with room for the staging copy.
+- **[The prod ClickHouse is small (4 GiB, 30 Gi)]** → Monthly batches, `grace_hash` joins and the 2 GiB `marts` profile limit bound memory. The staging copy doubles storage during a build. The first v19 build records its peak memory and disk. Marts keep a rolling 180-day `TTL` window, which fits the existing PVC with room for the staging copy.
 - **[ClickHouse Iceberg pruning on DataLakeCatalog tables is weaker than Spark's]** → The monthly batches filter on partition columns. Variant A of the benchmark measures it, and whatever the result is goes into the report as evidence.
 - **[Snapshot consistency between Spark and ClickHouse]** → The DP2 mutex, plus the recorded snapshot-ID comparison that fails the marts stage on a mismatch.
 - **[Change-point features are unfamiliar to Feast users]** → The definition file and the `feat_` contract state the "latest row ≤ t" semantics. A contract rule rejects two identical consecutive rows, and the conformance examples include expiry.
@@ -476,6 +483,7 @@ These requests block only the dashboard evidence.
 - **[Snapshot pinning on DataLakeCatalog tables is undocumented]** → Dev spike first. The mutex alone guarantees consistency, and a failed spike falls back to comparing snapshot IDs.
 - **[The `marts` user can read all query-log entries]** → In-cluster only; no credentials appear in query text.
 - **[#102's change is not archived yet]** → Shared spec deltas use ADDED requirements only, so they do not collide with #102's deltas, whichever change archives first.
+- **[The wall-clock `TTL` shrinks the marts while live data is off]** → Accepted: the live simulator is to be enabled eventually. Evidence is captured promptly after the prod DP3 run, and every report records its window.
 - **[Prod is the first full-scale test]** → The prod ClickHouse is the tightest resource. The prod run records the marts stage's peak memory and disk against the 180-day window.
 - **[The platform requests are not met]** → DP3, the marts and the evidence run anyway. Only the Grafana screenshots wait.
 
@@ -496,7 +504,7 @@ None remain. Decisions recorded from the user:
 
 - DP3 writes the marts as a new `marts` user, with Doppler key `CLICKHOUSE_MARTS_PASSWORD`, and reuses every other DP1 and DP2 credential.
 - The ClickHouse database is `marts`.
-- Prod marts keep 180 days, anchored to the data, on the existing PVC.
+- Marts keep 180 days through a wall-clock `TTL` (`ttl_only_drop_parts` on daily partitions), because the live simulator will be enabled. The PVC is unchanged.
 - DP3 is tested on prod v19.
 - Grafana dashboards are not catalogued in OpenMetadata.
 - `dim_customer` tracks devices as the familiar-device set (decision 4).

@@ -10,7 +10,7 @@ ClickHouse SHALL hold two native MergeTree tables in the `marts` database.
 - **`marts.fact_payment_attempt`:** one row per lifecycle-valid Silver attempt, with the attempt, customer and payment-method keys, the merchant, the amount and currency, start and client attempt times, the risk decision, the outcome and payment status, the earliest available simulation-truth label and scenario, and the earliest available chargeback time.
 - **`marts.fact_merchant_day`:** one row per integration, merchant and UTC start day. It holds attempt, decided, succeeded, risk-declined and processor-declined counts, amounts, distinct customers, chargeback and truth-fraud counts, and their rates. Each rate uses the documented denominator and is null when the denominator is zero.
 
-The marts SHALL cover the attempts whose start day is within a configured retention window ending at the latest Silver start day: 180 days in prod, and all of Silver when unset. The window SHALL be anchored to the data, not to the wall clock, so marts do not shrink while no new data arrives. A one-row `marts.build_info` table SHALL record each build's window start and end, the Silver snapshot IDs, and the build time.
+The marts SHALL keep a rolling retention window of the configured number of days, 180, measured from the current date. Expiry SHALL be enforced by a table `TTL` that drops whole expired days. Each build SHALL insert only attempts inside that window. A one-row `marts.build_info` table SHALL record each build's window start and end, the Silver snapshot IDs, and the build time.
 
 The marts SHALL be built by ClickHouse from the `lakehouse` database with `INSERT … SELECT`. No Spark job and no export SHALL write them. Column names SHALL be stable and documented, so the dashboards and the later analytics tool can depend on them.
 
@@ -19,10 +19,15 @@ The marts SHALL be built by ClickHouse from the `lakehouse` database with `INSER
 - **WHEN** a mart build completes
 - **THEN** `fact_payment_attempt` has exactly as many rows as there are lifecycle-valid `silver.attempts` rows inside the recorded window of the Silver snapshot the build read, with no duplicate attempt key
 
-#### Scenario: Prod retention window
+#### Scenario: Retention window
 
-- **WHEN** prod Silver holds 365 days and the latest start day is D
-- **THEN** the marts hold attempts with start days from D − 179 to D, and `build_info` records that window
+- **WHEN** a build runs on day T over Silver that holds 365 days
+- **THEN** the marts hold only attempts with start days from T − 179 onward, and `build_info` records that window
+
+#### Scenario: Day ages out between builds
+
+- **WHEN** a day's attempts become older than the retention window
+- **THEN** ClickHouse drops that day's partition without a rebuild
 
 #### Scenario: Rate with an empty denominator
 
