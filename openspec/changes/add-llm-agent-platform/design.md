@@ -34,7 +34,7 @@ The rubric (`edai-2`, LLM rows) asks for: an llm-d based inference platform with
 
 **Non-Goals:**
 
-- The RAG pipeline (only the embedding endpoint it will call is built here), MCP servers, the scoring tool, the risk and coordinator agents, MCP/A2A routes, agent autoscaling, prompt management, LLM/agent dashboards and A/B tests. These come after the feature-store change.
+- The RAG consumers (the chunk Web API and the MCP search tools; the pipeline itself is in scope, decision 15), MCP servers, the scoring tool, the risk and coordinator agents, MCP/A2A routes, agent autoscaling, prompt management, LLM/agent dashboards and A/B tests. These come after the feature-store change.
 - A self-hosted laya decision model on CPU, for the coordinator's routing and for gateway screening (an agentgateway prompt-guard webhook) of requests that ask agents to act. It belongs with the coordinator in phase 2. The hosted Jev API is not used, because it would send analyst prompts to a third party.
 - Public exposure of the gateway, kagent UI or registry UI (port-forward only in this phase).
 - Running prod GPU capacity without explicit user confirmation.
@@ -278,6 +278,63 @@ Secrets:
 
 Headless init creates organisation `payment-gateway`, project `payment-gateway-fraud-detection` and an admin user. Sign-up is off. The UI uses the kagent pattern: the app owns a `VirtualService` on `ml/kubeflow-gateway` for `langfuse(-dev).phuchoang.sbs`, and the platform adds the TunnelBinding, the oauth2-proxy hosts and the Dex redirect URIs. The shared proxy is the access control.
 
+### 15. RAG knowledge pipeline (after #102 merges)
+
+The RAG pipeline turns a small document corpus about how the gateway behaves into embedded chunks stored through Feast. It never reads Silver, Gold or any payment data. The corpus, with source, sync rule and size for each document, is in [rag-corpus.md](rag-corpus.md): about 14 documents and 140–160 chunks.
+- Eight documents are rendered from specs, contracts and docs when the image is built, so they cannot drift from the code.
+- Six are short, hand-written and labelled synthetic: decline codes, risk policy, analyst runbook, chargebacks, merchant terms and FAQ.
+- Simulator configs are excluded, because they hold the generator's ground truth.
+
+**Corpus and versioning.**
+- Sources live in `src/data-pipeline/knowledge/`: hand-written documents with front matter (`doc_id`, title, audience, `synthetic`, source of truth), plus a `sources.yaml` that lists the rendered documents. The `knowledge` image is built from them.
+- Its build paths in `.github/service-images.json` include every source file, so a change to any source produces a new image through the normal release.
+- CI runs the sync tests. For example, the reason and decline codes in `decline-codes` must equal those in the Go constants and protos.
+- No CI job holds bucket credentials. The first workflow step writes the corpus to `datasets/payment-gateway/knowledge/<knowledge_version>/`, with a `manifest.json` of per-document SHA-256 hashes. Like the historical datasets, a prefix is immutable once its manifest exists.
+- `knowledge_version` is a hash of the documents, the chunker settings and the embedding model with its revision. Changing the model or the chunker therefore produces a new version and a full re-embed.
+
+**Workflow.** An Argo `WorkflowTemplate`, `rag-knowledge`, in the `data-pipelines` chart, following the #102 pattern. Steps pass object paths, never data:
+1. `publish-corpus` writes the version prefix if it is absent. If the offline table and the online store already hold this version, the run ends early, so reruns are cheap.
+2. `chunk` → `runs/payment-gateway/knowledge/<run>/chunks.parquet`.
+3. `embed` calls the agent gateway's `/v1/embeddings` in batches with its own client key (`rag`). The gateway mesh policy admits the workflow's ServiceAccount in `data`, which is an ambient namespace. Documents are embedded without an instruction prefix. Queries use Qwen3-Embedding's query instruction, which every consumer must apply.
+4. `write` appends to the offline table and refreshes the online store.
+5. `validate` runs the pipeline-side checks.
+6. `checks` runs the contract checks through the existing `openmetadata_jobs.checks` (product `knowledge-base`).
+7. On exit, `publish` records the run status and lineage in OpenMetadata: corpus container → `rag-knowledge` → `knowledge.chunks`.
+
+The workflow runs on manual submit, plus a daily `CronWorkflow`. The early exit makes the cron a no-op when nothing changed. The pipeline depends on the embedding model, so it is enabled wherever `llm-platform` is: dev now, prod only when the LLM platform is.
+
+**Stores.**
+- **Offline:** Iceberg table `knowledge.chunks` in the app-owned Polaris catalog, written with PyIceberg (no Spark for a few hundred rows). It is append-only by `knowledge_version`. ClickHouse sees it through the DataLakeCatalog, so the ODCS SQL checks and the catalog discovery from #102 apply unchanged.
+- **Online:** Feast project `knowledge_base` on its own CNPG Postgres, `knowledge-pgvector`, in `data`.
+  - Image `ghcr.io/cloudnative-pg/postgresql:18.3-standard-trixie`, which ships pgvector. A CNPG `Database` resource enables the `vector` extension, because Feast does not create it.
+  - Online store `postgres` with `vector_enabled: true` and `vector_len: 1024`. The Feast registry is a SQL registry in the same database, so the writer applies definitions and readers never need DDL.
+  - Roles: `knowledge_writer` owns the schema (pipeline); `knowledge_reader` gets SELECT only (later Web API and MCP tools). Their passwords are new app Doppler keys.
+  - Feast builds no ANN index and its `vector` column has no fixed dimension, so search is an exact cosine scan. That is adequate below tens of thousands of chunks.
+- **Feature view `knowledge_chunks`:** entity `chunk_id`, with fields `doc_id`, `title`, `section`, `audience`, `synthetic`, `source_path`, `text`, `embedding` (1024 × float32, vector index, cosine), `knowledge_version` and `content_sha256`, and no TTL. Its batch source is the version's chunk Parquet. Retrieval goes through Feast only (no direct SQL).
+
+**Chunking and identity.**
+- Chunking follows the markdown structure: one chunk per spec requirement, numbered clause, section or FAQ entry.
+- A section longer than about 350 tokens splits on paragraph boundaries with about 50 tokens of overlap. Each chunk's text starts with "document title › section", so it stands alone.
+- `chunk_id` is `<doc_id>#<section-slug>[-n]`. It stays stable while a heading is unchanged, and `content_sha256` detects edits.
+- Each new version refreshes the online store fully: the feature view's table is dropped and re-applied, then every current chunk is written. Deleted and renamed chunks therefore disappear, and the online store is briefly empty only when the corpus changes.
+- The offline table keeps every version for history and lineage.
+
+**Validation.** A failed check fails the run.
+- **Contract checks** (ODCS `contracts/data-products/knowledge-base/knowledge-chunks.odcs.yaml`, scalar counts that must be 0, on the current version):
+  - row count within the expected range;
+  - unique `chunk_id`;
+  - no empty text, and text length within bounds;
+  - every embedding has 1024 finite values with unit norm;
+  - synthetic documents flagged;
+  - no card-number or e-mail patterns in the text.
+- **Pipeline checks:**
+  - every manifest document has at least one chunk;
+  - the online store matches the offline version, with every chunk readable by id with the same hash and no extra ids online;
+  - a small golden question set reaches recall@3 against the expected `doc_id`s, for example "what does `NEW_ACCOUNT_GEO_MISMATCH` mean" → `decline-codes`.
+- Reports go to `runs/payment-gateway/knowledge/<run>/report.json`.
+
+**Not in this decision:** the chunk-by-id Web API (FastAPI and pydantic) and the MCP `search` and `get_chunk` tools. They read through `knowledge_reader` and have to re-check the Feast 0.66 bug the reference recorded (ids and feature values mismatched in `retrieve_online_documents_v2(...).to_df()`): use the search for candidate ids, then read features by id.
+
 ### 13. Platform changes (talos-proxmox, separate approval)
 
 | # | Component | Placement | Notes |
@@ -304,6 +361,8 @@ The clusters stay on Talos 1.13.9 / Kubernetes 1.36.3. No change is needed to th
 - [Chat and embedding share one 16 GB GPU] → fixed memory fractions per process, with AWQ chat as the in-family fallback. If both still do not fit, embedding moves to CPU (0.6B is small) and the decision is recorded.
 - [The OpenMetadata part depends on PR #102] → it lands after #102 merges and is rebased onto its layout. The rest of the change does not wait for it.
 - [agentgateway policies overwrite per target] → the chart renders policies from the route list, one per route, so a second policy for the same route cannot be declared in values.
+- [The RAG pipeline builds on #102's `data-pipelines`, `openmetadata_jobs`, Polaris and ClickHouse] → it is implemented only after #102 merges, on top of that layout.
+- [Hand-written synthetic documents could drift from the code or be mistaken for real policy] → each is labelled synthetic in its text, and CI tests keep the codes and thresholds equal to the code.
 - [Benchmark variants need the GPU] → the `LLMInferenceService` is stopped for the duration of a run, and dev agents are unavailable then.
 
 ## Migration Plan

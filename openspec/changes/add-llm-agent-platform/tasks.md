@@ -61,6 +61,26 @@
 - [ ] 5.1 Rebase onto #102. In `openmetadata_jobs/integrations.py`, add the `llm` service kind (`CreateLLMServiceRequest`, `CustomLLM`) and idempotent registration of the `ai` entries (`llmModels`, `aiApplications`). Verify locally with ruff. CI runs the existing integration tests; add one behaviour test only if the AI registration adds a distinct failure path, such as an application whose primary model is missing.
 - [ ] 5.2 Add the `llm` connector and the `ai` section to `infra/charts/metadata-integrations` values (dev), matching the llm-platform chart's model names, revisions and agent version. Verify with `helm template` that `connectors.json` contains them.
 
+## 5b. RAG knowledge pipeline (after PR #102 merges; design.md decision 15)
+
+- [x] 5b.1 Research the corpus sources and record the proposed corpus in `rag-corpus.md`.
+- [ ] 5b.2 Settle the open corpus questions with the user: the synthetic documents to write, the trigger, the store placement and chart owner, and whether the Web API and MCP tools join this change.
+- [ ] 5b.3 Create `src/data-pipeline/knowledge/`:
+  - the hand-written synthetic documents with front matter, and `sources.yaml` for the rendered ones;
+  - the renderer, the structure-aware chunker, the batched embed client, the Feast definitions (`knowledge_base`, `knowledge_chunks`, Postgres online store with `vector_enabled`, SQL registry) and the validation;
+  - CI tests for the code and threshold sync, chunk-id stability, and version hashing.
+
+  Verify locally only with ruff and format.
+- [ ] 5b.4 Add the `knowledge` image to `.github/service-images.json`, with build paths covering every corpus source.
+- [ ] 5b.5 Add `contracts/data-products/knowledge-base/` (ODPS product and ODCS `knowledge-chunks` with the contract checks as SQL counts). In `openmetadata_jobs`, add the `knowledge-base` checks product and the `rag-knowledge` pipeline and lineage edges.
+- [ ] 5b.6 In `infra/charts/data-pipelines`, add:
+  - the `rag-knowledge` WorkflowTemplate (publish corpus, chunk, embed, write, validate, checks, publish on exit) and its CronWorkflow, enabled in dev only;
+  - the CNPG `knowledge-pgvector` Cluster (`18.3-standard-trixie`), its `Database` with the `vector` extension, the writer and reader roles, and their ExternalSecrets;
+  - the Polaris namespace or table grant for `knowledge`.
+
+  Verify with `helm template` and `helm lint`.
+- [ ] 5b.7 In `llm-platform`, add the `rag` client key ExternalSecret and admit the workflow's identity in `data` to the gateway. Provision `LLM_GATEWAY_RAG_API_KEY`, `KNOWLEDGE_DB_WRITER_PASSWORD` and `KNOWLEDGE_DB_READER_PASSWORD` in Doppler `dev` and `prd`.
+
 ## 6. Benchmark harness
 
 - [x] 6.1 Add `infra/charts/llm-platform/benchmark/job.yaml` (`vllm bench serve` concurrency sweep with the `prefix_repetition` workload, results printed as JSON) and `server.yaml` (standalone variant server with its mesh policy), applied with `kubectl`. Verify with a server-side dry run on dev.
@@ -81,6 +101,12 @@
 - [ ] 7.5 After section 5, verify that OpenMetadata shows the LLM service, both models and the agent application linked to `qwen3-8b`, and capture it.
 - [ ] 7.6 Run the benchmark baseline and each optimization (design.md decision 9) on dev by applying the rendered Job with `kubectl`, plus the gateway end-to-end run. Keep only improving settings, and set the gateway limits from the measured capacity. Record each run's command, image digest, args and date.
 
+- [ ] 7.7 Submit `rag-knowledge` on dev. Record:
+  - the version, chunk count, step durations and check results;
+  - a rerun that exits early;
+  - a run after deleting a section, showing the stale id gone online;
+  - a sample of Feast vector search results and the OpenMetadata lineage and test results, with screenshots.
+
 ## 8. Documentation and cleanup
 
 - [ ] 8.1 Write `docs/llm/platform.md`:
@@ -90,6 +116,7 @@
   - links to code at a commit, with captures.
 
   Write `docs/llm/benchmark.md` with the workload, recorded results and conclusions. Add both to `docs/_Sidebar.md`.
+- [ ] 8.1b Write `docs/llm/rag.md` from the 7.7 run: corpus, versioning, workflow, stores, checks and lineage.
 - [ ] 8.2 Update only the affected parts of:
   - `docs/llm/agents.md` (status and component table);
   - `docs/overview/roadmap.md` (LLM rows and the Knative/KEDA mapping);
