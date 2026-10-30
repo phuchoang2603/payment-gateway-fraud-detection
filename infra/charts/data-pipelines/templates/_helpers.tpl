@@ -230,6 +230,10 @@ spec:
     spark.sql.adaptive.advisoryPartitionSizeInBytes: {{ $sizing.advisoryPartitionSize | quote }}
     spark.io.compression.codec: zstd
     spark.decommission.enabled: "true"
+    {{- /* A spot executor that is shutting down rejects tasks; without exclusion a task retries on it until its
+    attempts run out, as the v19 Silver labels write did. */}}
+    spark.excludeOnFailure.enabled: "true"
+    spark.task.maxFailures: "8"
     spark.storage.decommission.enabled: "true"
     spark.storage.decommission.shuffleBlocks.enabled: "true"
     spark.storage.decommission.rddBlocks.enabled: "true"
