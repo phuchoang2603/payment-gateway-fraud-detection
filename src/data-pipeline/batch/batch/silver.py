@@ -118,9 +118,12 @@ def collapse_duplicates(hashed: DataFrame, plan: dict) -> DataFrame:
 
 
 def narrow_dedup(hashed: DataFrame, plan: dict) -> tuple[DataFrame, DataFrame]:
+    """Unique events keep their Bronze day layout; the collapsed duplicates, grouped by event_id, are re-clustered by
+    day so a fanout write opens one file per task rather than one per day in every task."""
     collapsed = collapse_duplicates(hashed, plan)
     unique = against_duplicates(hashed, plan, "left_anti").select(*DEDUP_COLUMNS)
-    return unique.unionByName(collapsed.select(*DEDUP_COLUMNS)), collapsed
+    by_day = collapsed.select(*DEDUP_COLUMNS).repartition(F.to_date("occurred_at"))
+    return unique.unionByName(by_day), collapsed
 
 
 def full_width_dedup(hashed: DataFrame) -> DataFrame:
