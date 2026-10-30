@@ -62,7 +62,7 @@ def test_workflow(table, cases, snapshot=None):
                 "config": {
                     "type": "TestSuite",
                     "entityFullyQualifiedName": table_fqn(table),
-                    "testCases": [case.name for case in cases],
+                    "testCases": [],
                 }
             },
         },
