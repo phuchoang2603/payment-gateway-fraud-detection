@@ -45,3 +45,19 @@ Mesh authorization SHALL admit connections to the model servers only from the ga
 #### Scenario: Direct call to vLLM
 - **WHEN** a pod other than the gateway or endpoint picker connects to the vLLM port
 - **THEN** the connection is refused by the mesh
+
+### Requirement: Knowledge MCP route
+The gateway SHALL route `/mcp/knowledge` to the `rag-mcp` server through an MCP backend, with its own policy:
+- strict API keys;
+- the agents' client id allowed;
+- tool-call metrics exported for each tool, with success and failure counts.
+
+Mesh authorization SHALL admit only the gateway to `rag-mcp`, and only `rag-mcp` and the gateway to `rag-api`.
+
+#### Scenario: Agent lists tools
+- **WHEN** a client with the agents' key lists tools on `/mcp/knowledge`
+- **THEN** it receives `search_knowledge` and `get_knowledge_chunk`, and a request without a key gets 401
+
+#### Scenario: Direct call
+- **WHEN** a pod other than the gateway calls `rag-mcp` directly
+- **THEN** the mesh refuses the connection
