@@ -7,6 +7,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: rag-knowledge
+  namespace: {{ .Values.pipelineNamespace }}
 spec:
   serviceAccountName: rag-pipeline
   entrypoint: knowledge
@@ -80,7 +81,7 @@ spec:
           - name: EMBEDDING_REVISION
             value: {{ .Values.embedding.revision }}
           {{- include "rag-pipeline.storageEnv" . | nindent 10 }}
-          {{- include "rag-pipeline.gatewayEnv" (dict "root" . "secret" .Values.gateway.ingestKeySecret) | nindent 10 }}
+          {{- include "rag-pipeline.gatewayEnv" (dict "root" . "secret" "rag-gateway") | nindent 10 }}
           {{- include "rag-pipeline.dbEnv" (dict "root" . "secret" "rag-db-writer") | nindent 10 }}
         securityContext:
           {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
@@ -101,7 +102,7 @@ spec:
           {{- include "rag-pipeline.metadataEnv" . | nindent 10 }}
         envFrom:
           - secretRef:
-              name: {{ .Values.openmetadata.connectorSecret }}
+              name: rag-clickhouse
         securityContext:
           {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
         resources:
@@ -111,22 +112,28 @@ spec:
           - name: metadata-connectors
             mountPath: /etc/metadata
             readOnly: true
+          - name: contracts
+            mountPath: /contracts/knowledge-base
+            readOnly: true
       volumes:
         - name: metadata-connectors
           configMap:
-            name: {{ .Values.openmetadata.connectorsConfigMap }}
+            name: rag-metadata-connectors
+        - name: contracts
+          configMap:
+            name: rag-knowledge-contract
     # The version output defaults to empty, so a run that failed before publishing the corpus records status only.
     - name: publish
       retryStrategy:
         limit: 2
         retryPolicy: OnError
       container:
-        image: {{ $metadata | quote }}
-        command: [python, -m, openmetadata_jobs.publish]
+        image: {{ $rag | quote }}
+        args: [rag.pipeline, catalog]
         env:
-          - name: PIPELINES
-            value: rag-knowledge
-          - name: DATASET_VERSION
+          - name: AI_ASSETS
+            value: {{ .Values.aiAssets | toJson | quote }}
+          - name: KNOWLEDGE_VERSION
             value: "{{ "{{workflow.outputs.parameters.knowledge-version}}" }}"
           - name: WORKFLOW_STATUS
             value: "{{ "{{workflow.status}}" }}"
@@ -136,14 +143,15 @@ spec:
         securityContext:
           {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
         resources:
-          requests: {cpu: 50m, memory: 256Mi}
-          limits: {memory: 1Gi}
+          requests: {cpu: 50m, memory: 128Mi}
+          limits: {memory: 512Mi}
 ---
 # Each sync that changes this application (in practice a new rag image) runs the pipeline once.
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
   name: rag-knowledge-sync
+  namespace: {{ .Values.pipelineNamespace }}
   annotations:
     argocd.argoproj.io/hook: PostSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation

@@ -21,7 +21,7 @@ No CI job SHALL write to the bucket. The first step of every run SHALL write the
 - **THEN** a new `knowledge_version` is produced and every chunk is embedded again
 
 ### Requirement: Chunk, embed and write workflow
-An Argo `WorkflowTemplate` `rag-knowledge` in the `rag-pipeline` chart, in namespace `llm`, SHALL run these steps in order: publish corpus, chunk, embed, validate, write, verify, contract checks. No store SHALL be written before validation passes. On exit it SHALL publish the run status and lineage. Steps SHALL hand each other object paths, not data, and SHALL run without Spark.
+An Argo `WorkflowTemplate` `rag-knowledge` in the `rag-pipeline` chart, in namespace `data`, SHALL run these steps in order: publish corpus, chunk, embed, validate, write, verify, contract checks. No store SHALL be written before validation passes. On exit it SHALL publish the run status and lineage. Steps SHALL hand each other object paths, not data, and SHALL run without Spark.
 
 An Argo CD PostSync hook SHALL start a run whenever the `rag-pipeline` application syncs a change, and the hook SHALL have a deadline. Manual submission from the template SHALL remain possible. There SHALL be no schedule.
 - Chunks SHALL follow the document structure (requirement, clause, section or FAQ entry), split longer sections on paragraph boundaries with overlap, and start with the document title and section.

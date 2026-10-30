@@ -63,6 +63,12 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/part-of: rag-pipeline
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.pipelineNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: rag-pipeline
       ports:
         - {port: 5432, protocol: TCP}
     - from:

@@ -1,0 +1,38 @@
+{{- $clickhouse := .Values.openmetadata.clickhouse }}
+{{- $connectors := dict "clickhouse" (dict
+  "kind" "database"
+  "discover" true
+  "source" (dict
+    "type" "clickhouse"
+    "serviceName" "clickhouse"
+    "serviceConnection" (dict "config" (dict
+      "type" "Clickhouse"
+      "username" $clickhouse.username
+      "password" "${CLICKHOUSE_PASSWORD}"
+      "hostPort" $clickhouse.hostPort
+      "databaseSchema" .Values.openmetadata.clickhouseDatabase
+      "https" false))
+    "sourceConfig" (dict "config" (dict
+      "type" "DatabaseMetadata"
+      "tableFilterPattern" (dict "includes" (list "^knowledge\\."))
+      "markDeletedTables" false
+      "includeStoredProcedures" false
+      "overrideMetadata" false)))) }}
+# The same ClickHouse service the data pipelines register, filtered to the knowledge tables this chart owns.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-metadata-connectors
+  namespace: {{ .Values.pipelineNamespace }}
+data:
+  connectors.json: {{ $connectors | toJson | quote }}
+---
+# The knowledge-base contract this chart owns; the shared checks job reads it from DATA_PRODUCTS_ROOT.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-knowledge-contract
+  namespace: {{ .Values.pipelineNamespace }}
+data:
+  knowledge-chunks.odcs.yaml: |
+    {{- .Files.Get "files/knowledge-base/knowledge-chunks.odcs.yaml" | nindent 4 }}

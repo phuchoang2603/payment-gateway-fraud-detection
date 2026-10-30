@@ -9,7 +9,7 @@ from openmetadata_jobs.integrations import workflow
 from openmetadata_jobs.wap import Catalog, audited_snapshots
 from openmetadata_jobs.warehouse import SERVICE, sql_table, table_fqn
 
-PRODUCTS = ("bronze-payments", "silver-payments", "knowledge-base")
+PRODUCTS = ("bronze-payments", "silver-payments")
 PAGE = 100
 
 

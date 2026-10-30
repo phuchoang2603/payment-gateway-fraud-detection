@@ -242,22 +242,17 @@ agentregistry 0.4.0 materializes agents as kagent `v1alpha2` resources, the API 
 
 **Prompts are versioned in the registry.** Each agent's system prompt is a file, `files/prompts/<agent>.md`. kagent reads it through `systemMessageFrom` from the `agent-prompts` ConfigMap. The same content is published to agentregistry as a `Prompt` (`<agent>-system-prompt`, tagged with the agent version), so every released prompt version is retained and browsable next to its agent. In phase 2 Langfuse becomes the prompt-management tool the rubric names, and the source of truth. It is deployed now by this chart (decision 14). A sync step renders each agent's `production`-labelled prompt into the `agent-prompts` ConfigMap, because kagent cannot fetch from Langfuse itself, and the registry `Prompt` entries are then dropped. Langfuse also receives the gateway's LLM traces (OTLP). Skills use the same registry mechanism when agents get them. OpenMetadata's `promptTemplate` entity catalogues the same prompts with the AI assets (decision 12).
 
-### 12. OpenMetadata: register the AI assets through the metadata-integrations chart
+### 12. OpenMetadata: register the AI assets from this change's own code
 
-OpenMetadata 2.0.6 has first-class AI entities: `llmService`, `llmModel`, `aiApplication`, `mcpServer` and `promptTemplate`. It has no ingestion connector for a custom LLM service, so the assets are created through the SDK by the existing `metadata-integrations` register Job, the same chart and image that register the ClickHouse, Kafka, Argo and object-storage services.
+OpenMetadata 2.0.6 has first-class AI entities: `llmService`, `llmModel`, `aiApplication` and `mcpServer`. It has no ingestion connector for a custom LLM service, so the assets are created through its REST API.
 
-The chart gains:
+This change must stay independent of the data pipelines, so it does not touch `openmetadata_jobs` or the `data-pipelines` chart, which now holds the OpenMetadata connections. Instead the RAG workflow's `catalog` step (decision 15) registers them on every run with idempotent `PUT`s from the `rag` image. That step already runs in `data`, the namespace OpenMetadata admits.
+- `llmService` `agent-gateway`: `CustomLLM`, base URL the gateway's `/v1`, no key stored.
+- `llmModels` `qwen3-8b` and `qwen3-embedding`: base model, pinned revision as version, capabilities, and the vLLM deployment.
+- `aiApplication` `evidence-agent`: agent, kagent, primary model `qwen3-8b`, the current agent version, and its MCP server.
+- `mcpServer` `knowledge`: the gateway route, its two tools, and lineage to `knowledge.chunks`.
 
-- an `llm` connector kind: `CreateLLMServiceRequest`, `serviceType: CustomLLM`, `baseURL` set to the gateway's `/v1`, with no API key stored in the catalog;
-- an `ai` section that the same Job applies with `create_or_update`:
-  - `llmModels`: `qwen3-8b` (`modelType: Quantized`, `baseModel: Qwen/Qwen3-8B`, provider `Qwen`, the pinned HF revision as `modelVersion`, capabilities `Chat`/`FunctionCalling`/`ToolUse`, deployment info for vLLM and the GPU) and `qwen3-embedding` (`Embeddings`);
-  - `aiApplications`: `evidence-agent` (`applicationType: Agent`, framework kagent, `primaryModel` `qwen3-8b`, `developmentStage: Development`, version 0.1.0, source-code link).
-
-Later phases add `mcpServers` (the evidence and scoring tools, linked to the Feast and KServe assets they read), the risk and coordinator applications with `upstreamApplications`/`downstreamApplications`, and `knowledgeBases` pointing at the RAG tables. These are only new values entries.
-
-The register code lives where open PR #102 moves it (`src/data-pipeline/openmetadata_jobs/openmetadata_jobs/integrations.py`), so this part is implemented on top of #102 after it merges. The `metadata-integrations` application is enabled in dev and disabled in prod, so AI assets are catalogued in dev until prod metadata integration is enabled. Bring-up checks that the pinned `openmetadata-ingestion` 2.0.6 SDK ships the generated `api.ai` requests and has `create_or_update` routes for them; if not, the Job uses the SDK's REST client against `/v1/services/llmServices`, `/v1/llmModels` and `/v1/aiApplications`.
-
-The catalog facts (model names, revisions, agent version) are values in the metadata chart that must match the llm-platform chart, because one Helm chart cannot read another's files. Both live in the same release, and the agent version is bumped in both places in the same commit as the registry catalog.
+The facts come from the `rag-pipeline` values and must match the `llm-platform` chart, because one chart cannot read another's values. Both charts change in the same commit when a model or the agent version changes.
 
 ### 14. Langfuse, app-owned, on the shared ClickHouse
 
@@ -291,7 +286,9 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
   - `rag.service`: the Web API and the MCP server in one process.
 
   They share the Feast definitions and the gateway client. Python because Feast and PyIceberg are Python. There is no Spark, since a few hundred rows do not need a cluster.
-- Chart: `infra/charts/rag-pipeline`, application `rag-pipeline`. Everything runs in `llm`, next to the embedding model and the gateway. It is enabled where `llm-platform` is: dev now, prod only with the LLM platform.
+- Chart: `infra/charts/rag-pipeline`, application `rag-pipeline`, enabled where `llm-platform` is: dev now, prod only with the LLM platform.
+- Namespaces: the store and the knowledge API run in `llm`, next to the embedding model and the gateway. The ingest workflow runs in `data`, because that is where Argo Workflows, Polaris and OpenMetadata already admit pipelines. Running it in `llm` instead would need two platform changes (Argo Workflows watching `llm`; OpenMetadata admitting `llm`) and a `lakehouse` network change; that is recorded as a follow-up.
+- The chart owns everything it needs: its own ExternalSecrets in both namespaces, a ClickHouse connector filtered to the `knowledge` tables, and the knowledge-base contract in `files/knowledge-base/`. It changes no data-pipeline code, chart or contract.
 
 **Corpus inside the image.**
 - The hand-written documents (with front matter `doc_id`, title, audience, `synthetic`, source of truth) and `sources.yaml`, which lists the rendered documents, live in `src/rag/corpus/`.
@@ -301,15 +298,15 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 - `knowledge_version` is a hash of the documents, the chunker settings and the embedding model with its revision. Changing the model or the chunker re-embeds everything.
 
 **Workflow and trigger.**
-- Argo `WorkflowTemplate` `rag-knowledge` in `llm`. Steps pass object paths, never data:
+- Argo `WorkflowTemplate` `rag-knowledge` in `data`. Steps pass object paths, never data:
   1. `publish-corpus` writes the version prefix if absent. It ends the run early when the offline table and the online store already hold the version.
   2. `chunk` → `runs/payment-gateway/knowledge/<run>/chunks.parquet`.
   3. `embed` calls the gateway's `/v1/embeddings` in batches with the `ragingest` client key. Documents are embedded without an instruction prefix.
   4. `validate` gates the write. It runs every quality check on the staged, embedded Parquet, so a bad corpus never reaches either store.
   5. `write` appends to the offline table, then refreshes the online store and rebuilds its ANN index.
   6. `verify` checks that the stores hold exactly what was validated.
-  7. `checks` re-runs the contract rules on `knowledge.chunks` with `openmetadata_jobs.checks` (product `knowledge-base`), so the results are recorded in the catalog.
-  8. On exit, `publish` records the run status and lineage in OpenMetadata.
+  7. `checks` re-runs the contract rules on `knowledge.chunks` with the shared `openmetadata_jobs.checks` image, pointed at this chart's contract and a connector that ingests only the `knowledge` tables, so the results are recorded in the catalog.
+  8. On exit, `catalog` (in the `rag` image, over OpenMetadata's REST API) records the run status, the corpus container, the lineage to `knowledge.chunks` and the AI assets of decision 12.
 - Each release that changes the app runs it: an Argo CD `PostSync` hook in the chart creates a `Workflow` from the template. The app only goes out of sync when its rendered manifests change, which in practice means a new `rag` image, that is, changed documents or code. A run that finds nothing new ends at step 1.
 - The hook has a deadline, so a failed run shows as a failed sync instead of hanging. Manual `argo submit --from workflowtemplate/rag-knowledge` stays available. There is no cron.
 - Access to object storage: the gateway storage identity (`OBJECT_GATEWAY_*` from `gateway-doppler`), which already covers `datasets/payment-gateway/`, `runs/payment-gateway/` and `lakehouse/`.
@@ -350,7 +347,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
   - a golden question set reaches recall@3 against the expected `doc_id`s. The questions are embedded through the gateway and ranked in memory against the staged vectors, so retrieval quality is known before the store changes.
 
   A CI test asserts that the Python gate and the ODCS contract cover the same rule ids.
-- **Contract rules** (ODCS `contracts/data-products/knowledge-base/knowledge-chunks.odcs.yaml`, scalar counts that must be 0, on the current version; the catalog records them after the write):
+- **Contract rules** (ODCS `infra/charts/rag-pipeline/files/knowledge-base/knowledge-chunks.odcs.yaml`, scalar counts that must be 0, on the current version; the catalog records them after the write):
   - row count within the expected range;
   - unique `chunk_id`;
   - text non-empty and within bounds;
@@ -388,8 +385,8 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 | P5 | Agent Substrate 0.0.9 (`substrate-crds` and `substrate`, the version kagent 0.10.4 pins), JWT mode, Valkey, snapshots in an S3/MinIO prefix with its own identity (not bundled RustFS) | `ate-system` (privileged Pod Security) | No Kubernetes feature gates needed. Its workers must reach the `ml` gateway in the mesh. |
 | P6 | KEDA (latest stable) | `operators` | Phase 2 only (decision 10) |
 | P8 | Namespace `llm` (ambient, Pod Security `restricted`), with kagent and agentregistry watching it | `llm` | The application's namespace; the app never creates or deletes it |
-| P9 | Add `llm` to the Argo Workflows controller's `workflowNamespaces` (`apps/components/argo-workflows/values.yaml`) | `operators` | Lets the RAG workflow (decision 15) run in `llm`; the app chart brings its own executor ServiceAccount and Role |
-| P10 | Admit `llm` to OpenMetadata on 8585 in `apps/components/openmetadata/templates/network.yaml` | `data` | The RAG workflow's checks and lineage steps call OpenMetadata from `llm` |
+| P9 (follow-up, optional) | Add `llm` to the Argo Workflows controller's `workflowNamespaces` | `operators` | Only if the RAG workflow moves from `data` to `llm` (decision 15) |
+| P10 (follow-up, optional) | Admit `llm` to OpenMetadata on 8585 | `data` | Same condition as P9 |
 | P7 | Enroll the platform vmagent in Istio ambient (`istio.io/dataplane-mode: ambient` on its pods) | `observability` | Lets app mesh policies admit the metrics agent by identity, rather than opening inference ports to sources with no identity |
 
 The clusters stay on Talos 1.13.9 / Kubernetes 1.36.3. No change is needed to the GPU operator, the DRA driver, Istio or Knative.
@@ -404,7 +401,7 @@ The clusters stay on Talos 1.13.9 / Kubernetes 1.36.3. No change is needed to th
 - [Chat and embedding share one 16 GB GPU] → fixed memory fractions per process, with AWQ chat as the in-family fallback. If both still do not fit, embedding moves to CPU (0.6B is small) and the decision is recorded.
 - [The OpenMetadata part depends on PR #102] → it lands after #102 merges and is rebased onto its layout. The rest of the change does not wait for it.
 - [agentgateway policies overwrite per target] → the chart renders policies from the route list, one per route, so a second policy for the same route cannot be declared in values.
-- [RAG builds on #102's `openmetadata_jobs`, Polaris and ClickHouse, and runs in `llm`] → this branch is stacked on #102 and goes live only after #102 merges. Polaris admits `llm` (app chart); the platform adds `llm` to the Argo Workflows controller (P9) and to OpenMetadata's network policy (P10).
+- [RAG reuses #102's Polaris, ClickHouse and checks image while staying out of the data-pipeline code] → the workflow runs in `data` with chart-owned secrets, connector and contract, and publishes lineage itself; no platform, lakehouse or data-pipelines change is needed.
 - [The customer-features endpoint needs customer features online] → it lands with or after the DP3 slice; the chunk endpoints do not wait for it.
 - [Hand-written synthetic documents could drift from the code or be mistaken for real policy] → each is labelled synthetic in its text, and CI tests keep the codes and thresholds equal to the code.
 - [Benchmark variants need the GPU] → the `LLMInferenceService` is stopped for the duration of a run, and dev agents are unavailable then.

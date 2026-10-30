@@ -26,7 +26,9 @@ def row(chunk_id="d#a", doc_id="d", text="A passage long enough to pass the text
 
 
 def test_gate_rules_match_the_contract_rule_ids(repo):
-    contract = yaml.safe_load((repo / "contracts/data-products/knowledge-base/knowledge-chunks.odcs.yaml").read_text())
+    contract = yaml.safe_load(
+        (repo / "infra/charts/rag-pipeline/files/knowledge-base/knowledge-chunks.odcs.yaml").read_text()
+    )
     contract_ids = {rule["id"] for table in contract["schema"] for rule in table["quality"]}
 
     assert set(validation.contract_rules([row()])) == contract_ids

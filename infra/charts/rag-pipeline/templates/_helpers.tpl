@@ -22,7 +22,7 @@ capabilities:
 
 {{- define "rag-pipeline.dbEnv" -}}
 - name: RAG_DB_HOST
-  value: {{ .root.Values.database.name }}-rw
+  value: {{ .root.Values.database.name }}-rw.{{ .root.Release.Namespace }}.svc.cluster.local
 - name: RAG_DB_NAME
   value: {{ .root.Values.database.dbname }}
 - name: RAG_DB_USER
@@ -78,7 +78,7 @@ capabilities:
 - name: CLICKHOUSE_DATABASE
   value: {{ .Values.openmetadata.clickhouseDatabase }}
 - name: DATA_PRODUCTS_ROOT
-  value: /contracts/data-products
+  value: /contracts
 - name: HOME
   value: /tmp
 {{- end -}}

@@ -6,7 +6,6 @@ SERVICE = "argo"
 KAFKA_SERVICE = "payment-gateway-kafka"
 STORAGE_SERVICE = "platform-object-storage"
 HISTORICAL_PREFIX = "datasets/payment-gateway/historical"
-KNOWLEDGE_PREFIX = "datasets/payment-gateway/knowledge"
 PAYMENTS_TOPIC = "payments.events.v1"
 LABELS_TOPIC = "fraud.labels.v1"
 
@@ -40,14 +39,6 @@ def dataset(version):
     return Node("container", f"{STORAGE_SERVICE}.{dataset_container(version)}")
 
 
-def knowledge_container(version):
-    return f"knowledge-{version}"
-
-
-def knowledge(version):
-    return Node("container", f"{STORAGE_SERVICE}.{knowledge_container(version)}")
-
-
 def pipeline_fqn(name):
     return f"{SERVICE}.{name}"
 
@@ -59,14 +50,12 @@ SILVER_EVENTS = table("silver.payment_events")
 SILVER_ATTEMPTS = table("silver.attempts")
 SILVER_LABELS = table("silver.labels")
 SILVER_REJECTED = table("silver.rejected_events")
-KNOWLEDGE_CHUNKS = table("knowledge.chunks")
 
 PIPELINES = {
     "dp1-bronze-historical": "Bronze from the historical source",
     "dp1-bronze-kafka": "Bronze from the payments and labels topics",
     "dp2-silver": "Silver from pinned Bronze snapshots",
     "maintain-lakehouse": "Lakehouse compaction, layout and snapshot expiry",
-    "rag-knowledge": "RAG knowledge chunks embedded through the agent gateway",
 }
 
 
@@ -89,5 +78,4 @@ def edges(dataset_version: str) -> list[Edge]:
         Edge(BRONZE_LABELS, SILVER_LABELS, "dp2-silver"),
         Edge(BRONZE_LABELS, SILVER_REJECTED, "dp2-silver"),
     ]
-    knowledge_edges = [Edge(knowledge(dataset_version), KNOWLEDGE_CHUNKS, "rag-knowledge")]
-    return historical_edges + kafka_edges + silver_edges + knowledge_edges
+    return historical_edges + kafka_edges + silver_edges
