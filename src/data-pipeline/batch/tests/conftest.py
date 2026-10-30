@@ -38,6 +38,16 @@ def brokers():
 
 
 @pytest.fixture(scope="session")
+def clickhouse():
+    from testcontainers.core.container import DockerContainer
+    from testcontainers.core.wait_strategies import HttpWaitStrategy
+
+    with DockerContainer("clickhouse/clickhouse-server:26.10.2.103").with_exposed_ports(8123) as container:
+        HttpWaitStrategy(8123, "/ping").for_response_predicate(lambda body: "Ok" in body).wait_until_ready(container)
+        yield container
+
+
+@pytest.fixture(scope="session")
 def spark(tmp_path_factory, contract_inputs):
     os.environ.setdefault("SPARK_SHUFFLE_PARTITIONS", "4")
     os.environ["SPARK_JARS_PACKAGES"] = ",".join(
