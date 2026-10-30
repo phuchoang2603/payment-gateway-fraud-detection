@@ -7,7 +7,7 @@ from confluent_kafka import Consumer, TopicPartition
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from batch.lakehouse import LOCAL_WRITE_OPTIONS, TABLE_PROPERTIES
+from batch.lakehouse import LOCAL_WRITE_OPTIONS, TABLE_PROPERTIES, ref_snapshot, stage, write_ref
 from batch.metrics import phase
 from batch.schema import (
     EVENT_COLUMNS,
@@ -103,6 +103,7 @@ def run_historical(spark, root, version, run_id):
             }
         )
         same_version = (F.col("_source") == "historical") & (F.col("_dataset_version") == version)
+        stage(spark, name)
         with phase(spark, phases, f"write {table}"):
             writer = frame.writeTo(name)
             if table == "payment_events":
@@ -113,7 +114,7 @@ def run_historical(spark, root, version, run_id):
         report["tables"][name] = {
             "rows": sum(written.values()),
             "files": len(parts),
-            "snapshot_id": current_snapshot(spark, name),
+            "snapshot_id": current_snapshot(spark, name, write_ref()),
         }
     return report
 
@@ -160,6 +161,8 @@ def read_parts(spark, root, table, parts):
 
 def run_kafka(spark, bootstrap, run_id):
     ensure_tables(spark)
+    for table in (EVENTS, LABELS, REJECTED):
+        stage(spark, table)
     starting = os.environ.get("KAFKA_STARTING_OFFSETS", "earliest")
     if starting not in ("earliest", "latest"):
         raise ValueError("KAFKA_STARTING_OFFSETS must be earliest or latest")
@@ -201,8 +204,8 @@ def run_kafka(spark, bootstrap, run_id):
             "rejected_starts": _partition_map(rejected_starts),
             "ends": _partition_map(highs),
             "snapshot_ids": {
-                table: current_snapshot(spark, table),
-                REJECTED: current_snapshot(spark, REJECTED),
+                table: current_snapshot(spark, table, write_ref()),
+                REJECTED: current_snapshot(spark, REJECTED, write_ref()),
             },
         }
         records.unpersist()
@@ -324,9 +327,9 @@ def ensure_tables(spark):
     )
 
 
-def current_snapshot(spark, table):
-    rows = spark.sql(f"SELECT snapshot_id FROM {table}.snapshots ORDER BY committed_at DESC LIMIT 1").collect()
-    return rows[0]["snapshot_id"] if rows else None
+def current_snapshot(spark, table, ref="main"):
+    """The head of a ref; main unless asked for this run's write branch. Unpublished audit branches are never read."""
+    return ref_snapshot(spark, table, ref)
 
 
 def hadoop_uri(uri):

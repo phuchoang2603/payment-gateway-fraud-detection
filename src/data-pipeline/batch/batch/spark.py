@@ -17,6 +17,8 @@ def session(app_name):
         .config("spark.redaction.regex", "(?i)secret|password|token|access.?key|credential")
         .config(f"spark.sql.catalog.{ICEBERG_CATALOG}", "org.apache.iceberg.spark.SparkCatalog")
     )
+    if os.environ.get("WAP_BRANCH"):
+        builder = builder.config("spark.wap.branch", os.environ["WAP_BRANCH"])
     if os.environ.get("SPARK_JARS_PACKAGES"):
         builder = builder.config("spark.jars.packages", os.environ["SPARK_JARS_PACKAGES"])
     local_warehouse = os.environ.get("BATCH_LOCAL_WAREHOUSE")

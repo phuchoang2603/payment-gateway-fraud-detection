@@ -39,6 +39,9 @@ spec:
           - name: checks
             template: checks
             depends: "spark-historical.Succeeded || spark-kafka.Succeeded"
+          - name: publish-tables
+            template: publish-tables
+            depends: checks
     - name: spark-historical
       {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
       resource:
@@ -47,7 +50,7 @@ spec:
         successCondition: status.currentState.currentStateSummary == ResourceReleased
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
         manifest: |
-          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp1-bronze-historical" "main" "bronze" "product" "bronze-payments" "stage" "bronze-historical" "sizing" $historical "extraEnv" (list (dict "name" "BRONZE_SOURCE" "value" "historical") (dict "name" "DATASET_VERSION" "value" "{{workflow.parameters.dataset-version}}") (dict "name" "HISTORICAL_ROOT" "value" .Values.bronze.historicalRoot) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.bronze.reportRoot))) | nindent 10 }}
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp1-bronze-historical" "wap" true "main" "bronze" "product" "bronze-payments" "stage" "bronze-historical" "sizing" $historical "extraEnv" (list (dict "name" "BRONZE_SOURCE" "value" "historical") (dict "name" "DATASET_VERSION" "value" "{{workflow.parameters.dataset-version}}") (dict "name" "HISTORICAL_ROOT" "value" .Values.bronze.historicalRoot) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.bronze.reportRoot))) | nindent 10 }}
     - name: spark-kafka
       {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
       resource:
@@ -56,7 +59,8 @@ spec:
         successCondition: status.currentState.currentStateSummary == ResourceReleased
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
         manifest: |
-          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp1-bronze-kafka" "main" "bronze" "product" "bronze-payments" "stage" "bronze-kafka" "sizing" $kafka "extraEnv" (list (dict "name" "BRONZE_SOURCE" "value" "kafka") (dict "name" "KAFKA_BOOTSTRAP_SERVERS" "value" .Values.bronze.kafka.bootstrapServers) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.bronze.reportRoot))) | nindent 10 }}
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp1-bronze-kafka" "wap" true "main" "bronze" "product" "bronze-payments" "stage" "bronze-kafka" "sizing" $kafka "extraEnv" (list (dict "name" "BRONZE_SOURCE" "value" "kafka") (dict "name" "KAFKA_BOOTSTRAP_SERVERS" "value" .Values.bronze.kafka.bootstrapServers) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.bronze.reportRoot))) | nindent 10 }}
 {{- include "data-pipelines.checks" (dict "root" $ "product" "bronze-payments") | nindent 4 }}
+{{- include "data-pipelines.publish-tables" (dict "root" $ "product" "bronze-payments") | nindent 4 }}
 {{- include "data-pipelines.publish" (dict "root" $ "pipelines" (printf "dp1-bronze-%s" "{{workflow.parameters.source}}") "dataset" "{{workflow.parameters.dataset-version}}") | nindent 4 }}
 {{- end }}

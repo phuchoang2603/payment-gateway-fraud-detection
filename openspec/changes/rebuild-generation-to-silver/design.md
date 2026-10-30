@@ -165,17 +165,20 @@ The checks stage runs native discovery for the run's tables, then the test suite
 
 The Spark jobs own only conservation and quarantine accounting: manifest row equality, offset bookkeeping, and the rejected-record counts that the run report and checks read.
 
-### 7. Two workflows, three stages, one retry level
+### 7. Two workflows, write-audit-publish, one retry level
 
-`dp1-bronze` (parameters: `source=historical|kafka`, `dataset-version`) and `dp2-silver` each run three stages:
+`dp1-bronze` (parameters: `source=historical|kafka`, `dataset-version`) and `dp2-silver` each run these stages:
 
-1. **spark:** an Argo `resource` step creating a SparkApplication, with `setOwnerReference`, operator restarts disabled, and success/failure conditions.
-2. **checks:** the native OpenMetadata container.
-3. **publish:** the metadata-image SDK publishes lineage, the pipeline execution and contracts. It runs on success and failure, so failed runs are visible.
+1. **spark:** an Argo `resource` step creating a SparkApplication, with `setOwnerReference`, operator restarts disabled, and success/failure conditions. With `WAP_BRANCH=audit-<workflow>`, the session sets `spark.wap.branch`; each table is branched from main before the first write, so the run's writes land on the audit branch and main is unchanged.
+2. **checks:** the native OpenMetadata container. Each table's rules run with `SETTINGS iceberg_snapshot_id` pinned to the audit branch head (main for a table the run did not write), read from the Iceberg REST catalog.
+3. **publish-tables:** only after every check succeeds, one catalog transaction fast-forwards each table's main to its branch head, asserting main has not moved, and drops the branch. A failed run leaves main untouched and keeps its branch for diagnosis.
+4. **publish (exit handler):** the metadata-image SDK publishes lineage, the pipeline execution and contracts. It runs on success and failure, so failed runs are visible.
+
+Readers of another pipeline's tables (DP2 reading Bronze, the benchmark, ClickHouse queries) use main, so they only see audited data. Snapshot lookups read refs, not the latest committed snapshot, because unpublished branches also add snapshots.
 
 Retries:
 - Each stage has `retryStrategy` with a limit of 2 for errors only.
-- Spark retries are safe because historical overwrite is idempotent and a failed Kafka append commits nothing.
+- Spark retries are safe because historical overwrite is idempotent and a retried Kafka append resumes from the offsets already on its audit branch.
 - A synchronization mutex per workflow serializes writers.
 
 A `CronWorkflow` for `dp1-bronze source=kafka`, followed by `dp2-silver`, exists but is disabled in both environments.

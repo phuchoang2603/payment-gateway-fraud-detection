@@ -9,12 +9,12 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 | Workflow | Stages | Status |
 |---|---|---|
 | `generate-historical` | Shards in parallel → publish | Done; prod renders only this template |
-| `dp1-bronze` (historical or Kafka mode) | Spark ingest → ClickHouse checks → OpenMetadata publish | In progress (PR #102) |
-| `dp2-silver` | Spark curate → ClickHouse checks → OpenMetadata publish | In progress (PR #102) |
+| `dp1-bronze` (historical or Kafka mode) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | In progress (PR #102) |
+| `dp2-silver` | Spark curate to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | In progress (PR #102) |
 | `dp3-features` | Spark features → checks → publish | Planned |
 | `maintain-lakehouse`, `dp2-benchmark` | Single on-demand stage | In progress (PR #102) |
 
-Each pipeline stage retries only on execution errors, never on failed data checks, and each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow. Pending: screenshots of each pipeline graph and run, taken after the first dev run.
+Bronze and Silver use write-audit-publish: a run's rows stay on its `audit-<workflow>` Iceberg branch until every check passes, so DP2 and other readers of `main` never see unaudited data, and a failed run leaves its branch for diagnosis. Each pipeline stage retries only on execution errors, never on failed data checks, and each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow. Pending: screenshots of each pipeline graph and run, taken after the first dev run.
 
 ### Spark sizing and placement
 

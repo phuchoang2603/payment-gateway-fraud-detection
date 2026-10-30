@@ -3,7 +3,7 @@
 The offline path turns a reproducible synthetic history into curated tables. The historical generator writes immutable per-day Parquet datasets to object storage, standing in for an export from another department; DP1 ingests them into Bronze, DP2 curates Silver, and DP3 (planned) computes offline features. Each data problem the generator introduces is solved by a pipeline stage.
 
 - Generator code: [`src/data-pipeline/simulator/simulator`](../../src/data-pipeline/simulator/simulator) (`world.py`, `lifecycle.py`, `historical.py`, `store.py`).
-- Pipeline status: **in progress** in [PR #102](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/102), designed by the [`rebuild-generation-to-silver`](../../openspec/changes/rebuild-generation-to-silver/design.md) change. Each pipeline is an Argo workflow with a Spark stage and a checks stage (Spark job → ClickHouse SQL checks), and an exit handler that publishes the run to OpenMetadata; see [orchestration and governance](orchestration-governance.md).
+- Pipeline status: **in progress** in [PR #102](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/102), designed by the [`rebuild-generation-to-silver`](../../openspec/changes/rebuild-generation-to-silver/design.md) change. Each pipeline is an Argo workflow that writes, audits and publishes: the Spark stage writes to an audit branch of each Iceberg table, the checks stage runs the ClickHouse SQL checks against that branch, and only when every check passes does `publish-tables` fast-forward the tables' main branch. An exit handler publishes the run to OpenMetadata; see [orchestration and governance](orchestration-governance.md).
 
 ## Data problems and how they are solved
 

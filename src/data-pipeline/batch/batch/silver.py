@@ -9,7 +9,7 @@ from pyspark.sql import functions as F
 from batch.bronze import EVENTS as BRONZE_EVENTS
 from batch.bronze import LABELS as BRONZE_LABELS
 from batch.bronze import current_snapshot
-from batch.lakehouse import LOCAL_WRITE_OPTIONS, WRITE_PROPERTIES
+from batch.lakehouse import LOCAL_WRITE_OPTIONS, WRITE_PROPERTIES, stage, write_ref
 from batch.metrics import phase
 from batch.schema import EVENT_COLUMNS, LABEL_COLUMNS
 from batch.spark import ICEBERG_CATALOG, session
@@ -212,11 +212,11 @@ def total_records(spark, table, snapshot) -> int:
 
 
 def snapshot_info(spark, table) -> dict:
+    snapshot = current_snapshot(spark, table, write_ref())
     row = spark.sql(
-        f"SELECT snapshot_id, summary['added-records'] AS added FROM {table}.snapshots "
-        "ORDER BY committed_at DESC LIMIT 1"
+        f"SELECT summary['added-records'] AS added FROM {table}.snapshots WHERE snapshot_id = {snapshot}"
     ).first()
-    return {"snapshot_id": row["snapshot_id"], "added_records": int(row["added"] or 0)}
+    return {"snapshot_id": snapshot, "added_records": int(row["added"] or 0)}
 
 
 def with_event_hash(events: DataFrame) -> DataFrame:
@@ -439,6 +439,7 @@ def write_table(spark, name, frame, pins, run_id, partition=None, options=None) 
         if partition is not None:
             creator = creator.partitionedBy(partition)
         creator.create()
+    stage(spark, name)
     writer = frame.writeTo(name).options(**(options or {}))
     for key, value in {**pins, "dp2.run_id": run_id}.items():
         writer = writer.option(f"snapshot-property.{key}", value)

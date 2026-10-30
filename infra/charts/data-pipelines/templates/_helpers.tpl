@@ -142,6 +142,26 @@ retryStrategy:
 {{- include "data-pipelines.env" .root | nindent 6 }}
 {{- end -}}
 
+{{- define "data-pipelines.wapBranch" -}}
+audit-{{ "{{workflow.name}}" }}
+{{- end -}}
+
+{{- define "data-pipelines.publish-tables" -}}
+- name: publish-tables
+  retryStrategy:
+    limit: 2
+    retryPolicy: OnError
+  container:
+    image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
+    command: [python, -m, openmetadata_jobs.wap]
+    env:
+      - name: CHECK_PRODUCT
+        value: {{ .product | quote }}
+      - name: WAP_BRANCH
+        value: {{ include "data-pipelines.wapBranch" . | quote }}
+{{- include "data-pipelines.env" .root | nindent 6 }}
+{{- end -}}
+
 {{- define "data-pipelines.checks" -}}
 - name: checks
   retryStrategy:
@@ -157,6 +177,8 @@ retryStrategy:
         value: /etc/metadata/connectors.json
       - name: NATIVE_TIMEOUT_SECONDS
         value: {{ .root.Values.checks.nativeTimeoutSeconds | int64 | toString | quote }}
+      - name: WAP_BRANCH
+        value: {{ include "data-pipelines.wapBranch" . | quote }}
 {{- include "data-pipelines.env" .root | nindent 6 }}
     envFrom:
       - secretRef:
@@ -242,6 +264,10 @@ spec:
               {{- include "data-pipelines.env" .root | nindent 14 }}
               - name: SPARK_SHUFFLE_PARTITIONS
                 value: {{ $sizing.shufflePartitions | quote }}
+              {{- if .wap }}
+              - name: WAP_BRANCH
+                value: {{ include "data-pipelines.wapBranch" . | quote }}
+              {{- end }}
               {{- range .extraEnv }}
               - name: {{ .name }}
                 value: {{ .value | quote }}

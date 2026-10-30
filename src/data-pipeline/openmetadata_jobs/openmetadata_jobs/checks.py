@@ -6,6 +6,7 @@ import yaml
 
 from openmetadata_jobs.catalog import client, native, server
 from openmetadata_jobs.integrations import workflow
+from openmetadata_jobs.wap import Catalog, audited_snapshots
 from openmetadata_jobs.warehouse import SERVICE, sql_table, table_fqn
 
 PRODUCTS = ("bronze-payments", "silver-payments")
@@ -38,7 +39,14 @@ def check(contract, table, rule):
     return Check(table=table, name=rule["id"], description=rule.get("description", rule["id"]), sql=sql)
 
 
-def test_workflow(table, cases):
+def audited(sql, snapshot):
+    """Pin a rule to the audited Iceberg snapshot; each rule reads only its own table, so one setting covers it."""
+    if snapshot is None:
+        return sql
+    return f"{sql.rstrip().rstrip(';')}\nSETTINGS iceberg_snapshot_id = {int(snapshot)}"
+
+
+def test_workflow(table, cases, snapshot=None):
     return {
         "source": {
             "type": "testsuite",
@@ -61,7 +69,7 @@ def test_workflow(table, cases):
                         "description": case.description,
                         "testDefinitionName": "tableCustomSQLQuery",
                         "parameterValues": [
-                            {"name": "sqlExpression", "value": case.sql},
+                            {"name": "sqlExpression", "value": audited(case.sql, snapshot)},
                             {"name": "strategy", "value": "COUNT"},
                             {"name": "operator", "value": "=="},
                             {"name": "threshold", "value": "0"},
@@ -101,10 +109,14 @@ def readback(table):
 def main():
     found = checks(products=[os.environ["CHECK_PRODUCT"]])
     tables = sorted({check.table for check in found})
+    branch = os.environ.get("WAP_BRANCH")
+    snapshots = audited_snapshots(Catalog(), tables, branch) if branch else {}
+    for table, snapshot in snapshots.items():
+        print(f"auditing {table} at snapshot {snapshot} ({branch} head, or main if this run did not write it)")
     native("ingest", workflow(SERVICE))
     for table in tables:
         cases = [check for check in found if check.table == table]
-        native("test", test_workflow(table, cases))
+        native("test", test_workflow(table, cases, snapshots.get(table)))
     failures = []
     for table in tables:
         expected = [check.name for check in found if check.table == table]
