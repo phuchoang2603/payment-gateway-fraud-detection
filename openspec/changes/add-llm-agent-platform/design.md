@@ -98,7 +98,7 @@ Memory budget on the dev card (15.93 GiB):
 | Process | `--gpu-memory-utilization` | Budget | Weights | Left for KV cache |
 |---|---:|---:|---:|---|
 | Chat | 0.80 | 12.7 GiB | 8.8 GiB | about 2.7 GiB after about 1.2 GiB of activations and CUDA graphs: about 39k tokens at FP8 KV (72 KiB/token for 36 layers × 8 KV heads × 128), about 19k at bf16 |
-| Embedding | 0.12 | 1.9 GiB | 1.1 GiB | `--max-model-len 8192`, small batches |
+| Embedding | 0.12 | 1.9 GiB | 1.1 GiB | `--max-model-len 2048` (measured on dev: 0.29 GiB of KV cache is left, and 8192 tokens need 0.88 GiB) |
 
 The total of 0.92 leaves headroom for the CUDA contexts. Prod's L4 (24 GB, about 22.5 GiB usable) keeps the same fractions, which gives chat about 8 GiB of KV cache: roughly 115k tokens at FP8 KV. If FP8 does not load on sm_120, or its KV room cannot hold two full 16k contexts at FP8 KV, the chat model switches to `Qwen/Qwen3-8B-AWQ` (revision `4da05a8e`, 5.68 GiB). That is still Qwen3-8B and adds about 3 GiB of KV cache. The benchmark compares both.
 
@@ -133,7 +133,7 @@ Serving flags (checked against the vLLM v0.32.0 source):
 
 | Flag | Setting | Status |
 |---|---|---|
-| `--max-model-len` | 16384 (chat), 8192 (embedding) | fixed |
+| `--max-model-len` | 16384 (chat), 2048 (embedding) | fixed |
 | `--gpu-memory-utilization` | 0.80 / 0.12 | fixed (decision 4) |
 | `--reasoning-parser qwen3`, `--default-chat-template-kwargs '{"enable_thinking": false}'` | chat | fixed: agents get answers, not `<think>` blocks |
 | `--enable-auto-tool-choice --tool-call-parser hermes` | chat | fixed: kagent tool calls |
