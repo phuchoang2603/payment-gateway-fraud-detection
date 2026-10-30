@@ -161,12 +161,17 @@ def run(spark, run_id, mode="historical"):
             report = incremental_report(run_id, mode, scope, phases)
             Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/silver.json", report)
             return report
+        # A semi join on named columns moves them first; keep Bronze's column order, which row_json serializes.
         affected = F.broadcast(scope["payments"])
-        events = bronze_events.where(F.col("occurred_at") >= F.lit(scope["cutoff"])).join(
-            affected, PAYMENT_KEY, "left_semi"
+        events = (
+            bronze_events.where(F.col("occurred_at") >= F.lit(scope["cutoff"]))
+            .join(affected, PAYMENT_KEY, "left_semi")
+            .select(*bronze_events.columns)
         )
-        labels_input = bronze_labels.where(F.col("label_available_at") >= F.lit(scope["cutoff"])).join(
-            affected, PAYMENT_KEY, "left_semi"
+        labels_input = (
+            bronze_labels.where(F.col("label_available_at") >= F.lit(scope["cutoff"]))
+            .join(affected, PAYMENT_KEY, "left_semi")
+            .select(*bronze_labels.columns)
         )
     else:
         events = bronze_events
