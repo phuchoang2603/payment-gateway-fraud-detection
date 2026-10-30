@@ -115,7 +115,7 @@ Deployment:
 - Agents SHALL reach the MCP tools only through the gateway route `/mcp/knowledge`.
 - It SHALL be published to the agent registry as an MCP server.
 
-`evidence-agent` SHALL use these tools through the gateway, as version 0.2.0.
+`evidence-agent` SHALL use these tools through the gateway.
 
 #### Scenario: Unknown chunk id
 - **WHEN** a client requests a `chunk_id` that is not in the current version

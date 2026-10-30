@@ -12,8 +12,8 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - The LLM route requires a per-client API key and applies request and token rate limits and PII masking (card numbers, e-mail, phone) on prompts and responses.
   - Istio ambient stays the mesh: mesh authorization admits only the gateway (and the endpoint picker) to the model servers.
 - Add a global kagent `ModelConfig`, `default-model-config`, that points every agent at the gateway's `/v1` with the agents' gateway key.
-- Run `evidence-agent` 0.1.0 on kagent 0.10.4. It is a read-only fraud-analyst agent without tools, and the first version of the evidence agent that later gains the MCP evidence tool.
-- Run the same agent as `evidence-agent-sandbox`, a `SandboxAgent` on Agent Substrate 0.0.9 (gVisor). Its conversations suspend to warm snapshots and resume on a small worker pool, which covers the sandbox and warm-up rubric rows.
+- Run `evidence-agent` 0.3.0 on kagent 0.10.4: a read-only fraud-analyst agent with the knowledge MCP tools.
+- Run agents only as kagent `SandboxAgent`s on Agent Substrate 0.0.9 (gVisor), in a new platform-created namespace `llm-agents` (Pod Security `privileged`, outside the mesh) with the app's own WorkerPool autoscaled by KEDA. Each conversation is its own sandbox that suspends to a snapshot and resumes warm. Sandboxes reach the gateway and Langfuse only through an app-owned egress proxy in `llm`. This covers the sandbox, warm-up and multi-replica autoscaling rows with one runtime; `llm` stays `restricted`.
 - Publish the agent's catalog entry to agentregistry from Git with a sync hook.
 - Run self-hosted Langfuse v3 in `llm`, on the shared ClickHouse that replaces StarRocks (owned by this repository, added in PR #102), with app-owned Postgres and Redis. In phase 2 it becomes the prompt store. Agents send their own traces to Langfuse through kagent's OpenTelemetry export, which needs kagent tracing switched on in the platform. Gateway traces go to the platform's VictoriaTraces directly. There is no collector.
 - Build RAG in `llm` (design.md decision 15; corpus in `rag-corpus.md`): a knowledge pipeline, a Web API and an MCP tool. It never reads payment data.
@@ -26,7 +26,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - Add an on-demand benchmark (`vllm bench serve` from the vLLM image, as plain manifests applied with `kubectl`) with an agent-shaped shared-prefix workload. It records throughput, TTFT and inter-token latency before and after each optimization (prefix caching, FP8 KV cache, n-gram speculative decoding, streamed cold start, FP8 vs AWQ weights). Results are recorded only from real dev runs, with the command and date.
 - Record the autoscaling decision against the rubric's KEDA:
   - Knative for this repo's own plain HTTP services that need no caller identity (later MCP servers and web APIs); the knowledge API is a Deployment, because its callers are admitted by mesh identity and Knative's cluster-local gateway runs outside the mesh;
-  - KEDA for kagent agent Deployments and the Substrate WorkerPool (from phase 2);
+  - KEDA for the agents' Substrate WorkerPool (2 to 4 workers on the gateway's chat request rate);
   - a fixed single replica per model server, because each cluster has one GPU.
 - Document the platform on new, focused `docs/llm/` pages (inference, gateway, agents, observability, benchmark, RAG), and update `docs/llm/agents.md`, the roadmap and the architecture where the behaviour changes.
 - Planned for a later phase, not built in this change: a read-only ClickHouse analytics MCP tool. It answers questions such as "decline rate by merchant this week" or "top payment methods by volume" from the ClickHouse analytics marts that the next data slice builds from the Iceberg Silver tables (`fact_payment_attempt` and a daily merchant mart).
@@ -67,7 +67,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
     - the CNPG `rag-pgvector` Cluster and `Database`;
     - the `rag-api` Deployment (Web API and MCP tool in one);
     - ExternalSecrets, mesh policies and the registry `MCPServer` entry.
-  - In `llm-platform`: the `ragingest` and `ragapi` client keys, the `/mcp/knowledge` route and policy, the `knowledge` RemoteMCPServer, and `evidence-agent` 0.2.0 with the knowledge tools.
+  - In `llm-platform`: the `ragingest` and `ragapi` client keys, the `/mcp/knowledge` route and policy, the `knowledge` RemoteMCPServer, and `evidence-agent` 0.3.0 with the knowledge tools.
   - After #102: `llm` admitted by the Polaris, ClickHouse and OpenMetadata network rules.
 - **Code:**
   - a new `src/rag/` uv workspace (`common`, `pipeline`, `serving`) and images `rag-pipeline` and `rag-serving`: corpus sources, renderer, chunker, embed client, Feast definitions, validation, OpenMetadata client, Web API and MCP server, with their CI tests;

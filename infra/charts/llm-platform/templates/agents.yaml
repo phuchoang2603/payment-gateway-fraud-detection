@@ -1,13 +1,12 @@
 {{- $agents := .Values.agents }}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {{ $agents.serviceAccount }}
----
+{{- $ns := $agents.namespace }}
+{{- $pool := $agents.workerPool }}
+{{- $egress := printf "http://%s.%s.svc.cluster.local" $agents.egress.name .Release.Namespace }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: agent-prompts
+  namespace: {{ $ns }}
 data:
   {{- range $agent := $agents.list }}
   {{ $agent.name }}.md: |
@@ -19,6 +18,7 @@ apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: langfuse-otlp
+  namespace: {{ $ns }}
 spec:
   refreshInterval: 1h
   secretStoreRef:
@@ -38,58 +38,103 @@ spec:
       remoteRef:
         key: LANGFUSE_INIT_SECRET_KEY
 {{- end }}
-{{- $egress := $agents.sandbox.egress }}
-{{- $hosts := dict
-  "agent" (printf "%s.%s.svc.cluster.local" .Values.gateway.name .Release.Namespace)
-  "sandbox" (printf "%s.%s.svc.cluster.local" $egress.name .Release.Namespace) }}
-{{- range $kind, $host := $hosts }}
 ---
 apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
-  name: {{ $kind | eq "agent" | ternary $agents.modelConfig (printf "%s-sandbox" $agents.modelConfig) }}
+  name: {{ $agents.modelConfig }}
+  namespace: {{ $ns }}
 spec:
   provider: OpenAI
-  model: {{ $.Values.models.chat.name }}
+  model: {{ .Values.models.chat.name }}
   apiKeySecret: llm-gateway-agents
   apiKeySecretKey: key
   openAI:
-    baseUrl: http://{{ $host }}/v1
+    baseUrl: {{ $egress }}/v1
+{{- range $name, $server := .Values.gateway.mcpServers }}
+---
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+spec:
+  description: {{ $server.description | quote }}
+  url: {{ $egress }}/mcp/{{ $name }}
+  protocol: STREAMABLE_HTTP
+  headersFrom:
+    - name: Authorization
+      valueFrom:
+        type: Secret
+        name: llm-gateway-agents
+        key: authorization
 {{- end }}
+---
+apiVersion: ate.dev/v1alpha1
+kind: WorkerPool
+metadata:
+  name: {{ $pool.name }}
+  namespace: {{ $ns }}
+spec:
+  ateomImage: {{ $pool.image }}
+  sandboxClass: {{ $pool.sandboxClass }}
+  replicas: {{ $pool.minReplicas }}
+  template:
+    resources:
+      {{- toYaml $pool.resources | nindent 6 }}
+---
+# One worker runs one active conversation; idle conversations are suspended to snapshots and take no worker.
+# The pool follows the agents' model traffic, about two chat calls per conversation turn.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ $pool.name }}
+  namespace: {{ $ns }}
+spec:
+  scaleTargetRef:
+    apiVersion: ate.dev/v1alpha1
+    kind: WorkerPool
+    name: {{ $pool.name }}
+  minReplicaCount: {{ $pool.minReplicas }}
+  maxReplicaCount: {{ $pool.maxReplicas }}
+  cooldownPeriod: {{ $pool.autoscaling.cooldownSeconds }}
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: {{ $pool.autoscaling.prometheus }}
+        query: {{ printf "sum(rate(agentgateway_requests_total{gateway=\"%s/%s\",backend=\"%s/%s\"}[2m]))" .Release.Namespace .Values.gateway.name .Release.Namespace .Values.models.chat.name | quote }}
+        threshold: {{ $pool.autoscaling.requestsPerSecondPerWorker | quote }}
 {{- range $agent := $agents.list }}
 {{- $tools := list }}
-{{- $sandboxTools := list }}
 {{- range $server := $agent.mcpServers | default list }}
 {{- $spec := required (printf "gateway.mcpServers.%s is not defined" $server) (index $.Values.gateway.mcpServers $server) }}
 {{- $tools = append $tools (dict "type" "McpServer" "mcpServer" (dict "apiGroup" "kagent.dev" "kind" "RemoteMCPServer" "name" $server "toolNames" $spec.tools)) }}
-{{- $sandboxTools = append $sandboxTools (dict "type" "McpServer" "mcpServer" (dict "apiGroup" "kagent.dev" "kind" "RemoteMCPServer" "name" (printf "%s-sandbox" $server) "toolNames" $spec.tools)) }}
 {{- end }}
-{{- $prompt := dict "type" "ConfigMap" "name" "agent-prompts" "key" (printf "%s.md" $agent.name) }}
-{{- $declarative := dict "modelConfig" $agents.modelConfig "systemMessageFrom" $prompt }}
-{{- $sandboxDeclarative := dict "modelConfig" (printf "%s-sandbox" $agents.modelConfig) "systemMessageFrom" $prompt }}
+{{- $declarative := dict
+  "modelConfig" $agents.modelConfig
+  "systemMessageFrom" (dict "type" "ConfigMap" "name" "agent-prompts" "key" (printf "%s.md" $agent.name)) }}
 {{- with $tools }}
 {{- $_ := set $declarative "tools" . }}
-{{- $_ := set $sandboxDeclarative "tools" $sandboxTools }}
 {{- end }}
 ---
 apiVersion: kagent.dev/v1alpha2
-kind: Agent
+kind: SandboxAgent
 metadata:
   name: {{ $agent.name }}
+  namespace: {{ $ns }}
 spec:
   type: Declarative
   description: {{ $agent.description | quote }}
   version: {{ $agent.version | quote }}
   declarative:
     {{- toYaml $declarative | nindent 4 }}
+    {{- if $agents.tracing.enabled }}
     deployment:
-      serviceAccountName: {{ $agents.serviceAccount }}
-      {{- if $agents.tracing.enabled }}
       # kagent appends its controller's OTEL_* variables after these, so its OTEL_TRACING_ENABLED decides whether
-      # the agent exports at all.
+      # the agent exports at all. Traces leave the sandbox through the egress proxy like every other call.
       env:
         - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
-          value: http://langfuse-web.{{ $.Release.Namespace }}.svc.cluster.local:3000/api/public/otel/v1/traces
+          value: {{ $egress }}/api/public/otel/v1/traces
         - name: OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
           value: http/protobuf
         - name: OTEL_EXPORTER_OTLP_TRACES_HEADERS
@@ -97,55 +142,49 @@ spec:
             secretKeyRef:
               name: langfuse-otlp
               key: headers
-      {{- end }}
-      podSecurityContext:
-        {{- include "llm-platform.podSecurity" $agents | nindent 8 }}
-      securityContext:
-        runAsNonRoot: true
-        {{- include "llm-platform.containerSecurity" $ | nindent 8 }}
----
-apiVersion: kagent.dev/v1alpha2
-kind: SandboxAgent
-metadata:
-  name: {{ $agent.name }}-sandbox
-spec:
-  type: Declarative
-  description: {{ $agent.description | quote }}
-  version: {{ $agent.version | quote }}
-  declarative:
-    {{- toYaml $sandboxDeclarative | nindent 4 }}
+    {{- end }}
   sandbox:
     network:
       allowedDomains:
-        - {{ $hosts.sandbox }}
+        - {{ printf "%s.%s.svc.cluster.local" $agents.egress.name $.Release.Namespace }}
   substrate:
+    workerPoolRef:
+      apiGroup: ate.dev
+      kind: WorkerPool
+      name: {{ $pool.name }}
     snapshotsConfig:
-      location: {{ printf "%s/%s-sandbox/" $agents.sandbox.snapshotRoot $agent.name }}
+      location: {{ printf "%s/%s/" $agents.snapshotRoot $agent.name }}
 {{- end }}
 ---
+# Substrate's API server resolves each actor's Secret references when it starts the golden actor.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: substrate-sandbox-secrets
+  name: substrate-actor-secrets
+  namespace: {{ $ns }}
 rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [get]
     resourceNames:
       - llm-gateway-agents
+      {{- if $agents.tracing.enabled }}
+      - langfuse-otlp
+      {{- end }}
       {{- range $agent := $agents.list }}
-      - {{ $agent.name }}-sandbox
+      - {{ $agent.name }}
       {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: substrate-sandbox-secrets
+  name: substrate-actor-secrets
+  namespace: {{ $ns }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: substrate-sandbox-secrets
+  name: substrate-actor-secrets
 subjects:
   - kind: ServiceAccount
-    namespace: {{ $agents.sandbox.apiServer.namespace }}
-    name: {{ $agents.sandbox.apiServer.name }}
+    namespace: {{ $agents.substrateApiServer.namespace }}
+    name: {{ $agents.substrateApiServer.name }}

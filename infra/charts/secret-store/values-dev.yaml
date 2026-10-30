@@ -8,6 +8,7 @@ secretStore:
   - data
   - ml
   - llm
+  - llm-agents
   tokenSecret:
     namespace: payment-gateway
     name: doppler-token

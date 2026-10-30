@@ -73,6 +73,9 @@ gateway:
     benchmark: LLM_GATEWAY_BENCHMARK_API_KEY
     ragingest: LLM_GATEWAY_RAG_INGEST_API_KEY
     ragapi: LLM_GATEWAY_RAG_API_KEY
+  # Each client's key Secret lands where its caller runs; the default is the release namespace.
+  clientNamespaces:
+    agents: llm-agents
   limits:
     requestsPerMinute: 120
     burst: 20
@@ -119,34 +122,45 @@ platformSecretStore: doppler
 # The platform's metrics agent, enrolled in the ambient mesh so it can be admitted by identity.
 metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
 
+# Agents run only as kagent SandboxAgents on Agent Substrate, in their own namespace: Substrate workers run privileged
+# gVisor sandboxes outside the mesh, and a SandboxAgent can only use a WorkerPool in its own namespace.
 agents:
-  serviceAccount: llm-agents
+  namespace: llm-agents
   modelConfig: default-model-config
-  # kagent exports each agent's own spans (agent, model generations, tool calls) to Langfuse's OTLP endpoint with the
-  # headless-init project keys.
+  # kagent exports each agent's own spans (agent, model generations, tool calls) to Langfuse with the headless-init
+  # project keys.
   tracing:
     enabled: true
-  uid: 65532
-  sandbox:
-    snapshotRoot: gs://platform-dev/substrate/llm
-    # Substrate's API server resolves the actor's Secret references in this namespace when it starts the golden actor.
-    apiServer: {namespace: ate-system, name: ate-api-server}
-    # Substrate workers run outside the mesh, so sandboxed actors have no mesh identity. They reach the gateway only
-    # through this proxy, which admits the workers by NetworkPolicy and calls the gateway with its own identity.
-    egress:
-      name: sandbox-egress
-      image: nginxinc/nginx-unprivileged:1.31.7-alpine
-      uid: 101
-      workers:
-        namespace: kagent
-        podLabels: {ate.dev/worker-pool: kagent-default}
-      controller:
-        namespace: kagent
-        podLabels: {app.kubernetes.io/name: kagent, app.kubernetes.io/component: controller}
+  snapshotRoot: gs://platform-dev/substrate/llm-agents
+  workerPool:
+    name: llm-agents
+    image: ghcr.io/kagent-dev/substrate/ateom-gvisor:v0.0.9
+    sandboxClass: gvisor
+    minReplicas: 2
+    maxReplicas: 4
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 2Gi}
+    autoscaling:
+      prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
+      requestsPerSecondPerWorker: "0.1"
+      cooldownSeconds: 300
+  # Substrate's API server resolves the actors' Secret references when it starts a golden actor.
+  substrateApiServer: {namespace: ate-system, name: ate-api-server}
+  # Sandboxed actors have no mesh identity. They leave the sandbox only through this proxy in the release namespace,
+  # which admits the workers by NetworkPolicy and calls the gateway and Langfuse with its own identity.
+  egress:
+    name: sandbox-egress
+    image: nginxinc/nginx-unprivileged:1.31.7-alpine
+    uid: 101
+    workerLabels: {ate.dev/worker-pool: llm-agents}
+    controller:
+      namespace: kagent
+      podLabels: {app.kubernetes.io/name: kagent, app.kubernetes.io/component: controller}
   # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
   list:
     - name: evidence-agent
-      version: 0.2.0
+      version: 0.3.0
       title: Evidence agent
       description: Read-only fraud-analyst agent that explains declines, risk decisions and payment behaviour from the knowledge base, citing its passages.
       mcpServers: [knowledge]

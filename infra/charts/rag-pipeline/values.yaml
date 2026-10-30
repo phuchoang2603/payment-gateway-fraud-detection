@@ -116,6 +116,6 @@ aiAssets:
         description: Returns one knowledge chunk by chunk_id.
   agent:
     name: evidence-agent
-    version: 0.2.0
+    version: 0.3.0
     primaryModel: qwen3-8b
     description: Read-only fraud-analyst agent that explains declines, risk decisions and payment behaviour from the knowledge base.
