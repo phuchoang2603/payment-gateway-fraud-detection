@@ -67,7 +67,8 @@ spec:
         parameters:
           - name: version
             globalName: knowledge-version
-            valueFrom: {path: /tmp/outputs/version, default: ""}
+            # Every step sets the global; steps after publish write no file and pass their input through.
+            valueFrom: {path: /tmp/outputs/version, default: "{{ "{{inputs.parameters.version}}" }}"}
           - name: skip
             valueFrom: {path: /tmp/outputs/skip, default: "false"}
       container:
