@@ -22,5 +22,5 @@ spec:
         successCondition: status.currentState.currentStateSummary == ResourceReleased
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
         manifest: |
-          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp2-benchmark" "main" "benchmark" "product" "silver-payments" "stage" "dp2-benchmark" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" $.Values.analytics.reportRoot))) | nindent 10 }}
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp2-benchmark" "main" "benchmark" "product" "silver-payments" "stage" "dp2-benchmark" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" $.Values.analytics.reportRoot) (dict "name" "SILVER_DEDUP_BROADCAST_BYTES" "value" ($.Values.silver.dedupBroadcastBytes | int64 | toString)))) | nindent 10 }}
 {{- end }}

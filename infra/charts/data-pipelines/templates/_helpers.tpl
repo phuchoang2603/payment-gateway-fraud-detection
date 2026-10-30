@@ -201,6 +201,7 @@ spec:
     spark.sql.adaptive.enabled: "true"
     spark.sql.adaptive.coalescePartitions.enabled: "true"
     spark.sql.adaptive.advisoryPartitionSizeInBytes: {{ $sizing.advisoryPartitionSize | quote }}
+    spark.io.compression.codec: zstd
     spark.decommission.enabled: "true"
     spark.storage.decommission.enabled: "true"
     spark.storage.decommission.shuffleBlocks.enabled: "true"
@@ -220,6 +221,8 @@ spec:
   driverSpec:
     podTemplateSpec:
       metadata:
+        annotations:
+          karpenter.sh/do-not-disrupt: "true"
         labels:
           {{- include "data-pipelines.kafkaClientLabels" .root | nindent 10 }}
           dp-product: {{ .product }}
@@ -235,6 +238,8 @@ spec:
                 ephemeral-storage: {{ $sizing.driver.ephemeralStorage | quote }}
             env:
               {{- include "data-pipelines.env" .root | nindent 14 }}
+              - name: SPARK_SHUFFLE_PARTITIONS
+                value: {{ $sizing.shufflePartitions | quote }}
               {{- range .extraEnv }}
               - name: {{ .name }}
                 value: {{ .value | quote }}
@@ -242,6 +247,8 @@ spec:
   executorSpec:
     podTemplateSpec:
       metadata:
+        annotations:
+          karpenter.sh/do-not-disrupt: "true"
         labels:
           {{- include "data-pipelines.kafkaClientLabels" .root | nindent 10 }}
           dp-product: {{ .product }}

@@ -33,12 +33,12 @@ spark:
     policy: Always
   # aws-cpu-burst allows only large and xlarge (12 nodes, 48 vCPU, 192 GiB). An xlarge leaves 3270m for pods after
   # Talos reservations and DaemonSets, so a 4-core executor does not fit: 11 executors of 3 cores, one per xlarge, and
-  # the 1-core 4g + 1g driver on a large. Shuffle disk binds first: the v19 Bronze write shuffles about 217 GB into
+  # the 1-core 4g + 1g driver on a large. Shuffle disk binds first: a hash-distributed v19 Bronze write shuffled about 217 GB into
   # 24Gi of ephemeral storage per executor (the practical limit of the 40Gi root volume), which fits only with all 11
   # executors. Executors request 10g + 2g of the 13217Mi free on a 16 GiB xlarge: 5 GiB executors, which fit the 8 GiB
   # c-family, were OOM-killed in the Iceberg write. 32 GiB r-family spot nodes can exhaust the 192 GiB limit before 12
-  # nodes. The batch session sets spark.sql.shuffle.partitions from SPARK_SHUFFLE_PARTITIONS (default 1024), which
-  # overrides this value.
+  # nodes. Shuffle partitions stay at 1024 rather than 3-4x the 33 cores: v19 shuffles reach hundreds of GB, so 128
+  # partitions would be GBs each, while AQE coalesces small ones up to the 128 MB advisory size.
   profiles:
     large:
       shufflePartitions: 1024
@@ -53,6 +53,9 @@ bronze:
 silver:
   enabled: true
   profile: large
+  # v19 has about 20M duplicated IDs (about 800 MB of long keys), so the anti join stays a broadcast and the events keep
+  # their Bronze layout instead of shuffling by event_id. Each 10g executor holds one copy.
+  dedupBroadcastBytes: 1073741824
   reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp2
 analytics:
   enabled: true

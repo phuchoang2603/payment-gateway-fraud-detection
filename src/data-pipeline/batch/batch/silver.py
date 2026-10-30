@@ -9,7 +9,7 @@ from pyspark.sql import functions as F
 from batch.bronze import EVENTS as BRONZE_EVENTS
 from batch.bronze import LABELS as BRONZE_LABELS
 from batch.bronze import current_snapshot
-from batch.lakehouse import WRITE_PROPERTIES
+from batch.lakehouse import LOCAL_WRITE_OPTIONS, WRITE_PROPERTIES
 from batch.metrics import phase
 from batch.schema import EVENT_COLUMNS, LABEL_COLUMNS
 from batch.spark import ICEBERG_CATALOG, session
@@ -39,7 +39,10 @@ PERSIST = StorageLevel.MEMORY_AND_DISK
 
 DEDUP_BROADCAST_ENV = "SILVER_DEDUP_BROADCAST_BYTES"
 DEDUP_BROADCAST_DEFAULT = 256 * 1024 * 1024
-KEY_OVERHEAD_BYTES = 64
+# Duplicated IDs join back on xxhash64(event_id): a long key broadcasts at about 40 bytes per ID instead of the
+# string's length plus 64. A collision only routes a unique event through the collapse path, which keeps its one copy,
+# because the semi and anti joins share the key.
+KEY_BYTES = 40
 DEDUP_COLUMNS = [*EVENT_COLUMNS.keys(), "event_hash", "_source"]
 
 
@@ -53,9 +56,8 @@ def duplicated_ids(hashed: DataFrame) -> DataFrame:
 
 def plan_dedup(hashed: DataFrame, threshold: int) -> dict:
     duplicated = duplicated_ids(hashed).persist(PERSIST)
-    stats = duplicated.agg(F.count("*").alias("n"), F.avg(F.length("event_id")).alias("key")).first()
-    count = int(stats["n"])
-    estimated = int(count * ((stats["key"] or 0) + KEY_OVERHEAD_BYTES))
+    count = duplicated.count()
+    estimated = count * KEY_BYTES
     return {
         "duplicated": duplicated,
         "duplicated_event_ids": count,
@@ -66,8 +68,10 @@ def plan_dedup(hashed: DataFrame, threshold: int) -> dict:
 
 
 def against_duplicates(frame: DataFrame, plan: dict, how: str) -> DataFrame:
-    ids = plan["duplicated"].select("event_id")
-    return frame.join(F.broadcast(ids) if plan["strategy"] == "broadcast" else ids, "event_id", how)
+    keys = plan["duplicated"].select(F.xxhash64("event_id").alias("event_key"))
+    keyed = frame.withColumn("event_key", F.xxhash64("event_id"))
+    joined = keyed.join(F.broadcast(keys) if plan["strategy"] == "broadcast" else keys, "event_key", how)
+    return joined.drop("event_key")
 
 
 def collapse_duplicates(hashed: DataFrame, plan: dict) -> DataFrame:
@@ -116,7 +120,7 @@ def run(spark, run_id):
         snapshots = {}
         with phase(spark, phases, "write payment_events"):
             snapshots[PAYMENT_EVENTS] = write_table(
-                spark, PAYMENT_EVENTS, accepted_events, pins, run_id, F.days("occurred_at")
+                spark, PAYMENT_EVENTS, accepted_events, pins, run_id, F.days("occurred_at"), LOCAL_WRITE_OPTIONS
             )
         accepted = spark.read.option("versionAsOf", snapshots[PAYMENT_EVENTS]["snapshot_id"]).table(PAYMENT_EVENTS)
         payment_status = payments(accepted)
@@ -426,7 +430,7 @@ def reject_payment_rows(frame: DataFrame, table: str, conflicting_payments, conf
     )
 
 
-def write_table(spark, name, frame, pins, run_id, partition=None) -> dict:
+def write_table(spark, name, frame, pins, run_id, partition=None, options=None) -> dict:
     if not spark.catalog.tableExists(name):
         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {NAMESPACE}")
         creator = frame.limit(0).writeTo(name).using("iceberg")
@@ -435,7 +439,7 @@ def write_table(spark, name, frame, pins, run_id, partition=None) -> dict:
         if partition is not None:
             creator = creator.partitionedBy(partition)
         creator.create()
-    writer = frame.writeTo(name)
+    writer = frame.writeTo(name).options(**(options or {}))
     for key, value in {**pins, "dp2.run_id": run_id}.items():
         writer = writer.option(f"snapshot-property.{key}", value)
     writer.overwrite(F.lit(True))

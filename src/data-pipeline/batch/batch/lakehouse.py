@@ -8,6 +8,10 @@ WRITE_PROPERTIES = {
     "write.distribution-mode": "hash",
     "write.target-file-size-bytes": str(TARGET_FILE_BYTES),
 }
+# For input already laid out by the target's day partition (one historical file per purchase day, or Bronze files
+# read back for Silver), each task touches only a few partitions, so the hash shuffle adds no clustering: write in
+# place with one open file per partition.
+LOCAL_WRITE_OPTIONS = {"distribution-mode": "none", "fanout-enabled": "true"}
 
 
 def file_stats(spark: SparkSession, table: str):

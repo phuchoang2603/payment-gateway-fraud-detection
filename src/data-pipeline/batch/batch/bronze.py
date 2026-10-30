@@ -7,7 +7,7 @@ from confluent_kafka import Consumer, TopicPartition
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from batch.lakehouse import TABLE_PROPERTIES
+from batch.lakehouse import LOCAL_WRITE_OPTIONS, TABLE_PROPERTIES
 from batch.metrics import phase
 from batch.schema import (
     EVENT_COLUMNS,
@@ -104,7 +104,10 @@ def run_historical(spark, root, version, run_id):
         )
         same_version = (F.col("_source") == "historical") & (F.col("_dataset_version") == version)
         with phase(spark, phases, f"write {table}"):
-            frame.writeTo(name).overwrite(same_version)
+            writer = frame.writeTo(name)
+            if table == "payment_events":
+                writer = writer.options(**LOCAL_WRITE_OPTIONS)
+            writer.overwrite(same_version)
         with phase(spark, phases, f"check {table}"):
             written = check_written_rows(spark, name, same_version, parts)
         report["tables"][name] = {
