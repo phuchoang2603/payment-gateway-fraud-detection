@@ -57,8 +57,10 @@ def assert_matches_historical(spark, run_id):
     for table, snapshot in pinned.items():
         incremental_rows = comparable(spark.read.option("versionAsOf", snapshot).table(table), table)
         historical_rows = comparable(spark.table(table), table)
-        assert incremental_rows.exceptAll(historical_rows).count() == 0, f"{table}: rows only in incremental"
-        assert historical_rows.exceptAll(incremental_rows).count() == 0, f"{table}: rows only in historical"
+        only_incremental = [row.asDict() for row in incremental_rows.exceptAll(historical_rows).collect()]
+        only_historical = [row.asDict() for row in historical_rows.exceptAll(incremental_rows).collect()]
+        assert not only_incremental, f"{run_id} {table}: rows only in incremental: {only_incremental}"
+        assert not only_historical, f"{run_id} {table}: rows only in historical: {only_historical}"
 
 
 def test_incremental_runs_equal_a_historical_run_after_every_batch(spark, lake, report_root):
