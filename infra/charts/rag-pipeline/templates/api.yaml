@@ -36,12 +36,16 @@ spec:
               value: {{ $api.port | quote }}
             {{- include "rag-pipeline.gatewayEnv" (dict "root" . "secret" .Values.gateway.apiKeySecret) | nindent 12 }}
             {{- include "rag-pipeline.dbEnv" (dict "root" . "secret" "rag-db-reader") | nindent 12 }}
+          # Importing Feast takes close to a minute on a busy dev node.
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 5
+            failureThreshold: 36
           readinessProbe:
             httpGet: {path: /readyz, port: http}
             periodSeconds: 10
           livenessProbe:
             httpGet: {path: /healthz, port: http}
-            initialDelaySeconds: 10
             periodSeconds: 20
           securityContext:
             {{- include "rag-pipeline.containerSecurity" . | nindent 12 }}
