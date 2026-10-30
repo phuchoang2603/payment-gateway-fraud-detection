@@ -42,7 +42,8 @@ def check(contract, table, rule):
 # The join spill threshold must be below its hard size limit so full-load checks can spill before hitting the cap.
 SPILL_SETTINGS = (
     "max_bytes_before_external_group_by = 800000000, max_bytes_before_external_sort = 800000000, "
-    "join_algorithm = 'auto', max_bytes_before_external_join = 400000000, max_bytes_in_join = 800000000"
+    "join_algorithm = 'auto', max_bytes_before_external_join = 400000000, max_bytes_in_join = 800000000, "
+    "max_threads = 2, max_block_size = 16384"
 )
 
 
