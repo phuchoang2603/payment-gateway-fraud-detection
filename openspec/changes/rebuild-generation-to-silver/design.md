@@ -25,7 +25,7 @@ Constraints:
 
 **Non-Goals:**
 - Accepted-snapshot pointers, metadata-only replay, writer takeover or resumable partial files.
-- Running Bronze or Silver at full scale, evidence capture, gold/feature marts, drift detection.
+- Gold/feature marts and drift detection. Bronze/Silver prod verification and evidence are tracked in section 15.
 - A raw S3 archive of Kafka that outlives topic retention. Iceberg Bronze is the archive.
 
 ## Decisions
@@ -263,7 +263,7 @@ The `lakehouse` application deploys the Polaris REST catalog that Spark, ClickHo
 
 ### 15. Evidence is recorded from the prod v19 run
 
-Spark applications write rolling event logs to `runs/payment-gateway/spark-events/` in each environment's bucket, using the S3A credentials the jobs already have. The Spark UI for each job is viewed after the run through a throwaway History Server pod, documented in `docs/data/offline.md`. The evidence set covers the Spark UI for DP1, DP2 and the benchmark, the Argo Workflows graphs and the Kafka CronWorkflow run, the OpenMetadata tables, lineage and test results, and the maintenance before-and-after report. Images go under `docs/data/images/`. The evidence is recorded after the prod v19 run, and the change is archived after that record.
+Spark applications write rolling event logs to `runs/payment-gateway/spark-events/` in each environment's bucket, using the S3A credentials the jobs already have. The Spark UI for each job is viewed after the run through a throwaway History Server pod, documented in `docs/data/offline.md`. The evidence set covers the Spark UI for DP1, DP2 and the benchmark, the Argo Workflows graphs and the Kafka CronWorkflow definition, the OpenMetadata tables, lineage and test results, and the maintenance before-and-after report. Images go under `docs/data/images/`. Bronze and all four Silver tables are published, but complete Silver validation remains open. Benchmark and maintenance execution are deferred while Gold/features proceeds separately. Capture the suspended Kafka CronWorkflow definition; a live run waits for traffic. The change stays open until verification and evidence are recorded, then is archived.
 
 ### 16. Catalog registration belongs to data-pipelines
 
