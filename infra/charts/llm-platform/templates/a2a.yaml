@@ -31,10 +31,11 @@ spec:
   parentRefs:
     - name: {{ $gateway.name }}
       sectionName: http
+  # A prefix rewrite needs exactly one path match per rule, so each path is its own rule.
   rules:
+    {{- range $path := list (printf "/a2a/%s" $agent.name) (printf "/api/a2a-sandboxes/%s/%s" $agents.namespace $agent.name) }}
     - matches:
-        - path: {type: PathPrefix, value: /a2a/{{ $agent.name }}}
-        - path: {type: PathPrefix, value: /api/a2a-sandboxes/{{ $agents.namespace }}/{{ $agent.name }}}
+        - path: {type: PathPrefix, value: {{ $path }}}
       backendRefs:
         {{- range $arm := $arms }}
         - group: agentgateway.dev
@@ -50,6 +51,7 @@ spec:
         {{- end }}
       timeouts:
         request: 600s
+    {{- end }}
 {{- $routes = append $routes (printf "a2a-%s" $agent.name) }}
 {{- end }}
 ---
