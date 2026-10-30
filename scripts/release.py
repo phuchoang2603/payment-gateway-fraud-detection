@@ -3,6 +3,8 @@ import os
 import re
 import subprocess
 import sys
+import time
+import urllib.request
 from pathlib import Path
 
 RELEASE_FILE = "infra/argocd/app-of-apps/release.yaml"
@@ -131,5 +133,51 @@ def publish():
     )
 
 
+def workflow_runs(repository, sha):
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{repository}/actions/runs?head_sha={sha}&per_page=100",
+        headers={
+            "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+            "Accept": "application/vnd.github+json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.load(response)["workflow_runs"]
+
+
+def wait_checks():
+    """Wait until every other workflow run for this commit and event has succeeded, so no release skips CI."""
+    repository = os.environ["GITHUB_REPOSITORY"]
+    sha = os.environ["CHECK_SHA"]
+    event = os.environ["GITHUB_EVENT_NAME"]
+    own = int(os.environ["GITHUB_RUN_ID"])
+    deadline = time.monotonic() + int(os.environ.get("CHECK_TIMEOUT_SECONDS", "3600"))
+    while True:
+        runs = [
+            run
+            for run in workflow_runs(repository, sha)
+            if run["id"] != own and run["event"] == event
+        ]
+        failed = [
+            run
+            for run in runs
+            if run["status"] == "completed"
+            and run["conclusion"] not in ("success", "skipped", "neutral")
+        ]
+        if failed:
+            names = ", ".join(f"{run['name']} ({run['conclusion']})" for run in failed)
+            raise SystemExit(f"not releasing {sha}: {names}")
+        pending = [run["name"] for run in runs if run["status"] != "completed"]
+        if not pending:
+            print(
+                f"every check on {sha} passed: "
+                + ", ".join(sorted(run["name"] for run in runs))
+            )
+            return
+        if time.monotonic() > deadline:
+            raise SystemExit(f"timed out waiting for: {', '.join(pending)}")
+        time.sleep(20)
+
+
 if __name__ == "__main__":
-    {"plan": plan, "publish": publish}[sys.argv[1]]()
+    {"plan": plan, "publish": publish, "wait-checks": wait_checks}[sys.argv[1]]()

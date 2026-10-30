@@ -58,6 +58,7 @@ jobs:
     environment: ${{ github.event_name == 'pull_request' && 'dev' || 'prod' }}
     permissions:
       contents: write
+      actions: read
     env:
       IMAGE_TAGS: ${{ needs.plan.outputs.image_tags }}
       PREVIOUS_RELEASE: ${{ needs.plan.outputs.previous }}
@@ -65,5 +66,10 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
+      - name: Wait for every other check on this commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CHECK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 scripts/release.py wait-checks
       - name: Publish the GitOps release
         run: python3 scripts/release.py publish
