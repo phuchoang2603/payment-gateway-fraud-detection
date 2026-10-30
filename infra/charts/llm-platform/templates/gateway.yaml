@@ -9,6 +9,14 @@ spec:
   service:
     spec:
       type: ClusterIP
+  # The namespace enforces the restricted Pod Security level; the generated proxy sets everything but seccomp.
+  deployment:
+    spec:
+      template:
+        spec:
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
