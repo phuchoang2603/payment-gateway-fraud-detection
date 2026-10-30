@@ -183,11 +183,15 @@ langfuse:
       - {name: LANGFUSE_INIT_USER_NAME, value: Operator}
       - name: LANGFUSE_INIT_USER_PASSWORD
         valueFrom: {secretKeyRef: {name: langfuse, key: init-user-password}}
-    # Node sizes its heap from the cgroup limit; the web server runs out of heap at 1Gi during startup.
+    # Node sizes its heap from the cgroup limit; the web server runs out of heap at 1Gi during startup. Its
+    # migrations and headless init run before it listens, so liveness waits for them.
     web:
       resources:
         requests: {cpu: 250m, memory: 1Gi}
         limits: {memory: 2Gi}
+      livenessProbe:
+        initialDelaySeconds: 180
+        failureThreshold: 6
     worker:
       resources:
         requests: {cpu: 250m, memory: 512Mi}
