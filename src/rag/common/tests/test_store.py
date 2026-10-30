@@ -33,3 +33,19 @@ def test_repo_config_validates_with_a_vector_enabled_postgres_store(monkeypatch)
     assert config.online_store.vector_enabled
     assert config.project == store.PROJECT
     assert "p%40ss%3Aword" in config.registry.path
+
+
+def test_chunk_ids_decode_from_feast_entity_keys():
+    from feast.infra.key_encoding_utils import serialize_entity_key
+    from feast.protos.feast.types.EntityKey_pb2 import EntityKey
+    from feast.protos.feast.types.Value_pb2 import Value
+
+    key = EntityKey(join_keys=["chunk_id"], entity_values=[Value(string_val="decline-codes#high-amount")])
+
+    assert (
+        store.chunk_id_of(serialize_entity_key(key, entity_key_serialization_version=3)) == "decline-codes#high-amount"
+    )
+
+
+def test_vectors_render_as_pgvector_literals():
+    assert store.vector_literal([1, 0.5, -0.25]) == "[1.0,0.5,-0.25]"

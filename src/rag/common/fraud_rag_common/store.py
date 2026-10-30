@@ -4,6 +4,7 @@ from urllib.parse import quote
 
 import psycopg
 from feast import Entity, FeatureStore, FeatureView, Field, FileSource, ValueType
+from feast.infra.key_encoding_utils import deserialize_entity_key
 from feast.infra.online_stores.helpers import compute_table_id
 from feast.repo_config import RepoConfig
 from feast.types import Array, Bool, Float32, String
@@ -117,17 +118,28 @@ def online_entities(view: FeatureView) -> int:
         return conn.execute(query).fetchone()[0]
 
 
+def vector_literal(vector: list[float]) -> str:
+    return "[" + ",".join(repr(float(value)) for value in vector) + "]"
+
+
+# The search and the index check share this query, so the index check proves what the search does.
+def nearest_query(table: str) -> sql.Composed:
+    return sql.SQL(
+        "SELECT entity_key, vector_value <=> %(q)s::vector AS distance FROM {} "
+        "ORDER BY vector_value <=> %(q)s::vector LIMIT %(k)s"
+    ).format(sql.Identifier(table))
+
+
+def chunk_id_of(entity_key: bytes) -> str:
+    return deserialize_entity_key(bytes(entity_key), entity_key_serialization_version=3).entity_values[0].string_val
+
+
 def uses_index(view: FeatureView) -> bool:
     table = table_name(view)
-    probe = "[" + ",".join(["0"] * (DIMENSION - 1) + ["1"]) + "]"
+    probe = vector_literal([0.0] * (DIMENSION - 1) + [1.0])
     with psycopg.connect(**connection()) as conn:
         conn.execute("SET enable_seqscan = off")
-        rows = conn.execute(
-            sql.SQL("EXPLAIN SELECT entity_key FROM {} ORDER BY vector_value <=> %s::vector LIMIT 5").format(
-                sql.Identifier(table)
-            ),
-            (probe,),
-        ).fetchall()
+        rows = conn.execute(sql.SQL("EXPLAIN ") + nearest_query(table), {"q": probe, "k": 5}).fetchall()
     return any(f"{table}_hnsw" in row[0] for row in rows)
 
 
@@ -145,12 +157,11 @@ def read(feature_store: FeatureStore, chunk_ids: list[str]) -> list[dict | None]
     return rows
 
 
+# Feast 0.67 cannot return ids with distances on Postgres: v1 retrieval returns only the embedding column and v2
+# can pair ids with the wrong rows. The nearest-neighbour query runs on Feast's own table, then `read` fetches the
+# features through Feast.
 def search(feature_store: FeatureStore, vector: list[float], top_k: int) -> list[tuple[str, float]]:
-    response = feature_store.retrieve_online_documents(
-        query=vector, top_k=top_k, features=[f"{VIEW}:embedding"], distance_metric="cosine"
-    ).to_dict()
-    return [
-        (chunk_id, distance)
-        for chunk_id, distance in zip(response["chunk_id"], response["distance"])
-        if chunk_id is not None and distance is not None
-    ]
+    _, view = definitions("unused")
+    with psycopg.connect(**connection()) as conn:
+        rows = conn.execute(nearest_query(table_name(view)), {"q": vector_literal(vector), "k": top_k}).fetchall()
+    return [(chunk_id_of(key), float(distance)) for key, distance in rows if distance is not None]
