@@ -58,6 +58,7 @@
 - [ ] 4b.2 After the rebuild and #102's ClickHouse: the platform adds the tunnel, proxy hosts and Dex redirect URIs; then verify on dev that the migrations complete, login works behind the proxy, and the init project's API keys authenticate.
 - [x] 4b.3 Run an OpenTelemetry Collector in `llm` that receives OTLP from the gateway and `evidence-agent` and exports every span to Langfuse (basic auth from the init project keys) and to VictoriaTraces through `vtagent`. Verified with `helm template` and a server-side dry-run on dev.
 - [x] 4b.4 Confirm on dev that a question to `evidence-agent` produces its trace in both Langfuse and VictoriaTraces (agent span, two `qwen3-8b` generations with token usage, the `search_knowledge` tool call), and that the gateway's chat and MCP spans reach both. Recorded 2026-10-30 on 7c44415. The gateway spans are separate traces, because the kagent runtime does not propagate `traceparent`.
+- [ ] 4b.5 Run the agents on kagent's Python ADK so the gateway's spans join the agent's trace; confirm on dev one trace id across the agent, the gateway's chat and MCP spans and the model call, in both Langfuse and VictoriaTraces, and that the sandboxed copy still starts and resumes.
 
 ## 5. OpenMetadata (after PR #102 merges)
 
