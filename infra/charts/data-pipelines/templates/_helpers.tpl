@@ -133,14 +133,10 @@ retryStrategy:
     env:
       - name: PIPELINES
         value: {{ .pipelines | quote }}
-      - name: STEPS
-        value: {{ .steps | default "" | quote }}
       - name: DATASET_VERSION
         value: {{ .dataset | quote }}
       - name: WORKFLOW_STATUS
         value: {{ "{{workflow.status}}" | quote }}
-      - name: FAILED_STEPS
-        value: {{ "{{workflow.failures}}" | quote }}
       - name: RUN_ID
         value: {{ "{{workflow.name}}" | quote }}
 {{- include "data-pipelines.env" .root | nindent 6 }}

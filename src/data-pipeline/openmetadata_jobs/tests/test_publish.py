@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from openmetadata_jobs import publish
@@ -21,44 +19,24 @@ def calls(monkeypatch):
     return recorded
 
 
-def publish_with(monkeypatch, pipelines, status, steps="", failures=""):
+def publish_with(monkeypatch, pipelines, status):
     monkeypatch.setenv("PIPELINES", pipelines)
-    monkeypatch.setenv("STEPS", steps)
     monkeypatch.setenv("WORKFLOW_STATUS", status)
-    monkeypatch.setenv("FAILED_STEPS", failures)
     return publish.main()
 
 
-def failure(name):
-    return f'[{{"displayName": "kafka[0].{name}", "phase": "Failed"}}]'
+def test_a_successful_run_publishes_status_and_lineage_for_each_pipeline(monkeypatch, calls):
+    publish_with(monkeypatch, "dp1-bronze-kafka,dp2-silver", "Succeeded")
+
+    assert calls["status"] == [("dp1-bronze-kafka", "Succeeded"), ("dp2-silver", "Succeeded")]
+    assert calls["lineage"] == ["dp1-bronze-kafka", "dp2-silver"]
 
 
-def test_a_failed_single_pipeline_publishes_status_without_lineage(monkeypatch, calls):
-    publish_with(monkeypatch, "dp2-silver", "Failed")
-
-    assert calls["status"] == [("dp2-silver", "Failed")]
-    assert calls["lineage"] == []
-
-
-def test_a_succeeded_single_pipeline_publishes_status_and_lineage(monkeypatch, calls):
-    publish_with(monkeypatch, "dp2-silver", "Succeeded")
-
-    assert calls["status"] == [("dp2-silver", "Succeeded")]
-    assert calls["lineage"] == ["dp2-silver"]
-
-
-def test_kafka_cron_failed_bronze_publishes_both_statuses_and_no_lineage(monkeypatch, calls):
-    publish_with(monkeypatch, "dp1-bronze-kafka,dp2-silver", "Failed", "bronze,silver", failure("bronze"))
+def test_a_failed_run_publishes_failed_status_and_no_lineage(monkeypatch, calls):
+    publish_with(monkeypatch, "dp1-bronze-kafka,dp2-silver", "Failed")
 
     assert calls["status"] == [("dp1-bronze-kafka", "Failed"), ("dp2-silver", "Failed")]
     assert calls["lineage"] == []
-
-
-def test_kafka_cron_failed_silver_keeps_bronze_lineage_and_status(monkeypatch, calls):
-    publish_with(monkeypatch, "dp1-bronze-kafka,dp2-silver", "Failed", "bronze,silver", failure("silver"))
-
-    assert calls["status"] == [("dp1-bronze-kafka", "Succeeded"), ("dp2-silver", "Failed")]
-    assert calls["lineage"] == ["dp1-bronze-kafka"]
 
 
 def test_historical_pipeline_requires_a_dataset_version(monkeypatch, calls):
@@ -66,23 +44,3 @@ def test_historical_pipeline_requires_a_dataset_version(monkeypatch, calls):
 
     with pytest.raises(ValueError, match="DATASET_VERSION"):
         publish_with(monkeypatch, "dp1-bronze-historical", "Succeeded")
-
-
-def test_kafka_cron_success_publishes_lineage_for_both(monkeypatch, calls):
-    publish_with(monkeypatch, "dp1-bronze-kafka,dp2-silver", "Succeeded", "bronze,silver")
-
-    assert calls["lineage"] == ["dp1-bronze-kafka", "dp2-silver"]
-
-
-def test_failed_steps_reads_the_value_argo_renders():
-    nodes = [
-        {
-            "displayName": "checks(0)",
-            "message": "main: Error (exit code 1)",
-            "templateName": "checks",
-            "phase": "Failed",
-        },
-        {"displayName": "checks", "message": "main: Error (exit code 1)", "templateName": "checks", "phase": "Failed"},
-    ]
-    assert publish.failed_steps(json.dumps(nodes)) == {"checks(0)", "checks"}
-    assert publish.failed_steps(json.dumps(json.dumps(nodes))) == {"checks(0)", "checks"}

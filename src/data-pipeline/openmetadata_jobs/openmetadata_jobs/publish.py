@@ -92,48 +92,25 @@ def publish_lineage(sdk, name: str, pipeline_ref, dataset_version: str) -> int:
     return published
 
 
-def failed_steps(failures: str) -> set[str]:
-    nodes = json.loads(failures or "[]")
-    if isinstance(nodes, str):
-        nodes = json.loads(nodes)
-    names = set()
-    for node in nodes:
-        names.update(node.get("displayName", "").split("."))
-    return names
-
-
-def step_status(index: int, steps: list[str], workflow_status: str, failed: set[str]) -> str:
-    if not steps:
-        return workflow_status
-    if failed.intersection(steps[: index + 1]):
-        return "Failed"
-    if workflow_status == "Succeeded" or failed:
-        return "Succeeded"
-    return "Failed"
-
-
 def main() -> int:
     names = [name for name in os.environ["PIPELINES"].split(",") if name]
-    steps = [step for step in os.environ.get("STEPS", "").split(",") if step]
     unknown = [name for name in names if name not in PIPELINES]
-    if unknown or (steps and len(steps) != len(names)):
-        raise ValueError(f"invalid publish request for {names or unknown}")
+    if unknown:
+        raise ValueError(f"invalid publish request for {unknown}")
     dataset_version = os.environ.get("DATASET_VERSION", "")
     if "dp1-bronze-historical" in names and not dataset_version:
         raise ValueError("DATASET_VERSION is required to publish the historical pipeline")
     workflow_status = os.environ["WORKFLOW_STATUS"]
-    failed = failed_steps(os.environ.get("FAILED_STEPS", ""))
     run_id = os.environ["RUN_ID"]
     sdk = client()
     summary = {}
-    for index, name in enumerate(names):
-        status = step_status(index, steps, workflow_status, failed)
+    for name in names:
         pipeline_ref = ensure_pipeline(sdk, name)
-        publish_status(sdk, name, status, run_id)
+        publish_status(sdk, name, workflow_status, run_id)
         edges = 0
-        if status == "Succeeded":
+        if workflow_status == "Succeeded":
             edges = publish_lineage(sdk, name, pipeline_ref, dataset_version)
-        summary[name] = {"status": status_for(status), "lineage_edges": edges}
+        summary[name] = {"status": status_for(workflow_status), "lineage_edges": edges}
     print(json.dumps(summary, sort_keys=True))
     return 0
 
