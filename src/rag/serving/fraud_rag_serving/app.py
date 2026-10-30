@@ -183,11 +183,6 @@ async def get_chunk(chunk_id: str = PathParam(pattern=CHUNK_ID, max_length=200))
     return found
 
 
-@app.post("/v1/chunks/search", response_model=SearchResponse)
-async def search(request: SearchRequest) -> SearchResponse:
-    return await knowledge.search(request)
-
-
 app.mount("/metrics", make_asgi_app())
 app.mount("/", mcp_app)
 
