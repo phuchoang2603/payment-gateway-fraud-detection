@@ -66,7 +66,7 @@
 - [x] 5b.1 Research the corpus sources and record the proposed corpus in `rag-corpus.md`.
 - [x] 5b.2 Settle the layout with the user: `src/rag`, chart `rag-pipeline`, namespace `llm`, corpus in the image, release-triggered runs, Iceberg offline, Web API and MCP in scope (2026-10-29).
 - [ ] 5b.3 Ask the platform for P9 (`llm` in the Argo Workflows controller's `workflowNamespaces`). Verify read-only that the controller reconciles a test Workflow in `llm`.
-- [ ] 5b.4 Create `src/rag/` (uv project):
+- [x] 5b.4 Create `src/rag/` (uv project):
   - `corpus/`: the hand-written synthetic documents with front matter, `sources.yaml` and the renderer;
   - `pipeline/`: publish, structure-aware chunker, batched embed client, pre-write validation gate, PyIceberg writer, Feast refresh with HNSW index, post-write verify;
   - `store/`: the Feast definitions (`knowledge_base`, `knowledge_chunks`, Postgres online store with `vector_enabled`, SQL registry);
@@ -74,21 +74,22 @@
   - CI tests for the code and threshold sync, chunk-id stability, version hashing, gate and contract rule parity, the Feast table name and index DDL, API validation and MCP tool mapping.
 
   Verify locally only with ruff and format.
-- [ ] 5b.5 Add the `rag` image to `.github/service-images.json`. Its build paths are `src/rag/` plus every corpus source in `sources.yaml`, and the Dockerfile copies those sources into the image.
-- [ ] 5b.6 Add `contracts/data-products/knowledge-base/` (ODPS product and ODCS `knowledge-chunks` with the contract checks as SQL counts). In `openmetadata_jobs`, add the `knowledge-base` checks product, the `rag-knowledge` pipeline and lineage edges, and the `rag-api` `mcpServer` entry.
-- [ ] 5b.7 Create `infra/charts/rag-pipeline` and the `rag-pipeline` application (dev on, prod off), with:
+- [x] 5b.5 Add the `rag` image to `.github/service-images.json`. Its build paths are `src/rag/` plus every corpus source in `sources.yaml`, and the Dockerfile copies those sources into the image.
+- [x] 5b.6 Add `contracts/data-products/knowledge-base/` (ODPS product and ODCS `knowledge-chunks` with the contract checks as SQL counts). In `openmetadata_jobs`, add the `knowledge-base` checks product, the `rag-knowledge` pipeline and lineage edges, and the `rag-api` `mcpServer` entry.
+- [x] 5b.7 Create `infra/charts/rag-pipeline` and the `rag-pipeline` application (dev on, prod off), with:
   - the executor ServiceAccount and Role;
   - the `rag-knowledge` WorkflowTemplate and its PostSync `Workflow` hook with a deadline;
   - the CNPG `rag-pgvector` Cluster (`18.3-standard-trixie`) and `Database` with the `vector` extension and the writer and reader roles;
-  - the `rag-api` Knative Service (REST and MCP);
+  - the `rag-api` Deployment (REST and MCP);
   - ExternalSecrets (gateway storage identity, Polaris client, DB roles, gateway keys, OpenMetadata token, ClickHouse checks user);
   - mesh AuthorizationPolicies;
   - the registry `MCPServer` entry.
 
   Verify with `helm template` and `helm lint`.
-- [ ] 5b.8 After #102: admit `llm` in the network rules of the `lakehouse` (Polaris), `clickhouse` and OpenMetadata charts.
-- [ ] 5b.9 In `llm-platform`:
-  - add the `rag-ingest` and `rag-api` client keys;
+- [x] 5b.8 Admit `llm` in the `lakehouse` (Polaris) network rule, add `knowledge` tables to the ClickHouse ingestion filter, and publish the checks connectors and ClickHouse secret into `llm` from `metadata-integrations`. ClickHouse has no network rule.
+- [ ] 5b.8b Ask the platform for P10 (OpenMetadata admits `llm` on 8585).
+- [x] 5b.9 In `llm-platform`:
+  - add the `ragingest` and `ragapi` client keys;
   - add the `/mcp/knowledge` HTTPRoute, MCP backend and policy;
   - add a kagent `RemoteMCPServer` for the gateway route;
   - give `evidence-agent` the two tools as 0.2.0, updating its prompt and registry entry.

@@ -26,7 +26,7 @@ An Argo `WorkflowTemplate` `rag-knowledge` in the `rag-pipeline` chart, in names
 An Argo CD PostSync hook SHALL start a run whenever the `rag-pipeline` application syncs a change, and the hook SHALL have a deadline. Manual submission from the template SHALL remain possible. There SHALL be no schedule.
 - Chunks SHALL follow the document structure (requirement, clause, section or FAQ entry), split longer sections on paragraph boundaries with overlap, and start with the document title and section.
 - `chunk_id` SHALL be `<doc_id>#<section-slug>[-n]`, and each chunk SHALL carry a `content_sha256`.
-- Embedding SHALL use the platform's embedding model through the agent gateway's `/v1/embeddings` route with the `rag-ingest` client key, never by calling the model server directly. It SHALL produce 1024-dimension vectors, and documents SHALL be embedded without a query instruction.
+- Embedding SHALL use the platform's embedding model through the agent gateway's `/v1/embeddings` route with the `ragingest` client key, never by calling the model server directly. It SHALL produce 1024-dimension vectors, and documents SHALL be embedded without a query instruction.
 
 The workflow SHALL be enabled only where the LLM platform is enabled.
 
@@ -36,7 +36,7 @@ The workflow SHALL be enabled only where the LLM platform is enabled.
 
 #### Scenario: Embedding through the gateway
 - **WHEN** the embed step runs
-- **THEN** its requests carry the `rag-ingest` key, pass the gateway's policy, and are refused without the key
+- **THEN** its requests carry the `ragingest` key, pass the gateway's policy, and are refused without the key
 
 #### Scenario: Gateway unavailable
 - **WHEN** the embedding route returns errors after the step's retries
@@ -102,7 +102,8 @@ REST: pydantic request and response models, async handlers, and liveness and rea
 MCP: the streamable-HTTP tools `search_knowledge` and `get_knowledge_chunk` at `/mcp`, in stateless mode, backed by the same functions as the REST endpoints.
 
 Deployment:
-- It SHALL run as a Knative Service in `llm` with revision-based rolling updates and automatic fallback to the last ready revision.
+- It SHALL run as a Deployment in `llm` whose rolling update keeps the previous version serving until a new version is ready.
+- Its readiness SHALL depend on the database only, not on a loaded knowledge version.
 - It SHALL be load-tested for throughput and latency.
 - Agents SHALL reach the MCP tools only through the gateway route `/mcp/knowledge`.
 - It SHALL be published to the agent registry as an MCP server.
