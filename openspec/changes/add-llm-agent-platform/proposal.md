@@ -20,12 +20,12 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - **Corpus:** about 14 documents about gateway behaviour. Most are rendered from the repository's specs and contracts; six are short, hand-written and labelled synthetic (decline codes, risk policy, analyst runbook, chargebacks, merchant terms, FAQ). The corpus ships inside the `rag` image built from `src/rag/`, so CI never writes to the bucket.
   - **Workflow:** an Argo `WorkflowTemplate` in the new `rag-pipeline` chart (Python, no Spark). Each release that changes the image triggers it through a sync hook. It publishes the corpus to an immutable version prefix, chunks it, embeds through the gateway's embedding route and writes through Feast. The offline history is an Iceberg table; the online store is pgvector on an app-owned CNPG Postgres.
   - **Governance:** the run validates its output and records its checks and lineage in OpenMetadata like the other pipelines.
-  - **Web API and MCP tool in one service:** FastAPI with pydantic and health checks, on Knative. It fetches chunks by id, searches them, and later returns customer features by id from the online feature store. It also serves the knowledge MCP tools behind the gateway's `/mcp/knowledge` route; they are published to the registry and used by `evidence-agent`.
+  - **Web API and MCP tool in one service:** FastAPI with pydantic and health checks, as a Deployment whose rolling update keeps the last ready version serving. It fetches chunks by id, searches them, and later returns customer features by id from the online feature store. It also serves the knowledge MCP tools behind the gateway's `/mcp/knowledge` route; they are published to the registry and used by `evidence-agent`.
   - **Quality gate:** every quality check runs before the write. After the write, the pipeline types the Feast pgvector column and adds an HNSW index, which Feast does not create.
 - Register the AI assets in OpenMetadata through the existing `metadata-integrations` chart: the LLM service (the gateway endpoint), both models, and the agent as an AI application linked to its model. MCP servers, further agents and knowledge bases attach to these later.
 - Add an on-demand benchmark (`vllm bench serve` from the vLLM image, as plain manifests applied with `kubectl`) with an agent-shaped shared-prefix workload. It records throughput, TTFT and inter-token latency before and after each optimization (prefix caching, FP8 KV cache, n-gram speculative decoding, streamed cold start, FP8 vs AWQ weights). Results are recorded only from real dev runs, with the command and date.
 - Record the autoscaling decision against the rubric's KEDA:
-  - Knative for this repo's own HTTP services (the RAG Web API and knowledge MCP tool now, later MCP servers);
+  - Knative for this repo's own plain HTTP services that need no caller identity (later MCP servers and web APIs); the knowledge API is a Deployment, because its callers are admitted by mesh identity and Knative's cluster-local gateway runs outside the mesh;
   - KEDA for kagent agent Deployments and the Substrate WorkerPool (from phase 2);
   - a fixed single replica per model server, because each cluster has one GPU.
 - Document the platform on new `docs/llm/platform.md` and `docs/llm/benchmark.md` pages, and update `docs/llm/agents.md`, the roadmap and the architecture where the behaviour changes.
@@ -38,7 +38,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - Platform prerequisites are a separate talos-proxmox change set that needs user approval:
   - restrict the prod GPU pool to `g6.xlarge`;
   - install the shared controllers and CRDs: KServe LLM presets, agentgateway, kagent 0.10.4 with Agent Substrate 0.0.9, agentregistry, and KEDA for phase 2;
-  - let the Argo Workflows controller run workflows in `llm`, for the RAG pipeline.
+  - let the Argo Workflows controller run workflows in `llm`, and let `llm` reach OpenMetadata, for the RAG pipeline.
 
   The clusters stay on Kubernetes 1.36. This change consumes these components and does not install them.
 
@@ -66,9 +66,10 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - A new chart `infra/charts/rag-pipeline`, application `rag-pipeline` in `llm` (enabled in dev, disabled in prod), containing:
     - the `rag-knowledge` WorkflowTemplate and its PostSync trigger;
     - the CNPG `rag-pgvector` Cluster and `Database`;
-    - the `rag-api` Knative Service (Web API and MCP tool in one);
+    - the `rag-api` Deployment (Web API and MCP tool in one);
     - ExternalSecrets, mesh policies and the registry `MCPServer` entry.
-  - In `llm-platform`: the `rag-ingest` and `rag-api` client keys and the `/mcp/knowledge` route and policy.
+  - In `llm-platform`: the `ragingest` and `ragapi` client keys, the `/mcp/knowledge` route and policy, the `knowledge` RemoteMCPServer, and `evidence-agent` 0.2.0 with the knowledge tools.
+  - In `metadata-integrations`: the `knowledge` tables in the ClickHouse ingestion filter, and its connectors and ClickHouse secret published into `llm` for the RAG checks.
   - After #102: `llm` admitted by the Polaris, ClickHouse and OpenMetadata network rules.
 - **Code:**
   - an `llm` service kind and `ai` asset registration in the OpenMetadata register job (`src/data-pipeline/openmetadata_jobs/` after PR #102 merges);
@@ -77,7 +78,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - `contracts/data-products/knowledge-base/` (ODPS and ODCS).
 - **Secrets:**
   - new keys in the `payment-gateway-fraud-detection` Doppler configs (`dev`, `prd`): `LLM_GATEWAY_AGENTS_API_KEY` and `LLM_GATEWAY_BENCHMARK_API_KEY`, already provisioned with random values. No model-provider key is needed, because the models are public on Hugging Face.
-  - for RAG, still to provision: `LLM_GATEWAY_RAG_INGEST_API_KEY`, `LLM_GATEWAY_RAG_API_KEY`, `RAG_DB_WRITER_PASSWORD` and `RAG_DB_READER_PASSWORD`.
+  - for RAG: `LLM_GATEWAY_RAG_INGEST_API_KEY`, `LLM_GATEWAY_RAG_API_KEY`, `RAG_DB_WRITER_PASSWORD` and `RAG_DB_READER_PASSWORD`, provisioned with random values in `dev` and `prd` on 2026-10-29.
 - **Platform dependency:** the talos-proxmox components in design.md decision 13 must be live in an environment before the chart's resources can reconcile there.
 - **Docs:**
   - new: `docs/llm/platform.md`, `docs/llm/benchmark.md`, `docs/llm/rag.md`;

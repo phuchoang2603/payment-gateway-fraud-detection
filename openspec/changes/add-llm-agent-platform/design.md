@@ -230,7 +230,7 @@ Each result row records the command, image and digest, args, date and environmen
 | Model server | `LLMInferenceService.replicas` | Fixed: 1 in dev, 0 in prod until confirmed; scale-to-zero by a values toggle | Each cluster has exactly one schedulable GPU (prod pool limit is 1 node), so there is nothing to scale out to. `LLMInferenceService.scaling` supports only KEDA and llm-d's WVA, and Knative cannot manage it. With KEDA in place, `scaling.keda` (scale 0↔1 on the gateway's queued LLM requests) becomes possible for prod cost; it is not built in phase 1, because a Spot GPU cold start of several minutes would time out agent calls. |
 | kagent agents (phase 2) | KEDA `ScaledObject` on the Deployment kagent creates; `minReplicaCount` 2 for multi-replica | Prometheus trigger on agentgateway's A2A request rate per agent, from vmsingle's Prometheus API | Knative's KPA and HPA classes scale only Knative Revisions, and kagent creates plain Deployments with no Knative mode. CPU-based HPA misreads agents that mostly wait on the model. KEDA is acceptable to the user, so it is the platform equivalent here. |
 | Substrate worker pool (phase 2) | KEDA `ScaledObject` on the `WorkerPool` scale subresource | Active-actor or request-rate trigger | `WorkerPool` exposes a scale subresource for exactly this purpose |
-| MCP servers, web API (phase 2) | Knative `Service` | KPA with a concurrency target, `min-scale` ≥ 1 for MCP sessions, revisions for rolling update with automatic fallback to the last ready revision | They are this repo's own stateless HTTP services, which is Knative's model. Knative is already deployed and is the user's preference. |
+| MCP servers, web API (phase 2; the knowledge API is the exception in decision 15) | Knative `Service` | KPA with a concurrency target, `min-scale` ≥ 1 for MCP sessions, revisions for rolling update with automatic fallback to the last ready revision | They are this repo's own stateless HTTP services, which is Knative's model. Knative is already deployed and is the user's preference. |
 
 The docs record this mapping the way the roadmap maps Airflow→Argo: Knative where the workload is a plain HTTP service, KEDA where the replicas belong to another controller.
 
@@ -244,7 +244,7 @@ agentregistry 0.4.0 materializes agents as kagent `v1alpha2` resources, the API 
 
 ### 12. OpenMetadata: register the AI assets through the metadata-integrations chart
 
-OpenMetadata 2.0.6 has first-class AI entities: `llmService`, `llmModel`, `aiApplication`, `mcpServer` and `promptTemplate`. It has no ingestion connector for a custom LLM service, so the assets are created through the SDK by the existing `metadata-integrations` register Job, the same chart and image that register the StarRocks, Kafka, Argo and object-storage services.
+OpenMetadata 2.0.6 has first-class AI entities: `llmService`, `llmModel`, `aiApplication`, `mcpServer` and `promptTemplate`. It has no ingestion connector for a custom LLM service, so the assets are created through the SDK by the existing `metadata-integrations` register Job, the same chart and image that register the ClickHouse, Kafka, Argo and object-storage services.
 
 The chart gains:
 
@@ -304,7 +304,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 - Argo `WorkflowTemplate` `rag-knowledge` in `llm`. Steps pass object paths, never data:
   1. `publish-corpus` writes the version prefix if absent. It ends the run early when the offline table and the online store already hold the version.
   2. `chunk` → `runs/payment-gateway/knowledge/<run>/chunks.parquet`.
-  3. `embed` calls the gateway's `/v1/embeddings` in batches with the `rag-ingest` key. Documents are embedded without an instruction prefix.
+  3. `embed` calls the gateway's `/v1/embeddings` in batches with the `ragingest` client key. Documents are embedded without an instruction prefix.
   4. `validate` gates the write. It runs every quality check on the staged, embedded Parquet, so a bad corpus never reaches either store.
   5. `write` appends to the offline table, then refreshes the online store and rebuilds its ANN index.
   6. `verify` checks that the stores hold exactly what was validated.
@@ -365,11 +365,14 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 **Web API and MCP tool in one service (`rag-api`).** One FastAPI process serves both the REST API and the MCP tools, so there is one deployment, one reader identity and no extra hop.
 - REST: pydantic models, async handlers, and `/healthz` and `/readyz` probes for Kubernetes. Endpoints:
   - `GET /v1/chunks/{chunk_id}`;
-  - `POST /v1/chunks/search`: embeds the query through the gateway with Qwen3-Embedding's query instruction and the `rag-api` key, then runs the indexed v1 search. Results are read back by id, which also sidesteps the id and feature mismatch the reference recorded with `retrieve_online_documents_v2(...).to_df()` on Feast 0.66;
+  - `POST /v1/chunks/search`: embeds the query through the gateway with Qwen3-Embedding's query instruction and the `ragapi` client key, then runs the indexed v1 search. Results are read back by id, which also sidesteps the id and feature mismatch the reference recorded with `retrieve_online_documents_v2(...).to_df()` on Feast 0.66;
   - `GET /v1/customers/{customer_id}/features`: online customer features from the fraud Feast project, once the DP3 slice puts customer features online.
 - MCP: the official `mcp` SDK's streamable-HTTP app, mounted at `/mcp`, with two tools, `search_knowledge(query, top_k, audience)` and `get_knowledge_chunk(chunk_id)`. They call the same functions as the REST endpoints. It runs in stateless mode, so any replica or revision can answer any request with no session affinity.
 - It is the only Feast reader of the knowledge store, through `rag_reader`.
-- It runs as a Knative Service in `llm` (decision 10): rolling updates through revisions, automatic fallback to the last ready revision, `min-scale` 1. It is load-tested with Locust.
+- It runs as a Deployment, not a Knative Service. The platform's Knative cluster-local gateway runs outside the mesh, so traffic routed through Knative would reach the pods with no identity, and the mesh rule that only the gateway may call the service could not hold.
+  - Rollouts use `maxUnavailable: 0`, `maxSurge: 1`, readiness gating and a progress deadline. A version that never becomes ready stalls the rollout while the previous pods keep serving, which is the automatic fallback.
+  - Two replicas and a PodDisruptionBudget. It is load-tested with Locust.
+- It loads the Feast store on first use: the registry exists only after the first pipeline run, and the reader role cannot create it. Readiness checks the database only, so the first Argo CD sync does not wait on the pipeline that its PostSync hook starts.
 - The gateway routes `/mcp/knowledge` to the service's `/mcp` (decision 2), with its own policy: the agents' key, and tool-call metrics for the agent telemetry rows. Mesh policy admits only the gateway to the service.
 - It is published to agentregistry as an `MCPServer` and catalogued in OpenMetadata as an `mcpServer`. `evidence-agent` gains the tools (kagent `RemoteMCPServer` → gateway), which bumps it to 0.2.0.
 
@@ -386,6 +389,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 | P6 | KEDA (latest stable) | `operators` | Phase 2 only (decision 10) |
 | P8 | Namespace `llm` (ambient, Pod Security `restricted`), with kagent and agentregistry watching it | `llm` | The application's namespace; the app never creates or deletes it |
 | P9 | Add `llm` to the Argo Workflows controller's `workflowNamespaces` (`apps/components/argo-workflows/values.yaml`) | `operators` | Lets the RAG workflow (decision 15) run in `llm`; the app chart brings its own executor ServiceAccount and Role |
+| P10 | Admit `llm` to OpenMetadata on 8585 in `apps/components/openmetadata/templates/network.yaml` | `data` | The RAG workflow's checks and lineage steps call OpenMetadata from `llm` |
 | P7 | Enroll the platform vmagent in Istio ambient (`istio.io/dataplane-mode: ambient` on its pods) | `observability` | Lets app mesh policies admit the metrics agent by identity, rather than opening inference ports to sources with no identity |
 
 The clusters stay on Talos 1.13.9 / Kubernetes 1.36.3. No change is needed to the GPU operator, the DRA driver, Istio or Knative.
@@ -400,7 +404,7 @@ The clusters stay on Talos 1.13.9 / Kubernetes 1.36.3. No change is needed to th
 - [Chat and embedding share one 16 GB GPU] → fixed memory fractions per process, with AWQ chat as the in-family fallback. If both still do not fit, embedding moves to CPU (0.6B is small) and the decision is recorded.
 - [The OpenMetadata part depends on PR #102] → it lands after #102 merges and is rebased onto its layout. The rest of the change does not wait for it.
 - [agentgateway policies overwrite per target] → the chart renders policies from the route list, one per route, so a second policy for the same route cannot be declared in values.
-- [RAG builds on #102's `openmetadata_jobs`, Polaris and ClickHouse, and runs in `llm`] → it is implemented after #102 merges. Polaris, ClickHouse and OpenMetadata network rules admit `llm`, and the platform adds `llm` to the Argo Workflows controller's namespaces (P9).
+- [RAG builds on #102's `openmetadata_jobs`, Polaris and ClickHouse, and runs in `llm`] → this branch is stacked on #102 and goes live only after #102 merges. Polaris admits `llm` (app chart); the platform adds `llm` to the Argo Workflows controller (P9) and to OpenMetadata's network policy (P10).
 - [The customer-features endpoint needs customer features online] → it lands with or after the DP3 slice; the chunk endpoints do not wait for it.
 - [Hand-written synthetic documents could drift from the code or be mistaken for real policy] → each is labelled synthetic in its text, and CI tests keep the codes and thresholds equal to the code.
 - [Benchmark variants need the GPU] → the `LLMInferenceService` is stopped for the duration of a run, and dev agents are unavailable then.
