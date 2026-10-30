@@ -140,6 +140,13 @@ spec:
           - name: USER
             value: vllm
           {{- include "llm-platform.modelStoreEnv" $store | nindent 10 }}
+        # Streaming the weights, torch.compile and CUDA-graph capture outlast the preset's 10-minute startup window
+        # on the dev GPU; a restart repeats all of it, so the window is wider.
+        startupProbe:
+          httpGet: {path: /health, port: 8000}
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: {{ $.Values.vllm.startupFailureThreshold }}
         resources:
           {{- toYaml $model.resources | nindent 10 }}
           claims:
