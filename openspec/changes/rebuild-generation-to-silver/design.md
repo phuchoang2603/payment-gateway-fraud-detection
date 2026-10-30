@@ -24,7 +24,7 @@ Constraints:
 - Every rule that can fail is either a Spark job failure before writing (unreadable historical input), a row routed to a rejected-records table (undecodable Kafka records, conflicting Silver payments), or a contract-derived SQL check. Nothing is checked twice.
 
 **Non-Goals:**
-- Incremental Silver, accepted-snapshot pointers, recurring modes, metadata-only replay, writer takeover or resumable partial files.
+- Accepted-snapshot pointers, metadata-only replay, writer takeover or resumable partial files.
 - Running Bronze or Silver at full scale, evidence capture, gold/feature marts, drift detection.
 - A raw S3 archive of Kafka that outlives topic retention. Iceberg Bronze is the archive.
 
@@ -269,13 +269,25 @@ Spark applications write rolling event logs to `runs/payment-gateway/spark-event
 
 The `data-pipelines` application owns the OpenMetadata connector configuration, its ExternalSecrets and the register job. A PostSync job creates the services on each deploy. Every checks run ingests the ClickHouse tables before its native tests, so no scheduled ClickHouse discovery remains. Kafka topics are ingested by the on-demand `metadata-discovery` WorkflowTemplate. The `metadata-integrations` application is removed.
 
+### 17. Incremental Silver from Iceberg change data
+
+`dp2-silver` takes `mode=historical|incremental`; manual runs default to historical, the suspended Kafka CronWorkflow uses incremental. Exactness rests on one invariant: every Silver rule is local to one payment (duplicate copies, conflicts that reject a whole payment, attempt lifecycles, label linkage and pending or orphan classes). Recomputing each affected payment from all of its Bronze rows and replacing its rows therefore gives the historical result, and every other payment is unchanged.
+
+- **State:** every DP2 commit already records the Bronze snapshot IDs it read; it now also records `dp2.mode` and `dp2.logic_version`. Incremental mode takes the newest DP2 commit in `silver.payment_events` main history (maintenance commits carry no run ID), so the state is published with, and only with, the Silver data it describes.
+- **New rows:** Bronze is append-only outside historical reloads, so Iceberg's incremental append read between the recorded and current Bronze snapshots returns exactly the new rows, without a separate offset watermark. It relies on the recorded snapshots surviving expiry (7 days, last 10 kept); a run that falls further behind is refused.
+- **Scope:** the new rows name the affected payments. Their full history is reread from both sources from 35 days (`SILVER_LOOKBACK_DAYS`) before the earliest new event time or label availability, which covers a payment's lifetime and the 7–21 day chargeback delay while still pruning partitions. A check fails the run when an affected payment already has Silver rows older than that cutoff.
+- **Replace:** the existing curation functions run on that subset; each Silver table deletes the affected payments and appends their new rows on the audit branch, then the normal checks and `publish-tables` apply. Rows must be removed as well as upserted because a conflicting redelivery moves a whole payment out of the accepted tables.
+- **Refuse:** no recorded Bronze snapshots, a non-append, non-compaction Bronze snapshot since them (a historical reload), or a different logic version fails the run with a message to run historical. There is no silent fallback.
+- **Consumers (DP3):** read Iceberg's changelog view of `silver.attempts` and `silver.labels` between the snapshot they last consumed and the current one, with net changes, so carry-over rows from rewritten files cancel out and only changed rows remain, with their old values as deletes. A historical run rewrites every row, which reads as a full reset.
+- **Verification:** a CI test replays Kafka batches (new payment, late duplicate, conflicting redelivery, label before payment, chargeback 20 days later) and compares every incremental result with a historical run over the same Bronze; each refusal has a test, and one test reads the attempts changelog across an incremental run.
+
 ## Risks / Trade-offs
 
 - [Bronze not run within Kafka retention (7 days)] → `failOnDataLoss` fails the run loudly. Enabling the schedule must come with a cadence or retention that covers it. Raising retention is a Kafka chart change owned by the live change.
 - [`from_protobuf` types differ from the historical Parquet types (timestamps, enums, `uint64`)] → One explicit cast to the Bronze contract schema serves both sources. A CI test decodes protobuf fixtures and generated Parquet into the same Bronze schema, and any mismatch fails. Exact Spark 4.1 `from_protobuf` options are verified against the Spark docs during implementation.
 - [The full-scale run takes hours and its throughput is unmeasured for the new code] → The dev v18 run measures rows per second per worker first, and the prod resources, shard count and deadline are set from that. The `aws-cpu-burst` pool caps prod at four xlarge nodes, so four shards is the ceiling until the pool limit changes. A pod lost to node replacement resumes from day markers. The run is reported only as a published manifest with its byte total; no coursework evidence is captured.
 - [Prod compute and storage cost] → Four shard pods and one publish pod on spot prod nodes, with no Spark or OpenMetadata workloads enabled in prod. About 100+ GB is stored in the prod bucket. The template is on demand and does nothing until submitted.
-- [Full Silver recompute grows with history] → Acceptable at development scale. Incremental Silver is a later change once volume justifies it.
+- [Full Silver recompute grows with history] → Historical mode stays the full recompute; scheduled runs use incremental mode (decision 17).
 - [Historical overwrite-by-filter rewrites data files] → Partitioning by `_source` keeps rewrites within historical partitions.
 - [Spec deltas overlap the live change] → This change modifies only these requirements of shared specs:
   - `live-traffic-simulation`: "One shared current flow", plus four removed landing requirements;
@@ -328,6 +340,6 @@ Steps 3 and 4 run when the whole pipeline is ready, not as tasks of this change.
   - `servers.environment` as a string in the historical contracts, which the importer reads as an object (400);
   - a server-side null-pointer error (`String.hashCode`) on the bronze and silver contracts that stayed after removing quality rules, servers and top-level fields.
   Our files are valid ODCS v3. Rewriting them to the importer's dialect would break the `contracts` lint and the generator digest recorded in the v18 and v19 manifests. Git stays the authority. Retry `PUT /v1/dataContracts/odcs/yaml` on a newer OpenMetadata, and publish data products once ODPS is supported natively.
-- Incremental Silver is not planned. The full recompute stays because cross-source dedup, conflict rejection and label linkage can change any payment's result, so a partial run cannot be exact. Revisit only if the v19 Silver run time is a problem.
+- Incremental Silver is decision 17. Historical mode remains the default for manual runs and the reference result.
 - Exact transitive jar versions for the Kafka connector under Spark 4.1.3, resolved when the Dockerfile is written.
 - Whether the benchmark should also show a `mergeSchema` on/off read over schema versions 2/3 files. It can be added to the benchmark job later without spec changes.

@@ -16,6 +16,14 @@ spec:
         karpenter.sh/do-not-disrupt: "true"
     entrypoint: kafka
     onExit: publish
+    arguments:
+      parameters:
+        - name: source
+          value: kafka
+        - name: dataset-version
+          value: {{ .Values.bronze.datasetVersion | quote }}
+        - name: mode
+          value: incremental
     templates:
       - name: kafka
         steps:
@@ -31,5 +39,9 @@ spec:
               templateRef:
                 name: dp2-silver
                 template: silver
+              arguments:
+                parameters:
+                  - name: mode
+                    value: incremental
 {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp1-bronze-kafka,dp2-silver" "dataset" .Values.bronze.datasetVersion) | nindent 6 }}
 {{- end }}

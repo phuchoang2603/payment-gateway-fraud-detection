@@ -8,6 +8,7 @@ from pyspark import StorageLevel
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
+from batch import incremental
 from batch.bronze import EVENTS as BRONZE_EVENTS
 from batch.bronze import LABELS as BRONZE_LABELS
 from batch.bronze import current_snapshot
@@ -22,6 +23,8 @@ PAYMENT_EVENTS = f"{NAMESPACE}.payment_events"
 ATTEMPTS = f"{NAMESPACE}.attempts"
 LABELS = f"{NAMESPACE}.labels"
 REJECTED = f"{NAMESPACE}.rejected_events"
+MODES = ("historical", "incremental")
+AFFECTED_VIEW = "dp2_affected_payments"
 
 PAYMENT_KEY = ["integration_id", "payment_id"]
 ATTEMPT_KEY = [*PAYMENT_KEY, "attempt_id"]
@@ -130,21 +133,50 @@ def full_width_dedup(hashed: DataFrame) -> DataFrame:
     return distinct_events(hashed).select(*DEDUP_COLUMNS)
 
 
-def run(spark, run_id):
+def run(spark, run_id, mode="historical"):
+    if mode not in MODES:
+        raise ValueError(f"mode must be one of {', '.join(MODES)}, not {mode}")
     events_snapshot = current_snapshot(spark, BRONZE_EVENTS)
     labels_snapshot = current_snapshot(spark, BRONZE_LABELS)
     pins = {
         "bronze.payment_events.snapshot_id": str(events_snapshot),
         "bronze.fraud_labels.snapshot_id": str(labels_snapshot),
+        "dp2.mode": mode,
+        incremental.LOGIC_PROPERTY: incremental.LOGIC_VERSION,
     }
-    events = spark.read.option("versionAsOf", events_snapshot).table(BRONZE_EVENTS)
-    hashed = with_event_hash(events)
+    bronze_events = spark.read.option("versionAsOf", events_snapshot).table(BRONZE_EVENTS)
+    bronze_labels = spark.read.option("versionAsOf", labels_snapshot).table(BRONZE_LABELS)
     cached = []
     phases = {}
 
     def cache(frame):
         cached.append(frame.persist(PERSIST))
         return cached[-1]
+
+    scope = None
+    if mode == "incremental":
+        with phase(spark, phases, "scope"):
+            scope = incremental_scope(spark, events_snapshot, labels_snapshot, cache)
+        if scope["payments_count"] == 0:
+            report = incremental_report(run_id, mode, scope, phases)
+            Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/silver.json", report)
+            return report
+        payments = F.broadcast(scope["payments"])
+        events = bronze_events.where(F.col("occurred_at") >= F.lit(scope["cutoff"])).join(
+            payments, PAYMENT_KEY, "left_semi"
+        )
+        labels_input = bronze_labels.where(F.col("label_available_at") >= F.lit(scope["cutoff"])).join(
+            payments, PAYMENT_KEY, "left_semi"
+        )
+    else:
+        events = bronze_events
+        labels_input = bronze_labels
+    hashed = with_event_hash(events)
+
+    def save(name, frame, partition=None, options=None):
+        if scope is None:
+            return write_table(spark, name, frame, pins, run_id, partition, options)
+        return replace_payments(spark, name, frame, pins, run_id, partition, options)
 
     try:
         plan = plan_dedup(hashed, dedup_broadcast_threshold())
@@ -161,13 +193,15 @@ def run(spark, run_id):
 
         snapshots = {}
         with phase(spark, phases, "write payment_events"):
-            snapshots[PAYMENT_EVENTS] = write_table(
-                spark, PAYMENT_EVENTS, accepted_events, pins, run_id, F.days("occurred_at"), LOCAL_WRITE_OPTIONS
+            snapshots[PAYMENT_EVENTS] = save(
+                PAYMENT_EVENTS, accepted_events, F.days("occurred_at"), LOCAL_WRITE_OPTIONS
             )
         accepted = spark.read.option("versionAsOf", snapshots[PAYMENT_EVENTS]["snapshot_id"]).table(PAYMENT_EVENTS)
+        if scope is not None:
+            accepted = accepted.join(F.broadcast(scope["payments"]), PAYMENT_KEY, "left_semi")
         payment_status = payments(accepted)
         accepted_attempts = attempts(accepted, payment_status)
-        all_labels = label_observations(spark.read.option("versionAsOf", labels_snapshot).table(BRONZE_LABELS))
+        all_labels = label_observations(labels_input)
         linked = link_labels(all_labels, accepted_attempts, payment_status)
         accepted_labels = linked.join(conflicting_payments, PAYMENT_KEY, "left_anti")
 
@@ -196,10 +230,10 @@ def run(spark, run_id):
             (REJECTED, rejected, None),
         ):
             with phase(spark, phases, f"write {name.split('.')[-1]}"):
-                snapshots[name] = write_table(spark, name, frame, pins, run_id, partition)
+                snapshots[name] = save(name, frame, partition)
 
         with phase(spark, phases, "report"):
-            input_events = total_records(spark, BRONZE_EVENTS, events_snapshot)
+            input_events = total_records(spark, BRONZE_EVENTS, events_snapshot) if scope is None else hashed.count()
             conflicting_events = conflicts.count()
             distinct = snapshots[PAYMENT_EVENTS]["added_records"] + conflict_events.count()
             report = {
@@ -222,7 +256,9 @@ def run(spark, run_id):
                     "conflicting_payments": conflicting_payments.count(),
                 },
                 "labels": {
-                    "input_rows": total_records(spark, BRONZE_LABELS, labels_snapshot),
+                    "input_rows": (
+                        total_records(spark, BRONZE_LABELS, labels_snapshot) if scope is None else labels_input.count()
+                    ),
                     "distinct_observations": snapshots[LABELS]["added_records"],
                     "linkage": counts_by(spark.table(LABELS), "linkage"),
                 },
@@ -234,12 +270,91 @@ def run(spark, run_id):
                 "lifecycle_invalid": spark.table(ATTEMPTS).where(~F.col("lifecycle_valid")).count(),
                 "silver_snapshots": snapshots,
                 "phases": phases,
+                **incremental_report(run_id, mode, scope, phases),
             }
         Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/silver.json", report)
         return report
     finally:
         for frame in cached:
             frame.unpersist()
+
+
+def incremental_scope(spark, events_snapshot, labels_snapshot, cache) -> dict:
+    """The payments with Bronze rows appended since the last DP2 run, or IncrementalRefused when the result could
+    differ from a historical run."""
+    reason, since = incremental.refusal(
+        spark,
+        PAYMENT_EVENTS,
+        {
+            BRONZE_EVENTS: (incremental.EVENTS_PROPERTY, events_snapshot),
+            BRONZE_LABELS: (incremental.LABELS_PROPERTY, labels_snapshot),
+        },
+    )
+    if reason:
+        raise incremental.IncrementalRefused(f"{reason}; run dp2-silver with mode=historical")
+    new_events = incremental.appended(spark, BRONZE_EVENTS, since[BRONZE_EVENTS], events_snapshot)
+    new_labels = incremental.appended(spark, BRONZE_LABELS, since[BRONZE_LABELS], labels_snapshot)
+    payments, cutoff = incremental.affected_scope(new_events, new_labels)
+    payments = cache(payments)
+    count = payments.count()
+    scope = {"payments": payments, "payments_count": count, "cutoff": cutoff, "bronze_since": since}
+    if count == 0:
+        return scope
+    silver = {
+        table: spark.read.option("versionAsOf", current_snapshot(spark, table)).table(table)
+        for table in (PAYMENT_EVENTS, LABELS, REJECTED)
+    }
+    late = incremental.outside_lookback(silver[PAYMENT_EVENTS], silver[LABELS], silver[REJECTED], payments, cutoff)
+    late_count = late.count()
+    if late_count:
+        days = incremental.lookback().days
+        raise incremental.IncrementalRefused(
+            f"{late_count} affected payments have Silver rows before the {days}-day lookback cutoff {cutoff}; "
+            f"raise {incremental.LOOKBACK_ENV} or run dp2-silver with mode=historical"
+        )
+    payments.createOrReplaceTempView(AFFECTED_VIEW)
+    return scope
+
+
+def incremental_report(run_id, mode, scope, phases) -> dict:
+    report = {"run_id": run_id, "mode": mode, "phases": phases}
+    if scope is not None:
+        report.update(
+            {
+                "bronze_since": scope["bronze_since"],
+                "affected_payments": scope["payments_count"],
+                "lookback_days": incremental.lookback().days,
+                "cutoff": scope["cutoff"],
+            }
+        )
+    return report
+
+
+def create_table(spark, name, frame, partition=None, properties=WRITE_PROPERTIES) -> None:
+    if spark.catalog.tableExists(name):
+        return
+    spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {NAMESPACE}")
+    creator = frame.limit(0).writeTo(name).using("iceberg")
+    for key, value in properties.items():
+        creator = creator.tableProperty(key, value)
+    if partition is not None:
+        creator = creator.partitionedBy(partition)
+    creator.create()
+
+
+def replace_payments(spark, name, frame, pins, run_id, partition=None, options=None) -> dict:
+    """Replace the affected payments' rows: delete them, then append their recomputed rows, on this run's branch."""
+    create_table(spark, name, frame, partition)
+    stage(spark, name)
+    spark.sql(
+        f"DELETE FROM {name} WHERE (integration_id, payment_id) IN "
+        f"(SELECT integration_id, payment_id FROM {AFFECTED_VIEW})"
+    )
+    writer = frame.writeTo(name).options(**(options or {}))
+    for key, value in {**pins, "dp2.run_id": run_id}.items():
+        writer = writer.option(f"snapshot-property.{key}", value)
+    writer.append()
+    return snapshot_info(spark, name)
 
 
 def counts_by(frame: DataFrame, column: str) -> dict:
@@ -471,14 +586,7 @@ def reject_payment_rows(frame: DataFrame, table: str, conflicting_payments, conf
 
 
 def write_table(spark, name, frame, pins, run_id, partition=None, options=None) -> dict:
-    if not spark.catalog.tableExists(name):
-        spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {NAMESPACE}")
-        creator = frame.limit(0).writeTo(name).using("iceberg")
-        for key, value in WRITE_PROPERTIES.items():
-            creator = creator.tableProperty(key, value)
-        if partition is not None:
-            creator = creator.partitionedBy(partition)
-        creator.create()
+    create_table(spark, name, frame, partition)
     stage(spark, name)
     writer = frame.writeTo(name).options(**(options or {}))
     for key, value in {**pins, "dp2.run_id": run_id}.items():
@@ -489,9 +597,10 @@ def write_table(spark, name, frame, pins, run_id, partition=None, options=None) 
 
 def main():
     run_id = os.environ["RUN_ID"]
+    mode = os.environ.get("SILVER_MODE", "historical")
     spark = session("dp2-silver")
     try:
-        report = run(spark, run_id)
+        report = run(spark, run_id, mode)
         print(json.dumps(report, sort_keys=True, default=str))
     finally:
         spark.stop()

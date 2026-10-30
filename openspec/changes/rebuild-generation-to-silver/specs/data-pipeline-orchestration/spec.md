@@ -17,13 +17,18 @@ Pipeline-specific discovery and native check execution SHALL consume centrally m
 
 ## ADDED Requirements
 
-### Requirement: Three-stage pipeline workflows
-DP1 Bronze and DP2 Silver SHALL each run as an Argo workflow with exactly three stages: a Spark job, contract SQL checks, and OpenMetadata publication. Checks SHALL start only after the Spark stage has committed. Publication SHALL run whether the earlier stages succeed or fail, recording the run outcome. Stage results SHALL distinguish failed data checks from execution errors.
+### Requirement: Write-audit-publish pipeline workflows
+DP1 Bronze and DP2 Silver SHALL each run as an Argo workflow with a Spark job that writes to an `audit-<workflow>` Iceberg branch, contract SQL checks pinned to that branch's heads, a `publish-tables` stage that fast-forwards each table's main branch only after every check succeeds, and OpenMetadata publication as the exit handler. Readers of another pipeline's tables SHALL read main. Publication SHALL run whether the earlier stages succeed or fail, recording the run outcome. Stage results SHALL distinguish failed data checks from execution errors.
 
 #### Scenario: Inspect a workflow
 
 - **WHEN** a user opens a DP1 or DP2 run
-- **THEN** they see its three stages, its input (dataset version, Kafka offsets or Bronze snapshots), its committed snapshots, its check outcome and its publication outcome
+- **THEN** they see its stages, its input (dataset version, Kafka offsets or Bronze snapshots), its committed snapshots, its check outcome and its publication outcome
+
+#### Scenario: Checks fail before publication
+
+- **WHEN** a check fails on the audit branch
+- **THEN** main is unchanged, the branch is kept for diagnosis, and downstream pipelines keep reading the previous published data
 
 #### Scenario: Checks fail
 
@@ -44,20 +49,25 @@ Each stage SHALL have one bounded Argo retry policy for execution errors; nested
 - **THEN** Kubernetes rejects the request with guidance to use graceful stop
 
 ### Requirement: Readable workflow graph
-The Bronze and Silver workflows SHALL each show the Spark, checks and publish stages with direct dependencies and readable names. The benchmark SHALL be a separate on-demand workflow template with a single Spark stage. Metadata API call details SHALL remain in stage logs.
+The Bronze and Silver workflows SHALL each show the Spark, checks, publish-tables and publish stages with direct dependencies and readable names. The benchmark SHALL be a separate on-demand workflow template with a single Spark stage. Metadata API call details SHALL remain in stage logs.
 
 #### Scenario: Inspect the stage graph
 
 - **WHEN** a user opens a normal DP1 or DP2 run
-- **THEN** the graph shows three stages without select, discover, profile, readback or accept nodes
+- **THEN** the graph shows those stages without select, discover, profile, readback or accept nodes
 
 ### Requirement: Pipeline inputs
-A DP1 submission SHALL select either a historical dataset version, by source root and dataset version parameters with chart defaults selecting v18, or Kafka mode. A DP2 submission SHALL take no input selection and read current Bronze. A scheduled workflow SHALL run DP1 in Kafka mode followed by DP2, and SHALL be disabled by default in every environment.
+A DP1 submission SHALL select either a historical dataset version, by source root and dataset version parameters with chart defaults selecting v18, or Kafka mode. A DP2 submission SHALL take a `mode` parameter, `historical` (the default) or `incremental`, and read published Bronze. A scheduled workflow SHALL run DP1 in Kafka mode followed by DP2 in incremental mode, and SHALL be disabled by default in every environment.
 
 #### Scenario: Ingest a dataset version
 
 - **WHEN** a DP1 historical submission names a dataset version
 - **THEN** all stages use that version's manifest
+
+#### Scenario: Manual Silver submission
+
+- **WHEN** a user submits DP2 without parameters
+- **THEN** it runs in historical mode
 
 #### Scenario: Default schedule
 

@@ -14,7 +14,7 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 | `dp3-features` | Spark features → checks → publish | Planned |
 | `maintain-lakehouse`, `dp2-benchmark` | Single on-demand stage | In progress (PR #102) |
 
-Bronze and Silver use write-audit-publish: a run's rows stay on its `audit-<workflow>` Iceberg branch until every check passes, so DP2 and other readers of `main` never see unaudited data, and a failed run leaves its branch for diagnosis. Each pipeline stage retries only on execution errors, never on failed data checks, and each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow. Pending: screenshots of each pipeline graph and run, taken after the first dev run.
+Bronze and Silver use write-audit-publish: a run's rows stay on its `audit-<workflow>` Iceberg branch until every check passes, so DP2 and other readers of `main` never see unaudited data, and a failed run leaves its branch for diagnosis. Each pipeline stage retries only on execution errors, never on failed data checks, and each workflow holds a mutex so one writer per pipeline runs at a time. Scheduled Kafka-mode ingestion exists as a suspended CronWorkflow that runs `dp1-bronze` with `source=kafka`, then `dp2-silver` with `mode=incremental`. Pending: screenshots of each pipeline graph and run, taken after the first dev run.
 
 ### Spark sizing and placement
 

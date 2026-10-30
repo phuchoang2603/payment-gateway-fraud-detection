@@ -105,3 +105,9 @@
 - [ ] 13.3 Blocked: import ODCS contracts with `PUT /v1/dataContracts/odcs/yaml` once OpenMetadata accepts the ODCS v3 files as written. Blocked on OpenMetadata 2.0.6; see design section 16 and the open questions.
 - [ ] 13.4 Blocked: publish data products once OpenMetadata supports ODPS natively, or with a minimal product create.
 - [ ] 13.5 At archive, move the requirements of `openspec/specs/metadata-integrations` into `data-pipeline-orchestration` and remove that capability.
+
+## 14. Incremental Silver
+
+- [ ] 14.1 Add `mode=historical|incremental` to `dp2-silver` (default historical) and run the suspended Kafka CronWorkflow's Silver step in incremental mode. Verify with helm lint and template for every values file.
+- [ ] 14.2 Implement incremental curation from Iceberg change data: state from the last DP2 commit's snapshot properties, new Bronze rows by incremental append read, the lookback check and refusals, and consumers reading Silver's changelog view (design decision 17). Verify with the CI equivalence test over Kafka batches, one test per refusal and the attempts changelog test.
+- [ ] 14.3 Record one incremental Silver run on prod next to the historical v19 run (rows read, payments affected, wall time) once Kafka-mode Bronze has new rows. Verify from the run report.

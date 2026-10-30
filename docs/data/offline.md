@@ -101,7 +101,7 @@ Bronze keeps every delivery, including duplicates, in two tables shared by both 
 
 ### DP2: Bronze → Silver
 
-A full recompute from Bronze snapshots fixed at the start of the run writes three tables:
+DP2 has two modes. `historical`, the default, is a full recompute from Bronze snapshots fixed at the start of the run. `incremental`, used by the Kafka schedule, reads only the Bronze rows appended since the snapshots the last DP2 run recorded (an Iceberg incremental read), recomputes every payment they name from all of its Bronze rows within a 35-day lookback, and replaces those payments' rows. Every Silver rule is local to one payment, so the result equals a historical run over the same Bronze; when it cannot be exact (no previous run, a historical Bronze reload, changed curation logic, or history older than the lookback) the run fails and asks for historical mode. Consumers read what a run changed through Iceberg's changelog view of the Silver tables. Either mode writes these tables:
 
 - **`silver.payment_events`:** one row per `event_id`. Republished copies (same content, later `recorded_at`) collapse to the earliest. Copies that differ in any other business field are conflicts: the whole payment goes to `silver.rejected_events`.
 - **`silver.attempts`:** one row per attempt with `customer_id`, `merchant_id`, `payment_method_fingerprint`, `amount_minor`, server start time, client `attempted_at`, risk decision, outcome and payment status. Lifecycle violations fail the checks.

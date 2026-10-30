@@ -101,6 +101,9 @@ silver:
   reportRoot: s3://platform-dev/runs/payment-gateway/dp2
   # Estimated size (duplicated IDs times 8 bytes) under which DP2 broadcasts the duplicated-ID keys as a sorted array.
   dedupBroadcastBytes: 268435456
+  # Incremental runs reread affected payments' Bronze history from this many days before the earliest new row; it
+  # covers a payment's lifetime and the 7-21 day chargeback delay.
+  incrementalLookbackDays: 35
   activeDeadlineSeconds: 7200
 analytics:
   enabled: false
