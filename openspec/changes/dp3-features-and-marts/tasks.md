@@ -25,9 +25,10 @@
 
 - [ ] 3.1 Add `clickhouse-connect` (pinned) to `src/data-pipeline/batch` and lock it. Add `batch/sql/marts/{fact_payment_attempt,fact_merchant_day}.sql` (decision 6 DDL) and `batch/marts.py`:
   - drop leftover staging tables;
+  - compute the data-anchored window from `MARTS_RETENTION_DAYS` (prod 180, unset in dev for all of Silver) and write `build_info`;
   - run monthly `INSERT … SELECT` from `lakehouse` with the Spark report's snapshot IDs (decision 7);
   - aggregate the merchant-day table;
-  - reconcile the row count before the swap;
+  - reconcile the row count within the window before the swap;
   - exchange each table, then drop staging;
   - write a report with rows, months, durations and peak memory from `system.query_log`.
 
@@ -36,6 +37,7 @@
   - the build's rates are null on zero denominators;
   - a failed insert leaves the live tables unchanged;
   - two builds give equal content;
+  - a retention window keeps exactly the last N start days and reconciles against Silver within that window;
   - leftover staging is dropped.
 
   The lakehouse source is replaced by local MergeTree fixture tables named like the lakehouse tables, because CI has no Polaris.
@@ -52,11 +54,8 @@
 
 - [ ] 4.1 Change `openmetadata_jobs.checks` to resolve `{object}` and the entity FQN from each contract's server database, as decision 10 shows for `marts` and ``lakehouse.`gold.x` ``. Accept several products in `CHECK_PRODUCT`. Remove the environment-based schema lookup from `warehouse.py` and its callers. Extend the existing preparation test over the real contracts to cover the gold products and the mart FQNs.
 - [ ] 4.2 Add a scoped `marts` profiler run to the checks stage when the product list includes `payment-marts` (decision 10 configuration). A failed profile fails the stage. Verify with a focused test of the generated profiler workflow's scope.
-- [ ] 4.3 Add pipelines `dp3-features` and `dp3-marts` with their Silver → gold and mart edges to `openmetadata_jobs.lineage`. Record the Silver snapshot IDs from the DP3 report in the pipeline status. Add the fixed mart → dashboard map: edges are published only when the dashboard entity exists, and missing ones are reported as pending. Extend the existing lineage and publish tests.
-- [ ] 4.4 In `infra/charts/data-pipelines` `catalog.connectors`:
-  - replace `databaseSchema: lakehouse` with `schemaFilterPattern` (`^lakehouse$`, `^marts$`) and add `^fact_` to the table filter;
-  - add a `grafana` dashboard connector gated by an `enabled` flag (default false), with its ExternalSecret for `GRAFANA_OPENMETADATA_TOKEN`, `dashboardFilterPattern` and `dbServicePrefixes`, ingested through the on-demand `metadata-discovery` template;
-  - extend `integrations.register` with the dashboard service request.
+- [ ] 4.3 Add pipelines `dp3-features` and `dp3-marts` with their Silver → gold and mart edges to `openmetadata_jobs.lineage`. Record the Silver snapshot IDs from the DP3 report in the pipeline status. Extend the existing lineage and publish tests.
+- [ ] 4.4 In `infra/charts/data-pipelines` `catalog.connectors`, replace `databaseSchema: lakehouse` with `schemaFilterPattern` (`^lakehouse$`, `^marts$`) and add `^fact_` to the table filter;
 
   Verify with CI helm lint and template, and the existing integrations test.
 
@@ -77,7 +76,7 @@
   - mutexes `dp3-gold-writer` and `dp2-silver-writer`;
   - the `dev` and `large` profiles through `dp3.profile`.
 
-  Add the `clickhouse-marts` ExternalSecret and the values `dp3.*` and `marts.*`. Add the `gold` step and publish names to the suspended Kafka CronWorkflow. Verify with CI helm lint and template for all values files.
+  Add the `clickhouse-marts` ExternalSecret and the values `dp3.*` and `marts.*`, including `marts.retentionDays: 180` in `values-prod.yaml`. Add the `gold` step and publish names to the suspended Kafka CronWorkflow. Verify with CI helm lint and template for all values files.
 - [ ] 6.2 Add the on-demand `warehouse-benchmark` WorkflowTemplate (one container step, `dp3-gold-writer` mutex, `warehouseBenchmark.reportRoot`). Verify with CI helm template.
 - [ ] 6.3 Add `infra/charts/data-pipelines/dashboards/{payments-overview,merchant-drilldown,fraud-outcomes}.json` (decision 13 panels):
   - datasource `{"type": "grafana-clickhouse-datasource", "uid": "clickhouse-marts"}`;
@@ -100,7 +99,7 @@
 
 ## 8. Local checks and handoff
 
-- [ ] 8.0 Start only after the prod-evidence thread confirms the v19 Bronze and Silver evidence run is finished. Get answers to open question 3 (prod PVC) and open question 1 (marts writer key) before 5.1.
+- [ ] 8.0 Start only after the prod-evidence thread confirms the v19 Bronze and Silver evidence run is finished. Settle open question 1 (writer credentials) before 5.1.
 - [ ] 8.1 Run local non-test checks only: `ruff`, `ruff format --check`, treefmt, helm lint and template for the changed charts, the contract lints, `openspec validate dp3-features-and-marts --strict` and `git diff --check`. Commit locally.
 - [ ] 8.2 Push, open the PR and inspect every CI check. Report pending or failed checks honestly.
 
@@ -114,4 +113,4 @@
   - Spark UI from the event logs, the benchmark tables and a DBeaver ER export.
 
   Results that do not meet expectations are recorded as observed.
-- [ ] 9.3 Send the platform requests (design decision 13, items 1–7). Once they are met, capture the three dashboards and the dashboard lineage in OpenMetadata.
+- [ ] 9.3 Send the platform requests (design decision 13). Once they are met, capture the three dashboards.

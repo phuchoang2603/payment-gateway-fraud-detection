@@ -56,7 +56,7 @@ Constraints:
 - **Why the facts are in ClickHouse.** They exist only for SQL analytics and indexing, so they live in ClickHouse.
 - **Naming conventions.** The namespace or database states the layer and engine; the prefix states the role (`dim_`, `fact_`, `feat_`, `label_`). Bronze and Silver keep schema-based layer names rather than `raw_` and `stg_` prefixes. The rubric accepts "prefix or similar", and renaming #102's tables is out of scope.
 - **Column naming.** Keys are integration-scoped. Timestamps end in `_at` (business time) or `_ts` (SCD validity). Surrogate keys end in `_sk`, and booleans start with `is_`. The exceptions are Feast's own `event_timestamp` and `created`.
-- **Why the database is not called `gold`.** `marts` avoids having both an Iceberg `gold` namespace and a ClickHouse `gold` database. Whether to rename is open question 2.
+- **Why the database is not called `gold`.** `marts` avoids having both an Iceberg `gold` namespace and a ClickHouse `gold` database. Confirmed by the user.
 
 **Relationships (documented as a Mermaid ER diagram in `docs/data/offline.md`):**
 
@@ -246,7 +246,7 @@ ORDER BY (integration_id, merchant_id, day);
 - **Integration first.** `integration_id` has one value today, but it leads the key so per-integration queries stay correct.
 - **Hot merchant.** One merchant takes about 56% of rows, so Q1 on the hot merchant still reads about half the table. The evidence reports Q1 for both the hot merchant and a median merchant, so the skew is visible instead of hidden.
 - **Granularity.** Bloom filters use `GRANULARITY 4`, one index block per 4 × 8192 rows, to balance index size against skipping. Customer IDs are near-unique per granule block, which is why a bloom filter is chosen over a set index.
-- **Projections.** A customer-ordered projection would beat the bloom filter on Q2 but double storage. Prod has a 30 Gi PVC, so projections are not used. Revisit them if the evidence shows a weak bloom result.
+- **Projections.** A customer-ordered projection would beat the bloom filter on Q2 but double storage. Prod's 30 Gi PVC is shared with Langfuse, so projections are not used. Revisit them if the evidence shows a weak bloom result.
 
 ### 7. Mart build: monthly batches, staging, exchange
 
@@ -255,19 +255,22 @@ ORDER BY (integration_id, merchant_id, day);
 **Steps:**
 
 1. Drop any `marts.*__staging` tables left by a failed run, then create empty staging tables from the DDL.
-2. For each month that has Silver attempts, run one `INSERT INTO marts.fact_payment_attempt__staging SELECT … FROM lakehouse.`silver.attempts` LEFT JOIN (labels aggregated per attempt) …`:
-   - Attempts are filtered to the month, so Iceberg partition pruning applies.
+2. Compute the window. `window_end` is the latest Silver start day. `window_start` is `window_end − (marts.retentionDays − 1)` when `marts.retentionDays` is set (prod: 180), and otherwise the first Silver start day (dev keeps all of v18's 90 days). The window is anchored to the data, not to `now()`, so a MergeTree `TTL` is not used: it would empty the marts while no new data arrives.
+3. For each month in the window, run one `INSERT INTO marts.fact_payment_attempt__staging SELECT … FROM lakehouse.`silver.attempts` LEFT JOIN (labels aggregated per attempt) …`:
+   - Attempts are filtered to the month and the window, so Iceberg partition pruning applies.
    - Labels are filtered to `occurred_at` within the month and `label_available_at >= month start`, which prunes earlier partitions and uses file statistics to skip later ones.
    - The join runs with `join_algorithm = 'grace_hash'` and the profile's memory limit, to bound memory on the prod 4 GiB instance.
-3. Build `fact_merchant_day__staging` from the staged fact with one `INSERT … SELECT … GROUP BY`.
-4. Reconcile: the staged fact's row count must equal the lifecycle-valid count of `lakehouse.`silver.attempts``. A mismatch fails before the swap.
-5. Run `EXCHANGE TABLES marts.fact_payment_attempt AND marts.fact_payment_attempt__staging`, then the same for the merchant table, as two statements. Each exchange is atomic in an Atomic database, but a multi-pair exchange is not atomic as a batch, so there is no benefit to combining them. Then drop the staging tables, which now hold the old data. `EXCHANGE` has no privilege of its own: it needs `SELECT`, `INSERT`, `CREATE TABLE` and `DROP TABLE` on both tables.
+4. Build `fact_merchant_day__staging` from the staged fact with one `INSERT … SELECT … GROUP BY`, and write `build_info__staging`: one row with `window_start`, `window_end`, the Silver snapshot IDs and `built_at`.
+5. Reconcile: the staged fact's row count must equal the lifecycle-valid count of `lakehouse.`silver.attempts`` inside the window. A mismatch fails before the swap.
+6. Run `EXCHANGE TABLES marts.fact_payment_attempt AND marts.fact_payment_attempt__staging`, then the same for the merchant and `build_info` tables, one statement each. Each exchange is atomic in an Atomic database, but a multi-pair exchange is not atomic as a batch, so there is no benefit to combining them. Then drop the staging tables, which now hold the old data. `EXCHANGE` has no privilege of its own: it needs `SELECT`, `INSERT`, `CREATE TABLE` and `DROP TABLE` on both tables.
 
 **Consistency.** Spark pins Silver by snapshot ID. The marts stage reads the Spark stage's report and passes the same IDs to every lakehouse read with `SETTINGS iceberg_snapshot_id = <id>`. ClickHouse documents that setting (25.4+) only for the `iceberg()` table function and the Iceberg engine. The 26.x source reads it from the query context regardless of table kind, but no test covers DataLakeCatalog tables, so a dev spike confirms it on ``lakehouse.`silver.attempts` `` before implementation relies on it. Either way, the DP2 writer mutex (decision 9) keeps Silver unchanged while DP3 runs. If the spike fails, the stage compares `system.iceberg_history`'s current snapshot with the pinned ID and fails on a mismatch.
 
 **Idempotency.** The same Silver snapshot gives the same marts. A crash before the exchange leaves the live tables untouched. A crash between the two exchanges is the only partially updated state: the next run rebuilds both, and the validate stage's reconciliation rule fails in the meantime.
 
-**Storage.** Prod `fact_payment_attempt` is estimated at 5–8 GB compressed, and it is held twice during a build. That fits the 30 Gi PVC beside Langfuse, but tightly; see open question 3.
+**Storage.** With the 180-day prod window, `fact_payment_attempt` holds about 100M rows, estimated at 3–4 GB compressed, or 6–8 GB while a build holds both copies. That fits the existing 30 Gi PVC beside Langfuse, so the PVC is unchanged.
+
+**Dashboards and tools.** Dashboards and the later analytics tool read `build_info` to show the window, so a 180-day prod history is not mistaken for missing data.
 
 *Alternative:* incremental `REPLACE PARTITION` by month, after comparing per-month fingerprints between Iceberg and the mart. Deferred: a full rebuild is simpler, and Silver itself is not yet incremental.
 
@@ -277,7 +280,7 @@ ORDER BY (integration_id, merchant_id, day);
 
 **Variants, built from the same pinned data:**
 
-- **A, raw Iceberg:** ``lakehouse.`silver.attempts` `` joined to labels, the logical equivalent of each query.
+- **A, raw Iceberg:** ``lakehouse.`silver.attempts` `` joined to labels and restricted to `build_info`'s window, the logical equivalent of each query.
 - **B, unsorted:** `marts_benchmark.fact_payment_attempt_unsorted`, built `AS SELECT * FROM marts.fact_payment_attempt` with `ORDER BY tuple()` and no skip indexes. It has the same columns and compression and no indexing.
 - **C, indexed:** the live mart.
 - **C′, primary key only:** the live mart with `use_skip_indexes = 0`.
@@ -313,7 +316,7 @@ publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, l
 - **RBAC.** No new RBAC is needed. The marts and benchmark containers mount a new `clickhouse-marts` secret, an ExternalSecret in the data-pipelines chart for `CLICKHOUSE_MARTS_PASSWORD`.
 - **Values:**
   - `dp3.enabled`, `dp3.profile`, `dp3.reportRoot`, `dp3.activeDeadlineSeconds`;
-  - `marts.clickhouseUrl`, `marts.resources`;
+  - `marts.clickhouseUrl`, `marts.resources`, `marts.retentionDays` (prod 180);
   - `warehouseBenchmark.enabled`, `warehouseBenchmark.reportRoot`;
   - `dashboards.enabled`.
 - **Prod enablement.** `values-prod.yaml` sets DP3 enablement the same way as Silver's.
@@ -350,14 +353,7 @@ The marts container requests 100m CPU and 256 Mi, because ClickHouse does the wo
 - **Where connectors live.** Since #102, `data-pipelines` owns the OpenMetadata connector configuration (`catalog.connectors`), its ExternalSecrets and a PostSync register job. Every checks run ingests the ClickHouse tables before its tests, and other connectors are ingested by the on-demand `metadata-discovery` WorkflowTemplate. Contracts and products are not imported into OpenMetadata (its 2.0.6 ODCS importer rejects them), so Git stays the authority for the gold contracts too.
 - **Connector.** The ClickHouse connector in `catalog.connectors` drops `databaseSchema: lakehouse`, which limits ingestion to one schema, and uses `schemaFilterPattern: {includes: ["^lakehouse$", "^marts$"]}`. Its table filter adds `^fact_`. `marts_benchmark` and the `__staging` tables are excluded.
 - **Pipelines.** `openmetadata_jobs.lineage` adds the pipelines `dp3-features` ("Gold features, dimension and labels from pinned Silver") and `dp3-marts` ("ClickHouse marts from Silver"), with the edges listed in the governance delta. `publish` records the Silver snapshot IDs from the run report in the pipeline status.
-- **Dashboard connector.** OpenMetadata's native Grafana connector has existed since 1.9.1, so 2.0.6 has it. It is a `catalog.connectors.grafana` entry: the register job creates the service, and `metadata-discovery` ingests it on demand after a dashboard change. There is no schedule. Its configuration:
-  - `kind: dashboard`, type `Grafana`;
-  - `hostPort` set to the platform's in-cluster Grafana URL;
-  - `apiKey` set to a service-account token (`glsa_…`) from `GRAFANA_OPENMETADATA_TOKEN`; the docs require the Admin role;
-  - `dashboardFilterPattern` limited to the three dashboards;
-  - `lineageInformation.dbServicePrefixes: [clickhouse]`.
-
-  It catalogs dashboards and charts. **Its lineage does not work for this datasource in 2.0.6.** That release reads `rawSql` only for a datasource type literally named `clickhouse`, while the plugin's type is `grafana-clickhouse-datasource`, so no table → dashboard lineage is produced. 2.1.0-rc1 fixes this (OpenMetadata PR #32303). Until the platform upgrades OpenMetadata, `publish` adds mart → dashboard edges with the SDK, from a fixed map of dashboards to tables, using the dashboard entities the connector created. Once the platform runs 2.1, the SDK edges are removed. Panel SQL always uses `marts.<table>`, because the connector takes its database hint from the datasource's top-level `database` field, not from `jsonData.defaultDatabase`.
+- **Dashboards are not catalogued.** OpenMetadata covers the tables, pipelines, tests and profiles. Grafana dashboards stay out of the catalog: no Grafana connector, no token, and no mart → dashboard lineage.
 
 ### 12. ClickHouse users and grants
 
@@ -424,10 +420,8 @@ users:
 4. **ExternalSecret.** One in `observability` that maps `CLICKHOUSE_GRAFANA_PASSWORD` into the Grafana pod's environment.
 5. **Sidecar coverage.** The dashboard sidecar must watch namespace `data` (`sidecar.dashboards.searchNamespace` includes `data` or `ALL`), with folder annotations enabled (`folderAnnotation: grafana_folder`).
 6. **Network.** If any NetworkPolicy restricts `data`, allow `observability/grafana` → `data/clickhouse` on TCP 9000.
-7. **OpenMetadata token.** A Grafana service account for OpenMetadata, its token published to Doppler as `GRAFANA_OPENMETADATA_TOKEN`, and the in-cluster Grafana URL. OpenMetadata's connector docs require the Admin role. Ask whether the platform accepts that, or whether Viewer is enough for catalog-only reads on the dashboard folder (open question 5).
-8. **OpenMetadata upgrade (optional, later).** Running OpenMetadata 2.1+ would give native ClickHouse panel lineage and replace the SDK edges.
 
-Requests 1–6 block only the dashboard evidence, and request 7 only dashboard lineage.
+These requests block only the dashboard evidence.
 
 ### 14. Rubric mapping
 
@@ -445,18 +439,17 @@ Requests 1–6 block only the dashboard evidence, and request 7 only dashboard l
 
 ## Risks / Trade-offs
 
-- **[The prod ClickHouse is small (4 GiB, 30 Gi)]** → Monthly batches, `grace_hash` joins and the 2 GiB `marts` profile limit bound memory. The staging copy doubles storage during a build. The first v19 build records its peak memory and disk. Mitigations, if needed: raise the prod PVC (open question 3), or limit prod marts to a trailing window.
+- **[The prod ClickHouse is small (4 GiB, 30 Gi)]** → Monthly batches, `grace_hash` joins and the 2 GiB `marts` profile limit bound memory. The staging copy doubles storage during a build. The first v19 build records its peak memory and disk. Prod marts keep a 180-day window, which fits the existing PVC with room for the staging copy.
 - **[ClickHouse Iceberg pruning on DataLakeCatalog tables is weaker than Spark's]** → The monthly batches filter on partition columns. Variant A of the benchmark measures it, and whatever the result is goes into the report as evidence.
 - **[Snapshot consistency between Spark and ClickHouse]** → The DP2 mutex, plus the recorded snapshot-ID comparison that fails the marts stage on a mismatch.
 - **[Change-point features are unfamiliar to Feast users]** → The definition file and the `feat_` contract state the "latest row ≤ t" semantics. A contract rule rejects two identical consecutive rows, and the conformance examples include expiry.
 - **[Daily anchors skew training against serving by the DP3 delay]** → Documented in the definition's availability block. The roadmap's TTL step accounts for it.
 - **[The hot merchant dominates Q1]** → Reported separately, not averaged away.
 - **[Snapshot pinning on DataLakeCatalog tables is undocumented]** → Dev spike first. The mutex alone guarantees consistency, and a failed spike falls back to comparing snapshot IDs.
-- **[The OpenMetadata 2.0.6 Grafana lineage gap]** → SDK edges until the platform runs 2.1.
 - **[The `marts` user can read all query-log entries]** → In-cluster only; no credentials appear in query text.
 - **[#102's change is not archived yet]** → Shared spec deltas use ADDED requirements only, so they do not collide with #102's deltas, whichever change archives first.
-- **[Prod is the first full-scale test]** → The prod ClickHouse is the tightest resource. The prod run records the marts stage's peak memory and disk, and open question 3 decides the PVC before that run.
-- **[The platform requests are not met]** → DP3, the marts and the evidence run anyway. Only the Grafana screenshots and the dashboard lineage wait.
+- **[Prod is the first full-scale test]** → The prod ClickHouse is the tightest resource. The prod run records the marts stage's peak memory and disk against the 180-day window.
+- **[The platform requests are not met]** → DP3, the marts and the evidence run anyway. Only the Grafana screenshots wait.
 
 ## Migration Plan
 
@@ -465,15 +458,13 @@ Requests 1–6 block only the dashboard evidence, and request 7 only dashboard l
 1. **Start gate.** Implementation starts only after the prod Bronze and Silver v19 evidence run finishes. A prod-evidence thread will send the start instruction. Until then the branch holds only this proposal, unpushed.
 2. **Implement and open the PR.** Implement on this branch with local non-test checks only, then push and open a PR. The trusted PR deploys to dev, which serves as a v18 smoke run: `dp3-gold`, then `warehouse-benchmark`, on the existing v18 Silver. The new Doppler keys must exist in dev before that deploy.
 3. **Prod evidence after merge.** Prod releases come only from `main`. Run `dp3-gold`, then `warehouse-benchmark`, on the pinned v19 Silver, on the `large` profile and the prod ClickHouse. Record the results in the docs: Spark event logs and UI through the History Server pattern of #102, Argo graphs, OpenMetadata lineage, tests and profiles, the benchmark tables, and the ER export.
-4. **Platform requests.** Send the requests in decision 13. Once they are met, capture the dashboard and lineage screenshots in prod.
+4. **Platform requests.** Send the requests in decision 13. Once they are met, capture the dashboard screenshots in prod.
 
 **Rollback:** revert the PR, then drop `marts`, `marts_benchmark` and the `gold` namespace in the affected environment. Silver is untouched.
 
 ## Open Questions
 
-1. **Marts writer key.** Is a dedicated `marts` writer user with its own Doppler key acceptable, or should DP3 use `admin`? A dedicated user is recommended.
-2. **Database name.** Should the ClickHouse native database be `marts` (proposed) or `gold`?
-3. **Prod ClickHouse PVC.** Raise it from 30 Gi to 60 Gi in `values-prod.yaml`, or limit the prod marts to a trailing 180 days? This must be decided before the prod run, which is now the first full-scale test.
-4. **Prod enablement.** Resolved: DP3 is enabled in prod and tested there after the v19 Bronze and Silver evidence run.
-5. **Grafana connector.** OpenMetadata 2.0.6 catalogs dashboards but produces no ClickHouse panel lineage, because of a datasource-type mismatch fixed in 2.1.0-rc1. Do you accept SDK-published mart → dashboard edges until the platform upgrades? And will the platform issue an Admin-role Grafana token, as the connector docs require, or should a Viewer token be tried first?
-6. **Tracked SCD2 attributes.** Is shipping address plus account metadata enough, or should the customer's device set be added? Adding devices would mean a version every 120 days per customer in v19.
+1. **ClickHouse writer credentials.** Should DP3 write the marts as a new `marts` user (one new Doppler key, `CLICKHOUSE_MARTS_PASSWORD`) or as the existing `admin` (no new key, but with access management)? DP3 reuses every other DP1/DP2 credential. The `openmetadata` user cannot be reused: it is read-only (`readonly = 2`) and belongs to the catalog.
+2. **Tracked SCD2 attributes.** Adding devices needs no regeneration, because `device_fingerprint` is already in Silver and the dimension is recomputed from Silver each run. It is still not recommended. Customers alternate between two devices, so a device attribute would open a new version almost every attempt. Device rotation every 120 days appears only in v19, because v18 covers 90 days. The recommendation is to keep the current attributes.
+
+**Resolved:** the ClickHouse database is `marts`; prod marts keep 180 days on the existing PVC; DP3 is tested on prod v19; Grafana dashboards are not catalogued in OpenMetadata.
