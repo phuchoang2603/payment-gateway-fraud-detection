@@ -71,7 +71,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - After #102: `llm` admitted by the Polaris, ClickHouse and OpenMetadata network rules.
 - **Code:**
   - a new `src/rag/` uv workspace (`common`, `pipeline`, `serving`) and images `rag-pipeline` and `rag-serving`: corpus sources, renderer, chunker, embed client, Feast definitions, validation, OpenMetadata client, Web API and MCP server, with their CI tests;
-  - the knowledge-base ODPS product and ODCS contract in `contracts/data-products/knowledge-base/`, and `knowledge.chunks` added to the shared checks test's expected tables.
+  - the knowledge-base ODPS product and ODCS contract in `contracts/data-products/knowledge-base/`; the `openmetadata_jobs` unit tests are removed at the user's request.
   - No change to the data-pipeline code, the `data-pipelines` or `lakehouse` charts, or any existing contract.
 - **Secrets:**
   - new keys in the `payment-gateway-fraud-detection` Doppler configs (`dev`, `prd`): `LLM_GATEWAY_AGENTS_API_KEY` and `LLM_GATEWAY_BENCHMARK_API_KEY`, already provisioned with random values. No model-provider key is needed, because the models are public on Hugging Face.
