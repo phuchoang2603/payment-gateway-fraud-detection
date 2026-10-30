@@ -1,6 +1,22 @@
 {{- $gateway := .Values.gateway }}
 {{- $agents := .Values.agents }}
 {{- $controller := $agents.a2a.controller }}
+{{- $signing := $agents.a2a.signing }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $signing.secret }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.platformSecretStore }}
+  target:
+    name: {{ $signing.secret }}
+  data:
+    - secretKey: signingKey
+      remoteRef:
+        key: {{ $signing.remoteKey }}
 {{- $routes := list }}
 {{- range $agent := $agents.list }}
 {{- $arms := list (dict "name" $agent.name "weight" (sub 100 (($agent.abTest).weight | default 0))) }}
@@ -19,6 +35,15 @@ spec:
   a2a:
     host: {{ $controller.host }}
     port: {{ $controller.port }}
+  policies:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: {{ $signing.secret }}
+        alg: {{ $signing.alg }}
+        ttl: {{ $signing.ttl }}
+        claims:
+          {{- toYaml $signing.claims | nindent 10 }}
 {{- end }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
