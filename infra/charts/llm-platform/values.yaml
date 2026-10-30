@@ -193,6 +193,8 @@ agents:
   # egress proxy, which forwards kagent's sandbox A2A paths to the gateway's A2A routes and on to the controller.
   a2a:
     controller: {host: kagent-controller.kagent.svc.cluster.local, port: 8083}
+    # The controller's A2A base URL (kagent's A2A_BASE_URL), which it writes into agent cards.
+    controllerBaseUrl: http://kagent-controller.kagent.svc:8083
   # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
   # `routing` is what the coordinator's routing tool reads to pick the agent; `agents` are its A2A sub-agents.
   # `abTest` runs a variant with another model config behind the same A2A route and splits its traffic by weight.
