@@ -39,11 +39,18 @@ def check(contract, table, rule):
     return Check(table=table, name=rule["id"], description=rule.get("description", rule["id"]), sql=sql)
 
 
+# Uniqueness and self-join rules over hundreds of millions of rows exceed ClickHouse's memory limit in memory; spill
+# GROUP BY and sort state to disk and let large joins fall back from hash to merge joins.
+SPILL_SETTINGS = (
+    "max_bytes_before_external_group_by = 800000000, max_bytes_before_external_sort = 800000000, "
+    "join_algorithm = 'auto', max_bytes_in_join = 800000000"
+)
+
+
 def audited(sql, snapshot):
-    """Pin a rule to the audited Iceberg snapshot; each rule reads only its own table, so one setting covers it."""
-    if snapshot is None:
-        return sql
-    return f"{sql.rstrip().rstrip(';')}\nSETTINGS iceberg_snapshot_id = {int(snapshot)}"
+    """Pin a rule to the audited Iceberg snapshot, with the spill settings; each rule reads only its own table."""
+    settings = SPILL_SETTINGS if snapshot is None else f"iceberg_snapshot_id = {int(snapshot)}, {SPILL_SETTINGS}"
+    return f"{sql.rstrip().rstrip(';')}\nSETTINGS {settings}"
 
 
 def test_workflow(table, cases, snapshot=None):
