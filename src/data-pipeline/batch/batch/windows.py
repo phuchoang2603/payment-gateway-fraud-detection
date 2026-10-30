@@ -204,7 +204,7 @@ def change_points(
             name = f"{measure.name}_{w}"
             if isinstance(measure, Ratio):
                 denominator = F.col(f"{measure.denominator}_{w}")
-                value = F.when(denominator > 0, F.col(f"{measure.numerator}_{w}") / denominator)
+                value = F.when(denominator > 0, F.try_divide(F.col(f"{measure.numerator}_{w}"), denominator))
             else:
                 value = F.col(name)
             served[name] = F.when(covered, value)

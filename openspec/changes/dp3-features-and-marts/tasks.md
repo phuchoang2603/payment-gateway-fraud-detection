@@ -118,7 +118,7 @@
 ## 8. Local checks and handoff
 
 - [ ] 8.0 Implementation started on the user's go-ahead on 2026-10-30, before the v19 Silver evidence finished; the push and deploys still wait for it. The `CLICKHOUSE_MARTS_PASSWORD` and `CLICKHOUSE_GRAFANA_PASSWORD` Doppler keys must exist in dev and prod before the first deploy.
-- [ ] 8.1 Run local non-test checks only: `ruff`, `ruff format --check`, treefmt, helm lint and template for the changed charts, the contract lints, `openspec validate dp3-features-and-marts --strict` and `git diff --check`. Commit locally.
+- [x] 8.1 Run local non-test checks only: `ruff`, `ruff format --check`, treefmt, helm lint and template for the changed charts, the contract lints, `openspec validate dp3-features-and-marts --strict` and `git diff --check`. Commit locally.
 - [ ] 8.2 Push, open the PR and inspect every CI check. Report pending or failed checks honestly.
 
 ## 9. Runs and evidence (cluster)
