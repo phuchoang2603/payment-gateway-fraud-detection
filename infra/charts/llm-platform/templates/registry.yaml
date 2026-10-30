@@ -1,5 +1,16 @@
 {{- $registry := .Values.registry }}
 {{- $catalog := list }}
+{{- range $name, $server := .Values.gateway.mcpServers }}
+{{- $entry := dict
+  "apiVersion" "ar.dev/v1alpha1"
+  "kind" "MCPServer"
+  "metadata" (dict "name" $name "tag" $server.version)
+  "spec" (dict
+    "title" $server.title
+    "description" (printf "%s Tools: %s. Served through the agent gateway with an agent key." $server.description (join ", " $server.tools))
+    "remote" (dict "type" "streamable-http" "url" (printf "http://%s.%s.svc.cluster.local/mcp/%s" $.Values.gateway.name $.Release.Namespace $name))) }}
+{{- $catalog = append $catalog (toYaml $entry) }}
+{{- end }}
 {{- range $agent := .Values.agents.list }}
 {{- $prompt := dict
   "apiVersion" "ar.dev/v1alpha1"
@@ -19,6 +30,13 @@
     "source" (dict
       "repository" (dict "url" $registry.repository "subfolder" "infra/charts/llm-platform")
       "protocol" "A2A")) }}
+{{- with $agent.mcpServers }}
+{{- $refs := list }}
+{{- range $server := . }}
+{{- $refs = append $refs (dict "kind" "MCPServer" "name" $server "tag" (index $.Values.gateway.mcpServers $server).version) }}
+{{- end }}
+{{- $_ := set $entry.spec "mcpServers" $refs }}
+{{- end }}
 {{- $catalog = append $catalog (toYaml $entry) }}
 {{- end }}
 apiVersion: v1

@@ -26,9 +26,17 @@ spec:
   openAI:
     baseUrl: http://{{ .Values.gateway.name }}.{{ .Release.Namespace }}.svc.cluster.local/v1
 {{- range $agent := $agents.list }}
+{{- $tools := list }}
+{{- range $server := $agent.mcpServers | default list }}
+{{- $spec := required (printf "gateway.mcpServers.%s is not defined" $server) (index $.Values.gateway.mcpServers $server) }}
+{{- $tools = append $tools (dict "type" "McpServer" "mcpServer" (dict "apiGroup" "kagent.dev" "kind" "RemoteMCPServer" "name" $server "toolNames" $spec.tools)) }}
+{{- end }}
 {{- $declarative := dict
   "modelConfig" $agents.modelConfig
   "systemMessageFrom" (dict "type" "ConfigMap" "name" "agent-prompts" "key" (printf "%s.md" $agent.name)) }}
+{{- with $tools }}
+{{- $_ := set $declarative "tools" . }}
+{{- end }}
 ---
 apiVersion: kagent.dev/v1alpha2
 kind: Agent

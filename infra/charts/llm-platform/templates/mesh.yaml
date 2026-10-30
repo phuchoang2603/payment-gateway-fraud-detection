@@ -70,6 +70,9 @@ spec:
             principals:
               - {{ $agents | quote }}
               - {{ $benchmark | quote }}
+              {{- range .Values.gateway.namespaceClients }}
+              - {{ include "llm-platform.principal" (dict "namespace" $ns "name" .) | quote }}
+              {{- end }}
               {{- range .Values.gateway.externalClients }}
               - {{ . | quote }}
               {{- end }}
