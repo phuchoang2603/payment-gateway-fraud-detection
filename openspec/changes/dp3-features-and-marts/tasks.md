@@ -24,6 +24,7 @@
 ## 3. ClickHouse marts and evidence
 
 - [ ] 3.1 Add `clickhouse-connect` (pinned) to `src/data-pipeline/batch` and lock it. Add `batch/sql/marts/{fact_payment_attempt,fact_merchant_day}.sql` (decision 6 DDL) and `batch/marts.py`:
+  - split into `build` and `publish` entry points: `build` stops before the exchange, leaving the staging tables for the checks, and `publish` runs the exchanges;
   - drop leftover staging tables;
   - compute the rolling window from `MARTS_RETENTION_DAYS` (180), render it into the DDL `TTL`, insert only rows inside the window, and write `build_info`;
   - run monthly `INSERT … SELECT` from `lakehouse` with the Spark report's snapshot IDs (decision 7);
@@ -52,8 +53,8 @@
 
 ## 4. Checks, catalog and lineage
 
-- [ ] 4.1 Change `openmetadata_jobs.checks` to resolve `{object}` and the entity FQN from each contract's server database, as decision 10 shows for `marts` and ``lakehouse.`gold.x` ``. Accept several products in `CHECK_PRODUCT`. Remove the environment-based schema lookup from `warehouse.py` and its callers. Extend the existing preparation test over the real contracts to cover the gold products and the mart FQNs.
-- [ ] 4.2 Add a scoped `marts` profiler run to the checks stage when the product list includes `payment-marts` (decision 10 configuration). A failed profile fails the stage. Verify with a focused test of the generated profiler workflow's scope.
+- [ ] 4.1 Change `openmetadata_jobs.checks` to resolve `{object}` and the entity FQN from each contract's server database, as decision 10 shows for `marts` and ``lakehouse.`gold.x` ``. Under `WAP_BRANCH`, Iceberg rules are already pinned to branch heads; `marts` rules must resolve to `marts.<table>__staging` while the test still attaches to the live table's entity. Accept several products in `CHECK_PRODUCT`. Remove the environment-based schema lookup from `warehouse.py` and its callers. Extend the existing preparation test over the real contracts to cover the gold products and the mart FQNs.
+- [ ] 4.2 Add a scoped `marts` profiler step that runs after `publish-marts` (decision 10 configuration). A failed profile fails the stage. Verify with a focused test of the generated profiler workflow's scope.
 - [ ] 4.3 Add pipelines `dp3-features` and `dp3-marts` with their Silver → gold and mart edges to `openmetadata_jobs.lineage`. Record the Silver snapshot IDs from the DP3 report in the pipeline status. Extend the existing lineage and publish tests.
 - [ ] 4.4 In `infra/charts/data-pipelines` `catalog.connectors`, replace `databaseSchema: lakehouse` with `schemaFilterPattern` (`^lakehouse$`, `^marts$`) and add `^fact_` to the table filter;
 
@@ -72,11 +73,11 @@
 ## 6. Workflows, values and dashboards
 
 - [ ] 6.1 Add the `dp3-gold` WorkflowTemplate (decision 9):
-  - `features` SparkApplication, then `marts` container, then `checks` (`gold-features,payment-marts`), with the exit-handler publish of `dp3-features,dp3-marts`;
+  - `features` SparkApplication with `WAP_BRANCH`, `marts` build container, `checks` (`gold-features,payment-marts`, with `WAP_BRANCH`), the shared `publish-tables` step for `gold-features`, the `publish-marts` container, then `profile`, with the exit-handler publish of `dp3-features,dp3-marts`;
   - mutexes `dp3-gold-writer` and `dp2-silver-writer`;
   - the `dev` and `large` profiles through `dp3.profile`.
 
-  Add the `clickhouse-marts` ExternalSecret and the values `dp3.*` and `marts.*`, including `marts.retentionDays: 180` in `values.yaml`. Add the `gold` step and publish names to the suspended Kafka CronWorkflow. Verify with CI helm lint and template for all values files.
+  Add the `clickhouse-marts` ExternalSecret and the values `dp3.*` and `marts.*`, including `marts.retentionDays: 180` in `values.yaml`. Add a suspended daily `dp3-gold` CronWorkflow (`17 4 * * *`). Leave the six-hourly Kafka schedule unchanged. Verify with CI helm lint and template for all values files.
 - [ ] 6.2 Add the on-demand `warehouse-benchmark` WorkflowTemplate (one container step, `dp3-gold-writer` mutex, `warehouseBenchmark.reportRoot`). Verify with CI helm template.
 - [ ] 6.3 Add `infra/charts/data-pipelines/dashboards/{payments-overview,merchant-drilldown,fraud-outcomes}.json` (decision 13 panels):
   - datasource `{"type": "grafana-clickhouse-datasource", "uid": "clickhouse-marts"}`;

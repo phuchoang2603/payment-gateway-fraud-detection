@@ -38,7 +38,7 @@ Constraints:
 - Feast repository objects, materialization, TTLs and feature services (roadmap steps 2–7).
 - Streaming features into the offline store; training; drift.
 - The LLM platform (#103), and the MCP tool itself.
-- Incremental gold or marts.
+- Incremental DP2 and DP3. A `mode=incremental` toggle is listed as planned on the roadmap: payment-scoped Silver merges from new Kafka offsets with a change feed, entity-scoped gold recompute, and daily mart partition replacement. CI would check it against historical mode. DP3 implements the shared window engine with entity- and anchor-scoped entry points, so that mode can plug in later.
 - Making the platform changes: they are listed, not made.
 
 ## Decisions
@@ -73,7 +73,13 @@ A DBeaver ER export of the ClickHouse `marts` and `lakehouse.gold` tables is cap
 ### 2. DP3 reads pinned Silver and recomputes gold in full
 
 - **Pinned inputs.** The `gold` Spark job (`batch/gold.py`) reads `silver.attempts`, `silver.payment_events` and `silver.labels` at their current snapshot IDs, which it records, with `versionAsOf`, as DP2 does.
-- **Writes.** It writes the four tables with `writeTo(...).createOrReplace()` on the first run and `overwrite(lit(True))` afterwards. Each commit carries the Silver snapshot IDs through the Iceberg 1.12 write option `snapshot-property.silver.<table>.snapshot_id`.
+- **Writes: write-audit-publish, as Bronze and Silver do since `78765df`.**
+  - **Write.** The job runs with `spark.wap.branch = audit-<workflow>` and calls `batch.lakehouse.stage()` on each gold table before writing, so the branch starts from `main`. Each write uses `overwrite(lit(True))`, with `create` on first use. Each commit carries the Silver snapshot IDs through the Iceberg 1.12 write option `snapshot-property.silver.<table>.snapshot_id`.
+  - **Audit.** The checks stage runs every `gold-features` rule against the branch heads, pinned with `SETTINGS iceberg_snapshot_id`.
+  - **Publish.** The shared `publish-tables` step (`openmetadata_jobs.wap`) fast-forwards `main` for all four tables in one catalog transaction, only after every check passes.
+  - **Readers.** Feast, training and ClickHouse read `main` only, so they never see unaudited gold.
+  - **Failure.** A failed run leaves its branch behind for diagnosis.
+  - **Inputs.** DP3 reads Silver at its published `main` refs, through `ref_snapshot`, never an audit branch.
 - **Why full recompute.** Silver itself is fully recomputed, so any day can change and there is nothing incremental to follow. Full recompute is idempotent by construction.
 - **`created`.** `created` is the commit timestamp of the pinned `silver.attempts` snapshot, not wall-clock time. It is deterministic for one input, increases across Silver runs, and is at or after every anchor in the table, because anchors stop at the last midnight before that commit. The rerun-equality test therefore compares every column.
 - **Contributing rows.** Only lifecycle-valid attempts contribute. Their count is zero anyway, by Silver's checks.
@@ -304,11 +310,13 @@ TTL day + INTERVAL {retention_days} DAY DELETE;
    - The join runs with `join_algorithm = 'grace_hash'` and the profile's memory limit, to bound memory on the prod 4 GiB instance.
 4. Build `fact_merchant_day__staging` from the staged fact with one `INSERT … SELECT … GROUP BY`, and write `build_info__staging`: one row with `window_start`, `window_end`, the Silver snapshot IDs and `built_at`.
 5. Reconcile: the staged fact's row count must equal the lifecycle-valid count of `lakehouse.`silver.attempts`` inside the window. A mismatch fails before the swap.
+
+   **Write-audit-publish for the marts.** The `__staging` tables are the audit copy, the ClickHouse counterpart of the Iceberg audit branch. The marts stage ends after step 5 and leaves staging in place. The checks stage then runs every `payment-marts` rule against the staging tables: when `WAP_BRANCH` is set, `{object}` resolves to `marts.<table>__staging`. Results attach to the live table's OpenMetadata entity, the same way Iceberg rules audit a branch but report on the table. Only a separate `publish-marts` step, after all checks pass, runs step 6.
 6. Run `EXCHANGE TABLES marts.fact_payment_attempt AND marts.fact_payment_attempt__staging`, then the same for the merchant and `build_info` tables, one statement each. Each exchange is atomic in an Atomic database, but a multi-pair exchange is not atomic as a batch, so there is no benefit to combining them. Then drop the staging tables, which now hold the old data. `EXCHANGE` has no privilege of its own: it needs `SELECT`, `INSERT`, `CREATE TABLE` and `DROP TABLE` on both tables.
 
 **Consistency.** Spark pins Silver by snapshot ID. The marts stage reads the Spark stage's report and passes the same IDs to every lakehouse read with `SETTINGS iceberg_snapshot_id = <id>`. ClickHouse documents that setting (25.4+) only for the `iceberg()` table function and the Iceberg engine. The 26.x source reads it from the query context regardless of table kind, but no test covers DataLakeCatalog tables, so a dev spike confirms it on ``lakehouse.`silver.attempts` `` before implementation relies on it. Either way, the DP2 writer mutex (decision 9) keeps Silver unchanged while DP3 runs. If the spike fails, the stage compares `system.iceberg_history`'s current snapshot with the pinned ID and fails on a mismatch.
 
-**Idempotency.** The same Silver snapshot gives the same marts. A crash before the exchange leaves the live tables untouched. A crash between the two exchanges is the only partially updated state: the next run rebuilds both, and the validate stage's reconciliation rule fails in the meantime.
+**Idempotency.** The same Silver snapshot gives the same marts. A failed check or a crash before publication leaves the live tables untouched. A crash between exchanges in `publish-marts` is the only partially published state: the step retries on error, and the next run rebuilds and audits all tables again.
 
 **Storage.** With the 180-day prod window, `fact_payment_attempt` holds about 100M rows, estimated at 3–4 GB compressed, or 6–8 GB while a build holds both copies. That fits the existing 30 Gi PVC beside Langfuse, so the PVC is unchanged.
 
@@ -347,16 +355,24 @@ A against C shows the full benefit of the warehouse. B against C isolates the ef
 
 ```text
 dp3-gold (WorkflowTemplate, mutexes: dp3-gold-writer, dp2-silver-writer, onExit: publish)
-├── features   SparkApplication batch/gold.py              (ingest)
-├── marts      container batch/marts.py as user marts      (ingest, after features)
-└── checks     openmetadata_jobs.checks, products gold-features,payment-marts + mart profiler   (validate)
+├── features        SparkApplication batch/gold.py, writes audit-<workflow> branch     (ingest)
+├── marts           container batch/marts.py build, writes marts.*__staging          (ingest, after features)
+├── checks          openmetadata_jobs.checks, gold-features on branch heads, payment-marts on staging   (validate)
+├── publish-tables  openmetadata_jobs.wap, fast-forwards gold main                  (after checks)
+├── publish-marts   container batch/marts.py publish, exchanges staging into live   (after publish-tables)
+└── profile         OpenMetadata profiler on the published marts                    (after publish-marts)
 publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, lineage on success
 ```
 
-- **Why `marts` runs after `features`.** It does not need `features`' output. It runs second only so that the run report can compare the Silver snapshot IDs (decision 7), and so that both stages do not compete on the prod spot pool and the small ClickHouse at once. The graph still shows two ingest stages and one validate stage. Parallel stages are possible later.
+- **Publication order.** Iceberg gold is published first because it is one atomic catalog transaction. If `publish-marts` then fails, gold is current and the marts keep the previous build until the next run; the stage retries on error. Profiling runs on the published tables, because OpenMetadata profiles entities, not staging tables.
+
+- **Why `marts` runs after `features`.** It does not need `features`' output. It runs second only so that the run report can compare the Silver snapshot IDs (decision 7), and so that both stages do not compete on the prod spot pool and the small ClickHouse at once. The graph still shows the ingest stages, one validate stage and the publish steps. Parallel stages are possible later.
 - **Mutexes.** Holding `dp2-silver-writer` serializes DP3 with DP2. Argo 3.6+ supports several mutexes on one workflow (to be verified in implementation).
 - **Retries.** As in #102: Spark retries on error (prod: limit 10, `Always`, for spot loss), containers retry on error with limit 2, and checks are never retried.
-- **Schedule.** The suspended `dp1-bronze-kafka` CronWorkflow gains a `gold` step via `templateRef: dp3-gold`, and its publish list adds `dp3-features,dp3-marts`. Template-level mutexes do not apply under a `templateRef`; the Cron runs its steps in sequence anyway.
+- **Schedule: daily, not every six hours.** DP3 is not added to the six-hourly `dp1-bronze-kafka` CronWorkflow. It gets its own suspended daily CronWorkflow `dp3-gold` at 04:17 UTC, after the 03:43 maintenance run.
+  - The features are daily-anchored, so a daily run is their natural cadence.
+  - The marts are rebuilt in full, so a six-hourly rebuild would cost four times as much for no gain until incremental mode exists.
+  - The workflow-level mutexes still apply, because the CronWorkflow runs the template directly rather than through a `templateRef` step.
 - **RBAC.** No new RBAC is needed. The marts and benchmark containers mount a new `clickhouse-marts` secret, an ExternalSecret in the data-pipelines chart for `CLICKHOUSE_MARTS_PASSWORD`.
 - **Values:**
   - `dp3.enabled`, `dp3.profile`, `dp3.reportRoot`, `dp3.activeDeadlineSeconds`;
@@ -390,7 +406,7 @@ The marts container requests 100m CPU and 256 Mi, because ClickHouse does the wo
 | `fact_payment_attempt` | unique attempt key; row count equals the lifecycle-valid ``lakehouse.`silver.attempts` `` count; `outcome` is a known value; `chargeback_available_at >= started_at` |
 | `fact_merchant_day` | sums of `attempts` and `succeeded` equal the fact's; rates are in [0, 1] and null iff their denominator is 0; `decided = succeeded + risk_declined + processor_declined` |
 
-**Profiling.** After the tests, the checks stage runs a native `Profiler` workflow (`type: Profiler`) scoped to the `marts` schema with `schemaFilterPattern`. It uses `computeTableMetrics` and `computeColumnMetrics`, and `profileSampleConfig` set to a static 100%, because the marts are small. #102 removed profiling everywhere; this brings back only this scoped use.
+**Profiling.** After `publish-marts`, a `profile` step runs a native `Profiler` workflow (`type: Profiler`) scoped to the `marts` schema with `schemaFilterPattern`. It uses `computeTableMetrics` and `computeColumnMetrics`, and `profileSampleConfig` set to a static 100%, because the marts are small. #102 removed profiling everywhere; this brings back only this scoped use.
 
 ### 11. Catalog and lineage
 

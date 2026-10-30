@@ -25,9 +25,9 @@ Every quality rule in the `gold-features` and `payment-marts` contracts SHALL ru
 - **THEN** the dimension's no-overlap test fails in OpenMetadata and the DP3 run fails
 
 ### Requirement: Scoped mart profiling
-The DP3 validate stage SHALL run native OpenMetadata profiling for the `marts` tables only, recording row counts and column metrics with each run. It SHALL NOT profile Bronze, Silver or gold Iceberg tables. A profiling failure SHALL fail the stage.
+After the marts are published, DP3 SHALL run native OpenMetadata profiling for the `marts` tables only, recording row counts and column metrics with each run. It SHALL NOT profile Bronze, Silver or gold Iceberg tables. A profiling failure SHALL fail the stage.
 
 #### Scenario: Profile after a rebuild
 
-- **WHEN** a DP3 run completes its validate stage
+- **WHEN** a DP3 run publishes its marts
 - **THEN** OpenMetadata shows a fresh profile for `fact_payment_attempt` and `fact_merchant_day` with the current row counts

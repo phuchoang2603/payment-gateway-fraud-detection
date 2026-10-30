@@ -35,7 +35,7 @@ The marts SHALL be built by ClickHouse from the `lakehouse` database with `INSER
 - **THEN** its approval rate for that day is null, not zero
 
 ### Requirement: Atomic idempotent rebuild
-Each DP3 run SHALL rebuild both marts in full into staging tables and then atomically exchange them with the live tables. Readers SHALL see either the previous build or the new one, never a partial build. A failed build SHALL leave the live tables unchanged. Rebuilding from the same Silver snapshot SHALL produce equal content. Staging tables left by a failed build SHALL be dropped before the next build starts.
+Each DP3 run SHALL rebuild both marts in full into staging tables, run every mart contract rule against the staging tables, and only after all of them pass atomically exchange the staging tables with the live tables. Readers SHALL see either the previous build or the new one, never a partial build. A failed build SHALL leave the live tables unchanged. Rebuilding from the same Silver snapshot SHALL produce equal content. Staging tables left by a failed build SHALL be dropped before the next build starts.
 
 #### Scenario: Build fails midway
 

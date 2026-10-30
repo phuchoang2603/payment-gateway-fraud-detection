@@ -5,7 +5,7 @@ Produce governed DP3 gold tables in the Iceberg lakehouse. They are an SCD2 cust
 ## ADDED Requirements
 
 ### Requirement: Recompute from pinned Silver snapshots
-DP3 SHALL read `silver.attempts`, `silver.payment_events` and `silver.labels` at snapshot IDs fixed when the run starts. It SHALL replace every gold table in full on each run, and each gold commit SHALL record the Silver snapshot IDs it was built from. Rerunning on the same Silver snapshots SHALL produce equal content in every column, `created` included. Lifecycle-invalid attempts and labels whose linkage is not `linked` SHALL NOT contribute to any gold table.
+DP3 SHALL read `silver.attempts`, `silver.payment_events` and `silver.labels` at snapshot IDs fixed when the run starts. It SHALL replace every gold table in full on each run, writing to the run's audit branch, and SHALL publish to `main` only after every gold check passes. Each gold commit SHALL record the published Silver snapshot IDs it was built from. Rerunning on the same Silver snapshots SHALL produce equal content in every column, `created` included. Lifecycle-invalid attempts and labels whose linkage is not `linked` SHALL NOT contribute to any gold table.
 
 #### Scenario: Rerun on unchanged Silver
 
