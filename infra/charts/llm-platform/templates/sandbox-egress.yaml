@@ -7,7 +7,7 @@
     access_log off;
     return 200;
   }
-  # Only the gateway's model and MCP routes and Langfuse's trace intake; nothing else is reachable from a sandbox.
+  # Only the gateway's model, MCP and A2A routes and Langfuse's trace intake; nothing else is reachable from a sandbox.
   location ~ ^/(v1|mcp)/ {
     proxy_pass http://%[1]s;
     proxy_set_header Host %[1]s;
@@ -16,6 +16,17 @@
     proxy_buffering off;
     proxy_request_buffering off;
     proxy_read_timeout 300s;
+  }
+  # Sub-agent calls over A2A, as kagent's proxy URL addresses them. The caller's Host is kept: the gateway rewrites
+  # agent-card URLs to it, and this proxy is the only address a sandbox can reach.
+  location ^~ /api/a2a-sandboxes/%[3]s/ {
+    proxy_pass http://%[1]s;
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_read_timeout 600s;
   }
   location = /api/public/otel/v1/traces {
     proxy_pass http://%[2]s;
@@ -26,7 +37,7 @@
   location / {
     return 404;
   }
-}` $upstream $langfuse }}
+}` $upstream $langfuse .Values.agents.namespace }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

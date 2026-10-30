@@ -1,3 +1,7 @@
+global:
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/decision: dev
+
 storageClass: local-path
 
 gpu:
@@ -66,6 +70,27 @@ models:
     - repo: Qwen/Qwen3-8B-AWQ
       revision: 4da05a8edb55c6046cce958586c33b61da07bb79
 
+# laya, a non-autoregressive decision model (ModernBERT-large, 421M), answers typed questions in one forward pass on
+# CPU: which agent should answer an analyst's question (the coordinator's routing tool) and whether a prompt asks an
+# agent to act or to break its rules (the gateway's screening webhook). Only the English checkpoint is uploaded.
+decision:
+  name: decision
+  image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/decision
+  uid: 65532
+  model:
+    repo: convaiinnovations/laya
+    revision: 7b928d828b7b0e022f929d9bd2e44165aa270148
+    files: [rl_agent_config.json, model.safetensors, "encoder/*", "tokenizer/*"]
+  # Probability of "asks to act" or "jailbreak" at or above which the gateway rejects a prompt.
+  screenThreshold: "0.5"
+  # Agents hold no tools that change anything, so screening is an early refusal rather than the only control; a
+  # decision service outage lets prompts through instead of stopping every agent.
+  failureMode: FailOpen
+  threads: 2
+  resources:
+    requests: {cpu: "1", memory: 2Gi}
+    limits: {memory: 3Gi}
+
 gateway:
   name: agentgateway
   className: agentgateway
@@ -103,6 +128,15 @@ gateway:
       version: 0.1.0
       title: Payment-gateway knowledge base
       description: Search and read passages about decline codes, risk policy, the payment lifecycle, the checkout API and fraud features.
+      # Data the server reads, linked in OpenMetadata to each agent that uses it.
+      tables: ['clickhouse.default.lakehouse."knowledge.chunks"']
+    decision:
+      service: decision
+      port: 8080
+      path: /mcp
+      version: 0.1.0
+      title: Agent routing
+      description: Choose the specialist agent that should answer an analyst's question, with the laya decision model.
   # REST APIs behind /<name>/v1, each a Service in this namespace, with client keys and limits like the LLM route.
   apiRoutes:
     knowledge:
@@ -120,7 +154,13 @@ metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
 # gVisor sandboxes outside the mesh, and a SandboxAgent can only use a WorkerPool in its own namespace.
 agents:
   namespace: llm-agents
+  # The global model config every agent uses unless an A/B variant names another one. Each entry is a kagent
+  # ModelConfig on the chat model through the gateway; its fields are the OpenAI sampling settings.
   modelConfig: default-model-config
+  modelConfigs:
+    default-model-config: {}
+    model-config-b:
+      temperature: "0.2"
   # kagent exports each agent's own spans (agent, model generations, tool calls) to Langfuse with the headless-init
   # project keys.
   tracing:
@@ -131,8 +171,9 @@ agents:
     image: ghcr.io/kagent-dev/substrate/ateom-gvisor:v0.0.9
     sandboxClass: gvisor
     # Fixed: one worker runs one active conversation. Substrate 0.0.9's WorkerPool scale subresource has no
-    # status.selector, which the HPA behind KEDA requires, so the pool cannot be autoscaled yet.
-    replicas: 2
+    # status.selector, which the HPA behind KEDA requires, so the pool cannot be autoscaled yet. A coordinator
+    # conversation holds one worker and its delegation a second.
+    replicas: 3
     resources:
       requests: {cpu: 100m, memory: 256Mi}
       limits: {memory: 2Gi}
@@ -148,13 +189,35 @@ agents:
     controller:
       namespace: kagent
       podLabels: {app.kubernetes.io/name: kagent, app.kubernetes.io/component: controller}
+  # Agents call each other over A2A through the gateway: kagent's proxy URL sends a sandbox's sub-agent calls to the
+  # egress proxy, which forwards kagent's sandbox A2A paths to the gateway's A2A routes and on to the controller.
+  a2a:
+    controller: {host: kagent-controller.kagent.svc.cluster.local, port: 8083}
   # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
+  # `routing` is what the coordinator's routing tool reads to pick the agent; `agents` are its A2A sub-agents.
+  # `abTest` runs a variant with another model config behind the same A2A route and splits its traffic by weight.
   list:
     - name: evidence-agent
       version: 0.3.0
       title: Evidence agent
       description: Read-only fraud-analyst agent that explains declines, risk decisions and payment behaviour from the knowledge base, citing its passages.
+      routing: what a decline or reason code means, why payments of a kind are declined, risk policy, the payment lifecycle, the checkout API, or what a fraud feature means in general
       mcpServers: [knowledge]
+      abTest:
+        variant: evidence-agent-b
+        modelConfig: model-config-b
+        weight: 50
+    - name: risk-agent
+      version: 0.1.0
+      title: Risk agent
+      description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, and explains what drives it.
+      routing: the fraud risk, score, features or likely outcome of one specific payment, card, customer or merchant
+    - name: coordinator
+      version: 0.1.0
+      title: Coordinator
+      description: Read-only entry agent for fraud analysts that routes each question to the evidence or risk agent with the laya routing tool and combines their answers.
+      mcpServers: [decision]
+      agents: [evidence-agent, risk-agent]
 
 # One Job per release publishes the catalog from these values and the prompt files: agents and MCP servers to
 # agentregistry, prompts to Langfuse, and models, MCP servers (with the tools they list) and agents to OpenMetadata.
@@ -168,8 +231,6 @@ catalog:
     tokenKey: OPENMETADATA_TOKEN
     llmService: agent-gateway
     mcpService: agent-gateway-mcp
-    # Data the agents' tools read, linked to each agent as its knowledge base.
-    knowledgeTables: ['clickhouse.default.lakehouse."knowledge.chunks"']
 
 # Langfuse v3 for prompt management and LLM traces. Its ClickHouse is the shared app-owned instance in `data`;
 # Postgres and Redis are instances of the platform operators in this namespace.

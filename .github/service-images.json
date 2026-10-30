@@ -177,6 +177,18 @@
         "src/rag/common",
         "src/rag/serving"
       ]
+    },
+    {
+      "service": "decision",
+      "image-suffix": "/decision",
+      "context": ".",
+      "dockerfile": "infra/docker/decision.Dockerfile",
+      "paths": [
+        "infra/docker/decision.Dockerfile",
+        "src/decision/pyproject.toml",
+        "src/decision/uv.lock",
+        "src/decision/fraud_decision"
+      ]
     }
   ]
 }
