@@ -93,8 +93,11 @@ def publish_lineage(sdk, name: str, pipeline_ref, dataset_version: str) -> int:
 
 
 def failed_steps(failures: str) -> set[str]:
+    nodes = json.loads(failures or "[]")
+    if isinstance(nodes, str):
+        nodes = json.loads(nodes)
     names = set()
-    for node in json.loads(failures or "[]"):
+    for node in nodes:
         names.update(node.get("displayName", "").split("."))
     return names
 

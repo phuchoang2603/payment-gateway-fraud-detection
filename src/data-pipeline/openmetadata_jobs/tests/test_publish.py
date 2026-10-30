@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from openmetadata_jobs import publish
@@ -70,3 +72,17 @@ def test_kafka_cron_success_publishes_lineage_for_both(monkeypatch, calls):
     publish_with(monkeypatch, "dp1-bronze-kafka,dp2-silver", "Succeeded", "bronze,silver")
 
     assert calls["lineage"] == ["dp1-bronze-kafka", "dp2-silver"]
+
+
+def test_failed_steps_reads_the_value_argo_renders():
+    nodes = [
+        {
+            "displayName": "checks(0)",
+            "message": "main: Error (exit code 1)",
+            "templateName": "checks",
+            "phase": "Failed",
+        },
+        {"displayName": "checks", "message": "main: Error (exit code 1)", "templateName": "checks", "phase": "Failed"},
+    ]
+    assert publish.failed_steps(json.dumps(nodes)) == {"checks(0)", "checks"}
+    assert publish.failed_steps(json.dumps(json.dumps(nodes))) == {"checks(0)", "checks"}
