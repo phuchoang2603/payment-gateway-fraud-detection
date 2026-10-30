@@ -39,10 +39,10 @@ def check(contract, table, rule):
     return Check(table=table, name=rule["id"], description=rule.get("description", rule["id"]), sql=sql)
 
 
-# The join spill threshold must be below its hard size limit so full-load checks can spill before hitting the cap.
+# Full-load self-joins need disk-backed sorting rather than a hash table that grows with the payment count.
 SPILL_SETTINGS = (
-    "max_bytes_before_external_group_by = 800000000, max_bytes_before_external_sort = 800000000, "
-    "join_algorithm = 'auto', max_bytes_before_external_join = 400000000, max_bytes_in_join = 800000000, "
+    "max_bytes_before_external_group_by = 800000000, max_bytes_before_external_sort = 400000000, "
+    "join_algorithm = 'full_sorting_merge', "
     "max_threads = 2, max_block_size = 16384"
 )
 
