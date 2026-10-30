@@ -1,44 +1,12 @@
 import json
 
-import pytest
 from pyspark.sql import functions as F
 
-from batch import bronze, silver
-from batch.schema import EVENT_COLUMNS, LABEL_COLUMNS, business_schema
+from batch.bronze import ingest as bronze
+from batch.bronze.schema import LABEL_COLUMNS, business_schema
+from batch.silver import curate as silver
 from tests.events import approved, at, created, declined, label, requested, started, succeeded
-
-
-def provenance(frame, source):
-    return frame.withColumns(
-        {
-            "_source": F.lit(source),
-            "_dataset_version": F.lit("v-test" if source == "historical" else None).cast("string"),
-            "_source_file": F.lit("payment_events/part.parquet" if source == "historical" else None).cast("string"),
-            "_kafka_topic": F.lit(None if source == "historical" else "payments.events.v1").cast("string"),
-            "_kafka_partition": F.lit(None).cast("int"),
-            "_kafka_offset": F.lit(None).cast("bigint"),
-            "_kafka_timestamp": F.lit(None).cast("timestamp"),
-            "_ingested_at": F.current_timestamp(),
-            "_run_id": F.lit("bronze-test"),
-        }
-    )
-
-
-def load_bronze(spark, events, labels, source="historical"):
-    bronze.ensure_tables(spark)
-    spark.createDataFrame(events, business_schema(spark, EVENT_COLUMNS)).transform(
-        lambda frame: provenance(frame, source)
-    ).writeTo(bronze.EVENTS).overwrite(F.lit(True))
-    if labels is not None:
-        spark.createDataFrame(labels, business_schema(spark, LABEL_COLUMNS)).transform(
-            lambda frame: provenance(frame, source)
-        ).writeTo(bronze.LABELS).overwrite(F.lit(True))
-
-
-@pytest.fixture
-def report_root(tmp_path, monkeypatch):
-    monkeypatch.setenv("RUN_REPORT_ROOT", str(tmp_path / "reports"))
-    return tmp_path / "reports"
+from tests.lake import load_bronze, provenance
 
 
 def test_identical_copies_collapse_to_earliest_and_conflicts_leave_the_accepted_tables(spark, report_root):

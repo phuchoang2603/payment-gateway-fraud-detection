@@ -6,7 +6,7 @@ import os
 import statistics
 from datetime import date, datetime, timedelta, timezone
 
-from batch import marts
+from batch.gold import marts
 from batch.store import Store
 
 SCRATCH = "marts_benchmark.fact_payment_attempt_unsorted"

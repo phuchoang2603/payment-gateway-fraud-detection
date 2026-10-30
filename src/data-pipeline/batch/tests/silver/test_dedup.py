@@ -1,7 +1,7 @@
 from pyspark.sql import functions as F
 
-from batch import silver
-from batch.schema import EVENT_COLUMNS, business_schema
+from batch.bronze.schema import EVENT_COLUMNS, business_schema
+from batch.silver import curate as silver
 from tests.events import at, created
 
 

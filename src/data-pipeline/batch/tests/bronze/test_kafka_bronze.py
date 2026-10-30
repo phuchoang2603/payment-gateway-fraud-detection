@@ -6,8 +6,8 @@ from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient, NewTopic
 from pyspark.sql import functions as F
 
-from batch import bronze
-from batch.schema import EVENT_COLUMNS, LABEL_COLUMNS, business_schema
+from batch.bronze import ingest as bronze
+from batch.bronze.schema import EVENT_COLUMNS, LABEL_COLUMNS, business_schema
 from tests.historical import EVENTS_PART, LABELS_PART, write_manifest, write_part
 
 SECONDS = 1785498000

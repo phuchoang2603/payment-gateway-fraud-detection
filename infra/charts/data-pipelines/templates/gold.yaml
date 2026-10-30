@@ -55,11 +55,11 @@ spec:
         successCondition: status.currentState.currentStateSummary == ResourceReleased
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
         manifest: |
-          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp3-gold" "wap" true "main" "gold" "product" "gold-features" "stage" "features" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.dp3.reportRoot) (dict "name" "GOLD_MODE" "value" "{{workflow.parameters.mode}}"))) | nindent 10 }}
-{{- include "data-pipelines.marts-step" (dict "root" $ "name" "marts" "command" (list "python" "-m" "batch.marts" "build") "reportRoot" .Values.dp3.reportRoot) | nindent 4 }}
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "dp3-gold" "wap" true "main" "gold/features" "product" "gold-features" "stage" "features" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.dp3.reportRoot) (dict "name" "GOLD_MODE" "value" "{{workflow.parameters.mode}}"))) | nindent 10 }}
+{{- include "data-pipelines.marts-step" (dict "root" $ "name" "marts" "command" (list "python" "-m" "batch.gold.marts" "build") "reportRoot" .Values.dp3.reportRoot) | nindent 4 }}
 {{- include "data-pipelines.checks" (dict "root" $ "product" "gold-features,payment-marts") | nindent 4 }}
 {{- include "data-pipelines.publish-tables" (dict "root" $ "product" "gold-features") | nindent 4 }}
-{{- include "data-pipelines.marts-step" (dict "root" $ "name" "publish-marts" "command" (list "python" "-m" "batch.marts" "publish") "reportRoot" .Values.dp3.reportRoot) | nindent 4 }}
+{{- include "data-pipelines.marts-step" (dict "root" $ "name" "publish-marts" "command" (list "python" "-m" "batch.gold.marts" "publish") "reportRoot" .Values.dp3.reportRoot) | nindent 4 }}
 {{- include "data-pipelines.profile" (dict "root" $) | nindent 4 }}
 {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp3-features,dp3-marts" "dataset" .Values.bronze.datasetVersion "report" (printf "%s/%s/gold.json" .Values.dp3.reportRoot "{{workflow.name}}")) | nindent 4 }}
 ---
@@ -100,5 +100,5 @@ spec:
     labels:
       dp-product: payment-marts
   templates:
-{{- include "data-pipelines.marts-step" (dict "root" $ "name" "benchmark" "command" (list "python" "-m" "batch.warehouse_benchmark") "reportRoot" .Values.warehouseBenchmark.reportRoot) | nindent 4 }}
+{{- include "data-pipelines.marts-step" (dict "root" $ "name" "benchmark" "command" (list "python" "-m" "batch.gold.warehouse_benchmark") "reportRoot" .Values.warehouseBenchmark.reportRoot) | nindent 4 }}
 {{- end }}

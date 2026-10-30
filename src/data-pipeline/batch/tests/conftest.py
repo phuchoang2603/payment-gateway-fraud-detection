@@ -69,3 +69,9 @@ def spark(tmp_path_factory, contract_inputs):
     session_ = session("batch-tests")
     yield session_
     session_.stop()
+
+
+@pytest.fixture
+def report_root(tmp_path, monkeypatch):
+    monkeypatch.setenv("RUN_REPORT_ROOT", str(tmp_path / "reports"))
+    return tmp_path / "reports"

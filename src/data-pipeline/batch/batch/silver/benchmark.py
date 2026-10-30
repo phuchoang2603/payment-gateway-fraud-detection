@@ -5,10 +5,10 @@ import urllib.request
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from batch.bronze import EVENTS as BRONZE_EVENTS
-from batch.bronze import current_snapshot
+from batch.bronze.ingest import EVENTS as BRONZE_EVENTS
+from batch.bronze.ingest import current_snapshot
 from batch.metrics import phase
-from batch.silver import (
+from batch.silver.curate import (
     ATTEMPTS,
     dedup_broadcast_threshold,
     full_width_dedup,

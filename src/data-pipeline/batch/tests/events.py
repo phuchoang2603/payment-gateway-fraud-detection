@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
-from batch.schema import EVENT_COLUMNS
-from batch.validation import EVENT_PAYLOADS
+from batch.bronze.schema import EVENT_COLUMNS
+from batch.bronze.validation import EVENT_PAYLOADS
 
 BASE = datetime(2026, 7, 31, 12, tzinfo=timezone.utc)
 

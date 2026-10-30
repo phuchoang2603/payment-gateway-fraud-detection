@@ -13,12 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
-from batch import incremental, silver
-from batch.lakehouse import create_table, ref_snapshot, snapshot_info, stage
-from batch.metrics import phase
-from batch.spark import ICEBERG_CATALOG, session
-from batch.store import Store
-from batch.windows import (
+from batch.gold.windows import (
     ANCHOR,
     SINCE,
     Count,
@@ -30,6 +25,12 @@ from batch.windows import (
     columns,
     merge_intervals,
 )
+from batch.lakehouse import create_table, ref_snapshot, snapshot_info, stage
+from batch.metrics import phase
+from batch.silver import curate as silver
+from batch.silver import incremental
+from batch.spark import ICEBERG_CATALOG, session
+from batch.store import Store
 
 NAMESPACE = f"{ICEBERG_CATALOG}.gold"
 DIM_CUSTOMER = f"{NAMESPACE}.dim_customer"

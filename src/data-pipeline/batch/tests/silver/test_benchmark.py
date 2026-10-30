@@ -1,8 +1,9 @@
 import pytest
 from pyspark.sql import functions as F
 
-from batch import benchmark, silver
-from batch.schema import EVENT_COLUMNS, business_schema
+from batch.bronze.schema import EVENT_COLUMNS, business_schema
+from batch.silver import benchmark
+from batch.silver import curate as silver
 from tests.events import at, created
 
 LOW_SKEW_THRESHOLDS = {

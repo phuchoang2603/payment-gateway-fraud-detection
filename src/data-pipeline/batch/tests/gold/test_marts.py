@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-from batch import marts
+from batch.gold import marts
 
 TODAY = datetime.now(timezone.utc).date()
 RETENTION = 180

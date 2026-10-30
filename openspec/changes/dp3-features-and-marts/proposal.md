@@ -64,7 +64,7 @@ No breaking changes. Nothing downstream consumes gold today. The feature-store p
 - **Contracts:**
   - `contracts/data-products/{gold-features,payment-marts}`;
   - `contracts/features/fraud-history-batch-v1.{yaml,examples.json}`;
-  - mart DDL under `src/data-pipeline/batch/batch/sql/`.
+  - mart DDL under `src/data-pipeline/batch/batch/gold/sql/`.
 - **Infra:**
   - `infra/charts/data-pipelines`: the `dp3-gold` and `warehouse-benchmark` templates, the schedule step, values, and dashboard ConfigMaps;
   - `infra/charts/clickhouse`: the `grafana` and `marts` users and profiles, the new databases, and their ExternalSecrets;

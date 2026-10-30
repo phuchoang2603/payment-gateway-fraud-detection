@@ -6,7 +6,7 @@
 
 ## 2. DP3 Spark job
 
-- [x] 2.1 Add the shared interval-delta and change-point engine to `batch/`, as a function parameterized by anchor rule (daily grid, or exact change instants for the Feast `feature-backfill`). Then add `batch/gold.py` on top of it:
+- [x] 2.1 Add the shared interval-delta and change-point engine to `batch/`, as a function parameterized by anchor rule (daily grid, or exact change instants for the Feast `feature-backfill`). Then add `batch/gold/features.py` on top of it:
   - pin the snapshots of `silver.attempts`, `silver.payment_events` and `silver.labels`;
   - build `gold.dim_customer` (decision 4), `gold.feat_customer_daily` and `gold.feat_payment_method_daily` (decision 3, using interval deltas, merged distinct intervals, change-point rows, coverage nulls, and anchors capped at the Silver commit day), and `gold.label_attempt` (decision 5);
   - write each table with full replacement, hash distribution, the 256 MB target file size, day partitioning and `snapshot-property.silver.*` IDs;
@@ -23,7 +23,7 @@
 
 ## 3. ClickHouse marts and evidence
 
-- [x] 3.1 Add a standard-library ClickHouse HTTP client (no new dependency) and `batch/sql/marts/{fact_payment_attempt,fact_merchant_day,build_info,attempt_labels}.sql` (decision 6 DDL) and `batch/marts.py`:
+- [x] 3.1 Add a standard-library ClickHouse HTTP client (no new dependency) and `batch/gold/sql/marts/{fact_payment_attempt,fact_merchant_day,build_info,attempt_labels}.sql` (decision 6 DDL) and `batch/gold/marts.py`:
   - split into `build` and `publish` entry points: `build` stops before the exchange, leaving the staging tables for the checks, and `publish` runs the exchanges;
   - drop leftover staging tables;
   - compute the rolling window from `MARTS_RETENTION_DAYS` (180), render it into the DDL `TTL`, insert only rows inside the window, and write `build_info`;
@@ -42,7 +42,7 @@
   - leftover staging is dropped.
 
   The lakehouse source is replaced by local MergeTree fixture tables named like the lakehouse tables, because CI has no Polaris.
-- [x] 3.3 Add `batch/warehouse_benchmark.py` (decision 8):
+- [x] 3.3 Add `batch/gold/warehouse_benchmark.py` (decision 8):
   - variants A, B, C and C′ for Q0, Q1 (hot and median merchant), Q2, Q3 and Q4;
   - `EXPLAIN indexes = 1`, the cold run after cache drops, and the median of 5 warm runs;
   - `system.query_log` metrics by `query_id`;
@@ -86,13 +86,13 @@
   - a `$merchant` variable.
 
   Add `templates/dashboards.yaml` rendering them as ConfigMaps labelled `grafana_dashboard: "1"` with `grafana_folder`, gated by `dashboards.enabled`. Verify that the JSON parses and that CI helm template renders three ConfigMaps.
-- [x] 6.4 Make sure the Spark image's rebuild paths cover `src/data-pipeline/batch/batch/sql` and the metadata image's cover the new contracts. Today both are already under their copied directories, so confirm and change nothing if so. Verify that the CI image builds succeed.
+- [x] 6.4 Make sure the Spark image's rebuild paths cover `src/data-pipeline/batch/batch/gold/sql` and the metadata image's cover the new contracts. Today both are already under their copied directories, so confirm and change nothing if so. Verify that the CI image builds succeed.
 
 ## 6b. Incremental mode
 
 - [x] 6b.1 `dp2-silver mode=incremental` is on `main` (`a753980`). Read its decision 17 and the `curated-payments` requirements "Incremental curation" and "Silver change data for consumers", and reuse its CI test `test_the_attempts_changelog_shows_only_the_changed_attempt` as the pattern.
-- [x] 6b.2 Add `mode` to `batch/gold.py` and `batch/marts.py`, and the `mode` parameter to `dp3-gold` (default `historical`; the daily CronWorkflow uses `incremental`):
-  - reuse `batch.incremental` (`read_at`, `last_run`, `rewritten_since`) for snapshot reads and refusals rather than copying them;
+- [x] 6b.2 Add `mode` to `batch/gold/features.py` and `batch/gold/marts.py`, and the `mode` parameter to `dp3-gold` (default `historical`; the daily CronWorkflow uses `incremental`):
+  - reuse `batch.silver.incremental` (`read_at`, `last_run`, `rewritten_since`) for snapshot reads and refusals rather than copying them;
   - read the consumed `silver.*.snapshot_id` properties from the latest published gold commit, and create net changelog views of `silver.attempts` and `silver.labels` from those snapshots to current `main`;
   - apply the refusal rules: no prior DP3 commit, `dp2.mode = historical` in the range, an expired start snapshot, a time before `H`, or a logic version change;
   - for the feature tables, recompute the affected and expiring entities with the engine's entity- and anchor-scoped entry points, seeded from each entity's last prior row, and `MERGE` them on the audit branch;

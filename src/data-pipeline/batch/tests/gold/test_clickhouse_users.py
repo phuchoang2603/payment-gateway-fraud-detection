@@ -8,7 +8,7 @@ from xml.sax.saxutils import escape
 import pytest
 import yaml
 
-INSTALLATION = Path(__file__).resolve().parents[4] / "infra/charts/clickhouse/templates/installation.yaml"
+INSTALLATION = Path(__file__).resolve().parents[5] / "infra/charts/clickhouse/templates/installation.yaml"
 USER = "grafana"
 
 

@@ -7,9 +7,7 @@ from confluent_kafka import Consumer, TopicPartition
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from batch.lakehouse import LOCAL_WRITE_OPTIONS, TABLE_PROPERTIES, ref_snapshot, stage, write_ref
-from batch.metrics import phase
-from batch.schema import (
+from batch.bronze.schema import (
     EVENT_COLUMNS,
     LABEL_COLUMNS,
     business_schema,
@@ -21,9 +19,11 @@ from batch.schema import (
     label_ddl,
     rejected_ddl,
 )
+from batch.bronze.validation import EVENT_PAYLOADS, payload_case_of, rejection_reason, required_fields
+from batch.lakehouse import LOCAL_WRITE_OPTIONS, TABLE_PROPERTIES, ref_snapshot, stage, write_ref
+from batch.metrics import phase
 from batch.spark import ICEBERG_CATALOG, session
 from batch.store import Store
-from batch.validation import EVENT_PAYLOADS, payload_case_of, rejection_reason, required_fields
 
 NAMESPACE = f"{ICEBERG_CATALOG}.bronze"
 EVENTS = f"{NAMESPACE}.payment_events"

@@ -8,13 +8,13 @@ from pyspark import StorageLevel
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
-from batch import incremental
-from batch.bronze import EVENTS as BRONZE_EVENTS
-from batch.bronze import LABELS as BRONZE_LABELS
-from batch.bronze import current_snapshot
+from batch.bronze.ingest import EVENTS as BRONZE_EVENTS
+from batch.bronze.ingest import LABELS as BRONZE_LABELS
+from batch.bronze.ingest import current_snapshot
+from batch.bronze.schema import EVENT_COLUMNS, LABEL_COLUMNS
 from batch.lakehouse import LOCAL_WRITE_OPTIONS, create_table, snapshot_info, stage
 from batch.metrics import phase
-from batch.schema import EVENT_COLUMNS, LABEL_COLUMNS
+from batch.silver import incremental
 from batch.spark import ICEBERG_CATALOG, session
 from batch.store import Store
 

@@ -2,8 +2,8 @@ from datetime import timedelta
 
 import pytest
 
-from batch import warehouse_benchmark
-from tests.test_marts import TODAY, attempt, client, rebuild  # noqa: F401
+from batch.gold import warehouse_benchmark
+from tests.gold.test_marts import TODAY, attempt, client, rebuild  # noqa: F401
 
 
 @pytest.fixture

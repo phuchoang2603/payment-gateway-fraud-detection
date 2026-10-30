@@ -72,7 +72,7 @@ A DBeaver ER export of the ClickHouse `marts` and `lakehouse.gold` tables is cap
 
 ### 2. DP3 reads pinned Silver and recomputes gold in full
 
-- **Pinned inputs.** The `gold` Spark job (`batch/gold.py`) reads `silver.attempts`, `silver.payment_events` and `silver.labels` at their current snapshot IDs, which it records, with `versionAsOf`, as DP2 does.
+- **Pinned inputs.** The `gold` Spark job (`batch/gold/features.py`) reads `silver.attempts`, `silver.payment_events` and `silver.labels` at their current snapshot IDs, which it records, with `versionAsOf`, as DP2 does.
 - **Writes: write-audit-publish, as Bronze and Silver do since `78765df`.**
   - **Write.** The job runs with `spark.wap.branch = audit-<workflow>` and calls `batch.lakehouse.stage()` on each gold table before writing, so the branch starts from `main`. Each write uses `overwrite(lit(True))`, with `create` on first use. Each commit carries the Silver snapshot IDs through the Iceberg 1.12 write option `snapshot-property.silver.<table>.snapshot_id`.
   - **Audit.** The checks stage runs every `gold-features` rule against the branch heads, pinned with `SETTINGS iceberg_snapshot_id`.
@@ -228,7 +228,7 @@ One row per (attempt key, `label_source`), taken from `silver.labels` where `lin
 
 ### 6. Marts: DDL, keys and indexes
 
-**Database.** The ClickHouse setup job creates `marts` and `marts_benchmark` as admin, next to `langfuse`. The DDL lives in `src/data-pipeline/batch/batch/sql/marts/*.sql`. The build job owns it and runs `CREATE TABLE IF NOT EXISTS` for the live tables, so a schema change is a `DROP` plus rebuild during the run (no legacy compatibility).
+**Database.** The ClickHouse setup job creates `marts` and `marts_benchmark` as admin, next to `langfuse`. The DDL lives in `src/data-pipeline/batch/batch/gold/sql/marts/*.sql`. The build job owns it and runs `CREATE TABLE IF NOT EXISTS` for the live tables, so a schema change is a `DROP` plus rebuild during the run (no legacy compatibility).
 
 ```sql
 CREATE TABLE marts.fact_payment_attempt (
@@ -296,7 +296,7 @@ TTL day + INTERVAL {retention_days} DAY DELETE;
 
 ### 7. Mart build: monthly batches, staging, exchange
 
-**Job.** `batch/marts.py` runs as a plain container on the Spark image, which already carries the `batch` package. It talks to ClickHouse over HTTP as user `marts` through a small standard-library client, as the chart's setup job and the tests do, so the image gains no dependency.
+**Job.** `batch/gold/marts.py` runs as a plain container on the Spark image, which already carries the `batch` package. It talks to ClickHouse over HTTP as user `marts` through a small standard-library client, as the chart's setup job and the tests do, so the image gains no dependency.
 
 **Steps:**
 
@@ -329,7 +329,7 @@ TTL day + INTERVAL {retention_days} DAY DELETE;
 
 ### 8. Warehouse indexing evidence
 
-`warehouse-benchmark` is an on-demand workflow template with one container step that runs `batch/warehouse_benchmark.py`.
+`warehouse-benchmark` is an on-demand workflow template with one container step that runs `batch/gold/warehouse_benchmark.py`.
 
 **Variants, built from the same pinned data:**
 
@@ -356,11 +356,11 @@ A against C shows the full benefit of the warehouse. B against C isolates the ef
 
 ```text
 dp3-gold (WorkflowTemplate, mutexes: dp3-gold-writer, dp2-silver-writer, onExit: publish)
-├── features        SparkApplication batch/gold.py, writes audit-<workflow> branch     (ingest)
-├── marts           container batch/marts.py build, writes marts.*__staging          (ingest, after features)
+├── features        SparkApplication batch/gold/features.py, writes audit-<workflow> branch     (ingest)
+├── marts           container batch/gold/marts.py build, writes marts.*__staging          (ingest, after features)
 ├── checks          openmetadata.checks, gold-features on branch heads, payment-marts on staging   (validate)
 ├── publish-tables  openmetadata.wap, fast-forwards gold main                  (after checks)
-├── publish-marts   container batch/marts.py publish, exchanges staging into live   (after publish-tables)
+├── publish-marts   container batch/gold/marts.py publish, exchanges staging into live   (after publish-tables)
 └── profile         OpenMetadata profiler on the published marts                    (after publish-marts)
 publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, lineage on success
 ```

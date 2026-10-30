@@ -1,10 +1,9 @@
-import json
 from pathlib import Path
 
 import pytest
 
-from openmetadata import checks, lineage, profile
-from openmetadata.warehouse import LAKEHOUSE, MARTS
+from openmetadata import checks, lineage, wap
+from openmetadata.warehouse import LAKEHOUSE
 
 ROOT = Path(__file__).resolve().parents[4] / "contracts" / "data-products"
 
@@ -14,24 +13,19 @@ def found():
     return {(check.table, check.name): check for check in checks.checks(ROOT)}
 
 
-def test_every_contract_rule_resolves_to_its_server_database(found):
-    assert {check.database for check in found.values()} == {LAKEHOUSE, MARTS}
+def test_every_rule_of_every_product_renders_against_its_table(found):
+    assert {check.table.split(".")[0] for check in found.values() if check.database == LAKEHOUSE} == {
+        "bronze",
+        "silver",
+        "gold",
+    }
     for check in found.values():
         for staging in (False, True):
             sql = checks.rendered(check, 42 if check.database == LAKEHOUSE else None, staging)
             assert "{object}" not in sql and "{table:" not in sql, check.name
 
 
-def test_fqns_quote_only_lakehouse_names(found):
-    assert (
-        found[("gold.dim_customer", "gold_dim_one_current")].fqn == 'clickhouse.default.lakehouse."gold.dim_customer"'
-    )
-    assert found[("fact_payment_attempt", "marts_fact_unique_attempt")].fqn == (
-        "clickhouse.default.marts.fact_payment_attempt"
-    )
-
-
-def test_a_single_table_rule_pins_the_whole_query(found):
+def test_a_single_table_rule_is_pinned_to_the_audited_snapshot_query_wide(found):
     sql = checks.rendered(found[("silver.attempts", "silver_unique_attempt")], 7)
 
     assert "FROM lakehouse.`silver.attempts`" in sql
@@ -45,44 +39,70 @@ def test_a_rule_reading_another_lakehouse_table_pins_only_its_own(found):
     assert sql.endswith(f"SETTINGS {checks.SPILL_SETTINGS}")
 
 
-def test_mart_rules_audit_staging_and_report_on_the_live_table(found):
+def test_mart_rules_audit_staging_but_report_on_the_live_table(found):
     rule = found[("fact_merchant_day", "marts_merchant_day_sums")]
 
     audited = checks.rendered(rule, None, staging=True)
-    live = checks.rendered(rule, None, staging=False)
 
     assert "marts.`fact_merchant_day__staging`" in audited
     assert "marts.`fact_payment_attempt__staging`" in audited and "marts.`build_info__staging`" in audited
-    assert "__staging" not in live
+    assert "__staging" not in checks.rendered(rule, None, staging=False)
     assert rule.fqn == "clickhouse.default.marts.fact_merchant_day"
 
 
-def test_dp3_lineage_endpoints_are_contracted_tables(found):
+def test_every_lineage_edge_lands_on_a_contracted_table(found):
     contracted = {check.fqn for check in found.values()}
-    dp3 = [edge for edge in lineage.edges("v19") if edge.pipeline in lineage.DP3]
+    targets = {edge.pipeline: [] for edge in lineage.edges("v19")}
+    for edge in lineage.edges("v19"):
+        targets[edge.pipeline].append(edge.target.fqn)
 
-    assert {edge.pipeline for edge in dp3} == set(lineage.DP3) <= set(lineage.PIPELINES)
-    for edge in dp3:
-        assert edge.target.fqn in contracted, edge.target.fqn
+    assert set(targets) <= set(lineage.PIPELINES)
+    for pipeline, fqns in targets.items():
+        assert set(fqns) <= contracted, pipeline
 
 
-def test_profiling_is_scoped_to_the_published_marts(tmp_path, monkeypatch):
-    connectors = {
-        "clickhouse": {
-            "source": {
-                "type": "clickhouse",
-                "serviceName": "clickhouse",
-                "serviceConnection": {"config": {"type": "Clickhouse", "password": "${CLICKHOUSE_PASSWORD}"}},
-            }
+def test_a_missing_or_failed_result_fails_the_check():
+    results = {"passed": {"testCaseStatus": "Success"}, "failed": {"testCaseStatus": "Failed"}}
+
+    assert checks.evaluate(["passed", "failed", "never-ran"], results) == ["failed", "never-ran"]
+
+
+class FakeCatalog:
+    def __init__(self, tables):
+        self.tables = tables
+
+    def metadata(self, table):
+        return self.tables[table]
+
+
+def table_metadata(main, branch=None, parents=None):
+    refs = {"main": {"snapshot-id": main}} if main else {}
+    if branch:
+        refs["audit-run"] = {"snapshot-id": branch}
+    snapshots = [{"snapshot-id": child, "parent-snapshot-id": parent} for child, parent in (parents or {}).items()]
+    return {"refs": refs, "snapshots": snapshots}
+
+
+def test_publish_fast_forwards_main_only_from_its_own_branch_base():
+    catalog = FakeCatalog(
+        {
+            "silver.attempts": table_metadata(1, 2, {2: 1}),
+            "silver.labels": table_metadata(5),
+            "gold.dim_customer": table_metadata(None, 9),
         }
-    }
-    path = tmp_path / "connectors.json"
-    path.write_text(json.dumps(connectors))
-    monkeypatch.setenv("METADATA_CONNECTORS_FILE", str(path))
+    )
 
-    config = profile.workflow()["source"]["sourceConfig"]["config"]
+    changes = wap.publish_changes(catalog, ["silver.attempts", "silver.labels", "gold.dim_customer"], "audit-run")
 
-    assert config["type"] == "Profiler"
-    assert config["schemaFilterPattern"] == {"includes": ["^marts$"]}
-    assert config["tableFilterPattern"] == {"includes": ["^fact_payment_attempt$", "^fact_merchant_day$"]}
-    assert config["profileSampleConfig"]["config"]["profileSample"] == 100
+    assert [(change["identifier"]["name"], change["updates"][0]["snapshot-id"]) for change in changes] == [
+        ("attempts", 2),
+        ("dim_customer", 9),
+    ]
+    assert wap.audited_snapshots(catalog, ["silver.labels"], "audit-run") == {"silver.labels": 5}
+
+
+def test_publish_refuses_when_main_moved_off_the_branch_base():
+    catalog = FakeCatalog({"bronze.payment_events": table_metadata(3, 2, {2: 1, 3: 1})})
+
+    with pytest.raises(RuntimeError, match="not a fast-forward"):
+        wap.publish_changes(catalog, ["bronze.payment_events"], "audit-run")

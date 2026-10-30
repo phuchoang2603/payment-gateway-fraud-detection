@@ -1,5 +1,6 @@
-from batch import bronze, lakehouse
-from batch.schema import event_ddl
+from batch import lakehouse
+from batch.bronze import ingest as bronze
+from batch.bronze.schema import event_ddl
 from tests.events import created
 
 TOPIC = "payments.events.compaction-test"

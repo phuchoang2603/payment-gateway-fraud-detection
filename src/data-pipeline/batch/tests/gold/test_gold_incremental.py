@@ -4,20 +4,15 @@ from datetime import timedelta
 import pytest
 from pyspark.sql import functions as F
 
-from batch import bronze, gold, incremental, silver
-from batch.schema import EVENT_COLUMNS, LABEL_COLUMNS, business_schema
+from batch.bronze import ingest as bronze
+from batch.gold import features as gold
+from batch.silver import curate as silver
+from batch.silver import incremental
 from tests.events import BASE, approved, created, label, started, succeeded
+from tests.lake import deliver
 
-TOPICS = {bronze.EVENTS: "payments.events.v1", bronze.LABELS: "fraud.labels.v1"}
-COLUMNS = {bronze.EVENTS: EVENT_COLUMNS, bronze.LABELS: LABEL_COLUMNS}
 SILVER_TABLES = (silver.PAYMENT_EVENTS, silver.ATTEMPTS, silver.LABELS, silver.REJECTED)
 DAY = 24 * 60
-
-
-@pytest.fixture
-def report_root(tmp_path, monkeypatch):
-    monkeypatch.setenv("RUN_REPORT_ROOT", str(tmp_path / "reports"))
-    return tmp_path / "reports"
 
 
 @pytest.fixture
@@ -34,25 +29,6 @@ def clock(monkeypatch):
     now = {"at": BASE + timedelta(days=31)}
     monkeypatch.setattr(gold, "commit_time", lambda spark, table, snapshot: now["at"])
     return now
-
-
-def deliver(spark, lake, table, rows):
-    for values in rows:
-        offset = lake["offsets"][table]
-        lake["offsets"][table] += 1
-        spark.createDataFrame([values], business_schema(spark, COLUMNS[table])).withColumns(
-            {
-                "_source": F.lit("kafka"),
-                "_dataset_version": F.lit(None).cast("string"),
-                "_source_file": F.lit(None).cast("string"),
-                "_kafka_topic": F.lit(TOPICS[table]),
-                "_kafka_partition": F.lit(0),
-                "_kafka_offset": F.lit(offset).cast("bigint"),
-                "_kafka_timestamp": F.current_timestamp(),
-                "_ingested_at": F.current_timestamp(),
-                "_run_id": F.lit("bronze-kafka-test"),
-            }
-        ).writeTo(table).append()
 
 
 def start(payment, event, version, minutes, attempt, customer="c-1", card="pm-1", address="f"):

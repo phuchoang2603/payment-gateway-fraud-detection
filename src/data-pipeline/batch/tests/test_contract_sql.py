@@ -7,10 +7,12 @@ from pathlib import Path
 import pyspark.sql.types as T
 import yaml
 
-from batch import gold, marts, silver
+from batch.gold import features as gold
+from batch.gold import marts
+from batch.silver import curate as silver
 from batch.spark import ICEBERG_CATALOG
 from tests.events import approved, created, label, started, succeeded
-from tests.test_silver import load_bronze
+from tests.lake import load_bronze
 
 CONTRACTS = Path(__file__).resolve().parents[4] / "contracts" / "data-products"
 PRODUCTS = ("bronze-payments", "silver-payments", "gold-features")

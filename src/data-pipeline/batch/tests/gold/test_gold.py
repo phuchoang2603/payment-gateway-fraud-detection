@@ -7,13 +7,14 @@ from pathlib import Path
 import pytest
 from pyspark.sql import functions as F
 
-from batch import gold, silver
-from batch.windows import ANCHOR
+from batch.gold import features as gold
+from batch.gold.windows import ANCHOR
+from batch.silver import curate as silver
 from tests.events import approved, at, created, label, started, succeeded
-from tests.test_silver import load_bronze
+from tests.lake import load_bronze
 
 EXAMPLES = json.loads(
-    (Path(__file__).resolve().parents[4] / "contracts/features/fraud-history-batch-v1.examples.json").read_text()
+    (Path(__file__).resolve().parents[5] / "contracts/features/fraud-history-batch-v1.examples.json").read_text()
 )
 VIEWS = {"customer": gold.CUSTOMER, "payment_method": gold.METHOD}
 ATTEMPT_COLUMNS = (
@@ -178,12 +179,6 @@ def test_attempt_labels_keep_the_earliest_linked_observation_per_source(spark):
     assert rows[("p-1", truth)].label is False
     assert rows[("p-1", chargeback)].label is True
     assert rows[("p-1", truth)]._at == micros(at(0).isoformat())
-
-
-@pytest.fixture
-def report_root(tmp_path, monkeypatch):
-    monkeypatch.setenv("RUN_REPORT_ROOT", str(tmp_path / "reports"))
-    return tmp_path / "reports"
 
 
 def shipped_to(event, address):

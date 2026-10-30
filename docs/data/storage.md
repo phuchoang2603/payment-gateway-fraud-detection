@@ -68,7 +68,7 @@ The full-history amount/context rule joins `attempt_started` to `payment_created
 
 ### Warehouse indexing
 
-DP3 builds two native MergeTree marts in the ClickHouse `marts` database ([DDL](../../src/data-pipeline/batch/batch/sql/marts)); every structure serves a named fixed query.
+DP3 builds two native MergeTree marts in the ClickHouse `marts` database ([DDL](../../src/data-pipeline/batch/batch/gold/sql/marts)); every structure serves a named fixed query.
 
 | Structure | Choice | Query it serves |
 |---|---|---|
