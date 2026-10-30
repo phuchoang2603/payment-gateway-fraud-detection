@@ -81,4 +81,18 @@ spec:
   rules:
     - from:
         - source:
-            principals: ["cluster.local/ns/{{ .Release.Namespace }}/sa/{{ .Values.gateway.serviceAccount }}"]
+            principals:
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/{{ .Values.gateway.serviceAccount }}
+              - {{ .Values.metricsAgent }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: rag-api
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rag-api
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics/

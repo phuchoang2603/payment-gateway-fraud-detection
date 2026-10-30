@@ -3,10 +3,10 @@ name = "fraud-rag-serving"
 version = "0.1.0"
 description = "Knowledge API: REST and MCP over the Feast pgvector store"
 requires-python = ">=3.12,<3.13"
-dependencies = ["fraud-rag-common", "fastapi==0.162.0", "uvicorn==0.54.0", "mcp==2.3.0"]
+dependencies = ["fraud-rag-common", "fastapi==0.162.0", "uvicorn==0.54.0", "mcp==2.3.0", "prometheus-client==0.24.1"]
 
 [dependency-groups]
-dev = ["pytest==9.2.0", "ruff==0.17.3"]
+dev = ["pytest==9.2.0", "pytest-cov==7.1.0", "ruff==0.17.3"]
 
 [tool.uv]
 package = false
@@ -17,6 +17,10 @@ fraud-rag-common = { workspace = true }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "--cov=fraud_rag_serving --cov-report=term-missing --cov-fail-under=90"
 
 [tool.ruff]
 extend = "../pyproject.toml"
+
+[tool.coverage.run]
+omit = ["fraud_rag_serving/__main__.py"]
