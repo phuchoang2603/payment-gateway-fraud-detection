@@ -83,6 +83,8 @@ workflow:
 
 api:
   port: 8080
+  # Identity of the on-demand load test Job; the llm-platform chart creates it for the benchmark.
+  loadTestServiceAccount: llm-benchmark
   autoscaling:
     minReplicas: 2
     maxReplicas: 4

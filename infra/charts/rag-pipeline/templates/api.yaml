@@ -105,6 +105,8 @@ spec:
             principals:
               - cluster.local/ns/{{ .Release.Namespace }}/sa/{{ .Values.gateway.serviceAccount }}
               - {{ .Values.metricsAgent }}
+              # The on-demand load test (loadtest/job.yaml) measures the API itself, behind the gateway's rate limit.
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/{{ .Values.api.loadTestServiceAccount }}
 ---
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMPodScrape
