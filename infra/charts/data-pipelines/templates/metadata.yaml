@@ -54,7 +54,7 @@ spec:
       containers:
         - name: register
           image: {{ include "data-pipelines.image" (dict "image" .Values.images.openmetadata "global" .Values.global) | quote }}
-          command: [python, -m, openmetadata_jobs.integrations]
+          command: [python, -m, openmetadata.integrations]
           env:
             - name: METADATA_STAGE
               value: register
@@ -110,7 +110,7 @@ spec:
           - name: metadata-{{ $name }}
       container:
         image: {{ include "data-pipelines.image" (dict "image" $.Values.images.openmetadata "global" $.Values.global) | quote }}
-        command: [python, -m, openmetadata_jobs.integrations]
+        command: [python, -m, openmetadata.integrations]
         env:
           - name: METADATA_STAGE
             value: "{{`{{workflow.parameters.stage}}`}}"

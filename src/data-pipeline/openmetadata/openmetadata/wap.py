@@ -102,7 +102,7 @@ def publish_changes(catalog, tables, branch):
 
 
 def main():
-    from openmetadata_jobs.checks import checks
+    from openmetadata.checks import checks
 
     branch = os.environ["WAP_BRANCH"]
     tables = sorted({check.table for check in checks(products=[os.environ["CHECK_PRODUCT"]])})

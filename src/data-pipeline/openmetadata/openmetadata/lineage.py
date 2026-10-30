@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from openmetadata_jobs.warehouse import table_fqn
+from openmetadata.warehouse import table_fqn
 
 SERVICE = "argo"
 KAFKA_SERVICE = "payment-gateway-kafka"

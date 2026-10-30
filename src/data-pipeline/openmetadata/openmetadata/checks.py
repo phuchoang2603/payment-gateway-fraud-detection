@@ -4,10 +4,10 @@ from pathlib import Path
 
 import yaml
 
-from openmetadata_jobs.catalog import client, native, server
-from openmetadata_jobs.integrations import workflow
-from openmetadata_jobs.wap import Catalog, audited_snapshots
-from openmetadata_jobs.warehouse import SERVICE, sql_table, table_fqn
+from openmetadata.catalog import client, native, server
+from openmetadata.integrations import workflow
+from openmetadata.wap import Catalog, audited_snapshots
+from openmetadata.warehouse import SERVICE, sql_table, table_fqn
 
 PRODUCTS = ("bronze-payments", "silver-payments")
 PAGE = 100

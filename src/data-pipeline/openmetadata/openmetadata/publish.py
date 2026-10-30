@@ -2,8 +2,8 @@ import json
 import os
 import time
 
-from openmetadata_jobs.catalog import client
-from openmetadata_jobs.lineage import (
+from openmetadata.catalog import client
+from openmetadata.lineage import (
     HISTORICAL_PREFIX,
     PIPELINES,
     SERVICE,

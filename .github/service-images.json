@@ -111,7 +111,7 @@
       "dockerfile": "infra/docker/data-platform-metadata.Dockerfile",
       "paths": [
         "infra/docker/data-platform-metadata.Dockerfile",
-        "src/data-pipeline/openmetadata_jobs/openmetadata_jobs",
+        "src/data-pipeline/openmetadata/openmetadata",
         "contracts/data-products"
       ]
     },

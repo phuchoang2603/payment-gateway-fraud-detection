@@ -147,7 +147,7 @@ retryStrategy:
     retryPolicy: OnError
   container:
     image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
-    command: [python, -m, openmetadata_jobs.publish]
+    command: [python, -m, openmetadata.publish]
     env:
       - name: PIPELINES
         value: {{ .pipelines | quote }}
@@ -171,7 +171,7 @@ audit-{{ "{{workflow.name}}" }}
     retryPolicy: OnError
   container:
     image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
-    command: [python, -m, openmetadata_jobs.wap]
+    command: [python, -m, openmetadata.wap]
     env:
       - name: CHECK_PRODUCT
         value: {{ .product | quote }}
@@ -187,7 +187,7 @@ audit-{{ "{{workflow.name}}" }}
     retryPolicy: OnError
   container:
     image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
-    command: [python, -m, openmetadata_jobs.checks]
+    command: [python, -m, openmetadata.checks]
     env:
       - name: CHECK_PRODUCT
         value: {{ .product | quote }}

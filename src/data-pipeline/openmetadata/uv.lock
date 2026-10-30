@@ -3,7 +3,7 @@ revision = 5
 requires-python = "==3.12.*"
 
 [[package]]
-name = "fraud-openmetadata-jobs"
+name = "fraud-openmetadata"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

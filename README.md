@@ -56,7 +56,7 @@ Everything runs on two Talos Kubernetes clusters (Proxmox dev, AWS prod), deploy
 │       ├── feast/            # Feast writer and feature server
 │       ├── features/         # Reference feature implementation
 │       ├── batch/            # Bronze, Silver, maintenance and analytics Spark jobs
-│       └── openmetadata_jobs/ # Metadata integrations, native checks and lineage publication
+│       └── openmetadata/ # Metadata integrations, native checks and lineage publication
 └── devenv.nix, devenv.yaml   # Development environment
 ```
 
