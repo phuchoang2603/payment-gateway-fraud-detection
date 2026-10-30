@@ -286,10 +286,9 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 - Simulator configs are excluded, because they hold the generator's ground truth.
 
 **Layout.**
-- Code: one Python project, `src/rag/`, built into one image, `rag`, with three entrypoints:
+- Code: one Python project, `src/rag/`, built into one image, `rag`, with two entrypoints:
   - `rag.pipeline`: the workflow steps;
-  - `rag.api`: the Web API;
-  - `rag.mcp`: the MCP server.
+  - `rag.service`: the Web API and the MCP server in one process.
 
   They share the Feast definitions and the gateway client. Python because Feast and PyIceberg are Python. There is no Spark, since a few hundred rows do not need a cluster.
 - Chart: `infra/charts/rag-pipeline`, application `rag-pipeline`. Everything runs in `llm`, next to the embedding model and the gateway. It is enabled where `llm-platform` is: dev now, prod only with the LLM platform.
@@ -306,10 +305,11 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
   1. `publish-corpus` writes the version prefix if absent. It ends the run early when the offline table and the online store already hold the version.
   2. `chunk` → `runs/payment-gateway/knowledge/<run>/chunks.parquet`.
   3. `embed` calls the gateway's `/v1/embeddings` in batches with the `rag-ingest` key. Documents are embedded without an instruction prefix.
-  4. `write` appends to the offline table and refreshes the online store.
-  5. `validate` runs the pipeline checks.
-  6. `checks` runs the contract checks with `openmetadata_jobs.checks` (product `knowledge-base`).
-  7. On exit, `publish` records the run status and lineage in OpenMetadata.
+  4. `validate` gates the write. It runs every quality check on the staged, embedded Parquet, so a bad corpus never reaches either store.
+  5. `write` appends to the offline table, then refreshes the online store and rebuilds its ANN index.
+  6. `verify` checks that the stores hold exactly what was validated.
+  7. `checks` re-runs the contract rules on `knowledge.chunks` with `openmetadata_jobs.checks` (product `knowledge-base`), so the results are recorded in the catalog.
+  8. On exit, `publish` records the run status and lineage in OpenMetadata.
 - Each release that changes the app runs it: an Argo CD `PostSync` hook in the chart creates a `Workflow` from the template. The app only goes out of sync when its rendered manifests change, which in practice means a new `rag` image, that is, changed documents or code. A run that finds nothing new ends at step 1.
 - The hook has a deadline, so a failed run shows as a failed sync instead of hanging. Manual `argo submit --from workflowtemplate/rag-knowledge` stays available. There is no cron.
 - Access to object storage: the gateway storage identity (`OBJECT_GATEWAY_*` from `gateway-doppler`), which already covers `datasets/payment-gateway/`, `runs/payment-gateway/` and `lakehouse/`.
@@ -322,46 +322,55 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
   - Online store `postgres` with `vector_enabled: true` and `vector_len: 1024`. The Feast registry is a SQL registry in the same database.
   - Roles: `rag_writer` owns the schema (workflow); `rag_reader` gets SELECT only (Web API). Their passwords are app Doppler keys.
 - **Feature view `knowledge_chunks`:** entity `chunk_id`, with fields `doc_id`, `title`, `section`, `audience`, `synthetic`, `source_path`, `text`, `embedding` (1024 × float32, vector index, cosine), `knowledge_version` and `content_sha256`, and no TTL.
-- **No ANN index, even after an upgrade:** Feast 0.67 is the latest release, and neither it nor its main branch builds HNSW or IVFFlat indexes for Postgres.
-  - It stores features in a key-value table with an untyped `vector` column and queries `vector_value <=> q::vector`. An index added by hand would need a typed cast expression, which that query never uses.
-  - Search is an exact cosine scan, which takes well under a millisecond at this size and stays adequate below about 100k vectors.
-  - If ANN is ever needed, the options are Feast's Milvus or Qdrant store, or an upstream change. Not now.
+- **ANN index, added by the pipeline:** Feast 0.67 is the latest release, and neither it nor its main branch builds an HNSW or IVFFlat index for Postgres. The common advice ("`CREATE INDEX … USING hnsw (embedding vector_cosine_ops)` on the Feast table") does not work as written, for three reasons:
+  1. Feast stores one row per entity and feature, in `<project>_<feature_view>` with columns `entity_key`, `feature_name`, `value`, `value_text`, `vector_value`. There is no `embedding` column.
+  2. `vector_value` is created as `vector` without dimensions, and pgvector cannot index such a column.
+  3. `retrieve_online_documents_v2` ranks with `MIN(vector_value <=> q) … GROUP BY entity_key ORDER BY distance LIMIT k`. That aggregate reads every row, so no index can serve it.
+
+  What works:
+  - Right after Feast re-applies the table, the `write` step runs `ALTER TABLE … ALTER COLUMN vector_value TYPE vector(1024)` and builds `USING hnsw (vector_value vector_cosine_ops)`. The other features' rows have a NULL `vector_value`, and HNSW skips NULLs.
+  - The service searches with `retrieve_online_documents(…, distance_metric="cosine")`, the v1 call. Its query is `ORDER BY vector_value <=> q LIMIT k`, which the index serves.
+  - `verify` asserts with `EXPLAIN` (with sequential scans disabled, since the planner rightly prefers a sequential scan on a table this small) that the search uses the index.
+  - The table name and column come from Feast's internals, so the step resolves the name through Feast's own `compute_table_id`, and a CI test pins the behaviour, so an upgrade that changes it fails CI.
+
+  At about 150 chunks the exact scan is already well under a millisecond. The index is for scale, and to show the technique.
 
 **Chunking and identity.**
 - Chunking follows the markdown structure: one chunk per spec requirement, clause, section or FAQ entry.
 - Sections over about 350 tokens split on paragraphs with about 50 tokens of overlap. Each chunk starts with "document title › section".
 - `chunk_id` is `<doc_id>#<section-slug>[-n]`, stable while a heading is unchanged, and `content_sha256` detects edits.
-- A new version fully refreshes the online store: the feature view's table is dropped and re-applied, then every current chunk is written. Deleted and renamed chunks therefore disappear.
+- A new version fully refreshes the online store: the feature view's table is dropped and re-applied, its column typed and indexed, then every current chunk is written. Deleted and renamed chunks therefore disappear. Because the gate already passed, the refresh fails only on infrastructure errors, and a rerun repairs it.
 - The offline table keeps every version.
 
 **Validation.** A failed check fails the run.
-- **Contract checks** (ODCS `contracts/data-products/knowledge-base/knowledge-chunks.odcs.yaml`, scalar counts that must be 0, on the current version):
+- **Before the write** (`validate`, over the staged Parquet):
+  - the contract rules below, implemented in Python;
+  - every manifest document has chunks;
+  - a golden question set reaches recall@3 against the expected `doc_id`s. The questions are embedded through the gateway and ranked in memory against the staged vectors, so retrieval quality is known before the store changes.
+
+  A CI test asserts that the Python gate and the ODCS contract cover the same rule ids.
+- **Contract rules** (ODCS `contracts/data-products/knowledge-base/knowledge-chunks.odcs.yaml`, scalar counts that must be 0, on the current version; the catalog records them after the write):
   - row count within the expected range;
   - unique `chunk_id`;
   - text non-empty and within bounds;
   - 1024 finite values per embedding, with unit norm;
   - synthetic documents flagged;
   - no card-number or e-mail patterns in the text.
-- **Pipeline checks:**
-  - every manifest document has chunks;
+- **After the write** (`verify`):
   - the online store equals the offline version: same hashes by id, no extra ids;
-  - a golden question set reaches recall@3 against the expected `doc_id`s.
+  - the search plan uses the HNSW index.
 - Reports go to `runs/payment-gateway/knowledge/<run>/report.json`.
 
-**Web API (`rag-api`).**
-- FastAPI with pydantic models, async handlers, and `/healthz` and `/readyz` probes for Kubernetes. It is the only Feast reader of the knowledge store, through `rag_reader`.
-- Endpoints:
+**Web API and MCP tool in one service (`rag-api`).** One FastAPI process serves both the REST API and the MCP tools, so there is one deployment, one reader identity and no extra hop.
+- REST: pydantic models, async handlers, and `/healthz` and `/readyz` probes for Kubernetes. Endpoints:
   - `GET /v1/chunks/{chunk_id}`;
-  - `POST /v1/chunks/search`: embeds the query through the gateway with Qwen3-Embedding's query instruction and the `rag-api` key, takes candidate ids from `retrieve_online_documents_v2`, then reads features by id and ranks by distance. This sidesteps the id and feature mismatch the reference recorded on Feast 0.66;
+  - `POST /v1/chunks/search`: embeds the query through the gateway with Qwen3-Embedding's query instruction and the `rag-api` key, then runs the indexed v1 search. Results are read back by id, which also sidesteps the id and feature mismatch the reference recorded with `retrieve_online_documents_v2(...).to_df()` on Feast 0.66;
   - `GET /v1/customers/{customer_id}/features`: online customer features from the fraud Feast project, once the DP3 slice puts customer features online.
-- It runs as a Knative Service in `llm` (decision 10) and is load-tested with Locust for throughput and latency.
-
-**MCP tool (`rag-mcp`).**
-- A streamable-HTTP MCP server with two tools, `search_knowledge(query, top_k, audience)` and `get_knowledge_chunk(chunk_id)`. Both call the Web API, so the MCP server holds no database credentials.
-- It runs as a Knative Service: rolling updates through revisions, automatic fallback to the last ready revision, and `min-scale` 1 for sessions.
-- The gateway routes it as `/mcp/knowledge` (decision 2), with its own policy: the agents' key, and tool-call metrics for the agent telemetry rows. Mesh policy admits only the gateway to the MCP server, and only the MCP server and the gateway to the Web API.
-- It is published to agentregistry as an `MCPServer` and catalogued in OpenMetadata as an `mcpServer`.
-- `evidence-agent` gains the tool (kagent `RemoteMCPServer` → gateway), which bumps it to 0.2.0.
+- MCP: the official `mcp` SDK's streamable-HTTP app, mounted at `/mcp`, with two tools, `search_knowledge(query, top_k, audience)` and `get_knowledge_chunk(chunk_id)`. They call the same functions as the REST endpoints. It runs in stateless mode, so any replica or revision can answer any request with no session affinity.
+- It is the only Feast reader of the knowledge store, through `rag_reader`.
+- It runs as a Knative Service in `llm` (decision 10): rolling updates through revisions, automatic fallback to the last ready revision, `min-scale` 1. It is load-tested with Locust.
+- The gateway routes `/mcp/knowledge` to the service's `/mcp` (decision 2), with its own policy: the agents' key, and tool-call metrics for the agent telemetry rows. Mesh policy admits only the gateway to the service.
+- It is published to agentregistry as an `MCPServer` and catalogued in OpenMetadata as an `mcpServer`. `evidence-agent` gains the tools (kagent `RemoteMCPServer` → gateway), which bumps it to 0.2.0.
 
 ### 13. Platform changes (talos-proxmox, separate approval)
 

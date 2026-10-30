@@ -20,8 +20,8 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - **Corpus:** about 14 documents about gateway behaviour. Most are rendered from the repository's specs and contracts; six are short, hand-written and labelled synthetic (decline codes, risk policy, analyst runbook, chargebacks, merchant terms, FAQ). The corpus ships inside the `rag` image built from `src/rag/`, so CI never writes to the bucket.
   - **Workflow:** an Argo `WorkflowTemplate` in the new `rag-pipeline` chart (Python, no Spark). Each release that changes the image triggers it through a sync hook. It publishes the corpus to an immutable version prefix, chunks it, embeds through the gateway's embedding route and writes through Feast. The offline history is an Iceberg table; the online store is pgvector on an app-owned CNPG Postgres.
   - **Governance:** the run validates its output and records its checks and lineage in OpenMetadata like the other pipelines.
-  - **Web API:** FastAPI with pydantic and health checks. It fetches chunks by id, searches them, and later returns customer features by id from the online feature store.
-  - **MCP tool:** a knowledge MCP server on Knative behind the gateway's `/mcp/knowledge` route, published to the registry and used by `evidence-agent`.
+  - **Web API and MCP tool in one service:** FastAPI with pydantic and health checks, on Knative. It fetches chunks by id, searches them, and later returns customer features by id from the online feature store. It also serves the knowledge MCP tools behind the gateway's `/mcp/knowledge` route; they are published to the registry and used by `evidence-agent`.
+  - **Quality gate:** every quality check runs before the write. After the write, the pipeline types the Feast pgvector column and adds an HNSW index, which Feast does not create.
 - Register the AI assets in OpenMetadata through the existing `metadata-integrations` chart: the LLM service (the gateway endpoint), both models, and the agent as an AI application linked to its model. MCP servers, further agents and knowledge bases attach to these later.
 - Add an on-demand benchmark (`vllm bench serve` from the vLLM image, as plain manifests applied with `kubectl`) with an agent-shaped shared-prefix workload. It records throughput, TTFT and inter-token latency before and after each optimization (prefix caching, FP8 KV cache, n-gram speculative decoding, streamed cold start, FP8 vs AWQ weights). Results are recorded only from real dev runs, with the command and date.
 - Record the autoscaling decision against the rubric's KEDA:
@@ -66,7 +66,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - A new chart `infra/charts/rag-pipeline`, application `rag-pipeline` in `llm` (enabled in dev, disabled in prod), containing:
     - the `rag-knowledge` WorkflowTemplate and its PostSync trigger;
     - the CNPG `rag-pgvector` Cluster and `Database`;
-    - the `rag-api` and `rag-mcp` Knative Services;
+    - the `rag-api` Knative Service (Web API and MCP tool in one);
     - ExternalSecrets, mesh policies and the registry `MCPServer` entry.
   - In `llm-platform`: the `rag-ingest` and `rag-api` client keys and the `/mcp/knowledge` route and policy.
   - After #102: `llm` admitted by the Polaris, ClickHouse and OpenMetadata network rules.

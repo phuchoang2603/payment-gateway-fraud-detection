@@ -68,20 +68,19 @@
 - [ ] 5b.3 Ask the platform for P9 (`llm` in the Argo Workflows controller's `workflowNamespaces`). Verify read-only that the controller reconciles a test Workflow in `llm`.
 - [ ] 5b.4 Create `src/rag/` (uv project):
   - `corpus/`: the hand-written synthetic documents with front matter, `sources.yaml` and the renderer;
-  - `pipeline/`: publish, structure-aware chunker, batched embed client, PyIceberg writer, Feast refresh, validation;
+  - `pipeline/`: publish, structure-aware chunker, batched embed client, pre-write validation gate, PyIceberg writer, Feast refresh with HNSW index, post-write verify;
   - `store/`: the Feast definitions (`knowledge_base`, `knowledge_chunks`, Postgres online store with `vector_enabled`, SQL registry);
-  - `api/`: FastAPI with pydantic and probes;
-  - `mcp/`: the streamable-HTTP server;
-  - CI tests for the code and threshold sync, chunk-id stability, version hashing, API validation and MCP tool mapping.
+  - `service/`: FastAPI with pydantic and probes, with the stateless streamable-HTTP MCP app mounted at `/mcp`;
+  - CI tests for the code and threshold sync, chunk-id stability, version hashing, gate and contract rule parity, the Feast table name and index DDL, API validation and MCP tool mapping.
 
   Verify locally only with ruff and format.
 - [ ] 5b.5 Add the `rag` image to `.github/service-images.json`. Its build paths are `src/rag/` plus every corpus source in `sources.yaml`, and the Dockerfile copies those sources into the image.
-- [ ] 5b.6 Add `contracts/data-products/knowledge-base/` (ODPS product and ODCS `knowledge-chunks` with the contract checks as SQL counts). In `openmetadata_jobs`, add the `knowledge-base` checks product, the `rag-knowledge` pipeline and lineage edges, and the `rag-mcp` `mcpServer` entry.
+- [ ] 5b.6 Add `contracts/data-products/knowledge-base/` (ODPS product and ODCS `knowledge-chunks` with the contract checks as SQL counts). In `openmetadata_jobs`, add the `knowledge-base` checks product, the `rag-knowledge` pipeline and lineage edges, and the `rag-api` `mcpServer` entry.
 - [ ] 5b.7 Create `infra/charts/rag-pipeline` and the `rag-pipeline` application (dev on, prod off), with:
   - the executor ServiceAccount and Role;
   - the `rag-knowledge` WorkflowTemplate and its PostSync `Workflow` hook with a deadline;
   - the CNPG `rag-pgvector` Cluster (`18.3-standard-trixie`) and `Database` with the `vector` extension and the writer and reader roles;
-  - the `rag-api` and `rag-mcp` Knative Services;
+  - the `rag-api` Knative Service (REST and MCP);
   - ExternalSecrets (gateway storage identity, Polaris client, DB roles, gateway keys, OpenMetadata token, ClickHouse checks user);
   - mesh AuthorizationPolicies;
   - the registry `MCPServer` entry.
@@ -121,6 +120,8 @@
   - the version, chunk count, step durations and check results;
   - a re-sync that exits early;
   - a run after deleting a section, showing the stale id gone online;
+  - a run with a deliberately broken document that fails at `validate` and leaves both stores unchanged;
+  - the `EXPLAIN` showing the HNSW index;
   - the OpenMetadata lineage and test results, with screenshots.
 - [ ] 7.8 Exercise the Web API (chunk by id, search, the 404 and 422 paths) and run a Locust load test, keeping its HTML report. Chat with `evidence-agent` 0.2.0 so that it calls the knowledge tools through the gateway. Capture the tool-call metrics, a Knative revision rollback, and the registry entry for the MCP server.
 
