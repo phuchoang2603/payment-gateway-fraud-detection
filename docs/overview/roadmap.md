@@ -46,10 +46,13 @@ Feast is built as one change after Bronze and Silver merge. Until then the strea
 
 | Area | Capability | Page | Status |
 |---|---|---|---|
-| Agents | Inference platform, agent gateway, registry, RAG pipeline, MCP tools, coordinator agent | [Agents](../llm/agents.md) | Planned |
-| Retrieval | RAG chunks embedded through the gateway into a Feast feature view on CNPG pgvector, read by the MCP evidence tool | [Agents](../llm/agents.md) | Planned |
+| Inference | Qwen3-8B (FP8) chat and Qwen3-Embedding on vLLM through KServe, one shared GPU | [Inference](../llm/inference.md) | Done on dev; benchmark planned |
+| Agent gateway | One gateway for models, MCP tools and REST APIs: per-client keys, rate and token limits, PII masking, mesh-only access | [Agent gateway](../llm/gateway.md) | Done on dev |
+| Agents | Global model config, `evidence-agent` with the knowledge tools, sandboxed on Agent Substrate with warm start, registry | [Agents](../llm/agents.md) | Done on dev; agent pool autoscaling waits on Substrate; risk and coordinator agents and the A2A gateway planned |
+| Retrieval | RAG pipeline into Iceberg and a Feast pgvector store, governed in OpenMetadata; Web API by id and MCP tools, autoscaled by KEDA | [RAG](../llm/rag.md) | Done on dev |
+| Prompt management | Prompts versioned in Git, published to Langfuse as production versions | [Agents](../llm/agents.md#prompts) | Done on dev |
 | A/B tests | A/B tests for agent model configs and LLM versions, with dashboards | [Agents](../llm/agents.md) | Planned |
-| Agent tracing | Agent traces from kagent to Langfuse | [Agents](../llm/agents.md) | In progress; the sandboxed agent is not traced yet |
+| Agent tracing | Agent traces from kagent to Langfuse; LLM, gateway and API metrics in VictoriaMetrics | [Observability](../llm/observability.md) | Done on dev; Grafana dashboard planned |
 | Decision model | Self-hosted laya on CPU for coordinator routing and gateway request screening | [Agents](../llm/agents.md) | Planned |
 | GPU scheduling | Kueue queueing for GPU training and serving workloads | [Agents](../llm/agents.md) | Planned |
 | Model loading | GPUDirect Storage for model weights on supported GPUs and local NVMe | [Agents](../llm/agents.md) | Planned |
