@@ -109,6 +109,8 @@ A DBeaver ER export of the ClickHouse `marts` and `lakehouse.gold` tables is cap
 
 The latest row at or before any time is then exact. Each entity's last row is all zeros, written at the anchor where its last attempt leaves the 30-day window.
 
+**Shared engine.** The interval-delta and change-point computation lives in one reusable `batch/` function. Its anchor rule is a parameter: a daily grid for these tables, or exact change instants for the Feast change's `feature-backfill` job, which writes `gold.feat_stream_*_backfill` (user decision, Feast change `25bab4e`). One implementation serves both. The import path and signature go in the DP3 handback.
+
 **Computation (all quantities are exact):**
 
 - **Contribution intervals.** Each eligible attempt contributes to the inclusive anchor-day interval `[enter, exit)` for each window, where:

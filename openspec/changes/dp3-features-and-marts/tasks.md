@@ -6,7 +6,7 @@
 
 ## 2. DP3 Spark job
 
-- [ ] 2.1 Add `batch/gold.py`:
+- [ ] 2.1 Add the shared interval-delta and change-point engine to `batch/`, as a function parameterized by anchor rule (daily grid, or exact change instants for the Feast `feature-backfill`). Then add `batch/gold.py` on top of it:
   - pin the snapshots of `silver.attempts`, `silver.payment_events` and `silver.labels`;
   - build `gold.dim_customer` (decision 4), `gold.feat_customer_daily` and `gold.feat_payment_method_daily` (decision 3, using interval deltas, merged distinct intervals, change-point rows, coverage nulls, and anchors capped at the Silver commit day), and `gold.label_attempt` (decision 5);
   - write each table with full replacement, hash distribution, the 256 MB target file size, day partitioning and `snapshot-property.silver.*` IDs;
@@ -123,5 +123,5 @@
   - the prod runs and their outcomes;
   - the evidence and screenshots, with paths;
   - blockers and open questions;
-  - for the Feast change, the final names, keys and locations of `gold.feat_customer_daily`, `gold.feat_payment_method_daily`, `gold.dim_customer` and `gold.label_attempt`: Iceberg catalog and namespace, entity key columns, `event_timestamp` and `created` semantics, partitioning, and the SCD2 validity columns.
+  - for the Feast change, the shared engine's import path and signature, and the final names, keys and locations of `gold.feat_customer_daily`, `gold.feat_payment_method_daily`, `gold.dim_customer` and `gold.label_attempt`: Iceberg catalog and namespace, entity key columns, `event_timestamp` and `created` semantics, partitioning, and the SCD2 validity columns.
 - [ ] 10.3 Send the Feast planning thread (threadId `mcp:launch:7ca1eca307dd1025361c2668599d5e1e0680de28f6edec3ffd254c9b9283182b`, branch `plan/feast-store`) the same final table names, keys, locations and semantics with `t3_thread_send`, and tell it to rebase onto `main`. Its implementation starts on that message or the user's go-ahead.
