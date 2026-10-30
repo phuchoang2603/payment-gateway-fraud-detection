@@ -46,3 +46,6 @@ applications:
   llm-platform:
     destinationNamespace: llm
     path: infra/charts/llm-platform
+  rag-pipeline:
+    destinationNamespace: llm
+    path: infra/charts/rag-pipeline

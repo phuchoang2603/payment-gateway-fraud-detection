@@ -12,6 +12,7 @@ Three storage roles: immutable source files in object storage, an Iceberg lakeho
 | Prefix | Contents |
 |---|---|
 | `datasets/payment-gateway/historical/<version>/` | Generator output; immutable once `manifest.json` exists |
+| `datasets/payment-gateway/knowledge/<version>/` | RAG corpus documents published by the `rag-knowledge` workflow; immutable once `manifest.json` exists |
 | `runs/payment-gateway/` | Pipeline run reports and Flink checkpoints |
 | `lakehouse/` | Iceberg table data, through the Polaris catalog |
 | `artifacts/` | Kubeflow artifacts, owned by the platform |

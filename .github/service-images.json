@@ -146,6 +146,21 @@
         "infra/docker/streaming.Dockerfile",
         "src/data-pipeline/streaming"
       ]
+    },
+    {
+      "service": "rag",
+      "image-suffix": "/rag",
+      "context": ".",
+      "dockerfile": "infra/docker/rag.Dockerfile",
+      "paths": [
+        "infra/docker/rag.Dockerfile",
+        "src/rag",
+        "openspec/specs",
+        "contracts/payments/v1",
+        "contracts/features/fraud-snapshot-v2.yaml",
+        "docs/payment-gateway/flows.md",
+        "docs/data/products/silver-payments"
+      ]
     }
   ]
 }

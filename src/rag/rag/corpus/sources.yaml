@@ -1,0 +1,66 @@
+chunker:
+  max_words: 280
+  overlap_words: 40
+
+documents:
+  - doc_id: payment-processing
+    title: Payment and attempt lifecycle
+    audience: analyst
+    render: markdown
+    sources: [openspec/specs/payment-processing/spec.md]
+    drop_sections: [Purpose]
+  - doc_id: payment-flows
+    title: Payment flows, recovery and expiry
+    audience: analyst
+    render: markdown
+    sources: [docs/payment-gateway/flows.md]
+    drop_sections: [Later database sharding]
+  - doc_id: risk-decision
+    title: How Fraud decides and records an assessment
+    audience: analyst
+    render: markdown
+    sources: [openspec/specs/fraud-decision/spec.md]
+    drop_sections: [Purpose]
+  - doc_id: authorization-velocity
+    title: Authorization velocity counters (observe-only)
+    audience: analyst
+    render: markdown
+    sources: [openspec/specs/authorization-velocity/spec.md]
+    drop_sections: [Purpose]
+  - doc_id: checkout-api
+    title: Merchant checkout API
+    audience: merchant
+    render: markdown
+    sources: [openspec/specs/checkout-api/spec.md]
+    drop_sections: [Purpose]
+  - doc_id: processor-behaviour
+    title: Processor outcomes and unknown outcomes
+    audience: analyst
+    render: markdown
+    sources: [openspec/specs/processor-simulator/spec.md]
+    drop_sections: [Purpose]
+  - doc_id: payment-events
+    title: Payment event and label catalogue
+    audience: analyst
+    render: proto
+    sources: [contracts/payments/v1/events.proto, contracts/payments/v1/types.proto, contracts/payments/v1/labels.proto]
+  - doc_id: fraud-features
+    title: Fraud feature glossary and freshness rules
+    audience: analyst
+    render: features
+    sources: [contracts/features/fraud-snapshot-v2.yaml]
+  - doc_id: feature-contracts
+    title: Fraud feature contracts and streaming features
+    audience: analyst
+    render: markdown
+    sources: [openspec/specs/fraud-feature-contracts/spec.md, openspec/specs/streaming-fraud-features/spec.md]
+    drop_sections: [Purpose]
+  - doc_id: data-products
+    title: Silver payment data products
+    audience: analyst
+    render: markdown
+    sources:
+      - docs/data/products/silver-payments/attempts.md
+      - docs/data/products/silver-payments/labels.md
+      - docs/data/products/silver-payments/payment-events.md
+    drop_sections: [Info, Servers, SLA Properties]

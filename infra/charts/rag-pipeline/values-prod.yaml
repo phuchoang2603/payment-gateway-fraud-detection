@@ -1,0 +1,8 @@
+storageClass: gp3
+storage:
+  bucket: platform-prod-142737101504-us-east-1
+  endpoint: https://s3.us-east-1.amazonaws.com
+  pathStyle: false
+database:
+  nodeSelector:
+    karpenter.sh/capacity-type: on-demand
