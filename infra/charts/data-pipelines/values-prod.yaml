@@ -35,15 +35,15 @@ spark:
   # Talos reservations and DaemonSets, so a 4-core executor does not fit: 11 executors of 3 cores, one per xlarge, and
   # the 1-core 4g + 1g driver on a large. Shuffle disk binds first: the v19 Bronze write shuffles about 217 GB into
   # 24Gi of ephemeral storage per executor (the practical limit of the 40Gi root volume), which fits only with all 11
-  # executors. Executors therefore request 3.5g + 1.5g, which fits an 8 GiB c-family xlarge (about 5.3 GiB free), so
-  # 32 GiB r-family nodes cannot exhaust the memory limit before 12 nodes. The batch session sets
-  # spark.sql.shuffle.partitions from SPARK_SHUFFLE_PARTITIONS (default 1024), which overrides this value.
+  # executors. Executors request 10g + 2g of the 13217Mi free on a 16 GiB xlarge: 5 GiB executors, which fit the 8 GiB
+  # c-family, were OOM-killed in the Iceberg write. 32 GiB r-family spot nodes can exhaust the 192 GiB limit before 12
+  # nodes. The batch session sets spark.sql.shuffle.partitions from SPARK_SHUFFLE_PARTITIONS (default 1024), which
+  # overrides this value.
   profiles:
     large:
       shufflePartitions: 1024
       executor:
-        memory: 3584m
-        memoryOverhead: 1536m
+        memory: 10g
 bronze:
   enabled: true
   datasetVersion: v19
