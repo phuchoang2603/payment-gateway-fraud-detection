@@ -94,6 +94,9 @@ spec:
         value: discover
   podGC:
     strategy: OnWorkflowSuccess
+  podMetadata:
+    labels:
+      {{- include "data-pipelines.kafkaClientLabels" . | nindent 6 }}
   templates:
     - name: run
       steps:
