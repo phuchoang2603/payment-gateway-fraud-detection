@@ -13,6 +13,31 @@ data:
   {{ $agent.name }}.md: |
     {{- $.Files.Get (printf "files/prompts/%s.md" $agent.name) | required (printf "files/prompts/%s.md is missing" $agent.name) | nindent 4 }}
   {{- end }}
+{{- if $agents.tracing.enabled }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: langfuse-otlp
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.secretStore }}
+  target:
+    name: langfuse-otlp
+    template:
+      data:
+        # OTLP exporters URL-decode header values, so the space after Basic is %20.
+        headers: '{{ "Authorization=Basic%20{{ printf \"%s:%s\" .public .secret | b64enc }}" }}'
+  data:
+    - secretKey: public
+      remoteRef:
+        key: LANGFUSE_INIT_PUBLIC_KEY
+    - secretKey: secret
+      remoteRef:
+        key: LANGFUSE_INIT_SECRET_KEY
+{{- end }}
 ---
 apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
@@ -32,7 +57,6 @@ spec:
 {{- $tools = append $tools (dict "type" "McpServer" "mcpServer" (dict "apiGroup" "kagent.dev" "kind" "RemoteMCPServer" "name" $server "toolNames" $spec.tools)) }}
 {{- end }}
 {{- $declarative := dict
-  "runtime" $agents.runtime
   "modelConfig" $agents.modelConfig
   "systemMessageFrom" (dict "type" "ConfigMap" "name" "agent-prompts" "key" (printf "%s.md" $agent.name)) }}
 {{- with $tools }}
@@ -51,16 +75,19 @@ spec:
     {{- toYaml $declarative | nindent 4 }}
     deployment:
       serviceAccountName: {{ $agents.serviceAccount }}
-      {{- if $.Values.tracing.enabled }}
+      {{- if $agents.tracing.enabled }}
       # kagent appends its controller's OTEL_* variables after these, so its OTEL_TRACING_ENABLED decides whether
       # the agent exports at all.
       env:
         - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
-          value: http://otel-collector.{{ $.Release.Namespace }}.svc.cluster.local:4317
+          value: http://langfuse-web.{{ $.Release.Namespace }}.svc.cluster.local:3000/api/public/otel/v1/traces
         - name: OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
-          value: grpc
-        - name: OTEL_EXPORTER_OTLP_TRACES_INSECURE
-          value: "true"
+          value: http/protobuf
+        - name: OTEL_EXPORTER_OTLP_TRACES_HEADERS
+          valueFrom:
+            secretKeyRef:
+              name: langfuse-otlp
+              key: headers
       {{- end }}
       podSecurityContext:
         {{- include "llm-platform.podSecurity" $agents | nindent 8 }}
