@@ -140,7 +140,7 @@
 - [ ] 7b.12 MCP deployment rollout (`rag.md`): the stalled rollout from 7.8 with the previous version still serving.
 - [ ] 7b.13 OpenMetadata AI assets (`observability.md`): the LLM service, both models, the `knowledge` MCP server and the `evidence-agent` application linked to its model, tool and `knowledge.chunks`.
 - [ ] 7b.14 LLM and agent telemetry (`observability.md`): the metrics are enabled now. vmagent scrapes vLLM, the endpoint picker, agentgateway, and `rag-serving`'s REST request and MCP tool-call counters (with failures). Capture them in the metrics explorer. The Grafana dashboard is deferred to a later change at the user's request.
-- [ ] 7b.15 Langfuse (`observability.md`): the Langfuse UI behind Dex with the `payment-gateway-fraud-detection` project, and the traces of gateway LLM calls (model, latency, token usage) that arrive through the OpenTelemetry Collector. Prompt sourcing from Langfuse is phase 2.
+- [ ] 7b.15 Langfuse (`observability.md`): the Langfuse UI behind Dex with the `payment-gateway-fraud-detection` project (prompt sourcing from Langfuse is phase 2), and the gateway's LLM, MCP and REST spans in VictoriaTraces through Grafana's trace view.
 - [ ] 7b.16 CI/CD (`rag.md`, `inference.md`): the GitHub Actions runs that test, build and release the `rag-pipeline` and `rag-serving` images and the LLM charts, and the `deploy/dev` release they produced.
 - [ ] 7b.17 Web API authentication and rate limit (`rag.md`): the REST knowledge API is routed through the gateway as `/knowledge/v1/...` with client keys and limits, like `/mcp/knowledge`; capture 401 and 429.
 
@@ -150,7 +150,7 @@
   - `docs/llm/inference.md`: model servers, the GPU split and rollout strategy, weight streaming, placement, cache;
   - `docs/llm/gateway.md`: the Gateway, routes (`/v1`, `/mcp/<server>`, `/<api>/v1`), keys, limits, PII masking, mesh rules;
   - `docs/llm/agents.md` (update): ModelConfig, `evidence-agent` and its tools, the sandboxed warm copy on Substrate, the registry, the autoscaling decision table;
-  - `docs/llm/observability.md`: metrics and scrapes, Langfuse tracing through the collector, OpenMetadata AI assets;
+  - `docs/llm/observability.md`: metrics and scrapes, gateway traces in VictoriaTraces, OpenMetadata AI assets;
   - `docs/llm/benchmark.md`: the workload, recorded results and conclusions.
 
   Add the pages to `docs/_Sidebar.md`.
