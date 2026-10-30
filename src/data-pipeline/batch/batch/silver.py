@@ -82,7 +82,9 @@ def duplicate_keys(plan: dict):
             frame = plan["duplicated"].select(F.xxhash64("event_id").alias("event_key")).toPandas()
         finally:
             spark.conf.set(arrow, previous)
-        plan["keys"] = spark.sparkContext.broadcast(np.unique(frame["event_key"].to_numpy(dtype=np.int64)))
+        keys = np.unique(frame["event_key"].to_numpy(dtype=np.int64))
+        # Raw bytes: PySpark's broadcast serializer cannot write the out-of-band buffers a large array pickles to.
+        plan["keys"] = spark.sparkContext.broadcast(keys.tobytes())
     return plan["keys"]
 
 
@@ -91,7 +93,7 @@ def duplicated_flag(plan: dict):
 
     @F.pandas_udf("boolean")
     def member(event_key: pd.Series) -> pd.Series:
-        sorted_keys = keys.value
+        sorted_keys = np.frombuffer(keys.value, dtype=np.int64)
         values = event_key.to_numpy(dtype=np.int64)
         if len(sorted_keys) == 0:
             return pd.Series(np.zeros(len(values), dtype=bool))
