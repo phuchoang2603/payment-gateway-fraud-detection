@@ -161,12 +161,12 @@ def run(spark, run_id, mode="historical"):
             report = incremental_report(run_id, mode, scope, phases)
             Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/silver.json", report)
             return report
-        payments = F.broadcast(scope["payments"])
+        affected = F.broadcast(scope["payments"])
         events = bronze_events.where(F.col("occurred_at") >= F.lit(scope["cutoff"])).join(
-            payments, PAYMENT_KEY, "left_semi"
+            affected, PAYMENT_KEY, "left_semi"
         )
         labels_input = bronze_labels.where(F.col("label_available_at") >= F.lit(scope["cutoff"])).join(
-            payments, PAYMENT_KEY, "left_semi"
+            affected, PAYMENT_KEY, "left_semi"
         )
     else:
         events = bronze_events
