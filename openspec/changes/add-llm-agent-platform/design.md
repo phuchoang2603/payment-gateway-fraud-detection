@@ -317,7 +317,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 - **Offline:** Iceberg table `knowledge.chunks` in the app-owned Polaris catalog, written with PyIceberg. It is append-only by `knowledge_version`. ClickHouse sees it through the DataLakeCatalog, so #102's ODCS SQL checks and catalog discovery apply unchanged.
 - **Online:** Feast project `knowledge_base` on its own CNPG Postgres, `rag-pgvector`, in `llm`.
   - Image `ghcr.io/cloudnative-pg/postgresql:18.3-standard-trixie`, which ships pgvector. A CNPG `Database` resource enables the `vector` extension, because Feast does not create it.
-  - Online store `postgres` with `vector_enabled: true` and `vector_len: 1024`. The Feast registry is a SQL registry in the same database.
+  - Online store `postgres` with `vector_enabled: true`; the 1024 dimension comes from the feature field's `vector_length` (Feast 0.67 has no store-level length). The Feast registry is a SQL registry in the same database.
   - Roles: `rag_writer` owns the schema (workflow); `rag_reader` gets SELECT only (Web API). Their passwords are app Doppler keys.
 - **Feature view `knowledge_chunks`:** entity `chunk_id`, with fields `doc_id`, `title`, `section`, `audience`, `synthetic`, `source_path`, `text`, `embedding` (1024 × float32, vector index, cosine), `knowledge_version` and `content_sha256`, and no TTL.
 - **ANN index, added by the pipeline:** Feast 0.67 is the latest release, and neither it nor its main branch builds an HNSW or IVFFlat index for Postgres. The common advice ("`CREATE INDEX … USING hnsw (embedding vector_cosine_ops)` on the Feast table") does not work as written, for three reasons:
