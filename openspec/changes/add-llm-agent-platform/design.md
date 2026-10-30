@@ -310,7 +310,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
   8. On exit, `catalog` (in the `rag-pipeline` image, over OpenMetadata's REST API) records the run status, the corpus container, the lineage to `knowledge.chunks` and the AI assets of decision 12.
 - Each new `rag-pipeline` image runs it: the chart renders a `Workflow` named after a hash of that image tag, in the last sync wave. A changed corpus or pipeline code yields a new tag and so a new run; a serving-only change yields none.
 - It is an ordinary resource, not a sync hook. On dev, a failing `PostSync` hook made Argo CD retry the old revision and hold back every newer release; now a failed run is visible in Argo Workflows and in the OpenMetadata run status but never blocks a sync.
-- Superseded runs are kept (`Prune=false`). The current run has no TTL, because self-heal would recreate a deleted run and execute it again. Runs have a deadline, manual `argo submit --from workflowtemplate/rag-knowledge` stays available, and there is no cron.
+- Argo CD prunes the superseded run when a new image arrives; its reports stay in object storage and its status in OpenMetadata. The current run has no TTL, because self-heal would recreate a deleted run and execute it again. Runs have a deadline, manual `argo submit --from workflowtemplate/rag-knowledge` stays available, and there is no cron.
 - Access to object storage: the gateway storage identity (`OBJECT_GATEWAY_*` from `gateway-doppler`), which already covers `datasets/payment-gateway/`, `runs/payment-gateway/` and `lakehouse/`.
 - Access to Polaris: the same `platform` client as `data-pipelines`. Polaris has STS disabled, so writers bring their own storage credentials.
 
