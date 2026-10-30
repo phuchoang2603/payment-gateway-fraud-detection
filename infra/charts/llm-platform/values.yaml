@@ -102,12 +102,12 @@ gateway:
       service: rag-api
       port: 8080
 
-# LLM traces: the gateway and the agents send OTLP to one collector, which exports every span to Langfuse (with the
-# project keys) and to the platform's VictoriaTraces through vtagent.
+# Gateway traces: agentgateway posts OTLP spans straight to the platform's trace store, next to the services' traces.
+# Agent traces go to Langfuse from kagent itself (agents.tracing).
 tracing:
   enabled: true
-  collectorImage: otel/opentelemetry-collector-contrib:0.162.0
-  victoriaTraces: http://vtagent-vmks.observability.svc.cluster.local:10429/insert/opentelemetry
+  url: http://vtagent-vmks.observability.svc.cluster.local:10429
+  path: /insert/opentelemetry/v1/traces
   sampling: "true"
 
 secretStore: gateway-doppler
@@ -120,9 +120,10 @@ metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
 agents:
   serviceAccount: llm-agents
   modelConfig: default-model-config
-  # The Python ADK instruments every outgoing httpx call, so model and MCP requests carry traceparent and the
-  # gateway's spans join the agent's trace. kagent 0.10.4's Go ADK only does that for calls to other agents.
-  runtime: python
+  # kagent exports each agent's own spans (agent, model generations, tool calls) to Langfuse's OTLP endpoint with the
+  # headless-init project keys.
+  tracing:
+    enabled: true
   uid: 65532
   sandbox:
     snapshotRoot: gs://platform-dev/substrate/llm

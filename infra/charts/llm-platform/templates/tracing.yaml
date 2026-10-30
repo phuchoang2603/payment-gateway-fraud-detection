@@ -1,121 +1,4 @@
 {{- if .Values.tracing.enabled }}
-{{- $ns := .Release.Namespace }}
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: otel-collector
-data:
-  config.yaml: |
-    extensions:
-      health_check:
-        endpoint: 0.0.0.0:13133
-      # Langfuse authenticates OTLP with the project's public and secret keys as basic auth.
-      basicauth/langfuse:
-        client_auth:
-          username: ${env:LANGFUSE_PUBLIC_KEY}
-          password: ${env:LANGFUSE_SECRET_KEY}
-    receivers:
-      otlp:
-        protocols:
-          grpc:
-            endpoint: 0.0.0.0:4317
-    processors:
-      batch: {}
-    exporters:
-      otlp_http/langfuse:
-        endpoint: http://langfuse-web.{{ $ns }}.svc.cluster.local:3000/api/public/otel
-        auth:
-          authenticator: basicauth/langfuse
-      otlp_http/victoriatraces:
-        endpoint: {{ .Values.tracing.victoriaTraces }}
-    service:
-      extensions: [health_check, basicauth/langfuse]
-      pipelines:
-        traces:
-          receivers: [otlp]
-          processors: [batch]
-          exporters: [otlp_http/langfuse, otlp_http/victoriatraces]
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: otel-collector
-automountServiceAccountToken: false
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: otel-collector
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: otel-collector
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: otel-collector
-    spec:
-      serviceAccountName: otel-collector
-      automountServiceAccountToken: false
-      securityContext:
-        {{- include "llm-platform.podSecurity" (dict "uid" 10001) | nindent 8 }}
-      containers:
-        - name: collector
-          image: {{ .Values.tracing.collectorImage }}
-          args: [--config=/conf/config.yaml]
-          ports:
-            - {name: otlp-grpc, containerPort: 4317}
-            - {name: health, containerPort: 13133}
-          env:
-            - name: LANGFUSE_PUBLIC_KEY
-              valueFrom: {secretKeyRef: {name: langfuse, key: init-public-key}}
-            - name: LANGFUSE_SECRET_KEY
-              valueFrom: {secretKeyRef: {name: langfuse, key: init-secret-key}}
-          readinessProbe:
-            httpGet: {path: /, port: health}
-          livenessProbe:
-            httpGet: {path: /, port: health}
-          securityContext:
-            runAsNonRoot: true
-            readOnlyRootFilesystem: true
-            {{- include "llm-platform.containerSecurity" . | nindent 12 }}
-          resources:
-            requests: {cpu: 50m, memory: 128Mi}
-            limits: {memory: 256Mi}
-          volumeMounts:
-            - {name: config, mountPath: /conf}
-      volumes:
-        - name: config
-          configMap:
-            name: otel-collector
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: otel-collector
-spec:
-  selector:
-    app.kubernetes.io/name: otel-collector
-  ports:
-    - {name: otlp-grpc, port: 4317, targetPort: otlp-grpc, appProtocol: grpc}
----
-apiVersion: security.istio.io/v1
-kind: AuthorizationPolicy
-metadata:
-  name: otel-collector
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: otel-collector
-  action: ALLOW
-  rules:
-    - from:
-        - source:
-            principals:
-              - {{ include "llm-platform.principal" (dict "namespace" $ns "name" .Values.gateway.name) | quote }}
-              - {{ include "llm-platform.principal" (dict "namespace" $ns "name" .Values.agents.serviceAccount) | quote }}
----
 # Frontend policies attach to the Gateway; route policies stay one per route.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -128,10 +11,9 @@ spec:
       name: {{ .Values.gateway.name }}
   frontend:
     tracing:
-      backendRef:
-        name: otel-collector
-        port: 4317
-      protocol: GRPC
+      url: {{ .Values.tracing.url }}
+      protocol: HTTP
+      path: {{ .Values.tracing.path }}
       randomSampling: {{ .Values.tracing.sampling | quote }}
       clientSampling: {{ .Values.tracing.sampling | quote }}
 {{- end }}
