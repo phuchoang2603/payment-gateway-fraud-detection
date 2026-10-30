@@ -43,21 +43,7 @@ Historical source contracts describe schema and meaning only. Bronze and Silver 
 
 The checks stage pins each rule to its table's audit snapshot and evaluates the full relevant table contents, including after incremental curation. Incremental SQL validation is not implemented. The checks pod submits SQL to the shared ClickHouse server; moving that pod onto Spark's spot nodes would not distribute SQL execution or increase server memory.
 
-At v19 scale, the attempt-uniqueness rule initially aborted at ClickHouse's memory limit, so `dp2-silver-cxjgf` failed and did not publish its Silver audit branches. External aggregation and a disk-backed sort-merge join now bound check execution; the full-history amount/context join independently passed with zero mismatches at 1.77 GiB peak query memory. The [storage optimization evidence](storage.md#full-load-check-optimization-on-v19) records the SQL plan, settings, failures and successful diagnostic. That diagnostic is separate from the workflow's native OpenMetadata results. Historical rerun `dp2-silver-cnr27` completed Spark in about 32 minutes, then failed because native execution included an older saved uniqueness rule against the preceding run's snapshot, without spill settings. The current uniqueness query subsequently completed, but the earlier error stopped the suite before all Silver tables were validated.
-
-The native test source now selects no saved cases (`testCases: []`); the processor receives only the current contract definitions with the current snapshot and spill settings, and upserts them before execution. Historical test results remain available. This avoids executing stale copies alongside their replacements.
-
-### Publishing an existing Silver audit
-
-The manual `dp2-silver-publish-existing` WorkflowTemplate refreshes the current contract test definitions, then fast-forwards the existing audit snapshots without rerunning Spark or executing validation. It requires `source-run-id`, `force=true` and a nonempty `reason`. For example:
-
-```sh
-argo submit -n data --from workflowtemplate/dp2-silver-publish-existing \
-  -p source-run-id=dp2-silver-cnr27 -p force=true \
-  -p reason='Explicit publication request; current-run validation incomplete'
-```
-
-The workflow shares the Silver writer mutex, requires every table's audit branch, and retains the normal ancestry and compare-and-swap checks. Its `publication` output records the previous and published snapshot IDs and the incomplete validation status. It does not change the failed source workflow or mark quality checks successful. After publication, a normal incremental Silver run can validate the full published data with the corrected runner; without new Bronze rows, its Spark phase is a no-op.
+At v19 scale, the attempt-uniqueness rule initially aborted at ClickHouse's memory limit, so `dp2-silver-cxjgf` failed and did not publish its Silver audit branches. External aggregation and a disk-backed sort-merge join now bound check execution; the full-history amount/context join independently passed with zero mismatches at 1.77 GiB peak query memory. The [storage optimization evidence](storage.md#full-load-check-optimization-on-v19) records the SQL plan, settings, failures and successful diagnostic. That diagnostic is separate from the workflow's native OpenMetadata results. Historical rerun `dp2-silver-cnr27`, submitted on 2026-10-30 with release `91a35cc`, is still awaiting its full Spark → checks → publish outcome in this evidence record.
 
 For coursework, capture the successful Argo graph and each table's native OpenMetadata test results from that completed workflow, plus the historical source → DP1 → Bronze → DP2 → Silver lineage and pipeline execution status. Retain the failed run as evidence that a resource-aborted check blocks publication; a Spark report alone does not establish a successful pipeline.
 
