@@ -6,7 +6,6 @@ dependencies = ["pyyaml>=6,<7"]
 
 [dependency-groups]
 dev = [
-    "pytest>=9,<10",
     "ruff>=0.14,<1",
 ]
 
@@ -17,10 +16,6 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = "openmetadata_jobs"
 module-root = ""
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]
 
 [tool.ruff]
 line-length = 119
