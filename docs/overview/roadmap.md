@@ -49,7 +49,7 @@ Feast is built as one change after Bronze and Silver merge. Until then the strea
 | Agents | Inference platform, agent gateway, registry, RAG pipeline, MCP tools, coordinator agent | [Agents](../llm/agents.md) | Planned |
 | Retrieval | RAG chunks embedded through the gateway into a Feast feature view on CNPG pgvector, read by the MCP evidence tool | [Agents](../llm/agents.md) | Planned |
 | A/B tests | A/B tests for agent model configs and LLM versions, with dashboards | [Agents](../llm/agents.md) | Planned |
-| Agent tracing | Agent-side LLM traces (kagent tracing or an SDK such as OpenLIT) sent to Langfuse and VictoriaTraces | [Agents](../llm/agents.md) | Planned |
+| Agent tracing | Agent-side LLM traces from kagent's OpenTelemetry instrumentation sent to Langfuse, joined by trace id with the gateway's spans in VictoriaTraces | [Agents](../llm/agents.md) | In progress: configured; waits on kagent tracing being enabled in the platform |
 | Decision model | Self-hosted laya on CPU for coordinator routing and gateway request screening | [Agents](../llm/agents.md) | Planned |
 | GPU scheduling | Kueue queueing for GPU training and serving workloads | [Agents](../llm/agents.md) | Planned |
 | Model loading | GPUDirect Storage for model weights on supported GPUs and local NVMe | [Agents](../llm/agents.md) | Planned |

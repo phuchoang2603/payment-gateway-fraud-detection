@@ -14,6 +14,29 @@ data:
     {{- $.Files.Get (printf "files/prompts/%s.md" $agent.name) | required (printf "files/prompts/%s.md is missing" $agent.name) | nindent 4 }}
   {{- end }}
 ---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: langfuse-otlp
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.secretStore }}
+  target:
+    name: langfuse-otlp
+    template:
+      data:
+        # The OTLP exporter URL-decodes header values, so the space after Basic is %20.
+        headers: '{{ "Authorization=Basic%20{{ printf \"%s:%s\" .public .secret | b64enc }}" }}'
+  data:
+    - secretKey: public
+      remoteRef:
+        key: LANGFUSE_INIT_PUBLIC_KEY
+    - secretKey: secret
+      remoteRef:
+        key: LANGFUSE_INIT_SECRET_KEY
+---
 apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
@@ -50,6 +73,16 @@ spec:
     {{- toYaml $declarative | nindent 4 }}
     deployment:
       serviceAccountName: {{ $agents.serviceAccount }}
+      env:
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: {{ $agents.tracing.url | quote }}
+        - name: OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+          value: http/protobuf
+        - name: OTEL_EXPORTER_OTLP_TRACES_HEADERS
+          valueFrom:
+            secretKeyRef:
+              name: langfuse-otlp
+              key: headers
       podSecurityContext:
         {{- include "llm-platform.podSecurity" $agents | nindent 8 }}
       securityContext:
