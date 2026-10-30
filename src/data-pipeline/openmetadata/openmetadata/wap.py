@@ -102,10 +102,11 @@ def publish_changes(catalog, tables, branch):
 
 
 def main():
-    from openmetadata.checks import checks
+    from openmetadata.checks import checks, products
+    from openmetadata.warehouse import LAKEHOUSE
 
     branch = os.environ["WAP_BRANCH"]
-    tables = sorted({check.table for check in checks(products=[os.environ["CHECK_PRODUCT"]])})
+    tables = sorted({check.table for check in checks(products=products()) if check.database == LAKEHOUSE})
     catalog = Catalog()
     changes = publish_changes(catalog, tables, branch)
     if changes:

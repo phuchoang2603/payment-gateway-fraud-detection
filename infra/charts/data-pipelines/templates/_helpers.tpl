@@ -95,8 +95,6 @@ container:
     secretKeyRef:
       name: {{ .Values.catalog.openmetadataSecret.name }}
       key: OPENMETADATA_TOKEN
-- name: CLICKHOUSE_DATABASE
-  value: {{ .Values.catalog.clickhouseDatabase | quote }}
 - name: DATA_PRODUCTS_ROOT
   value: /contracts/data-products
 {{- end -}}

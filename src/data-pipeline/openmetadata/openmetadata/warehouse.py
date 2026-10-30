@@ -1,16 +1,14 @@
-import os
-
 SERVICE = "clickhouse"
 OPENMETADATA_DATABASE = "default"
+LAKEHOUSE = "lakehouse"
+MARTS = "marts"
 
 
-def schema():
-    return os.environ.get("CLICKHOUSE_DATABASE", "lakehouse")
+def table_fqn(table, database=LAKEHOUSE):
+    """The OpenMetadata FQN; lakehouse table names hold a dot and are quoted."""
+    name = f'"{table}"' if "." in table else table
+    return f"{SERVICE}.{OPENMETADATA_DATABASE}.{database}.{name}"
 
 
-def table_fqn(table):
-    return f'{SERVICE}.{OPENMETADATA_DATABASE}.{schema()}."{table}"'
-
-
-def sql_table(table):
-    return f"{schema()}.`{table}`"
+def sql_table(table, database=LAKEHOUSE):
+    return f"{database}.`{table}`"

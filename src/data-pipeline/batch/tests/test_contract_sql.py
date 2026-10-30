@@ -1,4 +1,5 @@
 import base64
+import re
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -6,13 +7,14 @@ from pathlib import Path
 import pyspark.sql.types as T
 import yaml
 
-from batch import silver
+from batch import gold, marts, silver
 from batch.spark import ICEBERG_CATALOG
 from tests.events import approved, created, label, started, succeeded
 from tests.test_silver import load_bronze
 
 CONTRACTS = Path(__file__).resolve().parents[4] / "contracts" / "data-products"
-PRODUCTS = ("bronze-payments", "silver-payments")
+PRODUCTS = ("bronze-payments", "silver-payments", "gold-features")
+MART_PRODUCTS = ("payment-marts",)
 DATABASE = "lakehouse"
 AUTH = "Basic " + base64.b64encode(b"test:test").decode()
 PRIMITIVES = {
@@ -64,7 +66,7 @@ def contract_tables(product):
         yield from yaml.safe_load(contract.read_text())["schema"]
 
 
-def test_every_bronze_and_silver_rule_analyzes_on_the_pinned_clickhouse(spark, clickhouse, tmp_path, monkeypatch):
+def test_every_lakehouse_and_mart_rule_analyzes_on_the_pinned_clickhouse(spark, clickhouse, tmp_path, monkeypatch):
     monkeypatch.setenv("RUN_REPORT_ROOT", str(tmp_path / "reports"))
     load_bronze(
         spark,
@@ -77,7 +79,12 @@ def test_every_bronze_and_silver_rule_analyzes_on_the_pinned_clickhouse(spark, c
         [label("pay-1", "att-1", available=10)],
     )
     silver.run(spark, "contract-sql")
-    assert run_sql(clickhouse, f"CREATE DATABASE IF NOT EXISTS {DATABASE}") is None
+    gold.run(spark, "contract-sql")
+    for database in (DATABASE, marts.DATABASE):
+        assert run_sql(clickhouse, f"DROP DATABASE IF EXISTS {database} SYNC") is None
+        assert run_sql(clickhouse, f"CREATE DATABASE {database}") is None
+    for table in marts.LIVE:
+        assert run_sql(clickhouse, marts.ddl(table, staging=False, retention_days=180)) is None
 
     rules = []
     for product in PRODUCTS:
@@ -91,10 +98,16 @@ def test_every_bronze_and_silver_rule_analyzes_on_the_pinned_clickhouse(spark, c
             assert error is None, f"{physical}: {error}"
             rules += [(physical, rule) for rule in quality]
 
-    assert len(rules) >= 20
+    for product in MART_PRODUCTS:
+        for table in contract_tables(product):
+            rules += [(f"{marts.DATABASE}.{table['physicalName']}", rule) for rule in table.get("quality", [])]
+
+    assert len(rules) >= 40
     failures = []
     for physical, rule in rules:
-        sql = rule["query"].replace("{object}", f"{DATABASE}.`{physical}`").strip()
+        target = physical if physical.startswith(f"{marts.DATABASE}.") else f"{DATABASE}.`{physical}`"
+        sql = rule["query"].replace("{object}", target).strip()
+        sql = re.sub(r"\{table:([A-Za-z0-9_]+)\}", rf"{marts.DATABASE}.\1", sql)
         error = run_sql(clickhouse, f"EXPLAIN {sql}")
         if error:
             failures.append(f"{physical}.{rule['id']}: {error}")
