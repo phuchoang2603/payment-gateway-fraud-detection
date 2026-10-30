@@ -81,14 +81,15 @@ decision:
     repo: convaiinnovations/laya
     revision: 7b928d828b7b0e022f929d9bd2e44165aa270148
     files: [rl_agent_config.json, model.safetensors, "encoder/*", "tokenizer/*"]
-  # Probability of "asks to act" or "jailbreak" at or above which the gateway rejects a prompt.
+  # Probability of "action" or "jailbreak" at or above which the gateway rejects a prompt.
   screenThreshold: "0.5"
   # Agents hold no tools that change anything, so screening is an early refusal rather than the only control; a
   # decision service outage lets prompts through instead of stopping every agent.
   failureMode: FailOpen
-  threads: 2
+  # One forward pass of the 421M encoder takes about 3 s on 2 threads; it scales with threads.
+  threads: 4
   resources:
-    requests: {cpu: "1", memory: 2Gi}
+    requests: {cpu: "2", memory: 2Gi}
     limits: {memory: 3Gi}
 
 gateway:

@@ -27,13 +27,13 @@ class FakeAgent:
             )
             choice = max(probabilities, key=probabilities.get)
             return {"answers": {"agent": {"choice": choice, "probabilities": probabilities, "answer_confidence": 0.7}}}
-        act = 0.9 if "refund" in text else 0.1
-        return {
-            "answers": {
-                "request": {"choice": "act" if act > 0.5 else "ask", "probabilities": {"act": act, "ask": 1 - act}},
-                "jailbreak": {"noul": 0.95 if "ignore all previous" in text else 0.02},
-            }
-        }
+        probabilities = {"action": 0.05, "jailbreak": 0.05, "ok": 0.9}
+        if "refund" in text:
+            probabilities = {"action": 0.9, "jailbreak": 0.05, "ok": 0.05}
+        if "ignore all previous" in text:
+            probabilities = {"action": 0.1, "jailbreak": 0.85, "ok": 0.05}
+        choice = max(probabilities, key=probabilities.get)
+        return {"answers": {"request": {"choice": choice, "probabilities": probabilities}}}
 
 
 @pytest.fixture
