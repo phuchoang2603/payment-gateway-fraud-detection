@@ -62,6 +62,7 @@
 - [ ] 4b.6 Run agents only as `SandboxAgent`s in `llm-agents` (platform: namespace with Pod Security `privileged`, outside the mesh, Argo CD and secret-store access; Substrate accepting an app WorkerPool there). Chart: WorkerPool `llm-agents` (fixed 2 workers; KEDA cannot scale it while Substrate 0.0.9's scale subresource has no selector), the model config, RemoteMCPServers and Secrets there, tracing to Langfuse through `sandbox-egress`; drop the Deployment `Agent` and the `llm-agents` gateway client; `evidence-agent` 0.3.0. Then confirm on dev an answer with the knowledge tool, a warm resume, a Langfuse trace, and two conversations active at once on the two workers.
 - [ ] 4b.7 Autoscale `rag-api` with a KEDA ScaledObject (2 to 4 replicas on its combined REST and MCP request rate, 10 req/s per replica; the Deployment leaves `replicas` to KEDA). Confirm on dev that the Locust load test scales it out and that it returns to 2 afterwards; capture the HPA events for the rubric's autoscale row.
 - [ ] 4b.8 Discover MCP tools dynamically: agents reference MCP servers without `toolNames` (kagent lists the tools at runtime), the registry entry carries no tool list, and the RAG catalog step reads `tools/list` through the gateway for OpenMetadata. Drop the gateway's trace export to VictoriaTraces; agent traces stay in Langfuse. Confirm on dev that the agent sees both tools and OpenMetadata lists them with their server-side descriptions.
+- [ ] 4b.9 Replace the registry hook with one catalog Job per release (`llm-catalog-<content hash>`): agentregistry entries for agents and MCP servers (no prompt copies), and each agent's prompt from Git to Langfuse as a new `production` version when the text changes. Confirm on dev that the Job succeeds, the registry lists the agent, and Langfuse shows the prompt.
 
 ## 5. OpenMetadata (after PR #102 merges)
 
@@ -118,7 +119,7 @@
   - a burst gets 429;
   - a direct call to vLLM is refused by the mesh.
 - [ ] 7.3 Chat with `evidence-agent` in the kagent UI (port-forward), and capture the ModelConfig and agent pages. Run three concurrent sandboxed conversations on one worker and capture the worker count, actor states and answer times.
-- [ ] 7.4 Verify that the registry lists `evidence-agent` 0.3.0, its system prompt and the `knowledge` MCP server, and capture the registry UI.
+- [ ] 7.4 Verify that the registry lists `evidence-agent` 0.3.0 and the `knowledge` MCP server, and that Langfuse shows `evidence-agent-system-prompt` as the production version; capture both UIs.
 - [ ] 7.5 After section 5, verify that OpenMetadata shows the LLM service, both models and the agent application linked to `qwen3-8b`, and capture it.
 - [ ] 7.6 Run the benchmark baseline and each optimization (design.md decision 9) on dev by applying the rendered Job with `kubectl`, plus the gateway end-to-end run. Keep only improving settings, and set the gateway limits from the measured capacity. Record each run's command, image digest, args and date.
 
@@ -139,7 +140,7 @@
 - [ ] 7b.4 MCP gateway (`rag.md`): `tools/list` and a `search_knowledge` call through `/mcp/knowledge` with the agents key, the same call refused without a key and refused when calling `rag-api` directly, plus a link to the MCP route and policy YAML.
 - [ ] 7b.5 Global ModelConfig and agent (`agents.md`): the kagent UI's ModelConfig page pointing at the gateway, and a chat with `evidence-agent` that calls the knowledge tools and cites chunk ids, plus links to the Agent YAML.
 - [ ] 7b.6 Agent UI authentication (`agents.md`): the kagent UI behind the platform's Dex login.
-- [ ] 7b.7 Registry (`agents.md`): the agentregistry UI showing `evidence-agent`, its prompt and the `knowledge` MCP server, plus a link to the registry catalog template.
+- [ ] 7b.7 Registry (`agents.md`): the agentregistry UI showing `evidence-agent` and the `knowledge` MCP server, plus a link to the registry catalog template.
 - [ ] 7b.8 Sandbox, warm-up and autoscaling (`agents.md`): `evidence-agent` on Agent Substrate, with several conversations served by few workers (worker count, actor states, answer times), plus a link to the SandboxAgent YAML.
 - [ ] 7b.9 RAG pipeline (`rag.md`): the Argo Workflows graph of a successful `rag-knowledge` run, the validate and verify reports, the OpenMetadata lineage from the corpus container through `rag-knowledge` to `knowledge.chunks`, and the knowledge-base contract test results.
 - [ ] 7b.10 Web API (`rag.md`): the FastAPI OpenAPI page, chunk-by-id responses, the 404 and 422 paths, the readiness probe, and the Locust HTML report (throughput and latency).
@@ -147,7 +148,7 @@
 - [ ] 7b.12 MCP deployment rollout (`rag.md`): the stalled rollout from 7.8 with the previous version still serving.
 - [ ] 7b.13 OpenMetadata AI assets (`observability.md`): the LLM service, both models, the `knowledge` MCP server and the `evidence-agent` application linked to its model, tool and `knowledge.chunks`.
 - [ ] 7b.14 LLM and agent telemetry (`observability.md`): the metrics are enabled now. vmagent scrapes vLLM, the endpoint picker, agentgateway, and `rag-serving`'s REST request and MCP tool-call counters (with failures). Capture them in the metrics explorer. The Grafana dashboard is deferred to a later change at the user's request.
-- [ ] 7b.15 Langfuse (`observability.md`): the Langfuse UI behind Dex with the `payment-gateway-fraud-detection` project (prompt sourcing from Langfuse is phase 2), and the agent's trace in Langfuse with its generations, token usage and tool calls.
+- [ ] 7b.15 Langfuse (`observability.md`): the Langfuse UI behind Dex with the `payment-gateway-fraud-detection` project the agent's system prompt as its production version published from Git, and the agent's trace in Langfuse with its generations, token usage and tool calls.
 - [ ] 7b.16 CI/CD (`rag.md`, `inference.md`): the GitHub Actions runs that test, build and release the `rag-pipeline` and `rag-serving` images and the LLM charts, and the `deploy/dev` release they produced.
 - [ ] 7b.17 Web API authentication and rate limit (`rag.md`): the REST knowledge API is routed through the gateway as `/knowledge/v1/...` with client keys and limits, like `/mcp/knowledge`; capture 401 and 429.
 

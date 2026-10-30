@@ -1,0 +1,98 @@
+{{- $registry := .Values.registry }}
+{{- $catalog := list }}
+{{- range $name, $server := .Values.gateway.mcpServers }}
+{{- $entry := dict
+  "apiVersion" "ar.dev/v1alpha1"
+  "kind" "MCPServer"
+  "metadata" (dict "name" $name "tag" $server.version)
+  "spec" (dict
+    "title" $server.title
+    "description" (printf "%s Served through the agent gateway with an agent key." $server.description)
+    "remote" (dict "type" "streamable-http" "url" (printf "http://%s.%s.svc.cluster.local/mcp/%s" $.Values.gateway.name $.Release.Namespace $name))) }}
+{{- $catalog = append $catalog (toYaml $entry) }}
+{{- end }}
+{{- range $agent := .Values.agents.list }}
+{{- $entry := dict
+  "apiVersion" "ar.dev/v1alpha1"
+  "kind" "Agent"
+  "metadata" (dict "name" ($agent.name | replace "-" "") "tag" $agent.version)
+  "spec" (dict
+    "title" $agent.title
+    "description" (printf "%s Model config %s (%s through the agent gateway); system prompt %s-system-prompt in Langfuse." $agent.description $.Values.agents.modelConfig $.Values.models.chat.name $agent.name)
+    "source" (dict
+      "repository" (dict "url" $registry.repository "subfolder" "infra/charts/llm-platform")
+      "protocol" "A2A")) }}
+{{- with $agent.mcpServers }}
+{{- $refs := list }}
+{{- range $server := . }}
+{{- $refs = append $refs (dict "kind" "MCPServer" "name" $server "tag" (index $.Values.gateway.mcpServers $server).version) }}
+{{- end }}
+{{- $_ := set $entry.spec "mcpServers" $refs }}
+{{- end }}
+{{- $catalog = append $catalog (toYaml $entry) }}
+{{- end }}
+{{- $agentList := list }}
+{{- range $agent := .Values.agents.list }}
+{{- $agentList = append $agentList (dict "name" $agent.name "version" $agent.version) }}
+{{- end }}
+{{- $data := dict
+  "registry.yaml" (join "\n---\n" $catalog)
+  "agents.json" (toJson $agentList)
+  "publish.py" (.Files.Get "files/catalog.py") }}
+{{- range $agent := .Values.agents.list }}
+{{- $_ := set $data (printf "prompt-%s.md" $agent.name) ($.Files.Get (printf "files/prompts/%s.md" $agent.name)) }}
+{{- end }}
+{{- $hash := toJson $data | sha256sum | trunc 10 }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-catalog-{{ $hash }}
+data:
+  {{- range $key, $value := $data }}
+  {{ $key }}: |
+    {{- $value | nindent 4 }}
+  {{- end }}
+---
+# One run per catalog content: a changed agent, MCP server or prompt yields a new Job. It is an ordinary resource,
+# not a sync hook, so a failed run never blocks a sync; Argo CD prunes the superseded run.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llm-catalog-{{ $hash }}
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "llm-platform.podSecurity" (dict "uid" 65532) | nindent 8 }}
+      containers:
+        - name: publish
+          image: {{ $registry.image }}
+          command: [python, /etc/catalog/publish.py]
+          env:
+            - name: REGISTRY_URL
+              value: {{ $registry.url }}
+            - name: LANGFUSE_URL
+              value: http://langfuse-web.{{ .Release.Namespace }}.svc.cluster.local:3000
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom: {secretKeyRef: {name: langfuse, key: init-public-key}}
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom: {secretKeyRef: {name: langfuse, key: init-secret-key}}
+            - {name: HOME, value: /tmp}
+            - {name: PYTHONDONTWRITEBYTECODE, value: "1"}
+            - {name: PYTHONUNBUFFERED, value: "1"}
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            {{- include "llm-platform.containerSecurity" . | nindent 12 }}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts:
+            - {name: catalog, mountPath: /etc/catalog}
+      volumes:
+        - name: catalog
+          configMap:
+            name: llm-catalog-{{ $hash }}
