@@ -35,8 +35,8 @@ spark:
   # after Talos reservations and DaemonSets, so a 4-core executor does not fit: 11 executors of 3 cores, one per xlarge.
   # Each needs a 16 GiB node (10g + 2g; 5 GiB executors on 8 GiB c-family nodes were OOM-killed in the Iceberg write)
   # and spreads shuffle over 24Gi of ephemeral storage, the practical limit of the 40Gi root volume. The driver takes
-  # the twelfth xlarge at 8g + 1g, because DP2 collects and hashes about 20M duplicated-ID keys for its broadcast and a
-  # 4g driver ran out of heap. Twelve 16 GiB nodes are exactly the memory limit, so 32 GiB r-family spot nodes leave
+  # the twelfth xlarge at 8g + 1g, because DP2 collects about 20M duplicated-ID keys for its broadcast; a 4g driver
+  # building a broadcast hash relation of them ran out of heap. Twelve 16 GiB nodes are exactly the memory limit, so 32 GiB r-family spot nodes leave
   # executors pending. Shuffle partitions stay at 1024 rather than 3-4x the 33 cores: v19 shuffles reach hundreds of
   # GB, and AQE coalesces small partitions up to the 128 MB advisory size.
   profiles:
@@ -44,7 +44,7 @@ spark:
       shufflePartitions: 1024
       driver:
         memory: 8g
-        # The broadcast collect of the v19 duplicated-ID keys is about 1 GiB of task results, over the 1g default.
+        # Collecting the v19 duplicated-ID keys as broadcast join rows returned about 1 GiB of task results.
         maxResultSize: 4g
       executor:
         memory: 10g
@@ -58,8 +58,8 @@ bronze:
 silver:
   enabled: true
   profile: large
-  # v19 has about 20M duplicated IDs (about 800 MB of long keys), so the anti join stays a broadcast and the events keep
-  # their Bronze layout instead of shuffling by event_id. Each 10g executor holds one copy.
+  # v19 has about 20M duplicated IDs (about 160 MB as a sorted int64 array), so duplicates are flagged map-side and the
+  # events keep their Bronze layout instead of shuffling by event_id.
   dedupBroadcastBytes: 1073741824
   reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp2
   activeDeadlineSeconds: 14400

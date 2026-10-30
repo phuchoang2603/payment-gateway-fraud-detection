@@ -2,6 +2,8 @@ import json
 import os
 from functools import reduce
 
+import numpy as np
+import pandas as pd
 from pyspark import StorageLevel
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
@@ -39,10 +41,12 @@ PERSIST = StorageLevel.MEMORY_AND_DISK
 
 DEDUP_BROADCAST_ENV = "SILVER_DEDUP_BROADCAST_BYTES"
 DEDUP_BROADCAST_DEFAULT = 256 * 1024 * 1024
-# Duplicated IDs join back on xxhash64(event_id): a long key broadcasts at about 40 bytes per ID instead of the
-# string's length plus 64. A collision only routes a unique event through the collapse path, which keeps its one copy,
-# because the semi and anti joins share the key.
-KEY_BYTES = 40
+# Duplicated IDs are matched on xxhash64(event_id). Under the threshold their keys are collected once as a sorted int64
+# array (8 bytes each) and broadcast, and a vectorized membership test flags rows map-side, so unique events keep
+# their layout and only duplicated rows are grouped. A broadcast join's hash relation costs the driver about 50 bytes
+# per key and ran it out of heap on v19's 20M duplicated IDs. A collision only routes a unique event through the
+# collapse path, which keeps its one copy, because both sides share the key.
+KEY_BYTES = 8
 DEDUP_COLUMNS = [*EVENT_COLUMNS.keys(), "event_hash", "_source"]
 
 
@@ -67,11 +71,43 @@ def plan_dedup(hashed: DataFrame, threshold: int) -> dict:
     }
 
 
+def duplicate_keys(plan: dict):
+    """The duplicated IDs' keys as one sorted array, collected through Arrow once per plan and broadcast."""
+    if "keys" not in plan:
+        spark = plan["duplicated"].sparkSession
+        arrow = "spark.sql.execution.arrow.pyspark.enabled"
+        previous = spark.conf.get(arrow)
+        spark.conf.set(arrow, "true")
+        try:
+            frame = plan["duplicated"].select(F.xxhash64("event_id").alias("event_key")).toPandas()
+        finally:
+            spark.conf.set(arrow, previous)
+        plan["keys"] = spark.sparkContext.broadcast(np.unique(frame["event_key"].to_numpy(dtype=np.int64)))
+    return plan["keys"]
+
+
+def duplicated_flag(plan: dict):
+    keys = duplicate_keys(plan)
+
+    @F.pandas_udf("boolean")
+    def member(event_key: pd.Series) -> pd.Series:
+        sorted_keys = keys.value
+        values = event_key.to_numpy(dtype=np.int64)
+        if len(sorted_keys) == 0:
+            return pd.Series(np.zeros(len(values), dtype=bool))
+        found = np.minimum(np.searchsorted(sorted_keys, values), len(sorted_keys) - 1)
+        return pd.Series(sorted_keys[found] == values)
+
+    return member(F.xxhash64("event_id"))
+
+
 def against_duplicates(frame: DataFrame, plan: dict, how: str) -> DataFrame:
+    if plan["strategy"] == "broadcast":
+        flag = duplicated_flag(plan)
+        return frame.where(flag if how == "left_semi" else ~flag)
     keys = plan["duplicated"].select(F.xxhash64("event_id").alias("event_key"))
     keyed = frame.withColumn("event_key", F.xxhash64("event_id"))
-    joined = keyed.join(F.broadcast(keys) if plan["strategy"] == "broadcast" else keys, "event_key", how)
-    return joined.drop("event_key")
+    return keyed.join(keys, "event_key", how).drop("event_key")
 
 
 def collapse_duplicates(hashed: DataFrame, plan: dict) -> DataFrame:

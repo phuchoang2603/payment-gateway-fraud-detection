@@ -99,7 +99,7 @@ silver:
   enabled: false
   profile: dev
   reportRoot: s3://platform-dev/runs/payment-gateway/dp2
-  # Estimated size (duplicated IDs times 40 bytes) under which DP2 broadcasts the duplicated-ID keys.
+  # Estimated size (duplicated IDs times 8 bytes) under which DP2 broadcasts the duplicated-ID keys as a sorted array.
   dedupBroadcastBytes: 268435456
   activeDeadlineSeconds: 7200
 analytics:
