@@ -126,6 +126,8 @@ agents:
   uid: 65532
   sandbox:
     snapshotRoot: gs://platform-dev/substrate/llm
+    # Substrate's API server resolves the actor's Secret references in this namespace when it starts the golden actor.
+    apiServer: system:serviceaccount:ate-system:ate-api-server
   # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
   list:
     - name: evidence-agent
