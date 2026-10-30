@@ -81,6 +81,30 @@ spec:
       remoteRef:
         key: {{ $stores.clickhousePasswordKey }}
 ---
+# Sign-in goes through the platform's Dex; its client secret is a platform key. The issuer differs per environment,
+# and the Langfuse subchart takes a flat env list, so the issuer travels in this Secret.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: langfuse-oidc
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.platformSecretStore }}
+  target:
+    name: langfuse-oidc
+    template:
+      data:
+        client-secret: '{{ "{{ .secret }}" }}'
+        issuer: {{ $stores.oidc.issuer | quote }}
+  data:
+    - secretKey: secret
+      remoteRef:
+        key: {{ $stores.oidc.clientSecretKey }}
+---
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
