@@ -20,7 +20,7 @@ The shared platform (Talos clusters, Argo CD, operators, the ClickHouse operator
 | Bronze and Silver pipelines (DP1, DP2) | Spark on the Spark Operator, ClickHouse checks, OpenMetadata | Iceberg tables, run reports | In progress |
 | Flink streaming features, Feast writer and server | Python; window features to the online store | Checkpoints, Feast Redis | Deployed in dev (shadow) |
 | Offline features (DP3), training, KServe, drift | Spark, Kubeflow, KServe | Feature tables, models | Planned |
-| Fraud investigation agent | LLM agent over recorded evidence | Audited retrievals | Planned |
+| LLM and agent platform | vLLM on KServe, agentgateway, kagent agents on Agent Substrate, RAG pipeline and knowledge API ([LLM agents](../llm/agents.md)) | Feast pgvector and Iceberg knowledge chunks, Langfuse | Deployed in dev; further agents planned |
 
 ## Deployment view
 
