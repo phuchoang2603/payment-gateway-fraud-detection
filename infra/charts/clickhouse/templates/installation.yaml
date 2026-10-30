@@ -18,6 +18,7 @@ spec:
       default/allow_database_iceberg: 1
       openmetadata/readonly: 2
       openmetadata/allow_database_iceberg: 1
+      openmetadata/show_data_lake_catalogs_in_system_tables: 1
     users:
       default/networks/ip: [127.0.0.1, "::1"]
       admin/password:
@@ -51,6 +52,10 @@ spec:
         spec:
           {{- with .Values.nodeSelector }}
           nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           containers:

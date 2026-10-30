@@ -1,6 +1,12 @@
-# ClickHouse 26.10 needs AVX2, which dev-server3's Pentium G5400 lacks; dev-server1 has it.
-nodeSelector:
-  kubernetes.io/hostname: dev-server1
+# ClickHouse 26.10 needs AVX2: dev-server3's Pentium G5400 lacks it, so the server runs only on dev-server1 or dev-server2.
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: [dev-server1, dev-server2]
 resources:
   requests: {cpu: 500m, memory: 2Gi}
   limits: {memory: 3Gi}
