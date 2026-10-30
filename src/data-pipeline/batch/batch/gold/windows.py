@@ -49,15 +49,19 @@ class ExactAnchors:
 
 @dataclass(frozen=True)
 class Count:
+    """Attempts where the SQL condition `when` holds."""
+
     name: str
-    when: Column | None = None
+    when: str | None = None
     outcome: bool = False
 
 
 @dataclass(frozen=True)
 class Total:
+    """The sum of the SQL expression `value`."""
+
     name: str
-    value: Column
+    value: str
     outcome: bool = False
 
 
@@ -137,9 +141,9 @@ def change_points(
         if isinstance(measure, Count):
             value = F.lit(1)
             if measure.when is not None:
-                active = active & F.coalesce(measure.when, F.lit(False))
+                active = active & F.coalesce(F.expr(measure.when), F.lit(False))
         else:
-            value = F.coalesce(measure.value, F.lit(0))
+            value = F.coalesce(F.expr(measure.value), F.lit(0))
         return F.when(active, value.cast("long")).otherwise(F.lit(0).cast("long"))
 
     events = []

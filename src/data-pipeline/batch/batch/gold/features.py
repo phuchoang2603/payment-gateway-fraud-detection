@@ -63,14 +63,14 @@ FAMILIAR_WINDOW = timedelta(days=90)
 RULE = DailyAnchors()
 DAY = timedelta(days=1)
 
-DECIDED = F.col("outcome").isin("succeeded", "declined")
-DECLINED = F.col("outcome") == "declined"
+DECIDED = "outcome IN ('succeeded', 'declined')"
+DECLINED = "outcome = 'declined'"
 COMMON = [
     Count("attempt_count"),
-    Total("amount_sum_minor", F.col("amount_minor")),
+    Total("amount_sum_minor", "amount_minor"),
     Count("decided_count", DECIDED, outcome=True),
     Count("declined_count", DECLINED, outcome=True),
-    Count("risk_declined_count", DECLINED & (F.col("decline_source") == "DECLINE_SOURCE_RISK"), outcome=True),
+    Count("risk_declined_count", f"{DECLINED} AND decline_source = 'DECLINE_SOURCE_RISK'", outcome=True),
     Ratio("decline_rate", "declined_count", "decided_count"),
     Distinct("distinct_merchant_count", "merchant_id"),
 ]
