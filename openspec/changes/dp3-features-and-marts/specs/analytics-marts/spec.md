@@ -47,6 +47,14 @@ Each DP3 run SHALL rebuild both marts in full into staging tables, run every mar
 - **WHEN** the mart stage runs twice on unchanged Silver
 - **THEN** both marts have equal content after each run
 
+### Requirement: Incremental mart days
+In incremental mode, DP3 SHALL rebuild only the attempt start days affected by the change feed, and the months that contain them for `fact_merchant_day`, within the retention window. It SHALL audit those staging partitions and then replace each live partition atomically. The live marts SHALL then equal a full rebuild over the same Silver.
+
+#### Scenario: Late chargeback
+
+- **WHEN** a chargeback arrives for an attempt started 20 days ago
+- **THEN** only that start day of `fact_payment_attempt`, and its month of `fact_merchant_day`, are rebuilt and replaced
+
 ### Requirement: Query-driven sort keys and skip indexes
 Each mart SHALL declare a partition key, an `ORDER BY` key and data-skipping indexes, each justified in the design by a named fixed query:
 

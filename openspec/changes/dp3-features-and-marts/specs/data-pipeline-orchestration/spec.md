@@ -29,7 +29,7 @@ An exit handler SHALL publish the run outcome on success and failure. DP3 SHALL 
 - **THEN** gold `main` and the live marts are unchanged, the branch remains for diagnosis, and the workflow fails
 
 ### Requirement: DP3 writer serialization
-A DP3 run SHALL hold its own writer mutex and the DP2 Silver writer mutex for its whole duration. Silver therefore cannot be overwritten while DP3's Spark and ClickHouse stages read it, and both stages read the same Silver snapshots. DP3 SHALL have its own suspended daily schedule and SHALL NOT run in the six-hourly Kafka schedule.
+A DP3 run SHALL hold its own writer mutex and the DP2 Silver writer mutex for its whole duration. Silver therefore cannot be overwritten while DP3's Spark and ClickHouse stages read it, and both stages read the same Silver snapshots. DP3 SHALL have its own suspended daily schedule, running in incremental mode, and SHALL NOT run in the six-hourly Kafka schedule.
 
 #### Scenario: Silver submitted during DP3
 

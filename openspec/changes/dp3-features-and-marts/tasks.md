@@ -87,7 +87,22 @@
   Add `templates/dashboards.yaml` rendering them as ConfigMaps labelled `grafana_dashboard: "1"` with `grafana_folder`, gated by `dashboards.enabled`. Verify that the JSON parses and that CI helm template renders three ConfigMaps.
 - [ ] 6.4 Make sure the Spark image's rebuild paths cover `src/data-pipeline/batch/batch/sql` and the metadata image's cover the new contracts. Today both are already under their copied directories, so confirm and change nothing if so. Verify that the CI image builds succeed.
 
-## 7. Docs
+## 6b. Incremental mode
+
+- [ ] 6b.1 Start once the Bootstrap prod thread has merged `dp2-silver mode=incremental` and the `silver.changed_payments` feed. Align with its final column names before coding.
+- [ ] 6b.2 Add `mode` to `batch/gold.py` and `batch/marts.py`, and the `mode` parameter to `dp3-gold` (default `historical`; the daily CronWorkflow uses `incremental`):
+  - read the feed since the `run_id` recorded on the last published gold commit;
+  - apply the refusal rules;
+  - for the feature tables, recompute the affected and expiring entities with the engine's entity- and anchor-scoped entry points, seeded from each entity's last prior row, and `MERGE` them on the audit branch;
+  - for `dim_customer`, rebuild the affected customers;
+  - for `label_attempt`, replace the affected payments' rows;
+  - for the marts, `REPLACE PARTITION` the affected days and months after audit;
+  - record the processed feed `run_id` in snapshot properties and `build_info`.
+- [ ] 6b.3 Add CI tests:
+  - an equivalence test: a sequence of Silver states with feed rows (a new payment, a late chargeback, a rejected payment that moves an attempt, and an expiry with no new data) must give the same output from incremental DP3 after each step as from one historical run, excluding `created`;
+  - one test for each refusal rule.
+
+
 
 - [ ] 7.1 Update the existing pages only:
   - `docs/data/offline.md`: DP3 section, gold schemas, naming table, Mermaid ER diagram, SCD2 and point-in-time join rules;
@@ -107,7 +122,7 @@
 ## 9. Runs and evidence (cluster)
 
 - [ ] 9.1 Dev smoke, after the PR deploys to dev. As `marts`, confirm that `SETTINGS iceberg_snapshot_id` pins a ``lakehouse.`silver.attempts` `` read, that the `SELECT ON lakehouse.*` grant and pruning on monthly filters work, and that `grafana`'s profile accepts the plugin's settings. Record the results in design.md decision 7, and choose the snapshot fallback if pinning fails. Then run `dp3-gold` and `warehouse-benchmark` on the existing v18 Silver.
-- [ ] 9.2 Prod evidence, after the PR merges and `main` releases to prod. Capture it promptly, because the rolling `TTL` shrinks the marts until the live simulator runs. Run `dp3-gold`, then `warehouse-benchmark`, on the v19 Silver. Record in the docs:
+- [ ] 9.2 Prod evidence, after the PR merges and `main` releases to prod. Run `dp3-gold mode=historical` first; once live or Kafka batches flow, also run one `mode=incremental`, and record rows read, entities recomputed and wall time next to the historical run. Capture it promptly, because the rolling `TTL` shrinks the marts until the live simulator runs. Run `dp3-gold`, then `warehouse-benchmark`, on the v19 Silver. Record in the docs:
   - run IDs, gold and mart row counts, DP3 phase tasks and times;
   - marts peak memory and disk;
   - check and profile outcomes, and lineage screenshots;

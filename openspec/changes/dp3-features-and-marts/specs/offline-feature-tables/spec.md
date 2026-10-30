@@ -94,6 +94,30 @@ Consumers SHALL be able to join it to the feature tables on entity key and `even
 - **WHEN** a training cutoff precedes a chargeback's `label_available_at`
 - **THEN** filtering `label_available_at <= cutoff` excludes that row, and the attempt has no chargeback label at that cutoff
 
+### Requirement: Incremental gold mode
+DP3 SHALL accept `mode=historical` or `mode=incremental`, with `historical` as the default for manual submits. In incremental mode it SHALL read DP2's change feed since the last published DP3 run, recompute only:
+
+- the affected customers and payment methods;
+- the entities whose windows change between the previous and new anchor caps;
+- the affected payments' labels;
+
+and replace their rows on the audit branch. The result SHALL equal a historical run over the same Silver in every column except `created`, which keeps the commit time of the Silver snapshot that last recomputed the row. Incremental mode SHALL refuse to run, naming historical mode as the remedy, when there is no prior DP3 run, when the feed contains a historical DP2 run since the last DP3 run, when an affected time precedes the coverage start, or when the logic version changed.
+
+#### Scenario: Incremental equals historical
+
+- **WHEN** DP3 runs incrementally after each of several DP2 incremental runs
+- **THEN** every gold table equals a historical DP3 run over the final Silver, apart from `created`
+
+#### Scenario: Window expiry without new data
+
+- **WHEN** an entity has no changed payments but its only attempt leaves the 7-day window between two DP3 runs
+- **THEN** the incremental run writes its expiry row at the same anchor a historical run would
+
+#### Scenario: Historical DP2 run in the feed
+
+- **WHEN** the change feed contains a historical DP2 run since the last DP3 run
+- **THEN** incremental DP3 fails and asks for a historical DP3 run
+
 ### Requirement: Gold table layout
 Feature and label tables SHALL be partitioned by day of `event_timestamp`, and `dim_customer` by day of `valid_from_ts`. Every gold table SHALL be created with hash write distribution and the lakehouse target file size, and SHALL be covered by the `maintain-lakehouse` compaction and snapshot expiry.
 

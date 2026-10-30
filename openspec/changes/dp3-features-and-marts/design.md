@@ -38,7 +38,7 @@ Constraints:
 - Feast repository objects, materialization, TTLs and feature services (roadmap steps 2–7).
 - Streaming features into the offline store; training; drift.
 - The LLM platform (#103), and the MCP tool itself.
-- Incremental DP2 and DP3. A `mode=incremental` toggle is listed as planned on the roadmap: payment-scoped Silver merges from new Kafka offsets with a change feed, entity-scoped gold recompute, and daily mart partition replacement. CI would check it against historical mode. DP3 implements the shared window engine with entity- and anchor-scoped entry points, so that mode can plug in later.
+- DP2's incremental mode. The user asked for it, and the Bootstrap prod thread implements it with a `silver.changed_payments` change feed. DP3's incremental mode, which consumes that feed, is in scope here (decision 9b).
 - Making the platform changes: they are listed, not made.
 
 ## Decisions
@@ -389,6 +389,39 @@ publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, l
 | prod | `large`: 11 executors × 3 cores, 9 GiB plus 2 GiB overhead, 24 GiB ephemeral storage, 2,048 shuffle partitions, spot `aws-cpu-burst` | About 200M attempts produce about 1.2B interval-delta rows per window family before aggregation. The shuffle is estimated at 40–60 GB across 11 executors, under the 264 GiB of executor ephemeral storage. The first v19 run records tasks and time per phase, which confirms or lowers the profile, as for Silver. |
 
 The marts container requests 100m CPU and 256 Mi, because ClickHouse does the work. ClickHouse itself is sized by the clickhouse chart.
+
+### 9b. Incremental mode
+
+`dp3-gold` takes `mode=historical|incremental`. `historical` is decisions 2–8, a full recompute, and it is the default for manual submits and the mode for the v19 evidence. `incremental` must leave gold and the marts equal to a historical run over the same Silver, except for `created` (below). CI checks this.
+
+**Input.** DP3 reads DP2's change feed, `silver.changed_payments`, owned and implemented by the Bootstrap prod thread. Each published DP2 run appends:
+- its `run_id` and mode;
+- each affected payment, with the before and after images' customer IDs and payment-method fingerprints;
+- the earliest attempt time, `started_at` and label `occurred_at` across both images.
+
+DP3 records the last feed `run_id` it processed in each gold commit's snapshot properties and in `marts.build_info`.
+
+**Refusals.** Incremental mode fails with an instruction to run historical, with no silent fallback, when:
+- there is no prior published DP3 run;
+- the feed has a `historical` row since the last DP3 run;
+- an affected time precedes the coverage start `H`;
+- the logic or contract version differs from the last run's.
+
+**Per table:**
+
+| Table | Incremental update |
+|---|---|
+| `feat_*_daily` | The entities to recompute are the affected customers and cards from both images, plus every entity with an attempt in `[C0 − 30 days, C1)`, where `C0` and `C1` are the previous and new anchor caps. Those entities need their new expiry or arrival rows even without changed data. For each one, recompute anchors from `min(earliest affected anchor, C0 + 1 day)`, reading its attempts from 30 days before that anchor. Seed the change-point comparison with its last existing row before that anchor, then replace its rows at and after that anchor in one `MERGE` on the audit branch. The shared engine's entity- and anchor-scoped entry points do this. |
+| `dim_customer` | Rebuild the affected customers' full version history from Silver and replace their rows. The familiar-device set is evaluated only at attempts, so time passing alone changes nothing. |
+| `label_attempt` | Replace the rows of the affected payments' attempts. |
+| `fact_payment_attempt` | Rebuild only the affected start days inside the retention window into staging, audit them, then `ALTER TABLE … REPLACE PARTITION <day> FROM …__staging` for each day in `publish-marts`. Each replace is atomic per day, matching the daily partitions. |
+| `fact_merchant_day` | Rebuild the affected months (monthly partitions, small) from the published fact, then `REPLACE PARTITION`. Update `build_info`. |
+
+**`created` in incremental mode.** A row keeps the Silver commit time of the run that last recomputed it. A historical run stamps every row with the current commit time. That is the only allowed difference, so the equivalence test compares every column except `created`. The `created >= event_timestamp` rule still holds, and Feast uses `created` only to break ties between rows with the same `event_timestamp`.
+
+**Schedule.** The suspended daily `dp3-gold` CronWorkflow runs `mode=incremental`, after the six-hourly Kafka schedule's DP2 incremental runs.
+
+**Cost.** With the live simulator at one payment every 30 seconds (about 2,900 a day), an incremental run touches a few thousand payments and their entities' last 30 days. A historical run rereads all of v19 Silver. The prod evidence records one of each.
 
 ### 10. Contracts and checks
 
