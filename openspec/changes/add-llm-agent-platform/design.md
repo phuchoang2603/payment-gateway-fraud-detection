@@ -334,6 +334,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
   - The table name and column come from Feast's internals, so the step resolves the name through Feast's own `compute_table_id`, and a CI test pins the behaviour, so an upgrade that changes it fails CI.
 
   At about 150 chunks the exact scan is already well under a millisecond. The index is for scale, and to show the technique.
+- **Qdrant was considered and rejected (2026-10-29).** Feast 0.67's Qdrant store reads by id through a `collection_name` setting its config does not define, so reads crash. It also writes points with random ids, so a rewrite duplicates them. v2 search support is still an open PR (feast-dev/feast#6445). Postgres is the Feast vector store that works for writes, reads by id and search.
 
 **Chunking and identity.**
 - Chunking follows the markdown structure: one chunk per spec requirement, clause, section or FAQ entry.
