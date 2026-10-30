@@ -1,8 +1,6 @@
 import os
-import time
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import quote
 
 import yaml
 
@@ -12,8 +10,6 @@ from openmetadata_jobs.warehouse import SERVICE, sql_table, table_fqn
 
 PRODUCTS = ("bronze-payments", "silver-payments")
 PAGE = 100
-RESULT_TIMEOUT_SECONDS = 120
-RESULT_POLL_SECONDS = 5
 
 
 @dataclass(frozen=True)
@@ -80,69 +76,41 @@ def test_workflow(table, cases):
     }
 
 
-def fresh_results(fqn, since):
-    page = client().client.get(
-        f"/dataQuality/testCases/testCaseResults/{quote(fqn, safe='')}",
-        {"startTs": since, "limit": PAGE},
-    )
-    return [result for result in page.get("data", []) if result.get("timestamp", 0) >= since]
+def evaluate(expected, results):
+    """Return the expected test names whose latest result is missing or not Success.
 
-
-def await_results(
-    expected,
-    fetch,
-    prepared_at,
-    timeout=RESULT_TIMEOUT_SECONDS,
-    poll=RESULT_POLL_SECONDS,
-    clock=time.monotonic,
-    sleep=time.sleep,
-):
-    """Return the expected cases that failed and those with no result from this run.
-
-    The native runner writes results asynchronously, so each case is polled until it has a result written at or
-    after preparation. Its newest such result decides it.
+    The native runner exits 0 when an assertion fails, so the stored result is the verdict.
     """
-    deadline = clock() + timeout
-    pending, failed = list(expected), []
+    return [name for name in expected if (results.get(name) or {}).get("testCaseStatus") != "Success"]
+
+
+def readback(table):
+    results, after = {}, None
     while True:
-        unresolved = []
-        for name in pending:
-            results = fetch(name)
-            if not results:
-                unresolved.append(name)
-                continue
-            newest = max(results, key=lambda result: result["timestamp"])
-            if newest.get("testCaseStatus") != "Success":
-                failed.append(name)
-        pending = unresolved
-        if not pending or clock() >= deadline:
-            return failed, pending
-        sleep(poll)
+        query = {"entityLink": f"<#E::table::{table_fqn(table)}>", "fields": "testCaseResult", "limit": PAGE}
+        if after:
+            query["after"] = after
+        page = client().client.get("/dataQuality/testCases", query)
+        for case in page.get("data", []):
+            results[case["name"]] = case.get("testCaseResult") or {}
+        after = page.get("paging", {}).get("after")
+        if not after:
+            return results
 
 
 def main():
-    prepared_at = int(time.time() * 1000)
     found = checks(products=[os.environ["CHECK_PRODUCT"]])
     tables = sorted({check.table for check in found})
     native("ingest", workflow(SERVICE))
     for table in tables:
         cases = [check for check in found if check.table == table]
         native("test", test_workflow(table, cases))
-    failed, missing = [], []
+    failures = []
     for table in tables:
         expected = [check.name for check in found if check.table == table]
-        table_failed, table_missing = await_results(
-            expected,
-            lambda name, table=table: fresh_results(f"{table_fqn(table)}.{name}", prepared_at),
-            prepared_at,
-        )
-        failed += [f"{table}.{name}" for name in table_failed]
-        missing += [f"{table}.{name}" for name in table_missing]
-    if failed:
-        print("checks did not succeed: " + ", ".join(sorted(failed)))
-    if missing:
-        print("no result from this run: " + ", ".join(sorted(missing)))
-    if failed or missing:
+        failures += [f"{table}.{name}" for name in evaluate(expected, readback(table))]
+    if failures:
+        print("checks did not succeed: " + ", ".join(sorted(failures)))
         return 1
     print(f"all {len(found)} checks succeeded")
     return 0
