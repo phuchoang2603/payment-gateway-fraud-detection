@@ -30,8 +30,9 @@ data:
             print("waiting for ClickHouse", file=sys.stderr)
             time.sleep(10)
 
-    send("CREATE DATABASE IF NOT EXISTS langfuse")
-    print("langfuse database exists")
+    for database in ("langfuse", "marts", "marts_benchmark"):
+        send(f"CREATE DATABASE IF NOT EXISTS {database}")
+        print(f"{database} database exists")
 ---
 apiVersion: batch/v1
 kind: Job

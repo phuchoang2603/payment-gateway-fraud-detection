@@ -19,6 +19,24 @@ spec:
       openmetadata/readonly: 2
       openmetadata/allow_database_iceberg: 1
       openmetadata/show_data_lake_catalogs_in_system_tables: 1
+      # Dashboards: readonly 2 still blocks writes and DDL but allows the SET statements the Grafana plugin sends;
+      # the constraints stop a dashboard from raising its own limits.
+      grafana/readonly: 2
+      grafana/max_execution_time: 30
+      grafana/max_memory_usage: 1073741824
+      grafana/max_result_rows: 100000
+      grafana/result_overflow_mode: break
+      grafana/max_threads: 2
+      grafana/constraints/readonly/const: ""
+      grafana/constraints/max_execution_time/max: 30
+      grafana/constraints/max_memory_usage/max: 1073741824
+      grafana/constraints/max_result_rows/max: 100000
+      marts/allow_database_iceberg: 1
+      marts/max_memory_usage: 2147483648
+      marts/join_algorithm: full_sorting_merge
+      marts/max_bytes_before_external_sort: 400000000
+      marts/max_bytes_before_external_group_by: 800000000
+      marts/max_insert_threads: 2
     users:
       default/networks/ip: [127.0.0.1, "::1"]
       admin/password:
@@ -39,8 +57,26 @@ spec:
       openmetadata/profile: openmetadata
       openmetadata/grants/query:
         - GRANT SELECT ON lakehouse.*
+        - GRANT SELECT ON marts.*
+        - GRANT SELECT ON system.databases
         - GRANT SELECT ON system.tables
         - GRANT SELECT ON system.columns
+      grafana/password:
+        valueFrom: {secretKeyRef: {name: clickhouse-grafana, key: password}}
+      grafana/networks/ip: ["10.0.0.0/8"]
+      grafana/profile: grafana
+      grafana/grants/query:
+        - GRANT SELECT ON marts.*
+      marts/password:
+        valueFrom: {secretKeyRef: {name: clickhouse-marts, key: password}}
+      marts/networks/ip: ["10.0.0.0/8"]
+      marts/profile: marts
+      marts/grants/query:
+        - GRANT SELECT, INSERT, CREATE TABLE, DROP TABLE, ALTER, TRUNCATE ON marts.*
+        - GRANT SELECT, INSERT, CREATE TABLE, DROP TABLE ON marts_benchmark.*
+        - GRANT SELECT ON lakehouse.*
+        - GRANT SELECT ON system.query_log
+        - GRANT SYSTEM DROP CACHE, SYSTEM FLUSH LOGS ON *.*
     settings:
       logger/level: warning
       timezone: UTC
