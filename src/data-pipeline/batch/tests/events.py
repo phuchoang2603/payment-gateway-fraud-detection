@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from batch.schema import EVENT_COLUMNS
+from batch.validation import EVENT_PAYLOADS
 
 BASE = datetime(2026, 7, 31, 12, tzinfo=timezone.utc)
 
@@ -47,6 +48,7 @@ def row(payment_id, event_id, version, minutes, recorded=None, **payload):
         correlation_id=f"corr-{payment_id}",
     )
     values.update(payload)
+    values["payload_case"] = next((name for name in payload if name in EVENT_PAYLOADS), None)
     return values
 
 

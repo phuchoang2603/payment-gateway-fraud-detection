@@ -23,7 +23,7 @@ from batch.schema import (
 )
 from batch.spark import ICEBERG_CATALOG, session
 from batch.store import Store
-from batch.validation import EVENT_PAYLOADS, rejection_reason, required_fields
+from batch.validation import EVENT_PAYLOADS, payload_case_of, rejection_reason, required_fields
 
 NAMESPACE = f"{ICEBERG_CATALOG}.bronze"
 EVENTS = f"{NAMESPACE}.payment_events"
@@ -85,7 +85,12 @@ def run_historical(spark, root, version, run_id):
             read_parts(spark, root, table, parts),
             business_schema(spark, columns),
             keep=("_source_file",),
-        ).withColumns(
+        )
+        if table == "payment_events":
+            frame = frame.withColumn(
+                "payload_case", payload_case_of(F.struct(*[F.col(name) for name in EVENT_PAYLOADS]))
+            )
+        frame = frame.withColumns(
             {
                 "_source": F.lit("historical"),
                 "_dataset_version": F.lit(version),
@@ -304,6 +309,8 @@ def ensure_tables(spark):
         f"CREATE TABLE IF NOT EXISTS {EVENTS} ({event_ddl()}) USING iceberg "
         f"PARTITIONED BY (_source, days(occurred_at)) {TABLE_PROPERTIES}"
     )
+    if "payload_case" not in spark.table(EVENTS).columns:
+        spark.sql(f"ALTER TABLE {EVENTS} ADD COLUMNS (payload_case string)")
     spark.sql(
         f"CREATE TABLE IF NOT EXISTS {LABELS} ({label_ddl()}) USING iceberg "
         f"PARTITIONED BY (_source, days(label_available_at)) {TABLE_PROPERTIES}"

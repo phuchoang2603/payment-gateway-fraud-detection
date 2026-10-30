@@ -15,6 +15,13 @@ EVENT_PAYLOADS = (
     "payment_succeeded",
     "payment_expired",
 )
+
+
+def payload_case_of(event: Column) -> Column:
+    """The one payload an event carries, named by its protobuf oneof member, or null when it carries none."""
+    return F.coalesce(*[F.when(event.getField(name).isNotNull(), F.lit(name)) for name in EVENT_PAYLOADS])
+
+
 VALUE_RULES = {
     "schema_version": lambda value: value.isin(2, 3),
     "aggregate_version": lambda value: value >= 1,

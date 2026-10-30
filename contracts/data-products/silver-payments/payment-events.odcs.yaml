@@ -54,6 +54,7 @@ schema:
       - {name: attempt_declined, logicalType: object, description: Risk or processor decline.}
       - {name: payment_succeeded, logicalType: object, description: Terminal success.}
       - {name: payment_expired, logicalType: object, description: Terminal expiry.}
+      - {name: payload_case, logicalType: string, physicalType: VARCHAR, description: The payload the event carries, named by its protobuf oneof member, or null when it carries none.}
       - {name: _source, logicalType: string, physicalType: VARCHAR, required: true, description: Source of the kept copy, historical or kafka.}
     quality:
       - id: silver_unique_event
@@ -67,7 +68,7 @@ schema:
         description: Checkout totals are nonnegative in one currency, have line items, and equal the sum of quantity times unit price.
         query: |
           SELECT count(*) FROM {object}
-          WHERE payment_created.merchant.merchant_id IS NOT NULL AND (
+          WHERE payload_case = 'payment_created' AND (
             payment_created.snapshot.total.minor_units < 0
             OR NOT match(payment_created.snapshot.total.currency, '^[A-Z]{3}$')
             OR length(payment_created.snapshot.items) = 0
@@ -85,7 +86,7 @@ schema:
         description: Decisions declare an approve or decline outcome and a policy version. Declines require a reason; reason codes are nonempty strings.
         query: |
           SELECT count(*) FROM {object}
-          WHERE risk_decision_recorded.attempt_id IS NOT NULL AND (
+          WHERE payload_case = 'risk_decision_recorded' AND (
             risk_decision_recorded.assessment.outcome NOT IN ('RISK_OUTCOME_APPROVE', 'RISK_OUTCOME_DECLINE')
             OR nullif(risk_decision_recorded.assessment.policy_version, '') IS NULL
             OR (risk_decision_recorded.assessment.outcome = 'RISK_OUTCOME_DECLINE'
@@ -100,7 +101,7 @@ schema:
           SELECT count(*) FROM {object} AS attempt
           JOIN {object} AS created
             ON created.integration_id = attempt.integration_id AND created.payment_id = attempt.payment_id
-          WHERE attempt.attempt_started.attempt_id IS NOT NULL AND created.payment_created.merchant.merchant_id IS NOT NULL
+          WHERE attempt.payload_case = 'attempt_started' AND created.payload_case = 'payment_created'
             AND (attempt.attempt_started.context.snapshot.total.minor_units
                 <> created.payment_created.snapshot.total.minor_units
               OR attempt.attempt_started.context.snapshot.total.currency

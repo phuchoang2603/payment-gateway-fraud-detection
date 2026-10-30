@@ -57,6 +57,7 @@ schema:
       - {name: attempt_declined, logicalType: object, description: payments.v1.AttemptDeclined with source and reason.}
       - {name: payment_succeeded, logicalType: object, description: payments.v1.PaymentSucceeded.}
       - {name: payment_expired, logicalType: object, description: payments.v1.PaymentExpired with the _present marker.}
+      - {name: payload_case, logicalType: string, physicalType: VARCHAR, description: The payload the event carries, named by its protobuf oneof member, or null when it carries none. Derived from the decoded payload fields during ingestion.}
       - {name: _source, logicalType: string, physicalType: VARCHAR, required: true, description: historical or kafka.}
       - {name: _dataset_version, logicalType: string, physicalType: VARCHAR, description: Historical dataset version such as v18; null for Kafka rows.}
       - {name: _source_file, logicalType: string, physicalType: VARCHAR, description: Historical Parquet object key; null for Kafka rows.}
@@ -95,18 +96,15 @@ schema:
         description: Exactly one lifecycle payload is present per event, and an expiry marker is true.
         query: |
           SELECT count(*) FROM {object}
-          WHERE (payment_created.merchant.merchant_id IS NOT NULL) + (attempt_started.attempt_id IS NOT NULL)
-            + (risk_decision_recorded.attempt_id IS NOT NULL) + (processor_operation_requested.attempt_id IS NOT NULL)
-            + (processor_outcome_unknown.attempt_id IS NOT NULL) + (attempt_declined.attempt_id IS NOT NULL)
-            + (payment_succeeded.attempt_id IS NOT NULL) + (payment_expired._present IS NOT NULL) <> 1
-            OR (payment_expired._present IS NOT NULL AND NOT payment_expired._present)
+          WHERE payload_case IS NULL
+            OR (payload_case = 'payment_expired' AND NOT payment_expired._present)
         mustBe: 0
       - id: raw_declared_fields_by_schema_version
         type: sql
         description: Assessment fields declared with sinceSchemaVersion three are present exactly when schema_version is three or later.
         query: |
           SELECT count(*) FROM {object}
-          WHERE risk_decision_recorded.attempt_id IS NOT NULL AND (
+          WHERE payload_case = 'risk_decision_recorded' AND (
             (schema_version >= 3) <> (risk_decision_recorded.assessment.assessment_id IS NOT NULL)
             OR (schema_version >= 3) <> (risk_decision_recorded.assessment.evidence_sha256 IS NOT NULL)
           )
@@ -116,23 +114,24 @@ schema:
         description: Each present payload carries its attempt identity, and a payment creation carries its merchant, customer and checkout snapshot.
         query: |
           SELECT count(*) FROM {object}
-          WHERE (attempt_started.attempt_id = '')
-            OR (risk_decision_recorded.attempt_id = '')
-            OR (processor_operation_requested.attempt_id = '')
-            OR (processor_outcome_unknown.attempt_id = '')
-            OR (attempt_declined.attempt_id = '')
-            OR (payment_succeeded.attempt_id = '')
-            OR (payment_created.merchant.merchant_id IS NOT NULL AND (
-              payment_created.customer.customer_id IS NULL OR payment_created.snapshot.external_order_id IS NULL))
+          WHERE (payload_case = 'attempt_started' AND nullif(attempt_started.attempt_id, '') IS NULL)
+            OR (payload_case = 'risk_decision_recorded' AND nullif(risk_decision_recorded.attempt_id, '') IS NULL)
+            OR (payload_case = 'processor_operation_requested' AND nullif(processor_operation_requested.attempt_id, '') IS NULL)
+            OR (payload_case = 'processor_outcome_unknown' AND nullif(processor_outcome_unknown.attempt_id, '') IS NULL)
+            OR (payload_case = 'attempt_declined' AND nullif(attempt_declined.attempt_id, '') IS NULL)
+            OR (payload_case = 'payment_succeeded' AND nullif(payment_succeeded.attempt_id, '') IS NULL)
+            OR (payload_case = 'payment_created' AND (
+              payment_created.merchant.merchant_id IS NULL OR payment_created.customer.customer_id IS NULL
+              OR payment_created.snapshot.external_order_id IS NULL))
         mustBe: 0
       - id: raw_enums
         type: sql
         description: Risk outcomes and decline sources are recognized enum values.
         query: |
           SELECT count(*) FROM {object}
-          WHERE (risk_decision_recorded IS NOT NULL
+          WHERE (payload_case = 'risk_decision_recorded'
               AND risk_decision_recorded.assessment.outcome NOT IN ('RISK_OUTCOME_APPROVE', 'RISK_OUTCOME_DECLINE'))
-            OR (attempt_declined IS NOT NULL
+            OR (payload_case = 'attempt_declined'
               AND attempt_declined.source NOT IN ('DECLINE_SOURCE_RISK', 'DECLINE_SOURCE_PROCESSOR'))
         mustBe: 0
       - id: raw_source_provenance

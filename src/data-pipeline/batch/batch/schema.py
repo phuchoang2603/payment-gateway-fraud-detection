@@ -6,6 +6,8 @@ from pyspark.sql import functions as F
 from pyspark.sql.protobuf.functions import from_protobuf
 from pyspark.sql.types import ArrayType, DataType, StructType
 
+from batch.validation import payload_case_of
+
 
 def descriptor_path() -> Path:
     return Path(os.environ.get("PAYMENTS_DESCRIPTOR", Path(__file__).with_name("payments.pb")))
@@ -53,6 +55,7 @@ EVENT_COLUMNS = {
     "attempt_declined": "struct<attempt_id: string, source: string, reason: string>",
     "payment_succeeded": "struct<attempt_id: string, processor_reference: string>",
     "payment_expired": "struct<_present: boolean>",
+    "payload_case": "string",
 }
 
 LABEL_COLUMNS = {
@@ -146,7 +149,8 @@ def decode_events(value: Column) -> Column:
         decoded["payment_expired"].isNotNull(),
         F.struct(decoded["payment_expired"]["present"].alias("_present")),
     )
-    return decoded.withField("payment_expired", expired)
+    decoded = decoded.withField("payment_expired", expired)
+    return decoded.withField("payload_case", payload_case_of(decoded))
 
 
 def decode_labels(value: Column) -> Column:
