@@ -246,7 +246,7 @@ agentregistry 0.4.0 materializes agents as kagent `v1alpha2` resources, the API 
 
 OpenMetadata 2.0.6 has first-class AI entities: `llmService`, `llmModel`, `aiApplication` and `mcpServer`. It has no ingestion connector for a custom LLM service, so the assets are created through its REST API.
 
-This change must stay independent of the data pipelines, so it does not change the `openmetadata_jobs` code (only its checks test learns the new table) or the `data-pipelines` chart, which now holds the OpenMetadata connections. Instead the RAG workflow's `catalog` step (decision 15) registers them on every run with idempotent `PUT`s from the `rag` image. That step already runs in `data`, the namespace OpenMetadata admits.
+This change must stay independent of the data pipelines, so it does not change the `openmetadata_jobs` code or the `data-pipelines` chart, which now holds the OpenMetadata connections. Instead the RAG workflow's `catalog` step (decision 15) registers them on every run with idempotent `PUT`s from the `rag` image. That step already runs in `data`, the namespace OpenMetadata admits.
 - `llmService` `agent-gateway`: `CustomLLM`, base URL the gateway's `/v1`, no key stored.
 - `llmModels` `qwen3-8b` and `qwen3-embedding`: base model, pinned revision as version, capabilities, and the vLLM deployment.
 - `aiApplication` `evidence-agent`: agent, kagent, primary model `qwen3-8b`, the current agent version, and its MCP server.
