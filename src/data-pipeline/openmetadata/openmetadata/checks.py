@@ -39,11 +39,10 @@ def check(contract, table, rule):
     return Check(table=table, name=rule["id"], description=rule.get("description", rule["id"]), sql=sql)
 
 
-# Uniqueness and self-join rules over hundreds of millions of rows exceed ClickHouse's memory limit in memory; spill
-# GROUP BY and sort state to disk and let large joins fall back from hash to merge joins.
+# The join spill threshold must be below its hard size limit so full-load checks can spill before hitting the cap.
 SPILL_SETTINGS = (
     "max_bytes_before_external_group_by = 800000000, max_bytes_before_external_sort = 800000000, "
-    "join_algorithm = 'auto', max_bytes_in_join = 800000000"
+    "join_algorithm = 'auto', max_bytes_before_external_join = 400000000, max_bytes_in_join = 800000000"
 )
 
 
