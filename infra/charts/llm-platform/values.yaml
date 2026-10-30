@@ -48,9 +48,11 @@ models:
     repo: Qwen/Qwen3-Embedding-0.6B
     revision: 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3
     replicas: 1
+    # 0.12 of the 16 GB GPU leaves about 0.3 GiB of KV cache after the weights: enough for 2048 tokens, which covers
+    # knowledge chunks (at most about 400 tokens) and queries.
     args:
       - --runner=pooling
-      - --max-model-len=8192
+      - --max-model-len=2048
       - --gpu-memory-utilization=0.12
     resources:
       requests: {cpu: 250m, memory: 2Gi}

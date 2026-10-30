@@ -30,7 +30,7 @@
   - `router.gateway.refs` and `router.route.http.refs`, with `router.scheduler: {}`.
 
   Verify with `helm template` and a server-side dry run against dev once P1 is live.
-- [x] 2.3 Add the embedding `LLMInferenceService` `qwen3-embedding`: pooling runner, memory fraction 0.12, max length 8192, the shared claim, no scheduler. Verify with a server-side dry run on dev.
+- [x] 2.3 Add the embedding `LLMInferenceService` `qwen3-embedding`: pooling runner, memory fraction 0.12, max length 2048, the shared claim, no scheduler. Verify with a server-side dry run on dev.
 - [x] 2.4 Add VMPodScrape configuration for both vLLM servers, the endpoint picker and agentgateway. vLLM scraping needs vmagent enrolled in the mesh (P7). Verify with `helm template`.
 
 ## 3. Agent gateway
