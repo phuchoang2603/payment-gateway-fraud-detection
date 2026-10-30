@@ -68,14 +68,14 @@
 
 ## 5. OpenMetadata (after PR #102 merges)
 
-- [x] 5.1 In `src/rag`, register the AI assets (decision 12) over OpenMetadata's REST API from the workflow's catalog step, with the facts in `rag-pipeline` values matching `llm-platform`. Verify the endpoints against the live OpenMetadata 2.0.6 API first. Superseded by 4b.10: the AI assets are registered by the llm-platform catalog Job.
+- [x] 5.1 In `src/llm`, register the AI assets (decision 12) over OpenMetadata's REST API from the workflow's catalog step, with the facts in `rag-pipeline` values matching `llm-platform`. Verify the endpoints against the live OpenMetadata 2.0.6 API first. Superseded by 4b.10: the AI assets are registered by the llm-platform catalog Job.
 
 ## 5b. RAG: pipeline, Web API and MCP tool (after PR #102 merges; design.md decision 15)
 
 - [x] 5b.1 Research the corpus sources and record the proposed corpus in `rag-corpus.md`.
-- [x] 5b.2 Settle the layout with the user: `src/rag`, chart `rag-pipeline`, namespace `llm`, corpus in the image, release-triggered runs, Iceberg offline, Web API and MCP in scope (2026-10-29).
+- [x] 5b.2 Settle the layout with the user: `src/llm`, chart `rag-pipeline`, namespace `llm`, corpus in the image, release-triggered runs, Iceberg offline, Web API and MCP in scope (2026-10-29).
 - [x] 5b.3 Run the workflow in `data`, where Argo, Polaris and OpenMetadata already admit pipelines; record P9 and P10 as optional follow-ups for an all-`llm` layout.
-- [x] 5b.4 Create `src/rag/` (uv project):
+- [x] 5b.4 Create `src/llm/` (uv project):
   - `corpus/`: the hand-written synthetic documents with front matter, `sources.yaml` and the renderer;
   - `pipeline/`: publish, structure-aware chunker, batched embed client, pre-write validation gate, PyIceberg writer, Feast refresh with HNSW index, post-write verify;
   - `store/`: the Feast definitions (`knowledge_base`, `knowledge_chunks`, Postgres online store with `vector_enabled`, SQL registry);
@@ -84,7 +84,7 @@
 
   Verify locally only with ruff and format.
 - [x] 5b.5 Add the `rag-pipeline` and `rag-serving` images to `.github/service-images.json`. The pipeline's build paths are the workspace root, `common`, `pipeline` plus every corpus source in `sources.yaml`, and the Dockerfile copies those sources into the image.
-- [x] 5b.6 Add the knowledge-base ODPS product and ODCS contract to `contracts/data-products/knowledge-base/`, read by the shared checks image. Publish the run status, corpus container and lineage from `src/rag` over OpenMetadata's REST API, without changing `openmetadata_jobs`.
+- [x] 5b.6 Add the knowledge-base ODPS product and ODCS contract to `contracts/data-products/knowledge-base/`, read by the shared checks image. Publish the run status, corpus container and lineage from `src/llm` over OpenMetadata's REST API, without changing `openmetadata_jobs`.
 - [x] 5b.7 Create `infra/charts/rag-pipeline` and the `rag-pipeline` application (dev on, prod off), with:
   - the executor ServiceAccount and Role;
   - the `rag-knowledge` WorkflowTemplate and a `Workflow` per `rag-pipeline` image tag, in the last sync wave, never a sync hook;
@@ -107,7 +107,7 @@
 
 ## 5c. Risk agent, coordinator, laya, A2A and A/B (design.md decisions 16 to 18)
 
-- [x] 5c.1 Add the `decision` service (`src/decision`, image `decision`): laya 0.4.7 on CPU, `route_question` MCP tool, `POST /request` screening webhook with a per-prompt cache, weight fetch from the bucket, metrics, and CI tests with coverage above 90%. Add the laya English checkpoint (pinned revision, four files) to the model upload. Verify with `ruff`, `uv lock` and `helm template`.
+- [x] 5c.1 Add the `decision` service (`src/llm/decision`, image `decision`): laya 0.4.7 on CPU, `route_question` MCP tool, `POST /request` screening webhook with a per-prompt cache, weight fetch from the bucket, metrics, and CI tests with coverage above 90%. Add the laya English checkpoint (pinned revision, four files) to the model upload. Verify with `ruff`, `uv lock` and `helm template`.
 - [x] 5c.2 Add the screening webhook to the LLM route after the PII regex (`Reject`, fail-open), and the `decision` MCP server at `/mcp/decision`.
 - [x] 5c.3 Add `risk-agent` 0.1.0 (prompt, no tools) and `coordinator` 0.1.0 (`decision` MCP server, `evidence-agent` and `risk-agent` as Agent tools with the agents' key and isolated sessions), with their prompts; grow the worker pool to 3.
 - [x] 5c.4 Add one A2A HTTPRoute per agent (`/a2a/<agent>` and kagent's sandbox path), an `a2a` AgentgatewayBackend per agent and variant on the kagent controller, and one A2A policy (key, rate limit); forward kagent's sandbox A2A paths of `llm-agents` in the egress proxy with the caller's Host.
@@ -116,6 +116,7 @@
 - [ ] 5c.7 Platform (P11, P12): kagent's proxy URL on the egress proxy; the Grafana dashboard sidecar watching `llm`. Asked in the platform thread on 2026-10-30.
 - [ ] 5c.8 Verify on dev: the decision service Ready; a question passes the screen and a refund request gets 403; `route_question` picks the evidence agent for a decline-code question and the risk agent for a payment-risk question; an A2A card and message through `/a2a/<agent>` (401 without a key); a coordinator chat in the kagent UI that routes and delegates through the gateway; the risk agent's answer without tools; the A/B split over many A2A messages; the dashboard; the registry and OpenMetadata entries for the new agents.
 - [ ] 5c.9 Document the new agents, routing, screening, A2A and A/B on the LLM pages with the evidence, and mark the roadmap rows.
+- [ ] 5c.10 A/B test of LLM versions on prod (design.md decision 18), with section 9.
 
 ## 6. Benchmark harness
 
@@ -158,7 +159,7 @@
 - [x] 7b.8 Sandbox, warm-up and autoscaling (`agents.md`): `evidence-agent` on Agent Substrate, with several conversations served by few workers (worker count, actor states, answer times), plus a link to the SandboxAgent YAML. Recorded on dev 2026-10-30.
 - [x] 7b.9 RAG pipeline (`rag.md`): the Argo Workflows graph of a successful `rag-knowledge` run, the validate and verify reports, the OpenMetadata lineage from the corpus container through `rag-knowledge` to `knowledge.chunks`, and the knowledge-base contract test results. Recorded on dev 2026-10-30.
 - [x] 7b.10 Web API (`rag.md`): the FastAPI OpenAPI page, chunk-by-id responses, the 404 and 422 paths, the readiness probe, and the Locust HTML report (throughput and latency). Recorded on dev 2026-10-30, without the OpenAPI page (rag-api is not published outside the mesh).
-- [x] 7b.11 Web API tests (`rag.md`): the `rag-serving` test run from CI with coverage above 90%, showing the fixtures and mocks used. The serving member's pytest options enforce `--cov-fail-under=90` with `pytest-cov`. Recorded on dev 2026-10-30: CI job src/rag/serving, 14 passed, 98.52% coverage (log text; GitHub shows job logs only to signed-in users).
+- [x] 7b.11 Web API tests (`rag.md`): the `rag-serving` test run from CI with coverage above 90%, showing the fixtures and mocks used. The serving member's pytest options enforce `--cov-fail-under=90` with `pytest-cov`. Recorded on dev 2026-10-30: CI job src/llm/rag_serving, 14 passed, 98.52% coverage (log text; GitHub shows job logs only to signed-in users).
 - [ ] 7b.12 MCP deployment rollout (`rag.md`): the stalled rollout from 7.8 with the previous version still serving.
 - [x] 7b.13 OpenMetadata AI assets (`observability.md`): the LLM service, both models, the `knowledge` MCP server and the `evidence-agent` application linked to its model, tool and `knowledge.chunks`. Recorded on dev 2026-10-30 as API output; see 7.5.
 - [x] 7b.14 LLM and agent telemetry (`observability.md`): the metrics are enabled now. vmagent scrapes vLLM, the endpoint picker, agentgateway, and `rag-serving`'s REST request and MCP tool-call counters (with failures). Capture them in the metrics explorer. Recorded on dev 2026-10-30; the Grafana dashboard is 5c.6 and 5c.8.

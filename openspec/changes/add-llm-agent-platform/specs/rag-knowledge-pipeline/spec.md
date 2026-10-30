@@ -2,7 +2,7 @@
 
 ### Requirement: Versioned document corpus
 The RAG corpus SHALL contain only documents about gateway behaviour, never payment, label or customer data, and never simulator configuration or calibration.
-- Documents derived from specs, contracts or docs SHALL be rendered from those sources into the corpus carried by the `rag-pipeline` image, which is built from `src/rag/pipeline/`.
+- Documents derived from specs, contracts or docs SHALL be rendered from those sources into the corpus carried by the `rag-pipeline` image, which is built from `src/llm/rag_pipeline/`.
 - Hand-written documents SHALL state in their text that they are synthetic.
 - CI tests SHALL fail when a code-bearing document lists codes, thresholds or the policy version differently from the code and protos.
 
