@@ -6,16 +6,19 @@ from typing import Literal
 import httpx
 import psycopg
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi import Path as PathParam
 from fraud_rag_common import store
 from fraud_rag_common.gateway import Embedder
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
+from prometheus_client import Counter, make_asgi_app
 from pydantic import BaseModel, Field
 
 Audience = Literal["analyst", "merchant"]
 CHUNK_ID = r"^[a-z0-9-]+#[a-z0-9-]+$"
+REQUESTS = Counter("knowledge_api_requests_total", "Knowledge REST requests", ["endpoint", "status"])
+TOOL_CALLS = Counter("knowledge_mcp_tool_calls_total", "Knowledge MCP tool calls", ["tool", "outcome"])
 
 
 class Chunk(BaseModel):
@@ -92,20 +95,35 @@ mcp = MCPServer(
 )
 
 
+async def counted(tool: str, call):
+    try:
+        result = await call
+    except Exception:
+        TOOL_CALLS.labels(tool, "failure").inc()
+        raise
+    TOOL_CALLS.labels(tool, "success").inc()
+    return result
+
+
+async def find_chunk(chunk_id: str) -> Chunk:
+    found = await knowledge.chunk(chunk_id)
+    if found is None:
+        raise ValueError(f"unknown chunk_id: {chunk_id}")
+    return found
+
+
 @mcp.tool()
 async def search_knowledge(query: str, top_k: int = 5, audience: Audience | None = None) -> SearchResponse:
     """Search the payment-gateway knowledge base: decline codes, risk policy, payment lifecycle,
     checkout API, features and support guidance. Returns passages with their chunk_id."""
-    return await knowledge.search(SearchRequest(query=query, top_k=top_k, audience=audience))
+    request = SearchRequest(query=query, top_k=top_k, audience=audience)
+    return await counted("search_knowledge", knowledge.search(request))
 
 
 @mcp.tool()
 async def get_knowledge_chunk(chunk_id: str) -> Chunk:
     """Return one knowledge-base passage by its chunk_id, for example 'decline-codes#high-amount'."""
-    found = await knowledge.chunk(chunk_id)
-    if found is None:
-        raise ValueError(f"unknown chunk_id: {chunk_id}")
-    return found
+    return await counted("get_knowledge_chunk", find_chunk(chunk_id))
 
 
 # Callers are restricted by mesh authorization to the agent gateway, which rewrites Host, so the
@@ -127,6 +145,15 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Payment-gateway knowledge API", version="0.1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def count_requests(request: Request, call_next):
+    response = await call_next(request)
+    route = request.scope.get("route")
+    if route is not None and request.url.path.startswith("/v1/"):
+        REQUESTS.labels(route.path, str(response.status_code)).inc()
+    return response
 
 
 @app.get("/healthz")
@@ -161,8 +188,9 @@ async def search(request: SearchRequest) -> SearchResponse:
     return await knowledge.search(request)
 
 
+app.mount("/metrics", make_asgi_app())
 app.mount("/", mcp_app)
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8080")), access_log=False)

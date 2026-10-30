@@ -55,6 +55,9 @@ gateway:
   ingestKey: LLM_GATEWAY_RAG_INGEST_API_KEY
   apiKeySecret: llm-gateway-ragapi
 
+# The platform's metrics agent, enrolled in the ambient mesh so it can be admitted by identity.
+metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
+
 # Must match models.embedding in the llm-platform chart; a change here produces a new knowledge version.
 embedding:
   model: qwen3-embedding

@@ -96,6 +96,17 @@ gateway:
       title: Payment-gateway knowledge base
       description: Search and read passages about decline codes, risk policy, the payment lifecycle, the checkout API and fraud features.
       tools: [search_knowledge, get_knowledge_chunk]
+  # REST APIs behind /<name>/v1, each a Service in this namespace, with client keys and limits like the LLM route.
+  apiRoutes:
+    knowledge:
+      service: rag-api
+      port: 8080
+
+# LLM traces: agentgateway sends OTLP spans to a collector, which forwards them to Langfuse with the project keys.
+tracing:
+  enabled: true
+  collectorImage: otel/opentelemetry-collector-contrib:0.162.0
+  sampling: "true"
 
 secretStore: gateway-doppler
 # Platform-owned credentials this app consumes: the Kubeflow artifacts identity and the shared ClickHouse users.

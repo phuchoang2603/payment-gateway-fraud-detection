@@ -15,7 +15,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - Run `evidence-agent` 0.1.0 on kagent 0.10.4. It is a read-only fraud-analyst agent without tools, and the first version of the evidence agent that later gains the MCP evidence tool.
 - Run the same agent as `evidence-agent-sandbox`, a `SandboxAgent` on Agent Substrate 0.0.9 (gVisor). Its conversations suspend to warm snapshots and resume on a small worker pool, which covers the sandbox and warm-up rubric rows.
 - Publish the agent's catalog entry to agentregistry from Git with a sync hook.
-- Run self-hosted Langfuse v3 in `llm`, on the shared ClickHouse that replaces StarRocks (owned by this repository, added in PR #102), with app-owned Postgres and Redis. In phase 2 it becomes the prompt store and receives LLM traces.
+- Run self-hosted Langfuse v3 in `llm`, on the shared ClickHouse that replaces StarRocks (owned by this repository, added in PR #102), with app-owned Postgres and Redis. It receives the gateway's LLM traces now, through an OpenTelemetry Collector that adds the project keys; in phase 2 it also becomes the prompt store.
 - Build RAG in `llm` (design.md decision 15; corpus in `rag-corpus.md`): a knowledge pipeline, a Web API and an MCP tool. It never reads payment data.
   - **Corpus:** about 14 documents about gateway behaviour. Most are rendered from the repository's specs and contracts; six are short, hand-written and labelled synthetic (decline codes, risk policy, analyst runbook, chargebacks, merchant terms, FAQ). The corpus ships inside the `rag-pipeline` image built from `src/rag/pipeline/`, so CI never writes to the bucket.
   - **Workflow:** an Argo `WorkflowTemplate` in the new `rag-pipeline` chart (Python, no Spark). Each new pipeline image starts one run, rendered as a `Workflow` named after the image tag, so a failed run never blocks a sync. It publishes the corpus to an immutable version prefix, chunks it, embeds through the gateway's embedding route and writes through Feast. The offline history is an Iceberg table; the online store is pgvector on an app-owned CNPG Postgres.
@@ -28,7 +28,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - Knative for this repo's own plain HTTP services that need no caller identity (later MCP servers and web APIs); the knowledge API is a Deployment, because its callers are admitted by mesh identity and Knative's cluster-local gateway runs outside the mesh;
   - KEDA for kagent agent Deployments and the Substrate WorkerPool (from phase 2);
   - a fixed single replica per model server, because each cluster has one GPU.
-- Document the platform on new `docs/llm/platform.md` and `docs/llm/benchmark.md` pages, and update `docs/llm/agents.md`, the roadmap and the architecture where the behaviour changes.
+- Document the platform on new, focused `docs/llm/` pages (inference, gateway, agents, observability, benchmark, RAG), and update `docs/llm/agents.md`, the roadmap and the architecture where the behaviour changes.
 - Planned for a later phase, not built in this change: a read-only ClickHouse analytics MCP tool. It answers questions such as "decline rate by merchant this week" or "top payment methods by volume" from the ClickHouse analytics marts that the next data slice builds from the Iceberg Silver tables (`fact_payment_attempt` and a daily merchant mart).
   - It is deployed like the other MCP tools: behind the agent gateway, published to the registry, wired into kagent, and covered by the same CI/CD.
   - It exposes a few typed, parameterised tools (metric, dimension, time range) rather than free-form SQL. If free-form SQL is ever offered, it is limited to SELECT over an allowlist of mart tables and capped.
@@ -78,6 +78,6 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - for RAG: `LLM_GATEWAY_RAG_INGEST_API_KEY`, `LLM_GATEWAY_RAG_API_KEY`, `RAG_DB_WRITER_PASSWORD` and `RAG_DB_READER_PASSWORD`, provisioned with random values in `dev` and `prd` on 2026-10-29.
 - **Platform dependency:** the talos-proxmox components in design.md decision 13 must be live in an environment before the chart's resources can reconcile there.
 - **Docs:**
-  - new: `docs/llm/platform.md`, `docs/llm/benchmark.md`, `docs/llm/rag.md`;
+  - new: `docs/llm/inference.md`, `docs/llm/gateway.md`, `docs/llm/observability.md`, `docs/llm/benchmark.md`, `docs/llm/rag.md` (and `docs/llm/agents.md` updated);
   - updated where behaviour changes: `docs/llm/agents.md`, `docs/overview/roadmap.md`, `docs/overview/architecture.md`, `docs/deployment/cd.md` (applications table), `docs/deployment/security.md` (keys), `docs/data/orchestration-governance.md` (AI assets in the catalog), `docs/_Sidebar.md`.
 - **No change** to the payment gateway, data pipelines or their contracts. Agents never sit in the payment decision path.

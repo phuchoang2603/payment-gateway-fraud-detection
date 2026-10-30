@@ -126,35 +126,36 @@
 
 ## 7b. Rubric screenshots (dev; stored in `docs/llm/images/`, each embedded in the page named, with a sentence on what it proves)
 
-- [ ] 7b.1 Inference platform (`platform.md`): both `LLMInferenceService`s Ready with their pods, `nvidia-smi` showing both processes on the one GPU, and the custom model's name and revision.
+- [ ] 7b.1 Inference platform (`inference.md`): both `LLMInferenceService`s Ready with their pods, `nvidia-smi` showing both processes on the one GPU, and the custom model's name and revision.
 - [ ] 7b.2 Benchmark (`benchmark.md`): the baseline and each optimization's results table, with the command and date.
-- [ ] 7b.3 Agent gateway security and policy (`platform.md`): the 7.2 terminal run (401 without or with a wrong key, chat and embedding with the agents key, PII masked, 429 burst, mesh refusal), plus links to the Gateway, HTTPRoute and `AgentgatewayPolicy` YAML.
+- [ ] 7b.3 Agent gateway security and policy (`gateway.md`): the 7.2 terminal run (401 without or with a wrong key, chat and embedding with the agents key, PII masked, 429 burst, mesh refusal), plus links to the Gateway, HTTPRoute and `AgentgatewayPolicy` YAML.
 - [ ] 7b.4 MCP gateway (`rag.md`): `tools/list` and a `search_knowledge` call through `/mcp/knowledge` with the agents key, the same call refused without a key and refused when calling `rag-api` directly, plus a link to the MCP route and policy YAML.
-- [ ] 7b.5 Global ModelConfig and agent (`platform.md`): the kagent UI's ModelConfig page pointing at the gateway, and a chat with `evidence-agent` that calls the knowledge tools and cites chunk ids, plus links to the Agent YAML.
-- [ ] 7b.6 Agent UI authentication (`platform.md`): the kagent UI behind the platform's Dex login.
-- [ ] 7b.7 Registry (`platform.md`): the agentregistry UI showing `evidence-agent`, its prompt and the `knowledge` MCP server, plus a link to the registry catalog template.
-- [ ] 7b.8 Sandbox and warm-up (`platform.md`): `evidence-agent-sandbox` on Agent Substrate, with several conversations served by few workers (worker count, actor states, answer times), plus a link to the SandboxAgent YAML.
+- [ ] 7b.5 Global ModelConfig and agent (`agents.md`): the kagent UI's ModelConfig page pointing at the gateway, and a chat with `evidence-agent` that calls the knowledge tools and cites chunk ids, plus links to the Agent YAML.
+- [ ] 7b.6 Agent UI authentication (`agents.md`): the kagent UI behind the platform's Dex login.
+- [ ] 7b.7 Registry (`agents.md`): the agentregistry UI showing `evidence-agent`, its prompt and the `knowledge` MCP server, plus a link to the registry catalog template.
+- [ ] 7b.8 Sandbox and warm-up (`agents.md`): `evidence-agent-sandbox` on Agent Substrate, with several conversations served by few workers (worker count, actor states, answer times), plus a link to the SandboxAgent YAML.
 - [ ] 7b.9 RAG pipeline (`rag.md`): the Argo Workflows graph of a successful `rag-knowledge` run, the validate and verify reports, the OpenMetadata lineage from the corpus container through `rag-knowledge` to `knowledge.chunks`, and the knowledge-base contract test results.
 - [ ] 7b.10 Web API (`rag.md`): the FastAPI OpenAPI page, chunk-by-id and search responses, the 404 and 422 paths, the readiness probe, and the Locust HTML report (throughput and latency).
-- [ ] 7b.11 Web API tests (`rag.md`): the `rag-serving` test run from CI with coverage above 90%, showing the fixtures and mocks used. This needs `pytest-cov` and a coverage threshold in the serving member's pytest options.
+- [ ] 7b.11 Web API tests (`rag.md`): the `rag-serving` test run from CI with coverage above 90%, showing the fixtures and mocks used. The serving member's pytest options enforce `--cov-fail-under=90` with `pytest-cov`.
 - [ ] 7b.12 MCP deployment rollout (`rag.md`): the stalled rollout from 7.8 with the previous version still serving.
-- [ ] 7b.13 OpenMetadata AI assets (`platform.md`): the LLM service, both models, the `knowledge` MCP server and the `evidence-agent` application linked to its model, tool and `knowledge.chunks`.
-- [ ] 7b.14 LLM and agent telemetry (`platform.md`): a Grafana dashboard, kept as code, with tokens in and out per request, round-trip time, TTFT, PII-masked request counts, agent calls, MCP tool calls and tool failures.
-- [ ] 7b.15 Langfuse (`platform.md`): the Langfuse UI behind Dex with the `payment-gateway-fraud-detection` project. Prompt sourcing from Langfuse is phase 2.
-- [ ] 7b.16 CI/CD (`rag.md`, `platform.md`): the GitHub Actions runs that test, build and release the `rag-pipeline` and `rag-serving` images and the LLM charts, and the `deploy/dev` release they produced.
-- [ ] 7b.17 Web API authentication and rate limit (`rag.md`): route the REST knowledge API through the gateway with a client key and limits, as `/mcp/knowledge` already is, and capture 401 and 429. If that is not done in this change, record it as a gap.
+- [ ] 7b.13 OpenMetadata AI assets (`observability.md`): the LLM service, both models, the `knowledge` MCP server and the `evidence-agent` application linked to its model, tool and `knowledge.chunks`.
+- [ ] 7b.14 LLM and agent telemetry (`observability.md`): the metrics are enabled now. vmagent scrapes vLLM, the endpoint picker, agentgateway, and `rag-serving`'s REST request and MCP tool-call counters (with failures). Capture them in the metrics explorer. The Grafana dashboard is deferred to a later change at the user's request.
+- [ ] 7b.15 Langfuse (`observability.md`): the Langfuse UI behind Dex with the `payment-gateway-fraud-detection` project, and the traces of gateway LLM calls (model, latency, token usage) that arrive through the OpenTelemetry Collector. Prompt sourcing from Langfuse is phase 2.
+- [ ] 7b.16 CI/CD (`rag.md`, `inference.md`): the GitHub Actions runs that test, build and release the `rag-pipeline` and `rag-serving` images and the LLM charts, and the `deploy/dev` release they produced.
+- [ ] 7b.17 Web API authentication and rate limit (`rag.md`): the REST knowledge API is routed through the gateway as `/knowledge/v1/...` with client keys and limits, like `/mcp/knowledge`; capture 401 and 429.
 
 ## 8. Documentation and cleanup
 
-- [ ] 8.1 Write `docs/llm/platform.md`:
-  - request path, model servers and the GPU split, placement, cache;
-  - gateway policy, ModelConfig, agent and warm-up;
-  - registry, OpenMetadata assets, the autoscaling decision table;
-  - links to code at a commit, with captures.
+- [ ] 8.1 Write the LLM pages as separate, focused notes, each with its captures and links to code at a commit:
+  - `docs/llm/inference.md`: model servers, the GPU split and rollout strategy, weight streaming, placement, cache;
+  - `docs/llm/gateway.md`: the Gateway, routes (`/v1`, `/mcp/<server>`, `/<api>/v1`), keys, limits, PII masking, mesh rules;
+  - `docs/llm/agents.md` (update): ModelConfig, `evidence-agent` and its tools, the sandboxed warm copy on Substrate, the registry, the autoscaling decision table;
+  - `docs/llm/observability.md`: metrics and scrapes, Langfuse tracing through the collector, OpenMetadata AI assets;
+  - `docs/llm/benchmark.md`: the workload, recorded results and conclusions.
 
-  Write `docs/llm/benchmark.md` with the workload, recorded results and conclusions. Add both to `docs/_Sidebar.md`.
+  Add the pages to `docs/_Sidebar.md`.
 - [ ] 8.1b Write `docs/llm/rag.md` from the 7.7 and 7.8 runs: corpus, versioning, workflow, stores, checks, lineage, the Web API with its load-test results, and the MCP tool.
-- [ ] 8.2 Update only the affected parts of:
+- [ ] 8.2 Update only the affected parts of (no single catch-all platform page):
   - `docs/llm/agents.md` (status and component table);
   - `docs/overview/roadmap.md` (LLM rows and the Knative/KEDA mapping);
   - `docs/overview/architecture.md` (deployable units);

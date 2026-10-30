@@ -95,3 +95,71 @@ def test_mcp_exposes_two_tools_backed_by_the_same_functions(client):
     assert asyncio.run(service.get_knowledge_chunk("decline-codes#high-amount")).doc_id == "decline-codes"
     with pytest.raises(ValueError, match="unknown chunk_id"):
         asyncio.run(service.get_knowledge_chunk("decline-codes#missing"))
+
+
+def test_liveness_needs_nothing(client):
+    assert client.get("/healthz").json() == {"status": "ok"}
+
+
+def test_readiness_follows_the_database(client, monkeypatch):
+    monkeypatch.setattr(service, "ping", lambda: None)
+    assert client.get("/readyz").status_code == 200
+
+    def down():
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(service, "ping", down)
+    assert client.get("/readyz").status_code == 503
+
+
+def test_store_loads_lazily_and_answers_503_until_the_registry_exists(client, monkeypatch):
+    monkeypatch.setattr(service.knowledge, "feature_store", None)
+
+    def missing():
+        raise RuntimeError("registry tables do not exist yet")
+
+    monkeypatch.setattr(store, "store", missing)
+    assert client.get("/v1/chunks/decline-codes%23high-amount").status_code == 503
+
+    class Loaded:
+        def get_feature_view(self, name):
+            return name
+
+    monkeypatch.setattr(store, "store", Loaded)
+    assert client.get("/v1/chunks/decline-codes%23high-amount").status_code == 200
+    assert isinstance(service.knowledge.feature_store, Loaded)
+
+
+def test_metrics_count_rest_requests_and_tool_outcomes(client):
+    client.get("/v1/chunks/decline-codes%23high-amount")
+    asyncio.run(service.search_knowledge("high amount"))
+    with pytest.raises(ValueError):
+        asyncio.run(service.get_knowledge_chunk("decline-codes#missing"))
+
+    metrics = client.get("/metrics/").text
+
+    assert 'knowledge_api_requests_total{endpoint="/v1/chunks/{chunk_id}",status="200"}' in metrics
+    assert 'knowledge_mcp_tool_calls_total{outcome="success",tool="search_knowledge"}' in metrics
+    assert 'knowledge_mcp_tool_calls_total{outcome="failure",tool="get_knowledge_chunk"}' in metrics
+
+
+def test_lifespan_builds_the_embedder_and_serves_mcp(monkeypatch):
+    monkeypatch.setattr(service.Embedder, "from_env", classmethod(lambda cls: FakeEmbedder()))
+    with TestClient(service.app) as running:
+        assert isinstance(service.knowledge.embedder, FakeEmbedder)
+        response = running.post(
+            "/mcp",
+            headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "0"},
+                },
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["result"]["serverInfo"]["name"] == "knowledge"
