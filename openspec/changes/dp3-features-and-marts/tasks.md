@@ -114,3 +114,13 @@
 
   Results that do not meet expectations are recorded as observed.
 - [ ] 9.3 Send the platform requests (design decision 13). Once they are met, capture the three dashboards.
+
+## 10. Archive and handback
+
+- [ ] 10.1 After the evidence is recorded, archive the change, which syncs the delta specs into `openspec/specs/`. Verify with `openspec validate --strict --all`.
+- [ ] 10.2 Send the final handback to the coordinator thread with `t3_thread_send` (threadId `c34bb87e-6fb4-4456-81b1-669837d72ff3`). It covers:
+  - the commits on `main` and the CI state;
+  - the prod runs and their outcomes;
+  - the evidence and screenshots, with paths;
+  - blockers and open questions;
+  - for the Feast change, the final names, keys and locations of `gold.feat_customer_daily`, `gold.feat_payment_method_daily`, `gold.dim_customer` and `gold.label_attempt`: Iceberg catalog and namespace, entity key columns, `event_timestamp` and `created` semantics, partitioning, and the SCD2 validity columns.
