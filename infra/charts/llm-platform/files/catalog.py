@@ -134,7 +134,21 @@ def publish_openmetadata(assets: dict, agents: list[dict]) -> None:
 
     def put(path: str, body: dict) -> dict:
         status, result, _ = call("PUT", f"{base}/v1/{path}", body, headers)
-        return required(status, result, f"openmetadata: PUT {path}") or {}
+        entity = required(status, result, f"openmetadata: PUT {path}") or {}
+        # PUT keeps an existing description; Git is the source, so replace it when it differs.
+        if entity.get("id") and entity.get("description") != body.get("description"):
+            patch = [
+                {"op": "add", "path": "/description", "value": body["description"]}
+            ]
+            status, result, _ = call(
+                "PATCH",
+                f"{base}/v1/{path}/{entity['id']}",
+                json.dumps(patch).encode(),
+                headers,
+                content_type="application/json-patch+json",
+            )
+            entity = required(status, result, f"openmetadata: PATCH {path} description")
+        return entity
 
     def get(path: str) -> dict:
         status, result, _ = call("GET", f"{base}/v1/{path}", headers=headers)
