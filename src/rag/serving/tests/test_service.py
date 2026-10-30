@@ -132,6 +132,25 @@ def test_store_loads_lazily_and_answers_503_until_the_registry_exists(client, mo
     assert isinstance(service.knowledge.feature_store, Loaded)
 
 
+def test_warm_loads_the_store_and_tolerates_a_missing_registry(monkeypatch):
+    monkeypatch.setattr(service.knowledge, "feature_store", None)
+
+    def missing():
+        raise RuntimeError("registry tables do not exist yet")
+
+    monkeypatch.setattr(store, "store", missing)
+    asyncio.run(service.knowledge.warm())
+    assert service.knowledge.feature_store is None
+
+    class Loaded:
+        def get_feature_view(self, name):
+            return name
+
+    monkeypatch.setattr(store, "store", Loaded)
+    asyncio.run(service.knowledge.warm())
+    assert isinstance(service.knowledge.feature_store, Loaded)
+
+
 def test_metrics_count_rest_requests_and_tool_outcomes(client):
     client.get("/v1/chunks/decline-codes%23high-amount")
     asyncio.run(service.search_knowledge("high amount"))
@@ -147,6 +166,7 @@ def test_metrics_count_rest_requests_and_tool_outcomes(client):
 
 def test_lifespan_builds_the_embedder_and_serves_mcp(monkeypatch):
     monkeypatch.setattr(service.Embedder, "from_env", classmethod(lambda cls: FakeEmbedder()))
+    monkeypatch.setattr(service.knowledge, "feature_store", object())
     with TestClient(service.app) as running:
         assert isinstance(service.knowledge.embedder, FakeEmbedder)
         response = running.post(
