@@ -23,6 +23,8 @@ spec:
     mutexes:
       - name: dp1-bronze-writer
   podMetadata:
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
     labels:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
       dp-product: bronze-payments

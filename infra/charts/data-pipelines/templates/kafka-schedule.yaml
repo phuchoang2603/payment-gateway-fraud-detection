@@ -11,6 +11,9 @@ spec:
   concurrencyPolicy: Forbid
   workflowSpec:
     serviceAccountName: data-pipelines
+    podMetadata:
+      annotations:
+        karpenter.sh/do-not-disrupt: "true"
     entrypoint: kafka
     onExit: publish
     templates:

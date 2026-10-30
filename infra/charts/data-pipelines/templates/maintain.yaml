@@ -14,6 +14,8 @@ spec:
     mutexes:
       - name: lakehouse-maintenance
   podMetadata:
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
     labels:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
       dp-product: lakehouse
@@ -41,6 +43,9 @@ spec:
   concurrencyPolicy: Forbid
   workflowSpec:
     serviceAccountName: data-pipelines
+    podMetadata:
+      annotations:
+        karpenter.sh/do-not-disrupt: "true"
     entrypoint: maintain
     onExit: publish
     templates:

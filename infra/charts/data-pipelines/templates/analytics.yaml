@@ -10,6 +10,8 @@ spec:
   entrypoint: run
   activeDeadlineSeconds: {{ .Values.analytics.activeDeadlineSeconds }}
   podMetadata:
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
     labels:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
       dp-product: silver-payments
