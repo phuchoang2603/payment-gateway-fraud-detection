@@ -278,81 +278,79 @@ def distinct_events(hashed: DataFrame) -> DataFrame:
     return grouped.select("hashes", "kept.*")
 
 
+START_FIELDS = [
+    ("merchant_id", "attempt_started.context.merchant.merchant_id"),
+    ("customer_id", "attempt_started.context.customer.customer_id"),
+    ("amount_minor", "attempt_started.context.snapshot.total.minor_units"),
+    ("currency", "attempt_started.context.snapshot.total.currency"),
+    ("started_at", "occurred_at"),
+    ("attempted_at", "attempt_started.signals.attempted_at"),
+    ("device_fingerprint", "attempt_started.signals.device_fingerprint"),
+    ("payment_method_type", "attempt_started.signals.payment_method.type"),
+    ("payment_method_fingerprint", "attempt_started.signals.payment_method.fingerprint"),
+]
+DECISION_FIELDS = [
+    ("risk_outcome", "risk_decision_recorded.assessment.outcome"),
+    ("risk_reason_codes", "risk_decision_recorded.assessment.reason_codes"),
+    ("policy_version", "risk_decision_recorded.assessment.policy_version"),
+    ("model_version", "risk_decision_recorded.assessment.model_version"),
+    ("feature_set_version", "risk_decision_recorded.assessment.feature_set_version"),
+    ("risk_score", "risk_decision_recorded.assessment.risk_score"),
+    ("assessment_id", "risk_decision_recorded.assessment.assessment_id"),
+]
+
+
 def attempt_events(events: DataFrame) -> DataFrame:
-    frames = []
-    for kind, payload in ATTEMPT_PAYLOADS:
-        detail = F.col("attempt_declined.source") if kind == "declined" else F.lit(None).cast("string")
-        frames.append(
-            events.where(F.col(payload).isNotNull()).select(
-                *PAYMENT_KEY,
-                F.col(f"{payload}.attempt_id").alias("attempt_id"),
-                "aggregate_version",
-                "occurred_at",
-                F.lit(kind).alias("kind"),
-                detail.alias("detail"),
-            )
-        )
-    return reduce(DataFrame.unionByName, frames)
-
-
-def first_per_attempt(events: DataFrame, payload: str, columns) -> DataFrame:
-    keyed = events.where(F.col(payload).isNotNull()).withColumn("attempt_id", F.col(f"{payload}.attempt_id"))
-    ordered = Window.partitionBy(*ATTEMPT_KEY).orderBy("aggregate_version")
-    return (
-        keyed.withColumn("_position", F.row_number().over(ordered))
-        .where(F.col("_position") == 1)
-        .select(*ATTEMPT_KEY, *columns)
+    """One row per attempt event from a single pass: its kind, version, and the start or decision fields it carries."""
+    kind = reduce(
+        lambda column, item: column.when(F.col(item[1]).isNotNull(), F.lit(item[0])),
+        ATTEMPT_PAYLOADS[1:],
+        F.when(F.col(ATTEMPT_PAYLOADS[0][1]).isNotNull(), F.lit(ATTEMPT_PAYLOADS[0][0])),
+    )
+    attempt_id = F.coalesce(*[F.col(f"{payload}.attempt_id") for _, payload in ATTEMPT_PAYLOADS])
+    return events.where(attempt_id.isNotNull()).select(
+        *PAYMENT_KEY,
+        attempt_id.alias("attempt_id"),
+        "aggregate_version",
+        "occurred_at",
+        kind.alias("kind"),
+        F.col("attempt_declined.source").alias("detail"),
+        F.when(
+            F.col("attempt_started").isNotNull(), F.struct(*[F.col(path).alias(name) for name, path in START_FIELDS])
+        ).alias("start"),
+        F.when(
+            F.col("risk_decision_recorded").isNotNull(),
+            F.struct(*[F.col(path).alias(name) for name, path in DECISION_FIELDS]),
+        ).alias("decision"),
     )
 
 
 def attempts(events: DataFrame, payment_status: DataFrame) -> DataFrame:
+    """Attempts from one aggregation per attempt: the first start and decision by aggregate_version, with the
+    lifecycle counts, joined to the payment status. One shuffle replaces a window per payload and their joins."""
     kinds = attempt_events(events)
-    per_attempt = kinds.groupBy(*ATTEMPT_KEY).agg(
-        F.sum(F.when(F.col("kind") == "start", 1).otherwise(0)).alias("starts"),
-        F.sum(F.when(F.col("kind").isin(*TERMINAL_KINDS), 1).otherwise(0)).alias("terminals"),
-        F.min(F.when(F.col("kind") == "start", F.col("aggregate_version"))).alias("start_version"),
-        F.min(F.when(F.col("kind").isin(*TERMINAL_KINDS), F.col("aggregate_version"))).alias("terminal_version"),
-        F.max(F.when(F.col("kind") == "succeeded", F.col("occurred_at"))).alias("succeeded_at"),
-        F.max(F.when(F.col("kind") == "declined", F.col("occurred_at"))).alias("declined_at"),
-        F.max(F.when(F.col("kind") == "unknown", F.col("occurred_at"))).alias("unknown_at"),
-        F.max(F.when(F.col("kind") == "declined", F.col("detail"))).alias("decline_source"),
+    per_attempt = (
+        kinds.groupBy(*ATTEMPT_KEY)
+        .agg(
+            F.sum(F.when(F.col("kind") == "start", 1).otherwise(0)).alias("starts"),
+            F.sum(F.when(F.col("kind").isin(*TERMINAL_KINDS), 1).otherwise(0)).alias("terminals"),
+            F.min(F.when(F.col("kind") == "start", F.col("aggregate_version"))).alias("start_version"),
+            F.min(F.when(F.col("kind").isin(*TERMINAL_KINDS), F.col("aggregate_version"))).alias("terminal_version"),
+            F.max(F.when(F.col("kind") == "succeeded", F.col("occurred_at"))).alias("succeeded_at"),
+            F.max(F.when(F.col("kind") == "declined", F.col("occurred_at"))).alias("declined_at"),
+            F.max(F.when(F.col("kind") == "unknown", F.col("occurred_at"))).alias("unknown_at"),
+            F.max(F.when(F.col("kind") == "declined", F.col("detail"))).alias("decline_source"),
+            F.min_by("start", F.when(F.col("kind") == "start", F.col("aggregate_version"))).alias("start"),
+            F.min_by("decision", F.when(F.col("kind") == "decision", F.col("aggregate_version"))).alias("decision"),
+        )
+        .select(
+            "*",
+            *[F.col(f"start.{name}").alias(name) for name, _ in START_FIELDS],
+            *[F.col(f"decision.{name}").alias(name) for name, _ in DECISION_FIELDS],
+        )
     )
-    starts = first_per_attempt(
-        events,
-        "attempt_started",
-        [
-            F.col("attempt_started.context.merchant.merchant_id").alias("merchant_id"),
-            F.col("attempt_started.context.customer.customer_id").alias("customer_id"),
-            F.col("attempt_started.context.snapshot.total.minor_units").alias("amount_minor"),
-            F.col("attempt_started.context.snapshot.total.currency").alias("currency"),
-            F.col("occurred_at").alias("started_at"),
-            F.col("attempt_started.signals.attempted_at").alias("attempted_at"),
-            F.col("attempt_started.signals.device_fingerprint").alias("device_fingerprint"),
-            F.col("attempt_started.signals.payment_method.type").alias("payment_method_type"),
-            F.col("attempt_started.signals.payment_method.fingerprint").alias("payment_method_fingerprint"),
-        ],
-    )
-    decisions = first_per_attempt(
-        events,
-        "risk_decision_recorded",
-        [
-            F.col("risk_decision_recorded.assessment.outcome").alias("risk_outcome"),
-            F.col("risk_decision_recorded.assessment.reason_codes").alias("risk_reason_codes"),
-            F.col("risk_decision_recorded.assessment.policy_version").alias("policy_version"),
-            F.col("risk_decision_recorded.assessment.model_version").alias("model_version"),
-            F.col("risk_decision_recorded.assessment.feature_set_version").alias("feature_set_version"),
-            F.col("risk_decision_recorded.assessment.risk_score").alias("risk_score"),
-            F.col("risk_decision_recorded.assessment.assessment_id").alias("assessment_id"),
-        ],
-    )
-    keys = kinds.select(*ATTEMPT_KEY).distinct()
     order = payment_status.select(*PAYMENT_KEY, "payment_status", "order_violation")
-    joined = (
-        keys.join(starts, ATTEMPT_KEY, "left")
-        .join(decisions, ATTEMPT_KEY, "left")
-        .join(per_attempt, ATTEMPT_KEY, "left")
-        .join(order, PAYMENT_KEY, "left")
-    )
+    joined = per_attempt.join(order, PAYMENT_KEY, "left")
     outcome = (
         F.when(F.col("succeeded_at").isNotNull(), F.lit("succeeded"))
         .when(F.col("declined_at").isNotNull(), F.lit("declined"))
