@@ -31,6 +31,13 @@ def lookback() -> timedelta:
     return timedelta(days=int(os.environ.get(LOOKBACK_ENV, LOOKBACK_DEFAULT_DAYS)))
 
 
+def read_at(spark: SparkSession, table: str, snapshot) -> DataFrame:
+    """The table at a snapshot; a table without one is empty."""
+    if snapshot is None:
+        return spark.table(table).limit(0)
+    return spark.read.option("versionAsOf", snapshot).table(table)
+
+
 def last_run(spark: SparkSession, table: str):
     """The summary of the newest DP2 commit in the table's main history; maintenance commits carry no run ID."""
     if not spark.catalog.tableExists(table):
@@ -82,7 +89,7 @@ def refusal(spark: SparkSession, state_table: str, bronze: dict):
         recorded = summary.get(prop)
         if recorded is None:
             return f"the last Silver run did not record {prop}", None
-        since[table] = int(recorded)
+        since[table] = int(recorded) if recorded else None
         reason = rewritten_since(spark, table, since[table], current)
         if reason:
             return f"Bronze changed historical rows since the last Silver run: {reason}", None
@@ -93,6 +100,8 @@ def appended(spark: SparkSession, table: str, since, current) -> DataFrame:
     """Rows appended to the table's main between two snapshots, by Iceberg's incremental append read."""
     if since == current:
         return spark.table(table).limit(0)
+    if since is None:
+        return read_at(spark, table, current)
     return (
         spark.read.format("iceberg")
         .option("start-snapshot-id", str(since))

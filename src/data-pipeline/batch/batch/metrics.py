@@ -15,7 +15,8 @@ def phase(spark, phases: dict, name: str):
         seconds = time.perf_counter() - started
         jobs = tracker.getJobIdsForGroup(group)
         stage_ids = [stage for job in jobs for stage in (tracker.getJobInfo(job).stageIds or [])]
-        tasks = sum(tracker.getStageInfo(stage).numTasks for stage in stage_ids)
+        infos = [tracker.getStageInfo(stage) for stage in stage_ids]
+        tasks = sum(info.numTasks for info in infos if info is not None)
         phases[name] = {
             "seconds": round(seconds, 2),
             "job_ids": list(jobs),

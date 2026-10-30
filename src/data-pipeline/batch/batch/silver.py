@@ -139,13 +139,13 @@ def run(spark, run_id, mode="historical"):
     events_snapshot = current_snapshot(spark, BRONZE_EVENTS)
     labels_snapshot = current_snapshot(spark, BRONZE_LABELS)
     pins = {
-        "bronze.payment_events.snapshot_id": str(events_snapshot),
-        "bronze.fraud_labels.snapshot_id": str(labels_snapshot),
+        incremental.EVENTS_PROPERTY: "" if events_snapshot is None else str(events_snapshot),
+        incremental.LABELS_PROPERTY: "" if labels_snapshot is None else str(labels_snapshot),
         "dp2.mode": mode,
         incremental.LOGIC_PROPERTY: incremental.LOGIC_VERSION,
     }
-    bronze_events = spark.read.option("versionAsOf", events_snapshot).table(BRONZE_EVENTS)
-    bronze_labels = spark.read.option("versionAsOf", labels_snapshot).table(BRONZE_LABELS)
+    bronze_events = incremental.read_at(spark, BRONZE_EVENTS, events_snapshot)
+    bronze_labels = incremental.read_at(spark, BRONZE_LABELS, labels_snapshot)
     cached = []
     phases = {}
 
@@ -301,7 +301,7 @@ def incremental_scope(spark, events_snapshot, labels_snapshot, cache) -> dict:
     if count == 0:
         return scope
     silver = {
-        table: spark.read.option("versionAsOf", current_snapshot(spark, table)).table(table)
+        table: incremental.read_at(spark, table, current_snapshot(spark, table))
         for table in (PAYMENT_EVENTS, LABELS, REJECTED)
     }
     late = incremental.outside_lookback(silver[PAYMENT_EVENTS], silver[LABELS], silver[REJECTED], payments, cutoff)
@@ -362,6 +362,8 @@ def counts_by(frame: DataFrame, column: str) -> dict:
 
 
 def total_records(spark, table, snapshot) -> int:
+    if snapshot is None:
+        return 0
     row = spark.sql(
         f"SELECT summary['total-records'] AS total FROM {table}.snapshots WHERE snapshot_id = {snapshot}"
     ).first()
