@@ -102,11 +102,12 @@ gateway:
       service: rag-api
       port: 8080
 
-# LLM traces: agentgateway posts OTLP spans straight to the platform's trace store, next to the services' traces.
+# LLM traces: the gateway and the agents send OTLP to one collector, which exports every span to Langfuse (with the
+# project keys) and to the platform's VictoriaTraces through vtagent.
 tracing:
   enabled: true
-  url: http://vtagent-vmks.observability.svc.cluster.local:10429
-  path: /insert/opentelemetry/v1/traces
+  collectorImage: otel/opentelemetry-collector-contrib:0.162.0
+  victoriaTraces: http://vtagent-vmks.observability.svc.cluster.local:10429/insert/opentelemetry
   sampling: "true"
 
 secretStore: gateway-doppler
@@ -122,10 +123,6 @@ agents:
   uid: 65532
   sandbox:
     snapshotRoot: gs://platform-dev/substrate/llm
-  # Agent-side LLM traces go to Langfuse's OTLP endpoint with the headless-init project keys. kagent injects its
-  # own OTEL_TRACING_ENABLED after these, so they take effect only once the platform sets otel.tracing.enabled.
-  tracing:
-    url: http://langfuse-web.llm.svc.cluster.local:3000/api/public/otel/v1/traces
   # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
   list:
     - name: evidence-agent
