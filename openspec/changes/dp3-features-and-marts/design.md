@@ -149,12 +149,24 @@ Keys are (`integration_id`, `customer_id`) and (`integration_id`, `payment_metho
 
 **Source.** The `attempt_started` context in `silver.payment_events`, joined to lifecycle-valid attempts.
 
-**Tracked attributes:** `external_buyer_id`, `customer_account_created_at`, `shipping_country`, `shipping_region`, `shipping_postal_code` and `shipping_address_fingerprint`.
+**Tracked attributes:**
+
+- `external_buyer_id` and `customer_account_created_at`;
+- `shipping_country`, `shipping_region`, `shipping_postal_code` and `shipping_address_fingerprint`;
+- `familiar_device_fingerprints`: the sorted set of devices the customer used on at least two attempts within the 90 days up to and including this attempt. The set is computed only from that attempt and earlier ones, so a version never depends on later data.
+
+**Why the familiar set, not the attempt's device.** Each customer alternates at random between two devices, so a per-attempt `device_fingerprint` attribute would open a version on about every other attempt, making the dimension one row per attempt. The familiar set changes only on real device events:
+
+- a new device used twice joins it (the account-takeover and stolen-card patterns);
+- the 120-day device rotation in the generator swaps the pair;
+- a device unused for 90 days drops out.
+
+One-off devices (the 5% unfamiliar contexts) never enter the set. They stay visible per attempt in `fact_payment_attempt.device_fingerprint` and in the `distinct_device_count` features.
 
 **Build steps:**
 
 1. Order each customer's attempts by (`started_at`, `payment_id`, `attempt_id`).
-2. Compute `profile_hash = sha2(to_json(named_struct(...)))`. JSON keeps nulls, so the comparison is null-safe.
+2. Compute `familiar_device_fingerprints` per attempt: count each device's uses over the customer's attempts in `(started_at − 90 days, started_at]`, keep devices with two or more uses, and sort them. Then compute `profile_hash = sha2(to_json(named_struct(...)))` over all tracked attributes. JSON keeps nulls and array order, so the comparison is null-safe and deterministic.
 3. Keep the rows where the hash differs from `lag(profile_hash)`.
 4. Set `valid_from_ts = started_at` and `valid_to_ts = lead(valid_from_ts)`, null for the current version. `is_current = valid_to_ts IS NULL`.
 5. Set `customer_sk = sha2(integration_id|customer_id|valid_from_ts)` and `version_number = row_number()`.
@@ -162,7 +174,14 @@ Keys are (`integration_id`, `customer_id`) and (`integration_id`, `payment_metho
 
 **Why null and not `9999-12-31` for the current version.** ClickHouse `DateTime64` stops at 2299, so a sentinel date would clip or fail when ClickHouse reads it through `lakehouse`.
 
-**Expected versions.** The generator gives this dimension real but sparse change: one-off shipping addresses, at 2% normally and 35% under compromise, and account-takeover address changes. That is about 0.25 extra versions per customer per year. The versions are a genuine fraud signal ("address changed recently"), and a later feature version could read them.
+**Expected versions.**
+
+- **Addresses:** one-off shipping addresses (2% normally, 35% under compromise) and account-takeover address changes add about 0.25 versions per customer per year.
+- **Device warm-up:** the familiar set starts empty and grows to one device, then two. That gives two to three warm-up versions per customer at the start of history.
+- **Device rotation:** in v19, each 120-day rotation adds about two versions, as the new pair enters and the old pair leaves after 90 days. That is about six per customer per year. v18 covers 90 days, so dev shows only warm-up and compromise changes.
+- **Totals:** about 25–30M rows in prod (3M customers) and about 40k in dev.
+
+These versions are genuine fraud signals ("new familiar device", "address changed recently"), and a later feature version could read them.
 
 **Checks:**
 
@@ -171,7 +190,10 @@ Keys are (`integration_id`, `customer_id`) and (`integration_id`, `payment_metho
 - `valid_from_ts < valid_to_ts`;
 - `customer_sk` is unique.
 
-*Alternative:* track the modal device or address per day. Rejected: it is a derived statistic, not an attribute, and it hides the one-off changes that matter for fraud.
+*Alternatives:*
+
+- Track the attempt's raw device. Rejected: it versions on almost every attempt.
+- Track the modal device or address per day. Rejected: it hides the one-off address changes that matter for fraud.
 
 ### 5. `label_attempt`
 
@@ -200,7 +222,7 @@ CREATE TABLE marts.fact_payment_attempt (
   merchant_id String, customer_id String, payment_method_fingerprint String,
   payment_method_type LowCardinality(String), device_fingerprint Nullable(String),
   amount_minor Int64, currency LowCardinality(String),
-  started_at DateTime64(6, 'UTC'), started_date Date MATERIALIZED toDate(started_at),
+  started_at DateTime64(6, 'UTC'),
   attempted_at Nullable(DateTime64(6, 'UTC')),
   risk_outcome LowCardinality(Nullable(String)), risk_score Nullable(Float64),
   policy_version LowCardinality(Nullable(String)), model_version LowCardinality(Nullable(String)),
@@ -213,8 +235,8 @@ CREATE TABLE marts.fact_payment_attempt (
   INDEX ix_score risk_score TYPE minmax GRANULARITY 4,
   INDEX ix_outcome outcome TYPE set(8) GRANULARITY 4
 ) ENGINE = MergeTree
-PARTITION BY toYYYYMM(started_date)
-ORDER BY (integration_id, merchant_id, started_date, customer_id);
+PARTITION BY toYYYYMM(started_at)
+ORDER BY (integration_id, toDate(started_at), merchant_id, started_at);
 
 CREATE TABLE marts.fact_merchant_day (
   integration_id LowCardinality(String), merchant_id String, day Date,
@@ -228,14 +250,15 @@ CREATE TABLE marts.fact_merchant_day (
   chargeback_window_complete Bool        -- day + 21 days <= build cutoff (max chargeback delay)
 ) ENGINE = MergeTree
 PARTITION BY toYYYYMM(day)
-ORDER BY (integration_id, merchant_id, day);
+ORDER BY (integration_id, day, merchant_id);
 ```
 
 **Fixed queries and the structure that serves each one:**
 
 | Query | Used by | Served by |
 |---|---|---|
-| Q1: one merchant's attempts and outcomes over a date range | Merchant drill-down, MCP | primary key prefix (`integration_id`, `merchant_id`, `started_date`) |
+| Q0: all attempts in a time range (for example the last 24 hours, by hour and outcome) | overview, MCP | partition pruning, then the primary key's time prefix (`integration_id`, `toDate(started_at)`) |
+| Q1: one merchant's attempts and outcomes over a date range | Merchant drill-down, MCP | time prefix, then `merchant_id` within each day |
 | Q2: one customer's attempts over 30 days | investigation, MCP | `ix_customer` bloom filter plus partition pruning |
 | Q3: one card's attempts across customers | card-testing investigation | `ix_method` bloom filter |
 | Q4: approved attempts with `risk_score > 0.9`, and declines by outcome | Fraud outcomes | `ix_score` minmax and `ix_outcome` set |
@@ -243,8 +266,13 @@ ORDER BY (integration_id, merchant_id, day);
 
 **Notes on the key choice:**
 
+- **Time first, as ClickHouse recommends.** Key columns go in ascending cardinality and by how often queries filter on them. Almost every dashboard and tool query has a time range. A day has 365 values in v19 and a merchant has 20,000, so the key is `(integration_id, toDate(started_at), merchant_id, started_at)`.
+  - The key uses the expression `toDate(started_at)` rather than a separate date column. ClickHouse analyses monotonic functions, so a plain `started_at >= … AND started_at < …` filter, which is what Grafana's `$__timeFilter(started_at)` produces, prunes through the primary key with no rewriting.
+  - Inside each day, rows are ordered by merchant and then by time. One merchant's range is a contiguous slice per day, and "latest attempts" reads stay ordered.
+  - Monthly partitions drop whole months for longer ranges and keep the part count low: about 6 partitions in prod with the 180-day window.
 - **Integration first.** `integration_id` has one value today, but it leads the key so per-integration queries stay correct.
-- **Hot merchant.** One merchant takes about 56% of rows, so Q1 on the hot merchant still reads about half the table. The evidence reports Q1 for both the hot merchant and a median merchant, so the skew is visible instead of hidden.
+- **Hot merchant.** One merchant takes about 56% of rows, so Q1 on the hot merchant still reads about half of each day. The evidence reports Q1 for both the hot merchant and a median merchant, so the skew is visible instead of hidden.
+- **Key choice considered:** `(merchant_id, day)` first. It is slightly faster for one merchant over a long range, but every network-wide time query would scan whole partitions. A time-first key serves both.
 - **Granularity.** Bloom filters use `GRANULARITY 4`, one index block per 4 × 8192 rows, to balance index size against skipping. Customer IDs are near-unique per granule block, which is why a bloom filter is chosen over a set index.
 - **Projections.** A customer-ordered projection would beat the bloom filter on Q2 but double storage. Prod's 30 Gi PVC is shared with Langfuse, so projections are not used. Revisit them if the evidence shows a weak bloom result.
 
@@ -255,7 +283,7 @@ ORDER BY (integration_id, merchant_id, day);
 **Steps:**
 
 1. Drop any `marts.*__staging` tables left by a failed run, then create empty staging tables from the DDL.
-2. Compute the window. `window_end` is the latest Silver start day. `window_start` is `window_end − (marts.retentionDays − 1)` when `marts.retentionDays` is set (prod: 180), and otherwise the first Silver start day (dev keeps all of v18's 90 days). The window is anchored to the data, not to `now()`, so a MergeTree `TTL` is not used: it would empty the marts while no new data arrives.
+2. Compute the window. `window_end` is the latest Silver start day. `window_start` is `window_end − (marts.retentionDays − 1)` when `marts.retentionDays` is set (prod: 180), and otherwise the first Silver start day (dev keeps all of v18's 90 days). The window is anchored to the data, not to `now()`, so a MergeTree `TTL` is not used: it would empty the marts while no new data arrives. Production systems usually use `TTL started_at + INTERVAL 180 DAY DELETE` with `ttl_only_drop_parts = 1` on append-only tables, so expired data leaves as whole monthly parts. That becomes the right choice when the marts turn incremental and live Kafka data flows; for full rebuilds over a fixed synthetic history, the build-time filter does the same job.
 3. For each month in the window, run one `INSERT INTO marts.fact_payment_attempt__staging SELECT … FROM lakehouse.`silver.attempts` LEFT JOIN (labels aggregated per attempt) …`:
    - Attempts are filtered to the month and the window, so Iceberg partition pruning applies.
    - Labels are filtered to `occurred_at` within the month and `label_available_at >= month start`, which prunes earlier partitions and uses file statistics to skip later ones.
@@ -287,7 +315,7 @@ ORDER BY (integration_id, merchant_id, day);
 
 A against C shows the full benefit of the warehouse. B against C isolates the effect of the sort order and indexes. C′ against C isolates the skip indexes. ClickHouse 26.2+ also has `use_primary_key = 0`, but the unsorted copy is the stronger control because it also loses the data locality that the sort gives.
 
-**Measurements for Q1 (hot and median merchant), Q2, Q3 and Q4:**
+**Measurements for Q0, Q1 (hot and median merchant), Q2, Q3 and Q4:**
 
 - `EXPLAIN indexes = 1`: the primary key and each skip index, with selected over total parts and granules;
 - one cold run after `SYSTEM DROP MARK CACHE`, `SYSTEM DROP UNCOMPRESSED CACHE`, `SYSTEM DROP INDEX UNCOMPRESSED CACHE` and `SYSTEM CLEAR FILESYSTEM CACHE`, plus 5 warm runs with `use_query_cache = 0`;
@@ -464,7 +492,12 @@ These requests block only the dashboard evidence.
 
 ## Open Questions
 
-1. **ClickHouse writer credentials.** Should DP3 write the marts as a new `marts` user (one new Doppler key, `CLICKHOUSE_MARTS_PASSWORD`) or as the existing `admin` (no new key, but with access management)? DP3 reuses every other DP1/DP2 credential. The `openmetadata` user cannot be reused: it is read-only (`readonly = 2`) and belongs to the catalog.
-2. **Tracked SCD2 attributes.** Adding devices needs no regeneration, because `device_fingerprint` is already in Silver and the dimension is recomputed from Silver each run. It is still not recommended. Customers alternate between two devices, so a device attribute would open a new version almost every attempt. Device rotation every 120 days appears only in v19, because v18 covers 90 days. The recommendation is to keep the current attributes.
+None remain. Decisions recorded from the user:
 
-**Resolved:** the ClickHouse database is `marts`; prod marts keep 180 days on the existing PVC; DP3 is tested on prod v19; Grafana dashboards are not catalogued in OpenMetadata.
+- DP3 writes the marts as a new `marts` user, with Doppler key `CLICKHOUSE_MARTS_PASSWORD`, and reuses every other DP1 and DP2 credential.
+- The ClickHouse database is `marts`.
+- Prod marts keep 180 days, anchored to the data, on the existing PVC.
+- DP3 is tested on prod v19.
+- Grafana dashboards are not catalogued in OpenMetadata.
+- `dim_customer` tracks devices as the familiar-device set (decision 4).
+- The mart keys are time-first (decision 6).

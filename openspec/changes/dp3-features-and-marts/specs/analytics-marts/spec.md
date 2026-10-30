@@ -45,9 +45,14 @@ Each DP3 run SHALL rebuild both marts in full into staging tables and then atomi
 ### Requirement: Query-driven sort keys and skip indexes
 Each mart SHALL declare a partition key, an `ORDER BY` key and data-skipping indexes, each justified in the design by a named fixed query:
 
-- per-merchant time ranges, served by the primary key;
+- time ranges, network-wide and per merchant, served by a time-first primary key that plain filters on the attempt start time can prune;
 - one customer's or payment method's attempts, served by bloom-filter indexes;
 - high-risk-score and outcome filters, served by minmax and set indexes.
+
+#### Scenario: Time-range filter prunes by key
+
+- **WHEN** `EXPLAIN indexes = 1` runs for a 24-hour filter on `started_at` alone
+- **THEN** the plan shows partition and primary-key pruning selecting only the granules of those days
 
 #### Scenario: Customer lookup skips granules
 

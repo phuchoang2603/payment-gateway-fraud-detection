@@ -14,7 +14,7 @@
   - write the run report through `batch.metrics.phase`.
 - [ ] 2.2 Add focused CI tests on a local Iceberg warehouse:
   - the conformance examples from 1.1, reproduced exactly for both entity types;
-  - SCD2 versions for the A→B→A address case and the unchanged case, with no overlaps or gaps;
+  - SCD2 versions for the A→B→A address case, device rotation (Z joins at its second use and X leaves after 90 days), a one-off device that opens no version, and the unchanged case, with no overlaps or gaps;
   - label point-in-time rows: earliest observation, sources kept separate, linked only;
   - rerun equality across all columns, `created` included.
 
@@ -42,7 +42,7 @@
 
   The lakehouse source is replaced by local MergeTree fixture tables named like the lakehouse tables, because CI has no Polaris.
 - [ ] 3.3 Add `batch/warehouse_benchmark.py` (decision 8):
-  - variants A, B, C and C′ for Q1 (hot and median merchant), Q2, Q3 and Q4;
+  - variants A, B, C and C′ for Q0, Q1 (hot and median merchant), Q2, Q3 and Q4;
   - `EXPLAIN indexes = 1`, the cold run after cache drops, and the median of 5 warm runs;
   - `system.query_log` metrics by `query_id`;
   - the equality guard by count and `sum(cityHash64(*))`;
@@ -99,7 +99,7 @@
 
 ## 8. Local checks and handoff
 
-- [ ] 8.0 Start only after the prod-evidence thread confirms the v19 Bronze and Silver evidence run is finished. Settle open question 1 (writer credentials) before 5.1.
+- [ ] 8.0 Start only after the prod-evidence thread confirms the v19 Bronze and Silver evidence run is finished. The `CLICKHOUSE_MARTS_PASSWORD` and `CLICKHOUSE_GRAFANA_PASSWORD` Doppler keys must exist in dev and prod before the first deploy.
 - [ ] 8.1 Run local non-test checks only: `ruff`, `ruff format --check`, treefmt, helm lint and template for the changed charts, the contract lints, `openspec validate dp3-features-and-marts --strict` and `git diff --check`. Commit locally.
 - [ ] 8.2 Push, open the PR and inspect every CI check. Report pending or failed checks honestly.
 

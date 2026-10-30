@@ -37,7 +37,8 @@ Bronze and Silver SHALL keep their `bronze` and `silver` namespaces. Timestamp c
 
 - external buyer ID;
 - customer account creation time;
-- shipping country, region, postal code and address fingerprint, taken from the AttemptStarted checkout context.
+- shipping country, region, postal code and address fingerprint, taken from the AttemptStarted checkout context;
+- the familiar-device set: the sorted devices the customer used on at least two attempts within the 90 days up to and including the attempt, computed from that attempt and earlier ones only.
 
 A new version SHALL start at the first attempt, ordered by start time and then attempt identity, whose profile differs from the previous version's in any tracked attribute, compared null-safely. `valid_from_ts` SHALL be that attempt's start time. `valid_to_ts` SHALL be the next version's `valid_from_ts`, and SHALL be null for the current version. `is_current` SHALL be true exactly when `valid_to_ts` is null. Each version SHALL carry `customer_sk`, a deterministic hash of the customer key and `valid_from_ts`, and the attempt that introduced it. Versions of one customer SHALL NOT overlap or leave gaps.
 
@@ -45,6 +46,16 @@ A new version SHALL start at the first attempt, ordered by start time and then a
 
 - **WHEN** a customer's attempts use address A, then address B once, then A again
 - **THEN** the dimension has three versions (A, B, A), the first two closed by the next version's start, and only the last current
+
+#### Scenario: Device rotation
+
+- **WHEN** a customer who used devices X and Y starts using Z twice and stops using X for 90 days
+- **THEN** a version adds Z to the familiar set at Z's second use, and a later version drops X at the first attempt after X's last use is more than 90 days old
+
+#### Scenario: One-off device
+
+- **WHEN** a customer uses a new device once
+- **THEN** no new version starts for it
 
 #### Scenario: Unchanged profile
 
