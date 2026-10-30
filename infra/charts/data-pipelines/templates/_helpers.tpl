@@ -234,6 +234,10 @@ spec:
     attempts run out, as the v19 Silver labels write did. */}}
     spark.excludeOnFailure.enabled: "true"
     spark.task.maxFailures: "8"
+    {{- /* Spot reclaims and failed launches lose executors steadily; by default the application exits after twice
+    its executor count of failures over its whole life, which a long v19 Silver run reached. */}}
+    spark.executor.maxNumFailures: "200"
+    spark.executor.failuresValidityInterval: "30m"
     spark.storage.decommission.enabled: "true"
     spark.storage.decommission.shuffleBlocks.enabled: "true"
     spark.storage.decommission.rddBlocks.enabled: "true"
