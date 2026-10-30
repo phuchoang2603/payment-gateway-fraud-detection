@@ -9,6 +9,8 @@ import json
 import os
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
 
 
 class Catalog:
@@ -104,12 +106,36 @@ def publish_changes(catalog, tables, branch):
 def main():
     from openmetadata.checks import checks
 
+    forced = os.environ.get("WAP_REQUIRE_FORCE") == "true"
+    reason = os.environ.get("WAP_FORCE_REASON", "").strip()
+    if forced and (os.environ.get("WAP_FORCE_PUBLISH") != "true" or not reason):
+        raise ValueError("publishing unvalidated audit data requires force=true and an explicit reason")
     branch = os.environ["WAP_BRANCH"]
     tables = sorted({check.table for check in checks(products=[os.environ["CHECK_PRODUCT"]])})
     catalog = Catalog()
+    if forced:
+        missing = [table for table in tables if ref_snapshot(catalog.metadata(table), branch) is None]
+        if missing:
+            raise ValueError(f"audit branch {branch} is missing from tables: {', '.join(missing)}")
     changes = publish_changes(catalog, tables, branch)
     if changes:
         catalog.commit(changes)
+    if forced:
+        report = {
+            "published_at": datetime.now(timezone.utc).isoformat(),
+            "source_branch": branch,
+            "validation": "overridden; current-run validation incomplete",
+            "reason": reason,
+            "tables": {
+                ".".join(change["identifier"]["namespace"] + [change["identifier"]["name"]]): {
+                    "previous_main_snapshot": change["requirements"][0]["snapshot-id"],
+                    "published_snapshot": change["updates"][0]["snapshot-id"],
+                }
+                for change in changes
+            },
+        }
+        Path(os.environ["WAP_PUBLICATION_REPORT"]).write_text(json.dumps(report, indent=2) + "\n")
+        print(json.dumps(report))
     for change in changes:
         table = ".".join(change["identifier"]["namespace"] + [change["identifier"]["name"]])
         print(f"published {table} main -> {change['updates'][0]['snapshot-id']} from {branch}")

@@ -53,6 +53,37 @@ def audited(sql, snapshot):
     return f"{sql.rstrip().rstrip(';')}\nSETTINGS {settings}"
 
 
+def definitions(cases, snapshot=None):
+    return [
+        {
+            "name": case.name,
+            "description": case.description,
+            "testDefinitionName": "tableCustomSQLQuery",
+            "parameterValues": [
+                {"name": "sqlExpression", "value": audited(case.sql, snapshot)},
+                {"name": "strategy", "value": "COUNT"},
+                {"name": "operator", "value": "=="},
+                {"name": "threshold", "value": "0"},
+            ],
+        }
+        for case in cases
+    ]
+
+
+def prepare(table, cases, snapshot):
+    from metadata.generated.schema.api.tests.createTestCase import CreateTestCaseRequest
+
+    for definition in definitions(cases, snapshot):
+        test_definition = definition.pop("testDefinitionName")
+        client().create_or_update(
+            CreateTestCaseRequest(
+                **definition,
+                testDefinition=test_definition,
+                entityLink=f"<#E::table::{table_fqn(table)}>",
+            )
+        )
+
+
 def test_workflow(table, cases, snapshot=None):
     return {
         "source": {
@@ -62,7 +93,8 @@ def test_workflow(table, cases, snapshot=None):
                 "config": {
                     "type": "TestSuite",
                     "entityFullyQualifiedName": table_fqn(table),
-                    "testCases": [case.name for case in cases],
+                    # Saved definitions can reference an earlier audit snapshot; execute only the inline cases.
+                    "testCases": [],
                 }
             },
         },
@@ -70,20 +102,7 @@ def test_workflow(table, cases, snapshot=None):
             "type": "orm-test-runner",
             "config": {
                 "forceUpdate": True,
-                "testCases": [
-                    {
-                        "name": case.name,
-                        "description": case.description,
-                        "testDefinitionName": "tableCustomSQLQuery",
-                        "parameterValues": [
-                            {"name": "sqlExpression", "value": audited(case.sql, snapshot)},
-                            {"name": "strategy", "value": "COUNT"},
-                            {"name": "operator", "value": "=="},
-                            {"name": "threshold", "value": "0"},
-                        ],
-                    }
-                    for case in cases
-                ],
+                "testCases": definitions(cases, snapshot),
             },
         },
         "sink": {"type": "metadata-rest", "config": {}},
@@ -121,9 +140,16 @@ def main():
     for table, snapshot in snapshots.items():
         print(f"auditing {table} at snapshot {snapshot} ({branch} head, or main if this run did not write it)")
     native("ingest", workflow(SERVICE))
+    prepare_only = os.environ.get("CHECK_PREPARE_ONLY") == "true"
     for table in tables:
         cases = [check for check in found if check.table == table]
-        native("test", test_workflow(table, cases, snapshots.get(table)))
+        if prepare_only:
+            prepare(table, cases, snapshots.get(table))
+        else:
+            native("test", test_workflow(table, cases, snapshots.get(table)))
+    if prepare_only:
+        print(f"prepared {len(found)} current checks; validation was not executed")
+        return 0
     failures = []
     for table in tables:
         expected = [check.name for check in found if check.table == table]

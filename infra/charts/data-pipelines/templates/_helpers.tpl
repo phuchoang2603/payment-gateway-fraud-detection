@@ -176,12 +176,29 @@ audit-{{ "{{workflow.name}}" }}
       - name: CHECK_PRODUCT
         value: {{ .product | quote }}
       - name: WAP_BRANCH
-        value: {{ include "data-pipelines.wapBranch" . | quote }}
+        value: {{ default (include "data-pipelines.wapBranch" .) .branch | quote }}
+{{- if .forcePublish }}
+      - name: WAP_REQUIRE_FORCE
+        value: "true"
+      - name: WAP_FORCE_PUBLISH
+        value: {{ "{{workflow.parameters.force}}" | quote }}
+      - name: WAP_FORCE_REASON
+        value: {{ "{{workflow.parameters.reason}}" | quote }}
+      - name: WAP_PUBLICATION_REPORT
+        value: /tmp/publication.json
+{{- end }}
 {{- include "data-pipelines.env" .root | nindent 6 }}
+{{- if .forcePublish }}
+  outputs:
+    parameters:
+      - name: publication
+        valueFrom:
+          path: /tmp/publication.json
+{{- end }}
 {{- end -}}
 
 {{- define "data-pipelines.checks" -}}
-- name: checks
+- name: {{ default "checks" .name }}
   retryStrategy:
     limit: 2
     retryPolicy: OnError
@@ -196,7 +213,11 @@ audit-{{ "{{workflow.name}}" }}
       - name: NATIVE_TIMEOUT_SECONDS
         value: {{ .root.Values.checks.nativeTimeoutSeconds | int64 | toString | quote }}
       - name: WAP_BRANCH
-        value: {{ include "data-pipelines.wapBranch" . | quote }}
+        value: {{ default (include "data-pipelines.wapBranch" .) .branch | quote }}
+{{- if .prepareOnly }}
+      - name: CHECK_PREPARE_ONLY
+        value: "true"
+{{- end }}
 {{- include "data-pipelines.env" .root | nindent 6 }}
     envFrom:
       - secretRef:

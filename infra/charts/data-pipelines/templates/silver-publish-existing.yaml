@@ -1,0 +1,37 @@
+{{- if .Values.silver.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: dp2-silver-publish-existing
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
+  entrypoint: force-publish
+  activeDeadlineSeconds: 3600
+  arguments:
+    parameters:
+      - name: source-run-id
+      - name: force
+        value: "false"
+        enum: ["false", "true"]
+      - name: reason
+  synchronization:
+    mutexes:
+      - name: dp2-silver-writer
+  podMetadata:
+    labels:
+      {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
+      dp-product: silver-payments
+      dp-validation: overridden
+  templates:
+    - name: force-publish
+      steps:
+        - - name: refresh-definitions
+            template: refresh-definitions
+            when: "{{`{{workflow.parameters.force}}`}} == true"
+        - - name: publish-tables
+            template: publish-tables
+{{- include "data-pipelines.checks" (dict "root" $ "product" "silver-payments" "name" "refresh-definitions" "branch" "audit-{{workflow.parameters.source-run-id}}" "prepareOnly" true) | nindent 4 }}
+{{- include "data-pipelines.publish-tables" (dict "root" $ "product" "silver-payments" "branch" "audit-{{workflow.parameters.source-run-id}}" "forcePublish" true) | nindent 4 }}
+{{- end }}
