@@ -61,25 +61,41 @@
 - [ ] 5.1 Rebase onto #102. In `openmetadata_jobs/integrations.py`, add the `llm` service kind (`CreateLLMServiceRequest`, `CustomLLM`) and idempotent registration of the `ai` entries (`llmModels`, `aiApplications`). Verify locally with ruff. CI runs the existing integration tests; add one behaviour test only if the AI registration adds a distinct failure path, such as an application whose primary model is missing.
 - [ ] 5.2 Add the `llm` connector and the `ai` section to `infra/charts/metadata-integrations` values (dev), matching the llm-platform chart's model names, revisions and agent version. Verify with `helm template` that `connectors.json` contains them.
 
-## 5b. RAG knowledge pipeline (after PR #102 merges; design.md decision 15)
+## 5b. RAG: pipeline, Web API and MCP tool (after PR #102 merges; design.md decision 15)
 
 - [x] 5b.1 Research the corpus sources and record the proposed corpus in `rag-corpus.md`.
-- [ ] 5b.2 Settle the open corpus questions with the user: the synthetic documents to write, the trigger, the store placement and chart owner, and whether the Web API and MCP tools join this change.
-- [ ] 5b.3 Create `src/data-pipeline/knowledge/`:
-  - the hand-written synthetic documents with front matter, and `sources.yaml` for the rendered ones;
-  - the renderer, the structure-aware chunker, the batched embed client, the Feast definitions (`knowledge_base`, `knowledge_chunks`, Postgres online store with `vector_enabled`, SQL registry) and the validation;
-  - CI tests for the code and threshold sync, chunk-id stability, and version hashing.
+- [x] 5b.2 Settle the layout with the user: `src/rag`, chart `rag-pipeline`, namespace `llm`, corpus in the image, release-triggered runs, Iceberg offline, Web API and MCP in scope (2026-10-29).
+- [ ] 5b.3 Ask the platform for P9 (`llm` in the Argo Workflows controller's `workflowNamespaces`). Verify read-only that the controller reconciles a test Workflow in `llm`.
+- [ ] 5b.4 Create `src/rag/` (uv project):
+  - `corpus/`: the hand-written synthetic documents with front matter, `sources.yaml` and the renderer;
+  - `pipeline/`: publish, structure-aware chunker, batched embed client, PyIceberg writer, Feast refresh, validation;
+  - `store/`: the Feast definitions (`knowledge_base`, `knowledge_chunks`, Postgres online store with `vector_enabled`, SQL registry);
+  - `api/`: FastAPI with pydantic and probes;
+  - `mcp/`: the streamable-HTTP server;
+  - CI tests for the code and threshold sync, chunk-id stability, version hashing, API validation and MCP tool mapping.
 
   Verify locally only with ruff and format.
-- [ ] 5b.4 Add the `knowledge` image to `.github/service-images.json`, with build paths covering every corpus source.
-- [ ] 5b.5 Add `contracts/data-products/knowledge-base/` (ODPS product and ODCS `knowledge-chunks` with the contract checks as SQL counts). In `openmetadata_jobs`, add the `knowledge-base` checks product and the `rag-knowledge` pipeline and lineage edges.
-- [ ] 5b.6 In `infra/charts/data-pipelines`, add:
-  - the `rag-knowledge` WorkflowTemplate (publish corpus, chunk, embed, write, validate, checks, publish on exit) and its CronWorkflow, enabled in dev only;
-  - the CNPG `knowledge-pgvector` Cluster (`18.3-standard-trixie`), its `Database` with the `vector` extension, the writer and reader roles, and their ExternalSecrets;
-  - the Polaris namespace or table grant for `knowledge`.
+- [ ] 5b.5 Add the `rag` image to `.github/service-images.json`. Its build paths are `src/rag/` plus every corpus source in `sources.yaml`, and the Dockerfile copies those sources into the image.
+- [ ] 5b.6 Add `contracts/data-products/knowledge-base/` (ODPS product and ODCS `knowledge-chunks` with the contract checks as SQL counts). In `openmetadata_jobs`, add the `knowledge-base` checks product, the `rag-knowledge` pipeline and lineage edges, and the `rag-mcp` `mcpServer` entry.
+- [ ] 5b.7 Create `infra/charts/rag-pipeline` and the `rag-pipeline` application (dev on, prod off), with:
+  - the executor ServiceAccount and Role;
+  - the `rag-knowledge` WorkflowTemplate and its PostSync `Workflow` hook with a deadline;
+  - the CNPG `rag-pgvector` Cluster (`18.3-standard-trixie`) and `Database` with the `vector` extension and the writer and reader roles;
+  - the `rag-api` and `rag-mcp` Knative Services;
+  - ExternalSecrets (gateway storage identity, Polaris client, DB roles, gateway keys, OpenMetadata token, ClickHouse checks user);
+  - mesh AuthorizationPolicies;
+  - the registry `MCPServer` entry.
 
   Verify with `helm template` and `helm lint`.
-- [ ] 5b.7 In `llm-platform`, add the `rag` client key ExternalSecret and admit the workflow's identity in `data` to the gateway. Provision `LLM_GATEWAY_RAG_API_KEY`, `KNOWLEDGE_DB_WRITER_PASSWORD` and `KNOWLEDGE_DB_READER_PASSWORD` in Doppler `dev` and `prd`.
+- [ ] 5b.8 After #102: admit `llm` in the network rules of the `lakehouse` (Polaris), `clickhouse` and OpenMetadata charts.
+- [ ] 5b.9 In `llm-platform`:
+  - add the `rag-ingest` and `rag-api` client keys;
+  - add the `/mcp/knowledge` HTTPRoute, MCP backend and policy;
+  - add a kagent `RemoteMCPServer` for the gateway route;
+  - give `evidence-agent` the two tools as 0.2.0, updating its prompt and registry entry.
+
+  Provision `LLM_GATEWAY_RAG_INGEST_API_KEY`, `LLM_GATEWAY_RAG_API_KEY`, `RAG_DB_WRITER_PASSWORD` and `RAG_DB_READER_PASSWORD` in Doppler `dev` and `prd`.
+- [ ] 5b.10 Add the customer-features endpoint once the DP3 slice has customer features online in Feast, and admit `rag-api` to that feature server.
 
 ## 6. Benchmark harness
 
@@ -101,11 +117,12 @@
 - [ ] 7.5 After section 5, verify that OpenMetadata shows the LLM service, both models and the agent application linked to `qwen3-8b`, and capture it.
 - [ ] 7.6 Run the benchmark baseline and each optimization (design.md decision 9) on dev by applying the rendered Job with `kubectl`, plus the gateway end-to-end run. Keep only improving settings, and set the gateway limits from the measured capacity. Record each run's command, image digest, args and date.
 
-- [ ] 7.7 Submit `rag-knowledge` on dev. Record:
+- [ ] 7.7 Release `rag-pipeline` to dev and let its sync hook run `rag-knowledge`. Record:
   - the version, chunk count, step durations and check results;
-  - a rerun that exits early;
+  - a re-sync that exits early;
   - a run after deleting a section, showing the stale id gone online;
-  - a sample of Feast vector search results and the OpenMetadata lineage and test results, with screenshots.
+  - the OpenMetadata lineage and test results, with screenshots.
+- [ ] 7.8 Exercise the Web API (chunk by id, search, the 404 and 422 paths) and run a Locust load test, keeping its HTML report. Chat with `evidence-agent` 0.2.0 so that it calls the knowledge tools through the gateway. Capture the tool-call metrics, a Knative revision rollback, and the registry entry for the MCP server.
 
 ## 8. Documentation and cleanup
 
@@ -116,7 +133,7 @@
   - links to code at a commit, with captures.
 
   Write `docs/llm/benchmark.md` with the workload, recorded results and conclusions. Add both to `docs/_Sidebar.md`.
-- [ ] 8.1b Write `docs/llm/rag.md` from the 7.7 run: corpus, versioning, workflow, stores, checks and lineage.
+- [ ] 8.1b Write `docs/llm/rag.md` from the 7.7 and 7.8 runs: corpus, versioning, workflow, stores, checks, lineage, the Web API with its load-test results, and the MCP tool.
 - [ ] 8.2 Update only the affected parts of:
   - `docs/llm/agents.md` (status and component table);
   - `docs/overview/roadmap.md` (LLM rows and the Knative/KEDA mapping);

@@ -10,3 +10,10 @@ The app-of-apps SHALL deploy chart `infra/charts/llm-platform` as application `l
 #### Scenario: Remove the application
 - **WHEN** the `llm-platform` application is deleted
 - **THEN** shared controllers, CRDs, GatewayClasses, NodePools and the `llm` namespace remain
+
+### Requirement: RAG pipeline application
+The app-of-apps SHALL deploy chart `infra/charts/rag-pipeline` as application `rag-pipeline` into the platform-owned `llm` namespace, enabled where `llm-platform` is enabled and disabled in prod until the user confirms. Its credentials SHALL come from `gateway-doppler`, except the Polaris client secret, which comes from the platform `doppler` store as for the other lakehouse writers. Its workflow SHALL run only after the platform has added `llm` to the Argo Workflows controller's namespaces.
+
+#### Scenario: Render both environments
+- **WHEN** the dev and prod roots are rendered
+- **THEN** dev contains the `rag-pipeline` Application and prod does not
