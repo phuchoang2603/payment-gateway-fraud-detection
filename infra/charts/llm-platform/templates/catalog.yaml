@@ -1,4 +1,5 @@
-{{- $registry := .Values.registry }}
+{{- $catalog_ := .Values.catalog }}
+{{- $registry := $catalog_.registry }}
 {{- $catalog := list }}
 {{- range $name, $server := .Values.gateway.mcpServers }}
 {{- $entry := dict
@@ -33,16 +34,56 @@
 {{- end }}
 {{- $agentList := list }}
 {{- range $agent := .Values.agents.list }}
-{{- $agentList = append $agentList (dict "name" $agent.name "version" $agent.version) }}
+{{- $agentList = append $agentList (dict "name" $agent.name "version" $agent.version "description" $agent.description "mcpServers" ($agent.mcpServers | default list)) }}
 {{- end }}
+{{- $gatewayUrl := printf "http://%s.%s.svc.cluster.local" .Values.gateway.name .Release.Namespace }}
+{{- $om := $catalog_.openmetadata }}
+{{- $models := list }}
+{{- range $model := list .Values.models.chat .Values.models.embedding }}
+{{- $models = append $models (pick $model "name" "repo" "revision" "description") }}
+{{- end }}
+{{- $servers := list }}
+{{- range $name, $server := .Values.gateway.mcpServers }}
+{{- $servers = append $servers (dict "name" $name "url" (printf "%s/mcp/%s" $gatewayUrl $name) "description" $server.description) }}
+{{- end }}
+{{- $assets := dict
+  "llmService" (dict "name" $om.llmService "baseUrl" (printf "%s/v1" $gatewayUrl))
+  "models" $models
+  "primaryModel" .Values.models.chat.name
+  "mcpService" $om.mcpService
+  "mcpServers" $servers
+  "knowledgeTables" $om.knowledgeTables }}
 {{- $data := dict
   "registry.yaml" (join "\n---\n" $catalog)
   "agents.json" (toJson $agentList)
+  "assets.json" (toJson $assets)
   "publish.py" (.Files.Get "files/catalog.py") }}
 {{- range $agent := .Values.agents.list }}
 {{- $_ := set $data (printf "prompt-%s.md" $agent.name) ($.Files.Get (printf "files/prompts/%s.md" $agent.name)) }}
 {{- end }}
 {{- $hash := toJson $data | sha256sum | trunc 10 }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: llm-catalog
+automountServiceAccountToken: false
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: llm-catalog-openmetadata
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.secretStore }}
+  target:
+    name: llm-catalog-openmetadata
+  data:
+    - secretKey: token
+      remoteRef:
+        key: {{ $om.tokenKey }}
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -64,12 +105,13 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      serviceAccountName: llm-catalog
       automountServiceAccountToken: false
       securityContext:
         {{- include "llm-platform.podSecurity" (dict "uid" 65532) | nindent 8 }}
       containers:
         - name: publish
-          image: {{ $registry.image }}
+          image: {{ $catalog_.image }}
           command: [python, /etc/catalog/publish.py]
           env:
             - name: REGISTRY_URL
@@ -80,6 +122,12 @@ spec:
               valueFrom: {secretKeyRef: {name: langfuse, key: init-public-key}}
             - name: LANGFUSE_SECRET_KEY
               valueFrom: {secretKeyRef: {name: langfuse, key: init-secret-key}}
+            - name: GATEWAY_API_KEY
+              valueFrom: {secretKeyRef: {name: llm-gateway-catalog, key: key}}
+            - name: OPENMETADATA_URL
+              value: {{ $om.url }}
+            - name: OPENMETADATA_TOKEN
+              valueFrom: {secretKeyRef: {name: llm-catalog-openmetadata, key: token}}
             - {name: HOME, value: /tmp}
             - {name: PYTHONDONTWRITEBYTECODE, value: "1"}
             - {name: PYTHONUNBUFFERED, value: "1"}
