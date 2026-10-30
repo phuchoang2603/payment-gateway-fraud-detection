@@ -67,6 +67,8 @@ gateway:
   clients:
     agents: LLM_GATEWAY_AGENTS_API_KEY
     benchmark: LLM_GATEWAY_BENCHMARK_API_KEY
+    ragingest: LLM_GATEWAY_RAG_INGEST_API_KEY
+    ragapi: LLM_GATEWAY_RAG_API_KEY
   limits:
     requestsPerMinute: 120
     burst: 20
@@ -77,6 +79,18 @@ gateway:
   # Callers outside this namespace that may reach the gateway: Substrate workers run sandboxed agent actors.
   externalClients:
     - cluster.local/ns/kagent/sa/default
+  # ServiceAccounts of the rag-pipeline application in this namespace: the ingest workflow and the knowledge API.
+  namespaceClients: [rag-pipeline, rag-api]
+  # MCP servers behind /mcp/<name>. Each target is a Service in this namespace.
+  mcpServers:
+    knowledge:
+      service: rag-api
+      port: 8080
+      path: /mcp
+      version: 0.1.0
+      title: Payment-gateway knowledge base
+      description: Search and read passages about decline codes, risk policy, the payment lifecycle, the checkout API and fraud features.
+      tools: [search_knowledge, get_knowledge_chunk]
 
 secretStore: gateway-doppler
 # Platform-owned credentials this app consumes: the Kubeflow artifacts identity and the shared ClickHouse users.
@@ -94,9 +108,10 @@ agents:
   # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
   list:
     - name: evidence-agent
-      version: 0.1.0
+      version: 0.2.0
       title: Evidence agent
-      description: Read-only fraud-analyst agent that explains one payment from recorded evidence. Phase 1 has no tools.
+      description: Read-only fraud-analyst agent that explains declines, risk decisions and payment behaviour from the knowledge base, citing its passages.
+      mcpServers: [knowledge]
 
 registry:
   url: http://agentregistry.agentregistry.svc:12121
