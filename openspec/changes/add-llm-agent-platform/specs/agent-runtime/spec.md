@@ -15,15 +15,19 @@ The repository SHALL define agent `evidence-agent` in `llm` as a declarative kag
 - **THEN** it states that it cannot retrieve payment evidence yet instead of fabricating details
 
 ### Requirement: Sandboxed warm agent on Agent Substrate
-The repository SHALL define `evidence-agent-sandbox`, a `SandboxAgent` rendered from the same specification as `evidence-agent`, running each conversation in a gVisor sandbox on the platform's Substrate worker pool. Its sandbox egress SHALL be limited to the agent gateway. Idle conversations SHALL suspend to snapshots and resume on any worker with capacity, so that a pool with fewer workers than concurrent conversations still serves all of them.
+The repository SHALL define `evidence-agent-sandbox`, a `SandboxAgent` rendered from the same specification as `evidence-agent`, running each conversation in a gVisor sandbox on the platform's Substrate worker pool. Its sandbox egress SHALL be limited to an app-owned sandbox egress proxy, which forwards only the gateway's model and MCP routes and calls the gateway with its own mesh identity; Substrate workers run outside the mesh and are admitted to the proxy by network policy. Idle conversations SHALL suspend to snapshots and resume on any worker with capacity, so that a pool with fewer workers than concurrent conversations still serves all of them.
 
 #### Scenario: More conversations than workers
 - **WHEN** three conversations start at once on a pool with one worker
 - **THEN** all three are answered and the worker count stays at one
 
 #### Scenario: Egress outside the gateway
-- **WHEN** the sandboxed agent tries to reach a destination other than the agent gateway
-- **THEN** the connection is refused
+- **WHEN** the sandboxed agent tries to reach a destination other than the sandbox egress proxy, or a gateway route other than the model and MCP routes
+- **THEN** the connection or request is refused
+
+#### Scenario: Gateway access from a sandbox
+- **WHEN** the sandboxed agent calls the model or its MCP tool
+- **THEN** the request reaches the gateway through the egress proxy with the proxy's mesh identity and the agents' API key
 
 ### Requirement: Self-hosted Langfuse
 The application SHALL run self-hosted Langfuse v3 at a pinned chart and image, using the shared ClickHouse in `data` through its fixed Service contract, and app-owned Postgres and Redis instances. Its secrets SHALL come from Doppler through External Secrets. Public sign-up SHALL be disabled, and its UI SHALL be reachable only through the platform's authenticating proxy.

@@ -1,0 +1,129 @@
+{{- $egress := .Values.agents.sandbox.egress }}
+{{- $upstream := printf "%s.%s.svc.cluster.local" .Values.gateway.name .Release.Namespace }}
+{{- $conf := printf `server {
+  listen 8080;
+  location = /healthz {
+    access_log off;
+    return 200;
+  }
+  # Only the model and MCP routes; everything else on the gateway stays unreachable from a sandbox.
+  location ~ ^/(v1|mcp)/ {
+    proxy_pass http://%[1]s;
+    proxy_set_header Host %[1]s;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_read_timeout 300s;
+  }
+  location / {
+    return 404;
+  }
+}` $upstream }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $egress.name }}
+data:
+  default.conf: |
+    {{- $conf | nindent 4 }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $egress.name }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $egress.name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $egress.name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $egress.name }}
+      annotations:
+        checksum/config: {{ $conf | sha256sum | trunc 16 }}
+    spec:
+      serviceAccountName: {{ $egress.name }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "llm-platform.podSecurity" $egress | nindent 8 }}
+      containers:
+        - name: proxy
+          image: {{ $egress.image }}
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            {{- include "llm-platform.containerSecurity" . | nindent 12 }}
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/nginx/conf.d}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $egress.name }}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $egress.name }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ $egress.name }}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+---
+# Substrate workers run outside the mesh, so they reach the proxy in plaintext and are admitted here by pod selector.
+# The kagent controller discovers the sandbox's MCP tools through the proxy over the mesh tunnel (15008).
+# Ambient rewrites kubelet probes to come from 169.254.7.127.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $egress.name }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $egress.name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $egress.workers.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $egress.workers.podLabels | nindent 14 }}
+      ports:
+        - {port: 8080, protocol: TCP}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $egress.controller.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $egress.controller.podLabels | nindent 14 }}
+      ports:
+        - {port: 8080, protocol: TCP}
+        - {port: 15008, protocol: TCP}
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+      ports:
+        - {port: 8080, protocol: TCP}
