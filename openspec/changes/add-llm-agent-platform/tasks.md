@@ -126,7 +126,7 @@
   - a run with a deliberately broken document that fails at `validate` and leaves both stores unchanged;
   - the `EXPLAIN` showing the HNSW index;
   - the OpenMetadata lineage and test results, with screenshots.
-- [ ] 7.8 Exercise the Web API (chunk by id, search, the 404 and 422 paths) and run a Locust load test, keeping its HTML report. Chat with `evidence-agent` 0.2.0 so that it calls the knowledge tools through the gateway. Capture the tool-call metrics, a stalled rollout of a deliberately broken `rag-serving` image with the previous pods still serving (the automatic fallback), and the registry entry for the MCP server.
+- [ ] 7.8 Exercise the Web API (chunk by id, the 404 and 422 paths) and run a Locust load test, keeping its HTML report. Chat with `evidence-agent` 0.2.0 so that it calls the knowledge tools through the gateway. Capture the tool-call metrics, a stalled rollout of a deliberately broken `rag-serving` image with the previous pods still serving (the automatic fallback), and the registry entry for the MCP server.
 
 ## 7b. Rubric screenshots (dev; stored in `docs/llm/images/`, each embedded in the page named, with a sentence on what it proves)
 
@@ -139,7 +139,7 @@
 - [ ] 7b.7 Registry (`agents.md`): the agentregistry UI showing `evidence-agent`, its prompt and the `knowledge` MCP server, plus a link to the registry catalog template.
 - [ ] 7b.8 Sandbox and warm-up (`agents.md`): `evidence-agent-sandbox` on Agent Substrate, with several conversations served by few workers (worker count, actor states, answer times), plus a link to the SandboxAgent YAML.
 - [ ] 7b.9 RAG pipeline (`rag.md`): the Argo Workflows graph of a successful `rag-knowledge` run, the validate and verify reports, the OpenMetadata lineage from the corpus container through `rag-knowledge` to `knowledge.chunks`, and the knowledge-base contract test results.
-- [ ] 7b.10 Web API (`rag.md`): the FastAPI OpenAPI page, chunk-by-id and search responses, the 404 and 422 paths, the readiness probe, and the Locust HTML report (throughput and latency).
+- [ ] 7b.10 Web API (`rag.md`): the FastAPI OpenAPI page, chunk-by-id responses, the 404 and 422 paths, the readiness probe, and the Locust HTML report (throughput and latency).
 - [ ] 7b.11 Web API tests (`rag.md`): the `rag-serving` test run from CI with coverage above 90%, showing the fixtures and mocks used. The serving member's pytest options enforce `--cov-fail-under=90` with `pytest-cov`.
 - [ ] 7b.12 MCP deployment rollout (`rag.md`): the stalled rollout from 7.8 with the previous version still serving.
 - [ ] 7b.13 OpenMetadata AI assets (`observability.md`): the LLM service, both models, the `knowledge` MCP server and the `evidence-agent` application linked to its model, tool and `knowledge.chunks`.

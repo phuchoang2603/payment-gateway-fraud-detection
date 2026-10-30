@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from fraud_rag_common import store
 
 from fraud_rag_serving import app as service
@@ -74,17 +75,18 @@ def test_malformed_chunk_id_is_422(client):
     assert client.get("/v1/chunks/not-a-chunk-id").status_code == 422
 
 
-def test_search_ranks_by_distance_and_filters_audience(client):
-    ranked = client.post("/v1/chunks/search", json={"query": "high amount"}).json()["hits"]
-    analyst = client.post("/v1/chunks/search", json={"query": "high amount", "audience": "analyst"}).json()["hits"]
+def test_search_tool_ranks_by_distance_and_filters_audience(client):
+    ranked = asyncio.run(service.search_knowledge("high amount")).hits
+    analyst = asyncio.run(service.search_knowledge("high amount", audience="analyst")).hits
 
-    assert [hit["chunk"]["chunk_id"] for hit in ranked] == ["decline-codes#high-amount", "checkout-api#public-routes"]
-    assert [hit["chunk"]["chunk_id"] for hit in analyst] == ["decline-codes#high-amount"]
+    assert [hit.chunk.chunk_id for hit in ranked] == ["decline-codes#high-amount", "checkout-api#public-routes"]
+    assert [hit.chunk.chunk_id for hit in analyst] == ["decline-codes#high-amount"]
 
 
-@pytest.mark.parametrize("body", [{"query": ""}, {"query": "x", "top_k": 0}, {"query": "x", "top_k": 21}])
-def test_invalid_search_is_422_without_calling_the_gateway(client, body):
-    assert client.post("/v1/chunks/search", json=body).status_code == 422
+@pytest.mark.parametrize("arguments", [{"query": ""}, {"query": "x", "top_k": 0}, {"query": "x", "top_k": 21}])
+def test_invalid_search_is_rejected_without_calling_the_gateway(client, arguments):
+    with pytest.raises(ValidationError):
+        asyncio.run(service.search_knowledge(**arguments))
     assert client.embedder.calls == 0
 
 

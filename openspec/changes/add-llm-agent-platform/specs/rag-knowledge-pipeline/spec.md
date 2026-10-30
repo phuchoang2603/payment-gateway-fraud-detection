@@ -98,12 +98,15 @@ Each run SHALL keep a report under `runs/payment-gateway/knowledge/<run>/`.
 ### Requirement: Knowledge Web API and MCP tool in one service
 The `rag-api` service SHALL be one FastAPI application that serves both REST endpoints and MCP tools. It SHALL be the only reader of the knowledge online store, and SHALL connect with the reader role.
 
-REST: pydantic request and response models, async handlers, and liveness and readiness endpoints used by its Kubernetes probes. It SHALL provide:
+REST is retrieval by id: pydantic response models, async handlers, and liveness and readiness endpoints used by its Kubernetes probes. It SHALL provide:
 - chunk retrieval by `chunk_id`;
-- search that embeds the query through the gateway with the embedding model's query instruction and its own client key, runs the indexed Feast vector search, and reads the chunks back by id;
 - customer feature retrieval by `customer_id` from the online feature store, once customer features are online.
 
-MCP: the streamable-HTTP tools `search_knowledge` and `get_knowledge_chunk` at `/mcp`, in stateless mode, backed by the same functions as the REST endpoints.
+MCP: the streamable-HTTP tools at `/mcp`, in stateless mode:
+- `search_knowledge`, which embeds the query through the gateway with the embedding model's query instruction and its own client key, runs the indexed Feast vector search, and reads the chunks back by id;
+- `get_knowledge_chunk`, backed by the same function as the REST chunk endpoint.
+
+Search is offered only as the MCP tool, because its callers are agents; REST serves lookups by id.
 
 Deployment:
 - It SHALL run as a Deployment in `llm` whose rolling update keeps the previous version serving until a new version is ready.
@@ -119,8 +122,8 @@ Deployment:
 - **THEN** the API returns 404 with a validated error body
 
 #### Scenario: Invalid search request
-- **WHEN** a search request has an empty query or `top_k` outside the allowed range
-- **THEN** the API returns 422 without calling the gateway or the store
+- **WHEN** a `search_knowledge` call has an empty query or `top_k` outside the allowed range
+- **THEN** the tool returns a validation error without calling the gateway or the store
 
 #### Scenario: Agent cites a chunk
 - **WHEN** an analyst asks `evidence-agent` what `NEW_ACCOUNT_GEO_MISMATCH` means

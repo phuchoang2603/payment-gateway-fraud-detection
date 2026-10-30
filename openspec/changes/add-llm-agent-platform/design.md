@@ -362,11 +362,14 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 - Reports go to `runs/payment-gateway/knowledge/<run>/report.json`.
 
 **Web API and MCP tool in one service (`rag-api`).** One FastAPI process serves both the REST API and the MCP tools, so there is one deployment, one reader identity and no extra hop.
-- REST: pydantic models, async handlers, and `/healthz` and `/readyz` probes for Kubernetes. Endpoints:
+- REST is the rubric's data-pull Web API, retrieval by id: pydantic models, async handlers, and `/healthz` and `/readyz` probes for Kubernetes. Endpoints:
   - `GET /v1/chunks/{chunk_id}`;
-  - `POST /v1/chunks/search`: embeds the query through the gateway with Qwen3-Embedding's query instruction and the `ragapi` client key, then runs the indexed nearest-neighbour query and reads the results back by id through Feast;
   - `GET /v1/customers/{customer_id}/features`: online customer features from the fraud Feast project, once the DP3 slice puts customer features online.
-- MCP: the official `mcp` SDK's streamable-HTTP app, mounted at `/mcp`, with two tools, `search_knowledge(query, top_k, audience)` and `get_knowledge_chunk(chunk_id)`. They call the same functions as the REST endpoints. It runs in stateless mode, so any replica or revision can answer any request with no session affinity.
+- MCP: the official `mcp` SDK's streamable-HTTP app, mounted at `/mcp`, with two tools:
+  - `search_knowledge(query, top_k, audience)`: embeds the query through the gateway with Qwen3-Embedding's query instruction and the `ragapi` client key, then runs the indexed nearest-neighbour query and reads the results back by id through Feast;
+  - `get_knowledge_chunk(chunk_id)`, the same function as the REST chunk endpoint.
+
+  Search exists only as the MCP tool: its callers are agents, and a second REST copy would add a public surface with no client. It runs in stateless mode, so any replica or revision can answer any request with no session affinity.
 - It is the only Feast reader of the knowledge store, through `rag_reader`.
 - It runs as a Deployment, not a Knative Service. The platform's Knative cluster-local gateway runs outside the mesh, so traffic routed through Knative would reach the pods with no identity, and the mesh rule that only the gateway may call the service could not hold.
   - Rollouts use `maxUnavailable: 0`, `maxSurge: 1`, readiness gating and a progress deadline. A version that never becomes ready stalls the rollout while the previous pods keep serving, which is the automatic fallback.
