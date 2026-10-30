@@ -50,3 +50,24 @@ def file_stats(spark: SparkSession, table: str):
         f"SELECT count(*) AS files, coalesce(sum(file_size_in_bytes), 0) AS bytes FROM {table}.files"
     ).first()
     return {"files": row["files"], "bytes": int(row["bytes"])}
+
+
+def create_table(spark: SparkSession, name: str, frame, partition=None, properties=WRITE_PROPERTIES) -> None:
+    if spark.catalog.tableExists(name):
+        return
+    spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {name.rsplit('.', 1)[0]}")
+    creator = frame.limit(0).writeTo(name).using("iceberg")
+    for key, value in properties.items():
+        creator = creator.tableProperty(key, value)
+    if partition is not None:
+        creator = creator.partitionedBy(partition)
+    creator.create()
+
+
+def snapshot_info(spark: SparkSession, table: str) -> dict:
+    """The head of this run's write ref and the records its commit added."""
+    snapshot = ref_snapshot(spark, table, write_ref())
+    row = spark.sql(
+        f"SELECT summary['added-records'] AS added FROM {table}.snapshots WHERE snapshot_id = {snapshot}"
+    ).first()
+    return {"snapshot_id": snapshot, "added_records": int(row["added"] or 0)}

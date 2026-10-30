@@ -12,7 +12,7 @@ from batch import incremental
 from batch.bronze import EVENTS as BRONZE_EVENTS
 from batch.bronze import LABELS as BRONZE_LABELS
 from batch.bronze import current_snapshot
-from batch.lakehouse import LOCAL_WRITE_OPTIONS, WRITE_PROPERTIES, stage, write_ref
+from batch.lakehouse import LOCAL_WRITE_OPTIONS, create_table, snapshot_info, stage
 from batch.metrics import phase
 from batch.schema import EVENT_COLUMNS, LABEL_COLUMNS
 from batch.spark import ICEBERG_CATALOG, session
@@ -335,18 +335,6 @@ def incremental_report(run_id, mode, scope, phases) -> dict:
     return report
 
 
-def create_table(spark, name, frame, partition=None, properties=WRITE_PROPERTIES) -> None:
-    if spark.catalog.tableExists(name):
-        return
-    spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {NAMESPACE}")
-    creator = frame.limit(0).writeTo(name).using("iceberg")
-    for key, value in properties.items():
-        creator = creator.tableProperty(key, value)
-    if partition is not None:
-        creator = creator.partitionedBy(partition)
-    creator.create()
-
-
 def replace_payments(spark, name, frame, pins, run_id, partition=None, options=None) -> dict:
     """Replace the affected payments' rows: delete them, then append their recomputed rows, on this run's branch."""
     create_table(spark, name, frame, partition)
@@ -373,14 +361,6 @@ def total_records(spark, table, snapshot) -> int:
         f"SELECT summary['total-records'] AS total FROM {table}.snapshots WHERE snapshot_id = {snapshot}"
     ).first()
     return int(row["total"])
-
-
-def snapshot_info(spark, table) -> dict:
-    snapshot = current_snapshot(spark, table, write_ref())
-    row = spark.sql(
-        f"SELECT summary['added-records'] AS added FROM {table}.snapshots WHERE snapshot_id = {snapshot}"
-    ).first()
-    return {"snapshot_id": snapshot, "added_records": int(row["added"] or 0)}
 
 
 def with_event_hash(events: DataFrame) -> DataFrame:

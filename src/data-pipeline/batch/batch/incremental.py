@@ -38,19 +38,19 @@ def read_at(spark: SparkSession, table: str, snapshot) -> DataFrame:
     return spark.read.option("versionAsOf", snapshot).table(table)
 
 
-def last_run(spark: SparkSession, table: str):
-    """The summary of the newest DP2 commit in the table's main history; maintenance commits carry no run ID."""
+def last_run(spark: SparkSession, table: str, run_property: str = RUN_PROPERTY, ref: str = "main"):
+    """The summary of the newest pipeline commit in the table's history; maintenance commits carry no run ID."""
     if not spark.catalog.tableExists(table):
         return None
     snapshots = {
         row["snapshot_id"]: (row["parent_id"], row["summary"])
         for row in spark.sql(f"SELECT snapshot_id, parent_id, summary FROM {table}.snapshots").collect()
     }
-    head = spark.sql(f"SELECT snapshot_id FROM {table}.refs WHERE name = 'main'").collect()
+    head = spark.sql(f"SELECT snapshot_id FROM {table}.refs WHERE name = '{ref}'").collect()
     node = head[0]["snapshot_id"] if head else None
     while node in snapshots:
         parent, summary = snapshots[node]
-        if summary and summary.get(RUN_PROPERTY):
+        if summary and summary.get(run_property):
             return summary
         node = parent
     return None

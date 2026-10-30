@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-from batch import bronze, silver
+from batch import bronze, gold, silver
 from batch.lakehouse import TARGET_FILE_BYTES, file_stats
 from batch.metrics import phase
 from batch.spark import ICEBERG_CATALOG, session
@@ -24,6 +24,7 @@ TABLES = [
     silver.ATTEMPTS,
     silver.LABELS,
     silver.REJECTED,
+    *gold.TABLES,
 ]
 
 
