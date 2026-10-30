@@ -69,6 +69,14 @@ class Knowledge:
                     self.feature_store = feature_store
         return self.feature_store
 
+    # Loading Feast takes seconds, longer than the gateway allows the first tool call; a missing registry is retried
+    # on first use.
+    async def warm(self) -> None:
+        try:
+            await self.store()
+        except HTTPException:
+            pass
+
     async def chunk(self, chunk_id: str) -> Chunk | None:
         feature_store = await self.store()
         rows = await asyncio.to_thread(store.read, feature_store, [chunk_id])
@@ -141,7 +149,11 @@ async def lifespan(_: FastAPI):
     async with httpx.AsyncClient(timeout=30.0) as client:
         knowledge.client = client
         async with mcp.session_manager.run():
-            yield
+            warming = asyncio.create_task(knowledge.warm())
+            try:
+                yield
+            finally:
+                warming.cancel()
 
 
 app = FastAPI(title="Payment-gateway knowledge API", version="0.1.0", lifespan=lifespan)
