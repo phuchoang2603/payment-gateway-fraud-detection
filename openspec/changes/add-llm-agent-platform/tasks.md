@@ -144,6 +144,7 @@
   - `docs/data/orchestration-governance.md` (AI assets).
 
   Verify with `rg` that no stale "planned" claim remains for built parts.
+- [ ] 8.2b Before merging, revert `infra/argocd/app-of-apps/values-dev.yaml`, which turns off Kafka, the gateway, live traffic, Flink/Feast and the Spark pipelines on dev for the LLM evidence runs, so `main` keeps dev's full stack.
 - [ ] 8.3 Run `devenv shell -- openspec validate add-llm-agent-platform --strict`, `helm lint` and the diff review locally. Open the PR, link it, and report CI results honestly.
 
 ## 9. Prod (explicit user confirmation required)
