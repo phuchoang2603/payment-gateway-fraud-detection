@@ -156,7 +156,8 @@ agents:
 registry:
   url: http://agentregistry.agentregistry.svc:12121
   repository: https://github.com/phuchoang2603/payment-gateway-fraud-detection
-  curlImage: curlimages/curl:8.17.0
+  # Runs the catalog job (agentregistry entries and Langfuse prompt versions), standard library only.
+  image: python:3.12.16-slim-bookworm
 
 # Langfuse v3 for prompt management and LLM traces. Its ClickHouse is the shared app-owned instance in `data`;
 # Postgres and Redis are instances of the platform operators in this namespace.

@@ -47,11 +47,22 @@ The application SHALL run self-hosted Langfuse v3 at a pinned chart and image, u
 - **THEN** it applies its migrations and creates the initial organisation, project and admin user from the provisioned keys
 
 ### Requirement: Agent registry publication
-The registry catalog SHALL live in Git and be published to the platform's agentregistry by a deployment-time job, never by CI. It SHALL record the agent's name, version, description, model config and tools. A behaviour change of a published agent SHALL publish a new version. Agents SHALL be deployed by the application chart, not by the registry.
+The registry catalog SHALL live in Git and be published to the platform's agentregistry by a deployment-time job, never by CI. It SHALL record the agent's name, version, description, model config and MCP servers; it SHALL NOT hold prompt copies or tool lists, which come from Langfuse and the MCP servers. A behaviour change of a published agent SHALL publish a new version. Agents SHALL be deployed by the application chart, not by the registry.
 
-#### Scenario: Sync publishes the catalog
-- **WHEN** the application syncs with a catalog containing `evidence-agent` 0.1.0
-- **THEN** the registry lists `evidence-agent` at 0.1.0 with its model config and no MCP servers
+#### Scenario: Release publishes the catalog
+- **WHEN** a release changes an agent, MCP server or prompt
+- **THEN** one catalog job runs and the registry lists the agent at its new version with its model config and MCP servers
+
+### Requirement: Prompts versioned in Langfuse from Git
+Each agent's system prompt SHALL be a file in Git, read by the agent from a ConfigMap rendered from that file. The same deployment-time job SHALL publish it to Langfuse as `<agent>-system-prompt` with the `production` label, creating a new version only when the text differs from the current production version. Langfuse SHALL NOT be written back to the agent.
+
+#### Scenario: Prompt changed in Git
+- **WHEN** a release changes an agent's prompt file
+- **THEN** Langfuse shows a new production version with the new text, and the agent uses the same text after reconciliation
+
+#### Scenario: Release without a prompt change
+- **WHEN** a release leaves the prompt file unchanged
+- **THEN** Langfuse keeps the same production version
 
 ### Requirement: Autoscaling mechanism per workload
 The agents' Substrate worker pool SHALL be autoscaled by KEDA once Substrate's WorkerPool scale subresource publishes a selector, and SHALL run at a fixed size until then. The knowledge API SHALL run as a Deployment, because its callers are admitted by mesh identity, which Knative's cluster-local gateway cannot carry, and SHALL be autoscaled by KEDA between two and four replicas on its combined REST and MCP request rate. The model servers SHALL NOT be autoscaled while each environment has one GPU. The documentation SHALL record this as the platform equivalent of the rubric's KEDA requirement, with the reason for each choice.
