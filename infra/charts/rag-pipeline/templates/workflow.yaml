@@ -144,8 +144,8 @@ spec:
 ---
 # One run per rag-pipeline image: a changed corpus or pipeline code yields a new image tag, hence a new Workflow.
 # It is an ordinary resource in the last wave, not a sync hook, so a failed run never blocks or retries the sync;
-# its result is in Argo Workflows and in the OpenMetadata run status. Superseded runs are kept (Prune=false) and the
-# current one has no TTL, because self-heal would recreate a deleted run and execute it again.
+# its result is in Argo Workflows and in the OpenMetadata run status. Argo CD prunes the superseded run; the current one
+# has no TTL, because self-heal would recreate a deleted run and execute it again.
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
@@ -153,7 +153,6 @@ metadata:
   namespace: {{ .Values.pipelineNamespace }}
   annotations:
     argocd.argoproj.io/sync-wave: "10"
-    argocd.argoproj.io/sync-options: Prune=false
 spec:
   workflowTemplateRef:
     name: rag-knowledge
