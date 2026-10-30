@@ -136,15 +136,12 @@ agents:
     name: llm-agents
     image: ghcr.io/kagent-dev/substrate/ateom-gvisor:v0.0.9
     sandboxClass: gvisor
-    minReplicas: 2
-    maxReplicas: 4
+    # Fixed: one worker runs one active conversation. Substrate 0.0.9's WorkerPool scale subresource has no
+    # status.selector, which the HPA behind KEDA requires, so the pool cannot be autoscaled yet.
+    replicas: 2
     resources:
       requests: {cpu: 100m, memory: 256Mi}
       limits: {memory: 2Gi}
-    autoscaling:
-      prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
-      requestsPerSecondPerWorker: "0.1"
-      cooldownSeconds: 300
   # Substrate's API server resolves the actors' Secret references when it starts a golden actor.
   substrateApiServer: {namespace: ate-system, name: ate-api-server}
   # Sandboxed actors have no mesh identity. They leave the sandbox only through this proxy in the release namespace,

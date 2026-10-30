@@ -78,32 +78,10 @@ metadata:
 spec:
   ateomImage: {{ $pool.image }}
   sandboxClass: {{ $pool.sandboxClass }}
-  replicas: {{ $pool.minReplicas }}
+  replicas: {{ $pool.replicas }}
   template:
     resources:
       {{- toYaml $pool.resources | nindent 6 }}
----
-# One worker runs one active conversation; idle conversations are suspended to snapshots and take no worker.
-# The pool follows the agents' model traffic, about two chat calls per conversation turn.
-apiVersion: keda.sh/v1alpha1
-kind: ScaledObject
-metadata:
-  name: {{ $pool.name }}
-  namespace: {{ $ns }}
-spec:
-  scaleTargetRef:
-    apiVersion: ate.dev/v1alpha1
-    kind: WorkerPool
-    name: {{ $pool.name }}
-  minReplicaCount: {{ $pool.minReplicas }}
-  maxReplicaCount: {{ $pool.maxReplicas }}
-  cooldownPeriod: {{ $pool.autoscaling.cooldownSeconds }}
-  triggers:
-    - type: prometheus
-      metadata:
-        serverAddress: {{ $pool.autoscaling.prometheus }}
-        query: {{ printf "sum(rate(agentgateway_requests_total{gateway=\"%s/%s\",backend=\"%s/%s\"}[2m]))" .Release.Namespace .Values.gateway.name .Release.Namespace .Values.models.chat.name | quote }}
-        threshold: {{ $pool.autoscaling.requestsPerSecondPerWorker | quote }}
 {{- range $agent := $agents.list }}
 {{- $tools := list }}
 {{- range $server := $agent.mcpServers | default list }}

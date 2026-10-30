@@ -14,12 +14,12 @@ Agents SHALL be kagent `SandboxAgent`s that run each conversation in a gVisor sa
 - **WHEN** more conversations are open than the pool has workers
 - **THEN** all are answered, idle ones are suspended, and a resumed conversation keeps its context
 
-### Requirement: Agent pool autoscaling
-The agents' `WorkerPool` SHALL run at least two workers and SHALL be scaled by a KEDA `ScaledObject` on its scale subresource, from the gateway's chat request rate, up to a fixed maximum.
+### Requirement: Agent pool capacity
+The agents' `WorkerPool` SHALL run a fixed two workers, so two conversations can be active at once while idle ones stay suspended. It SHALL NOT be autoscaled until Substrate's WorkerPool scale subresource publishes a selector that the Kubernetes HPA accepts.
 
-#### Scenario: Load rises
-- **WHEN** agent traffic exceeds the per-worker request-rate target
-- **THEN** KEDA adds workers up to the maximum, and removes them after the cooldown once traffic falls
+#### Scenario: Two active conversations
+- **WHEN** two conversations send messages at the same time
+- **THEN** each runs on its own worker and both are answered
 
 ### Requirement: Sandbox egress through a proxy
 Sandboxed agents SHALL leave their sandbox only through an app-owned egress proxy in the release namespace, which forwards only the gateway's model and MCP routes and Langfuse's trace intake and calls them with its own mesh identity. A network policy SHALL admit only the agents' worker pods, the kagent controller and kubelet probes to the proxy.
