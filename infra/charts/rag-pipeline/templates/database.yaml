@@ -69,11 +69,11 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/part-of: rag-pipeline
+      # Mesh peers arrive as HBONE on 15008 before ztunnel delivers them to 5432.
       ports:
         - {port: 5432, protocol: TCP}
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: operators
-      ports:
+        - {port: 15008, protocol: TCP}
+    # The instance manager's status port serves kubelet probes, which reach the pod from a link-local address in
+    # the ambient mesh, so it stays open; it exposes health and status, not data.
+    - ports:
         - {port: 8000, protocol: TCP}
