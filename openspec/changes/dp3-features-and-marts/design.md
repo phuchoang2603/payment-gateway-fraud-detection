@@ -83,7 +83,7 @@ A DBeaver ER export of the ClickHouse `marts` and `lakehouse.gold` tables is cap
 - **Why full recompute.** Silver itself is fully recomputed, so any day can change and there is nothing incremental to follow. Full recompute is idempotent by construction.
 - **`created`.** `created` is the commit timestamp of the pinned `silver.attempts` snapshot, not wall-clock time. It is deterministic for one input, increases across Silver runs, and is at or after every anchor in the table, because anchors stop at the last midnight before that commit. The rerun-equality test therefore compares every column.
 - **Contributing rows.** Only lifecycle-valid attempts contribute. Their count is zero anyway, by Silver's checks.
-- **Run report.** A report at `runs/payment-gateway/dp3/<run>/report.json` records:
+- **Run report.** A report at `runs/payment-gateway/dp3/<run>/gold.json` records:
   - the Silver snapshot IDs;
   - per-table rows and added files;
   - the coverage start date;
@@ -184,7 +184,7 @@ One-off devices (the 5% unfamiliar contexts) never enter the set. They stay visi
 2. Compute `familiar_device_fingerprints` per attempt: count each device's uses over the customer's attempts in `(started_at − 90 days, started_at]`, keep devices with two or more uses, and sort them. Then compute `profile_hash = sha2(to_json(named_struct(...)))` over all tracked attributes. JSON keeps nulls and array order, so the comparison is null-safe and deterministic.
 3. Keep the rows where the hash differs from `lag(profile_hash)`.
 4. Set `valid_from_ts = started_at` and `valid_to_ts = lead(valid_from_ts)`, null for the current version. `is_current = valid_to_ts IS NULL`.
-5. Set `customer_sk = sha2(integration_id|customer_id|valid_from_ts)` and `version_number = row_number()`.
+5. Set `customer_sk = sha2(integration_id|customer_id|valid_from_ts)` and `version_number = row_number()`. Attempts at the same instant open at most one version, the last in key order, so `customer_sk` is unique and no version is empty. The table is partitioned by `months(valid_from_ts)`, since about 30M versions would make day partitions tiny.
 6. Record `source_payment_id` and `source_attempt_id`, the attempt that introduced the version.
 
 **Why null and not `9999-12-31` for the current version.** ClickHouse `DateTime64` stops at 2299, so a sentinel date would clip or fail when ClickHouse reads it through `lakehouse`.
@@ -296,7 +296,7 @@ TTL day + INTERVAL {retention_days} DAY DELETE;
 
 ### 7. Mart build: monthly batches, staging, exchange
 
-**Job.** `batch/marts.py` runs as a plain container on the Spark image, which already carries the `batch` package. It uses `clickhouse-connect` over HTTP as user `marts`.
+**Job.** `batch/marts.py` runs as a plain container on the Spark image, which already carries the `batch` package. It talks to ClickHouse over HTTP as user `marts` through a small standard-library client, as the chart's setup job and the tests do, so the image gains no dependency.
 
 **Steps:**
 
@@ -308,7 +308,8 @@ TTL day + INTERVAL {retention_days} DAY DELETE;
    - Attempts are filtered to the month and the window, so Iceberg partition pruning applies.
    - Labels are filtered to `occurred_at` within the month and `label_available_at >= month start`, which prunes earlier partitions and uses file statistics to skip later ones.
    - The join runs with `join_algorithm = 'full_sorting_merge'`, external sort and group-by thresholds, and the profile's memory limit: the settings that let the v19 Silver checks finish on the prod instance. Hash and grace-hash joins are not used.
-4. Build `fact_merchant_day__staging` from the staged fact with one `INSERT … SELECT … GROUP BY`, and write `build_info__staging`: one row with `window_start`, `window_end`, the Silver snapshot IDs and `built_at`.
+   Labels are first aggregated once per attempt into an internal `marts.attempt_labels__staging` MergeTree table (earliest simulation truth and scenario, earliest chargeback), so each monthly insert joins a sorted local table instead of rereading Iceberg labels; it is dropped after the inserts.
+4. Build `fact_merchant_day__staging` from the staged fact with one `INSERT … SELECT … GROUP BY`, and write `build_info__staging`: one row with the run and mode, `window_start`, `window_end`, `rebuilt_days` (every day of the window for a historical build), `anchor_cap`, the Silver snapshot IDs and `built_at`. The mart rules scope their reconciliation to `rebuilt_days`, so one rule set audits both a full build and an incremental one.
 5. Reconcile: the staged fact's row count must equal the lifecycle-valid count of `lakehouse.`silver.attempts`` inside the window. A mismatch fails before the swap.
 
    **Write-audit-publish for the marts.** The `__staging` tables are the audit copy, the ClickHouse counterpart of the Iceberg audit branch. The marts stage ends after step 5 and leaves staging in place. The checks stage then runs every `payment-marts` rule against the staging tables: when `WAP_BRANCH` is set, `{object}` resolves to `marts.<table>__staging`. Results attach to the live table's OpenMetadata entity, the same way Iceberg rules audit a branch but report on the table. Only a separate `publish-marts` step, after all checks pass, runs step 6.
@@ -347,7 +348,7 @@ A against C shows the full benefit of the warehouse. B against C isolates the ef
 
 **Equality guard.** Every variant of a query must return the same row count and the same order-independent checksum (`sum(cityHash64(*))`), or the benchmark fails.
 
-**Report and cleanup.** The report goes to `runs/payment-gateway/warehouse-benchmark/<run>/report.json`, and the scratch table is dropped.
+**Report and cleanup.** The report goes to `runs/payment-gateway/warehouse-benchmark/<run>/report.json`, and the scratch table is dropped. The equality guard compares every variant with the indexed mart and names the variant that differs.
 
 **Page.** `docs/data/storage.md` § Warehouse gets one table per query and variant, with the plan excerpts.
 
@@ -369,11 +370,11 @@ publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, l
 - **Why `marts` runs after `features`.** It does not need `features`' output. It runs second only so that the run report can compare the Silver snapshot IDs (decision 7), and so that both stages do not compete on the prod spot pool and the small ClickHouse at once. The graph still shows the ingest stages, one validate stage and the publish steps. Parallel stages are possible later.
 - **Mutexes.** Holding `dp2-silver-writer` serializes DP3 with DP2. Argo 3.6+ supports several mutexes on one workflow (to be verified in implementation).
 - **Retries.** As in #102: Spark retries on error (prod: limit 10, `Always`, for spot loss), containers retry on error with limit 2, and checks are never retried.
-- **Schedule: daily, not every six hours.** DP3 is not added to the six-hourly `dp1-bronze-kafka` CronWorkflow. It gets its own suspended daily CronWorkflow `dp3-gold` at 04:17 UTC, after the 03:43 maintenance run.
+- **Schedule: daily, not every six hours.** DP3 is not added to the six-hourly `dp1-bronze-kafka` CronWorkflow. It gets its own suspended daily CronWorkflow `dp3-gold-daily` at 04:17 UTC, after the 03:43 maintenance run, which references the template with `workflowTemplateRef` so the template's mutexes, placement and exit handler apply.
   - The features are daily-anchored, so a daily run is their natural cadence.
   - The marts are rebuilt in full, so a six-hourly rebuild would cost four times as much for no gain until incremental mode exists.
-  - The workflow-level mutexes still apply, because the CronWorkflow runs the template directly rather than through a `templateRef` step.
-- **RBAC.** No new RBAC is needed. The marts and benchmark containers mount a new `clickhouse-marts` secret, an ExternalSecret in the data-pipelines chart for `CLICKHOUSE_MARTS_PASSWORD`.
+  - The workflow-level mutexes still apply, because `workflowTemplateRef` runs the whole template rather than a `templateRef` step.
+- **RBAC.** No new RBAC is needed. The marts and benchmark containers read the `clickhouse-marts` secret that the clickhouse chart's ExternalSecret already creates in `data` for `CLICKHOUSE_MARTS_PASSWORD`; a second ExternalSecret of the same name would collide. They receive only storage and ClickHouse credentials.
 - **Values:**
   - `dp3.enabled`, `dp3.profile`, `dp3.reportRoot`, `dp3.activeDeadlineSeconds`;
   - `marts.clickhouseUrl`, `marts.resources`, `marts.retentionDays` (180 in `values.yaml`, so in both environments);
@@ -413,7 +414,8 @@ The marts container requests 100m CPU and 256 Mi, because ClickHouse does the wo
 - there is no published DP3 commit recording consumed Silver snapshots;
 - any `silver.attempts` or `silver.labels` commit in the range has `dp2.mode = historical`, checked by walking the `snapshots` metadata table's summaries between start and end. A historical DP2 run rewrites every row, so it means a full reset;
 - a consumed start snapshot no longer exists. Silver keeps snapshots for 7 days, with the last 10 always kept, so DP3 must run at least weekly to stay incremental;
-- a changed attempt time precedes the coverage start `H`;
+- the earliest Silver attempt day `H` differs from the one the last run recorded (`dp3.history_start`), or coverage was still incomplete at the last anchor cap;
+- the gold tables were last written by different DP3 runs;
 - a `dp2.logic_version` in the range differs from the one recorded on the last consumed snapshot, or DP3's own logic or contract version changed.
 
 **Per table:**
@@ -425,6 +427,8 @@ The marts container requests 100m CPU and 256 Mi, because ClickHouse does the wo
 | `label_attempt` | Replace the rows of the attempts named in either changelog. |
 | `fact_payment_attempt` | Rebuild only the affected start days inside the retention window into staging. Those are the start days of changed attempts in both images, plus the attempts' start days for changed labels, looked up in the attempts changelog or on `main`. Then audit them, then `ALTER TABLE … REPLACE PARTITION <day> FROM …__staging` for each day in `publish-marts`. Each replace is atomic per day, matching the daily partitions. |
 | `fact_merchant_day` | Rebuild the affected months (monthly partitions, small) from the published fact, then `REPLACE PARTITION`. Update `build_info`. |
+
+**Anchors advance with Silver.** The anchor cap is the day of the pinned `silver.attempts` commit, so new anchors, including expiry rows, appear only after a DP2 run commits. A DP2 incremental run with nothing new commits nothing, which leaves the features at the last cap until data arrives.
 
 **`created` in incremental mode.** A row keeps the Silver commit time of the run that last recomputed it. A historical run stamps every row with the current commit time. That is the only allowed difference, so the equivalence test compares every column except `created`. The `created >= event_timestamp` rule still holds, and Feast uses `created` only to break ties between rows with the same `event_timestamp`.
 
@@ -446,7 +450,7 @@ The marts container requests 100m CPU and 256 Mi, because ClickHouse does the wo
 | Table | Rules |
 |---|---|
 | `dim_customer` | one current version per customer; no overlap or gap (`valid_to_ts` = the next `valid_from_ts`, via a `lead` window); `valid_from_ts < valid_to_ts`; unique `customer_sk`; `is_current` iff `valid_to_ts IS NULL` |
-| `feat_customer_daily`, `feat_payment_method_daily` | unique (key, `event_timestamp`); `event_timestamp` is a UTC midnight; `created >= event_timestamp`; counts ≥ 0; `decided <= attempts`; `declined <= decided`; each rate is in [0, 1] and null iff its denominator is 0; 7-day columns are null iff 30-day columns are null or coverage < 7 days (checked against `min(event_timestamp)`); no two consecutive rows for one key are identical (the change-point rule) |
+| `feat_customer_daily`, `feat_payment_method_daily` | unique (key, `event_timestamp`); `event_timestamp` is a UTC midnight; `created >= event_timestamp`; counts ≥ 0; `decided <= attempts`; `declined <= decided`; each rate is in [0, 1] and null iff its denominator is 0; a window's columns are null together, and a null 7-day window implies a null 30-day window; no two consecutive rows for one key are identical (the change-point rule) |
 | `label_attempt` | unique (attempt key, `label_source`); known source; `label_available_at >= occurred_at`; every key exists in ``lakehouse.`silver.attempts` `` |
 | `fact_payment_attempt` | unique attempt key; row count equals the lifecycle-valid ``lakehouse.`silver.attempts` `` count; `outcome` is a known value; `chargeback_available_at >= started_at` |
 | `fact_merchant_day` | sums of `attempts` and `succeeded` equal the fact's; rates are in [0, 1] and null iff their denominator is 0; `decided = succeeded + risk_declined + processor_declined` |
@@ -456,7 +460,7 @@ The marts container requests 100m CPU and 256 Mi, because ClickHouse does the wo
 ### 11. Catalog and lineage
 
 - **Where connectors live.** Since #102, `data-pipelines` owns the OpenMetadata connector configuration (`catalog.connectors`), its ExternalSecrets and a PostSync register job. Every checks run ingests the ClickHouse tables before its tests, and other connectors are ingested by the on-demand `metadata-discovery` WorkflowTemplate. Contracts and products are not imported into OpenMetadata (its 2.0.6 ODCS importer rejects them), so Git stays the authority for the gold contracts too.
-- **Connector.** The ClickHouse connector in `catalog.connectors` drops `databaseSchema: lakehouse`, which limits ingestion to one schema, and uses `schemaFilterPattern: {includes: ["^lakehouse$", "^marts$"]}`. Its table filter adds `^fact_`. `marts_benchmark` and the `__staging` tables are excluded.
+- **Connector.** The ClickHouse connector in `catalog.connectors` drops `databaseSchema: lakehouse`, which limits ingestion to one schema, and uses `schemaFilterPattern: {includes: ["^lakehouse$", "^marts$"]}`. Its table filter adds `^fact_` and `^build_info$`, which the build-info rule needs as an entity, and excludes `__staging$`. `marts_benchmark` is outside the schema filter.
 - **Pipelines.** `openmetadata.lineage` adds the pipelines `dp3-features` ("Gold features, dimension and labels from pinned Silver") and `dp3-marts` ("ClickHouse marts from Silver"), with the edges listed in the governance delta. `publish` records the Silver snapshot IDs from the run report in the pipeline status.
 - **Dashboards are not catalogued.** OpenMetadata covers the tables, pipelines, tests and profiles. Grafana dashboards stay out of the catalog: no Grafana connector, no token, and no mart → dashboard lineage.
 
@@ -495,10 +499,11 @@ users:
     - GRANT SELECT, INSERT, CREATE TABLE, DROP TABLE ON marts_benchmark.*
     - GRANT SELECT ON lakehouse.*
     - GRANT SELECT ON system.query_log
-    - GRANT SYSTEM DROP CACHE ON *.*
+    - GRANT SYSTEM DROP CACHE, SYSTEM FLUSH LOGS ON *.*
   openmetadata/grants/query:   # adds marts.*
     - GRANT SELECT ON lakehouse.*
     - GRANT SELECT ON marts.*
+    - GRANT SELECT ON system.databases
     - GRANT SELECT ON system.tables
     - GRANT SELECT ON system.columns
 ```
