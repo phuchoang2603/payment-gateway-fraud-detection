@@ -217,6 +217,9 @@ spec:
     spark.driver.cores: {{ $sizing.driver.cores | quote }}
     spark.driver.memory: {{ $sizing.driver.memory | quote }}
     spark.driver.memoryOverhead: {{ $sizing.driver.memoryOverhead | quote }}
+    {{- with $sizing.driver.maxResultSize }}
+    spark.driver.maxResultSize: {{ . | quote }}
+    {{- end }}
     spark.executor.instances: {{ $sizing.executors | quote }}
     spark.executor.cores: {{ $sizing.executor.cores | quote }}
     spark.executor.memory: {{ $sizing.executor.memory | quote }}

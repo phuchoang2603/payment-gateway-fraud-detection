@@ -44,6 +44,8 @@ spark:
       shufflePartitions: 1024
       driver:
         memory: 8g
+        # The broadcast collect of the v19 duplicated-ID keys is about 1 GiB of task results, over the 1g default.
+        maxResultSize: 4g
       executor:
         memory: 10g
 bronze:
