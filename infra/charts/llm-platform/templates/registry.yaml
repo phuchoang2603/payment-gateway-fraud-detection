@@ -7,7 +7,7 @@
   "metadata" (dict "name" $name "tag" $server.version)
   "spec" (dict
     "title" $server.title
-    "description" (printf "%s Tools: %s. Served through the agent gateway with an agent key." $server.description (join ", " $server.tools))
+    "description" (printf "%s Served through the agent gateway with an agent key." $server.description)
     "remote" (dict "type" "streamable-http" "url" (printf "http://%s.%s.svc.cluster.local/mcp/%s" $.Values.gateway.name $.Release.Namespace $name))) }}
 {{- $catalog = append $catalog (toYaml $entry) }}
 {{- end }}

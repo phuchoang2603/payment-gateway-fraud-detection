@@ -81,7 +81,6 @@ ASSETS = {
         "service": "agent-gateway-mcp",
         "url": "http://gateway/mcp/knowledge",
         "description": "kb",
-        "tools": [{"name": "search_knowledge", "description": "search"}],
     },
     "agent": {"name": "evidence-agent", "version": "0.2.0", "primaryModel": "qwen3-8b", "description": "Explains."},
 }
@@ -90,8 +89,12 @@ ASSETS = {
 def test_success_registers_the_ai_assets_linked_to_model_tool_and_table():
     om, calls = recorder()
 
-    summary = catalog.publish(om, "Succeeded", "run-1", "abc", ASSETS)
+    summary = catalog.publish(
+        om, "Succeeded", "run-1", "abc", ASSETS, [{"name": "search_knowledge", "description": "x"}]
+    )
 
+    server = next(body for _, path, body in calls if path == "/api/v1/mcpServers")
+    assert [tool["name"] for tool in server["tools"]] == ["search_knowledge"]
     application = next(body for _, path, body in calls if path == "/api/v1/aiApplications")
     assert application["primaryModel"] == "agent-gateway.qwen3-8b"
     assert application["tools"] == [{"id": "knowledge-id", "type": "mcpServer"}]
@@ -110,3 +113,27 @@ def test_failed_runs_register_no_assets():
     catalog.publish(om, "Failed", "run-1", "", ASSETS)
 
     assert not [path for _, path, _ in calls if "llm" in path or "mcp" in path.lower() or "aiApplications" in path]
+
+
+def test_tools_are_discovered_from_the_mcp_server_through_the_gateway():
+    seen = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        seen.append((body["method"], request.headers.get("authorization"), request.headers.get("mcp-session-id")))
+        if body["method"] == "initialize":
+            return httpx.Response(200, json={"result": {}}, headers={"mcp-session-id": "s1"})
+        if body["method"] == "tools/list":
+            tools = [{"name": "search_knowledge", "description": "Search the knowledge base.\n"}]
+            event = "event: message\ndata: " + json.dumps({"jsonrpc": "2.0", "id": 2, "result": {"tools": tools}})
+            return httpx.Response(200, text=event, headers={"content-type": "text/event-stream"})
+        return httpx.Response(202)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    tools = catalog.discover_tools("http://gateway/mcp/knowledge", "k", client)
+
+    assert tools == [{"name": "search_knowledge", "description": "Search the knowledge base."}]
+    assert [method for method, _, _ in seen] == ["initialize", "notifications/initialized", "tools/list"]
+    assert all(auth == "Bearer k" for _, auth, _ in seen)
+    assert seen[-1][2] == "s1"

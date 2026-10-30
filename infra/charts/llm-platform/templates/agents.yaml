@@ -89,8 +89,9 @@ spec:
 {{- range $agent := $agents.list }}
 {{- $tools := list }}
 {{- range $server := $agent.mcpServers | default list }}
-{{- $spec := required (printf "gateway.mcpServers.%s is not defined" $server) (index $.Values.gateway.mcpServers $server) }}
-{{- $tools = append $tools (dict "type" "McpServer" "mcpServer" (dict "apiGroup" "kagent.dev" "kind" "RemoteMCPServer" "name" $server "toolNames" $spec.tools)) }}
+{{- $_ := required (printf "gateway.mcpServers.%s is not defined" $server) (index $.Values.gateway.mcpServers $server) }}
+{{- /* No toolNames: the agent gets every tool the server lists, discovered at runtime. */}}
+{{- $tools = append $tools (dict "type" "McpServer" "mcpServer" (dict "apiGroup" "kagent.dev" "kind" "RemoteMCPServer" "name" $server)) }}
 {{- end }}
 {{- $declarative := dict
   "modelConfig" $agents.modelConfig
