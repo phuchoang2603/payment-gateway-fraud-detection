@@ -11,12 +11,12 @@ Implementation SHALL remove obsolete DP1-owned catalog registrations, contracts,
 ## ADDED Requirements
 
 ### Requirement: Product discovery
-The catalog SHALL expose the historical source, Bronze and Silver products, owners, classifications and output assets with their ODPS/ODCS identities, versions and artifact references. Historical source assets SHALL identify the dataset manifest without creating a catalog entity for every file.
+The catalog SHALL expose the Bronze and Silver tables with their schemas, the native quality test results written by each run, and their lineage from the historical source and the payment topics through DP1 and DP2. ODCS contracts and ODPS data products SHALL NOT be imported into OpenMetadata until its importer accepts the ODCS v3 files as written. Git SHALL remain the authority for contracts and products.
 
-#### Scenario: Discover a Silver output
+#### Scenario: Discover a Silver table
 
-- **WHEN** a user opens a Silver product output
-- **THEN** they can identify its owner, table schema, contract version and Bronze input products
+- **WHEN** a user opens a Silver table in OpenMetadata
+- **THEN** they can see its schema, its native test results from the latest run, and its lineage to the Bronze tables
 
 ### Requirement: Bronze and Silver lineage
 The catalog SHALL expose lineage from the historical source and from the `payments.events.v1` and `fraud.labels.v1` topics through the DP1 pipeline to the corresponding Bronze tables, and from the Bronze tables through the DP2 pipeline to the Silver tables. Events and labels SHALL be independent Bronze outputs; the catalog SHALL NOT fabricate an events-to-labels ingestion edge. The run's dataset version, Kafka offsets or Bronze snapshot IDs SHALL be available from the associated pipeline execution.

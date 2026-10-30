@@ -262,6 +262,10 @@ The `lakehouse` application deploys the Polaris REST catalog that Spark, ClickHo
 
 Spark applications write rolling event logs to `runs/payment-gateway/spark-events/` in each environment's bucket, using the S3A credentials the jobs already have. The Spark UI for each job is viewed after the run through a throwaway History Server pod, documented in `docs/data/offline.md`. The evidence set covers the Spark UI for DP1, DP2 and the benchmark, the Argo Workflows graphs and the Kafka CronWorkflow run, the OpenMetadata tables, lineage and test results, and the maintenance before-and-after report. Images go under `docs/data/images/`. The evidence is recorded after the prod v19 run, and the change is archived after that record.
 
+### 16. Catalog registration belongs to data-pipelines
+
+The `data-pipelines` application owns the OpenMetadata connector configuration, its ExternalSecrets and the register job. A PostSync job creates the services on each deploy. Every checks run ingests the ClickHouse tables before its native tests, so no scheduled ClickHouse discovery remains. Kafka topics are ingested by the on-demand `metadata-discovery` WorkflowTemplate. The `metadata-integrations` application is removed.
+
 ## Risks / Trade-offs
 
 - [Bronze not run within Kafka retention (7 days)] → `failOnDataLoss` fails the run loudly. Enabling the schedule must come with a cadence or retention that covers it. Raising retention is a Kafka chart change owned by the live change.
@@ -316,6 +320,11 @@ Steps 3 and 4 run when the whole pipeline is ready, not as tasks of this change.
 
 ## Open Questions
 
+- Contracts and data products are not in OpenMetadata. OpenMetadata 2.0.6 rejects the ODCS v3 files as written, found with `POST /v1/dataContracts/odcs/validate/yaml`:
+  - schema-level `customProperties` as a list, which the importer reads as an object (400);
+  - `servers.environment` as a string in the historical contracts, which the importer reads as an object (400);
+  - a server-side null-pointer error (`String.hashCode`) on the bronze and silver contracts that stayed after removing quality rules, servers and top-level fields.
+  Our files are valid ODCS v3. Rewriting them to the importer's dialect would break the `contracts` lint and the generator digest recorded in the v18 and v19 manifests. Git stays the authority. Retry `PUT /v1/dataContracts/odcs/yaml` on a newer OpenMetadata, and publish data products once ODPS is supported natively.
 - Incremental Silver is not planned. The full recompute stays because cross-source dedup, conflict rejection and label linkage can change any payment's result, so a partial run cannot be exact. Revisit only if the v19 Silver run time is a problem.
 - Exact transitive jar versions for the Kafka connector under Spark 4.1.3, resolved when the Dockerfile is written.
 - Whether the benchmark should also show a `mergeSchema` on/off read over schema versions 2/3 files. It can be added to the benchmark job later without spec changes.

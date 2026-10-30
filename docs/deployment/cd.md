@@ -22,12 +22,11 @@ GitOps deploys the same application charts to dev and prod. CI publishes a compl
 | `kafka` | `payment-gateway` | Kafka, Debezium Connect, Karapace and topic declarations |
 | `fraud-features` | `data` | Flink job, Feast writer and server, Feast Redis |
 | `live-traffic` | `data` | Live simulator |
-| `data-pipelines` | `data` | Generator and pipeline WorkflowTemplates |
-| `metadata-integrations` | `data` | Catalog connections and discovery |
+| `data-pipelines` | `data` | Generator and pipeline WorkflowTemplates; OpenMetadata connections, the register job and on-demand discovery |
 | `clickhouse` | `data` | ClickHouse instance, its users from Doppler, Service and the `langfuse` setup Job |
 | `lakehouse` | `data` | Polaris REST catalog with its PostgreSQL store, signing keys and Iceberg storage secret; the `lakehouse` warehouse registration; ClickHouse `lakehouse` DataLakeCatalog |
 
-The prod release enables every application except `live-traffic` and `fraud-features`: the gateway services with their databases, Redis and Kafka; `data-pipelines` with the generator, Bronze, Silver, analytics and maintenance workflows; `clickhouse`; `lakehouse`; and `metadata-integrations`, which connects OpenMetadata to ClickHouse and Kafka. Prod is not bootstrapped yet, so this describes its release configuration. Application pods are stateless; Postgres and the authorization and Feast Redis instances own the persistent volumes.
+The prod release enables every application except `live-traffic` and `fraud-features`: the gateway services with their databases, Redis and Kafka; `data-pipelines` with the generator, Bronze, Silver, analytics and maintenance workflows, with the OpenMetadata connections and register job; `clickhouse`; and `lakehouse`. Prod is not bootstrapped yet, so this describes its release configuration. Application pods are stateless; Postgres and the authorization and Feast Redis instances own the persistent volumes.
 
 ## Runtime configuration
 

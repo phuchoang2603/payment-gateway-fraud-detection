@@ -97,3 +97,11 @@
 - [ ] 12.3 Write the recorded prod v19 results into `docs/data/offline.md` (run IDs, row counts, duplicates collapsed, conflicts, rejected rows, label linkage, task counts and stage times, check outcomes) and link the screenshots from the pages named in 12.2. Replace the pending `Dev runs` text where it no longer applies.
 - [ ] 12.4 After the prod v19 evidence run is recorded: tick 12.2 and 12.3, sync the delta specs to `openspec/specs/`, and run `openspec archive rebuild-generation-to-silver --yes` in a docs-only follow-up commit on main.
 - [ ] 12.5 Open #102 squash-merge only after review, with this change still open. Tasks 9.2 and 12.2 to 12.4 stay open until the archive step.
+
+## 13. Catalog registration
+
+- [ ] 13.1 Fold `metadata-integrations` into `data-pipelines`: connector configuration and ExternalSecrets, a PostSync register job, and an on-demand discovery template. Delete the chart, its Application and its Kafka client. Verify that `deploy/dev` prunes the old Application and that the register job completes.
+- [ ] 13.2 Rerun the checks on dev after the fold, and confirm that the ClickHouse tables, native test results and lineage still appear in OpenMetadata.
+- [ ] 13.3 Blocked: import ODCS contracts with `PUT /v1/dataContracts/odcs/yaml` once OpenMetadata accepts the ODCS v3 files as written. Blocked on OpenMetadata 2.0.6; see design section 16 and the open questions.
+- [ ] 13.4 Blocked: publish data products once OpenMetadata supports ODPS natively, or with a minimal product create.
+- [ ] 13.5 At archive, move the requirements of `openspec/specs/metadata-integrations` into `data-pipeline-orchestration` and remove that capability.

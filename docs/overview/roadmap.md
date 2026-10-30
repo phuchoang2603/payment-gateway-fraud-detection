@@ -40,7 +40,7 @@ Feast is built as one change after Bronze and Silver merge. Until then the strea
 5. **Materialization.** An Argo workflow runs `feast materialize-incremental` from the offline store into Redis after each DP3 run, so batch features reach the online store.
 6. **TTL and feature services.** Each feature view gets a TTL equal to its longest window plus the expected pipeline delay, with the reason recorded on the [feature store](../ml/feature-store.md) page. A versioned `FeatureService` (for example `fraud_model_v1`) names the features a model uses; training and Go Fraud both request it.
 7. **Natural keys.** Feature views key on integration-scoped customer and payment-method IDs instead of the current synthetic snapshot key, so offline joins with labels are direct. Go Fraud's feature client moves to the new views and feature service in the same change.
-8. **Governance.** OpenMetadata's native Flink pipeline connector, run from `metadata-integrations` against the JobManager REST API, records the streaming job and its runs. If it does not resolve Kafka lineage for the PyFlink job, a deploy-time step publishes `payments.events.v1` → streaming job → feature journal and reject topics with the OpenMetadata SDK, as Bronze and Silver do. Feast has no OpenMetadata connector, so the governed assets are the `feat_` tables with DP3 lineage from Silver. Neither the Flink job nor Feast embeds the SDK, so a catalog outage cannot affect feature computation.
+8. **Governance.** OpenMetadata's native Flink pipeline connector, run from `data-pipelines` against the JobManager REST API, records the streaming job and its runs. If it does not resolve Kafka lineage for the PyFlink job, a deploy-time step publishes `payments.events.v1` → streaming job → feature journal and reject topics with the OpenMetadata SDK, as Bronze and Silver do. Feast has no OpenMetadata connector, so the governed assets are the `feat_` tables with DP3 lineage from Silver. Neither the Flink job nor Feast embeds the SDK, so a catalog outage cannot affect feature computation.
 
 ## LLM and agent platform
 
@@ -63,6 +63,7 @@ Feast is built as one change after Bronze and Silver merge. Until then the strea
 
 - **Silver reads only validated Bronze.** Bronze checks set an Iceberg `validated` tag on the checked snapshot, and Silver reads that tag instead of the current snapshot. Today a standalone `dp2-silver` run can consume a Bronze snapshot that failed its checks; the Kafka cron is gated by step order.
 
+- **OpenMetadata contracts and products.** Import ODCS contracts when OpenMetadata's importer accepts ODCS v3 as written (blocked on 2.0.6), and publish data products then.
 - **Bronze and Silver evidence (prod v19).** Screenshots and recorded results are open tasks in `openspec/changes/rebuild-generation-to-silver/tasks.md`, section 12.
 
 ## Limits

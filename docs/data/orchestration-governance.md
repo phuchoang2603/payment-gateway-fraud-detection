@@ -41,7 +41,7 @@ Historical source contracts describe schema and meaning only. Bronze and Silver 
 
 ## Catalog
 
-The `metadata-integrations` application owns the shared catalog connections and a daily 03:00 UTC discovery of ClickHouse tables and Kafka topics. Each connector declares its ExternalSecret alongside its connection. Discovery samples no rows and runs no profiling.
+The `data-pipelines` application owns the shared catalog connections. A PostSync register job creates the OpenMetadata services on each deploy. Every checks run ingests the ClickHouse tables, and Kafka topics are ingested by the on-demand `metadata-discovery` template. Each connector declares its ExternalSecret alongside its connection. Discovery samples no rows and runs no profiling.
 
 Pipelines publish lineage (historical source and Kafka topics → Bronze → Silver), their execution status on success and failure through the workflow exit handler, and native test results. The Kafka CronWorkflow's exit handler records only the Bronze pipeline: its Silver step runs through `templateRef`, which does not run the Silver template's exit handler. A run succeeds only when every expected test reports Success. Pending: lineage and validation screenshots for DP1–DP3, taken after the first dev run.
 

@@ -64,6 +64,13 @@ A DP1 submission SHALL select either a historical dataset version, by source roo
 - **WHEN** the charts are rendered with default values
 - **THEN** the scheduled workflow exists but is suspended
 
+### Requirement: Catalog registration and discovery
+The data-pipelines application SHALL own the OpenMetadata connector configuration, its ExternalSecrets and the service registration. A PostSync register job SHALL create the OpenMetadata services on each deploy. Every checks run SHALL ingest the ClickHouse tables before its native tests. Kafka topics SHALL be ingested by the on-demand `metadata-discovery` WorkflowTemplate, not by a schedule. Registration SHALL NOT import contracts or data products.
+
+#### Scenario: Deploy registers services
+- **WHEN** data-pipelines syncs
+- **THEN** the register job creates or updates the OpenMetadata services, and no discovery CronWorkflow exists
+
 ## REMOVED Requirements
 
 ### Requirement: Observable ingest and validate stages
