@@ -130,8 +130,6 @@ spec:
         image: {{ $rag | quote }}
         args: [catalog]
         env:
-          - name: AI_ASSETS
-            value: {{ .Values.aiAssets | toJson | quote }}
           - name: KNOWLEDGE_VERSION
             value: "{{ "{{workflow.outputs.parameters.knowledge-version}}" }}"
           - name: WORKFLOW_STATUS
@@ -139,7 +137,6 @@ spec:
           - name: RUN_ID
             value: "{{ "{{workflow.name}}" }}"
           {{- include "rag-pipeline.metadataEnv" . | nindent 10 }}
-          {{- include "rag-pipeline.gatewayEnv" (dict "root" . "secret" "rag-gateway") | nindent 10 }}
         securityContext:
           {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
         resources:

@@ -202,18 +202,11 @@ def verify() -> None:
 
 
 def publish_catalog() -> None:
-    assets = json.loads(os.environ.get("AI_ASSETS", "null"))
-    status = os.environ["WORKFLOW_STATUS"]
-    tools = None
-    if assets and status == "Succeeded":
-        tools = catalog.discover_tools(assets["mcpServer"]["url"], os.environ["GATEWAY_API_KEY"])
     summary = catalog.publish(
         catalog.Catalog.from_env(),
-        status,
+        os.environ["WORKFLOW_STATUS"],
         os.environ["RUN_ID"],
         os.environ.get("KNOWLEDGE_VERSION", ""),
-        assets,
-        tools,
     )
     print(json.dumps(summary, sort_keys=True))
 

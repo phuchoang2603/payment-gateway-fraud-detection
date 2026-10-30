@@ -91,31 +91,3 @@ api:
   resources:
     requests: {cpu: 100m, memory: 512Mi}
     limits: {memory: 1Gi}
-
-# AI assets the catalog step registers in OpenMetadata. These facts must match the llm-platform chart.
-aiAssets:
-  llmService:
-    name: agent-gateway
-    baseUrl: http://agentgateway.llm.svc.cluster.local/v1
-  models:
-    - name: qwen3-8b
-      baseModel: Qwen/Qwen3-8B-FP8
-      revision: 220b46e3b2180893580a4454f21f22d3ebb187d3
-      provider: Qwen
-      description: Chat model (FP8) served by vLLM through KServe LLMInferenceService with the llm-d endpoint picker.
-    - name: qwen3-embedding
-      baseModel: Qwen/Qwen3-Embedding-0.6B
-      revision: 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3
-      provider: Qwen
-      description: 1024-dimension embedding model served by vLLM's pooling runner; embeds the knowledge base and queries.
-  mcpServer:
-    name: knowledge
-    service: agent-gateway-mcp
-    url: http://agentgateway.llm.svc.cluster.local/mcp/knowledge
-    # Its tools are read from the server's tools/list through the gateway at publish time.
-    description: Read-only payment-gateway knowledge base over the Feast pgvector store, served by rag-api behind the agent gateway.
-  agent:
-    name: evidence-agent
-    version: 0.3.0
-    primaryModel: qwen3-8b
-    description: Read-only fraud-analyst agent that explains declines, risk decisions and payment behaviour from the knowledge base.

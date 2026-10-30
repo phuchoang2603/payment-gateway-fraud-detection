@@ -1,16 +1,21 @@
 ## ADDED Requirements
 
 ### Requirement: AI assets in the governance catalog
-The RAG workflow's catalog step SHALL publish the LLM platform to OpenMetadata as native AI entities, without changing the data pipelines' metadata code or chart:
+The LLM platform's release catalog job SHALL publish the LLM platform to OpenMetadata as native AI entities from that chart's own values, without changing the data pipelines' metadata code or chart:
 - a custom LLM service for the agent gateway endpoint, without storing any key;
-- one LLM model per served model, with base model, quantization type, pinned revision, capabilities and deployment details;
-- one AI application per agent, with type, framework, version, development stage and primary model.
+- one LLM model per served model, with base model, pinned revision, provider and deployment details;
+- one MCP server per gateway MCP route, with the tools the server itself lists;
+- one AI application per agent, with type, framework, version, development stage, primary model, MCP servers and knowledge base.
 
-Registration SHALL be idempotent and SHALL run on every RAG workflow run. Later MCP servers, agents and knowledge bases SHALL be added as further entries linked to these entities.
+Registration SHALL be idempotent and SHALL run once per change of the catalog content.
 
 #### Scenario: Registration after a sync
-- **WHEN** the metadata registration job runs in an environment with the LLM platform enabled
+- **WHEN** the catalog job runs in an environment with the LLM platform enabled
 - **THEN** OpenMetadata shows the LLM service, the `qwen3-8b` and `qwen3-embedding` models, and the `evidence-agent` application whose primary model is `qwen3-8b`
+
+#### Scenario: Tool added to an MCP server
+- **WHEN** an MCP server's code adds a tool and the catalog job runs again
+- **THEN** OpenMetadata lists the new tool on that server with the description from the server, with no chart change
 
 #### Scenario: Agent version bump
 - **WHEN** the agent's version changes and registration runs again

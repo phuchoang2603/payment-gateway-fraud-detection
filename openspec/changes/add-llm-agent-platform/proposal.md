@@ -22,7 +22,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - **Governance:** the run validates its output and records its checks and lineage in OpenMetadata like the other pipelines.
   - **Web API and MCP tool in one service:** FastAPI with pydantic and health checks, as a Deployment whose rolling update keeps the last ready version serving. Its REST API fetches chunks by id, and later customer features by id from the online feature store. Search is only an MCP tool: the service serves the knowledge MCP tools (search and chunk by id) behind the gateway's `/mcp/knowledge` route; they are published to the registry and used by `evidence-agent`.
   - **Quality gate:** every quality check runs before the write. After the write, the pipeline types the Feast pgvector column and adds an HNSW index, which Feast does not create.
-- Register the AI assets in OpenMetadata from the RAG workflow's catalog step: the LLM service (the gateway endpoint), both models, the agent as an AI application linked to its model, and the knowledge MCP server. Further agents attach later.
+- Register the AI assets in OpenMetadata from the `llm-platform` release catalog job: the LLM service (the gateway endpoint), both models, each MCP server with the tools it lists, and each agent as an AI application linked to its model, tools and knowledge table. The same job publishes agentregistry entries and the prompts to Langfuse.
 - Add an on-demand benchmark (`vllm bench serve` from the vLLM image, as plain manifests applied with `kubectl`) with an agent-shaped shared-prefix workload. It records throughput, TTFT and inter-token latency before and after each optimization (prefix caching, FP8 KV cache, n-gram speculative decoding, streamed cold start, FP8 vs AWQ weights). Results are recorded only from real dev runs, with the command and date.
 - Record the autoscaling decision against the rubric's KEDA:
   - Knative for this repo's own plain HTTP services that need no caller identity (later MCP servers and web APIs); the knowledge API is a Deployment autoscaled by KEDA (2 to 4 replicas on request rate), because its callers are admitted by mesh identity and Knative's cluster-local gateway runs outside the mesh;
@@ -55,7 +55,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 ### Modified Capabilities
 
 - `talos-gitops-deployment`: adds the `llm-platform` application in the platform-owned `llm` namespace. It is enabled in dev and disabled in prod until the user confirms launching the prod GPU pool. Its credentials come from `gateway-doppler`.
-- `data-catalog-governance`: adds AI assets (LLM service, models, agents, MCP server) to the catalog from the RAG workflow, and the knowledge-base product (contract checks and lineage for the RAG run).
+- `data-catalog-governance`: adds AI assets (LLM service, models, agents, MCP servers) to the catalog from the LLM platform's catalog job, and the knowledge-base product (contract checks and lineage for the RAG run).
 
 ## Impact
 

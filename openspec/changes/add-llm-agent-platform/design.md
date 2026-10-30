@@ -242,15 +242,15 @@ agentregistry 0.4.0 materializes agents as kagent `v1alpha2` resources, the API 
 
 ### 12. OpenMetadata: register the AI assets from this change's own code
 
-OpenMetadata 2.0.6 has first-class AI entities: `llmService`, `llmModel`, `aiApplication` and `mcpServer`. It has no ingestion connector for a custom LLM service, so the assets are created through its REST API.
+OpenMetadata 2.0.6 has first-class AI entities: `llmService`, `llmModel`, `aiApplication` and `mcpServer`. It has no ingestion connector for a custom LLM service, so the assets are created through its REST API with idempotent `PUT`s. This change does not touch the `openmetadata_jobs` code or the `data-pipelines` chart.
 
-This change must stay independent of the data pipelines, so it does not change the `openmetadata_jobs` code or the `data-pipelines` chart, which now holds the OpenMetadata connections. Instead the RAG workflow's `catalog` step (decision 15) registers them on every run with idempotent `PUT`s from the `rag` image. That step already runs in `data`, the namespace OpenMetadata admits.
+The `llm-platform` chart's catalog Job (one per catalog content) registers them from that chart's own values, so every fact has one source:
 - `llmService` `agent-gateway`: `CustomLLM`, base URL the gateway's `/v1`, no key stored.
-- `llmModels` `qwen3-8b` and `qwen3-embedding`: base model, pinned revision as version, capabilities, and the vLLM deployment.
-- `aiApplication` `evidence-agent`: agent, kagent, primary model `qwen3-8b`, the current agent version, and its MCP server.
-- `mcpServer` `knowledge`: the gateway route, its two tools, and lineage to `knowledge.chunks`.
+- `llmModels` `qwen3-8b` and `qwen3-embedding`: repository as base model, pinned revision as version, the provider, and the vLLM deployment, from `models`.
+- `mcpServer` per gateway MCP route, with the tools the server lists: the Job calls `tools/list` through the gateway with its own client key, so tool names and descriptions come from the server's code.
+- `aiApplication` per agent: agent, version, primary model, its MCP servers, and the knowledge table its tools read as knowledge base.
 
-The facts come from the `rag-pipeline` values and must match the `llm-platform` chart, because one chart cannot read another's values. Both charts change in the same commit when a model or the agent version changes.
+The Job runs in `llm` as ServiceAccount `llm-catalog`, which the platform admits to OpenMetadata's API port, with the app's OpenMetadata bot token. The RAG workflow's own catalog step records only its pipeline run, corpus container and lineage.
 
 ### 14. Langfuse, app-owned, on the shared ClickHouse
 
@@ -305,7 +305,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
   5. `write` appends to the offline table, then refreshes the online store and rebuilds its ANN index.
   6. `verify` checks that the stores hold exactly what was validated.
   7. `checks` re-runs the contract rules on `knowledge.chunks` with the shared `openmetadata_jobs.checks` image, pointed at this chart's contract and a connector that ingests only the `knowledge` tables, so the results are recorded in the catalog.
-  8. On exit, `catalog` (in the `rag-pipeline` image, over OpenMetadata's REST API) records the run status, the corpus container, the lineage to `knowledge.chunks` and the AI assets of decision 12.
+  8. On exit, `catalog` (in the `rag-pipeline` image, over OpenMetadata's REST API) records the run status, the corpus container and the lineage to `knowledge.chunks`. The AI assets are the `llm-platform` catalog Job's (decision 12).
 - Each new `rag-pipeline` image runs it: the chart renders a `Workflow` named after a hash of that image tag, in the last sync wave. A changed corpus or pipeline code yields a new tag and so a new run; a serving-only change yields none.
 - It is an ordinary resource, not a sync hook. On dev, a failing `PostSync` hook made Argo CD retry the old revision and hold back every newer release; now a failed run is visible in Argo Workflows and in the OpenMetadata run status but never blocks a sync.
 - Argo CD prunes the superseded run when a new image arrives; its reports stay in object storage and its status in OpenMetadata. The current run has no TTL, because self-heal would recreate a deleted run and execute it again. Runs have a deadline, manual `argo submit --from workflowtemplate/rag-knowledge` stays available, and there is no cron.
