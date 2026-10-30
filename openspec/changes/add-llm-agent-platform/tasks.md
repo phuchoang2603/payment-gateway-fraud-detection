@@ -105,6 +105,18 @@
   Provision `LLM_GATEWAY_RAG_INGEST_API_KEY`, `LLM_GATEWAY_RAG_API_KEY`, `RAG_DB_WRITER_PASSWORD` and `RAG_DB_READER_PASSWORD` in Doppler `dev` and `prd`.
 - [ ] 5b.10 Add the customer-features endpoint once the DP3 slice has customer features online in Feast, and admit `rag-api` to that feature server.
 
+## 5c. Risk agent, coordinator, laya, A2A and A/B (design.md decisions 16 to 18)
+
+- [x] 5c.1 Add the `decision` service (`src/decision`, image `decision`): laya 0.4.7 on CPU, `route_question` MCP tool, `POST /request` screening webhook with a per-prompt cache, weight fetch from the bucket, metrics, and CI tests with coverage above 90%. Add the laya English checkpoint (pinned revision, four files) to the model upload. Verify with `ruff`, `uv lock` and `helm template`.
+- [x] 5c.2 Add the screening webhook to the LLM route after the PII regex (`Reject`, fail-open), and the `decision` MCP server at `/mcp/decision`.
+- [x] 5c.3 Add `risk-agent` 0.1.0 (prompt, no tools) and `coordinator` 0.1.0 (`decision` MCP server, `evidence-agent` and `risk-agent` as Agent tools with the agents' key and isolated sessions), with their prompts; grow the worker pool to 3.
+- [x] 5c.4 Add one A2A HTTPRoute per agent (`/a2a/<agent>` and kagent's sandbox path), an `a2a` AgentgatewayBackend per agent and variant on the kagent controller, and one A2A policy (key, rate limit); forward kagent's sandbox A2A paths of `llm-agents` in the egress proxy with the caller's Host.
+- [x] 5c.5 Add named model configs and the `evidence-agent` A/B test (`evidence-agent-b` with `model-config-b`, 50/50 by weight on the A2A route).
+- [x] 5c.6 Add the "LLM agents" Grafana dashboard ConfigMap; link sub-agents and per-server knowledge tables in the registry and OpenMetadata entries.
+- [ ] 5c.7 Platform (P11, P12): kagent's proxy URL on the egress proxy; the Grafana dashboard sidecar watching `llm`. Asked in the platform thread on 2026-10-30.
+- [ ] 5c.8 Verify on dev: the decision service Ready; a question passes the screen and a refund request gets 403; `route_question` picks the evidence agent for a decline-code question and the risk agent for a payment-risk question; an A2A card and message through `/a2a/<agent>` (401 without a key); a coordinator chat in the kagent UI that routes and delegates through the gateway; the risk agent's answer without tools; the A/B split over many A2A messages; the dashboard; the registry and OpenMetadata entries for the new agents.
+- [ ] 5c.9 Document the new agents, routing, screening, A2A and A/B on the LLM pages with the evidence, and mark the roadmap rows.
+
 ## 6. Benchmark harness
 
 - [x] 6.1 Add `infra/charts/llm-platform/benchmark/job.yaml` (`vllm bench serve` concurrency sweep with the `prefix_repetition` workload, results printed as JSON) and `server.yaml` (standalone variant server with its mesh policy), applied with `kubectl`. Verify with a server-side dry run on dev.
@@ -149,7 +161,7 @@
 - [x] 7b.11 Web API tests (`rag.md`): the `rag-serving` test run from CI with coverage above 90%, showing the fixtures and mocks used. The serving member's pytest options enforce `--cov-fail-under=90` with `pytest-cov`. Recorded on dev 2026-10-30: CI job src/rag/serving, 14 passed, 98.52% coverage (log text; GitHub shows job logs only to signed-in users).
 - [ ] 7b.12 MCP deployment rollout (`rag.md`): the stalled rollout from 7.8 with the previous version still serving.
 - [x] 7b.13 OpenMetadata AI assets (`observability.md`): the LLM service, both models, the `knowledge` MCP server and the `evidence-agent` application linked to its model, tool and `knowledge.chunks`. Recorded on dev 2026-10-30 as API output; see 7.5.
-- [x] 7b.14 LLM and agent telemetry (`observability.md`): the metrics are enabled now. vmagent scrapes vLLM, the endpoint picker, agentgateway, and `rag-serving`'s REST request and MCP tool-call counters (with failures). Capture them in the metrics explorer. The Grafana dashboard is deferred to a later change at the user's request. Recorded on dev 2026-10-30.
+- [x] 7b.14 LLM and agent telemetry (`observability.md`): the metrics are enabled now. vmagent scrapes vLLM, the endpoint picker, agentgateway, and `rag-serving`'s REST request and MCP tool-call counters (with failures). Capture them in the metrics explorer. Recorded on dev 2026-10-30; the Grafana dashboard is 5c.6 and 5c.8.
 - [x] 7b.15 Langfuse (`observability.md`): the Langfuse UI behind Dex with the `payment-gateway-fraud-detection` project the agent's system prompt as its production version published from Git, and the agent's trace in Langfuse with its generations, token usage and tool calls. Recorded on dev 2026-10-30.
 - [x] 7b.16 CI/CD (`rag.md`, `inference.md`): the GitHub Actions runs that test, build and release the `rag-pipeline` and `rag-serving` images and the LLM charts, and the `deploy/dev` release they produced. Recorded on dev 2026-10-30.
 - [x] 7b.17 Web API authentication and rate limit (`rag.md`): the REST knowledge API is routed through the gateway as `/knowledge/v1/...` with client keys and limits, like `/mcp/knowledge`; capture 401 and 429. Recorded on dev 2026-10-30.

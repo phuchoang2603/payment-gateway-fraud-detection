@@ -1,6 +1,6 @@
 ## Why
 
-The LLM part of the coursework needs a self-hosted model behind a governed agent entry point before any fraud-analyst agent can be built. Neither cluster runs anything LLM-related today: KServe 0.21 ships its `LLMInferenceService` controller but no presets, the Gateway API Inference Extension CRDs are installed but unused, and there is no agent gateway, agent runtime or registry. This change builds phase 1: the parts that do not depend on the data pipeline or Feast, plus the RAG knowledge pipeline. It is shaped so that the RAG consumers, the MCP tools, the evidence, risk and coordinator agents, and the MCP/A2A gateway routes attach later without rework.
+The LLM part of the coursework needs a self-hosted model behind a governed agent entry point before any fraud-analyst agent can be built. Neither cluster runs anything LLM-related today: KServe 0.21 ships its `LLMInferenceService` controller but no presets, the Gateway API Inference Extension CRDs are installed but unused, and there is no agent gateway, agent runtime or registry. This change builds the parts that do not depend on the data pipeline's online features: the inference platform, the gateway with its MCP and A2A routes, the RAG knowledge pipeline, and the evidence, risk and coordinator agents. It is shaped so that the risk agent's scoring and feature tools and the analytics tool attach later without rework.
 
 ## What Changes
 
@@ -13,7 +13,12 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
   - Istio ambient stays the mesh: mesh authorization admits only the gateway (and the endpoint picker) to the model servers.
 - Add a global kagent `ModelConfig`, `default-model-config`, that points every agent at the gateway's `/v1` with the agents' gateway key.
 - Run `evidence-agent` 0.3.0 on kagent 0.10.4: a read-only fraud-analyst agent with the knowledge MCP tools.
-- Run agents only as kagent `SandboxAgent`s on Agent Substrate 0.0.9 (gVisor), in a new platform-created namespace `llm-agents` (Pod Security `privileged`, outside the mesh) with the app's own WorkerPool (2 workers; autoscaling waits on Substrate publishing a scale selector). Each conversation is its own sandbox that suspends to a snapshot and resumes warm. Sandboxes reach the gateway and Langfuse only through an app-owned egress proxy in `llm`. This covers the sandbox, warm-up and multi-replica rows with one runtime; `llm` stays `restricted`.
+- Run `risk-agent` 0.1.0 with its read-only prompt and no tools yet (its scoring and feature tools come with the feature-store work), and `coordinator` 0.1.0, the analysts' entry agent, which routes each question with a self-hosted laya decision model and delegates to the evidence or risk agent over A2A.
+- Run laya (`convaiinnovations/laya`, a 421M non-autoregressive decision model) on CPU as the `decision` service in `llm` (`src/decision`): the coordinator's `route_question` MCP tool, and an agentgateway prompt-guard webhook on the LLM route that rejects prompts asking an agent to act (approve, block, refund, retry, change a rule, promote a model) or to ignore its rules. Prompts never leave the cluster for this.
+- Route every agent through the gateway's A2A routes (`/a2a/<agent>` and kagent's sandbox A2A path), with keys and rate limits. The platform points kagent's proxy URL at the egress proxy, so the coordinator's sub-agent calls go through the gateway rather than straight to the kagent controller.
+- A/B test agent model configs: `evidence-agent-b` runs with `model-config-b` (temperature 0.2) behind the evidence agent's A2A route, taking half its traffic by weight; each arm is a separate gateway backend. A/B tests of LLM versions are blocked on a second GPU and recorded as such.
+- Ship an "LLM agents" Grafana dashboard: calls per agent, MCP tool calls and failures, routing and screening decisions, the A/B arms, tokens and latency.
+- Run agents only as kagent `SandboxAgent`s on Agent Substrate 0.0.9 (gVisor), in a new platform-created namespace `llm-agents` (Pod Security `privileged`, outside the mesh) with the app's own WorkerPool (3 workers; autoscaling waits on Substrate publishing a scale selector). Each conversation is its own sandbox that suspends to a snapshot and resumes warm. Sandboxes reach the gateway and Langfuse only through an app-owned egress proxy in `llm`. This covers the sandbox, warm-up and multi-replica rows with one runtime; `llm` stays `restricted`.
 - Publish the agent's catalog entry to agentregistry from Git with a sync hook.
 - Run self-hosted Langfuse v3 in `llm`, on the shared ClickHouse that replaces StarRocks (owned by this repository, added in PR #102), with app-owned Postgres and Redis. It shows every released system prompt: a release job publishes each agent's prompt from Git as a new `production` version when the text changes. Git stays the source; agents read the prompt from a ConfigMap rendered from the same file. Agents send their own traces to Langfuse through kagent's OpenTelemetry export, which needs kagent tracing switched on in the platform. The gateway exports no traces, and there is no collector.
 - Build RAG in `llm` (design.md decision 15; corpus in `rag-corpus.md`): a knowledge pipeline, a Web API and an MCP tool. It never reads payment data.
@@ -26,7 +31,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - Add an on-demand benchmark (`vllm bench serve` from the vLLM image, as plain manifests applied with `kubectl`) with an agent-shaped shared-prefix workload. It records throughput, TTFT and inter-token latency before and after each optimization (prefix caching, FP8 KV cache, n-gram speculative decoding, streamed cold start, FP8 vs AWQ weights). Results are recorded only from real dev runs, with the command and date.
 - Record the autoscaling decision against the rubric's KEDA:
   - Knative for this repo's own plain HTTP services that need no caller identity (later MCP servers and web APIs); the knowledge API is a Deployment autoscaled by KEDA (2 to 4 replicas on request rate), because its callers are admitted by mesh identity and Knative's cluster-local gateway runs outside the mesh;
-  - a fixed 2-worker Substrate WorkerPool for agents: Substrate 0.0.9's scale subresource has no selector, which KEDA's HPA requires;
+  - a fixed 3-worker Substrate WorkerPool for agents: Substrate 0.0.9's scale subresource has no selector, which KEDA's HPA requires;
   - a fixed single replica per model server, because each cluster has one GPU.
 - Document the platform on new, focused `docs/llm/` pages (inference, gateway, agents, observability, benchmark, RAG), and update `docs/llm/agents.md`, the roadmap and the architecture where the behaviour changes.
 - Planned for a later phase, not built in this change: a read-only ClickHouse analytics MCP tool. It answers questions such as "decline rate by merchant this week" or "top payment methods by volume" from the ClickHouse analytics marts that the next data slice builds from the Iceberg Silver tables (`fact_payment_attempt` and a daily merchant mart).
@@ -38,7 +43,8 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - Platform prerequisites are a separate talos-proxmox change set that needs user approval:
   - restrict the prod GPU pool to `g6.xlarge`;
   - install the shared controllers and CRDs: KServe LLM presets, agentgateway, kagent 0.10.4 with Agent Substrate 0.0.9, agentregistry, and KEDA for phase 2;
-  - let the Argo Workflows controller run workflows in `llm`, and let `llm` reach OpenMetadata, for the RAG pipeline.
+  - let the Argo Workflows controller run workflows in `llm`, and let `llm` reach OpenMetadata, for the RAG pipeline;
+  - point kagent's proxy URL at the app's egress proxy, for A2A through the gateway, and let the Grafana dashboard sidecar load dashboards from `llm`.
 
   The clusters stay on Kubernetes 1.36. This change consumes these components and does not install them.
 
@@ -68,8 +74,10 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
     - the `rag-api` Deployment (Web API and MCP tool in one);
     - ExternalSecrets, mesh policies and the registry `MCPServer` entry.
   - In `llm-platform`: the `ragingest` and `ragapi` client keys, the `/mcp/knowledge` route and policy, the `knowledge` RemoteMCPServer, and `evidence-agent` 0.3.0 with the knowledge tools.
+  - In `llm-platform`: the `decision` Deployment and its `/mcp/decision` route, the screening webhook, the A2A routes, backends and policy, `risk-agent`, `coordinator`, the A/B variant and its model config, and the Grafana dashboard ConfigMap.
   - After #102: `llm` admitted by the Polaris, ClickHouse and OpenMetadata network rules.
 - **Code:**
+  - a new `src/decision/` uv project and image `decision`: the laya routing tool, the screening webhook and the weight fetch, with their CI tests;
   - a new `src/rag/` uv workspace (`common`, `pipeline`, `serving`) and images `rag-pipeline` and `rag-serving`: corpus sources, renderer, chunker, embed client, Feast definitions, validation, OpenMetadata client, Web API and MCP server, with their CI tests;
   - the knowledge-base ODPS product and ODCS contract in `contracts/data-products/knowledge-base/`; the `openmetadata_jobs` unit tests are removed at the user's request.
   - No change to the data-pipeline code, the `data-pipelines` or `lakehouse` charts, or any existing contract.
