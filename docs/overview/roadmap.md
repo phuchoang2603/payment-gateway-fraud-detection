@@ -59,6 +59,10 @@ Feast is built as one change after Bronze and Silver merge. Until then the strea
 | Observability | Metrics, logs and traces for services | [Observability](../deployment/observability.md) | Done for Go services |
 | Security | Central secrets, service-to-service authorization | [Security](../deployment/security.md) | Done |
 
+## Next steps
+
+- **Silver reads only validated Bronze.** Bronze checks set an Iceberg `validated` tag on the checked snapshot, and Silver reads that tag instead of the current snapshot. Today a standalone `dp2-silver` run can consume a Bronze snapshot that failed its checks; the Kafka cron is gated by step order.
+
 ## Limits
 
 - Synthetic data cannot establish real-world fraud-model quality. Unlabelled drift measures distribution change, not accuracy.

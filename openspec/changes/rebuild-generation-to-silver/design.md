@@ -274,6 +274,7 @@ The `lakehouse` application deploys the Polaris REST catalog that Spark, ClickHo
   The archiver sentence in "Single simulator workload" is left to the live change, which already modifies that requirement for delivery faults.
 
   The live change is told to avoid them; whichever change archives second rebases its delta.
+- [A standalone `dp2-silver` run can consume a Bronze snapshot that failed its checks] → Accepted for this change. Next step: Bronze checks set an Iceberg `validated` tag on the checked snapshots and Silver reads that tag, as one `versionAsOf` pin, with a failure when the tag is missing. The tag holds its snapshot's files, so `expire_snapshots` cannot remove them until the tag moves.
 - [Generator and Silver correctness depend on CI only] → Behaviour tests cover:
   - per-day determinism and refused config changes;
   - the schema change boundary and duplicates;
@@ -311,5 +312,6 @@ Steps 3 and 4 run when the whole pipeline is ready, not as tasks of this change.
 
 ## Open Questions
 
+- Incremental Silver is not planned. The full recompute stays because cross-source dedup, conflict rejection and label linkage can change any payment's result, so a partial run cannot be exact. Revisit only if the v19 Silver run time is a problem.
 - Exact transitive jar versions for the Kafka connector under Spark 4.1.3, resolved when the Dockerfile is written.
 - Whether the benchmark should also show a `mergeSchema` on/off read over schema versions 2/3 files. It can be added to the benchmark job later without spec changes.
