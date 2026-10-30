@@ -179,10 +179,11 @@ langfuse:
       - {name: LANGFUSE_INIT_USER_NAME, value: Operator}
       - name: LANGFUSE_INIT_USER_PASSWORD
         valueFrom: {secretKeyRef: {name: langfuse, key: init-user-password}}
+    # Node sizes its heap from the cgroup limit; the web server runs out of heap at 1Gi during startup.
     web:
       resources:
-        requests: {cpu: 250m, memory: 512Mi}
-        limits: {memory: 1Gi}
+        requests: {cpu: 250m, memory: 1Gi}
+        limits: {memory: 2Gi}
     worker:
       resources:
         requests: {cpu: 250m, memory: 512Mi}
