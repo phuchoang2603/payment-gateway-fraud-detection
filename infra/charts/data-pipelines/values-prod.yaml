@@ -34,11 +34,12 @@ spark:
   # aws-cpu-burst allows only large and xlarge, so 12 xlarge is the whole 48 vCPU / 192 GiB limit. An xlarge has
   # 3500m / 13961Mi allocatable after Talos reservations; DaemonSets take 230m / 744Mi, leaving 3270m / 13217Mi. A
   # 4-core executor (4000m request) does not fit, so the large profile keeps 11 executors of 3 cores, one per xlarge,
-  # with 10g + 2g of memory, and the 1-core 4g + 1g driver fits a large (12 nodes, 46 vCPU, 184 GiB). Shuffle
-  # partitions are about 4x the 33 executor cores; AQE coalesces them further.
+  # with 10g + 2g of memory, and the 1-core 4g + 1g driver fits a large (12 nodes, 46 vCPU, 184 GiB). The batch
+  # session sets spark.sql.shuffle.partitions from SPARK_SHUFFLE_PARTITIONS (default 1024), which overrides this
+  # value; 1024 suits v19, whose Bronze write shuffles about 217 GB (about 210 MB per partition before AQE).
   profiles:
     large:
-      shufflePartitions: 128
+      shufflePartitions: 1024
       executor:
         memory: 10g
 bronze:
