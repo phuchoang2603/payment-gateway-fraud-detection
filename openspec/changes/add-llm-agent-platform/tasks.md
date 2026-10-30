@@ -61,6 +61,7 @@
 - [x] 4b.5 Sandbox access on dev: Role `substrate-sandbox-secrets` lets Substrate's API server read the sandbox's two Secrets by name; the platform fixed gVisor user namespaces (talos-proxmox 3c238f1) and opted the Substrate workers out of ambient (6d3be1e); the `sandbox-egress` proxy forwards only the model and MCP routes and calls the gateway with its own identity, with the sandbox's own model config and RemoteMCPServers. Recorded 2026-10-30 on cf38423: both RemoteMCPServers report their tools; a new sandbox session answered with `search_knowledge` in 16.8 s and resumed after suspend in 8.3 s with its context.
 - [ ] 4b.6 Run agents only as `SandboxAgent`s in `llm-agents` (platform: namespace with Pod Security `privileged`, outside the mesh, Argo CD and secret-store access; Substrate accepting an app WorkerPool there). Chart: WorkerPool `llm-agents` (fixed 2 workers; KEDA cannot scale it while Substrate 0.0.9's scale subresource has no selector), the model config, RemoteMCPServers and Secrets there, tracing to Langfuse through `sandbox-egress`; drop the Deployment `Agent` and the `llm-agents` gateway client; `evidence-agent` 0.3.0. Then confirm on dev an answer with the knowledge tool, a warm resume, a Langfuse trace, and two conversations active at once on the two workers.
 - [ ] 4b.7 Autoscale `rag-api` with a KEDA ScaledObject (2 to 4 replicas on its combined REST and MCP request rate, 10 req/s per replica; the Deployment leaves `replicas` to KEDA). Confirm on dev that the Locust load test scales it out and that it returns to 2 afterwards; capture the HPA events for the rubric's autoscale row.
+- [ ] 4b.8 Discover MCP tools dynamically: agents reference MCP servers without `toolNames` (kagent lists the tools at runtime), the registry entry carries no tool list, and the RAG catalog step reads `tools/list` through the gateway for OpenMetadata. Drop the gateway's trace export to VictoriaTraces; agent traces stay in Langfuse. Confirm on dev that the agent sees both tools and OpenMetadata lists them with their server-side descriptions.
 
 ## 5. OpenMetadata (after PR #102 merges)
 
@@ -146,7 +147,7 @@
 - [ ] 7b.12 MCP deployment rollout (`rag.md`): the stalled rollout from 7.8 with the previous version still serving.
 - [ ] 7b.13 OpenMetadata AI assets (`observability.md`): the LLM service, both models, the `knowledge` MCP server and the `evidence-agent` application linked to its model, tool and `knowledge.chunks`.
 - [ ] 7b.14 LLM and agent telemetry (`observability.md`): the metrics are enabled now. vmagent scrapes vLLM, the endpoint picker, agentgateway, and `rag-serving`'s REST request and MCP tool-call counters (with failures). Capture them in the metrics explorer. The Grafana dashboard is deferred to a later change at the user's request.
-- [ ] 7b.15 Langfuse (`observability.md`): the Langfuse UI behind Dex with the `payment-gateway-fraud-detection` project (prompt sourcing from Langfuse is phase 2), the agent's trace in Langfuse, and the gateway's spans in VictoriaTraces through Grafana's trace view.
+- [ ] 7b.15 Langfuse (`observability.md`): the Langfuse UI behind Dex with the `payment-gateway-fraud-detection` project (prompt sourcing from Langfuse is phase 2), and the agent's trace in Langfuse with its generations, token usage and tool calls.
 - [ ] 7b.16 CI/CD (`rag.md`, `inference.md`): the GitHub Actions runs that test, build and release the `rag-pipeline` and `rag-serving` images and the LLM charts, and the `deploy/dev` release they produced.
 - [ ] 7b.17 Web API authentication and rate limit (`rag.md`): the REST knowledge API is routed through the gateway as `/knowledge/v1/...` with client keys and limits, like `/mcp/knowledge`; capture 401 and 429.
 
@@ -156,7 +157,7 @@
   - `docs/llm/inference.md`: model servers, the GPU split and rollout strategy, weight streaming, placement, cache;
   - `docs/llm/gateway.md`: the Gateway, routes (`/v1`, `/mcp/<server>`, `/<api>/v1`), keys, limits, PII masking, mesh rules;
   - `docs/llm/agents.md` (update): ModelConfig, `evidence-agent` and its tools, the sandboxed warm copy on Substrate, the registry, the autoscaling decision table;
-  - `docs/llm/observability.md`: metrics and scrapes, agent traces in Langfuse and gateway traces in VictoriaTraces, OpenMetadata AI assets;
+  - `docs/llm/observability.md`: metrics and scrapes, agent traces in Langfuse, OpenMetadata AI assets;
   - `docs/llm/benchmark.md`: the workload, recorded results and conclusions.
 
   Add the pages to `docs/_Sidebar.md`.

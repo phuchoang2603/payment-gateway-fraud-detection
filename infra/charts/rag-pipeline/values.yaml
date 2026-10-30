@@ -112,12 +112,8 @@ aiAssets:
     name: knowledge
     service: agent-gateway-mcp
     url: http://agentgateway.llm.svc.cluster.local/mcp/knowledge
+    # Its tools are read from the server's tools/list through the gateway at publish time.
     description: Read-only payment-gateway knowledge base over the Feast pgvector store, served by rag-api behind the agent gateway.
-    tools:
-      - name: search_knowledge
-        description: Vector search over knowledge chunks; returns passages with chunk_id and distance.
-      - name: get_knowledge_chunk
-        description: Returns one knowledge chunk by chunk_id.
   agent:
     name: evidence-agent
     version: 0.3.0

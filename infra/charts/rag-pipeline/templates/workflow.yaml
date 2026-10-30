@@ -139,6 +139,7 @@ spec:
           - name: RUN_ID
             value: "{{ "{{workflow.name}}" }}"
           {{- include "rag-pipeline.metadataEnv" . | nindent 10 }}
+          {{- include "rag-pipeline.gatewayEnv" (dict "root" . "secret" "rag-gateway") | nindent 10 }}
         securityContext:
           {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
         resources:
