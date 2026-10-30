@@ -324,7 +324,7 @@ def incremental_report(run_id, mode, scope, phases) -> dict:
                 "bronze_since": scope["bronze_since"],
                 "affected_payments": scope["payments_count"],
                 "lookback_days": incremental.lookback().days,
-                "cutoff": scope["cutoff"],
+                "cutoff": None if scope["cutoff"] is None else scope["cutoff"].isoformat(),
             }
         )
     return report
