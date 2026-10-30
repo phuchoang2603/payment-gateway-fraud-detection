@@ -103,6 +103,10 @@ spec:
   storageInitializer:
     enabled: false
   replicas: {{ $model.replicas }}
+  # Both servers hold fixed fractions of the one GPU, so a surge pod would oversubscribe it: replace in place.
+  rolloutStrategy:
+    maxSurge: 0
+    maxUnavailable: 1
   {{- if eq $role "chat" }}
   router:
     gateway:
