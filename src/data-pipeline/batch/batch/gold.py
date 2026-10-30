@@ -331,6 +331,7 @@ def run(spark, run_id, mode="historical"):
     tables = {}
     scope_report = {}
     affected_days = None
+    consumed = None
     if mode == "historical":
         for view in VIEWS:
             with phase(spark, phases, f"write {view.table.split('.')[-1]}"):
@@ -358,6 +359,7 @@ def run(spark, run_id, mode="historical"):
             )
         with phase(spark, phases, "affected days"):
             affected_days = changed_days(changes, attempts)
+        consumed = {table.split(".", 1)[1]: snapshot for table, snapshot in changes["since"].items()}
         changes["images"].unpersist()
         changes["attempt_keys"].unpersist()
     report = {
@@ -370,6 +372,7 @@ def run(spark, run_id, mode="historical"):
         "tables": tables,
         "scope": scope_report,
         "affected_days": affected_days,
+        "consumed": consumed,
         "phases": phases,
     }
     Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/gold.json", report)
