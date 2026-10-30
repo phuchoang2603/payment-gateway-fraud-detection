@@ -1,0 +1,139 @@
+{{- if .Values.enabled }}
+{{- $connectors := dict }}
+{{- $secrets := list }}
+{{- range $name, $connector := .Values.catalog.connectors }}
+{{- $_ := set $connectors $name (omit $connector "externalSecret") }}
+{{- with $connector.externalSecret }}
+{{- $secrets = append $secrets . }}
+{{- end }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metadata-connectors
+  namespace: {{ .Values.namespace }}
+data:
+  connectors.json: {{ $connectors | toJson | quote }}
+{{- range $secrets }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .store }}
+  target:
+    name: {{ .name }}
+  data:
+    {{- range $local, $remote := .data }}
+    - secretKey: {{ $local }}
+      remoteRef:
+        key: {{ $remote }}
+    {{- end }}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: metadata-register
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 1800
+  template:
+    spec:
+      serviceAccountName: data-pipelines
+      restartPolicy: Never
+      containers:
+        - name: register
+          image: {{ include "data-pipelines.image" (dict "image" .Values.images.openmetadata "global" .Values.global) | quote }}
+          command: [python, -m, openmetadata_jobs.integrations]
+          env:
+            - name: METADATA_STAGE
+              value: register
+            - name: METADATA_CONNECTORS_FILE
+              value: /etc/metadata/connectors.json
+            {{- include "data-pipelines.env" . | nindent 12 }}
+          envFrom:
+            {{- range $secrets }}
+            - secretRef:
+                name: {{ .name }}
+            {{- end }}
+          volumeMounts:
+            - name: connectors
+              mountPath: /etc/metadata
+              readOnly: true
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 512Mi}
+      volumes:
+        - name: connectors
+          configMap:
+            name: metadata-connectors
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: metadata-discovery
+  namespace: {{ .Values.namespace }}
+spec:
+  entrypoint: run
+  serviceAccountName: data-pipelines
+  activeDeadlineSeconds: 3600
+  arguments:
+    parameters:
+      - name: connector
+      - name: stage
+        value: discover
+  podGC:
+    strategy: OnWorkflowSuccess
+  templates:
+    - name: run
+      steps:
+        - - name: discover
+            template: "{{`{{workflow.parameters.connector}}`}}"
+{{- range $name, $connector := .Values.catalog.connectors }}
+{{- if $connector.discover }}
+    - name: {{ $name }}
+      synchronization:
+        mutexes:
+          - name: metadata-{{ $name }}
+      container:
+        image: {{ include "data-pipelines.image" (dict "image" $.Values.images.openmetadata "global" $.Values.global) | quote }}
+        command: [python, -m, openmetadata_jobs.integrations]
+        env:
+          - name: METADATA_STAGE
+            value: "{{`{{workflow.parameters.stage}}`}}"
+          - name: METADATA_CONNECTOR
+            value: {{ $name | quote }}
+          - name: METADATA_CONNECTORS_FILE
+            value: /etc/metadata/connectors.json
+          - name: NATIVE_TIMEOUT_SECONDS
+            value: "3000"
+          {{- include "data-pipelines.env" $ | nindent 10 }}
+        envFrom:
+          {{- with $connector.externalSecret }}
+          - secretRef:
+              name: {{ .name }}
+          {{- end }}
+        volumeMounts:
+          - name: connectors
+            mountPath: /etc/metadata
+            readOnly: true
+        resources:
+          requests: {cpu: 250m, memory: 1Gi}
+          limits: {cpu: "2", memory: 2Gi}
+      volumes:
+        - name: connectors
+          configMap:
+            name: metadata-connectors
+{{- end }}
+{{- end }}
+{{- end }}

@@ -5,7 +5,5 @@ applications:
     enabled: false
   fraud-features:
     enabled: false
-  metadata-integrations:
-    enabled: true
   data-pipelines:
     enabled: true

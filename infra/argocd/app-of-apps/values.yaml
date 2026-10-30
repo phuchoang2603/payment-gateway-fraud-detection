@@ -32,9 +32,6 @@ applications:
   fraud-features:
     destinationNamespace: data
     path: infra/charts/fraud-features
-  metadata-integrations:
-    destinationNamespace: data
-    path: infra/charts/metadata-integrations
   data-pipelines:
     destinationNamespace: data
     path: infra/charts/data-pipelines
