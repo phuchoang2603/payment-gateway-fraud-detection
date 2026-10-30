@@ -57,7 +57,7 @@ schema:
       - {name: attempt_declined, logicalType: object, description: payments.v1.AttemptDeclined with source and reason.}
       - {name: payment_succeeded, logicalType: object, description: payments.v1.PaymentSucceeded.}
       - {name: payment_expired, logicalType: object, description: payments.v1.PaymentExpired with the _present marker.}
-      - {name: payload_case, logicalType: string, physicalType: VARCHAR, description: The payload the event carries, named by its protobuf oneof member, or null when it carries none. Derived from the decoded payload fields during ingestion.}
+      - {name: payload_case, logicalType: string, physicalType: VARCHAR, description: The protobuf oneof member the event carries or null when it carries none. Derived during ingestion from the decoded payload fields}
       - {name: _source, logicalType: string, physicalType: VARCHAR, required: true, description: historical or kafka.}
       - {name: _dataset_version, logicalType: string, physicalType: VARCHAR, description: Historical dataset version such as v18; null for Kafka rows.}
       - {name: _source_file, logicalType: string, physicalType: VARCHAR, description: Historical Parquet object key; null for Kafka rows.}

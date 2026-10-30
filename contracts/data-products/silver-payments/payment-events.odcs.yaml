@@ -54,7 +54,7 @@ schema:
       - {name: attempt_declined, logicalType: object, description: Risk or processor decline.}
       - {name: payment_succeeded, logicalType: object, description: Terminal success.}
       - {name: payment_expired, logicalType: object, description: Terminal expiry.}
-      - {name: payload_case, logicalType: string, physicalType: VARCHAR, description: The payload the event carries, named by its protobuf oneof member, or null when it carries none.}
+      - {name: payload_case, logicalType: string, physicalType: VARCHAR, description: The protobuf oneof member the event carries or null when it carries none.}
       - {name: _source, logicalType: string, physicalType: VARCHAR, required: true, description: Source of the kept copy, historical or kafka.}
     quality:
       - id: silver_unique_event

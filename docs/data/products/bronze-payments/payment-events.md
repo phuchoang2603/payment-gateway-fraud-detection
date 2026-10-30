@@ -43,7 +43,7 @@ Synthetic data only. Rows from both sources share one shape; _source tells them 
 |  attempt_declined | object | *payments.v1.AttemptDeclined with source and reason.* |
 |  payment_succeeded | object | *payments.v1.PaymentSucceeded.* |
 |  payment_expired | object | *payments.v1.PaymentExpired with the _present marker.* |
-|  payload_case | string | *The payload the event carries, named by its protobuf oneof member, or null when it carries none.* |
+|  payload_case | string | *The protobuf oneof member the event carries or null when it carries none. Derived during ingestion from the decoded payload fields* |
 |  _source | string | *historical or kafka.*<br />• `required` |
 |  _dataset_version | string | *Historical dataset version such as v18; null for Kafka rows.* |
 |  _source_file | string | *Historical Parquet object key; null for Kafka rows.* |

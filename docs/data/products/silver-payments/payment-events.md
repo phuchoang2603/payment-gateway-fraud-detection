@@ -44,7 +44,7 @@ Synthetic data only. Payments whose deliveries conflict are excluded and listed 
 |  attempt_declined | object | *Risk or processor decline.* |
 |  payment_succeeded | object | *Terminal success.* |
 |  payment_expired | object | *Terminal expiry.* |
-|  payload_case | string | *Terminal expiry.* |
+|  payload_case | string | *The protobuf oneof member the event carries or null when it carries none.* |
 |  _source | string | *Source of the kept copy*<br />• `required` |
 
 ## SLA Properties
