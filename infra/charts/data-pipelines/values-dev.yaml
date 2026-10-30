@@ -9,3 +9,4 @@ analytics:
   enabled: true
 maintenance:
   enabled: true
+sparkEventLogDir: s3a://platform-dev/runs/payment-gateway/spark-events/

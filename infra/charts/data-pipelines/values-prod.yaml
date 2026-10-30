@@ -49,3 +49,4 @@ maintenance:
   enabled: true
   profile: large
   reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/maintenance
+sparkEventLogDir: s3a://platform-prod-142737101504-us-east-1/runs/payment-gateway/spark-events/

@@ -206,6 +206,11 @@ spec:
     spark.storage.decommission.shuffleBlocks.enabled: "true"
     spark.storage.decommission.rddBlocks.enabled: "true"
     spark.pyspark.python: /opt/data-pipeline/batch/.venv/bin/python
+    {{- with .root.Values.sparkEventLogDir }}
+    spark.eventLog.enabled: "true"
+    spark.eventLog.dir: {{ . | quote }}
+    spark.eventLog.rolling.enabled: "true"
+    {{- end }}
   applicationTolerations:
     restartConfig:
       restartPolicy: Never

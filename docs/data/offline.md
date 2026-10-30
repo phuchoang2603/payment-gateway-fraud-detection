@@ -113,6 +113,17 @@ A run report records the Bronze snapshot IDs, input rows, duplicates, conflicts,
 
 Pending: `dp1-bronze` on the v18 historical source, then `dp2-silver` on its snapshots, have not run on dev yet. Run IDs, Bronze and Silver row counts, duplicates collapsed, conflicts and rejected rows, label linkage counts, task counts and stage times per phase, and ClickHouse and OpenMetadata check outcomes are recorded here after those runs. The task counts confirm or lower the prod executor count.
 
+### Viewing Spark event logs
+
+Every Spark application writes a rolling event log to `runs/payment-gateway/spark-events/` in the environment's bucket, so its UI can be read after the run ends. To view it, start a throwaway History Server from the `data-platform-spark` image with the release's tag, read from `infra/argocd/app-of-apps/release.yaml`:
+
+```sh
+kubectl -n data run spark-history --restart=Never --image=<data-platform-spark image> --overrides='{"spec":{"containers":[{"name":"spark-history","image":"<data-platform-spark image>","command":["/bin/sh","-c"],"args":["SPARK_HISTORY_OPTS=\"-Dspark.history.fs.logDirectory=<event log dir> -Dspark.hadoop.fs.s3a.endpoint=$S3_ENDPOINT -Dspark.hadoop.fs.s3a.path.style.access=$S3_PATH_STYLE -Dspark.hadoop.fs.s3a.access.key=$AWS_ACCESS_KEY_ID -Dspark.hadoop.fs.s3a.secret.key=$AWS_SECRET_ACCESS_KEY\" exec /opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer"],"envFrom":[{"secretRef":{"name":"gateway-storage"}}],"env":[{"name":"S3_ENDPOINT","value":"<S3_ENDPOINT>"},{"name":"S3_PATH_STYLE","value":"<S3_PATH_STYLE>"}],"ports":[{"containerPort":18080}]}]}}'
+kubectl -n data port-forward pod/spark-history 18080:18080
+```
+
+Use the event log directory and the `S3_ENDPOINT` and `S3_PATH_STYLE` values from the environment's `values-<env>.yaml`. Open `http://localhost:18080`, then delete the pod with `kubectl -n data delete pod spark-history` when finished. The image has `spark-class` but not `start-history-server.sh`, so the command starts the server class directly.
+
 ### DP3: offline features
 
 **Planned.** A daily Spark batch over Silver computes point-in-time features per customer and payment method, including the long 7- and 30-day windows that the streaming path does not keep, and materializes them into Feast. See [feature store](../ml/feature-store.md).
