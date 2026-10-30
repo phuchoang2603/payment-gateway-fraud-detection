@@ -220,3 +220,5 @@ catalog:
 checks:
   connectorsConfigMap: metadata-connectors
   connectorSecret: metadata-clickhouse
+  # Limit for each table's `metadata test` run; each contract rule is a ClickHouse scan over the lakehouse table.
+  nativeTimeoutSeconds: 1500

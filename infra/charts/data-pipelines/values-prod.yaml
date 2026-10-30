@@ -50,6 +50,7 @@ bronze:
   historicalRoot: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19
   reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp1
   historicalProfile: large
+  activeDeadlineSeconds: 14400
 silver:
   enabled: true
   profile: large
@@ -57,6 +58,7 @@ silver:
   # their Bronze layout instead of shuffling by event_id. Each 10g executor holds one copy.
   dedupBroadcastBytes: 1073741824
   reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp2
+  activeDeadlineSeconds: 14400
 analytics:
   enabled: true
   profile: large
@@ -76,3 +78,6 @@ catalog:
               endPointURL: https://s3.us-east-1.amazonaws.com
             bucketNames:
               - platform-prod-142737101504-us-east-1
+checks:
+  # The v19 Bronze event suite took about 1490 s against the 1500 s default; Silver has more rules on similar volume.
+  nativeTimeoutSeconds: 4800

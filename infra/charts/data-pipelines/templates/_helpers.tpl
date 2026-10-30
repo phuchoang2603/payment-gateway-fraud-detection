@@ -155,6 +155,8 @@ retryStrategy:
         value: {{ .product | quote }}
       - name: METADATA_CONNECTORS_FILE
         value: /etc/metadata/connectors.json
+      - name: NATIVE_TIMEOUT_SECONDS
+        value: {{ .root.Values.checks.nativeTimeoutSeconds | int64 | toString | quote }}
 {{- include "data-pipelines.env" .root | nindent 6 }}
     envFrom:
       - secretRef:
