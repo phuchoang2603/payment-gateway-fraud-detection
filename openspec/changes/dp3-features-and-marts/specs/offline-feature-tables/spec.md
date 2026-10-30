@@ -95,13 +95,13 @@ Consumers SHALL be able to join it to the feature tables on entity key and `even
 - **THEN** filtering `label_available_at <= cutoff` excludes that row, and the attempt has no chargeback label at that cutoff
 
 ### Requirement: Incremental gold mode
-DP3 SHALL accept `mode=historical` or `mode=incremental`, with `historical` as the default for manual submits. In incremental mode it SHALL read DP2's change feed since the last published DP3 run, recompute only:
+DP3 SHALL accept `mode=historical` or `mode=incremental`, with `historical` as the default for manual submits. Every DP3 commit SHALL record the Silver snapshots it consumed. In incremental mode, DP3 SHALL read the net Iceberg changelog of `silver.attempts` and `silver.labels` between those snapshots and the current published Silver. In that changelog, a changed or removed attempt appears as its old row (delete) and its new row (insert). DP3 SHALL then recompute only:
 
 - the affected customers and payment methods;
 - the entities whose windows change between the previous and new anchor caps;
 - the affected payments' labels;
 
-and replace their rows on the audit branch. The result SHALL equal a historical run over the same Silver in every column except `created`, which keeps the commit time of the Silver snapshot that last recomputed the row. Incremental mode SHALL refuse to run, naming historical mode as the remedy, when there is no prior DP3 run, when the feed contains a historical DP2 run since the last DP3 run, when an affected time precedes the coverage start, or when the logic version changed.
+and replace their rows on the audit branch. The result SHALL equal a historical run over the same Silver in every column except `created`, which keeps the commit time of the Silver snapshot that last recomputed the row. Incremental mode SHALL refuse to run, naming historical mode as the remedy, when there is no prior DP3 run, when a Silver commit in the range was made by a historical DP2 run, when a consumed snapshot has expired, when an affected time precedes the coverage start, or when the DP2 or DP3 logic version changed.
 
 #### Scenario: Incremental equals historical
 
@@ -113,9 +113,14 @@ and replace their rows on the audit branch. The result SHALL equal a historical 
 - **WHEN** an entity has no changed payments but its only attempt leaves the 7-day window between two DP3 runs
 - **THEN** the incremental run writes its expiry row at the same anchor a historical run would
 
-#### Scenario: Historical DP2 run in the feed
+#### Scenario: Removed attempt
 
-- **WHEN** the change feed contains a historical DP2 run since the last DP3 run
+- **WHEN** a conflicting redelivery makes DP2 remove a payment's attempts
+- **THEN** incremental DP3 recomputes the removed attempts' customers and cards and drops their contributions, matching a historical run
+
+#### Scenario: Historical DP2 run since the last DP3 run
+
+- **WHEN** a `silver.attempts` commit after the consumed snapshot has `dp2.mode = historical`
 - **THEN** incremental DP3 fails and asks for a historical DP3 run
 
 ### Requirement: Gold table layout

@@ -38,7 +38,7 @@ Constraints:
 - Feast repository objects, materialization, TTLs and feature services (roadmap steps 2–7).
 - Streaming features into the offline store; training; drift.
 - The LLM platform (#103), and the MCP tool itself.
-- DP2's incremental mode. The user asked for it, and the Bootstrap prod thread implements it with a `silver.changed_payments` change feed. DP3's incremental mode, which consumes that feed, is in scope here (decision 9b).
+- DP2's incremental mode. It is on `main` (`a753980`, decision 17 of `rebuild-generation-to-silver`) and publishes its changes through Iceberg change data, with no feed table. DP3's incremental mode, which consumes that change data, is in scope here (decision 9b).
 - Making the platform changes: they are listed, not made.
 
 ## Decisions
@@ -394,18 +394,27 @@ The marts container requests 100m CPU and 256 Mi, because ClickHouse does the wo
 
 `dp3-gold` takes `mode=historical|incremental`. `historical` is decisions 2–8, a full recompute, and it is the default for manual submits and the mode for the v19 evidence. `incremental` must leave gold and the marts equal to a historical run over the same Silver, except for `created` (below). CI checks this.
 
-**Input.** DP3 reads DP2's change feed, `silver.changed_payments`, owned and implemented by the Bootstrap prod thread. Each published DP2 run appends:
-- its `run_id` and mode;
-- each affected payment, with the before and after images' customer IDs and payment-method fingerprints;
-- the earliest attempt time, `started_at` and label `occurred_at` across both images.
+**Input: Iceberg change data, not a feed table.** This is DP2 decision 17 and the "Silver change data for consumers" requirement.
+- **State.** Every DP3 commit records the `main` snapshots it consumed as snapshot properties: `silver.attempts.snapshot_id`, `silver.labels.snapshot_id` and `silver.payment_events.snapshot_id`. `marts.build_info` records the same IDs. The next incremental run reads its start points from the latest published gold commit.
+- **Change sets.** For `silver.attempts` and `silver.labels`, the run creates a changelog view between the consumed snapshot and the current `main` snapshot, with net changes:
 
-DP3 records the last feed `run_id` it processed in each gold commit's snapshot properties and in `marts.build_info`.
+  ```sql
+  CALL lake.system.create_changelog_view(
+    table => 'silver.attempts',
+    options => map('start-snapshot-id', '<consumed>', 'end-snapshot-id', '<main>'),
+    net_changes => true)
+  ```
 
-**Refusals.** Incremental mode fails with an instruction to run historical, with no silent fallback, when:
-- there is no prior published DP3 run;
-- the feed has a `historical` row since the last DP3 run;
-- an affected time precedes the coverage start `H`;
-- the logic or contract version differs from the last run's.
+  Net changes cancel the carry-over rows from rewritten files, including DP2's delete-and-append of unchanged attempts and compaction rewrites. Only real changes remain, so the DELETE rows give the old image and the INSERT rows give the new one. That provides both images' `customer_id`, `payment_method_fingerprint`, `attempted_at` and `started_at` directly.
+- **Rejected payments.** DP2 replaces whole payments, so a conflicting redelivery removes a payment's attempts. Those removals show up as DELETEs and drive the recompute of their old entities.
+- **Why the attempts changelog also covers `dim_customer`'s profile.** The profile comes from `attempt_started` events. A changed `attempt_started` with the same `event_id` is a conflict, which deletes the attempt rows, and a new `attempt_started` inserts an attempt row. So every profile change surfaces in the attempts changelog, and `silver.payment_events` needs no changelog of its own. Its snapshot ID is still recorded and pinned for reads. The equivalence test includes a conflicting `attempt_started` case to protect this.
+
+**Refusals.** Incremental mode fails, with no silent fallback, and asks for a historical DP3 run when:
+- there is no published DP3 commit recording consumed Silver snapshots;
+- any `silver.attempts` or `silver.labels` commit in the range has `dp2.mode = historical`, checked by walking the `snapshots` metadata table's summaries between start and end. A historical DP2 run rewrites every row, so it means a full reset;
+- a consumed start snapshot no longer exists. Silver keeps snapshots for 7 days, with the last 10 always kept, so DP3 must run at least weekly to stay incremental;
+- a changed attempt time precedes the coverage start `H`;
+- a `dp2.logic_version` in the range differs from the one recorded on the last consumed snapshot, or DP3's own logic or contract version changed.
 
 **Per table:**
 
@@ -413,13 +422,15 @@ DP3 records the last feed `run_id` it processed in each gold commit's snapshot p
 |---|---|
 | `feat_*_daily` | The entities to recompute are the affected customers and cards from both images, plus every entity with an attempt in `[C0 − 30 days, C1)`, where `C0` and `C1` are the previous and new anchor caps. Those entities need their new expiry or arrival rows even without changed data. For each one, recompute anchors from `min(earliest affected anchor, C0 + 1 day)`, reading its attempts from 30 days before that anchor. Seed the change-point comparison with its last existing row before that anchor, then replace its rows at and after that anchor in one `MERGE` on the audit branch. The shared engine's entity- and anchor-scoped entry points do this. |
 | `dim_customer` | Rebuild the affected customers' full version history from Silver and replace their rows. The familiar-device set is evaluated only at attempts, so time passing alone changes nothing. |
-| `label_attempt` | Replace the rows of the affected payments' attempts. |
-| `fact_payment_attempt` | Rebuild only the affected start days inside the retention window into staging, audit them, then `ALTER TABLE … REPLACE PARTITION <day> FROM …__staging` for each day in `publish-marts`. Each replace is atomic per day, matching the daily partitions. |
+| `label_attempt` | Replace the rows of the attempts named in either changelog. |
+| `fact_payment_attempt` | Rebuild only the affected start days inside the retention window into staging. Those are the start days of changed attempts in both images, plus the attempts' start days for changed labels, looked up in the attempts changelog or on `main`. Then audit them, then `ALTER TABLE … REPLACE PARTITION <day> FROM …__staging` for each day in `publish-marts`. Each replace is atomic per day, matching the daily partitions. |
 | `fact_merchant_day` | Rebuild the affected months (monthly partitions, small) from the published fact, then `REPLACE PARTITION`. Update `build_info`. |
 
 **`created` in incremental mode.** A row keeps the Silver commit time of the run that last recomputed it. A historical run stamps every row with the current commit time. That is the only allowed difference, so the equivalence test compares every column except `created`. The `created >= event_timestamp` rule still holds, and Feast uses `created` only to break ties between rows with the same `event_timestamp`.
 
-**Schedule.** The suspended daily `dp3-gold` CronWorkflow runs `mode=incremental`, after the six-hourly Kafka schedule's DP2 incremental runs.
+**Schedule.** The suspended daily `dp3-gold` CronWorkflow runs `mode=incremental`, after the six-hourly Kafka schedule's DP2 incremental runs. A refusal fails the scheduled run visibly; the operator then submits `mode=historical`.
+
+**ClickHouse reads.** The marts stage reads the changed days from Silver `main` at the pinned snapshot IDs (`SETTINGS iceberg_snapshot_id`), so it stays consistent with Spark's view.
 
 **Cost.** With the live simulator at one payment every 30 seconds (about 2,900 a day), an incremental run touches a few thousand payments and their entities' last 30 days. A historical run rereads all of v19 Silver. The prod evidence records one of each.
 

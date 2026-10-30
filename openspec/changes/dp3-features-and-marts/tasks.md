@@ -89,17 +89,17 @@
 
 ## 6b. Incremental mode
 
-- [ ] 6b.1 Start once the Bootstrap prod thread has merged `dp2-silver mode=incremental` and the `silver.changed_payments` feed. Align with its final column names before coding.
+- [ ] 6b.1 `dp2-silver mode=incremental` is on `main` (`a753980`). Read its decision 17 and the `curated-payments` requirements "Incremental curation" and "Silver change data for consumers", and reuse its CI test `test_the_attempts_changelog_shows_only_the_changed_attempt` as the pattern.
 - [ ] 6b.2 Add `mode` to `batch/gold.py` and `batch/marts.py`, and the `mode` parameter to `dp3-gold` (default `historical`; the daily CronWorkflow uses `incremental`):
-  - read the feed since the `run_id` recorded on the last published gold commit;
-  - apply the refusal rules;
+  - read the consumed `silver.*.snapshot_id` properties from the latest published gold commit, and create net changelog views of `silver.attempts` and `silver.labels` from those snapshots to current `main`;
+  - apply the refusal rules: no prior DP3 commit, `dp2.mode = historical` in the range, an expired start snapshot, a time before `H`, or a logic version change;
   - for the feature tables, recompute the affected and expiring entities with the engine's entity- and anchor-scoped entry points, seeded from each entity's last prior row, and `MERGE` them on the audit branch;
   - for `dim_customer`, rebuild the affected customers;
-  - for `label_attempt`, replace the affected payments' rows;
+  - for `label_attempt`, replace the rows of the attempts named in either changelog;
   - for the marts, `REPLACE PARTITION` the affected days and months after audit;
-  - record the processed feed `run_id` in snapshot properties and `build_info`.
+  - record the consumed Silver snapshot IDs in the gold commits' snapshot properties and in `build_info`.
 - [ ] 6b.3 Add CI tests:
-  - an equivalence test: a sequence of Silver states with feed rows (a new payment, a late chargeback, a rejected payment that moves an attempt, and an expiry with no new data) must give the same output from incremental DP3 after each step as from one historical run, excluding `created`;
+  - an equivalence test: a sequence of real DP2 incremental runs over Kafka-style Bronze batches (a new payment, a late chargeback, a conflicting redelivery that removes attempts, a conflicting `attempt_started`, and an expiry with no new data) must give the same output from incremental DP3 after each step as from one historical run, excluding `created`;
   - one test for each refusal rule.
 
 

@@ -48,7 +48,7 @@ Each DP3 run SHALL rebuild both marts in full into staging tables, run every mar
 - **THEN** both marts have equal content after each run
 
 ### Requirement: Incremental mart days
-In incremental mode, DP3 SHALL rebuild only the attempt start days affected by the change feed, and the months that contain them for `fact_merchant_day`, within the retention window. It SHALL audit those staging partitions and then replace each live partition atomically. The live marts SHALL then equal a full rebuild over the same Silver.
+In incremental mode, DP3 SHALL rebuild only the attempt start days affected by the Silver changelog, and the months that contain them for `fact_merchant_day`, within the retention window. It SHALL audit those staging partitions and then replace each live partition atomically. The live marts SHALL then equal a full rebuild over the same Silver.
 
 #### Scenario: Late chargeback
 
