@@ -53,7 +53,7 @@
 
 ## 4b. Langfuse
 
-- [x] 4b.1 Vendor `langfuse` 1.5.41 (v3, image `3.224.1`) into the chart. Add its CNPG Postgres, Redis, ExternalSecrets and UI VirtualService, and point it at the shared ClickHouse contract agreed with #102. Provision its app keys in Doppler `dev` and `prd`. Verify with `helm lint`/`helm template`; live checks wait for the rebuild.
+- [x] 4b.1 Vendor `langfuse` 1.5.41 (v3, image `3.225.11`) into the chart. Add its CNPG Postgres, Redis, ExternalSecrets and UI VirtualService, and point it at the shared ClickHouse contract agreed with #102. Provision its app keys in Doppler `dev` and `prd`. Verify with `helm lint`/`helm template`; live checks wait for the rebuild.
 - [ ] 4b.2 After the rebuild and #102's ClickHouse: the platform adds the tunnel, proxy hosts and Dex redirect URIs; then verify on dev that the migrations complete, login works behind the proxy, and the init project's API keys authenticate.
 
 ## 5. OpenMetadata (after PR #102 merges)

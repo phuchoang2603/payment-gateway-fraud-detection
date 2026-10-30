@@ -170,7 +170,7 @@ langfuse:
       telemetryEnabled: false
       signUpDisabled: true
     image:
-      tag: "3.224.1"
+      tag: "3.225.11"
       pullPolicy: IfNotPresent
     podSecurityContext:
       runAsNonRoot: true

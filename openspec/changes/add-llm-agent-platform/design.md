@@ -256,7 +256,7 @@ The facts come from the `rag-pipeline` values and must match the `llm-platform` 
 
 ### 14. Langfuse, app-owned, on the shared ClickHouse
 
-Langfuse v3 runs in `llm` from the upstream chart `langfuse` 1.5.41 (the last v3 chart), vendored as a dependency of this chart with its own image version `3.224.1`. Every bundled subchart is off, so the backing services are:
+Langfuse v3 runs in `llm` from the upstream chart `langfuse` 1.5.41 (the last v3 chart), vendored as a dependency of this chart with image `3.225.11`, the v3 patch release that carries the fix for ClickHouse 26.8+ misparsing Langfuse's DateTime64 inserts (langfuse/langfuse#16858, which stamped traces `9999-12-31` on dev). Every bundled subchart is off, so the backing services are:
 - **ClickHouse:** the shared, app-owned instance that PR #102 adds as chart `infra/charts/clickhouse` in `data`, replacing StarRocks. The contract is fixed with #102:
   - Service `clickhouse.data.svc.cluster.local`, HTTP 8123 and native 9000;
   - `clickhouse/clickhouse-server:26.10.2.103`, single shard and replica;
