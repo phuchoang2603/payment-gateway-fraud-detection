@@ -27,7 +27,7 @@
   - split into `build` and `publish` entry points: `build` stops before the exchange, leaving the staging tables for the checks, and `publish` runs the exchanges;
   - drop leftover staging tables;
   - compute the rolling window from `MARTS_RETENTION_DAYS` (180), render it into the DDL `TTL`, insert only rows inside the window, and write `build_info`;
-  - run monthly `INSERT … SELECT` from `lakehouse` with the Spark report's snapshot IDs (decision 7);
+  - run monthly `INSERT … SELECT` from `lakehouse` with the Spark report's snapshot IDs and the sort-merge spill settings (decision 7);
   - aggregate the merchant-day table;
   - reconcile the row count within the window before the swap;
   - exchange each table, then drop staging;
@@ -53,9 +53,9 @@
 
 ## 4. Checks, catalog and lineage
 
-- [ ] 4.1 Change `openmetadata_jobs.checks` to resolve `{object}` and the entity FQN from each contract's server database, as decision 10 shows for `marts` and ``lakehouse.`gold.x` ``. Under `WAP_BRANCH`, Iceberg rules are already pinned to branch heads; `marts` rules must resolve to `marts.<table>__staging` while the test still attaches to the live table's entity. Accept several products in `CHECK_PRODUCT`. Remove the environment-based schema lookup from `warehouse.py` and its callers. Extend the existing preparation test over the real contracts to cover the gold products and the mart FQNs.
+- [ ] 4.1 Change `openmetadata.checks` to resolve `{object}` and the entity FQN from each contract's server database, as decision 10 shows for `marts` and ``lakehouse.`gold.x` ``. Under `WAP_BRANCH`, Iceberg rules are already pinned to branch heads; `marts` rules must resolve to `marts.<table>__staging` while the test still attaches to the live table's entity. Accept several products in `CHECK_PRODUCT`. Remove the environment-based schema lookup from `warehouse.py` and its callers. Extend the existing preparation test over the real contracts to cover the gold products and the mart FQNs.
 - [ ] 4.2 Add a scoped `marts` profiler step that runs after `publish-marts` (decision 10 configuration). A failed profile fails the stage. Verify with a focused test of the generated profiler workflow's scope.
-- [ ] 4.3 Add pipelines `dp3-features` and `dp3-marts` with their Silver → gold and mart edges to `openmetadata_jobs.lineage`. Record the Silver snapshot IDs from the DP3 report in the pipeline status. Extend the existing lineage and publish tests.
+- [ ] 4.3 Add pipelines `dp3-features` and `dp3-marts` with their Silver → gold and mart edges to `openmetadata.lineage`. Record the Silver snapshot IDs from the DP3 report in the pipeline status. Extend the existing lineage and publish tests.
 - [ ] 4.4 In `infra/charts/data-pipelines` `catalog.connectors`, replace `databaseSchema: lakehouse` with `schemaFilterPattern` (`^lakehouse$`, `^marts$`) and add `^fact_` to the table filter;
 
   Verify with CI helm lint and template, and the existing integrations test.
@@ -75,6 +75,7 @@
 - [ ] 6.1 Add the `dp3-gold` WorkflowTemplate (decision 9):
   - `features` SparkApplication with `WAP_BRANCH`, `marts` build container, `checks` (`gold-features,payment-marts`, with `WAP_BRANCH`), the shared `publish-tables` step for `gold-features`, the `publish-marts` container, then `profile`, with the exit-handler publish of `dp3-features,dp3-marts`;
   - mutexes `dp3-gold-writer` and `dp2-silver-writer`;
+  - `data-pipelines.workflowPlacement` on every step pod and the shared driver placement on the SparkApplication;
   - the `dev` and `large` profiles through `dp3.profile`.
 
   Add the `clickhouse-marts` ExternalSecret and the values `dp3.*` and `marts.*`, including `marts.retentionDays: 180` in `values.yaml`. Add a suspended daily `dp3-gold` CronWorkflow (`17 4 * * *`). Leave the six-hourly Kafka schedule unchanged. Verify with CI helm lint and template for all values files.
@@ -91,6 +92,7 @@
 
 - [ ] 6b.1 `dp2-silver mode=incremental` is on `main` (`a753980`). Read its decision 17 and the `curated-payments` requirements "Incremental curation" and "Silver change data for consumers", and reuse its CI test `test_the_attempts_changelog_shows_only_the_changed_attempt` as the pattern.
 - [ ] 6b.2 Add `mode` to `batch/gold.py` and `batch/marts.py`, and the `mode` parameter to `dp3-gold` (default `historical`; the daily CronWorkflow uses `incremental`):
+  - reuse `batch.incremental` (`read_at`, `last_run`, `rewritten_since`) for snapshot reads and refusals rather than copying them;
   - read the consumed `silver.*.snapshot_id` properties from the latest published gold commit, and create net changelog views of `silver.attempts` and `silver.labels` from those snapshots to current `main`;
   - apply the refusal rules: no prior DP3 commit, `dp2.mode = historical` in the range, an expired start snapshot, a time before `H`, or a logic version change;
   - for the feature tables, recompute the affected and expiring entities with the engine's entity- and anchor-scoped entry points, seeded from each entity's last prior row, and `MERGE` them on the audit branch;

@@ -2,7 +2,7 @@
 
 PR #102 (`rebuild-generation-to-silver`, not merged) produces four Silver Iceberg tables: `silver.payment_events`, `silver.attempts`, `silver.labels` and `silver.rejected_events`. They are partitioned by day and fully recomputed from pinned Bronze snapshots. That PR also gives this change the pieces it builds on:
 
-- **Contracts:** ODCS contracts whose ClickHouse SQL rules `openmetadata_jobs.checks` turns into native OpenMetadata test suites.
+- **Contracts:** ODCS contracts whose ClickHouse SQL rules `openmetadata.checks` turns into native OpenMetadata test suites.
 - **Workflows:** the Argo templates `dp1-bronze` and `dp2-silver`, each a Spark `resource` step plus checks, with an exit-handler publish.
 - **Spark sizing:** the `dev` and `large` profiles.
 - **ClickHouse:** the app-owned 26.10.2.103 instance, with users `admin`, `langfuse` and `openmetadata` and the `lakehouse` DataLakeCatalog database.
@@ -19,7 +19,7 @@ Constraints:
   - devices rotate every 120 days;
   - each customer makes about 0.17 purchases a day.
 - **Feature definitions:** `fraud-snapshot-v2` already fixes the meaning of "attempt time", `[s − window, s)` windows, a snapshot anchor `s` independent of the scored time `t`, and null-not-zero coverage.
-- **ClickHouse sizing:** prod has a 4 GiB memory limit and a 30 Gi PVC. Dev has a 12 GiB limit and must run on dev-server1 or dev-server2.
+- **ClickHouse sizing:** prod has a 4 GiB memory limit (about 3.4 GiB for the server) and a 30 Gi PVC. Dev has a 12 GiB limit and must run on dev-server1 or dev-server2. On v19, a full-history Silver check join exhausted the prod server with hash joins and passed only with external sort-merge (`docs/data/storage.md`, "Full-load check optimization on v19"). `openmetadata.checks` now appends those spill settings to every rule.
 - **Platform ownership:** Grafana (VictoriaMetrics k8s stack, `observability`), Doppler and OpenMetadata belong to the platform. This repository only requests changes to them.
 - **Process:** no local tests, and no cluster actions while planning.
 - **Coursework examples** (`../fsds/example-proj`, read only): `card-fraud-platform` uses `feat_` tables with `event_timestamp = day + 1` and `created`, a fully rebuilt hash-diff SCD2 `dim_customer` (`valid_to` exclusive, one-current and no-overlap tests), a `label_` table, and a naming table with an ERD. None of the examples use ClickHouse, OpenMetadata, Argo or a Grafana warehouse datasource, so those parts are designed here from the platform's own docs.
@@ -76,7 +76,7 @@ A DBeaver ER export of the ClickHouse `marts` and `lakehouse.gold` tables is cap
 - **Writes: write-audit-publish, as Bronze and Silver do since `78765df`.**
   - **Write.** The job runs with `spark.wap.branch = audit-<workflow>` and calls `batch.lakehouse.stage()` on each gold table before writing, so the branch starts from `main`. Each write uses `overwrite(lit(True))`, with `create` on first use. Each commit carries the Silver snapshot IDs through the Iceberg 1.12 write option `snapshot-property.silver.<table>.snapshot_id`.
   - **Audit.** The checks stage runs every `gold-features` rule against the branch heads, pinned with `SETTINGS iceberg_snapshot_id`.
-  - **Publish.** The shared `publish-tables` step (`openmetadata_jobs.wap`) fast-forwards `main` for all four tables in one catalog transaction, only after every check passes.
+  - **Publish.** The shared `publish-tables` step (`openmetadata.wap`) fast-forwards `main` for all four tables in one catalog transaction, only after every check passes.
   - **Readers.** Feast, training and ClickHouse read `main` only, so they never see unaudited gold.
   - **Failure.** A failed run leaves its branch behind for diagnosis.
   - **Inputs.** DP3 reads Silver at its published `main` refs, through `ref_snapshot`, never an audit branch.
@@ -307,7 +307,7 @@ TTL day + INTERVAL {retention_days} DAY DELETE;
 3. For each month in the window, run one `INSERT INTO marts.fact_payment_attempt__staging SELECT … FROM lakehouse.`silver.attempts` LEFT JOIN (labels aggregated per attempt) …`:
    - Attempts are filtered to the month and the window, so Iceberg partition pruning applies.
    - Labels are filtered to `occurred_at` within the month and `label_available_at >= month start`, which prunes earlier partitions and uses file statistics to skip later ones.
-   - The join runs with `join_algorithm = 'grace_hash'` and the profile's memory limit, to bound memory on the prod 4 GiB instance.
+   - The join runs with `join_algorithm = 'full_sorting_merge'`, external sort and group-by thresholds, and the profile's memory limit: the settings that let the v19 Silver checks finish on the prod instance. Hash and grace-hash joins are not used.
 4. Build `fact_merchant_day__staging` from the staged fact with one `INSERT … SELECT … GROUP BY`, and write `build_info__staging`: one row with `window_start`, `window_end`, the Silver snapshot IDs and `built_at`.
 5. Reconcile: the staged fact's row count must equal the lifecycle-valid count of `lakehouse.`silver.attempts`` inside the window. A mismatch fails before the swap.
 
@@ -357,8 +357,8 @@ A against C shows the full benefit of the warehouse. B against C isolates the ef
 dp3-gold (WorkflowTemplate, mutexes: dp3-gold-writer, dp2-silver-writer, onExit: publish)
 ├── features        SparkApplication batch/gold.py, writes audit-<workflow> branch     (ingest)
 ├── marts           container batch/marts.py build, writes marts.*__staging          (ingest, after features)
-├── checks          openmetadata_jobs.checks, gold-features on branch heads, payment-marts on staging   (validate)
-├── publish-tables  openmetadata_jobs.wap, fast-forwards gold main                  (after checks)
+├── checks          openmetadata.checks, gold-features on branch heads, payment-marts on staging   (validate)
+├── publish-tables  openmetadata.wap, fast-forwards gold main                  (after checks)
 ├── publish-marts   container batch/marts.py publish, exchanges staging into live   (after publish-tables)
 └── profile         OpenMetadata profiler on the published marts                    (after publish-marts)
 publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, lineage on success
@@ -386,9 +386,9 @@ publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, l
 | Environment | Profile | Basis |
 |---|---|---|
 | dev | `dev`: 1 executor × 2 cores, 16 shuffle partitions | v18 is under 1M attempts, and the gold tables are each under 1M rows |
-| prod | `large`: 11 executors × 3 cores, 9 GiB plus 2 GiB overhead, 24 GiB ephemeral storage, 2,048 shuffle partitions, spot `aws-cpu-burst` | About 200M attempts produce about 1.2B interval-delta rows per window family before aggregation. The shuffle is estimated at 40–60 GB across 11 executors, under the 264 GiB of executor ephemeral storage. The first v19 run records tasks and time per phase, which confirms or lowers the profile, as for Silver. |
+| prod | `large`, as Silver uses it: 11 executors × 3 cores, 9 GiB plus 3 GiB overhead, 24 GiB ephemeral storage, on spot `aws-cpu-burst`; the driver on the on-demand `aws-workers` pool through `spark.driverNodeSelector`; 2,048 shuffle partitions set by `dp3.profile` | About 200M attempts produce about 1.2B interval-delta rows per window family before aggregation. The shuffle is estimated at 40–60 GB across 11 executors, under the 264 GiB of executor ephemeral storage. The first v19 run records tasks and time per phase, which confirms or lowers the profile, as for Silver. |
 
-The marts container requests 100m CPU and 256 Mi, because ClickHouse does the work. ClickHouse itself is sized by the clickhouse chart.
+The marts container requests 100m CPU and 256 Mi, because ClickHouse does the work. ClickHouse itself is sized by the clickhouse chart. Every DP3 step pod uses `data-pipelines.workflowPlacement` and the SparkApplication uses the shared driver placement, so in prod no step or driver runs on spot nodes.
 
 ### 9b. Incremental mode
 
@@ -438,7 +438,8 @@ The marts container requests 100m CPU and 256 Mi, because ClickHouse does the wo
 
 - **New products.** `contracts/data-products/gold-features/` (`dim-customer`, `feat-customer-daily`, `feat-payment-method-daily`, `label-attempt`) and `contracts/data-products/payment-marts/` (`fact-payment-attempt`, `fact-merchant-day`). Each has an ODPS descriptor with Silver input ports, and one v1 ODCS per table with `sqlDialect: clickhouse`.
 - **Servers.** Each ODCS `servers[0].database` is `lakehouse` or `marts`.
-- **Check runner.** `openmetadata_jobs.checks` resolves `{object}` and the entity FQN from the contract server, not from the `CLICKHOUSE_DATABASE` environment variable. For example, `marts.fact_payment_attempt` → `clickhouse.default.marts.fact_payment_attempt`, and `lakehouse.`gold.dim_customer`` → `clickhouse.default.lakehouse."gold.dim_customer"`. `CHECK_PRODUCT` accepts a comma-separated list. `warehouse.py` loses its environment-based schema helper (no compatibility shim).
+- **Rule SQL.** Rules follow the Silver contracts: uniqueness groups by a `sipHash128` of the key columns, and a rule carries no `SETTINGS` clause, because the runner appends the snapshot pin and the spill settings.
+- **Check runner.** `openmetadata.checks` resolves `{object}` and the entity FQN from the contract server, not from the `CLICKHOUSE_DATABASE` environment variable. For example, `marts.fact_payment_attempt` → `clickhouse.default.marts.fact_payment_attempt`, and `lakehouse.`gold.dim_customer`` → `clickhouse.default.lakehouse."gold.dim_customer"`. `CHECK_PRODUCT` accepts a comma-separated list. `warehouse.py` loses its environment-based schema helper (no compatibility shim).
 
 **Rules, each a scalar violation count that must be 0:**
 
@@ -456,7 +457,7 @@ The marts container requests 100m CPU and 256 Mi, because ClickHouse does the wo
 
 - **Where connectors live.** Since #102, `data-pipelines` owns the OpenMetadata connector configuration (`catalog.connectors`), its ExternalSecrets and a PostSync register job. Every checks run ingests the ClickHouse tables before its tests, and other connectors are ingested by the on-demand `metadata-discovery` WorkflowTemplate. Contracts and products are not imported into OpenMetadata (its 2.0.6 ODCS importer rejects them), so Git stays the authority for the gold contracts too.
 - **Connector.** The ClickHouse connector in `catalog.connectors` drops `databaseSchema: lakehouse`, which limits ingestion to one schema, and uses `schemaFilterPattern: {includes: ["^lakehouse$", "^marts$"]}`. Its table filter adds `^fact_`. `marts_benchmark` and the `__staging` tables are excluded.
-- **Pipelines.** `openmetadata_jobs.lineage` adds the pipelines `dp3-features` ("Gold features, dimension and labels from pinned Silver") and `dp3-marts` ("ClickHouse marts from Silver"), with the edges listed in the governance delta. `publish` records the Silver snapshot IDs from the run report in the pipeline status.
+- **Pipelines.** `openmetadata.lineage` adds the pipelines `dp3-features` ("Gold features, dimension and labels from pinned Silver") and `dp3-marts` ("ClickHouse marts from Silver"), with the edges listed in the governance delta. `publish` records the Silver snapshot IDs from the run report in the pipeline status.
 - **Dashboards are not catalogued.** OpenMetadata covers the tables, pipelines, tests and profiles. Grafana dashboards stay out of the catalog: no Grafana connector, no token, and no mart → dashboard lineage.
 
 ### 12. ClickHouse users and grants
@@ -477,7 +478,9 @@ profiles:
   grafana/constraints/max_result_rows/max: 100000
   marts/allow_database_iceberg: 1
   marts/max_memory_usage: 2147483648          # 2 GiB; prod instance limit is 4 GiB
-  marts/join_algorithm: grace_hash
+  marts/join_algorithm: full_sorting_merge
+  marts/max_bytes_before_external_sort: 400000000
+  marts/max_bytes_before_external_group_by: 800000000
   marts/max_insert_threads: 2
 users:
   grafana/password: {valueFrom: {secretKeyRef: {name: clickhouse-grafana, key: password}}}
@@ -543,7 +546,7 @@ These requests block only the dashboard evidence.
 
 ## Risks / Trade-offs
 
-- **[The prod ClickHouse is small (4 GiB, 30 Gi)]** → Monthly batches, `grace_hash` joins and the 2 GiB `marts` profile limit bound memory. The staging copy doubles storage during a build. The first v19 build records its peak memory and disk. Marts keep a rolling 180-day `TTL` window, which fits the existing PVC with room for the staging copy.
+- **[The prod ClickHouse is small (4 GiB, 30 Gi)]** → Monthly batches, sort-merge joins with spill and the 2 GiB `marts` profile limit bound memory. Disk is the tighter limit: the 180-day v19 window is about 95M attempts, the staging copy doubles it during a build, the benchmark adds an unsorted copy, and a v19 full-history check join wrote 17.8 GiB of sort spill. The marts build, the checks and the benchmark therefore never run at the same time (the `dp3-gold-writer` mutex), and the benchmark drops its copies before it ends. Full-history gold rules, such as the `label_attempt` key-existence join and the change-point rule, may take tens of minutes on prod, as the Silver rules do. If one exceeds the limits, its SQL is rewritten under the same scope rather than narrowed. The first v19 build records its peak memory and disk. Marts keep a rolling 180-day `TTL` window, which fits the existing PVC with room for the staging copy.
 - **[ClickHouse Iceberg pruning on DataLakeCatalog tables is weaker than Spark's]** → The monthly batches filter on partition columns. Variant A of the benchmark measures it, and whatever the result is goes into the report as evidence.
 - **[Snapshot consistency between Spark and ClickHouse]** → The DP2 mutex, plus the recorded snapshot-ID comparison that fails the marts stage on a mismatch.
 - **[Change-point features are unfamiliar to Feast users]** → The definition file and the `feat_` contract state the "latest row ≤ t" semantics. A contract rule rejects two identical consecutive rows, and the conformance examples include expiry.

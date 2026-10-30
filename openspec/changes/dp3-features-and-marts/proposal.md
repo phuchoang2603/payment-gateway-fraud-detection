@@ -60,7 +60,7 @@ No breaking changes. Nothing downstream consumes gold today. The feature-store p
 
 - **Code:**
   - `src/data-pipeline/batch`: a new `gold` Spark job, a `marts` ClickHouse build job and a `warehouse_benchmark` job, using an HTTP ClickHouse client. Tests are added.
-  - `src/data-pipeline/openmetadata_jobs`: contract-aware table resolution, profiling of the marts, and DP3 pipelines and lineage edges.
+  - `src/data-pipeline/openmetadata`: contract-aware table resolution, profiling of the marts, and DP3 pipelines and lineage edges.
 - **Contracts:**
   - `contracts/data-products/{gold-features,payment-marts}`;
   - `contracts/features/fraud-history-batch-v1.{yaml,examples.json}`;
