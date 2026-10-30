@@ -32,6 +32,7 @@ spec:
 {{- $tools = append $tools (dict "type" "McpServer" "mcpServer" (dict "apiGroup" "kagent.dev" "kind" "RemoteMCPServer" "name" $server "toolNames" $spec.tools)) }}
 {{- end }}
 {{- $declarative := dict
+  "runtime" $agents.runtime
   "modelConfig" $agents.modelConfig
   "systemMessageFrom" (dict "type" "ConfigMap" "name" "agent-prompts" "key" (printf "%s.md" $agent.name)) }}
 {{- with $tools }}

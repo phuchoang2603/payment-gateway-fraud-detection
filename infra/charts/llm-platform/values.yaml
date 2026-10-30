@@ -120,6 +120,9 @@ metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
 agents:
   serviceAccount: llm-agents
   modelConfig: default-model-config
+  # The Python ADK instruments every outgoing httpx call, so model and MCP requests carry traceparent and the
+  # gateway's spans join the agent's trace. kagent 0.10.4's Go ADK only does that for calls to other agents.
+  runtime: python
   uid: 65532
   sandbox:
     snapshotRoot: gs://platform-dev/substrate/llm
