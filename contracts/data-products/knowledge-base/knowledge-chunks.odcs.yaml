@@ -70,9 +70,9 @@ schema:
         mustBe: 0
       - id: knowledge_embedding_shape
         type: sql
-        description: Every embedding in the current version has 1024 finite values and unit norm.
+        description: Every embedding in the current version has 1024 non-null, finite values and unit norm. Iceberg list elements read back as nullable in ClickHouse.
         query: |
-          SELECT count(*) FROM {object} WHERE knowledge_version = (SELECT argMax(knowledge_version, event_timestamp) FROM {object}) AND (length(embedding) != 1024 OR arrayExists(x -> NOT isFinite(x), embedding) OR abs(sqrt(arraySum(x -> x * x, embedding)) - 1) > 0.001)
+          SELECT count(*) FROM {object} WHERE knowledge_version = (SELECT argMax(knowledge_version, event_timestamp) FROM {object}) AND (length(embedding) != 1024 OR arrayExists(x -> x IS NULL OR NOT isFinite(assumeNotNull(x)), embedding) OR abs(sqrt(arraySum(x -> assumeNotNull(x) * assumeNotNull(x), embedding)) - 1) > 0.001)
         mustBe: 0
       - id: knowledge_synthetic_flagged
         type: sql
