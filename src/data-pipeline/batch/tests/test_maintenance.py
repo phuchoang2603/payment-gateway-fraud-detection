@@ -4,7 +4,7 @@ from pyspark.sql import functions as F
 
 from batch import maintenance
 from batch.schema import EVENT_COLUMNS, business_schema, ddl
-from tests.events import created
+from tests.events import at, created
 
 PARTITIONED = "lake.maintenance_tests.events_partitioned"
 UNPARTITIONED = "lake.maintenance_tests.events_unpartitioned"
@@ -32,3 +32,10 @@ def test_partition_filter_plans_fewer_files_than_an_unpartitioned_copy(spark):
     unpartitioned = maintenance.planned(spark, UNPARTITIONED, expression)
     assert unpartitioned["files_planned"] == 2
     assert partitioned["files_planned"] < unpartitioned["files_planned"]
+
+
+def test_customer_window_builds_one_iceberg_expression_from_three_predicates(spark):
+    expression = maintenance.customer_window(spark, "c-1", at(0))
+
+    assert "customer_id" in expression.toString()
+    assert "started_at" in expression.toString()

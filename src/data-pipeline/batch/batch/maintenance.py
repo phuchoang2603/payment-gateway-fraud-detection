@@ -52,8 +52,10 @@ def day_filter(spark: SparkSession, column: str, day: date):
 def customer_window(spark: SparkSession, customer: str, start: datetime):
     expressions = spark._jvm.org.apache.iceberg.expressions.Expressions
     return getattr(expressions, "and")(
-        expressions.equal("customer_id", customer),
-        expressions.greaterThanOrEqual("started_at", micros(spark, start)),
+        getattr(expressions, "and")(
+            expressions.equal("customer_id", customer),
+            expressions.greaterThanOrEqual("started_at", micros(spark, start)),
+        ),
         expressions.lessThan("started_at", micros(spark, start + timedelta(days=PROBE_DAYS))),
     )
 
