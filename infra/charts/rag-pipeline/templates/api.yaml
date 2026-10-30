@@ -1,0 +1,85 @@
+{{- $api := .Values.api }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-api
+spec:
+  replicas: {{ $api.replicas }}
+  # A revision that never becomes ready stalls the rollout while the previous pods keep serving.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  minReadySeconds: 10
+  progressDeadlineSeconds: 300
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rag-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rag-api
+        app.kubernetes.io/part-of: rag-pipeline
+    spec:
+      serviceAccountName: rag-api
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "rag-pipeline.podSecurity" . | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "rag-pipeline.image" (dict "image" .Values.images.rag "global" .Values.global) | quote }}
+          args: [rag.service]
+          ports:
+            - {name: http, containerPort: {{ $api.port }}}
+          env:
+            - name: PORT
+              value: {{ $api.port | quote }}
+            {{- include "rag-pipeline.gatewayEnv" (dict "root" . "secret" .Values.gateway.apiKeySecret) | nindent 12 }}
+            {{- include "rag-pipeline.dbEnv" (dict "root" . "secret" "rag-db-reader") | nindent 12 }}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          securityContext:
+            {{- include "rag-pipeline.containerSecurity" . | nindent 12 }}
+          resources:
+            {{- toYaml $api.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-api
+spec:
+  selector:
+    app.kubernetes.io/name: rag-api
+  ports:
+    - {name: http, port: {{ $api.port }}, targetPort: http}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rag-api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rag-api
+---
+# Agents reach the knowledge tools only through the gateway's /mcp/knowledge route.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: rag-api
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rag-api
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/{{ .Release.Namespace }}/sa/{{ .Values.gateway.serviceAccount }}"]

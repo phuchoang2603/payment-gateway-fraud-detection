@@ -25,9 +25,10 @@ GitOps deploys the same application charts to dev and prod. CI publishes a compl
 | `data-pipelines` | `data` | Generator and pipeline WorkflowTemplates; OpenMetadata connections, the register job and on-demand discovery |
 | `clickhouse` | `data` | ClickHouse instance, its users from Doppler, Service and the `langfuse` setup Job |
 | `lakehouse` | `data` | Polaris REST catalog with its PostgreSQL store, signing keys and Iceberg storage secret; the `lakehouse` warehouse registration; ClickHouse `lakehouse` DataLakeCatalog |
-| `llm-platform` | `ml` | Chat and embedding model servers, agent gateway and its policy, global model config, agents, registry catalog (agents and prompts), Langfuse with its Postgres and Redis; see [LLM agents](../llm/agents.md) |
+| `llm-platform` | `llm` | Chat and embedding model servers, agent gateway and its policy, global model config, agents, registry catalog (agents and prompts), the knowledge MCP route, Langfuse with its Postgres and Redis; see [LLM agents](../llm/agents.md) |
+| `rag-pipeline` | `llm` | RAG knowledge workflow (corpus, chunks, embeddings through the gateway, Feast write, checks and lineage), its Feast pgvector Postgres, and the knowledge API that also serves the MCP tools; see [LLM agents](../llm/agents.md) |
 
-The prod release enables every application except `live-traffic`, `fraud-features` and `llm-platform`: the gateway services with their databases, Redis and Kafka; `data-pipelines` with the generator, Bronze, Silver, analytics and maintenance workflows, with the OpenMetadata connections and register job; `clickhouse`; and `lakehouse`. Prod is not bootstrapped yet, so this describes its release configuration. Application pods are stateless; Postgres and the authorization and Feast Redis instances own the persistent volumes.
+The prod release enables every application except `live-traffic`, `fraud-features`, `llm-platform` and `rag-pipeline`: the gateway services with their databases, Redis and Kafka; `data-pipelines` with the generator, Bronze, Silver, analytics and maintenance workflows, with the OpenMetadata connections and register job; `clickhouse`; and `lakehouse`. Prod is not bootstrapped yet, so this describes its release configuration. Application pods are stateless; Postgres and the authorization and Feast Redis instances own the persistent volumes.
 
 ## Runtime configuration
 

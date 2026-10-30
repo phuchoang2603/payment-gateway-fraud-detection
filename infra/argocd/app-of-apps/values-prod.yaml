@@ -9,3 +9,5 @@ applications:
     enabled: true
   llm-platform:
     enabled: false
+  rag-pipeline:
+    enabled: false

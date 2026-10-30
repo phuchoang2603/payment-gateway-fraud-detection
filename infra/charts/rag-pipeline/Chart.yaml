@@ -1,0 +1,6 @@
+apiVersion: v2
+name: rag-pipeline
+description: RAG knowledge pipeline, its Feast pgvector store and the knowledge API with its MCP tools
+type: application
+version: 0.1.0
+kubeVersion: '>=1.34.0-0'

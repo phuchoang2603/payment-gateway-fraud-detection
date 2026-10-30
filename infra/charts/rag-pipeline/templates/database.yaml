@@ -1,0 +1,73 @@
+{{- $db := .Values.database }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $db.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  instances: 1
+  imageName: {{ $db.imageName }}
+  {{- with $db.nodeSelector }}
+  affinity:
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}
+  bootstrap:
+    initdb:
+      database: {{ $db.dbname }}
+      owner: rag_writer
+      secret:
+        name: rag-db-writer
+  # The reader can SELECT every table the writer (Feast) creates, including ones created later.
+  managed:
+    roles:
+      - name: rag_reader
+        ensure: present
+        login: true
+        inRoles: [pg_read_all_data]
+        passwordSecret:
+          name: rag-db-reader
+  storage:
+    storageClass: {{ .Values.storageClass }}
+    size: {{ $db.size }}
+  resources:
+    {{- toYaml $db.resources | nindent 4 }}
+---
+# Feast's Postgres online store uses pgvector but never creates the extension.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: {{ $db.name }}-{{ $db.dbname }}
+spec:
+  cluster:
+    name: {{ $db.name }}
+  name: {{ $db.dbname }}
+  owner: rag_writer
+  databaseReclaimPolicy: retain
+  extensions:
+    - name: vector
+      ensure: present
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $db.name }}-private
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: {{ $db.name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: rag-pipeline
+      ports:
+        - {port: 5432, protocol: TCP}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: operators
+      ports:
+        - {port: 8000, protocol: TCP}

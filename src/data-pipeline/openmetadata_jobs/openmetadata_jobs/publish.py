@@ -5,11 +5,13 @@ import time
 from openmetadata_jobs.catalog import client
 from openmetadata_jobs.lineage import (
     HISTORICAL_PREFIX,
+    KNOWLEDGE_PREFIX,
     PIPELINES,
     SERVICE,
     STORAGE_SERVICE,
     dataset_container,
     edges,
+    knowledge_container,
     pipeline_fqn,
 )
 
@@ -63,6 +65,19 @@ def ensure_dataset(sdk, version: str) -> None:
     )
 
 
+def ensure_knowledge(sdk, version: str) -> None:
+    from metadata.generated.schema.api.data.createContainer import CreateContainerRequest
+
+    sdk.create_or_update(
+        CreateContainerRequest(
+            name=knowledge_container(version),
+            service=STORAGE_SERVICE,
+            prefix=f"{KNOWLEDGE_PREFIX}/{version}/",
+            description=f"RAG knowledge corpus {version}: rendered and synthetic documents with their manifest",
+        )
+    )
+
+
 def publish_lineage(sdk, name: str, pipeline_ref, dataset_version: str) -> int:
     from metadata.generated.schema.api.lineage.addLineage import AddLineageRequest
     from metadata.generated.schema.type.entityLineage import EntitiesEdge, LineageDetails
@@ -70,6 +85,8 @@ def publish_lineage(sdk, name: str, pipeline_ref, dataset_version: str) -> int:
 
     if name == "dp1-bronze-historical":
         ensure_dataset(sdk, dataset_version)
+    if name == "rag-knowledge":
+        ensure_knowledge(sdk, dataset_version)
     published = 0
     for edge in edges(dataset_version):
         if edge.pipeline != name:
@@ -98,9 +115,10 @@ def main() -> int:
     if unknown:
         raise ValueError(f"invalid publish request for {unknown}")
     dataset_version = os.environ.get("DATASET_VERSION", "")
-    if "dp1-bronze-historical" in names and not dataset_version:
-        raise ValueError("DATASET_VERSION is required to publish the historical pipeline")
     workflow_status = os.environ["WORKFLOW_STATUS"]
+    versioned = {"dp1-bronze-historical", "rag-knowledge"} & set(names)
+    if versioned and not dataset_version and ("dp1-bronze-historical" in versioned or workflow_status == "Succeeded"):
+        raise ValueError(f"DATASET_VERSION is required to publish {sorted(versioned)}")
     run_id = os.environ["RUN_ID"]
     sdk = client()
     summary = {}

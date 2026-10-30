@@ -1,0 +1,38 @@
+apiVersion: v1.1.0
+kind: DataProduct
+id: urn:dataproduct:fraud:knowledge-base
+name: Knowledge base
+version: 1.0.0
+status: active
+domain: fraud-detection
+type: consumer-aligned
+description:
+  purpose: Embedded passages about how the payment gateway behaves, for agents that explain declines, risk decisions and checkout behaviour.
+  usage: Agents search and read the current knowledge version through the knowledge API and its MCP tools. This product's table keeps every version for history, lineage and checks.
+  limitations: No payment, label or customer data. Hand-written documents are synthetic. The online copy for search lives in a Feast pgvector store and is replaced in full for each new version.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, knowledge, rag]
+customProperties:
+  - property: catalog
+    value: lakehouse
+  - property: schema
+    value: knowledge
+  - property: runtime
+    value: Argo workflow rag-knowledge in llm; PyIceberg append per knowledge version and a full Feast online refresh. The checks run first on the staged chunks and again as ClickHouse SQL in OpenMetadata.
+outputPorts:
+  - name: chunks
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:knowledge-chunks
+    description: One row per chunk per knowledge version, with provenance and embedding.
+    customProperties:
+      - property: table
+        value: knowledge.chunks
+support:
+  - channel: GitHub maintainer
+    url: https://github.com/phuchoang2603
+    scope: support

@@ -1,0 +1,78 @@
+global:
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata: dev
+
+images:
+  rag:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag
+  metadata:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
+
+uid: 65532
+storageClass: local-path
+secretStore: gateway-doppler
+# Platform-owned credentials: the Polaris client shared with the other lakehouse writers.
+platformSecretStore: doppler
+
+# The gateway storage identity, scoped to datasets/payment-gateway/, runs/payment-gateway/ and lakehouse/.
+storage:
+  bucket: platform-dev
+  endpoint: https://minio.home.phuchoang.sbs
+  region: us-east-1
+  pathStyle: true
+  keys:
+    AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+
+catalog:
+  restUri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
+  warehouse: lakehouse
+  clientId: platform
+  oauth2Uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
+  clientSecretKey: ICEBERG_CLIENT_SECRET
+
+openmetadata:
+  url: http://openmetadata.data.svc.cluster.local:8585/api
+  tokenKey: OPENMETADATA_TOKEN
+  clickhouseDatabase: lakehouse
+  # Published into this namespace by the metadata-integrations chart (checkNamespaces).
+  connectorsConfigMap: metadata-connectors
+  connectorSecret: metadata-clickhouse
+
+# The llm-platform chart owns the gateway and the client key Secrets used here.
+gateway:
+  url: http://agentgateway.llm.svc.cluster.local
+  serviceAccount: agentgateway
+  ingestKeySecret: llm-gateway-ragingest
+  apiKeySecret: llm-gateway-ragapi
+
+# Must match models.embedding in the llm-platform chart; a change here produces a new knowledge version.
+embedding:
+  model: qwen3-embedding
+  revision: 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3
+
+database:
+  name: rag-pgvector
+  dbname: rag
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.3-standard-trixie
+  size: 2Gi
+  nodeSelector: {}
+  writerPasswordKey: RAG_DB_WRITER_PASSWORD
+  readerPasswordKey: RAG_DB_READER_PASSWORD
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 1Gi}
+
+workflow:
+  activeDeadlineSeconds: 1800
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {memory: 2Gi}
+
+api:
+  replicas: 2
+  port: 8080
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {memory: 1Gi}
