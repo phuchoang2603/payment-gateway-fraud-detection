@@ -1,3 +1,4 @@
+import base64
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -13,6 +14,7 @@ from tests.test_silver import load_bronze
 CONTRACTS = Path(__file__).resolve().parents[4] / "contracts" / "data-products"
 PRODUCTS = ("bronze-payments", "silver-payments")
 DATABASE = "lakehouse"
+AUTH = "Basic " + base64.b64encode(b"test:test").decode()
 PRIMITIVES = {
     T.StringType: "String",
     T.LongType: "Int64",
@@ -50,7 +52,8 @@ def create_table(physical, schema):
 def run_sql(clickhouse, sql):
     url = f"http://{clickhouse.get_container_host_ip()}:{clickhouse.get_exposed_port(8123)}/"
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, data=sql.encode(), method="POST"), timeout=120):
+        request = urllib.request.Request(url, data=sql.encode(), method="POST", headers={"Authorization": AUTH})
+        with urllib.request.urlopen(request, timeout=120):
             return None
     except urllib.error.HTTPError as error:
         return error.read().decode(errors="replace").strip().splitlines()[0]

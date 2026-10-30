@@ -42,7 +42,13 @@ def clickhouse():
     from testcontainers.core.container import DockerContainer
     from testcontainers.core.wait_strategies import HttpWaitStrategy
 
-    with DockerContainer("clickhouse/clickhouse-server:26.10.2.103").with_exposed_ports(8123) as container:
+    container = (
+        DockerContainer("clickhouse/clickhouse-server:26.10.2.103")
+        .with_exposed_ports(8123)
+        .with_env("CLICKHOUSE_USER", "test")
+        .with_env("CLICKHOUSE_PASSWORD", "test")
+    )
+    with container:
         HttpWaitStrategy(8123, "/ping").for_response_predicate(lambda body: "Ok" in body).wait_until_ready(container)
         yield container
 
