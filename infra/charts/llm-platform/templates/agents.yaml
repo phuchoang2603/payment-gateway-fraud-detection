@@ -75,6 +75,10 @@ kind: WorkerPool
 metadata:
   name: {{ $pool.name }}
   namespace: {{ $ns }}
+  # Substrate copies the pool's own labels onto its worker records, and kagent's ActorTemplates select workers by
+  # this label; the generated pods' labels are not used.
+  labels:
+    kagent.dev/worker-pool: {{ $pool.name }}
 spec:
   ateomImage: {{ $pool.image }}
   sandboxClass: {{ $pool.sandboxClass }}
