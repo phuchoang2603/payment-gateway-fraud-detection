@@ -4,7 +4,7 @@ kind: Deployment
 metadata:
   name: rag-api
 spec:
-  replicas: {{ $api.replicas }}
+  # KEDA owns the replica count (ScaledObject below), so the chart leaves it unset.
   # A revision that never becomes ready stalls the rollout while the previous pods keep serving.
   strategy:
     type: RollingUpdate
@@ -71,6 +71,23 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: rag-api
+---
+# REST requests and MCP tool calls load the same process, so the target is their combined rate.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: rag-api
+spec:
+  scaleTargetRef:
+    name: rag-api
+  minReplicaCount: {{ $api.autoscaling.minReplicas }}
+  maxReplicaCount: {{ $api.autoscaling.maxReplicas }}
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: {{ $api.autoscaling.prometheus }}
+        query: {{ printf "sum(rate({__name__=~\"knowledge_api_requests_total|knowledge_mcp_tool_calls_total\",namespace=\"%s\",job=\"%s/rag-api\"}[1m]))" .Release.Namespace .Release.Namespace | quote }}
+        threshold: {{ $api.autoscaling.requestsPerSecondPerReplica | quote }}
 ---
 # Agents reach the knowledge tools only through the gateway's /mcp/knowledge route.
 apiVersion: security.istio.io/v1

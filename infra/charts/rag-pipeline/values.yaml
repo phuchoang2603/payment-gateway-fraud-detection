@@ -82,8 +82,12 @@ workflow:
     limits: {memory: 2Gi}
 
 api:
-  replicas: 2
   port: 8080
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 4
+    requestsPerSecondPerReplica: "10"
+    prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
   resources:
     requests: {cpu: 100m, memory: 512Mi}
     limits: {memory: 1Gi}

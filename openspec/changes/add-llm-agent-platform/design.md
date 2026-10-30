@@ -371,7 +371,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 - It is the only Feast reader of the knowledge store, through `rag_reader`.
 - It runs as a Deployment, not a Knative Service. The platform's Knative cluster-local gateway runs outside the mesh, so traffic routed through Knative would reach the pods with no identity, and the mesh rule that only the gateway may call the service could not hold.
   - Rollouts use `maxUnavailable: 0`, `maxSurge: 1`, readiness gating and a progress deadline. A version that never becomes ready stalls the rollout while the previous pods keep serving, which is the automatic fallback.
-  - Two replicas and a PodDisruptionBudget. It is load-tested with Locust.
+  - KEDA autoscales it from 2 to 4 replicas on its combined REST and MCP request rate (`knowledge_api_requests_total` and `knowledge_mcp_tool_calls_total` in VictoriaMetrics, 10 req/s per replica); the chart leaves `replicas` unset so KEDA owns it. A PodDisruptionBudget keeps one ready. It is load-tested with Locust, which also demonstrates the scale-out.
 - It loads the Feast store on first use: the registry exists only after the first pipeline run, and the reader role cannot create it. Readiness checks the database only, so the first Argo CD sync does not wait on the pipeline that its PostSync hook starts.
 - The gateway routes `/mcp/knowledge` to the service's `/mcp` (decision 2), with its own policy: the agents' key, and tool-call metrics for the agent telemetry rows. Mesh policy admits only the gateway to the service.
 - It is published to agentregistry as an `MCPServer` and catalogued in OpenMetadata as an `mcpServer`. `evidence-agent` gains the tools (kagent `RemoteMCPServer` → gateway), which bumps it to 0.2.0.
