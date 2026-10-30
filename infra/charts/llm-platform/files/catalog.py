@@ -218,19 +218,27 @@ def publish_openmetadata(assets: dict, agents: list[dict]) -> None:
         print(
             f"openmetadata: MCP server {server['name']} with tools {[tool['name'] for tool in tools]}"
         )
-    knowledge = [
-        get(f"tables/name/{urllib.parse.quote(fqn, safe='')}")
-        for fqn in assets["knowledgeTables"]
-    ]
+    tables = {
+        server["name"]: [
+            get(f"tables/name/{urllib.parse.quote(fqn, safe='')}")
+            for fqn in server["tables"]
+        ]
+        for server in assets["mcpServers"]
+    }
     for agent in agents:
         primary = models[assets["primaryModel"]]
+        delegates = (
+            f" Delegates to {', '.join(agent['agents'])} over A2A."
+            if agent["agents"]
+            else ""
+        )
         put(
             "aiApplications",
             {
                 "name": agent["name"],
                 "applicationType": "Agent",
                 "developmentStage": "Development",
-                "description": f"{agent['description']} kagent agent, version {agent['version']}.",
+                "description": f"{agent['description']} kagent agent, version {agent['version']}.{delegates}",
                 "primaryModel": primary["fullyQualifiedName"],
                 "modelConfigurations": [
                     {
@@ -243,9 +251,11 @@ def publish_openmetadata(assets: dict, agents: list[dict]) -> None:
                     for name in agent["mcpServers"]
                 ],
                 "knowledgeBases": [
-                    {"id": table["id"], "type": "table"} for table in knowledge
+                    {"id": table["id"], "type": "table"}
+                    for name in agent["mcpServers"]
+                    for table in tables[name]
                 ],
-                "framework": {"name": "Custom", "language": "Python"},
+                "framework": {"name": "Custom", "language": "Go"},
             },
         )
         print(f"openmetadata: agent {agent['name']} {agent['version']}")

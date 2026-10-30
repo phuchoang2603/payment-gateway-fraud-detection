@@ -1,7 +1,7 @@
 {{- $chat := .Values.models.chat }}
 {{- $embedding := .Values.models.embedding }}
 {{- $store := .Values.modelStore }}
-{{- $uploads := concat (list (pick $chat "repo" "revision") (pick $embedding "repo" "revision")) .Values.models.extraUploads }}
+{{- $uploads := concat (list (pick $chat "repo" "revision") (pick $embedding "repo" "revision")) .Values.models.extraUploads (list .Values.decision.model) }}
 apiVersion: resource.k8s.io/v1
 kind: ResourceClaim
 metadata:
@@ -37,7 +37,7 @@ spec:
             - |
               pip install --quiet --no-cache-dir --target /work/lib $PACKAGES
               PYTHONPATH=/work/lib exec python3 - <<'EOF'
-              import json, os
+              import fnmatch, json, os
               import boto3
               from botocore.exceptions import ClientError
               from huggingface_hub import HfApi, hf_hub_download
@@ -45,9 +45,11 @@ spec:
               s3 = boto3.client("s3")
               bucket, prefix = os.environ["BUCKET"], os.environ["PREFIX"]
               for model in json.loads(os.environ["MODELS"]):
-                  repo, revision = model["repo"], model["revision"]
+                  repo, revision, files = model["repo"], model["revision"], model.get("files")
                   for item in HfApi().list_repo_tree(repo, revision=revision, recursive=True):
                       if not hasattr(item, "size"):
+                          continue
+                      if files and not any(fnmatch.fnmatch(item.path, pattern) for pattern in files):
                           continue
                       key = f"{prefix}/{repo}/{revision}/{item.path}"
                       try:

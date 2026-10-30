@@ -1,0 +1,44 @@
+[project]
+name = "fraud-decision"
+version = "0.1.0"
+description = "laya decision service: the coordinator's routing tool and the gateway's request screening webhook"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "laya==0.4.7",
+    "torch==2.14.1",
+    "transformers==5.20.0",
+    "boto3==1.43.114",
+    "fastapi==0.162.0",
+    "uvicorn==0.54.0",
+    "mcp==2.3.0",
+    "prometheus-client==0.24.1",
+]
+
+[dependency-groups]
+dev = ["pytest==9.2.0", "pytest-cov==7.1.0", "ruff==0.17.3"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--cov=fraud_decision --cov-report=term-missing --cov-fail-under=90"
+
+[tool.ruff]
+line-length = 119
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.coverage.run]
+omit = ["fraud_decision/__main__.py"]

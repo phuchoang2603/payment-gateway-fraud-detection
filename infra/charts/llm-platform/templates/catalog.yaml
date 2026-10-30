@@ -13,13 +13,20 @@
 {{- $catalog = append $catalog (toYaml $entry) }}
 {{- end }}
 {{- range $agent := .Values.agents.list }}
+{{- $notes := list (printf "Model config %s (%s through the agent gateway); system prompt %s-system-prompt in Langfuse." $.Values.agents.modelConfig $.Values.models.chat.name $agent.name) }}
+{{- with $agent.agents }}
+{{- $notes = append $notes (printf "Delegates to %s over A2A through the agent gateway." (join ", " .)) }}
+{{- end }}
+{{- with $agent.abTest }}
+{{- $notes = append $notes (printf "A/B test: %d%% of its A2A traffic goes to %s with model config %s." (int .weight) .variant .modelConfig) }}
+{{- end }}
 {{- $entry := dict
   "apiVersion" "ar.dev/v1alpha1"
   "kind" "Agent"
   "metadata" (dict "name" ($agent.name | replace "-" "") "tag" $agent.version)
   "spec" (dict
     "title" $agent.title
-    "description" (printf "%s Model config %s (%s through the agent gateway); system prompt %s-system-prompt in Langfuse." $agent.description $.Values.agents.modelConfig $.Values.models.chat.name $agent.name)
+    "description" (printf "%s %s" $agent.description (join " " $notes))
     "source" (dict
       "repository" (dict "url" $registry.repository "subfolder" "infra/charts/llm-platform")
       "protocol" "A2A")) }}
@@ -34,7 +41,7 @@
 {{- end }}
 {{- $agentList := list }}
 {{- range $agent := .Values.agents.list }}
-{{- $agentList = append $agentList (dict "name" $agent.name "version" $agent.version "description" $agent.description "mcpServers" ($agent.mcpServers | default list)) }}
+{{- $agentList = append $agentList (dict "name" $agent.name "version" $agent.version "description" $agent.description "mcpServers" ($agent.mcpServers | default list) "agents" ($agent.agents | default list)) }}
 {{- end }}
 {{- $gatewayUrl := printf "http://%s.%s.svc.cluster.local" .Values.gateway.name .Release.Namespace }}
 {{- $om := $catalog_.openmetadata }}
@@ -44,15 +51,14 @@
 {{- end }}
 {{- $servers := list }}
 {{- range $name, $server := .Values.gateway.mcpServers }}
-{{- $servers = append $servers (dict "name" $name "url" (printf "%s/mcp/%s" $gatewayUrl $name) "description" $server.description) }}
+{{- $servers = append $servers (dict "name" $name "url" (printf "%s/mcp/%s" $gatewayUrl $name) "description" $server.description "tables" ($server.tables | default list)) }}
 {{- end }}
 {{- $assets := dict
   "llmService" (dict "name" $om.llmService "baseUrl" (printf "%s/v1" $gatewayUrl))
   "models" $models
   "primaryModel" .Values.models.chat.name
   "mcpService" $om.mcpService
-  "mcpServers" $servers
-  "knowledgeTables" $om.knowledgeTables }}
+  "mcpServers" $servers }}
 {{- $data := dict
   "registry.yaml" (join "\n---\n" $catalog)
   "agents.json" (toJson $agentList)

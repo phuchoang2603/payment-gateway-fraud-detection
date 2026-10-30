@@ -136,6 +136,14 @@ spec:
               builtins: [CreditCard, Email, PhoneNumber]
               matches:
                 {{- toYaml $gateway.piiPatterns | nindent 16 }}
+          # Runs after masking, so the decision service never sees the masked values.
+          - webhook:
+              action: Reject
+              failureMode: {{ .Values.decision.failureMode }}
+              backendRef:
+                kind: Service
+                name: {{ .Values.decision.name }}
+                port: 8080
         response:
           - regex:
               action: Mask
