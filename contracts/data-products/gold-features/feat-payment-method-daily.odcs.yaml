@@ -1,0 +1,142 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:gold-feat-payment-method-daily
+name: Gold payment-method daily features
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: 7- and 30-day payment method features of fraud-history-batch-v1 at daily anchors, written only where a value changes.
+  usage: For a time t, take the payment method's latest row with event_timestamp at or before t; no row means the payment method is unknown. Never require an exact event_timestamp match.
+  limitations: Synthetic data only. Values are as of the last DP3 anchor, so they lag the scored attempt by up to one day plus the DP3 delay. Windows shorter than seven days are served by the streaming features.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, gold, features]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+  - property: definition
+    value: contracts/features/fraud-history-batch-v1.yaml
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: lakehouse
+    description: Iceberg table feat_payment_method_daily in schema gold, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.
+schema:
+  - name: feat_payment_method_daily
+    physicalName: gold.feat_payment_method_daily
+    logicalType: object
+    physicalType: table
+    description: One row per (integration_id, payment_method_fingerprint, event_timestamp) where a value changes.
+    dataGranularityDescription: One payment method at one daily anchor.
+    customProperties:
+      - property: partitioning
+        value: days(event_timestamp)
+    properties:
+      - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Integration namespace of the payment method.'}
+      - {name: payment_method_fingerprint, logicalType: string, physicalType: VARCHAR, required: true, description: 'Synthetic payment-method fingerprint.'}
+      - {name: event_timestamp, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: 'Anchor s, a UTC midnight; the values hold from s until the entity''s next row.'}
+      - {name: created, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: 'Commit time of the silver.attempts snapshot of the run that last recomputed the row.'}
+      - {name: attempt_count_7d, logicalType: integer, physicalType: BIGINT, description: 'Eligible attempts in the window. Window 7d, null until the window is covered.'}
+      - {name: amount_sum_minor_7d, logicalType: integer, physicalType: BIGINT, description: 'Sum of amount_minor over eligible attempts. Window 7d, null until the window is covered.'}
+      - {name: decided_count_7d, logicalType: integer, physicalType: BIGINT, description: 'Eligible attempts succeeded or declined before the anchor. Window 7d, null until the window is covered.'}
+      - {name: declined_count_7d, logicalType: integer, physicalType: BIGINT, description: 'Eligible attempts declined before the anchor. Window 7d, null until the window is covered.'}
+      - {name: risk_declined_count_7d, logicalType: integer, physicalType: BIGINT, description: 'Eligible attempts declined by the risk policy before the anchor. Window 7d, null until the window is covered.'}
+      - {name: decline_rate_7d, logicalType: number, physicalType: DOUBLE, description: 'declined_count / decided_count; null when decided_count is 0. Window 7d, null until the window is covered.'}
+      - {name: distinct_merchant_count_7d, logicalType: integer, physicalType: BIGINT, description: 'Distinct merchants over eligible attempts. Window 7d, null until the window is covered.'}
+      - {name: distinct_customer_count_7d, logicalType: integer, physicalType: BIGINT, description: 'Distinct customers over eligible attempts. Window 7d, null until the window is covered.'}
+      - {name: attempt_count_30d, logicalType: integer, physicalType: BIGINT, description: 'Eligible attempts in the window. Window 30d, null until the window is covered.'}
+      - {name: amount_sum_minor_30d, logicalType: integer, physicalType: BIGINT, description: 'Sum of amount_minor over eligible attempts. Window 30d, null until the window is covered.'}
+      - {name: decided_count_30d, logicalType: integer, physicalType: BIGINT, description: 'Eligible attempts succeeded or declined before the anchor. Window 30d, null until the window is covered.'}
+      - {name: declined_count_30d, logicalType: integer, physicalType: BIGINT, description: 'Eligible attempts declined before the anchor. Window 30d, null until the window is covered.'}
+      - {name: risk_declined_count_30d, logicalType: integer, physicalType: BIGINT, description: 'Eligible attempts declined by the risk policy before the anchor. Window 30d, null until the window is covered.'}
+      - {name: decline_rate_30d, logicalType: number, physicalType: DOUBLE, description: 'declined_count / decided_count; null when decided_count is 0. Window 30d, null until the window is covered.'}
+      - {name: distinct_merchant_count_30d, logicalType: integer, physicalType: BIGINT, description: 'Distinct merchants over eligible attempts. Window 30d, null until the window is covered.'}
+      - {name: distinct_customer_count_30d, logicalType: integer, physicalType: BIGINT, description: 'Distinct customers over eligible attempts. Window 30d, null until the window is covered.'}
+    quality:
+      - id: gold_feat_unique_anchor
+        type: sql
+        description: Each payment method has at most one row per anchor.
+        query: |
+          SELECT count(*) FROM (
+            SELECT sipHash128(integration_id, payment_method_fingerprint, event_timestamp) AS k FROM {object}
+            GROUP BY k HAVING count(*) > 1
+          ) AS duplicates
+        mustBe: 0
+      - id: gold_feat_anchor_time
+        type: sql
+        description: Anchors are UTC midnights at or before the row's created time.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE event_timestamp != toStartOfDay(event_timestamp) OR created < event_timestamp
+        mustBe: 0
+      - id: gold_feat_counts
+        type: sql
+        description: Counts are nonnegative, decided attempts never exceed attempts, and declines never exceed decided attempts.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE attempt_count_7d < 0
+            OR amount_sum_minor_7d < 0
+            OR decided_count_7d < 0
+            OR declined_count_7d < 0
+            OR risk_declined_count_7d < 0
+            OR distinct_merchant_count_7d < 0
+            OR distinct_customer_count_7d < 0
+            OR attempt_count_30d < 0
+            OR amount_sum_minor_30d < 0
+            OR decided_count_30d < 0
+            OR declined_count_30d < 0
+            OR risk_declined_count_30d < 0
+            OR distinct_merchant_count_30d < 0
+            OR distinct_customer_count_30d < 0
+            OR decided_count_7d > attempt_count_7d OR declined_count_7d > decided_count_7d OR risk_declined_count_7d > declined_count_7d
+            OR decided_count_30d > attempt_count_30d OR declined_count_30d > decided_count_30d OR risk_declined_count_30d > declined_count_30d
+        mustBe: 0
+      - id: gold_feat_rates
+        type: sql
+        description: Each decline rate lies in [0, 1] and is null exactly when its denominator is zero or unknown.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE (decline_rate_7d IS NULL) != (coalesce(decided_count_7d, 0) = 0) OR decline_rate_7d < 0 OR decline_rate_7d > 1
+            OR (decline_rate_30d IS NULL) != (coalesce(decided_count_30d, 0) = 0) OR decline_rate_30d < 0 OR decline_rate_30d > 1
+        mustBe: 0
+      - id: gold_feat_coverage
+        type: sql
+        description: A window's columns are null together, and the 7-day window is covered before the 30-day window.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE (attempt_count_7d IS NULL) != (amount_sum_minor_7d IS NULL)
+            OR (attempt_count_7d IS NULL) != (decided_count_7d IS NULL)
+            OR (attempt_count_7d IS NULL) != (declined_count_7d IS NULL)
+            OR (attempt_count_7d IS NULL) != (risk_declined_count_7d IS NULL)
+            OR (attempt_count_7d IS NULL) != (distinct_merchant_count_7d IS NULL)
+            OR (attempt_count_7d IS NULL) != (distinct_customer_count_7d IS NULL)
+            OR (attempt_count_30d IS NULL) != (amount_sum_minor_30d IS NULL)
+            OR (attempt_count_30d IS NULL) != (decided_count_30d IS NULL)
+            OR (attempt_count_30d IS NULL) != (declined_count_30d IS NULL)
+            OR (attempt_count_30d IS NULL) != (risk_declined_count_30d IS NULL)
+            OR (attempt_count_30d IS NULL) != (distinct_merchant_count_30d IS NULL)
+            OR (attempt_count_30d IS NULL) != (distinct_customer_count_30d IS NULL)
+            OR (attempt_count_7d IS NULL AND attempt_count_30d IS NOT NULL)
+        mustBe: 0
+      - id: gold_feat_change_points
+        type: sql
+        description: No row repeats the values of the payment method's previous row.
+        query: |
+          SELECT count(*) FROM (
+            SELECT
+              toString(tuple(attempt_count_7d, amount_sum_minor_7d, decided_count_7d, declined_count_7d, risk_declined_count_7d, decline_rate_7d, distinct_merchant_count_7d, distinct_customer_count_7d, attempt_count_30d, amount_sum_minor_30d, decided_count_30d, declined_count_30d, risk_declined_count_30d, decline_rate_30d, distinct_merchant_count_30d, distinct_customer_count_30d)) AS v,
+              lagInFrame(toString(tuple(attempt_count_7d, amount_sum_minor_7d, decided_count_7d, declined_count_7d, risk_declined_count_7d, decline_rate_7d, distinct_merchant_count_7d, distinct_customer_count_7d, attempt_count_30d, amount_sum_minor_30d, decided_count_30d, declined_count_30d, risk_declined_count_30d, decline_rate_30d, distinct_merchant_count_30d, distinct_customer_count_30d))) OVER (
+                PARTITION BY integration_id, payment_method_fingerprint ORDER BY event_timestamp
+                ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS previous,
+              row_number() OVER (PARTITION BY integration_id, payment_method_fingerprint ORDER BY event_timestamp) AS position
+            FROM {object}
+          ) AS ordered
+          WHERE position > 1 AND v = previous
+        mustBe: 0

@@ -13,10 +13,11 @@ The active plan is the OpenSpec change [`rebuild-generation-to-silver`](../../op
 | Online generator | Late arrivals and streaming duplicates | [Online data](../data/online.md) | Done; see [evidence](../data/online.md#evidence) |
 | Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline data](../data/offline.md) | In progress |
 | Flink jobs | Baseline, late arrivals, duplicates, windows, dead-letter topic; output ends at the feature journal topic | [Online data](../data/online.md) | Done except a Flink UI metrics-panel capture; see [evidence](../data/online.md#evidence) |
-| Storage | Lakehouse compaction, partitioning, Z-order; ClickHouse warehouse indexing (`ORDER BY`, skip indexes) | [Storage](../data/storage.md) | Planned |
-| Orchestration | DP1 (raw → Bronze), DP2 (Bronze → Silver/Gold), DP3 (offline features), each with ingest and validate stages | [Orchestration and governance](../data/orchestration-governance.md) | DP1/DP2 in progress; DP3 planned |
+| Storage | Lakehouse compaction, partitioning, Z-order; ClickHouse warehouse indexing (`ORDER BY`, skip indexes) | [Storage](../data/storage.md) | In progress; marts and benchmark implemented, v19 evidence pending |
+| Orchestration | DP1 (raw → Bronze), DP2 (Bronze → Silver/Gold), DP3 (offline features), each with ingest and validate stages | [Orchestration and governance](../data/orchestration-governance.md) | DP1/DP2 in progress; DP3 implemented, runs pending |
+| Incremental curation | A `mode=historical\|incremental` toggle for DP2 and DP3. DP2 recomputes only payments named by Bronze rows appended since its last run and publishes its changes as Iceberg change data; DP3 reads the net Silver changelog, recomputes only affected customers and cards and replaces affected mart days; CI checks incremental output against historical mode | [Offline data](../data/offline.md) | DP2 done (`a753980`); DP3 implemented, prod incremental run pending |
 | Governance | Lineage and validation for DP1–DP3 in the catalog | [Orchestration and governance](../data/orchestration-governance.md) | In progress |
-| Schemas | SCD2 dimensions, `feat_` tables with `event_timestamp`/`created`, naming conventions, relationships | [Offline data](../data/offline.md) | Planned |
+| Schemas | SCD2 dimensions, `feat_` tables with `event_timestamp`/`created`, naming conventions, relationships | [Offline data](../data/offline.md) | In progress; ER export pending |
 
 ## ML platform
 

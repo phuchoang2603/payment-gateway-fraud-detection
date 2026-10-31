@@ -3,7 +3,7 @@ from datetime import date
 from pyspark.sql import functions as F
 
 from batch import maintenance
-from batch.schema import EVENT_COLUMNS, business_schema, ddl
+from batch.bronze.schema import EVENT_COLUMNS, business_schema, ddl
 from tests.events import at, created
 
 PARTITIONED = "lake.maintenance_tests.events_partitioned"

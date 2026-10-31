@@ -120,12 +120,34 @@ maintenance:
   reportRoot: s3://platform-dev/runs/payment-gateway/maintenance
   activeDeadlineSeconds: 7200
   schedule: "43 3 * * *"
+dp3:
+  enabled: false
+  profile: dev
+  reportRoot: s3://platform-dev/runs/payment-gateway/dp3
+  activeDeadlineSeconds: 14400
+  # Daily at 04:17 UTC, after the 03:43 maintenance; the CronWorkflow runs incremental mode and is suspended.
+  schedule: "17 4 * * *"
+marts:
+  clickhouseUrl: http://clickhouse.data.svc.cluster.local:8123
+  user: marts
+  # The clickhouse chart's ExternalSecret for the marts user in the same namespace.
+  passwordSecret: clickhouse-marts
+  retentionDays: 180
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+warehouseBenchmark:
+  enabled: false
+  reportRoot: s3://platform-dev/runs/payment-gateway/warehouse-benchmark
+  activeDeadlineSeconds: 7200
+dashboards:
+  enabled: false
+  folder: Payments analytics
 catalog:
   icebergRestUri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
   icebergWarehouse: lakehouse
   icebergClientId: platform
   icebergOauth2Uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
-  clickhouseDatabase: lakehouse
   openmetadataUrl: http://openmetadata.data.svc.cluster.local:8585/api
   kafkaClient: data-pipelines
   icebergSecret:
@@ -156,16 +178,23 @@ catalog:
             username: openmetadata
             password: ${CLICKHOUSE_PASSWORD}
             hostPort: clickhouse.data.svc.cluster.local:8123
-            databaseSchema: lakehouse
             https: false
         sourceConfig:
           config:
             type: DatabaseMetadata
+            schemaFilterPattern:
+              includes:
+              - ^lakehouse$
+              - ^marts$
             tableFilterPattern:
               includes:
               - ^bronze\.
               - ^silver\.
               - ^gold\.
+              - ^fact_
+              - ^build_info$
+              excludes:
+              - __staging$
             markDeletedTables: false
             includeStoredProcedures: false
             overrideMetadata: false

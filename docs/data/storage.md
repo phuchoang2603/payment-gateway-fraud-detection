@@ -1,6 +1,6 @@
 # Storage
 
-Three storage roles: immutable source files in object storage, an Iceberg lakehouse for Bronze and Silver (and later Gold and feature tables), and ClickHouse as the SQL warehouse over the lakehouse.
+Three storage roles: immutable source files in object storage, an Iceberg lakehouse for Bronze, Silver and gold feature tables, and ClickHouse as the SQL warehouse over the lakehouse with native marts.
 
 ## Object storage
 
@@ -66,4 +66,20 @@ The full-history amount/context rule joins `attempt_started` to `payment_created
 | MergeTree keys and materialized aggregates | Relevant to native Gold tables; not indexes on Iceberg files |
 | Smaller Parquet row groups | Unmeasured; keep existing layout until a controlled comparison |
 
-**Planned:** warehouse indexing, not part of PR #102: Gold marts as ClickHouse MergeTree tables with `ORDER BY` keys and skip indexes chosen for the fixed analytical queries, measured before and after on the same data.
+### Warehouse indexing
+
+DP3 builds two native MergeTree marts in the ClickHouse `marts` database ([DDL](../../src/data-pipeline/batch/batch/gold/sql/marts)); every structure serves a named fixed query.
+
+| Structure | Choice | Query it serves |
+|---|---|---|
+| `fact_payment_attempt` partition | `toDate(started_at)` | Q0 time ranges prune whole days; the day-granular TTL drops whole partitions |
+| `fact_payment_attempt` primary key | `(integration_id, toDate(started_at), merchant_id, started_at)` | Q0 network-wide time ranges and Q1 one merchant's days; a plain `started_at` range prunes through the monotonic `toDate` |
+| Bloom filters, `GRANULARITY 4` | `customer_id`, `payment_method_fingerprint` | Q2 one customer's 30 days, Q3 one card across customers |
+| `minmax`, `set(8)` | `risk_score`, `outcome` | Q4 approved high-risk attempts and declines by outcome |
+| `fact_merchant_day` | monthly partitions, `(integration_id, day, merchant_id)` | Q5 daily KPIs without scanning attempts |
+
+Time comes first because almost every dashboard and tool query has a time range; a merchant-first key would make network-wide time queries scan every partition. The hot merchant holds about half of all attempts, so Q1 is reported for it and for a median merchant. No projections: a customer-ordered copy would double storage on the 30 GiB volume shared with Langfuse.
+
+Retention is a wall-clock `TTL` of 180 days with `ttl_only_drop_parts`, matching the rolling window each build inserts; `marts.build_info` records the window, the rebuilt days and the Silver snapshots. Builds join with external sort-merge and spill, the settings the v19 checks needed above.
+
+**Evidence method.** The on-demand `warehouse-benchmark` workflow runs Q0–Q4 against raw Iceberg through `lakehouse` (A), an unsorted MergeTree copy with no skip indexes (B), the indexed mart (C) and the mart with `use_skip_indexes = 0` (C′). For each it records `EXPLAIN indexes = 1`, one cold run after cache drops, the median of five warm runs, and read rows, bytes, selected marks and peak memory from `system.query_log`. Every variant must return the indexed mart's rows. Results pending: the prod v19 report.

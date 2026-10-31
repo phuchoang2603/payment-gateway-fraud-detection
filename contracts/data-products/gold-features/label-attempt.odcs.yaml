@@ -1,0 +1,78 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:gold-label-attempt
+name: Gold attempt labels
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: The earliest linked label of each attempt per label source, keyed for point-in-time joins with the feature tables.
+  usage: Filter label_available_at <= the training cutoff, then use the rows as the Feast entity dataframe on the customer or payment-method key and event_timestamp. Simulation truth and chargebacks are separate rows; a missing chargeback is not a negative.
+  limitations: Synthetic data only. Simulation truth is an oracle that production would not have; chargebacks arrive 7 to 21 days after success.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, gold, labels]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: lakehouse
+    description: Iceberg table label_attempt in schema gold, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.
+schema:
+  - name: label_attempt
+    physicalName: gold.label_attempt
+    logicalType: object
+    physicalType: table
+    description: One row per (integration_id, payment_id, attempt_id, label_source).
+    dataGranularityDescription: One label source for one payment attempt.
+    customProperties:
+      - property: partitioning
+        value: days(event_timestamp)
+    properties:
+      - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Integration namespace of the payment.'}
+      - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Payment aggregate identity.'}
+      - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Attempt identity within the payment.'}
+      - {name: customer_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Customer of the attempt, the customer feature join key.'}
+      - {name: payment_method_fingerprint, logicalType: string, physicalType: VARCHAR, required: true, description: 'Payment method of the attempt, the payment-method feature join key.'}
+      - {name: event_timestamp, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: 'Attempt time, coalesce(attempted_at, started_at), as in the feature definition.'}
+      - {name: label, logicalType: boolean, physicalType: BOOLEAN, required: true, description: 'is_fraud of the earliest observation from this source.'}
+      - {name: label_source, logicalType: string, physicalType: VARCHAR, required: true, description: 'LABEL_SOURCE_SIMULATION_TRUTH or LABEL_SOURCE_CHARGEBACK.'}
+      - {name: label_available_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: 'Earliest time the label may be used.'}
+      - {name: occurred_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: 'Time of the labeled business occurrence.'}
+    quality:
+      - id: gold_label_unique
+        type: sql
+        description: Each attempt has at most one row per label source.
+        query: |
+          SELECT count(*) FROM (
+            SELECT sipHash128(integration_id, payment_id, attempt_id, label_source) AS k FROM {object}
+            GROUP BY k HAVING count(*) > 1
+          ) AS duplicates
+        mustBe: 0
+      - id: gold_label_values
+        type: sql
+        description: Label sources are known and no label is available before it occurred.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE label_source NOT IN ('LABEL_SOURCE_SIMULATION_TRUTH', 'LABEL_SOURCE_CHARGEBACK')
+            OR label_available_at < occurred_at
+            OR label IS NULL
+        mustBe: 0
+      - id: gold_label_attempt_exists
+        type: sql
+        description: Every labelled attempt exists in silver.attempts.
+        query: |
+          SELECT count(*) FROM {object} AS l
+          LEFT JOIN (
+            SELECT integration_id, payment_id, attempt_id, 1 AS present FROM lakehouse.`silver.attempts`
+          ) AS a USING (integration_id, payment_id, attempt_id)
+          WHERE coalesce(a.present, 0) = 0
+        mustBe: 0

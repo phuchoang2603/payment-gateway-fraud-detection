@@ -82,6 +82,15 @@ maintenance:
   enabled: true
   profile: large
   reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/maintenance
+dp3:
+  enabled: true
+  profile: large
+  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp3
+warehouseBenchmark:
+  enabled: true
+  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/warehouse-benchmark
+dashboards:
+  enabled: true
 sparkEventLogDir: s3a://platform-prod-142737101504-us-east-1/runs/payment-gateway/spark-events/
 catalog:
   connectors:
