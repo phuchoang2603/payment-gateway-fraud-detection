@@ -2,7 +2,7 @@
 
 The agents answer from a small knowledge base about the payment gateway: decline codes, risk policy, the payment lifecycle, the checkout API, fraud features and support guidance. A pipeline turns documents into embedded chunks in a feature store, and one service serves them as a Web API (by id) and as MCP tools (search and read). It never reads payment data.
 
-- Code: [`src/llm`](../../src/llm), a uv workspace: [`common`](../../src/llm/common) (Feast store, gateway embedding client), [`rag_pipeline`](../../src/llm/rag_pipeline) (corpus, chunking, validation, steps, OpenMetadata), [`rag_serving`](../../src/llm/rag_serving) (FastAPI + MCP) and [`decision`](../../src/llm/decision) (laya routing and screening).
+- Code: [`src/llm`](../../src/llm), a uv workspace: [`common`](../../src/llm/common) (Feast store, gateway embedding client), [`rag_pipeline`](../../src/llm/rag_pipeline) (corpus, chunking, validation, steps, OpenMetadata), [`rag_serving`](../../src/llm/rag_serving) (FastAPI + MCP) and [`decision`](../../src/llm/decision) (laya request screening).
 - Deployment: [`infra/charts/rag-pipeline`](../../infra/charts/rag-pipeline), application `rag-pipeline` (workflow in `data`, store and API in `llm`). Images `rag-pipeline` and `rag-serving`.
 - Contract: [`contracts/data-products/knowledge-base`](../../contracts/data-products/knowledge-base).
 

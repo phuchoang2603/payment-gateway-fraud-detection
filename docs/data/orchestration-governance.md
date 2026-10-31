@@ -84,7 +84,7 @@ On prod the `grafana` user's profile allows `max_execution_time` up to 65 second
 
 ### RAG knowledge workflow and AI assets
 
-The RAG pipeline's `rag-knowledge` workflow also runs in `data`, from the [`rag-pipeline` chart](../../infra/charts/rag-pipeline). It is governed the same way: the knowledge-base contract's checks run through the shared checks image, and its exit handler publishes the run status and the lineage from the corpus container to `knowledge.chunks`. The LLM platform's catalog Job registers the AI assets (LLM service, models, MCP servers with their tools, agents linked to their models, tools and knowledge table). See [RAG](../llm/rag.md#governance) and [LLM observability](../llm/observability.md#ai-assets-in-openmetadata).
+The RAG pipeline's `rag-knowledge` workflow also runs in `data`, from the [`rag-pipeline` chart](../../infra/charts/rag-pipeline). It is governed the same way: the knowledge-base contract's checks run through the shared checks image, and its exit handler publishes the run status and the lineage from the corpus container to `knowledge.chunks`. See [RAG](../llm/rag.md#governance).
 
 ## Schema registry
 
