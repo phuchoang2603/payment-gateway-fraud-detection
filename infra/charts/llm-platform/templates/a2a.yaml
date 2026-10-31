@@ -19,18 +19,13 @@ spec:
         key: {{ $signing.remoteKey }}
 {{- $routes := list }}
 {{- range $agent := $agents.list }}
-{{- $arms := list (dict "name" $agent.name "weight" (sub 100 (($agent.abTest).weight | default 0))) }}
-{{- with $agent.abTest }}
-{{- $arms = append $arms (dict "name" .variant "weight" .weight) }}
-{{- end }}
-{{- range $arm := $arms }}
 ---
 # kagent serves every Agent's public A2A endpoint from its controller. As an A2A backend the gateway rewrites the
 # agent card's URLs to the address the caller used.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
-  name: a2a-{{ $arm.name }}
+  name: a2a-{{ $agent.name }}
 spec:
   a2a:
     host: {{ $controller.host }}
@@ -44,7 +39,6 @@ spec:
         ttl: {{ $signing.ttl }}
         claims:
           {{- toYaml $signing.claims | nindent 10 }}
-{{- end }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -58,18 +52,15 @@ spec:
     - matches:
         - path: {type: PathPrefix, value: /a2a/{{ $agent.name }}}
       backendRefs:
-        {{- range $arm := $arms }}
         - group: agentgateway.dev
           kind: AgentgatewayBackend
-          name: a2a-{{ $arm.name }}
-          weight: {{ $arm.weight }}
-          filters:
-            - type: URLRewrite
-              urlRewrite:
-                path:
-                  type: ReplacePrefixMatch
-                  replacePrefixMatch: /agents/{{ $agents.namespace }}/{{ $arm.name }}
-        {{- end }}
+          name: a2a-{{ $agent.name }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /agents/{{ $agents.namespace }}/{{ $agent.name }}
       timeouts:
         request: 600s
 {{- $routes = append $routes (printf "a2a-%s" $agent.name) }}

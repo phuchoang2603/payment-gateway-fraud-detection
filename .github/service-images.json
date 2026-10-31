@@ -190,6 +190,18 @@
         "src/llm/common/pyproject.toml",
         "src/llm/decision"
       ]
+    },
+    {
+      "service": "agent-runtime",
+      "image-suffix": "/agent-runtime",
+      "context": ".",
+      "dockerfile": "infra/docker/agent-runtime.Dockerfile",
+      "paths": [
+        "infra/docker/agent-runtime.Dockerfile",
+        "src/llm/pyproject.toml",
+        "src/llm/uv.lock",
+        "src/llm/agent_runtime"
+      ]
     }
   ]
 }

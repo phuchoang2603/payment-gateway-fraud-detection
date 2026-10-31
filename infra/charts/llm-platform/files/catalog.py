@@ -1,7 +1,7 @@
 """Publish one release's catalog from the chart values and files in Git.
 
 - agentregistry: agents and MCP servers.
-- Langfuse: each agent's system prompt, as a new production version only when the text changed.
+- Langfuse: each agent's system prompt (and its A/B variant) when Langfuse does not have it yet.
 """
 
 import base64
@@ -53,35 +53,55 @@ def publish_registry() -> None:
         sys.exit(1)
 
 
-def publish_prompts(agents: list[dict]) -> None:
+def seed_prompts(agents: list[dict]) -> None:
+    """Create each agent prompt that Langfuse does not have yet. Langfuse is the source; an existing prompt is
+    never changed, so edits and A/B tests made there are kept."""
     base = os.environ["LANGFUSE_URL"].rstrip("/")
     keys = f"{os.environ['LANGFUSE_PUBLIC_KEY']}:{os.environ['LANGFUSE_SECRET_KEY']}"
     headers = {"Authorization": "Basic " + base64.b64encode(keys.encode()).decode()}
     for agent in agents:
         name = f"{agent['name']}-system-prompt"
-        text = (CATALOG / f"prompt-{agent['name']}.md").read_text()
-        url = (
-            f"{base}/api/public/v2/prompts/{urllib.parse.quote(name)}?label=production"
+        status, current = call(
+            "GET",
+            f"{base}/api/public/v2/prompts/{urllib.parse.quote(name)}",
+            headers=headers,
         )
-        status, current = call("GET", url, headers=headers)
-        if status == 200 and current["prompt"] == text:
-            print(f"langfuse: {name} unchanged at version {current['version']}")
+        if status == 200:
+            print(
+                f"langfuse: {name} exists at version {current['version']}; left as is"
+            )
             continue
-        if status not in (200, 404):
+        if status != 404:
             sys.exit(f"langfuse: reading {name} failed with HTTP {status}: {current}")
-        body = {
-            "name": name,
-            "type": "text",
-            "prompt": text,
-            "labels": ["production"],
-            "tags": [agent["name"]],
-            "commitMessage": f"{agent['name']} {agent['version']} from Git",
-        }
-        status, created = call("POST", f"{base}/api/public/v2/prompts", body, headers)
-        required(status, created, f"langfuse: publishing {name}")
-        print(f"langfuse: {name} published as version {created['version']}")
+        text = (CATALOG / f"prompt-{agent['name']}.md").read_text()
+        test = agent.get("abTest")
+        versions = [
+            (
+                ["production"],
+                {"abTest": {"label": test["label"], "share": test["share"]}}
+                if test
+                else {},
+            )
+        ]
+        if test:
+            versions.append(([test["label"]], test.get("config", {})))
+        for labels, config in versions:
+            body = {
+                "name": name,
+                "type": "text",
+                "prompt": text,
+                "config": config,
+                "labels": labels,
+                "tags": [agent["name"]],
+                "commitMessage": f"{agent['name']} {agent['version']} seed from Git",
+            }
+            status, created = call(
+                "POST", f"{base}/api/public/v2/prompts", body, headers
+            )
+            required(status, created, f"langfuse: seeding {name} {labels}")
+            print(f"langfuse: {name} seeded as version {created['version']} {labels}")
 
 
 if __name__ == "__main__":
     publish_registry()
-    publish_prompts(json.loads((CATALOG / "agents.json").read_text()))
+    seed_prompts(json.loads((CATALOG / "agents.json").read_text()))

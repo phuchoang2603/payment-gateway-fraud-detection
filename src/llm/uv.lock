@@ -5,14 +5,133 @@ resolution-markers = [
     "sys_platform != 'darwin'",
     "sys_platform == 'darwin'",
 ]
+conflicts = [[
+    { package = "fraud-agent-runtime" },
+    { package = "fraud-rag-common" },
+], [
+    { package = "fraud-agent-runtime" },
+    { package = "fraud-rag-pipeline" },
+], [
+    { package = "fraud-agent-runtime" },
+    { package = "fraud-rag-serving" },
+]]
 
 [manifest]
 members = [
+    "fraud-agent-runtime",
     "fraud-decision",
     "fraud-llm",
     "fraud-rag-common",
     "fraud-rag-pipeline",
     "fraud-rag-serving",
+]
+
+[[package]]
+name = "a2a-sdk"
+version = "1.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "culsans", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-api-core", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "googleapis-common-protos", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "httpx", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "json-rpc", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "packaging", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b8/4d/975373c77f1c390f808e5079495db28982a3118e9bee813a2dcae10e878c/a2a_sdk-1.3.0.tar.gz", hash = "sha256:73694717de50f36aaebd57b8fc6636ecaa825eb0d4437984fa2cd17f703a6808", size = 439840, upload-time = "2026-10-27T10:07:04.845Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a8/c8/262490a338e07b269ed80f9b26d101532f7af4585238a9973a5f223ff3f4/a2a_sdk-1.3.0-py3-none-any.whl", hash = "sha256:b94a73b5dc7ff1afe5f11d324480f83386a64d02b8a6b719baf013595284cc6c", size = 282393, upload-time = "2026-10-27T10:07:02.914Z" },
+]
+
+[package.optional-dependencies]
+http-server = [
+    { name = "sse-starlette", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "starlette", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+
+[[package]]
+name = "agentsts-adk"
+version = "1.0.0rc1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "agentsts-core", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "aiofiles", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "anyio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-adk", extra = ["a2a"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-auth", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-genai", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "httpx", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pyjwt", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/c6/0d33a0ba0e344fc237908d6d94af513db0bc1c759d678b16b74722ad7e9c/agentsts_adk-1.0.0rc1.tar.gz", hash = "sha256:341f974c4852ffd386d67eb469baa1ca4fa1b900e46ea84cc2bbdd049abfb87e", size = 24157, upload-time = "2026-10-30T18:36:08.187Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/e9/8717f0505dac70ac1ec3811b649ef4ee5b552f9d5bdac44a6199c2406c5c/agentsts_adk-1.0.0rc1-py3-none-any.whl", hash = "sha256:c6e9fbcd413f5458bbb64412bec9648a49ba7d8c4659fef8722572b36466a3ba", size = 9523, upload-time = "2026-10-30T18:36:00.274Z" },
+]
+
+[[package]]
+name = "agentsts-core"
+version = "1.0.0rc1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "httpx", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pyjwt", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/31/49/55a2818dfa733d81848ad111dbe8e5eabc2d7dfc412f600a67b1396ca9c1/agentsts_core-1.0.0rc1.tar.gz", hash = "sha256:14da2a594878d39479d68c310e5d113bb6ac1d3fcfdc8eb8bf7a5f93565b9fb9", size = 10343, upload-time = "2026-10-30T18:36:08.803Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/60/d182b3d225b275a45ee1563f408804234f8a0b9746017fd173a771f77a95/agentsts_core-1.0.0rc1-py3-none-any.whl", hash = "sha256:ed86c2f42c297f3595a9e5bd3869b4c6c224f06c3eac206365e76f003bcd3aec", size = 9574, upload-time = "2026-10-30T18:36:01.316Z" },
+]
+
+[[package]]
+name = "aiofiles"
+version = "25.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/41/c3/534eac40372d8ee36ef40df62ec129bee4fdb5ad9706e58a29be53b2c970/aiofiles-25.1.0.tar.gz", hash = "sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2", size = 46354, upload-time = "2025-10-09T20:51:04.358Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bc/8a/340a1555ae33d7354dbca4faa54948d76d89a27ceef032c8c3bc661d003e/aiofiles-25.1.0-py3-none-any.whl", hash = "sha256:abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695", size = 14668, upload-time = "2025-10-09T20:51:03.174Z" },
+]
+
+[[package]]
+name = "aiologic"
+version = "0.17.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "sniffio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "wrapt", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f1/7a/d51f2fde1e8ae8a83431f8e97b7a71e9358cdb1d4d2ce6be387fa44d68de/aiologic-0.17.1.tar.gz", hash = "sha256:2e1b93b9e88ced318c2a63ad7b382688f40cbfe40e3d42258d49dc9c5aea179d", size = 252354, upload-time = "2026-06-27T20:41:33.25Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5b/d3/2d310b1b839014034dba0cba685e492df8a5c7ad32c19cab7e979eed6554/aiologic-0.17.1-py3-none-any.whl", hash = "sha256:c66b319830fedb7ca3d2b2125fa6f5b653f89418c2a27ea76f259ec5f00943c0", size = 161331, upload-time = "2026-06-27T20:41:31.877Z" },
+]
+
+[[package]]
+name = "aiosqlite"
+version = "0.22.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/8a/64761f4005f17809769d23e518d915db74e6310474e733e3593cfc854ef1/aiosqlite-0.22.1.tar.gz", hash = "sha256:043e0bd78d32888c0a9ca90fc788b38796843360c855a7262a532813133a0650", size = 14821, upload-time = "2025-12-23T19:25:43.997Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/b7/e3bf5133d697a08128598c8d0abc5e16377b51465a33756de24fa7dee953/aiosqlite-0.22.1-py3-none-any.whl", hash = "sha256:21c002eb13823fad740196c5a2e9d8e62f6243bd9e7e4a1f87fb5e44ecb4fceb", size = 17405, upload-time = "2025-12-23T19:25:42.139Z" },
+]
+
+[[package]]
+name = "alembic"
+version = "1.20.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mako", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "sqlalchemy", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/93/1c/00909e0fbebad2121d916fdcab044cae988146680e9ee4387ba25fef8747/alembic-1.20.1.tar.gz", hash = "sha256:83490def1f723413db5096591f7609ac52544805be93849170088ed04f5a2e0b", size = 2103576, upload-time = "2026-10-22T03:24:35.93Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/11/3c/8740f5b4e1bd57333e4f84265b9b6363da4f7cf70f5622dd1e2fde7a0bd5/alembic-1.20.1-py3-none-any.whl", hash = "sha256:9970712cfb81ea26c8658d378aaa5b8f6ff9146e5bb111d70497c164016cf598", size = 270355, upload-time = "2026-10-22T03:24:37.667Z" },
 ]
 
 [[package]]
@@ -34,6 +153,30 @@ wheels = [
 ]
 
 [[package]]
+name = "anthropic"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "docstring-parser", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "httpx2", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "jiter", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "sniffio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3e/ba/4c91947e0d0062d66d371db371597287153f7685fbed512d3294d0cde3c7/anthropic-2.3.0.tar.gz", hash = "sha256:edfdea1e3fa7b3ce25df1511953408b2f03bfa61eb6f6268f766101a9e18ad53", size = 1869656, upload-time = "2026-10-23T23:18:47.649Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/29/eb3558ab6bf252a07ac41c76ac5b0ea24a0aa0c23f87a40aaf31a5f8dba4/anthropic-2.3.0-py3-none-any.whl", hash = "sha256:aa6a3984f9276f307933d42dc6f58b6efc821a5ecafbc8d1bb5993a066767622", size = 2216980, upload-time = "2026-10-23T23:18:45.779Z" },
+]
+
+[package.optional-dependencies]
+vertex = [
+    { name = "google-auth", extra = ["requests"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+
+[[package]]
 name = "anyio"
 version = "4.15.1"
 source = { registry = "https://pypi.org/simple" }
@@ -44,6 +187,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a9/d2/f4d173e22df740bc37b1db102b386ba719b66e95b0f0d751f556b387e6d2/anyio-4.15.1.tar.gz", hash = "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94", size = 276966, upload-time = "2026-09-05T10:42:39.44Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/12/b8/4bd346e22b28902df4d651910f5242c28d84e4a5c2435ca5c3f797ed7e2e/anyio-4.15.1-py3-none-any.whl", hash = "sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101", size = 132079, upload-time = "2026-09-05T10:42:37.923Z" },
+]
+
+[[package]]
+name = "asgiref"
+version = "3.13.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6b/90/f5fce14e95fccf53b58e8e2c47cd84d40d105d64073ae1ac75166db150e0/asgiref-3.13.0.tar.gz", hash = "sha256:034cc8cbf72d00553b4be256703ac545120b4e50af13b49dec99da899aeeecb4", size = 52941, upload-time = "2026-10-23T08:13:14.715Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/b0/ec211e1f7966247cb6469158d856bac9aa4c2fe13621bd6a352e4f850453/asgiref-3.13.0-py3-none-any.whl", hash = "sha256:f9596a2434512686473d50f96ff6207fbba49ae1a785dfac614df4aeb085674d", size = 27593, upload-time = "2026-10-23T08:13:13.394Z" },
 ]
 
 [[package]]
@@ -97,6 +249,57 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/9a/8e/82a0fe20a541c03148528be8cac2408564a6c9a0cc7e9171802bc1d26985/attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32", size = 952055, upload-time = "2026-03-19T14:22:25.026Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309", size = 67548, upload-time = "2026-03-19T14:22:23.645Z" },
+]
+
+[[package]]
+name = "authlib"
+version = "1.9.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "joserfc", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c9/dc/087c08741a98d234c9b98beef8a28d3c309f814d14b6156422c5815bf6d6/authlib-1.9.1.tar.gz", hash = "sha256:5c7d9848f47cac340f060f76ae0bc09b59f5c8e89cc1bb032d4370a0c55b5974", size = 182700, upload-time = "2026-10-14T14:17:52.307Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/39/44/a46089266de32a0d809023b6bf31b80a1f26a46954446a7ce695a565cbea/authlib-1.9.1-py2.py3-none-any.whl", hash = "sha256:8b9be8b1e5174dcbf5520e984f1a22dc2edae5b6e40a61d4cedbf86b97e9e69b", size = 266042, upload-time = "2026-10-14T14:17:50.695Z" },
+]
+
+[[package]]
+name = "azure-core"
+version = "1.41.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a6/f3/b416179e408990df5db0d516283022dde0f5d0111d98c1a848e41853e81c/azure_core-1.41.0.tar.gz", hash = "sha256:f46ff5dfcd230f25cf1c19e8a34b8dc08a337b2503e268bb600a16c00db8ad5a", size = 381042, upload-time = "2026-05-07T23:30:54.302Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5b/db/325c6d7312d2200251c52323878281045aaffcb5586612296484e4280eaa/azure_core-1.41.0-py3-none-any.whl", hash = "sha256:522b4011e8180b1a3dcd2024396a4e7fe9ac37fb8597db47163d230b5efe892d", size = 220920, upload-time = "2026-05-07T23:30:56.357Z" },
+]
+
+[[package]]
+name = "azure-identity"
+version = "1.27.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "azure-core", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "cryptography", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "msal", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "msal-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cf/33/0b881d0093d64c965bb20fcf71b806c7097881b544a2a55d519cdcf3bab9/azure_identity-1.27.0.tar.gz", hash = "sha256:6a4c50e25e8e9a47b324a95ad024897e56cb3c6241e0094e93b126a2bf71edc5", size = 331360, upload-time = "2026-10-26T21:17:39.095Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/29/1e/6a2fe486576f41884a120ef7b2c3774f334f9143402fb73650c67db94ddd/azure_identity-1.27.0-py3-none-any.whl", hash = "sha256:92fd2a93c0d2f777dac6c04e5fd7d5734f6643582b983544ef66b4575844e46d", size = 203474, upload-time = "2026-10-26T21:17:40.92Z" },
+]
+
+[[package]]
+name = "backoff"
+version = "2.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/d7/5bbeb12c44d7c4f2fb5b56abce497eb5ed9f34d85701de869acedd602619/backoff-2.2.1.tar.gz", hash = "sha256:03f829f5bb1923180821643f8753b0502c3b682293992485b0eef2807afa5cba", size = 17001, upload-time = "2022-10-05T19:19:32.061Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/73/b6e24bd22e6720ca8ee9a85a0c4a2971af8497d8f3193fa05390cbd46e09/backoff-2.2.1-py3-none-any.whl", hash = "sha256:63579f9a0628e06278f7e47b7d7d5b6ce20dc65c5e96a6f3ca99a6adca0396e8", size = 15148, upload-time = "2022-10-05T19:19:30.546Z" },
 ]
 
 [[package]]
@@ -159,7 +362,7 @@ name = "cffi"
 version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycparser", marker = "implementation_name != 'PyPy'" },
+    { name = "pycparser", marker = "implementation_name != 'PyPy' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz", hash = "sha256:dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be", size = 530807, upload-time = "2026-08-03T21:21:18.939Z" }
 wheels = [
@@ -274,7 +477,7 @@ name = "cryptography"
 version = "50.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi", marker = "platform_python_implementation != 'PyPy'" },
+    { name = "cffi", marker = "platform_python_implementation != 'PyPy' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9d/af/182eb91b0df3fe75c4d9f26fe70684569566745f6ba7e5c9c73a862c5252/cryptography-50.0.2.tar.gz", hash = "sha256:7b46165bb56eb4704e2eaaf86f3c940d19154535d9b0ca7d6d590b04060e00d5", size = 880623, upload-time = "2026-09-30T15:30:04.884Z" }
 wheels = [
@@ -320,17 +523,30 @@ wheels = [
 ]
 
 [[package]]
+name = "culsans"
+version = "0.11.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiologic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d9/e3/49afa1bc180e0d28008ec6bcdf82a4072d1c7a41032b5b759b60814ca4b0/culsans-0.11.0.tar.gz", hash = "sha256:0b43d0d05dce6106293d114c86e3fb4bfc63088cfe8ff08ed3fe36891447fe33", size = 107546, upload-time = "2025-12-31T23:15:38.196Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/5d/9fb19fb38f6d6120422064279ea5532e22b84aa2be8831d49607194feda3/culsans-0.11.0-py3-none-any.whl", hash = "sha256:278d118f63fc75b9db11b664b436a1b83cc30d9577127848ba41420e66eb5a47", size = 21811, upload-time = "2025-12-31T23:15:37.189Z" },
+]
+
+[[package]]
 name = "dask"
 version = "2026.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "click" },
-    { name = "cloudpickle" },
-    { name = "fsspec" },
-    { name = "packaging" },
-    { name = "partd" },
-    { name = "pyyaml" },
-    { name = "toolz" },
+    { name = "click", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "cloudpickle", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "fsspec", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "packaging", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "partd", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pyyaml", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "toolz", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/33/a7/6b3c7ac32b642fbbe0821111654e0bd8cfbe88f68560bcf23cc78ab35c71/dask-2026.8.0.tar.gz", hash = "sha256:8a94c37b5de6d869343340dc26c3c3acca7ec48a3abdabe00ea3abb1125884d5", size = 11561752, upload-time = "2026-08-24T19:21:25.906Z" }
 wheels = [
@@ -339,9 +555,9 @@ wheels = [
 
 [package.optional-dependencies]
 dataframe = [
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "pyarrow" },
+    { name = "numpy", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pandas", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pyarrow", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 
 [[package]]
@@ -354,12 +570,31 @@ wheels = [
 ]
 
 [[package]]
+name = "distro"
+version = "1.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/98eea607f65de6527f8a2e8885fc8015d3e6f5775df186e443e0964a11c3/distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed", size = 60722, upload-time = "2023-12-24T09:54:32.31Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2", size = 20277, upload-time = "2023-12-24T09:54:30.421Z" },
+]
+
+[[package]]
+name = "docstring-parser"
+version = "0.18.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/4d/f332313098c1de1b2d2ff91cf2674415cc7cddab2ca1b01ae29774bd5fdf/docstring_parser-0.18.0.tar.gz", hash = "sha256:292510982205c12b1248696f44959db3cdd1740237a968ea1e2e7a900eeb2015", size = 29341, upload-time = "2026-04-14T04:09:19.867Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a7/5f/ed01f9a3cdffbd5a008556fc7b2a08ddb1cc6ace7effa7340604b1d16699/docstring_parser-0.18.0-py3-none-any.whl", hash = "sha256:b3fcbed555c47d8479be0796ef7e19c2670d428d72e96da63f3a40122860374b", size = 22484, upload-time = "2026-04-14T04:09:18.638Z" },
+]
+
+[[package]]
 name = "fastapi"
 version = "0.162.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
-    { name = "opentelemetry-api" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-api", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
     { name = "pydantic" },
     { name = "starlette" },
     { name = "typing-extensions" },
@@ -375,36 +610,36 @@ name = "feast"
 version = "0.67.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "attrs" },
-    { name = "bigtree" },
-    { name = "click" },
-    { name = "colorama" },
-    { name = "dask", extra = ["dataframe"] },
-    { name = "dill" },
-    { name = "fastapi" },
-    { name = "gunicorn", marker = "sys_platform != 'win32'" },
-    { name = "jinja2" },
-    { name = "mmh3" },
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "prometheus-client" },
-    { name = "protobuf" },
-    { name = "psutil" },
-    { name = "pyarrow" },
-    { name = "pydantic" },
-    { name = "pygments" },
-    { name = "pyjwt" },
-    { name = "pyyaml" },
-    { name = "requests" },
-    { name = "sqlalchemy", extra = ["mypy"] },
-    { name = "starlette" },
-    { name = "tabulate" },
-    { name = "tenacity" },
-    { name = "toml" },
-    { name = "tqdm" },
-    { name = "typeguard" },
-    { name = "uvicorn", extra = ["standard"] },
-    { name = "uvicorn-worker" },
+    { name = "attrs", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "bigtree", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "click", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "colorama", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "dask", extra = ["dataframe"], marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "dill", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "fastapi", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "gunicorn", marker = "(sys_platform != 'win32' and extra == 'project-16-fraud-rag-common') or (sys_platform != 'win32' and extra == 'project-17-fraud-rag-serving') or (sys_platform != 'win32' and extra == 'project-18-fraud-rag-pipeline') or (sys_platform != 'win32' and extra != 'project-19-fraud-agent-runtime') or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "jinja2", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "mmh3", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "numpy", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pandas", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "prometheus-client", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "protobuf", version = "7.36.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "psutil", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pyarrow", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pygments", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pyjwt", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pyyaml", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "requests", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "sqlalchemy", extra = ["mypy"], marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "starlette", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "tabulate", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "tenacity", version = "8.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "toml", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "tqdm", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "typeguard", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "uvicorn", extra = ["standard"], marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "uvicorn-worker", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/5a/80/f71800e5669ebdb5329c011a0eeaebff828db92a759e18584e5af28e2ad8/feast-0.67.0.tar.gz", hash = "sha256:46f01aa649550e67b00fdf58f9f6dd3679925d908b9bfcac04e3050d49ff5523", size = 7976957, upload-time = "2026-10-13T13:57:48.113Z" }
 wheels = [
@@ -413,7 +648,7 @@ wheels = [
 
 [package.optional-dependencies]
 postgres = [
-    { name = "psycopg", extra = ["binary", "pool"] },
+    { name = "psycopg", extra = ["binary", "pool"], marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 
 [[package]]
@@ -426,6 +661,39 @@ wheels = [
 ]
 
 [[package]]
+name = "fraud-agent-runtime"
+version = "0.1.0"
+source = { editable = "agent_runtime" }
+dependencies = [
+    { name = "kagent-adk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "kagent-proto", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "langfuse", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "kagent-adk", specifier = "==1.0.0rc1" },
+    { name = "kagent-proto", git = "https://github.com/kagent-dev/kagent?subdirectory=python%2Fpackages%2Fkagent-proto&tag=v1.0.0-rc1" },
+    { name = "langfuse", specifier = "==4.15.6" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = "==9.2.0" },
+    { name = "pytest-asyncio", specifier = "==1.4.0" },
+    { name = "pytest-cov", specifier = "==7.1.0" },
+    { name = "ruff", specifier = "==0.17.3" },
+]
+
+[[package]]
 name = "fraud-decision"
 version = "0.1.0"
 source = { virtual = "decision" }
@@ -434,8 +702,8 @@ dependencies = [
     { name = "fastapi" },
     { name = "laya" },
     { name = "prometheus-client" },
-    { name = "torch", version = "2.14.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
-    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
     { name = "transformers" },
     { name = "uvicorn" },
 ]
@@ -489,8 +757,8 @@ name = "fraud-rag-common"
 version = "0.1.0"
 source = { editable = "common" }
 dependencies = [
-    { name = "feast", extra = ["postgres"] },
-    { name = "httpx" },
+    { name = "feast", extra = ["postgres"], marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "httpx", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 
 [package.dev-dependencies]
@@ -516,9 +784,9 @@ name = "fraud-rag-pipeline"
 version = "0.1.0"
 source = { virtual = "rag_pipeline" }
 dependencies = [
-    { name = "fraud-rag-common" },
-    { name = "pyiceberg", extra = ["pyarrow"] },
-    { name = "pyyaml" },
+    { name = "fraud-rag-common", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pyiceberg", extra = ["pyarrow"], marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pyyaml", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 
 [package.dev-dependencies]
@@ -545,11 +813,11 @@ name = "fraud-rag-serving"
 version = "0.1.0"
 source = { virtual = "rag_serving" }
 dependencies = [
-    { name = "fastapi" },
-    { name = "fraud-rag-common" },
-    { name = "mcp" },
-    { name = "prometheus-client" },
-    { name = "uvicorn" },
+    { name = "fastapi", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "fraud-rag-common", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "mcp", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "prometheus-client", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "uvicorn", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 
 [package.dev-dependencies]
@@ -582,6 +850,288 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/77/cd/9be253869fc42e764de7f3dedd6969af7d44ff9c3375214a3442a6f3fc08/fsspec-2026.9.0.tar.gz", hash = "sha256:0f08147951c8cb31d844c3547d631053b127863b60be04cf06e121333ee0e2fe", size = 333545, upload-time = "2026-09-18T17:50:42.825Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6c/c0/a98505f18594f1bce828bb159cec0fcf9860562f1a2c85913409fc8f3d9e/fsspec-2026.9.0-py3-none-any.whl", hash = "sha256:8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f", size = 221738, upload-time = "2026-09-18T17:50:41.341Z" },
+]
+
+[[package]]
+name = "google-adk"
+version = "2.13.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiosqlite", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "authlib", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "click", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "cryptography", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "fastapi", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-auth", extra = ["pyopenssl"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-genai", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "graphviz", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "httpx", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "jsonschema", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "packaging", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "python-dotenv", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "python-multipart", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pyyaml", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "requests", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "starlette", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "tenacity", version = "9.1.4", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "uvicorn", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "watchdog", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "websockets", version = "15.0.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fe/2b/9616b2a498b8f247c1a9bef8c630e16151dd3a8ed768fa3118a961b19689/google_adk-2.13.0.tar.gz", hash = "sha256:bc2389c9d41bfadd9f0c87d6bfd8d5c7eaf1c449e8906079600b8f3752ddaa88", size = 4444119, upload-time = "2026-10-23T18:26:34.717Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e8/1a/6da4a8048b7cd47681928daed5d4d1c3ef971b3847fcc3cbc63f94df39d2/google_adk-2.13.0-py3-none-any.whl", hash = "sha256:bec4c4ee0aa3e63a2243c23365c5aef666ea539bc48c78dfbbf004dbddfc5f00", size = 5157034, upload-time = "2026-10-23T18:26:31.805Z" },
+]
+
+[package.optional-dependencies]
+a2a = [
+    { name = "a2a-sdk", extra = ["http-server"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+db = [
+    { name = "sqlalchemy", extra = ["asyncio"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "sqlalchemy-spanner", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+
+[[package]]
+name = "google-api-core"
+version = "2.43.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-auth", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "googleapis-common-protos", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "proto-plus", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "requests", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a4/74/307919972c4dc84598f4128a8d6ae05ac3d9e6ca73fe60a7bb93c670931c/google_api_core-2.43.2.tar.gz", hash = "sha256:5dfc5e9d52982bcc03bd6af380a893365b5fdf907dc527f63d3a372833c33329", size = 286250, upload-time = "2026-10-29T17:20:40.193Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b0/1d/a0120c7d937597293fce74510c80fe0cec8e45b1d702a816b567b6754c25/google_api_core-2.43.2-py3-none-any.whl", hash = "sha256:5a9d21baab97fd3c0547ccfc186a9e64f4227d8d7026f393835316400b29a6d4", size = 224304, upload-time = "2026-10-29T17:20:17.733Z" },
+]
+
+[package.optional-dependencies]
+grpc = [
+    { name = "grpcio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "grpcio-status", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+
+[[package]]
+name = "google-auth"
+version = "2.62.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pyasn1-modules", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f5/b9/4b2528f30114b106e3c3a7298ba38d85e682fd1f83fe7c4a5b77c7677082/google_auth-2.62.0.tar.gz", hash = "sha256:0bef0ce54bdf9ce226c5d66e4264413bd918141c31bbe49fb52eac882f513d69", size = 398180, upload-time = "2026-10-12T19:20:48.328Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/a3/87fe9b7203ec2e56ea6a57c75e6d632eaf9487c7f7978cdad1d801bee0af/google_auth-2.62.0-py3-none-any.whl", hash = "sha256:4ff4319aeb4ad128409759d397a9fcafad126d0031d241cc0dd6b9a00b43e3f3", size = 267911, upload-time = "2026-10-12T19:20:46.355Z" },
+]
+
+[package.optional-dependencies]
+pyopenssl = [
+    { name = "cryptography", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+requests = [
+    { name = "requests", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+
+[[package]]
+name = "google-cloud-core"
+version = "2.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-auth", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/55/71/d6081acadf55d4233271c39860f0d140ef61fbdb4bceb2075e9c2905d947/google_cloud_core-2.8.0.tar.gz", hash = "sha256:365f8e4518ae81c8101b8dea5fc1c32a960badedb8b511f19db2843cbbd285d2", size = 36605, upload-time = "2026-09-29T19:25:59.275Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/ed/1b09640a565e5d34d4e517463f65a67a11f9dcdeb6b6e8220f2d06aaf489/google_cloud_core-2.8.0-py3-none-any.whl", hash = "sha256:e235b0952f7ffe7b9c71a4cf96b506d9cfb557e22557c412f0df9b7068b5d007", size = 31048, upload-time = "2026-09-29T19:25:35.361Z" },
+]
+
+[[package]]
+name = "google-cloud-monitoring"
+version = "2.32.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-auth", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "grpcio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "proto-plus", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c8/94/68b1d25f99f8e61c8d4d4403caab3746c9e4aa629e1a8aef22f7f099c95c/google_cloud_monitoring-2.32.0.tar.gz", hash = "sha256:507501ce1c39161c071754f7ed14cd527788b4ea44a1d052bd815c115a70ea48", size = 388895, upload-time = "2026-10-01T18:17:17.249Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/89/97/86870c4f046bba0dcd5ca2099f30413653b84d0fbef611e5f39f8a94e3a8/google_cloud_monitoring-2.32.0-py3-none-any.whl", hash = "sha256:b6c026a5780330aa26c6151279194daa241369b324c96fd6c52c703137bc6b5b", size = 384477, upload-time = "2026-10-01T18:11:09.382Z" },
+]
+
+[[package]]
+name = "google-cloud-spanner"
+version = "3.71.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-auth", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-cloud-core", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-cloud-monitoring", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "grpc-google-iam-v1", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "grpc-interceptor", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "grpcio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "mmh3", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-resourcedetector-gcp", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-semantic-conventions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "proto-plus", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "sqlparse", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/93/ed/b02289c6b4035a1dd04c6377883b5e5310e79e3eb4ce9a687aaea78da23d/google_cloud_spanner-3.71.0.tar.gz", hash = "sha256:976280a8338cd10dcbe5673788eb4b54a55c4f271b31d251c18ab4d9e1c001d3", size = 921825, upload-time = "2026-09-03T22:31:16.358Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/9a/f15b3a0fa188a550b0a7c2dde7c7ce88d792ef813c74042eec55dea036b1/google_cloud_spanner-3.71.0-py3-none-any.whl", hash = "sha256:658443c774c3967a3a5773f40f42aebf7b93cf1b63d5a8cb556926ff9fc53f9d", size = 626703, upload-time = "2026-09-03T22:30:37.359Z" },
+]
+
+[[package]]
+name = "google-genai"
+version = "2.34.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "distro", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-auth", extra = ["requests"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "httpx", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "requests", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "sniffio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "tenacity", version = "9.1.4", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "websockets", version = "15.0.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/22/89/4621aee9cb183efa5b8a187f0e315c49fddcfb8cd7f238b4a3bf4946dcd0/google_genai-2.34.0.tar.gz", hash = "sha256:8e182cf3f73384167b96861cf0aef5102b5070f2db1ea11002879e913806ef37", size = 791853, upload-time = "2026-10-29T06:43:23.706Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/42/c24db865d9231b1c672ea26242a4dcf340e200bb1a9823dce4aa9c4c07a4/google_genai-2.34.0-py3-none-any.whl", hash = "sha256:a4cb02aebc4c357f863d2938132f0e3f7967fc5e00b8a4078673f68aad340665", size = 1258155, upload-time = "2026-10-29T06:43:21.121Z" },
+]
+
+[[package]]
+name = "googleapis-common-protos"
+version = "1.76.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/62/b6/bc095b23a3e0d978e75c8c18cabe4c11f791837410670e4486f0d539bfba/googleapis_common_protos-1.76.0.tar.gz", hash = "sha256:71db0e44a1d4c2dd024ebad44ca67129cc1e2892e4861df466764749d5ef8642", size = 156250, upload-time = "2026-10-22T23:43:36.263Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/05/6d/78dc67a9e779e594b49bf62604034d3a6aa428a55afc729cafda4b7333e1/googleapis_common_protos-1.76.0-py3-none-any.whl", hash = "sha256:59e13344a9f3651aa201a03e2bee815a3bf43a4baf1f9ff8a9b62a840ce25fac", size = 307707, upload-time = "2026-10-22T23:43:10.445Z" },
+]
+
+[package.optional-dependencies]
+grpc = [
+    { name = "grpcio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+
+[[package]]
+name = "graphviz"
+version = "0.21"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/b3/3ac91e9be6b761a4b30d66ff165e54439dcd48b83f4e20d644867215f6ca/graphviz-0.21.tar.gz", hash = "sha256:20743e7183be82aaaa8ad6c93f8893c923bd6658a04c32ee115edb3c8a835f78", size = 200434, upload-time = "2025-06-15T09:35:05.824Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/91/4c/e0ce1ef95d4000ebc1c11801f9b944fa5910ecc15b5e351865763d8657f8/graphviz-0.21-py3-none-any.whl", hash = "sha256:54f33de9f4f911d7e84e4191749cac8cc5653f815b06738c54db9a15ab8b1e42", size = 47300, upload-time = "2025-06-15T09:35:04.433Z" },
+]
+
+[[package]]
+name = "greenlet"
+version = "3.5.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/6e/0091f175ccd02b02bc8811bbcbcc6ac2e980be116e3b2f7a736ca322bf84/greenlet-3.5.6.tar.gz", hash = "sha256:8e67c43bdfc88d5fee6db0d3e40175b362fc95fb85f0412d233b9b203c53a575", size = 207653, upload-time = "2026-09-14T15:42:51.806Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/72/18/3fc6d951466ae9a2a688edcddde3b2e388da0a8244e0caf7117bbeb0eb95/greenlet-3.5.6-cp312-cp312-macosx_11_0_universal2.whl", hash = "sha256:a5876d0a60355af98d535c47f6cd6eb0f8a432396dab26845d380b92f8412422", size = 295668, upload-time = "2026-09-14T14:22:33.241Z" },
+    { url = "https://files.pythonhosted.org/packages/27/89/366d2af5061eeefa5012f510d95a99c8620dcc457609838db4d538820318/greenlet-3.5.6-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:e85880b538e59a59f55117b81f208a6660ad5ac328aad9305f812d9b8bc67a0f", size = 611700, upload-time = "2026-09-14T15:12:01.962Z" },
+    { url = "https://files.pythonhosted.org/packages/54/1c/07f133f865fd58ae593dd2bbec3144acaee9b04ffe2eb48c6e121747ceef/greenlet-3.5.6-cp312-cp312-manylinux_2_24_ppc64le.manylinux_2_28_ppc64le.whl", hash = "sha256:f0ba7c2a329d650628f4c8572fd1db29f0a59dd70a3e3e0710dcf18a35cce9d8", size = 624223, upload-time = "2026-09-14T15:20:42.459Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/f2/844dc823ff2752ad049caa6b59d57e4572f9c445934b02d3518f4c67197c/greenlet-3.5.6-cp312-cp312-manylinux_2_24_s390x.manylinux_2_28_s390x.whl", hash = "sha256:ee7d9da3bf493909cf811a3f038840cb34fab5ae2956b8a263919f6e289ab188", size = 629529, upload-time = "2026-09-14T15:25:06.354Z" },
+    { url = "https://files.pythonhosted.org/packages/66/6a/1594f3869c57c149abdb380492529e04d4c0229b5e4d79572c5bd0aaa673/greenlet-3.5.6-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:975736b002ed080d124cf81a79cb7e05cb26d6b3f5c7a7b651c0fcce70353aa1", size = 621404, upload-time = "2026-09-14T14:35:59.027Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/42/b1f8dbc89a53b9e77859fc1ad1627d106fc361daa3ea4bdf43a91ebb4338/greenlet-3.5.6-cp312-cp312-manylinux_2_39_riscv64.whl", hash = "sha256:71890d5247020c25c21a6b65202782bfc281d4e6e244842419d30e3492bb6dcc", size = 432385, upload-time = "2026-09-14T15:28:37.369Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/f5/33e5c9e48178b9259fd000f8f45caa4a65036f65d3d0c06a602f570f025d/greenlet-3.5.6-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:0616b8f878098c5681fd8f0dc92d887551717402342a70f0abcbfea5f5ad8a44", size = 1584998, upload-time = "2026-09-14T15:10:06.653Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/31/9b4e140bc24d0ad7927ebd651f5608b0acc2334d061748c3b6ad19085cfa/greenlet-3.5.6-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:3dbb4596a6a4e5d47121a33ff20533a81e60f302d9e67b69909a8bc21a43f0a7", size = 1647568, upload-time = "2026-09-14T14:35:49.787Z" },
+    { url = "https://files.pythonhosted.org/packages/c3/71/d79f1791f824f8ff15c2978746640467ae932a2365e0201069f7f272395f/greenlet-3.5.6-cp312-cp312-win_amd64.whl", hash = "sha256:7ac4abb3877c43af320392c664774eef6fa2cc063c79a55fc02d844a3cbe7395", size = 324203, upload-time = "2026-09-14T14:22:54.504Z" },
+    { url = "https://files.pythonhosted.org/packages/63/af/42aca4d56e8cb321912203069d8d34734cb288222f10ad2ae102718cc577/greenlet-3.5.6-cp312-cp312-win_arm64.whl", hash = "sha256:301102a49120b095e72a7838792b41233975fc1c155daec6d98f81c00c9280e0", size = 308310, upload-time = "2026-09-14T14:24:03.008Z" },
+]
+
+[[package]]
+name = "grpc-google-iam-v1"
+version = "0.14.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "googleapis-common-protos", extra = ["grpc"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "grpcio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/97/24/0ef24ccdd91ce07be7d6466d39becdd4fbb33e52426ba2391fe334d24bca/grpc_google_iam_v1-0.14.6.tar.gz", hash = "sha256:fc0a683ace0a149184fcd08d667dd64d51ae65e5698e86f7136aa6002a8b5373", size = 24088, upload-time = "2026-10-22T23:43:37.377Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/61/e0/0524fbc82835c22e711ac3e7d7dfb3ee997f99f5eaa22ba6b31cc17b753d/grpc_google_iam_v1-0.14.6-py3-none-any.whl", hash = "sha256:042705a3ce306f289b9c6eafc3453b23f953bab955adcac3c36545758ccd681a", size = 33089, upload-time = "2026-10-22T23:43:12.096Z" },
+]
+
+[[package]]
+name = "grpc-interceptor"
+version = "0.15.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "grpcio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9f/28/57449d5567adf4c1d3e216aaca545913fbc21a915f2da6790d6734aac76e/grpc-interceptor-0.15.4.tar.gz", hash = "sha256:1f45c0bcb58b6f332f37c637632247c9b02bc6af0fdceb7ba7ce8d2ebbfb0926", size = 19322, upload-time = "2023-11-16T02:05:42.459Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/15/ac/8d53f230a7443401ce81791ec50a3b0e54924bf615ad287654fa4a2f5cdc/grpc_interceptor-0.15.4-py3-none-any.whl", hash = "sha256:0035f33228693ed3767ee49d937bac424318db173fef4d2d0170b3215f254d9d", size = 20848, upload-time = "2023-11-16T02:05:40.913Z" },
+]
+
+[[package]]
+name = "grpcio"
+version = "1.85.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f0/03/f9e805772d4d01da2a1754a5f63c58601eacaf8f1e878729217188de7d16/grpcio-1.85.1.tar.gz", hash = "sha256:5f530287d5de5f7f66089ead81de44f6787162944dab3922efa65dfdff108a1d", size = 14091456, upload-time = "2026-10-30T16:01:16.909Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/31/8c/b6d9ea0bf02a6b47ba34c5f936da2921d76f5e40cbb411e9abb246b70d2d/grpcio-1.85.1-cp312-cp312-linux_armv7l.whl", hash = "sha256:1a10d337967ec2be049c6a2345320f6a59f71bf9f54febfd80e5a966cffaa945", size = 6797195, upload-time = "2026-10-30T15:59:35.364Z" },
+    { url = "https://files.pythonhosted.org/packages/c6/ee/f60cfacd679fe811944be391c899955c3d9c7e07db922b47e535ddda550c/grpcio-1.85.1-cp312-cp312-macosx_11_0_universal2.whl", hash = "sha256:658a9d89c5736bf4aa3ef4ecbc79528e26d8e23c5e1c83417d2870a1a06063e5", size = 12633025, upload-time = "2026-10-30T15:59:37.66Z" },
+    { url = "https://files.pythonhosted.org/packages/f1/0d/5dbe225f0ceb208538dc8c16c5f52b0c402b91611f981604b5e280439dfb/grpcio-1.85.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:843aa281a48188621f50880496d35defed51298bcb66d5345d5f282fd3f87354", size = 7170616, upload-time = "2026-10-30T15:59:40.138Z" },
+    { url = "https://files.pythonhosted.org/packages/54/35/ce972a4e5bb721ba85f5c9e20a0029253ae0b2deb5276dafa3383e025133/grpcio-1.85.1-cp312-cp312-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:e768556a2346d1d2921f511f3145e2462e4fe68095c31e4db407558bcd3f1d4f", size = 8180786, upload-time = "2026-10-30T15:59:42.7Z" },
+    { url = "https://files.pythonhosted.org/packages/00/8d/74a8649d2787dae0a661855cdf09a8e2238fa741689bb368ca1b4f6d5b6f/grpcio-1.85.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:a1a72d19c0ab84b4b73b6c47eeaade76d84b1973a51593ff1160a73df33d03d9", size = 7362744, upload-time = "2026-10-30T15:59:45.076Z" },
+    { url = "https://files.pythonhosted.org/packages/03/72/87ef13aba6bd2c5c6d4c5117238b17b1e3c1c1efa26c66cb377053124eb7/grpcio-1.85.1-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:0e07f477e1d1a05bdbe71d63add964c5457e7ab2e3f5fd32859639ed8ecb976e", size = 7929643, upload-time = "2026-10-30T15:59:47.294Z" },
+    { url = "https://files.pythonhosted.org/packages/09/f1/2e75b2906c9643e0be81a74bf23ae10c29661e0199c8f3a6e2c23707e882/grpcio-1.85.1-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:b2846c70ed58c8e149e8e5d867af40805a13b151d84157d8272952d711a77c5c", size = 9181161, upload-time = "2026-10-30T15:59:49.399Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/d9/6b9127e8fa3ef14a3ec199436bec6c1a54a0bb429ca261b1a2fb518938d1/grpcio-1.85.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:9998f03ac0dfed226eead6e93cee1b547d7a32e47e1915dee94eff0e113b167e", size = 8318829, upload-time = "2026-10-30T15:59:52.09Z" },
+    { url = "https://files.pythonhosted.org/packages/21/46/ff3374d33efee490a0e50e3c3fc59280b7f7fc2ed3ab1ee8c4e9873dc83d/grpcio-1.85.1-cp312-cp312-win32.whl", hash = "sha256:2670c03d154f6bec66a0fef97c607116761b032183187dfdfe229b5975820a4f", size = 4768056, upload-time = "2026-10-30T15:59:54.132Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/48/4030a63540089d00a36cea15282623bcf084a5ea4c0ffc4685a42ef0f342/grpcio-1.85.1-cp312-cp312-win_amd64.whl", hash = "sha256:eaad7e6aa9ac3aded4f6bc86a18bf2cff3de356f972bf32a5558df9788085b85", size = 5607218, upload-time = "2026-10-30T15:59:56.721Z" },
+]
+
+[[package]]
+name = "grpcio-health-checking"
+version = "1.74.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "grpcio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/82/69/87ad1cd826a9f06567bccb66f0c3228a0758ea47a1d35eef15db36b2f492/grpcio_health_checking-1.74.0.tar.gz", hash = "sha256:d6749451d4cef543c3f6260ae9a86c84b9ab02a92421cecae73a632e7fe920bf", size = 16770, upload-time = "2025-07-24T19:02:01.298Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/62/2fd797be7514855a0b28f946f57b9a134bba25a9873c269fa730d8fd49d8/grpcio_health_checking-1.74.0-py3-none-any.whl", hash = "sha256:9a6e7bcdf16395105425753d6e3fe31f57cb6ab3f232282254b50f02cc63d9c7", size = 18921, upload-time = "2025-07-24T19:01:24.856Z" },
+]
+
+[[package]]
+name = "grpcio-status"
+version = "1.85.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "googleapis-common-protos", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "grpcio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fe/16/0a161d0016f6e318ebf217780a91e007a67d9d244a06f79caeef689f5f02/grpcio_status-1.85.1.tar.gz", hash = "sha256:3f6ba6090d794b7148b23f03355addd56bee2b78174a12784c4d9b4e28c8928e", size = 13982, upload-time = "2026-10-30T16:05:25.631Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/e9/5e34e2543b586ffddf90721ab242e7b662c063484ee3978bf61ca90d7579/grpcio_status-1.85.1-py3-none-any.whl", hash = "sha256:ef84cb262c7a05fd7c27e61bb70c9f63bce4484ce8b3366585a381fed738fcb0", size = 14640, upload-time = "2026-10-30T16:05:11.252Z" },
 ]
 
 [[package]]
@@ -681,15 +1231,24 @@ wheels = [
 ]
 
 [[package]]
+name = "httpx-sse"
+version = "0.4.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/4c/751061ffa58615a32c31b2d82e8482be8dd4a89154f003147acee90f2be9/httpx_sse-0.4.3.tar.gz", hash = "sha256:9b1ed0127459a66014aec3c56bebd93da3c1bc8bb6618c8082039a44889a755d", size = 15943, upload-time = "2025-10-10T21:48:22.271Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d2/fd/6668e5aec43ab844de6fc74927e155a3b37bf40d7c3790e49fc0406b6578/httpx_sse-0.4.3-py3-none-any.whl", hash = "sha256:0ac1c9fe3c0afad2e0ebb25a934a59f4c7823b60792691f779fad2c5568830fc", size = 8960, upload-time = "2025-10-10T21:48:21.158Z" },
+]
+
+[[package]]
 name = "httpx2"
 version = "2.16.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "anyio", marker = "sys_platform != 'emscripten'" },
-    { name = "httpcore2", marker = "sys_platform != 'emscripten'" },
-    { name = "httpx2-jsfetch", marker = "sys_platform == 'emscripten'" },
+    { name = "anyio", marker = "sys_platform != 'emscripten' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "httpcore2", marker = "sys_platform != 'emscripten' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "httpx2-jsfetch", marker = "sys_platform == 'emscripten' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
     { name = "idna" },
-    { name = "truststore", marker = "sys_platform != 'emscripten'" },
+    { name = "truststore", marker = "sys_platform != 'emscripten' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
     { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/43/73/5ca2cedf5e4e50423d1c258877865a6b62793633b561c58499f8aeb33b7e/httpx2-2.16.0.tar.gz", hash = "sha256:0d54c98128e8f2ff7fbbde0fca8c359e5f032edeaaaac443cdb7f31f685bcd7f", size = 103116, upload-time = "2026-10-21T07:09:46.348Z" }
@@ -714,7 +1273,7 @@ dependencies = [
     { name = "click" },
     { name = "filelock" },
     { name = "fsspec" },
-    { name = "hf-xet", marker = "platform_machine == 'AMD64' or platform_machine == 'ARM64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'" },
+    { name = "hf-xet", marker = "platform_machine == 'AMD64' or platform_machine == 'ARM64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
     { name = "httpx2" },
     { name = "packaging" },
     { name = "pyyaml" },
@@ -757,12 +1316,68 @@ wheels = [
 ]
 
 [[package]]
+name = "jiter"
+version = "0.18.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/63/5b/f68319f4fe624311a744a33d10fdbcac4c971991e348223cba60d31780b2/jiter-0.18.0.tar.gz", hash = "sha256:a0ca63fd9450a212e4e658d4cfe0ab4977c4f9b0003c68828b843c65e27662ff", size = 234470, upload-time = "2026-10-23T13:51:13.103Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/45/0e/075bfa4fa46820da9ac8cf8a67c435b0586012279fba15deccde0e73b9ce/jiter-0.18.0-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:77a01cdf4381a1becbe5b827f682006f47b712581667451c5b1eb259b9ae7041", size = 290095, upload-time = "2026-10-23T13:49:14.118Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/e2/f4000a4d9c519ca019bf0e2922cc0c6b6db347be6303161382eda7635be7/jiter-0.18.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:7b41cd64ee6b54db94bea6274e6e37002ed526aa06c114a8be6f36ffe21c184e", size = 316319, upload-time = "2026-10-23T13:49:15.263Z" },
+    { url = "https://files.pythonhosted.org/packages/51/93/9aaef4d18d19446fd044b9cff0323b1b45b5526f077f1a80418567a6eef8/jiter-0.18.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d7424194e68ef44e94290961f59319850d7ce11a329a3957f91709c15ded6618", size = 335631, upload-time = "2026-10-23T13:49:16.551Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/9e/d2dc5e8179e248df7ef1c7c8822554f4c7f694a33be30790bb523f1e657a/jiter-0.18.0-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:04a484fce032a8b2c21dec0410a805d7b16573eb34297156a3b4d242c507d2b4", size = 322596, upload-time = "2026-10-23T13:49:17.875Z" },
+    { url = "https://files.pythonhosted.org/packages/22/ca/28bfd20743be0b2b37c1ddfe069a637d5180e535f1c8faad555cf7ac0b98/jiter-0.18.0-cp312-cp312-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:860ac97858116bda0ac02ef5f50c541fc1a84ad7b9368cac68d4de5697a9012d", size = 333858, upload-time = "2026-10-23T13:49:19.343Z" },
+    { url = "https://files.pythonhosted.org/packages/69/89/e42f7dba54dcf7787aa4be3e22cdcb1f14d9635b6527949652ab490d6f8e/jiter-0.18.0-cp312-cp312-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:39ef656cf371971486ec545ca0ae2da8d037d5479bc906121e3e46de86ee73c4", size = 348656, upload-time = "2026-10-23T13:49:20.796Z" },
+    { url = "https://files.pythonhosted.org/packages/74/6a/b13407f609ddaf9a1f0cdf1336326dc5c8c7fc56943e8450a04a542f5edf/jiter-0.18.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b3c741e6b778c951a6861964ee475118812a33208426c54fb92bf4e318bda834", size = 336286, upload-time = "2026-10-23T13:49:22.152Z" },
+    { url = "https://files.pythonhosted.org/packages/b2/7e/b560f97495a485a569e7fa338a13587328854f6a40cd2e93602c327ca4a6/jiter-0.18.0-cp312-cp312-manylinux_2_31_riscv64.whl", hash = "sha256:1277ac083a58d2f49a24ff9a28fd9876a6443a1992d4467a1db80fb45e354b18", size = 314415, upload-time = "2026-10-23T13:49:23.645Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/97/457b6ec16f1f3f25ec760f23728f43a2b20ddf934fcd8f02c81a2183597e/jiter-0.18.0-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:ccf224d2e706be81d464b59c2bc3f98ba65d12c092c1789e625127e64488944e", size = 332078, upload-time = "2026-10-23T13:49:24.917Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/d9/6f616071650f7bb8fcbce674d4dde7e59cfbd8a4d30f5c71c03630425d6e/jiter-0.18.0-cp312-cp312-musllinux_1_1_aarch64.whl", hash = "sha256:5c7fc8e5357d1ad082bb177be71e398fcd3d458726439255ca5cb0d706060269", size = 480354, upload-time = "2026-10-23T13:49:26.221Z" },
+    { url = "https://files.pythonhosted.org/packages/42/72/52a3630c8213cdc8093cc86dc6ad50f2bc89ccfa97ef272205d38a24e16d/jiter-0.18.0-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:a6bba0404b46157a651d1fe512cf2c59c8e42836a9284c35cdff35310758ba4f", size = 515322, upload-time = "2026-10-23T13:49:27.652Z" },
+    { url = "https://files.pythonhosted.org/packages/31/54/987cfee52bdf8a286e9c1c58192a9bb64f8773a6be36e4ec46959f67fb7e/jiter-0.18.0-cp312-cp312-win32.whl", hash = "sha256:07ae058bc052ead609b49bbae78c01bf4dee8f5f9d21705cbae9bfe59b33efc9", size = 185341, upload-time = "2026-10-23T13:49:29.147Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/c9/b1279eecf68e5f62c918af3f7f856a071ae7db0c90b8fd2235b1b6020c8c/jiter-0.18.0-cp312-cp312-win_amd64.whl", hash = "sha256:79d1fe529bd7065c6f3f50279a08c2ab82eaa0631a6f5dfafa9c65105eeaaafa", size = 225889, upload-time = "2026-10-23T13:49:30.306Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/14/715f84be58a7fc97779aa40c37164acfa25ccb2cee89bfb69358e7071ff3/jiter-0.18.0-cp312-cp312-win_arm64.whl", hash = "sha256:1f8b3b3d8761dee3cddcb5d3e99eaccc0155bbefc345affcdedcc758a4933a1f", size = 181852, upload-time = "2026-10-23T13:49:31.811Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/c2/49ee8f4743c27e61c52b4746ba636b43bedda97131a14043dc6f5ce5bb9d/jiter-0.18.0-graalpy312-graalpy250_312_native-macosx_10_12_x86_64.whl", hash = "sha256:118c1fd995f349f1cad0557f31d6860f336b4aeef7f002dedbc068027f68e2c3", size = 287302, upload-time = "2026-10-23T13:51:08.073Z" },
+    { url = "https://files.pythonhosted.org/packages/60/72/394036294ac3226216f73bfa4b14df920eb5baf7fb80fa7e0a0d7ef442a6/jiter-0.18.0-graalpy312-graalpy250_312_native-macosx_11_0_arm64.whl", hash = "sha256:44d0d719cd7845e66b01a0cf346ec9882073e710a05e89a5b6d87be47a9dc69c", size = 277797, upload-time = "2026-10-23T13:51:09.324Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/80/f0dadedaa9a109f31e8978c7db355593916968d5956f382188a3f8c0888c/jiter-0.18.0-graalpy312-graalpy250_312_native-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:4d1d2dc4d930ebc225f488b6b3790acebb2e51b3a165a4a42cc1d05bb927f83e", size = 300192, upload-time = "2026-10-23T13:51:10.551Z" },
+    { url = "https://files.pythonhosted.org/packages/93/51/e57dbc6c264ec6557a677189755fe4525d83439237418e3ae59771ac1cde/jiter-0.18.0-graalpy312-graalpy250_312_native-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ebb0c346b6c5d9c033fe9e9b6ed6a1ff6dac0288fe681c3434dde6eb9c264fa1", size = 301141, upload-time = "2026-10-23T13:51:11.882Z" },
+]
+
+[[package]]
 name = "jmespath"
 version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d3/59/322338183ecda247fb5d1763a6cbe46eff7222eaeebafd9fa65d4bf5cb11/jmespath-1.1.0.tar.gz", hash = "sha256:472c87d80f36026ae83c6ddd0f1d05d4e510134ed462851fd5f754c8c3cbb88d", size = 27377, upload-time = "2026-01-22T16:35:26.279Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/14/2f/967ba146e6d58cf6a652da73885f52fc68001525b4197effc174321d70b4/jmespath-1.1.0-py3-none-any.whl", hash = "sha256:a5663118de4908c91729bea0acadca56526eb2698e83de10cd116ae0f4e97c64", size = 20419, upload-time = "2026-01-22T16:35:24.919Z" },
+]
+
+[[package]]
+name = "joserfc"
+version = "1.7.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bd/15/48ff246732232d35ee234228def22b52455fcc55577f06146602399a29b0/joserfc-1.7.7.tar.gz", hash = "sha256:471d0fd12a5a0d1c0942de280f39efe6f597878315033270b504d4d006d25510", size = 237446, upload-time = "2026-10-19T00:30:29.974Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/9f/934db284aa22f37af59708e382903860d4b81329c137b1b0ed2745daeb65/joserfc-1.7.7-py3-none-any.whl", hash = "sha256:06979cfbab78bc802f14c0358f32969826cc26720e13cb38926ffdc86bc0cb2c", size = 71758, upload-time = "2026-10-19T00:30:28.498Z" },
+]
+
+[[package]]
+name = "json-rpc"
+version = "1.15.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6d/9e/59f4a5b7855ced7346ebf40a2e9a8942863f644378d956f68bcef2c88b90/json-rpc-1.15.0.tar.gz", hash = "sha256:e6441d56c1dcd54241c937d0a2dcd193bdf0bdc539b5316524713f554b7f85b9", size = 28854, upload-time = "2023-06-11T09:45:49.078Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/9e/820c4b086ad01ba7d77369fb8b11470a01fac9b4977f02e18659cf378b6b/json_rpc-1.15.0-py2.py3-none-any.whl", hash = "sha256:4a4668bbbe7116feb4abbd0f54e64a4adcf4b8f648f19ffa0848ad0f6606a9bf", size = 39450, upload-time = "2023-06-11T09:45:47.136Z" },
+]
+
+[[package]]
+name = "jsonref"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/0d/c1f3277e90ccdb50d33ed5ba1ec5b3f0a242ed8c1b1a85d3afeb68464dca/jsonref-1.1.0.tar.gz", hash = "sha256:32fe8e1d85af0fdefbebce950af85590b22b60f9e95443176adbde4e1ecea552", size = 8814, upload-time = "2023-01-16T16:10:04.455Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/ec/e1db9922bceb168197a558a2b8c03a7963f1afe93517ddd3cf99f202f996/jsonref-1.1.0-py3-none-any.whl", hash = "sha256:590dc7773df6c21cbf948b5dac07a72a251db28b0238ceecce0a2abfa8ec30a9", size = 9425, upload-time = "2023-01-16T16:10:02.255Z" },
 ]
 
 [[package]]
@@ -793,6 +1408,113 @@ wheels = [
 ]
 
 [[package]]
+name = "kagent-adk"
+version = "1.0.0rc1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "a2a-sdk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "agentsts-adk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "agentsts-core", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "aiofiles", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "anthropic", extra = ["vertex"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "anyio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "azure-identity", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "boto3", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "fastapi", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "filelock", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-adk", extra = ["a2a", "db"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-auth", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-genai", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "grpcio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "grpcio-health-checking", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "httpx", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "httpx-sse", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "httpx2", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "jsonref", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "kagent-core", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "kagent-proto", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "kagent-tools", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "mcp", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "numpy", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "ollama", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "openai", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "protovalidate", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "python-multipart", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typer", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "urllib3", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "uvicorn", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/51/3d/39b2b92ddf8861f2714555f2e4f426a123f11b9e9836adc00a96e89f12c0/kagent_adk-1.0.0rc1.tar.gz", hash = "sha256:a518622258ae013ef452b53beca00fe1307e975e192830d5ad043fbd70a9122d", size = 170404, upload-time = "2026-10-30T18:36:09.569Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/f9/921f30808e62a5665e8970c2f9791729be38265d9dc93a5b6af7a9bacb43/kagent_adk-1.0.0rc1-py3-none-any.whl", hash = "sha256:a03b5a3b267659d8cc66a799c27a76c2624b169952307cae51840f05e0685478", size = 110727, upload-time = "2026-10-30T18:36:02.179Z" },
+]
+
+[[package]]
+name = "kagent-core"
+version = "1.0.0rc1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "a2a-sdk", extra = ["http-server"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "kagent-proto", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-distro", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-instrumentation-fastapi", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-instrumentation-grpc", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-instrumentation-httpx", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "protovalidate", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ae/32/dd841c16b02ff3af25912f08db886afe4065d535b265a3f929e53f37f7e1/kagent_core-1.0.0rc1.tar.gz", hash = "sha256:8f68dab5a99db03eb2c0344b9c2e81f09b024eec6dad3eca5953b5094160a240", size = 41542, upload-time = "2026-10-30T18:36:10.373Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/0e/9ce7d533b573f73e75b495176c93dcf56adcfbc76e2e9ca28181bc4d196e/kagent_core-1.0.0rc1-py3-none-any.whl", hash = "sha256:c65c2ec60f5e4bad58bebdbc21748d7cfb8af87f669f2f311c9dbc86c0de9332", size = 33618, upload-time = "2026-10-30T18:36:03.502Z" },
+]
+
+[[package]]
+name = "kagent-proto"
+version = "0.1.0"
+source = { git = "https://github.com/kagent-dev/kagent?subdirectory=python%2Fpackages%2Fkagent-proto&tag=v1.0.0-rc1#eed27237a715fdbc7664aab9e1089c9a05097e71" }
+dependencies = [
+    { name = "a2a-sdk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "grpcio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+
+[[package]]
+name = "kagent-tools"
+version = "1.0.0rc1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/27/8d/4dda5dbd1819c3d7df34fe4091a0ad11e9857a523d58be2ad78a00e295a8/kagent_tools-1.0.0rc1.tar.gz", hash = "sha256:5ecfb6473b4595434b4140d12846c1b4922045b18f5212c3eaad974df429df77", size = 14117, upload-time = "2026-10-30T18:36:12.791Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/54/d837b0f887839506a44761314c4918da78f0470d57391822ed8f5b33eb4a/kagent_tools-1.0.0rc1-py3-none-any.whl", hash = "sha256:742facd43b15cca18fb19d5438161f3e5b083c5ef96b147e8b0e2d5a2239edf5", size = 7363, upload-time = "2026-10-30T18:36:07.375Z" },
+]
+
+[[package]]
+name = "langfuse"
+version = "4.15.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "backoff", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "httpx", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "packaging", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "wrapt", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4a/19/59253a357d77147e8cd3ad97817519e158af5d3336654656c92c2fc922f1/langfuse-4.15.6.tar.gz", hash = "sha256:af80ed1199e57c2641c9f228066bf9dc324657c06ce6e68660118fa46b237e35", size = 392968, upload-time = "2026-09-24T13:32:47.032Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/c5/927a01c47c0adf53832c6e5e35951e3d4998072ef955f3bb8e87e6d10517/langfuse-4.15.6-py3-none-any.whl", hash = "sha256:2364d5f17342301a8651ef166abb5bb260aaadd94d1ac72aa30c298b3a395d85", size = 706806, upload-time = "2026-09-24T13:32:48.577Z" },
+]
+
+[[package]]
 name = "laya"
 version = "0.4.7"
 source = { registry = "https://pypi.org/simple" }
@@ -800,8 +1522,8 @@ dependencies = [
     { name = "huggingface-hub" },
     { name = "numpy" },
     { name = "safetensors" },
-    { name = "torch", version = "2.14.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
-    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
     { name = "transformers" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ed/ba/477174d38f2acc252cb1414499369b2127cf74784a5ffaf51e8743400c82/laya-0.4.7.tar.gz", hash = "sha256:c3f567f21ce9860eb063c67b35316d5498881e6856f6d58f2b05ce4311e8b2c9", size = 1194323, upload-time = "2026-10-14T05:27:58.872Z" }
@@ -839,6 +1561,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/2f/83/97b29fe05cb6ae28d2dbd30b81e2e402a3eed5f460c26e9eaa5895ceacf5/locket-1.0.0.tar.gz", hash = "sha256:5c0d4c052a8bbbf750e056a8e65ccd309086f4f0f18a2eac306a8dfa4112a632", size = 4350, upload-time = "2022-04-20T22:04:44.312Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/db/bc/83e112abc66cd466c6b83f99118035867cecd41802f8d044638aa78a106e/locket-1.0.0-py2.py3-none-any.whl", hash = "sha256:b6c819a722f7b6bd955b80781788e4a66a55628b858d347536b7e81325a3a5e3", size = 4398, upload-time = "2022-04-20T22:04:42.23Z" },
+]
+
+[[package]]
+name = "mako"
+version = "1.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markupsafe", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5a/09/e07c4b5579a79f4b16f8d4f29f6c54514ac787c4ad506b8c4f28a0e6b0bf/mako-1.4.3.tar.gz", hash = "sha256:cd6537fe88d5fec315c55c2f8529bc4ce7a9a352ad7db3eeaa6a66e2dd4ec37a", size = 412799, upload-time = "2026-09-22T20:54:31.509Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6d/a0/053d6af3e8f871e0073b4a36732d9e65be77a72e5434c31b94f6af78a6bb/mako-1.4.3-py3-none-any.whl", hash = "sha256:723296007c870bfd6b3f0c3230dba7198096e5269297ebf5e4eff9e7ffa39d4f", size = 80164, upload-time = "2026-09-22T20:54:33.128Z" },
 ]
 
 [[package]]
@@ -885,16 +1619,17 @@ dependencies = [
     { name = "httpx2" },
     { name = "jsonschema" },
     { name = "mcp-types" },
-    { name = "opentelemetry-api" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-api", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
     { name = "pydantic" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "python-multipart" },
-    { name = "pywin32", marker = "sys_platform == 'win32'" },
+    { name = "pywin32", marker = "sys_platform == 'win32' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
     { name = "sse-starlette" },
     { name = "starlette" },
     { name = "typing-extensions" },
     { name = "typing-inspection" },
-    { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
+    { name = "uvicorn", marker = "sys_platform != 'emscripten' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9d/8d/e0d339616f4810e9051d4aba6887afab289ab1f81875fe908b606cdfd0e3/mcp-2.3.0.tar.gz", hash = "sha256:8b147a50441cf059dc88c684e0aeed3687f0aa0f39c6cde7b90330effd2b34d8", size = 4171955, upload-time = "2026-10-02T22:06:56.091Z" }
 wheels = [
@@ -959,15 +1694,41 @@ wheels = [
 ]
 
 [[package]]
+name = "msal"
+version = "1.39.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pyjwt", extra = ["crypto"], marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "requests", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bb/85/747d28986a44b715cc51cf57aa021c8fd94e9614064261ceec77320e8b0b/msal-1.39.0.tar.gz", hash = "sha256:6ab7de335e6d7f5717e2c7e1dbf86e4dda2f6acf3c56773b78dc53ebc6395b5f", size = 205360, upload-time = "2026-09-17T16:07:45.1Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a4/32/178457385925ce301c7b3232bd85665d4df57da39568b62dcfc74031873f/msal-1.39.0-py3-none-any.whl", hash = "sha256:2d2577886906cd7293850dffa2da29119966c213bfc6ec0cecf8bf7621e1ca77", size = 131629, upload-time = "2026-09-17T16:07:46.722Z" },
+]
+
+[[package]]
+name = "msal-extensions"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "msal", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/01/99/5d239b6156eddf761a636bded1118414d161bd6b7b37a9335549ed159396/msal_extensions-1.3.1.tar.gz", hash = "sha256:c5b0fd10f65ef62b5f1d62f4251d51cbcaf003fcedae8c91b040a488614be1a4", size = 23315, upload-time = "2025-03-14T23:51:03.902Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/75/bd9b7bb966668920f06b200e84454c8f3566b102183bc55c5473d96cb2b9/msal_extensions-1.3.1-py3-none-any.whl", hash = "sha256:96d3de4d034504e969ac5e85bae8106c8373b5c6568e4c8fa7af2eca9dbe6bca", size = 20583, upload-time = "2025-03-14T23:51:03.016Z" },
+]
+
+[[package]]
 name = "mypy"
 version = "2.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ast-serialize" },
-    { name = "librt", marker = "platform_python_implementation != 'PyPy'" },
-    { name = "mypy-extensions" },
-    { name = "pathspec" },
-    { name = "typing-extensions" },
+    { name = "ast-serialize", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "librt", marker = "(platform_python_implementation != 'PyPy' and extra == 'project-16-fraud-rag-common') or (platform_python_implementation != 'PyPy' and extra == 'project-17-fraud-rag-serving') or (platform_python_implementation != 'PyPy' and extra == 'project-18-fraud-rag-pipeline') or (platform_python_implementation != 'PyPy' and extra != 'project-19-fraud-agent-runtime') or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "mypy-extensions", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pathspec", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4a/3c/78ecece71ee4b5445389a4ccd11627cfb9c69e4de554d11060171f376305/mypy-2.4.1.tar.gz", hash = "sha256:63b590965691e540a335fa74dadf31a7069142f6b72e234689bbd244edf55623", size = 4066728, upload-time = "2026-10-28T19:23:13.286Z" }
 wheels = [
@@ -1018,15 +1779,267 @@ wheels = [
 ]
 
 [[package]]
+name = "ollama"
+version = "0.6.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b8/97/eeafe65594e4f4b25e443e068ef7d83aa3105b023e12e1c408c38669fc07/ollama-0.6.3.tar.gz", hash = "sha256:41fc49a8095c4a75939c4c1f8582e4d0671692fb6eac2a5a7ede8c9872b67096", size = 56868, upload-time = "2026-09-29T01:26:51.906Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/64/87505d9e006461233c21c8e66dc1ecee49c996090584b216abd0dd4a8322/ollama-0.6.3-py3-none-any.whl", hash = "sha256:6a20bc42c1a5f889295d7ec490d35e5132fc31f339561530f43a8abd4dbfe508", size = 16603, upload-time = "2026-09-29T01:26:50.451Z" },
+]
+
+[[package]]
+name = "openai"
+version = "3.42.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "httpx2", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "jiter", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "sniffio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f9/ef/c17c9ca921c1991b0a7185e8282da1996d09292b0caaf2e7cffd7e051eb6/openai-3.42.0.tar.gz", hash = "sha256:deffe27f9e20e4f1d9d471978d12f23aa119382494c0a9860795e66943d0fe42", size = 2353482, upload-time = "2026-10-31T00:27:26.502Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c5/79/904afac12186d9ab9e3f731eb798e36dc0f5b991a557c4304b0a43e393c1/openai-3.42.0-py3-none-any.whl", hash = "sha256:efb9d089ecf66c668289f647717389df98b40b954cd86d4fe54eddce39aabb3f", size = 2397860, upload-time = "2026-10-31T00:27:24.493Z" },
+]
+
+[[package]]
+name = "opentelemetry-api"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "sys_platform != 'darwin'",
+    "sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ee/8b/aa9e2d8b8dfa7c946f7dec5d1f8f6ba8eca062f43509a06bdb5ce93d26c0/opentelemetry_api-1.44.0.tar.gz", hash = "sha256:67647e5e9566edcf421166fdf022b3537f818635daa852b289e34604dc6fb33a", size = 72406, upload-time = "2026-07-16T15:25:32.678Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/6f/a04e900f465ff3221ccc395522503e2d10e79fa21f2723c8e177aae1e0d1/opentelemetry_api-1.44.0-py3-none-any.whl", hash = "sha256:94b98c893a91b88657eaac1e3ba89618cdb85be6918196705354f34728b2cdef", size = 60018, upload-time = "2026-07-16T15:25:11.657Z" },
+]
+
+[[package]]
 name = "opentelemetry-api"
 version = "1.45.2"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "sys_platform != 'darwin'",
+    "sys_platform == 'darwin'",
+]
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/19/14/cf3a6b6448849656e1e5f4e2101f3988dc6789724050096aba1bc5ccf592/opentelemetry_api-1.45.2.tar.gz", hash = "sha256:d7b0008e21e5fd61cbe7a7f34ca3b6905a78ab677d9bc395e299359c75cda6b4", size = 73277, upload-time = "2026-10-29T17:29:37.888Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a9/2d/610db864d7513158cebb8f36cc88e67e73bd6c7aa1905ef18d89e1281c81/opentelemetry_api-1.45.2-py3-none-any.whl", hash = "sha256:2cbd737377e710ee740d261c94e93fa0f08e6d037c18f17513cc0a2d94479a34", size = 60335, upload-time = "2026-10-29T17:29:06.955Z" },
+]
+
+[[package]]
+name = "opentelemetry-distro"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-instrumentation", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5f/61/29e94c78299b173486e6e3b10d63e89cbe340745743c6ed6ae2055433743/opentelemetry_distro-0.65b0.tar.gz", hash = "sha256:e2fef26fdf72978ab172530c13338aff367edae41ae8d90b7f6133efedde10ab", size = 2334, upload-time = "2026-07-16T15:25:47.917Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/d5/603a29962542152331c6e37a121129a26e24917daa4298ca00bea97571bb/opentelemetry_distro-0.65b0-py3-none-any.whl", hash = "sha256:0e15bb1a54c638e6c361bc66bc43e9de9ead442e1ae06f8099a2c1d27b6ef845", size = 2775, upload-time = "2026-07-16T15:24:47.562Z" },
+]
+
+[[package]]
+name = "opentelemetry-exporter-otlp-proto-common"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-proto", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/61/09/4d717852c1cf3f854b76c7110a5d00883bc3c99288b9b0dbcbeb9e306eb6/opentelemetry_exporter_otlp_proto_common-1.44.0.tar.gz", hash = "sha256:dc87a5a5bc58f149a56d1547e4691588fa12994cdc3bc039a694ccb3375862ac", size = 20202, upload-time = "2026-07-16T15:25:37.658Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/71/65fd9d54c10b860f87c045ccee1264cab7011268895d3528818a29c1172a/opentelemetry_exporter_otlp_proto_common-1.44.0-py3-none-any.whl", hash = "sha256:9a9fe61bba73d802904bc989f1d6b4a7b1ee40f06c40e98d6f85af65aaebb694", size = 17045, upload-time = "2026-07-16T15:25:18.201Z" },
+]
+
+[[package]]
+name = "opentelemetry-exporter-otlp-proto-grpc"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "googleapis-common-protos", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "grpcio", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-exporter-otlp-proto-common", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-proto", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1f/47/80d9e9d468dc5de3af5096f5ccdb065fa4dd1470f74495cc53e59e397f47/opentelemetry_exporter_otlp_proto_grpc-1.44.0.tar.gz", hash = "sha256:40d1ae9e03fcc36de3cbac610cc99f35894938bff9cfd90fc4ec68bd85448463", size = 27225, upload-time = "2026-07-16T15:25:38.308Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/29/6ae42ba32b153ae0a44ae125f0caff2188bbe62d99c82d1768da30864e72/opentelemetry_exporter_otlp_proto_grpc-1.44.0-py3-none-any.whl", hash = "sha256:6a1a645ea182a2f59440c51fa8301d309f3324a8f9d65f8395584b064b67ee4e", size = 19624, upload-time = "2026-07-16T15:25:19.096Z" },
+]
+
+[[package]]
+name = "opentelemetry-exporter-otlp-proto-http"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "googleapis-common-protos", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-exporter-otlp-proto-common", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-proto", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "requests", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1a/87/95e2a5aaa795b4e2260d74e16df2d5541deb2ea9de010bcd615f4dee2654/opentelemetry_exporter_otlp_proto_http-1.44.0.tar.gz", hash = "sha256:c633d7270ad6b57cd4cfbe8b0007a9e2e7c0cb50bd6c50fe2a7b245f721a09d8", size = 25806, upload-time = "2026-07-16T15:25:39.162Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cd/d0/fdeb1a98d8d3a6205f5f297c51b4a9bfe65126ab60339669bbe3dd54c2e2/opentelemetry_exporter_otlp_proto_http-1.44.0-py3-none-any.whl", hash = "sha256:838592fce774c1c8bb7b9a0a7facbfa82e17be5a8a4e94cef10cb84ae026bae3", size = 21850, upload-time = "2026-07-16T15:25:20.006Z" },
+]
+
+[[package]]
+name = "opentelemetry-instrumentation"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-semantic-conventions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "packaging", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "wrapt", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/91/3c58961cb0360cd60509064734f0be4275383c8681d73c580a40ca83ddce/opentelemetry_instrumentation-0.65b0.tar.gz", hash = "sha256:071d9d9eced9bd6460444ec3b0c77229870ed05a881c22c84fdede58e4eed09b", size = 42689, upload-time = "2026-07-16T15:25:50.275Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/40/7b/85eab1215f72adf0e68d3dc4a679b9bff993fa679ff34cd8dd378e2659fd/opentelemetry_instrumentation-0.65b0-py3-none-any.whl", hash = "sha256:ea967a72b9939b5fcfdad572753b4306c59dcb99e3f382d95dae04286805e137", size = 36717, upload-time = "2026-07-16T15:24:51.424Z" },
+]
+
+[[package]]
+name = "opentelemetry-instrumentation-asgi"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "asgiref", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-instrumentation", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-semantic-conventions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-util-http", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/17/83/8e8e83b7ac285281687c7be2fd305213ccccbb8c0a2dd4fb45a8ccaf12c7/opentelemetry_instrumentation_asgi-0.65b0.tar.gz", hash = "sha256:892bca67c56522ffa85a8a83cf934d7b50b3be2132e45cbee705825f0a5ba426", size = 26140, upload-time = "2026-07-16T15:25:54.544Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0b/9c/376962840b619d2d55fe8ee2285f8c70971c090e5fff614516fc654a6f3a/opentelemetry_instrumentation_asgi-0.65b0-py3-none-any.whl", hash = "sha256:3a845a8ebd1c4ef0d8263401e6545f5b219b2feee612090d50f578a87e71fd65", size = 15903, upload-time = "2026-07-16T15:24:57.198Z" },
+]
+
+[[package]]
+name = "opentelemetry-instrumentation-fastapi"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-instrumentation", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-instrumentation-asgi", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-semantic-conventions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-util-http", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/30/23/b057f8196d06efdc1b50e3ff11fbc499a7d96b35c87f217eb7885542f4ea/opentelemetry_instrumentation_fastapi-0.65b0.tar.gz", hash = "sha256:10a3a95486036230413a58fe4fdf4a83fa6bba46918407e527476994bd92bd97", size = 26236, upload-time = "2026-07-16T15:26:05.954Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fa/b0/c9b0300d33349ecc3dfd2362516eaffc44877e90970e6a52178ff953fec3/opentelemetry_instrumentation_fastapi-0.65b0-py3-none-any.whl", hash = "sha256:cda2610a0ec1b22d19886f33e4d861e9f5dbb886aeaa3a1263b47aff82c36943", size = 13261, upload-time = "2026-07-16T15:25:12.429Z" },
+]
+
+[[package]]
+name = "opentelemetry-instrumentation-grpc"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-instrumentation", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-semantic-conventions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "wrapt", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/67/80/0006818bfb54d5e3abb138607beff63561c2c920393ec8d18cc7e3d33810/opentelemetry_instrumentation_grpc-0.65b0.tar.gz", hash = "sha256:b05b3a1f476f350fdb12514ca1ebaed0d596095f91188c2efd26b3e6e2a4cc82", size = 31971, upload-time = "2026-07-16T15:26:07.304Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/05/6b/857ecc989566b09dde5bbfaf7dce4955095416d64b2e9231d1d9d6681d56/opentelemetry_instrumentation_grpc-0.65b0-py3-none-any.whl", hash = "sha256:d4d884439ddee9e68ebd45586eaa243d982351b1ec6a5ce9916eccfd20e66805", size = 24370, upload-time = "2026-07-16T15:25:14.63Z" },
+]
+
+[[package]]
+name = "opentelemetry-instrumentation-httpx"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-instrumentation", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-semantic-conventions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-util-http", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "wrapt", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/61/03/a529140241addd4d0acc73bafbd6f74691651b92fc0ae9b4513cf80f07fa/opentelemetry_instrumentation_httpx-0.65b0.tar.gz", hash = "sha256:4627aa9c6bb99bf4462c8b565b0ef6aeb9ffad95c6c92868be1ef7895de112ee", size = 26309, upload-time = "2026-07-16T15:26:07.973Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9d/0f/c6144096b4914bbf44b43ba21c962e8f333ff045770b50a3e79ed8bd455f/opentelemetry_instrumentation_httpx-0.65b0-py3-none-any.whl", hash = "sha256:400f1b78afa4ee2332b5debe58e1ed1b317913d58812c952576be76660aeadb1", size = 17436, upload-time = "2026-07-16T15:25:15.772Z" },
+]
+
+[[package]]
+name = "opentelemetry-proto"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/64/01/40ac4ae9a149263cc52c2cee200ddd80cb6d8db1a4610abf8eabce0fe771/opentelemetry_proto-1.44.0.tar.gz", hash = "sha256:c547a79c2f8c0c515d31509154682e5921c7cfd5ca67b70e1f9266e2c3e103f3", size = 46488, upload-time = "2026-07-16T15:25:45.34Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/7c/8be563d68e93bbefa5c8affb82ddcff91b3ad858ce49957ba7b16fd3e0ab/opentelemetry_proto-1.44.0-py3-none-any.whl", hash = "sha256:898b155a0e1557afd867478fb6158e8122a46329ca0bb8dc53cc55e98f017f56", size = 72483, upload-time = "2026-07-16T15:25:28.429Z" },
+]
+
+[[package]]
+name = "opentelemetry-resourcedetector-gcp"
+version = "1.14.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "requests", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/06/54/0a95db467d25d81abc16961f5c4538b65f5707e62628a7bb9cdac2849486/opentelemetry_resourcedetector_gcp-1.14.0.tar.gz", hash = "sha256:10b41802acf815838a85c9fe1dae02f5d27ebc17527b77441111c010bead95bc", size = 14831, upload-time = "2026-07-24T19:08:37.901Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/75/81a3035969eb44ff4c6a18abc26c5cbff73ba5e4bde6be94298004c3fbb2/opentelemetry_resourcedetector_gcp-1.14.0-py3-none-any.whl", hash = "sha256:cc4818570933b5c651aef80fbf6e8fbe26d63fe6fbc24ce22ae37e78744d30eb", size = 15561, upload-time = "2026-07-24T19:08:36.843Z" },
+]
+
+[[package]]
+name = "opentelemetry-sdk"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "opentelemetry-semantic-conventions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5d/77/a6592cbc7c8d9bcc9d6757a9df45e04a7c585e3e6e7a13456da522b21109/opentelemetry_sdk-1.44.0.tar.gz", hash = "sha256:cebe7f65dc12f26ead75c6064de12fd2a9052e5060c0272d402cfa203aae123b", size = 208624, upload-time = "2026-07-16T15:25:46.078Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/23/ff077e61886ee020a17ce9c8b6fa11c601c8d8345b09ea24f605445df62a/opentelemetry_sdk-1.44.0-py3-none-any.whl", hash = "sha256:df081c4c6bcfdb1211e3e86140376792643128a25f8d72d1d27675936e7e96ad", size = 137221, upload-time = "2026-07-16T15:25:29.534Z" },
+]
+
+[[package]]
+name = "opentelemetry-semantic-conventions"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/73/0cbdebcb4cf545fdd328da14f5137e37d0770c3f26185e478b0d15d94f50/opentelemetry_semantic_conventions-0.65b0.tar.gz", hash = "sha256:f9b2b81e9d5b64f11bc952075e7e9c7fb0aab075c7fd1c46d597f1b919852d60", size = 148774, upload-time = "2026-07-16T15:25:46.902Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/0e/49df70d9b81fb5cbae4bbf2a49d865b09bcbcbc4eb53f5851b1027738d78/opentelemetry_semantic_conventions-0.65b0-py3-none-any.whl", hash = "sha256:1cacde7b0ad306f84c5ef08c3dbe1bbaf20165bba6f8bff43b670e555a086bcb", size = 204645, upload-time = "2026-07-16T15:25:30.688Z" },
+]
+
+[[package]]
+name = "opentelemetry-util-http"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/32/a9/d7525a59fdd240e69b5af4a6338e78fafa1b4203394122cbd6701fb5f84a/opentelemetry_util_http-0.65b0.tar.gz", hash = "sha256:84f82d826978bba416ab453460ff6a7391cdc3534c93a786595e4068680016b7", size = 11243, upload-time = "2026-07-16T15:26:27.898Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/3f/ab8d29df207ce5f470a07fa96ebb48af4e95b7fab7e7635311b9a32f2fab/opentelemetry_util_http-0.65b0-py3-none-any.whl", hash = "sha256:7553b606f963097cb190536dc30556cce85090692e471a422fff30ca29b04348", size = 8245, upload-time = "2026-07-16T15:25:46.482Z" },
 ]
 
 [[package]]
@@ -1043,10 +2056,10 @@ name = "pandas"
 version = "2.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy" },
-    { name = "python-dateutil" },
-    { name = "pytz" },
-    { name = "tzdata" },
+    { name = "numpy", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "python-dateutil", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pytz", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "tzdata", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/33/01/d40b85317f86cf08d853a4f495195c73815fdf205eef3993821720274518/pandas-2.3.3.tar.gz", hash = "sha256:e05e1af93b977f7eafa636d043f9f94c7ee3ac81af99c13508215942e64c993b", size = 4495223, upload-time = "2025-09-29T23:34:51.853Z" }
 wheels = [
@@ -1064,8 +2077,8 @@ name = "partd"
 version = "1.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "locket" },
-    { name = "toolz" },
+    { name = "locket", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "toolz", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b2/3a/3f06f34820a31257ddcabdfafc2672c5816be79c7e353b02c1f318daa7d4/partd-1.4.2.tar.gz", hash = "sha256:d022c33afbdc8405c226621b015e8067888173d85f7f5ecebb3cafed9a20f02c", size = 21029, upload-time = "2024-05-06T19:51:41.945Z" }
 wheels = [
@@ -1100,9 +2113,44 @@ wheels = [
 ]
 
 [[package]]
+name = "proto-plus"
+version = "1.29.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/46/70/783e33ffbb4466cc154a94f79b869b92a451e2bd45605054e68ff68b7af6/proto_plus-1.29.0.tar.gz", hash = "sha256:cfb4e62ad7e13dd18f346cabbda00cab39930d36a05791fd81ddb074d6ee884f", size = 58592, upload-time = "2026-09-29T19:26:15.963Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b1/05/a3ef5b1161498e7b5a2a60288a9cf41b9149e94555423a43ec536737ac1a/proto_plus-1.29.0-py3-none-any.whl", hash = "sha256:8acd070469a7aaf43f440b022ef9757c8cac1a9f866e933f59ae98669ddc6c8b", size = 50786, upload-time = "2026-09-29T19:25:50.409Z" },
+]
+
+[[package]]
+name = "protobuf"
+version = "6.33.6"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "sys_platform != 'darwin'",
+    "sys_platform == 'darwin'",
+]
+sdist = { url = "https://files.pythonhosted.org/packages/66/70/e908e9c5e52ef7c3a6c7902c9dfbb34c7e29c25d2f81ade3856445fd5c94/protobuf-6.33.6.tar.gz", hash = "sha256:a6768d25248312c297558af96a9f9c929e8c4cee0659cb07e780731095f38135", size = 444531, upload-time = "2026-03-18T19:05:00.988Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fc/9f/2f509339e89cfa6f6a4c4ff50438db9ca488dec341f7e454adad60150b00/protobuf-6.33.6-cp310-abi3-win32.whl", hash = "sha256:7d29d9b65f8afef196f8334e80d6bc1d5d4adedb449971fefd3723824e6e77d3", size = 425739, upload-time = "2026-03-18T19:04:48.373Z" },
+    { url = "https://files.pythonhosted.org/packages/76/5d/683efcd4798e0030c1bab27374fd13a89f7c2515fb1f3123efdfaa5eab57/protobuf-6.33.6-cp310-abi3-win_amd64.whl", hash = "sha256:0cd27b587afca21b7cfa59a74dcbd48a50f0a6400cfb59391340ad729d91d326", size = 437089, upload-time = "2026-03-18T19:04:50.381Z" },
+    { url = "https://files.pythonhosted.org/packages/5c/01/a3c3ed5cd186f39e7880f8303cc51385a198a81469d53d0fdecf1f64d929/protobuf-6.33.6-cp39-abi3-macosx_10_9_universal2.whl", hash = "sha256:9720e6961b251bde64edfdab7d500725a2af5280f3f4c87e57c0208376aa8c3a", size = 427737, upload-time = "2026-03-18T19:04:51.866Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/90/b3c01fdec7d2f627b3a6884243ba328c1217ed2d978def5c12dc50d328a3/protobuf-6.33.6-cp39-abi3-manylinux2014_aarch64.whl", hash = "sha256:e2afbae9b8e1825e3529f88d514754e094278bb95eadc0e199751cdd9a2e82a2", size = 324610, upload-time = "2026-03-18T19:04:53.096Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/ca/25afc144934014700c52e05103c2421997482d561f3101ff352e1292fb81/protobuf-6.33.6-cp39-abi3-manylinux2014_s390x.whl", hash = "sha256:c96c37eec15086b79762ed265d59ab204dabc53056e3443e702d2681f4b39ce3", size = 339381, upload-time = "2026-03-18T19:04:54.616Z" },
+    { url = "https://files.pythonhosted.org/packages/16/92/d1e32e3e0d894fe00b15ce28ad4944ab692713f2e7f0a99787405e43533a/protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl", hash = "sha256:e9db7e292e0ab79dd108d7f1a94fe31601ce1ee3f7b79e0692043423020b0593", size = 323436, upload-time = "2026-03-18T19:04:55.768Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/72/02445137af02769918a93807b2b7890047c32bfb9f90371cbc12688819eb/protobuf-6.33.6-py3-none-any.whl", hash = "sha256:77179e006c476e69bf8e8ce866640091ec42e1beb80b213c3900006ecfba6901", size = 170656, upload-time = "2026-03-18T19:04:59.826Z" },
+]
+
+[[package]]
 name = "protobuf"
 version = "7.36.2"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "sys_platform != 'darwin'",
+    "sys_platform == 'darwin'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/d9/89/5b8517baa72f84a67b8a307ba953c91057af618bf40bf676f3c03551f8f0/protobuf-7.36.2.tar.gz", hash = "sha256:497d0463ff3316681da6c0b9e8d06cb465d61abce00b613ab42226175644d1bb", size = 512737, upload-time = "2026-09-17T20:07:59.326Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/32/72/98342feb672507c8f3a69e34b4fa8961f608edba5c1a48a6f47156d92cb5/protobuf-7.36.2-cp310-abi3-macosx_10_9_universal2.whl", hash = "sha256:cbc70b17ee27e28894c7fee8bb04be1abead49e936bc70eb60052531eee2079e", size = 456039, upload-time = "2026-09-17T20:07:51.542Z" },
@@ -1112,6 +2160,80 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fc/1b/dcc64f358fcb51811b58ae40b3d28f820725f116d86487cc20bd4b130701/protobuf-7.36.2-cp310-abi3-win32.whl", hash = "sha256:912c1221170e16c08d1f086762f563dd61ff83c18b5fa6652952dfaded66f728", size = 442998, upload-time = "2026-09-17T20:07:55.826Z" },
     { url = "https://files.pythonhosted.org/packages/8a/55/b77bda4e5e5f5971fb51b07663694690e9afdb9402136c16a522bd621cad/protobuf-7.36.2-cp310-abi3-win_amd64.whl", hash = "sha256:a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353", size = 456514, upload-time = "2026-09-17T20:07:57.188Z" },
     { url = "https://files.pythonhosted.org/packages/e4/04/d52c7016b04b6c5108f26691f9d33ec82a9b65d041f1a9c771137693d618/protobuf-7.36.2-py3-none-any.whl", hash = "sha256:bdb3a345d48db958e6ce1f18e508beb0cc981d64f24088427549c866cd039f1e", size = 179806, upload-time = "2026-09-17T20:07:58.211Z" },
+]
+
+[[package]]
+name = "protobuf-py"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "protobuf-py-ext", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime') or (platform_machine != 'AMD64' and platform_machine != 'ARM64' and sys_platform == 'win32' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (platform_machine != 'AMD64' and platform_machine != 'ARM64' and sys_platform == 'win32' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (platform_machine != 'AMD64' and platform_machine != 'ARM64' and sys_platform == 'win32' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'arm64' and platform_python_implementation == 'CPython' and sys_platform == 'darwin' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'x86_64' and platform_python_implementation == 'CPython' and sys_platform == 'linux' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'AMD64' and platform_python_implementation == 'CPython' and sys_platform == 'win32' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'ARM64' and platform_python_implementation == 'CPython' and sys_platform == 'win32' and extra == 'project-19-fraud-agent-runtime') or (platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'ARM64' and sys_platform == 'win32' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'ARM64' and sys_platform == 'win32' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (platform_machine == 'ARM64' and sys_platform == 'win32' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime') or (platform_python_implementation != 'CPython' and sys_platform == 'darwin' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (platform_python_implementation != 'CPython' and sys_platform == 'darwin' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (platform_python_implementation != 'CPython' and sys_platform == 'darwin' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "protobuf-py-pure", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f2/fd/905856e412bd77c9e64948547fdf4441e21871912b9df3d42a41b61d48e8/protobuf_py-0.7.0.tar.gz", hash = "sha256:2cec47c0462f8d0bfc1a1cbbe9cf766ec65ca95130700f0afeb962e9d7d3454f", size = 8396, upload-time = "2026-10-22T05:40:37.533Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1c/af/9876b0734662f4cbec932a41c174404aadb4efc2a8a75dff412d39979ede/protobuf_py-0.7.0-py3-none-any.whl", hash = "sha256:215c7083946cbe484f1734ba47bfc04913c1b8aa0ad3f0dc36d81da50d6e7fab", size = 8460, upload-time = "2026-10-22T05:39:22.424Z" },
+]
+
+[[package]]
+name = "protobuf-py-ext"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c9/ab/97e8c7fdd73c6d75491f8b18fddc55fa0875feb5744c52799d522f67a88c/protobuf_py_ext-0.7.0.tar.gz", hash = "sha256:ca19c0f5d83572a177523a07f456e2a88b1fd49c217e3a18fb223f74cd7c4d6a", size = 61923, upload-time = "2026-10-22T05:40:38.423Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/87/2c/4c95829ccf3c89d4321507188557974a7ecf8d4267f11fcd14cde46339fc/protobuf_py_ext-0.7.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:7bb0e73a8468dafa8caa4e107c6125ded903dc72f527b9c6e1b84cc24fe1e901", size = 473776, upload-time = "2026-10-22T05:39:23.727Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/58/72b756559cd6b21e922c3fc59cd61a77360b3e713e716d8e709bc83cdab8/protobuf_py_ext-0.7.0-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0f01dc86b1e4f029533ca40d4686f754455ee58655e16d475aa88af66b0d5119", size = 480543, upload-time = "2026-10-22T05:39:25.438Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/58/8b987c5fb90a4ba9589ffac1a18a96347565f8264c1e842187a470074f65/protobuf_py_ext-0.7.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:413fdff185d8a0eacdbd4bbd161d8ee73e028eae5fcd7fd8fa879ce2a8481fe6", size = 505461, upload-time = "2026-10-22T05:39:26.911Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/f9/b178f18ea43f3bec1db46bcac134465c8497b9e1a9eeeca080fed799e8a1/protobuf_py_ext-0.7.0-cp311-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:b1265e5d32216e49d13471a939d7408c9843c0789908e97d475e76513b654790", size = 659052, upload-time = "2026-10-22T05:39:28.247Z" },
+    { url = "https://files.pythonhosted.org/packages/76/10/ab4bee54edbd798021bed5f2b8e2627d7f804eb84e9044e0d611cc55a988/protobuf_py_ext-0.7.0-cp311-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:f17f1ad31d5a594a4a4cd983f16d45633647e190654916b313178962981bbad4", size = 717613, upload-time = "2026-10-22T05:39:29.673Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/66/66432b1e5bbfc17269c2a5f57e2cc90fec86bf63fa77ac49b28b9336637a/protobuf_py_ext-0.7.0-cp311-abi3-win_amd64.whl", hash = "sha256:6f9230bf2f33a4015c6d109939cde2cc73084cc4715ea1d58d5d75b19c8f75d0", size = 447750, upload-time = "2026-10-22T05:39:31.428Z" },
+    { url = "https://files.pythonhosted.org/packages/70/e3/69cffb038e87bd81724095508e83bf3b5ba9df4424a247b4873fa8679faa/protobuf_py_ext-0.7.0-cp311-abi3-win_arm64.whl", hash = "sha256:6515a3bf579cfaa8cbf3d3e3c8a791c35200cf0f4a801efde01a874a9a53ef79", size = 423594, upload-time = "2026-10-22T05:39:32.855Z" },
+    { url = "https://files.pythonhosted.org/packages/93/66/076ff68599093f0be17a082d0b49ab9c82a4e16648d01ab10ead81550708/protobuf_py_ext-0.7.0-cp315-abi3.abi3t-macosx_11_0_arm64.whl", hash = "sha256:2174b8072954b9e74a82163989b23b9ffb0a7deff5abee896fcaa18716256392", size = 469111, upload-time = "2026-10-22T05:40:03.999Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/31/7415cbb9ff035a8097b8c7f41255aaa180f5deb9d7920efa0fa578bbc4eb/protobuf_py_ext-0.7.0-cp315-abi3.abi3t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:08d496c9a9e492380087428692f1652c5a8b1f334257e0ab205f20b213518c20", size = 475053, upload-time = "2026-10-22T05:40:05.357Z" },
+    { url = "https://files.pythonhosted.org/packages/91/2e/7efa3ae0ccca7981749c6580116d3e088ea747382967583507d6658fdbdd/protobuf_py_ext-0.7.0-cp315-abi3.abi3t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0950844a5f321dea18280910b0bfb004e2ef89ffc4a91b028c1a8845d71d6a70", size = 500694, upload-time = "2026-10-22T05:40:06.907Z" },
+    { url = "https://files.pythonhosted.org/packages/2b/80/2cc398f36dc437067d012d40f90df26c505e47915db201ad2ff2606b1bbe/protobuf_py_ext-0.7.0-cp315-abi3.abi3t-musllinux_1_2_aarch64.whl", hash = "sha256:5c228b6fe018404405f2126ddc76f490e0ac345cc0657bb62a139a354d6ddd7e", size = 654394, upload-time = "2026-10-22T05:40:08.24Z" },
+    { url = "https://files.pythonhosted.org/packages/f3/60/86b92f1235c5ff22634cb89e3a1ac17bda2f2ece3a5704f80fead317e2a5/protobuf_py_ext-0.7.0-cp315-abi3.abi3t-musllinux_1_2_x86_64.whl", hash = "sha256:30f5837e99a98513b33d49fa1c9b008b23b8b6e6eb85640876d16462bc20ac60", size = 713363, upload-time = "2026-10-22T05:40:09.619Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/fa/394dd6edd5b3e0f0d6b1b0247d98fe77324493f685888c500d5c55ee9693/protobuf_py_ext-0.7.0-cp315-abi3.abi3t-win_amd64.whl", hash = "sha256:d85f2f5a1086296606c1e395f36176d6785abd4c3f8a6629f6201a54e57558e6", size = 441484, upload-time = "2026-10-22T05:40:11.316Z" },
+    { url = "https://files.pythonhosted.org/packages/16/d2/a2a995b0340916f64900a6930e7ad40eda79c6f1c6d9a05833a9968db27a/protobuf_py_ext-0.7.0-cp315-abi3.abi3t-win_arm64.whl", hash = "sha256:b2e62e1b1a49176934e8d6de5c026baa1822f7b4a542e000fd1bbcdfc9abd34b", size = 419089, upload-time = "2026-10-22T05:40:12.811Z" },
+]
+
+[[package]]
+name = "protobuf-py-pure"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dc/c7/a2db606c9d676390de993c027464f209fe0f1b039b1f82d8f22f0c7e283b/protobuf_py_pure-0.7.0.tar.gz", hash = "sha256:472ba30b4f1d8a95c82b88dc2aaba4964de3e183fd7593343845e44a92f78ede", size = 161918, upload-time = "2026-10-22T05:40:39.417Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f9/58/fa940f26fb1a01d85ccf1aac5193751b8507e2648a30936b5e99f605679a/protobuf_py_pure-0.7.0-py3-none-any.whl", hash = "sha256:9871a60800778e406d1378b589d2dd53da7c13cd644d16f6444d521443c99565", size = 214865, upload-time = "2026-10-22T05:40:34.332Z" },
+]
+
+[[package]]
+name = "protovalidate"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "protobuf-py", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a2/af/7518ed77c4355e4bb025496915385bd9337c975d8b7487a2f97adf2c1ab3/protovalidate-2.1.0.tar.gz", hash = "sha256:d2f66bd8c7e8c4929116ad598348e83d90bd718f0387f2307b34f83b1740f318", size = 18779340, upload-time = "2026-10-23T04:01:08.311Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9e/dc/c6a3f644d9e047279557b8623e25f32c8cc58499eaa575a84cdf201e3756/protovalidate-2.1.0-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:b02fe6dd3e373d6afcbaf858e62c37a337585f4ccb27334274e25bb30a6f55b2", size = 3233878, upload-time = "2026-10-23T04:00:18.714Z" },
+    { url = "https://files.pythonhosted.org/packages/96/8c/9c6aa9bb15ace2a9981ad50d1d2488f35e0d40e04c93a7860010afd50c4c/protovalidate-2.1.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:bdc9783c31de39465b2edbe11d384864113c8d599c20764d2aa154aefbd8fe45", size = 3002932, upload-time = "2026-10-23T04:00:21.008Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/9f/34899955f2569332a99484c651042a8d6f8009ee999bb91ea68c67537174/protovalidate-2.1.0-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b6cd2bb85b9af4bb5449df117c4f005130f9acd358a0385e6909dfb3ddefc353", size = 3745395, upload-time = "2026-10-23T04:00:23.22Z" },
+    { url = "https://files.pythonhosted.org/packages/85/88/2ef642906260c7603cbab71658892a3e68298d6d07f3ece1baa7c99cb336/protovalidate-2.1.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:86d57d28145b56532f43188036a638f1b551996f93453fdd67a2325f8b3267df", size = 4052025, upload-time = "2026-10-23T04:00:25.143Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/d7/0ed4cb8bb3bed00a1ff6cf52773b128143216c22d4a0284f4260917d02dc/protovalidate-2.1.0-cp311-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:c58b0e0247e3eb3b17ef447c30dfb6144a26797805714d1012111ccf5b1fde6a", size = 9998753, upload-time = "2026-10-23T04:00:27.173Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/12/2ab65a0d44384c47acf8b04d1b99bf16d430a5d943e2d5b316f5854200ea/protovalidate-2.1.0-cp311-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:2675889c98660df99a2bd2d919483a95a5b74317eff83dd6f553b65b49058718", size = 10603395, upload-time = "2026-10-23T04:00:29.474Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/5f/b801ca3e2b10095d001520248232dd8dc8ff65db1cc0a26987461e4b7fe1/protovalidate-2.1.0-cp311-abi3-win_amd64.whl", hash = "sha256:7720293383bfd0356be59cd505892f40e68867b759fce9ec9087b6aa5c924075", size = 3289512, upload-time = "2026-10-23T04:00:31.623Z" },
+    { url = "https://files.pythonhosted.org/packages/f3/0a/a06130ae55b30044943daaa6b5aa6a848c4a7a03351ee4d4a974d322e91b/protovalidate-2.1.0-cp311-abi3-win_arm64.whl", hash = "sha256:c8714dbae2e6f3d9be02d54e66e02e3c58d8117438e256cf853a7df8d45643dc", size = 3117228, upload-time = "2026-10-23T04:00:34.058Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/d5/8ddbfa61b6b23f0b25e275c7119ac4e6bce31f9e1a8b99c33842c6082a88/protovalidate-2.1.0-cp315-abi3.abi3t-macosx_10_12_x86_64.whl", hash = "sha256:9542ae752f098796bf538dfd1fa1d85edc3ab16d9545345e6636bb78f2b28fe8", size = 3239459, upload-time = "2026-10-23T04:00:52.04Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/c8/2030f4fa593fa1ee0b60946912073be8636b24b9add69b69ee79960a898d/protovalidate-2.1.0-cp315-abi3.abi3t-macosx_11_0_arm64.whl", hash = "sha256:afb0dd7029a29b859db0c4697480155a32b064ae3f0121dfe7e0d97ec98d0cca", size = 3001796, upload-time = "2026-10-23T04:00:53.749Z" },
+    { url = "https://files.pythonhosted.org/packages/a3/45/cf5a6788d6be5b23943f1b0f0a3b0f01194b84a8bfd2d62dce3cd2168409/protovalidate-2.1.0-cp315-abi3.abi3t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f1cdba9b0b5f67bbb02d0d43fa887863ce0af6296713d9bbd6c20b0fb6a0c34b", size = 3745064, upload-time = "2026-10-23T04:00:56.084Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/98/39fb7a4981ac9de206ddda2ef114f2dd36753c819afe49070afbb7b4dd8f/protovalidate-2.1.0-cp315-abi3.abi3t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c5dd874778b63448725bce985f84bfa3c2f8eb77dd95b8a6a3a8ee5355cbc5c1", size = 4053332, upload-time = "2026-10-23T04:00:57.857Z" },
+    { url = "https://files.pythonhosted.org/packages/af/64/b9ebea974cbf6335f26bfef198db4e6a65fd988de3f0779d2b16911562dd/protovalidate-2.1.0-cp315-abi3.abi3t-musllinux_1_2_aarch64.whl", hash = "sha256:137653777a7e11ffa69f60944c7e903177040c282c3bbe998732f4794e059e4b", size = 9998737, upload-time = "2026-10-23T04:00:59.902Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/31/281fd91ea2314a21bae1c8b6230645b8b92a1575e87427887544ed634313/protovalidate-2.1.0-cp315-abi3.abi3t-musllinux_1_2_x86_64.whl", hash = "sha256:93d66a07f8b82631f40f3f660a2d829f0d2421e5bcedd88a0fefb7b1890962eb", size = 10604949, upload-time = "2026-10-23T04:01:02.314Z" },
+    { url = "https://files.pythonhosted.org/packages/32/eb/379a8ccbb0598102fde5a77c0e7ced4d86d85848586d0119765c3781b026/protovalidate-2.1.0-cp315-abi3.abi3t-win_amd64.whl", hash = "sha256:48060577468a4494e37ab935786547cd95a0dbb2eb0a613c0419432aeb384280", size = 3288667, upload-time = "2026-10-23T04:01:04.445Z" },
+    { url = "https://files.pythonhosted.org/packages/98/f0/530d7654f9ae8dd03c30bbb1e5dacd2d23ad4aac56bbd864f748d66c766c/protovalidate-2.1.0-cp315-abi3.abi3t-win_arm64.whl", hash = "sha256:b654823c28148a0ea5e2ca7093735bf981de05ce8b7564985c0a79cfdf8f7193", size = 3116504, upload-time = "2026-10-23T04:01:06.11Z" },
 ]
 
 [[package]]
@@ -1135,8 +2257,8 @@ name = "psycopg"
 version = "3.3.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions" },
-    { name = "tzdata", marker = "sys_platform == 'win32'" },
+    { name = "typing-extensions", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "tzdata", marker = "(sys_platform == 'win32' and extra == 'project-16-fraud-rag-common') or (sys_platform == 'win32' and extra == 'project-17-fraud-rag-serving') or (sys_platform == 'win32' and extra == 'project-18-fraud-rag-pipeline') or (sys_platform == 'win32' and extra != 'project-19-fraud-agent-runtime') or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/26/3ea4ca5eaea1c0debcdf7ee7c1613fbe721dc27a03c461c0817ffd8a0601/psycopg-3.3.6.tar.gz", hash = "sha256:c081f2250df751a943036e42db6df4571c66cd0aabe8291a7a506512b12007d2", size = 168171, upload-time = "2026-09-18T13:22:55.152Z" }
 wheels = [
@@ -1145,10 +2267,10 @@ wheels = [
 
 [package.optional-dependencies]
 binary = [
-    { name = "psycopg-binary", marker = "implementation_name != 'pypy'" },
+    { name = "psycopg-binary", marker = "(implementation_name != 'pypy' and extra == 'project-16-fraud-rag-common') or (implementation_name != 'pypy' and extra == 'project-17-fraud-rag-serving') or (implementation_name != 'pypy' and extra == 'project-18-fraud-rag-pipeline') or (implementation_name != 'pypy' and extra != 'project-19-fraud-agent-runtime') or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
 ]
 pool = [
-    { name = "psycopg-pool" },
+    { name = "psycopg-pool", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 
 [[package]]
@@ -1174,7 +2296,7 @@ name = "psycopg-pool"
 version = "3.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/74/5e/c0664b968b102ff68b811d999c728546c48d5c1eec03e3bbaf88c0cb4472/psycopg_pool-3.3.3.tar.gz", hash = "sha256:df87b5d9d0ad7db37f6cdad4fa8ce113d250f5997f6db38e9a99192fb67f9e1d", size = 32006, upload-time = "2026-09-22T15:53:24.947Z" }
 wheels = [
@@ -1194,6 +2316,27 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/bb/e4/5bae3133b7fe04c24907a20f3bc1fba388cbbde659199e7b76445982047a/pyarrow-26.0.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:954d971b363b16ee41f89389a4053315dc71265f2ce5c2468eb0a910b1166268", size = 54444720, upload-time = "2026-10-09T08:14:31.214Z" },
     { url = "https://files.pythonhosted.org/packages/ba/b4/ee422493bb6dafdbef776cfe2c2a73106a1063a79bf4e78d1e5f51176885/pyarrow-26.0.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:5d5768d03426abe6526d5274adefa00abf00a7f81118c46e98b5a46390f5549e", size = 57388949, upload-time = "2026-10-09T08:14:38.964Z" },
     { url = "https://files.pythonhosted.org/packages/54/3c/1783aab1dac28e175dcf26dfc7123725efc474caecaed91e8a34cb89cad0/pyarrow-26.0.0-cp312-cp312-win_amd64.whl", hash = "sha256:cc903e1069e9dd5e9dcf780324c0112e27e051e422ecfaff574fb33ed65d9160", size = 28567581, upload-time = "2026-10-09T08:14:44.279Z" },
+]
+
+[[package]]
+name = "pyasn1"
+version = "0.6.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/88/7e/3c0da41061a2021cac7cd524fd57092adbe5b515e8bf9005702e366802e2/pyasn1-0.6.5.tar.gz", hash = "sha256:6b11616a6bcf3a40e635f082bb232fa57b5e0dd7f517bd7ddd69ec3794508a47", size = 155152, upload-time = "2026-10-27T06:32:49.125Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/19/1f/3eefd5c84c35cae44549ce1c7f7e58f7945b34f5a6bce07a135438522073/pyasn1-0.6.5-py3-none-any.whl", hash = "sha256:4017b0fce125096b8573b39c989fdb1a4b19cf761e683398184550fea0e66587", size = 84807, upload-time = "2026-10-27T06:32:48.045Z" },
+]
+
+[[package]]
+name = "pyasn1-modules"
+version = "0.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyasn1", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e9/e6/78ebbb10a8c8e4b61a59249394a4a594c1a7af95593dc933a349c8d00964/pyasn1_modules-0.4.2.tar.gz", hash = "sha256:677091de870a80aae844b1ca6134f54652fa2c8c5a52aa396440ac3106e941e6", size = 307892, upload-time = "2025-03-28T02:41:22.17Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/8d/d529b5d697919ba8c11ad626e835d4039be708a35b0d22de83a269a6682c/pyasn1_modules-0.4.2-py3-none-any.whl", hash = "sha256:29253a9207ce32b64c3ac6600edc75368f98473906e8fd1043bd6b5b1de2c14a", size = 181259, upload-time = "2025-03-28T02:41:19.028Z" },
 ]
 
 [[package]]
@@ -1264,18 +2407,18 @@ name = "pyiceberg"
 version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cachetools" },
-    { name = "click" },
-    { name = "fsspec" },
-    { name = "mmh3" },
-    { name = "pydantic" },
-    { name = "pyparsing" },
-    { name = "pyroaring" },
-    { name = "requests" },
-    { name = "rich" },
-    { name = "strictyaml" },
-    { name = "tenacity" },
-    { name = "zstandard" },
+    { name = "cachetools", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "click", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "fsspec", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "mmh3", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pydantic", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pyparsing", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pyroaring", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "requests", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "rich", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "strictyaml", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "tenacity", version = "8.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "zstandard", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/85/08/bde71e0bbcf1a62c92d7fa457b508691596c65fa7e52c1982c78c461cd1c/pyiceberg-0.12.0.tar.gz", hash = "sha256:19f165d298054f9436108691098b60fa0fa99d0eff5fb884700c43b29334a39d", size = 1212830, upload-time = "2026-09-01T17:28:42.378Z" }
 wheels = [
@@ -1290,7 +2433,7 @@ wheels = [
 
 [package.optional-dependencies]
 pyarrow = [
-    { name = "pyarrow" },
+    { name = "pyarrow", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 
 [[package]]
@@ -1341,7 +2484,7 @@ name = "pytest"
 version = "9.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
@@ -1350,6 +2493,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/79/42/bb4641652e58dedeac2ec51abc1f8cae4fee4ec63899a0999016229a0f2a/pytest-9.2.0.tar.gz", hash = "sha256:97c4f3b1f3c7414aa36465e09b8220f1d03627993bd51b1282e193753c80557b", size = 1797555, upload-time = "2026-10-27T21:30:20.728Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/51/39/1f5d8c8877a0fa327db959c19341d4be61660de1ab6b7391f9eb805bcd67/pytest-9.2.0-py3-none-any.whl", hash = "sha256:07acdcf88ec174f907dc01af70bf52d49b014bbab03faeeade31c96b18c2e588", size = 411776, upload-time = "2026-10-27T21:30:19.131Z" },
+]
+
+[[package]]
+name = "pytest-asyncio"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/43/7c/d36d04db312ecf4298932ef77e6e4a9e8ad017906e24e34f0b0c361a2473/pytest_asyncio-1.4.0.tar.gz", hash = "sha256:c6c0d2259945122819f171a32ecea2c349ead889ee28176caaf492143424be42", size = 58514, upload-time = "2026-05-26T09:56:04.083Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/03/e2/08a497ef684b88559c9cc5f4ad53a37e7b99e727094a86d6ea32536d5d3c/pytest_asyncio-1.4.0-py3-none-any.whl", hash = "sha256:933ca923a23075a87fb7070c0ec272a6848489824d887c85c812670932835aa1", size = 16930, upload-time = "2026-05-26T09:56:02.576Z" },
 ]
 
 [[package]]
@@ -1623,6 +2779,15 @@ wheels = [
 ]
 
 [[package]]
+name = "sniffio"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372, upload-time = "2024-02-25T23:20:04.057Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235, upload-time = "2024-02-25T23:20:01.196Z" },
+]
+
+[[package]]
 name = "sqlalchemy"
 version = "2.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1645,9 +2810,35 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+asyncio = [
+    { name = "greenlet", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
 mypy = [
-    { name = "mypy" },
-    { name = "types-greenlet" },
+    { name = "mypy", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "types-greenlet", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+]
+
+[[package]]
+name = "sqlalchemy-spanner"
+version = "1.20.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "alembic", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "google-cloud-spanner", marker = "extra == 'project-19-fraud-agent-runtime'" },
+    { name = "sqlalchemy", marker = "extra == 'project-19-fraud-agent-runtime'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/06/bd/12799120e3e23d1c825ecd9a1afcb8c612b00bcae18b4aed5f7104e14f7c/sqlalchemy_spanner-1.20.1.tar.gz", hash = "sha256:73537add78fe258752545d1e2d3e13be081ba278b0612cbd671b26f6c24fad64", size = 83277, upload-time = "2026-09-03T22:31:23.33Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/30/d7/ddde98fc154aa2c09f19c7734afc4f2247ea41457de51431a217973e289f/sqlalchemy_spanner-1.20.1-py3-none-any.whl", hash = "sha256:bf72778b440e74240453cf755b071469ef54c0972d4a2cc3eb6b6240b9a4a275", size = 32177, upload-time = "2026-09-03T22:30:46.705Z" },
+]
+
+[[package]]
+name = "sqlparse"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5f/d3/3f06a1006f2261d1342aefb3c71eed02f5d4ca5bdbecd86ebc12ad38306e/sqlparse-0.6.0.tar.gz", hash = "sha256:113c35c75365ab9cc9c7231d68c6428fb11c085fc8e9eb1ad659b7ddbf6cd2b9", size = 178477, upload-time = "2026-08-13T19:16:06.396Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d9/50/f00935da0ec7cbf325f8dc4f772ae46fbc7b672dd62876e73f0a94adda57/sqlparse-0.6.0-py3-none-any.whl", hash = "sha256:b861c0288ce2fa56209a9a6412d2e066ac664b3873b89c26c9d8415e8e32996f", size = 50070, upload-time = "2026-08-13T19:16:04.062Z" },
 ]
 
 [[package]]
@@ -1681,7 +2872,7 @@ name = "strictyaml"
 version = "1.7.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "python-dateutil" },
+    { name = "python-dateutil", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b3/08/efd28d49162ce89c2ad61a88bd80e11fb77bc9f6c145402589112d38f8af/strictyaml-1.7.3.tar.gz", hash = "sha256:22f854a5fcab42b5ddba8030a0e4be51ca89af0267961c8d6cfa86395586c407", size = 115206, upload-time = "2023-03-10T12:50:27.062Z" }
 wheels = [
@@ -1713,9 +2904,26 @@ wheels = [
 name = "tenacity"
 version = "8.5.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "sys_platform != 'darwin'",
+    "sys_platform == 'darwin'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/a3/4d/6a19536c50b849338fcbe9290d562b52cbdcf30d8963d3588a68a4107df1/tenacity-8.5.0.tar.gz", hash = "sha256:8bc6c0c8a09b31e6cad13c47afbed1a567518250a9a171418582ed8d9c20ca78", size = 47309, upload-time = "2024-07-05T07:25:31.836Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d2/3f/8ba87d9e287b9d385a02a7114ddcef61b26f86411e121c9003eb509a1773/tenacity-8.5.0-py3-none-any.whl", hash = "sha256:b594c2a5945830c267ce6b79a166228323ed52718f30302c1359836112346687", size = 28165, upload-time = "2024-07-05T07:25:29.591Z" },
+]
+
+[[package]]
+name = "tenacity"
+version = "9.1.4"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "sys_platform != 'darwin'",
+    "sys_platform == 'darwin'",
+]
+sdist = { url = "https://files.pythonhosted.org/packages/47/c6/ee486fd809e357697ee8a44d3d69222b344920433d3b6666ccd9b374630c/tenacity-9.1.4.tar.gz", hash = "sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a", size = 49413, upload-time = "2026-02-07T10:45:33.841Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d7/c1/eb8f9debc45d3b7918a32ab756658a0904732f75e555402972246b0b8e71/tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55", size = 28926, upload-time = "2026-02-07T10:45:32.24Z" },
 ]
 
 [[package]]
@@ -1771,13 +2979,13 @@ resolution-markers = [
     "sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "filelock" },
-    { name = "fsspec" },
-    { name = "jinja2" },
-    { name = "networkx" },
-    { name = "setuptools" },
-    { name = "sympy" },
-    { name = "typing-extensions" },
+    { name = "filelock", marker = "sys_platform == 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "fsspec", marker = "sys_platform == 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "jinja2", marker = "sys_platform == 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "networkx", marker = "sys_platform == 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "setuptools", marker = "sys_platform == 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "sympy", marker = "sys_platform == 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "typing-extensions", marker = "sys_platform == 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.14.1-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:9cf3082d25560efb1eef921871595227c0cf305abb7761ca45b6b988ef6cdd45", upload-time = "2026-09-30T19:50:32Z" },
@@ -1791,13 +2999,13 @@ resolution-markers = [
     "sys_platform != 'darwin'",
 ]
 dependencies = [
-    { name = "filelock" },
-    { name = "fsspec" },
-    { name = "jinja2" },
-    { name = "networkx" },
-    { name = "setuptools" },
-    { name = "sympy" },
-    { name = "typing-extensions" },
+    { name = "filelock", marker = "sys_platform != 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "fsspec", marker = "sys_platform != 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "jinja2", marker = "sys_platform != 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "networkx", marker = "sys_platform != 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "setuptools", marker = "sys_platform != 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "sympy", marker = "sys_platform != 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "typing-extensions", marker = "sys_platform != 'darwin' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp312-cp312-linux_s390x.whl", hash = "sha256:6b06a7f6275c5fdecaf1dbf5546f0820b024a97785575bb99e3d9930d83cd86b", upload-time = "2026-09-30T19:47:30Z" },
@@ -1812,7 +3020,7 @@ name = "tqdm"
 version = "4.70.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0d/ea/b2a5bd54b28a324dae8211928b2d730b6547500342c7e6c6dea08bd0a485/tqdm-4.70.1.tar.gz", hash = "sha256:cefd0eca11b2a37a3aee776544d4f4ae913f02688135b5556b8788dfa474afc4", size = 171846, upload-time = "2026-09-11T07:25:16.601Z" }
 wheels = [
@@ -1853,7 +3061,7 @@ name = "typeguard"
 version = "4.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b4/de/4420db493fa8fc0856d5e5c1b159c63a323d2de2317babe36b01568928e8/typeguard-4.6.0.tar.gz", hash = "sha256:e7414f09111317de3e335de92cd397c5c0ca00b1cc1676de12e1d444a79b3f21", size = 82330, upload-time = "2026-07-26T08:40:23.207Z" }
 wheels = [
@@ -1866,7 +3074,7 @@ version = "0.27.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
     { name = "rich" },
     { name = "shellingham" },
 ]
@@ -1938,12 +3146,12 @@ wheels = [
 
 [package.optional-dependencies]
 standard = [
-    { name = "httptools" },
-    { name = "python-dotenv" },
-    { name = "pyyaml" },
-    { name = "uvloop", marker = "platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'" },
-    { name = "watchfiles" },
-    { name = "websockets" },
+    { name = "httptools", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "python-dotenv", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "pyyaml", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "uvloop", marker = "(platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32' and extra == 'project-16-fraud-rag-common') or (platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32' and extra == 'project-17-fraud-rag-serving') or (platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32' and extra == 'project-18-fraud-rag-pipeline') or (platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32' and extra != 'project-19-fraud-agent-runtime') or (platform_python_implementation == 'PyPy' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (platform_python_implementation == 'PyPy' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (platform_python_implementation == 'PyPy' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime') or (sys_platform == 'cygwin' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (sys_platform == 'cygwin' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (sys_platform == 'cygwin' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime') or (sys_platform == 'win32' and extra == 'project-16-fraud-rag-common' and extra == 'project-19-fraud-agent-runtime') or (sys_platform == 'win32' and extra == 'project-17-fraud-rag-serving' and extra == 'project-19-fraud-agent-runtime') or (sys_platform == 'win32' and extra == 'project-18-fraud-rag-pipeline' and extra == 'project-19-fraud-agent-runtime')" },
+    { name = "watchfiles", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "websockets", version = "17.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 
 [[package]]
@@ -1951,8 +3159,8 @@ name = "uvicorn-worker"
 version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "gunicorn" },
-    { name = "uvicorn" },
+    { name = "gunicorn", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
+    { name = "uvicorn", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/80/59/9101b9c0680fd80e9d26c07deb822a5d18a324339fcf9cd017885ee808ad/uvicorn_worker-0.4.0.tar.gz", hash = "sha256:8ee5306070d8f38dce124adce488c3c0b50f20cf0c0222b12c66188da7214493", size = 9361, upload-time = "2025-09-20T10:47:01.218Z" }
 wheels = [
@@ -1974,11 +3182,32 @@ wheels = [
 ]
 
 [[package]]
+name = "watchdog"
+version = "6.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/db/7d/7f3d619e951c88ed75c6037b246ddcf2d322812ee8ea189be89511721d54/watchdog-6.0.0.tar.gz", hash = "sha256:9ddf7c82fda3ae8e24decda1338ede66e1c99883db93711d8fb941eaa2d8c282", size = 131220, upload-time = "2024-11-01T14:07:13.037Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/39/ea/3930d07dafc9e286ed356a679aa02d777c06e9bfd1164fa7c19c288a5483/watchdog-6.0.0-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:bdd4e6f14b8b18c334febb9c4425a878a2ac20efd1e0b231978e7b150f92a948", size = 96471, upload-time = "2024-11-01T14:06:37.745Z" },
+    { url = "https://files.pythonhosted.org/packages/12/87/48361531f70b1f87928b045df868a9fd4e253d9ae087fa4cf3f7113be363/watchdog-6.0.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:c7c15dda13c4eb00d6fb6fc508b3c0ed88b9d5d374056b239c4ad1611125c860", size = 88449, upload-time = "2024-11-01T14:06:39.748Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/7e/8f322f5e600812e6f9a31b75d242631068ca8f4ef0582dd3ae6e72daecc8/watchdog-6.0.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:6f10cb2d5902447c7d0da897e2c6768bca89174d0c6e1e30abec5421af97a5b0", size = 89054, upload-time = "2024-11-01T14:06:41.009Z" },
+    { url = "https://files.pythonhosted.org/packages/a9/c7/ca4bf3e518cb57a686b2feb4f55a1892fd9a3dd13f470fca14e00f80ea36/watchdog-6.0.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:7607498efa04a3542ae3e05e64da8202e58159aa1fa4acddf7678d34a35d4f13", size = 79079, upload-time = "2024-11-01T14:06:59.472Z" },
+    { url = "https://files.pythonhosted.org/packages/5c/51/d46dc9332f9a647593c947b4b88e2381c8dfc0942d15b8edc0310fa4abb1/watchdog-6.0.0-py3-none-manylinux2014_armv7l.whl", hash = "sha256:9041567ee8953024c83343288ccc458fd0a2d811d6a0fd68c4c22609e3490379", size = 79078, upload-time = "2024-11-01T14:07:01.431Z" },
+    { url = "https://files.pythonhosted.org/packages/d4/57/04edbf5e169cd318d5f07b4766fee38e825d64b6913ca157ca32d1a42267/watchdog-6.0.0-py3-none-manylinux2014_i686.whl", hash = "sha256:82dc3e3143c7e38ec49d61af98d6558288c415eac98486a5c581726e0737c00e", size = 79076, upload-time = "2024-11-01T14:07:02.568Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/cc/da8422b300e13cb187d2203f20b9253e91058aaf7db65b74142013478e66/watchdog-6.0.0-py3-none-manylinux2014_ppc64.whl", hash = "sha256:212ac9b8bf1161dc91bd09c048048a95ca3a4c4f5e5d4a7d1b1a7d5752a7f96f", size = 79077, upload-time = "2024-11-01T14:07:03.893Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/3b/b8964e04ae1a025c44ba8e4291f86e97fac443bca31de8bd98d3263d2fcf/watchdog-6.0.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:e3df4cbb9a450c6d49318f6d14f4bbc80d763fa587ba46ec86f99f9e6876bb26", size = 79078, upload-time = "2024-11-01T14:07:05.189Z" },
+    { url = "https://files.pythonhosted.org/packages/62/ae/a696eb424bedff7407801c257d4b1afda455fe40821a2be430e173660e81/watchdog-6.0.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:2cce7cfc2008eb51feb6aab51251fd79b85d9894e98ba847408f662b3395ca3c", size = 79077, upload-time = "2024-11-01T14:07:06.376Z" },
+    { url = "https://files.pythonhosted.org/packages/b5/e8/dbf020b4d98251a9860752a094d09a65e1b436ad181faf929983f697048f/watchdog-6.0.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:20ffe5b202af80ab4266dcd3e91aae72bf2da48c0d33bdb15c66658e685e94e2", size = 79078, upload-time = "2024-11-01T14:07:07.547Z" },
+    { url = "https://files.pythonhosted.org/packages/07/f6/d0e5b343768e8bcb4cda79f0f2f55051bf26177ecd5651f84c07567461cf/watchdog-6.0.0-py3-none-win32.whl", hash = "sha256:07df1fdd701c5d4c8e55ef6cf55b8f0120fe1aef7ef39a1c6fc6bc2e606d517a", size = 79065, upload-time = "2024-11-01T14:07:09.525Z" },
+    { url = "https://files.pythonhosted.org/packages/db/d9/c495884c6e548fce18a8f40568ff120bc3a4b7b99813081c8ac0c936fa64/watchdog-6.0.0-py3-none-win_amd64.whl", hash = "sha256:cbafb470cf848d93b5d013e2ecb245d4aa1c8fd0504e863ccefa32445359d680", size = 79070, upload-time = "2024-11-01T14:07:10.686Z" },
+    { url = "https://files.pythonhosted.org/packages/33/e8/e40370e6d74ddba47f002a32919d91310d6074130fe4e17dabcafc15cbf1/watchdog-6.0.0-py3-none-win_ia64.whl", hash = "sha256:a1914259fa9e1454315171103c6a30961236f508b9b623eae470268bbcc6a22f", size = 79067, upload-time = "2024-11-01T14:07:11.845Z" },
+]
+
+[[package]]
 name = "watchfiles"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "anyio" },
+    { name = "anyio", marker = "extra == 'project-16-fraud-rag-common' or extra == 'project-17-fraud-rag-serving' or extra == 'project-18-fraud-rag-pipeline' or extra != 'project-19-fraud-agent-runtime'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b3/68/e6aa0b77d217b31f8f486ec0cdfe5e00e6e38dc0be657e7d85819b9faf0a/watchfiles-1.3.0.tar.gz", hash = "sha256:99aee4a07847c06820765fd7b1b49ceac4f3f711ccb7d104655a33231de1c207", size = 108119, upload-time = "2026-09-21T09:08:55.664Z" }
 wheels = [
@@ -2000,8 +3229,36 @@ wheels = [
 
 [[package]]
 name = "websockets"
+version = "15.0.1"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "sys_platform != 'darwin'",
+    "sys_platform == 'darwin'",
+]
+sdist = { url = "https://files.pythonhosted.org/packages/21/e6/26d09fab466b7ca9c7737474c52be4f76a40301b08362eb2dbc19dcc16c1/websockets-15.0.1.tar.gz", hash = "sha256:82544de02076bafba038ce055ee6412d68da13ab47f0c60cab827346de828dee", size = 177016, upload-time = "2025-03-05T20:03:41.606Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/6b/4545a0d843594f5d0771e86463606a3988b5a09ca5123136f8a76580dd63/websockets-15.0.1-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:3e90baa811a5d73f3ca0bcbf32064d663ed81318ab225ee4f427ad4e26e5aff3", size = 175437, upload-time = "2025-03-05T20:02:16.706Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/71/809a0f5f6a06522af902e0f2ea2757f71ead94610010cf570ab5c98e99ed/websockets-15.0.1-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:592f1a9fe869c778694f0aa806ba0374e97648ab57936f092fd9d87f8bc03665", size = 173096, upload-time = "2025-03-05T20:02:18.832Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/69/1a681dd6f02180916f116894181eab8b2e25b31e484c5d0eae637ec01f7c/websockets-15.0.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:0701bc3cfcb9164d04a14b149fd74be7347a530ad3bbf15ab2c678a2cd3dd9a2", size = 173332, upload-time = "2025-03-05T20:02:20.187Z" },
+    { url = "https://files.pythonhosted.org/packages/a6/02/0073b3952f5bce97eafbb35757f8d0d54812b6174ed8dd952aa08429bcc3/websockets-15.0.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e8b56bdcdb4505c8078cb6c7157d9811a85790f2f2b3632c7d1462ab5783d215", size = 183152, upload-time = "2025-03-05T20:02:22.286Z" },
+    { url = "https://files.pythonhosted.org/packages/74/45/c205c8480eafd114b428284840da0b1be9ffd0e4f87338dc95dc6ff961a1/websockets-15.0.1-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:0af68c55afbd5f07986df82831c7bff04846928ea8d1fd7f30052638788bc9b5", size = 182096, upload-time = "2025-03-05T20:02:24.368Z" },
+    { url = "https://files.pythonhosted.org/packages/14/8f/aa61f528fba38578ec553c145857a181384c72b98156f858ca5c8e82d9d3/websockets-15.0.1-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:64dee438fed052b52e4f98f76c5790513235efaa1ef7f3f2192c392cd7c91b65", size = 182523, upload-time = "2025-03-05T20:02:25.669Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/6d/0267396610add5bc0d0d3e77f546d4cd287200804fe02323797de77dbce9/websockets-15.0.1-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:d5f6b181bb38171a8ad1d6aa58a67a6aa9d4b38d0f8c5f496b9e42561dfc62fe", size = 182790, upload-time = "2025-03-05T20:02:26.99Z" },
+    { url = "https://files.pythonhosted.org/packages/02/05/c68c5adbf679cf610ae2f74a9b871ae84564462955d991178f95a1ddb7dd/websockets-15.0.1-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:5d54b09eba2bada6011aea5375542a157637b91029687eb4fdb2dab11059c1b4", size = 182165, upload-time = "2025-03-05T20:02:30.291Z" },
+    { url = "https://files.pythonhosted.org/packages/29/93/bb672df7b2f5faac89761cb5fa34f5cec45a4026c383a4b5761c6cea5c16/websockets-15.0.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:3be571a8b5afed347da347bfcf27ba12b069d9d7f42cb8c7028b5e98bbb12597", size = 182160, upload-time = "2025-03-05T20:02:31.634Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/83/de1f7709376dc3ca9b7eeb4b9a07b4526b14876b6d372a4dc62312bebee0/websockets-15.0.1-cp312-cp312-win32.whl", hash = "sha256:c338ffa0520bdb12fbc527265235639fb76e7bc7faafbb93f6ba80d9c06578a9", size = 176395, upload-time = "2025-03-05T20:02:33.017Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/71/abf2ebc3bbfa40f391ce1428c7168fb20582d0ff57019b69ea20fa698043/websockets-15.0.1-cp312-cp312-win_amd64.whl", hash = "sha256:fcd5cf9e305d7b8338754470cf69cf81f420459dbae8a3b40cee57417f4614a7", size = 176841, upload-time = "2025-03-05T20:02:34.498Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/a8/5b41e0da817d64113292ab1f8247140aac61cbf6cfd085d6a0fa77f4984f/websockets-15.0.1-py3-none-any.whl", hash = "sha256:f7a866fbc1e97b5c617ee4116daaa09b722101d4a3c170c787450ba409f9736f", size = 169743, upload-time = "2025-03-05T20:03:39.41Z" },
+]
+
+[[package]]
+name = "websockets"
 version = "17.3"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "sys_platform != 'darwin'",
+    "sys_platform == 'darwin'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/30/4b/4692be6d5bf739ed049b3813901c42091f8c054df89d5c089343823dea0d/websockets-17.3.tar.gz", hash = "sha256:1c7dd93a1c9f89297471493674b1fc1d9467cafd45374f2172213046bdb3a329", size = 188878, upload-time = "2026-10-19T16:58:05.813Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0d/29/902ffe19c0d35603102f31490dea342f083bc77d8f8bcdc7d8b16f5810f9/websockets-17.3-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:41665c7ea01d3ae497a0c61fd22d3424230d18782a5fceb79f04db9ccb2042c9", size = 218250, upload-time = "2026-10-19T16:54:54.718Z" },
@@ -2031,6 +3288,26 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ed/b8/7eb904583ea2090b329f50487e6f8dc58eb558712b9f3c16f289f0be668e/websockets-17.3-pp312-pypy312_pp80-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:4e7b5d23ef144b32645d97bd99f382c4394c443395f45fe1576786838d26e308", size = 217828, upload-time = "2026-10-19T16:58:01.822Z" },
     { url = "https://files.pythonhosted.org/packages/79/36/f54b4a1cd9456ca0a65a76d77d181621433793aca633dfeed214748ff4f0/websockets-17.3-pp312-pypy312_pp80-win_amd64.whl", hash = "sha256:13eace1b315345ebac5b27821f5dcce24e5cf9976ab18f79e00a59bdd67e5d19", size = 306301, upload-time = "2026-10-19T16:58:03.161Z" },
     { url = "https://files.pythonhosted.org/packages/d7/b0/3f01fcb3406662f6deb1e3e72b34dd0979e993991c0b7435a9e12bc14f02/websockets-17.3-py3-none-any.whl", hash = "sha256:dc2b495a92b3971966bf102e73589f950db3ec1ca6713265355ce7771d97b199", size = 212375, upload-time = "2026-10-19T16:58:04.483Z" },
+]
+
+[[package]]
+name = "wrapt"
+version = "2.5.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/b0/f752d19e1e83ab8bd64aeccfde32ff086aee3ef08520f7340b69a8d0a4d2/wrapt-2.5.2.tar.gz", hash = "sha256:551cb49e88b3722faad780303833bc4fa70685fb1773270fb98b40d39d9fddbf", size = 186066, upload-time = "2026-10-29T23:06:39.868Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4b/fe/9ccae0a147d0732397f54ff232b1a0da148a4099f17c1b156b9d3e79127e/wrapt-2.5.2-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:bec3b6b1ae2f7ed763fb0ba1776b9b5f11283e6ff40c9cbe3a855ea652c326cf", size = 106628, upload-time = "2026-10-29T23:04:44.962Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/ca/a61d994df49fa422abd859e525e04b95ef2888e3818a0f451aa7d4d3527f/wrapt-2.5.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:e57d79e3338b3cecee1dd80d6ef8f945f8ea7b92f0d8d5591f840ffa0afc14dc", size = 106264, upload-time = "2026-10-29T23:04:46.307Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/26/a6caa9a84ef5db4a273787949cea7ab51f6001d2548768af4c8e3c49debd/wrapt-2.5.2-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:092472b7b1494deef40dac5e9f6295013a9d51b112b5fbc4350f64dc2574e46a", size = 250614, upload-time = "2026-10-29T23:04:47.735Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/28/2189571e711ab31cb7f682c739d05f033ae0e83e12eb4d5d21473ca2cd1a/wrapt-2.5.2-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:d108bd98ab2c5ccbf55cf2154e0a73341df930030df2e01ee35d71a44a99d3ad", size = 250770, upload-time = "2026-10-29T23:04:49.183Z" },
+    { url = "https://files.pythonhosted.org/packages/80/8e/46a6cc2e8215df7fae292178a355df729547ff9b912686823201d38be269/wrapt-2.5.2-cp312-cp312-manylinux_2_31_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:858511731d6ede4217960c5fecdb5ecbf90e306dfd93b837395658d61374a498", size = 230031, upload-time = "2026-10-29T23:04:50.641Z" },
+    { url = "https://files.pythonhosted.org/packages/97/38/dff531d0125fe880e05fe5fcb89f144d25ffbe95aa9a2c50539eabde7567/wrapt-2.5.2-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:3b6885250b809532a634acd56e360d57c201c1cdc75cbf2b5e106241ece6cbc3", size = 247325, upload-time = "2026-10-29T23:04:52.16Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/5b/f4a78df4c52175d53ff095f2f5a54206a2d16e542b1dd2cdcaed901fe432/wrapt-2.5.2-cp312-cp312-musllinux_1_2_riscv64.whl", hash = "sha256:c60a5cd8b7b510056f2643d94f1c144533a568ade2891a9dd35733f5e0055777", size = 226900, upload-time = "2026-10-29T23:04:53.559Z" },
+    { url = "https://files.pythonhosted.org/packages/20/6f/8eab144c717300f76f1337ba58091f4de5da0f4d772727c9f41135b325c1/wrapt-2.5.2-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:40e03506f09dbf4854fd69848e843dadd9b7fbbdd217837cb27b37fb8f0b5bc3", size = 239017, upload-time = "2026-10-29T23:04:55.293Z" },
+    { url = "https://files.pythonhosted.org/packages/59/1a/98e278ef2f8952a34f847a91f75899f6385762b07577c51a5ef82c768dfb/wrapt-2.5.2-cp312-cp312-win32.whl", hash = "sha256:ac00ba7d22d55d3c8d085005ce4942ff3bb118d480f889b5984f1d3454052917", size = 100660, upload-time = "2026-10-29T23:04:56.703Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/0a/ab645f8b4c594cac2db49bbc805bff97a9d3f2944061b865f67e0351b6c8/wrapt-2.5.2-cp312-cp312-win_amd64.whl", hash = "sha256:36021ef761856bdbc10d5f3da9a95af93ef60d6acf9c72c8f849937ba2b902aa", size = 106220, upload-time = "2026-10-29T23:04:58.081Z" },
+    { url = "https://files.pythonhosted.org/packages/37/1e/232868b68b925ab29ca5acbec4ad54ee42a853fcd8f596bf7e0e0e3850f1/wrapt-2.5.2-cp312-cp312-win_arm64.whl", hash = "sha256:81bdf0bd141d9b1706a0751b2ee068c7afe6be4042712d427b32b3072d5c40b9", size = 103377, upload-time = "2026-10-29T23:04:59.366Z" },
+    { url = "https://files.pythonhosted.org/packages/77/8b/1ea57b936b70f98e8e7620a352578096d778dbee95b262f73c066d210ffb/wrapt-2.5.2-py3-none-any.whl", hash = "sha256:61eb54e9540ea522c2c4752a57549a83d3c67e6704ed708403d28e067aaf90f0", size = 82025, upload-time = "2026-10-29T23:06:38.56Z" },
 ]
 
 [[package]]

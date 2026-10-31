@@ -1,6 +1,9 @@
 global:
   imageTags:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/decision: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/agent-runtime: dev
+  # Release digests; kagent runs only digest-pinned runtime images.
+  imageDigests: {}
 
 storageClass: local-path
 
@@ -142,18 +145,13 @@ metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
 # sandboxes outside the mesh, and an Agent's Harness can only use a WorkerPool in its own namespace.
 agents:
   namespace: llm-agents
-  # The global model config every agent uses unless an A/B variant names another one. Each entry is a kagent
-  # ModelConfig on the chat model through the gateway; its fields are the OpenAI sampling settings.
+  # The global model config: the chat model through the gateway. Sampling settings per prompt version come from
+  # Langfuse.
   modelConfig: default-model-config
-  modelConfigs:
-    default-model-config: {}
-    model-config-b:
-      temperature: "0.2"
-  # kagent exports each agent's own spans (agent, model generations, tool calls) to Langfuse with the headless-init
-  # project keys.
-  tracing:
-    enabled: true
-  harness: llm-agents
+  # Every agent runs this runtime: kagent's Python runtime with each model call's prompt, model settings and A/B
+  # variant taken from the agent's Langfuse prompt, and the call's trace linked to that prompt version.
+  runtime:
+    image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/agent-runtime
   snapshotRoot: s3://platform-dev/substrate/llm-agents/
   workerPool:
     name: llm-agents
@@ -184,10 +182,9 @@ agents:
       alg: ES256
       ttl: 300s
       claims: {iss: "urn:platform:kagent:gateway", sub: agentgateway, aud: kagent}
-  # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
-  # `agents` are an agent's sub-agents, compiled into its runtime from their templates; its model picks one by their
-  # descriptions.
-  # `abTest` runs a variant with another model config behind the same A2A route and splits its traffic by weight.
+  # Langfuse holds each agent's system prompt, `<name>-system-prompt`, and its A/B tests. files/prompts/<name>.md and
+  # `abTest` only seed a prompt that does not exist yet; changes are made in Langfuse.
+  # `agents` are other agents this one calls over A2A through the gateway.
   list:
     - name: evidence-agent
       version: 0.3.0
@@ -195,9 +192,9 @@ agents:
       description: Read-only fraud-analyst agent that explains declines, risk decisions and payment behaviour from the knowledge base, citing its passages.
       mcpServers: [knowledge]
       abTest:
-        variant: evidence-agent-b
-        modelConfig: model-config-b
-        weight: 50
+        label: variant-b
+        share: 0.5
+        config: {temperature: 0.2}
     - name: risk-agent
       version: 0.1.0
       title: Risk agent
@@ -205,11 +202,11 @@ agents:
     - name: coordinator
       version: 0.1.0
       title: Coordinator
-      description: Read-only entry agent for fraud analysts that hands each question to the evidence or risk sub-agent and combines their answers.
+      description: Read-only entry agent for fraud analysts that hands each question to the evidence or risk agent and combines their answers.
       agents: [evidence-agent, risk-agent]
 
-# One Job per release publishes the catalog from these values and the prompt files: agents and MCP servers to
-# agentregistry, and prompts to Langfuse.
+# One Job per release publishes the agents and MCP servers to agentregistry, and seeds any agent prompt that Langfuse
+# does not have yet.
 catalog:
   image: python:3.12.16-slim-bookworm
   registry:
