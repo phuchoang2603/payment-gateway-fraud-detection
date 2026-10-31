@@ -78,18 +78,21 @@ def seed_prompts(agents: list[dict]) -> None:
         versions = [
             (
                 ["production"],
+                text,
                 {"abTest": {"label": test["label"], "share": test["share"]}}
                 if test
                 else {},
             )
         ]
         if test:
-            versions.append(([test["label"]], test.get("config", {})))
-        for labels, config in versions:
+            versions.append(
+                ([test["label"]], f"{text.rstrip()}\n\n{test['addendum']}\n", {})
+            )
+        for labels, prompt, config in versions:
             body = {
                 "name": name,
                 "type": "text",
-                "prompt": text,
+                "prompt": prompt,
                 "config": config,
                 "labels": labels,
                 "tags": [agent["name"]],

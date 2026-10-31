@@ -7,7 +7,6 @@ COPY src/llm/common ./common
 COPY src/llm/rag_pipeline/pyproject.toml ./rag_pipeline/pyproject.toml
 COPY src/llm/rag_serving/pyproject.toml ./rag_serving/pyproject.toml
 COPY src/llm/decision/pyproject.toml ./decision/pyproject.toml
-COPY src/llm/agent_runtime/pyproject.toml ./agent_runtime/pyproject.toml
 RUN uv sync --locked --no-dev --no-editable --package fraud-rag-serving
 
 FROM python:3.12.16-slim-bookworm

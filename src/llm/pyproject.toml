@@ -9,15 +9,9 @@ dev = ["pytest==9.2.0", "ruff==0.17.3"]
 
 [tool.uv]
 package = false
-# Feast pins tenacity<9 and Google ADK needs tenacity>=9; the agent runtime never shares an environment with Feast.
-conflicts = [
-    [{ package = "fraud-agent-runtime" }, { package = "fraud-rag-common" }],
-    [{ package = "fraud-agent-runtime" }, { package = "fraud-rag-pipeline" }],
-    [{ package = "fraud-agent-runtime" }, { package = "fraud-rag-serving" }],
-]
 
 [tool.uv.workspace]
-members = ["common", "rag_pipeline", "rag_serving", "decision", "agent_runtime"]
+members = ["common", "rag_pipeline", "rag_serving", "decision"]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
