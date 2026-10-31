@@ -61,7 +61,8 @@ spark:
         memoryOverhead: 3g
     # DP3 collects only day lists and counts, so a 2g heap suffices and the driver fits the spare memory of the on-demand
     # pool, where the large driver's 5.5 GiB left it unschedulable. The Python driver process lives in the overhead,
-    # which 512m left OOMKilled. It runs no Python workers, so executors keep the base 2g overhead.
+    # which 512m left OOMKilled. Executors keep the large profile's 3g overhead: the dim_customer rebuild over a month's
+    # customers was OOMKilled at 2g.
     gold:
       executors: 11
       shufflePartitions: 1024
@@ -75,7 +76,7 @@ spark:
       executor:
         cores: 3
         memory: 9g
-        memoryOverhead: 2g
+        memoryOverhead: 3g
         ephemeralStorage: 24Gi
 bronze:
   enabled: true
