@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -66,6 +67,9 @@ func run(logLevel, host, port, configDir string) error {
 		return err
 	}
 	agentConfig.RemoteAgents = append(agentConfig.RemoteAgents, remoteAgents...)
+	if len(remoteAgents) > 0 {
+		http.DefaultTransport = remoteagents.WithoutTenant(http.DefaultTransport, remoteAgents)
+	}
 	promptName := os.Getenv("LANGFUSE_PROMPT")
 	if promptName == "" {
 		return fmt.Errorf("LANGFUSE_PROMPT is required")
