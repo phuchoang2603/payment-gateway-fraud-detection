@@ -10,7 +10,9 @@ COPY src/llm/rag_pipeline/pyproject.toml ./rag_pipeline/pyproject.toml
 COPY src/llm/rag_serving/pyproject.toml ./rag_serving/pyproject.toml
 COPY src/llm/decision/pyproject.toml ./decision/pyproject.toml
 COPY src/llm/agent_runtime ./agent_runtime
-RUN uv sync --locked --no-dev --no-editable --package fraud-agent-runtime
+# Precompiled bytecode: kagent waits 30 s for a golden runtime to become ready, and compiling ADK and its SDKs on
+# each start under gVisor takes longer than that.
+RUN UV_COMPILE_BYTECODE=1 uv sync --locked --no-dev --no-editable --package fraud-agent-runtime
 
 FROM python:3.12.16-slim-bookworm
 # kagent materializes the compiled agent configuration into /config at start.
