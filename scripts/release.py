@@ -1,4 +1,3 @@
-import base64
 import json
 import os
 import re
@@ -150,14 +149,11 @@ def publish():
 
 
 def image_digest(repository, tag):
-    """The registry digest of repository:tag, for workloads that only accept digest-pinned images."""
+    """The registry digest of repository:tag, for workloads that only accept digest-pinned images. The service
+    images are public, so an anonymous pull token reads them."""
     name = repository.removeprefix("ghcr.io/")
-    credentials = base64.b64encode(
-        f"x-access-token:{os.environ['GITHUB_TOKEN']}".encode()
-    ).decode()
     request = urllib.request.Request(
-        f"https://ghcr.io/token?scope=repository:{name}:pull",
-        headers={"Authorization": f"Basic {credentials}"},
+        f"https://ghcr.io/token?scope=repository:{name}:pull"
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         token = json.load(response)["token"]

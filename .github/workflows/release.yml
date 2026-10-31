@@ -2,6 +2,7 @@ name: Service images
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 
@@ -20,6 +21,7 @@ env:
 
 jobs:
   plan:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -59,7 +61,6 @@ jobs:
     permissions:
       contents: write
       actions: read
-      packages: read
     env:
       IMAGE_TAGS: ${{ needs.plan.outputs.image_tags }}
       PREVIOUS_RELEASE: ${{ needs.plan.outputs.previous }}
@@ -73,6 +74,4 @@ jobs:
           CHECK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 scripts/release.py wait-checks
       - name: Publish the GitOps release
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/release.py publish
