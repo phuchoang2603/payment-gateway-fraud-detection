@@ -4,13 +4,14 @@ GitOps deploys the same application charts to dev and prod. CI publishes a compl
 
 | Environment | Release branch | Published by | Gateway hostname |
 |---|---|---|---|
-| Dev | `deploy/dev` | Trusted pull requests | `pay-gateway-dev.phuchoang.sbs` |
+| Dev | `deploy/dev` | Trusted, non-draft pull requests | `pay-gateway-dev.phuchoang.sbs` |
 | Prod | `deploy/prod` | `main` | `pay-gateway.phuchoang.sbs` |
 
 ## Releases
 
 - The roots are `infra/argocd/dev/root.yaml` and `infra/argocd/prod/root.yaml`. Each release records one chart source revision and per-service image tags in `infra/argocd/app-of-apps/release.yaml`.
 - Images carry `pr-<number>-<full-sha>` or `main-<full-sha>` tags. The release planner (`scripts/release.py`) compares each image's build paths (`.github/service-images.json`) against its last deployed commit and rebuilds only changed images; unchanged images keep their tags, and an unreachable recorded commit counts as changed. Chart-only releases reuse every tag.
+- Draft PRs skip the service-image release workflow; marking a PR ready for review enables dev publication.
 - Publication waits for all affected image builds and for every other workflow run on the same commit and event (CI, Go CI, Python CI and any added later) to succeed, for dev and prod alike; a failed or cancelled check stops the release. It skips a superseded source revision. There are no image-pin commits or mutable `latest` tags.
 - Bootstrap: create the `payment-gateway` namespace and its Doppler token, then apply the AppProject and the environment root once.
 

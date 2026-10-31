@@ -59,6 +59,23 @@ spark:
       executor:
         memory: 9g
         memoryOverhead: 3g
+    # DP3 collects only day lists and counts, so its driver fits the spare memory of the on-demand pool, where the large
+    # driver's 5.5 GiB left it unschedulable. It runs no Python workers, so executors keep the base 2g overhead.
+    gold:
+      executors: 11
+      shufflePartitions: 1024
+      advisoryPartitionSize: 128m
+      driver:
+        cores: 1
+        requestCores: 500m
+        memory: 2g
+        memoryOverhead: 512m
+        ephemeralStorage: 8Gi
+      executor:
+        cores: 3
+        memory: 9g
+        memoryOverhead: 2g
+        ephemeralStorage: 24Gi
 bronze:
   enabled: true
   datasetVersion: v19
@@ -82,6 +99,15 @@ maintenance:
   enabled: true
   profile: large
   reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/maintenance
+dp3:
+  enabled: true
+  profile: gold
+  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp3
+warehouseBenchmark:
+  enabled: true
+  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/warehouse-benchmark
+dashboards:
+  enabled: true
 sparkEventLogDir: s3a://platform-prod-142737101504-us-east-1/runs/payment-gateway/spark-events/
 catalog:
   connectors:

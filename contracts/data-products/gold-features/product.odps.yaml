@@ -1,0 +1,82 @@
+apiVersion: v1.1.0
+kind: DataProduct
+id: urn:dataproduct:fraud:gold-features
+name: Gold features
+version: 1.0.0
+status: active
+domain: fraud-detection
+type: consumer-aligned
+description:
+  purpose: The batch layer for Feast and training, computed from pinned Silver snapshots per range of UTC days. It includes daily point-in-time features, each attempt's short-window snapshot features, an SCD2 customer dimension and attempt labels.
+  usage: Join label_attempt to the feature tables on the entity key, taking the latest feature row with event_timestamp at or before the label's event_timestamp. Join dim_customer on the customer key where valid_from_ts <= t < valid_to_ts, or valid_to_ts is null for the current version.
+  limitations: Synthetic data only. Feature rows exist only where a value changes, so a lookup must take the latest row at or before the time, never an exact match.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, gold, features]
+customProperties:
+  - property: catalog
+    value: lakehouse
+  - property: schema
+    value: gold
+  - property: runtime
+    value: Spark 4.1.3 on pinned Silver snapshots. A run over a range of UTC days overwrites only those days, so it is safe to re-run; the daily run covers yesterday plus a lookback, and a backfill is a longer range. Each commit records the Silver snapshot IDs it read. Checks run as ClickHouse SQL in OpenMetadata.
+  - property: definition
+    value: contracts/features/fraud-history-batch-v1.yaml
+inputPorts:
+  - name: silver-attempts
+    version: 1.0.0
+    contractId: urn:datacontract:fraud:silver-attempts
+  - name: silver-payment-events
+    version: 1.0.0
+    contractId: urn:datacontract:fraud:silver-payment-events
+  - name: silver-labels
+    version: 1.0.0
+    contractId: urn:datacontract:fraud:silver-labels
+outputPorts:
+  - name: dim-customer
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:gold-dim-customer
+    description: SCD2 versions of each customer's observed profile and familiar devices.
+    customProperties:
+      - property: table
+        value: gold.dim_customer
+  - name: feat-customer-daily
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:gold-feat-customer-daily
+    description: 7- and 30-day customer features at daily anchors, one row per change.
+    customProperties:
+      - property: table
+        value: gold.feat_customer_daily
+  - name: feat-payment-method-daily
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:gold-feat-payment-method-daily
+    description: 7- and 30-day payment-method features at daily anchors, one row per change.
+    customProperties:
+      - property: table
+        value: gold.feat_payment_method_daily
+  - name: feat-attempt-rt
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:gold-feat-attempt-rt
+    description: Each attempt's 5-minute, 1-hour and 24-hour customer and payment-method snapshot values at its start, the batch layer of fraud-snapshot-v2.
+    customProperties:
+      - property: table
+        value: gold.feat_attempt_rt
+  - name: label-attempt
+    version: 1.0.0
+    type: tables
+    contractId: urn:datacontract:fraud:gold-label-attempt
+    description: The earliest linked label per attempt and label source, with its availability time.
+    customProperties:
+      - property: table
+        value: gold.label_attempt
+support:
+  - channel: GitHub maintainer
+    url: https://github.com/phuchoang2603
+    scope: support

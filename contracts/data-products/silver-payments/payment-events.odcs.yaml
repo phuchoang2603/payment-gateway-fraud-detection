@@ -61,7 +61,7 @@ schema:
         type: sql
         description: Each event identity appears once.
         query: |
-          SELECT count(*) FROM (SELECT event_id FROM {object} GROUP BY event_id HAVING count(*) > 1) AS duplicates
+          SELECT count(*) FROM (SELECT sipHash128(event_id) AS k FROM {object} GROUP BY k HAVING count(*) > 1) AS duplicates
         mustBe: 0
       - id: silver_payment_amounts
         type: sql

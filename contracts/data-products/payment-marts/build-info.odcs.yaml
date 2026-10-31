@@ -1,0 +1,52 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:marts-build-info
+name: Marts build info
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: One row describing the latest marts build, its retention window, the days it rebuilt and the Silver snapshots it read.
+  usage: Read window_start and window_end before interpreting missing days in the marts as zero.
+  limitations: Holds only the latest build; earlier builds are in the DP3 run reports.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, gold, marts]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: marts
+    description: Native MergeTree table in the ClickHouse marts database. The rule placeholder {object} stands for the table.
+schema:
+  - name: build_info
+    physicalName: build_info
+    logicalType: object
+    physicalType: table
+    description: Exactly one row.
+    dataGranularityDescription: One marts build.
+    properties:
+      - {name: run_id, logicalType: string, physicalType: String, required: true, description: 'Workflow run that built the marts.'}
+      - {name: window_start, logicalType: date, physicalType: Date, required: true, description: 'First start day kept by the retention window.'}
+      - {name: window_end, logicalType: date, physicalType: Date, required: true, description: 'Last start day the marts cover: the DP3 run''s last day, or the latest Silver start day if earlier.'}
+      - {name: rebuilt_days, logicalType: array, physicalType: Array(Date), required: true, description: 'Start days this build rebuilt: the DP3 run''s days, the days its labels touched and the days whose chargeback window completes in its range.'}
+      - {name: chargebacks_complete_before, logicalType: date, physicalType: Date, required: true, description: 'The day after the DP3 run''s last day; a start day''s chargeback window is complete when it ends by then.'}
+      - {name: silver_attempts_snapshot_id, logicalType: integer, physicalType: Int64, required: true, description: 'silver.attempts snapshot the build read.'}
+      - {name: silver_labels_snapshot_id, logicalType: integer, physicalType: Int64, required: true, description: 'silver.labels snapshot the build read.'}
+      - {name: silver_payment_events_snapshot_id, logicalType: integer, physicalType: Int64, required: true, description: 'silver.payment_events snapshot of the same DP3 run.'}
+      - {name: built_at, logicalType: timestamp, physicalType: "DateTime64(6, 'UTC')", required: true, description: 'Wall-clock time of the build.'}
+    quality:
+      - id: marts_build_info_one_row
+        type: sql
+        description: The table holds exactly one row, and its window is ordered.
+        query: |
+          SELECT abs(toInt64(count()) - 1) + countIf(window_start > window_end) FROM {object}
+        mustBe: 0

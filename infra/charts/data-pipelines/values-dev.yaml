@@ -9,6 +9,12 @@ analytics:
   enabled: true
 maintenance:
   enabled: true
+dp3:
+  enabled: true
+warehouseBenchmark:
+  enabled: true
+dashboards:
+  enabled: true
 sparkEventLogDir: s3a://platform-dev/runs/payment-gateway/spark-events/
 catalog:
   connectors:

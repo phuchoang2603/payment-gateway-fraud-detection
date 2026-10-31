@@ -58,7 +58,7 @@ container:
       {{- toYaml $values.generator.resources.limits | nindent 6 }}
 {{- end -}}
 
-{{- define "data-pipelines.env" -}}
+{{- define "data-pipelines.storageEnv" -}}
 - name: AWS_REGION
   value: {{ .Values.config.AWS_REGION | quote }}
 - name: S3_ENDPOINT
@@ -75,6 +75,25 @@ container:
     secretKeyRef:
       name: {{ .Values.storage.externalSecret.name }}
       key: AWS_SECRET_ACCESS_KEY
+{{- end -}}
+
+{{- define "data-pipelines.martsEnv" -}}
+{{ include "data-pipelines.storageEnv" . }}
+- name: CLICKHOUSE_URL
+  value: {{ .Values.marts.clickhouseUrl | quote }}
+- name: CLICKHOUSE_USER
+  value: {{ .Values.marts.user | quote }}
+- name: CLICKHOUSE_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.marts.passwordSecret }}
+      key: password
+- name: MARTS_RETENTION_DAYS
+  value: {{ .Values.marts.retentionDays | int64 | toString | quote }}
+{{- end -}}
+
+{{- define "data-pipelines.env" -}}
+{{ include "data-pipelines.storageEnv" . }}
 - name: ICEBERG_REST_URI
   value: {{ .Values.catalog.icebergRestUri | quote }}
 - name: ICEBERG_WAREHOUSE
@@ -95,8 +114,6 @@ container:
     secretKeyRef:
       name: {{ .Values.catalog.openmetadataSecret.name }}
       key: OPENMETADATA_TOKEN
-- name: CLICKHOUSE_DATABASE
-  value: {{ .Values.catalog.clickhouseDatabase | quote }}
 - name: DATA_PRODUCTS_ROOT
   value: /contracts/data-products
 {{- end -}}
@@ -147,7 +164,7 @@ retryStrategy:
     retryPolicy: OnError
   container:
     image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
-    command: [python, -m, openmetadata_jobs.publish]
+    command: [python, -m, openmetadata.publish]
     env:
       - name: PIPELINES
         value: {{ .pipelines | quote }}
@@ -157,6 +174,8 @@ retryStrategy:
         value: {{ "{{workflow.status}}" | quote }}
       - name: RUN_ID
         value: {{ "{{workflow.name}}" | quote }}
+      - name: RUN_REPORT
+        value: {{ .report | default "" | quote }}
 {{- include "data-pipelines.env" .root | nindent 6 }}
 {{- end -}}
 
@@ -171,7 +190,7 @@ audit-{{ "{{workflow.name}}" }}
     retryPolicy: OnError
   container:
     image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
-    command: [python, -m, openmetadata_jobs.wap]
+    command: [python, -m, openmetadata.wap]
     env:
       - name: CHECK_PRODUCT
         value: {{ .product | quote }}
@@ -187,7 +206,7 @@ audit-{{ "{{workflow.name}}" }}
     retryPolicy: OnError
   container:
     image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
-    command: [python, -m, openmetadata_jobs.checks]
+    command: [python, -m, openmetadata.checks]
     env:
       - name: CHECK_PRODUCT
         value: {{ .product | quote }}
@@ -197,6 +216,51 @@ audit-{{ "{{workflow.name}}" }}
         value: {{ .root.Values.checks.nativeTimeoutSeconds | int64 | toString | quote }}
       - name: WAP_BRANCH
         value: {{ include "data-pipelines.wapBranch" . | quote }}
+{{- include "data-pipelines.env" .root | nindent 6 }}
+    envFrom:
+      - secretRef:
+          name: {{ .root.Values.checks.connectorSecret }}
+    volumeMounts:
+      - name: metadata-connectors
+        mountPath: /etc/metadata
+        readOnly: true
+  volumes:
+    - name: metadata-connectors
+      configMap:
+        name: {{ .root.Values.checks.connectorsConfigMap }}
+{{- end -}}
+
+{{- define "data-pipelines.marts-step" -}}
+- name: {{ .name }}
+  retryStrategy:
+    limit: 2
+    retryPolicy: OnError
+  container:
+    image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.spark "global" .root.Values.global) | quote }}
+    command: {{ .command | toJson }}
+    env:
+      - name: RUN_ID
+        value: {{ "{{workflow.name}}" | quote }}
+      - name: RUN_REPORT_ROOT
+        value: {{ .reportRoot | quote }}
+{{- include "data-pipelines.martsEnv" .root | nindent 6 }}
+    resources:
+      {{- toYaml .root.Values.marts.resources | nindent 6 }}
+{{- end -}}
+
+{{- define "data-pipelines.profile" -}}
+- name: profile
+  retryStrategy:
+    limit: 2
+    retryPolicy: OnError
+  container:
+    image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
+    command: [python, -m, openmetadata.profile]
+    env:
+      - name: METADATA_CONNECTORS_FILE
+        value: /etc/metadata/connectors.json
+      - name: NATIVE_TIMEOUT_SECONDS
+        value: {{ .root.Values.checks.nativeTimeoutSeconds | int64 | toString | quote }}
 {{- include "data-pipelines.env" .root | nindent 6 }}
     envFrom:
       - secretRef:

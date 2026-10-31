@@ -53,7 +53,7 @@ schema:
         type: sql
         description: Each label observation appears once.
         query: |
-          SELECT count(*) FROM (SELECT observation_id FROM {object} GROUP BY observation_id HAVING count(*) > 1) AS duplicates
+          SELECT count(*) FROM (SELECT sipHash128(observation_id) AS k FROM {object} GROUP BY k HAVING count(*) > 1) AS duplicates
         mustBe: 0
       - id: silver_linkage
         type: sql

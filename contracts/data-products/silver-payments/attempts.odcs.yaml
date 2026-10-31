@@ -67,8 +67,8 @@ schema:
         description: Each attempt identity appears once per payment.
         query: |
           SELECT count(*) FROM (
-            SELECT integration_id, payment_id, attempt_id FROM {object}
-            GROUP BY integration_id, payment_id, attempt_id HAVING count(*) > 1
+            SELECT sipHash128(integration_id, payment_id, attempt_id) AS k FROM {object}
+            GROUP BY k HAVING count(*) > 1
           ) AS duplicates
         mustBe: 0
       - id: silver_lifecycle_valid
