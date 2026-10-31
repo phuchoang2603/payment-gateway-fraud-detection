@@ -94,29 +94,10 @@ Consumers SHALL be able to join it to the feature tables on entity key and `even
 - **WHEN** a training cutoff precedes a chargeback's `label_available_at`
 - **THEN** filtering `label_available_at <= cutoff` excludes that row, and the attempt has no chargeback label at that cutoff
 
-### Requirement: Short-window snapshot features
-`gold.feat_attempt_rt` SHALL be the batch layer of `fraud-snapshot-v2`, with one row per Silver attempt, valid or not. For each attempt it SHALL hold the windowed values at its `started_at`:
-
-- the customer's attempt counts over 5 minutes, 1 hour and 24 hours;
-- the customer's distinct devices over 24 hours;
-- the payment method's attempt counts over 5 minutes, 1 hour and 24 hours.
-
-The values SHALL count attempt starts with attempt time in `[started_at − window, started_at)` that started before `started_at`, excluding starts whose attempt time is more than 24 hours before their own start. `event_timestamp` SHALL equal `started_at`. An entity's columns SHALL be null when its key is null, and a window's columns SHALL be null until Silver covers it. The table is training history only; the Flink speed layer serves these windows online.
-
-#### Scenario: The scored attempt is not in its own window
-
-- **WHEN** a customer's first attempt starts
-- **THEN** its row has a 5-minute count of 0
-
-#### Scenario: Late start
-
-- **WHEN** an attempt has an attempt time before an earlier attempt's start but starts after it
-- **THEN** the earlier attempt's row does not count it
-
 ### Requirement: Day-range runs
 DP3 SHALL take a `start` and `end` UTC day, and without them run yesterday and the `dp3.lookbackDays` days before it. A run SHALL be a pure function of the pinned Silver snapshots, plus, for `dim_customer`, the versions stored on either side of its range. It SHALL overwrite only:
 
-- the feature rows with anchors in the range and the snapshot rows of attempts started in it;
+- the feature rows with anchors in the range;
 - the label rows of attempts started in the range or on a day whose attempts gained a linked label available in it;
 - the `dim_customer` versions opened in the range, continued from each customer's stored version open at the range start and closed by its first stored version after the range.
 

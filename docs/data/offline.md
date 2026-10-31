@@ -80,11 +80,11 @@ Event logs live under `runs/payment-gateway/spark-events/` in each environment's
 
 ### DP3: offline features
 
-DP3, the `gold` stage of `dp-pipeline`, is the Spark batch layer of a Lambda design; Flink is the speed layer. It reads Silver at its published snapshots and writes, through write-audit-publish, five gold Iceberg tables and two ClickHouse marts for a range of UTC days. Code: [`batch/gold/features.py`](../../src/data-pipeline/batch/batch/gold/features.py), [`batch/gold/windows.py`](../../src/data-pipeline/batch/batch/gold/windows.py), [`batch/gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py); definition: [`fraud-history-batch-v1`](../../contracts/features/fraud-history-batch-v1.yaml); design: [`dp3-features-and-marts`](../../openspec/changes/dp3-features-and-marts/design.md).
+DP3, the `gold` stage of `dp-pipeline`, is the Spark batch layer of a Lambda design; Flink is the speed layer. It reads Silver at its published snapshots and writes, through write-audit-publish, four gold Iceberg tables and two ClickHouse marts for a range of UTC days. Code: [`batch/gold/features.py`](../../src/data-pipeline/batch/batch/gold/features.py), [`batch/gold/windows.py`](../../src/data-pipeline/batch/batch/gold/windows.py), [`batch/gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py); definition: [`fraud-history-batch-v1`](../../contracts/features/fraud-history-batch-v1.yaml); design: [`dp3-features-and-marts`](../../openspec/changes/dp3-features-and-marts/design.md).
 
 - **Features at daily anchors.** `feat_customer_daily` and `feat_payment_method_daily` hold 7- and 30-day counts, amounts, decided and declined counts, decline rates and distinct counts at each UTC midnight `s`, over attempts with `s − window <= coalesce(attempted_at, started_at) < s` and `started_at < s` (outcome counts also need `outcome_at < s`). A row is written only where a value changes, so the value at time `t` is the entity's latest row with `event_timestamp <= t`, and an entity with no such row is unknown. A window's columns are null until Silver covers the whole window. `created` is the pinned `silver.attempts` commit time.
-- **Short-window snapshots.** `feat_attempt_rt` is the batch layer of [`fraud-snapshot-v2`](../../contracts/features/fraud-snapshot-v2.yaml), one row per attempt. It holds the customer's and payment method's 5-minute, 1-hour and 24-hour attempt counts and the customer's 24-hour distinct devices. They are taken at the attempt's `started_at`, over attempt starts that began before it, excluding starts more than 24 hours late. It is training history only; Flink serves these windows live.
-- **Shared window engine.** `batch.gold.windows.window_states` computes exact values from attempt intervals with the anchor rule as a parameter: `DailyAnchors` for the daily tables, `ExactAnchors` for the snapshots. Values are exact once a run reads every attempt still in a window at its first anchor, so a run needs only one window of history before its range.
+- **Short windows belong to Flink.** The 5-minute, 1-hour and 24-hour [`fraud-snapshot-v2`](../../contracts/features/fraud-snapshot-v2.yaml) windows have one engine, Flink, for both history (a logical-clock replay of Bronze) and live serving; DP3 computes only the daily windows.
+- **Shared window engine.** `batch.gold.windows.window_states` computes exact values at `DailyAnchors` from attempt intervals. Values are exact once a run reads every attempt still in a window at its first anchor, so a run needs only one window of history before its range.
 - **Customer dimension.** `dim_customer` is an SCD2 over the observed profile: buyer ID, account creation time, shipping address and the sorted devices used at least twice in the 90 days up to each attempt. A version opens at the first attempt that changes the profile; `valid_to_ts` is the next version's `valid_from_ts`, null for the current version.
 - **Labels.** `label_attempt` keeps the earliest linked label per attempt and source, with `event_timestamp` equal to the attempt's `started_at`, when it was scored, and `label_available_at` for the training cutoff.
 - **Marts.** ClickHouse builds `marts.fact_payment_attempt` and `marts.fact_merchant_day` from the lakehouse over a rolling 180-day window into staging tables, rebuilding the run's days, the days its labels touched and the days whose chargeback window completes in it; the checks audit staging, then publish replaces those days' partitions. See [storage](storage.md#warehouse-indexing).
@@ -100,7 +100,7 @@ Table schemas are the data-product contracts, with generated references under [`
 |---|---|---|
 | Bronze | Iceberg `bronze` | `payment_events`, `fraud_labels`, `rejected_records` |
 | Silver | Iceberg `silver` | `payment_events`, `attempts`, `labels`, `rejected_events` |
-| Gold, ML | Iceberg `gold` | `dim_customer`, `feat_customer_daily`, `feat_payment_method_daily`, `feat_attempt_rt`, `label_attempt` |
+| Gold, ML | Iceberg `gold` | `dim_customer`, `feat_customer_daily`, `feat_payment_method_daily`, `label_attempt` |
 | Gold, analytics | ClickHouse `marts` | `fact_payment_attempt`, `fact_merchant_day`, `build_info` |
 
 ```mermaid
@@ -110,7 +110,6 @@ erDiagram
     fact_payment_attempt ||--o{ label_attempt : "attempt key"
     feat_customer_daily ||--o{ label_attempt : "customer, latest event_timestamp <= label event_timestamp"
     feat_payment_method_daily ||--o{ label_attempt : "card, latest event_timestamp <= label event_timestamp"
-    feat_attempt_rt ||--|| label_attempt : "attempt key"
     dim_customer ||--o{ feat_customer_daily : "customer"
 ```
 

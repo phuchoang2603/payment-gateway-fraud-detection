@@ -148,54 +148,6 @@ def test_a_range_run_writes_exactly_the_full_run_rows_of_its_days(spark):
         assert expected.exceptAll(ranged).count() == 0, view.table
 
 
-def test_attempt_snapshots_count_earlier_starts_in_each_window_at_the_attempt_start(spark):
-    rows = [
-        attempt("p-0", "c", "card", "d-1", 2000),
-        attempt("p-1", "c", "card", "d-2", 2002),
-        attempt("p-2", "c", "card-2", "d-2", 2030, attempted=2001),
-        attempt("p-3", "c", "card", None, 2040),
-        attempt("p-4", "c", "card", "d-9", 2041, attempted=500),
-        attempt("p-5", "c", None, "d-3", 3500),
-    ]
-    attempts = frame(spark, rows)
-    start = gold.history_start(attempts)
-    floor = gold.midnight(at(1440).date())
-    computed = gold.attempt_snapshots(attempts, start, floor, floor + 2 * gold.DAY, floor)
-    snapshots = {row.payment_id: row for row in computed.withColumn("_at", F.unix_micros(ANCHOR)).collect()}
-
-    assert set(snapshots) == {"p-0", "p-1", "p-2", "p-3", "p-4", "p-5"}
-    customer = {
-        payment: (
-            row.customer_snapshot_attempt_count_5m,
-            row.customer_snapshot_attempt_count_1h,
-            row.customer_snapshot_attempt_count_24h,
-            row.customer_snapshot_distinct_devices_24h,
-        )
-        for payment, row in snapshots.items()
-    }
-    assert customer["p-0"] == (0, 0, None, None)
-    assert customer["p-1"] == (1, 1, None, None)
-    # p-2 was attempted at 2001 but started at 2030, so it counts from 2030 at its attempt time.
-    assert customer["p-3"][:2] == (0, 3)
-    # p-4 was attempted more than 24 hours before it started: too late to count anywhere.
-    assert customer["p-5"][:2] == (0, 0)
-    assert snapshots["p-3"].method_snapshot_attempt_count_1h == 2
-    assert snapshots["p-5"].method_snapshot_attempt_count_1h is None
-    assert snapshots["p-0"]._at == micros(at(2000).isoformat())
-
-
-def test_attempt_snapshots_of_a_range_equal_the_full_run(spark):
-    attempts = frame(spark, history(20))
-    start = gold.history_start(attempts)
-    full = gold.attempt_snapshots(attempts, start, start, start + 20 * gold.DAY, start)
-    floor, upper = start + 6 * gold.DAY, start + 11 * gold.DAY
-    expected = full.where((F.col(ANCHOR) >= F.lit(floor)) & (F.col(ANCHOR) < F.lit(upper)))
-    ranged = gold.attempt_snapshots(attempts, start, floor, upper, start)
-    assert ranged.count() > 0
-    assert ranged.exceptAll(expected).count() == 0
-    assert expected.exceptAll(ranged).count() == 0
-
-
 def profile_row(attempt, day, device, address="A", customer="c"):
     return (
         "i",

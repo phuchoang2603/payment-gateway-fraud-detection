@@ -20,10 +20,8 @@ from batch.gold.windows import (
     Count,
     DailyAnchors,
     Distinct,
-    ExactAnchors,
     Ratio,
     Total,
-    as_of,
     changes,
     columns,
     merge_intervals,
@@ -48,9 +46,8 @@ NAMESPACE = f"{ICEBERG_CATALOG}.gold"
 DIM_CUSTOMER = f"{NAMESPACE}.dim_customer"
 FEAT_CUSTOMER = f"{NAMESPACE}.feat_customer_daily"
 FEAT_METHOD = f"{NAMESPACE}.feat_payment_method_daily"
-FEAT_ATTEMPT_RT = f"{NAMESPACE}.feat_attempt_rt"
 LABEL_ATTEMPT = f"{NAMESPACE}.label_attempt"
-TABLES = (DIM_CUSTOMER, FEAT_CUSTOMER, FEAT_METHOD, FEAT_ATTEMPT_RT, LABEL_ATTEMPT)
+TABLES = (DIM_CUSTOMER, FEAT_CUSTOMER, FEAT_METHOD, LABEL_ATTEMPT)
 # Bump when a change to DP3 would make earlier gold rows differ from a fresh run over the same days.
 LOGIC_VERSION = "3"
 
@@ -69,9 +66,6 @@ PAYMENT_KEY = silver.PAYMENT_KEY
 CUSTOMER_KEY = ["integration_id", "customer_id"]
 METHOD_KEY = ["integration_id", "payment_method_fingerprint"]
 WINDOWS = {"7d": timedelta(days=7), "30d": timedelta(days=30)}
-RT_WINDOWS = {"5m": timedelta(minutes=5), "1h": timedelta(hours=1), "24h": timedelta(hours=24)}
-# fraud-snapshot-v2: an attempt whose time is more than this before its start is too late and contributes nothing.
-RT_HORIZON = timedelta(hours=24)
 # Reads assume an attempt's client time is at most a day after its start.
 CLOCK_MARGIN = timedelta(days=1)
 WINDOW_COLUMNS = [
@@ -131,52 +125,10 @@ METHOD = View(FEAT_METHOD, tuple(METHOD_KEY), (*COMMON, Distinct("distinct_custo
 VIEWS = (CUSTOMER, METHOD)
 
 
-@dataclass(frozen=True)
-class Snapshot:
-    """One entity view of fraud-snapshot-v2, as of each attempt's start."""
-
-    keys: tuple
-    measures: tuple
-    output: tuple
-
-
-RT_VIEWS = (
-    Snapshot(
-        tuple(CUSTOMER_KEY),
-        (
-            Count("customer_snapshot_attempt_count"),
-            Distinct("customer_snapshot_distinct_devices", "device_fingerprint"),
-        ),
-        (
-            "customer_snapshot_attempt_count_5m",
-            "customer_snapshot_attempt_count_1h",
-            "customer_snapshot_attempt_count_24h",
-            "customer_snapshot_distinct_devices_24h",
-        ),
-    ),
-    Snapshot(
-        tuple(METHOD_KEY),
-        (Count("method_snapshot_attempt_count"),),
-        (
-            "method_snapshot_attempt_count_5m",
-            "method_snapshot_attempt_count_1h",
-            "method_snapshot_attempt_count_24h",
-        ),
-    ),
-)
-RT_COLUMNS = [
-    *ATTEMPT_KEY,
-    "customer_id",
-    "payment_method_fingerprint",
-    ANCHOR,
-    "created",
-    *[name for view in RT_VIEWS for name in view.output],
-]
 PARTITIONS = {
     DIM_CUSTOMER: lambda: F.months("valid_from_ts"),
     FEAT_CUSTOMER: lambda: F.days(ANCHOR),
     FEAT_METHOD: lambda: F.days(ANCHOR),
-    FEAT_ATTEMPT_RT: lambda: F.days(ANCHOR),
     LABEL_ATTEMPT: lambda: F.days(ANCHOR),
 }
 PROFILE_ATTRIBUTES = [
@@ -242,30 +194,6 @@ def daily_features(view: View, attempts: DataFrame, start, floor, cutoff, create
         .withColumn("created", F.lit(created))
         .select(*view.columns)
     )
-
-
-def attempt_snapshots(attempts: DataFrame, start, floor, cutoff, created) -> DataFrame:
-    """Each attempt started in [floor, cutoff) with its customer and method snapshot values at its start: the batch
-    view of fraud-snapshot-v2, counting every attempt start, valid or not, in time to be seen then."""
-    read = started_between(attempts, floor - max(RT_WINDOWS.values()) - CLOCK_MARGIN, cutoff).where(
-        F.col("attempt_time") >= F.col("started_at") - F.expr(f"INTERVAL {int(RT_HORIZON.total_seconds())} SECONDS")
-    )
-    points = started_between(attempts, floor, cutoff).select(
-        *ATTEMPT_KEY, "customer_id", "payment_method_fingerprint", F.col("started_at").alias(ANCHOR)
-    )
-    for view in RT_VIEWS:
-        states = window_states(
-            read.where(F.col(view.keys[1]).isNotNull()),
-            list(view.keys),
-            list(view.measures),
-            RT_WINDOWS,
-            ExactAnchors(),
-            start,
-            floor,
-            cutoff,
-        )
-        points = as_of(points, states, list(view.keys), list(view.output), ANCHOR)
-    return points.withColumn("created", F.lit(created)).select(*RT_COLUMNS)
 
 
 def profiles(events: DataFrame, attempts: DataFrame) -> DataFrame:
@@ -550,8 +478,8 @@ def run(spark, run_id: str, start_day: date, end_day: date) -> dict:
         RANGE_PROPERTY: f"{start_day}/{end_day}",
     }
     tables = {}
-    # Both window engines read the same history: the range plus one longest window, pruned to their columns.
-    history = max(*WINDOWS.values(), *RT_WINDOWS.values()) + CLOCK_MARGIN
+    # The daily views read the range plus one longest window, pruned to their columns, once.
+    history = max(WINDOWS.values()) + CLOCK_MARGIN
     windowed = (
         started_between(frames[silver.ATTEMPTS], floor - history, cutoff)
         .select(*WINDOW_COLUMNS)
@@ -563,10 +491,6 @@ def run(spark, run_id: str, start_day: date, end_day: date) -> dict:
             rows = daily_features(view, windowed.where(F.col("lifecycle_valid")), start, floor, cutoff, created)
             within = (F.col(ANCHOR) > F.lit(floor)) & (F.col(ANCHOR) <= F.lit(cutoff))
             tables[view.table] = write(spark, view.table, rows, within, pins)
-    with phase(spark, phases, "write feat_attempt_rt"):
-        rows = attempt_snapshots(windowed, start, floor, cutoff, created)
-        within = (F.col(ANCHOR) >= F.lit(floor)) & (F.col(ANCHOR) < F.lit(cutoff))
-        tables[FEAT_ATTEMPT_RT] = write(spark, FEAT_ATTEMPT_RT, rows, within, pins)
     windowed.unpersist()
     with phase(spark, phases, "write label_attempt"):
         range_days = every_day(start_day, end_day)

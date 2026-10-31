@@ -78,7 +78,6 @@ def test_daily_runs_build_the_same_gold_as_one_backfill(spark, lake):
     assert report["start"] == str(FIRST) and report["end"] == str(last)
     backfill = tables(spark)
     assert backfill[gold.FEAT_CUSTOMER].count() > 0
-    assert backfill[gold.FEAT_ATTEMPT_RT].count() == 5
     assert backfill[gold.LABEL_ATTEMPT].count() == 1
 
     for table in gold.TABLES:

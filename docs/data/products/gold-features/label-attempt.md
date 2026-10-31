@@ -8,7 +8,7 @@
 
 ## Terms of Use
 ### Usage
-Filter label_available_at <= the training cutoff, then use the rows as the Feast entity dataframe on the customer or payment-method key and event_timestamp, or join feat_attempt_rt on the attempt key. Simulation truth and chargebacks are separate rows; a missing chargeback is not a negative.
+Filter label_available_at <= the training cutoff, then use the rows as the Feast entity dataframe on the customer or payment-method key and event_timestamp. Simulation truth and chargebacks are separate rows; a missing chargeback is not a negative.
 
 ### Purpose
 The earliest linked label of each attempt per label source, keyed for point-in-time joins with the feature tables.

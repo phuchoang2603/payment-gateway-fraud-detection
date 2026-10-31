@@ -7,7 +7,7 @@ status: active
 domain: fraud-detection
 type: consumer-aligned
 description:
-  purpose: The batch layer for Feast and training, computed from pinned Silver snapshots per range of UTC days. It includes daily point-in-time features, each attempt's short-window snapshot features, an SCD2 customer dimension and attempt labels.
+  purpose: The batch layer for Feast and training, computed from pinned Silver snapshots per range of UTC days. It includes daily point-in-time features, an SCD2 customer dimension and attempt labels. Flink owns the short windows.
   usage: Join label_attempt to the feature tables on the entity key, taking the latest feature row with event_timestamp at or before the label's event_timestamp. Join dim_customer on the customer key where valid_from_ts <= t < valid_to_ts, or valid_to_ts is null for the current version.
   limitations: Synthetic data only. Feature rows exist only where a value changes, so a lookup must take the latest row at or before the time, never an exact match.
 team:
@@ -60,14 +60,6 @@ outputPorts:
     customProperties:
       - property: table
         value: gold.feat_payment_method_daily
-  - name: feat-attempt-rt
-    version: 1.0.0
-    type: tables
-    contractId: urn:datacontract:fraud:gold-feat-attempt-rt
-    description: Each attempt's 5-minute, 1-hour and 24-hour customer and payment-method snapshot values at its start, the batch layer of fraud-snapshot-v2.
-    customProperties:
-      - property: table
-        value: gold.feat_attempt_rt
   - name: label-attempt
     version: 1.0.0
     type: tables

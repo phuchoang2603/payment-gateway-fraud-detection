@@ -92,7 +92,7 @@
 
 - [x] 6b.1 Replace `mode` with `start`/`end` day parameters (defaulting to yesterday plus `dp3.lookbackDays`) in `batch/gold/features.py`, `batch/gold/marts.py` and `dp3-gold`. Remove the changelog views, consumed-snapshot state, refusal rules and `EXCHANGE` publish.
 - [x] 6b.2 Make `windows.window_states` exact from a baseline anchor at the range's first midnight, with `windows.changes` for the daily change rows and `windows.as_of` for per-attempt lookups.
-- [x] 6b.3 Add `gold.feat_attempt_rt`, the `fraud-snapshot-v2` batch layer at each attempt's `started_at`. Add its contract, generated reference and lineage edge, and set `label_attempt.event_timestamp` to `started_at`.
+- [x] 6b.3 (Reverted 2026-10-31: Flink owns the short windows; see decision 9b.) Added `gold.feat_attempt_rt`, the `fraud-snapshot-v2` batch layer at each attempt's `started_at`. Add its contract, generated reference and lineage edge, and set `label_attempt.event_timestamp` to `started_at`.
 - [x] 6b.4 Add CI tests:
   - daily runs build the same gold as one backfill;
   - a re-run of a range changes nothing;
@@ -103,6 +103,7 @@
 - [x] 6b.6 Make `dim_customer` range-scoped: open versions only for attempts in the range, continued from the stored version at its start and linked to the stored version after it, so a run's cost follows its range.
 - [x] 6b.5 Give prod DP3 the `gold` Spark profile with a 2 GiB driver. The `large` driver was unschedulable on the on-demand pool on 2026-10-31.
 
+- [x] 6b.8 Remove `gold.feat_attempt_rt` and its Spark short-window path (`attempt_snapshots`, `ExactAnchors`, `as_of`), contract, reference page, checks and lineage.
 - [x] 6b.7 Run Silver, Gold and the marts as one `dp-pipeline` (decision 9) with `dp-daily` and an ordered month-by-month `dp-backfill`, under one template-level mutex, with Spark applications named after their step pods.
 
 ## 7. Docs
@@ -142,5 +143,5 @@
   - the prod runs and their outcomes;
   - the evidence and screenshots, with paths;
   - blockers and open questions;
-  - for the Feast change, the shared engine's import path and signature, and the final names, keys and locations of `gold.feat_customer_daily`, `gold.feat_payment_method_daily`, `gold.feat_attempt_rt`, `gold.dim_customer` and `gold.label_attempt`: Iceberg catalog and namespace, entity key columns, `event_timestamp` and `created` semantics, partitioning, and the SCD2 validity columns.
+  - for the Feast change, the shared engine's import path and signature, and the final names, keys and locations of `gold.feat_customer_daily`, `gold.feat_payment_method_daily`, `gold.dim_customer` and `gold.label_attempt`: Iceberg catalog and namespace, entity key columns, `event_timestamp` and `created` semantics, partitioning, and the SCD2 validity columns.
 - [ ] 10.3 Send the Feast planning thread (threadId `mcp:launch:7ca1eca307dd1025361c2668599d5e1e0680de28f6edec3ffd254c9b9283182b`, branch `plan/feast-store`) the same final table names, keys, locations and semantics with `t3_thread_send`, and tell it to rebase onto `main`. Its implementation starts on that message or the user's go-ahead.

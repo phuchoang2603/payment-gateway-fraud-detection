@@ -5,7 +5,7 @@ also need outcome_at < s). So each attempt contributes over an anchor interval [
 anchor after its attempt time and start (and outcome) and leaves at the first anchor whose window begins after its
 attempt time. A value at an anchor is the running sum of +/- deltas at those interval ends; a distinct count first
 merges each value's intervals. The anchor rule decides which instants are anchors: UTC midnights for the daily
-tables, or every microsecond for exact change instants. Values at a run's anchors are exact when the run reads every
+tables. Values at a run's anchors are exact when the run reads every
 attempt still in a window at its first anchor, so a run over any date range needs only that much history.
 """
 
@@ -32,19 +32,6 @@ class DailyAnchors:
         if window % timedelta(days=1):
             raise ValueError(f"daily anchors need whole-day windows, not {window}")
         return F.date_add(F.to_date(attempt_time), window.days + 1).cast("timestamp")
-
-
-class ExactAnchors:
-    """Every microsecond is an anchor, so rows fall at the exact instants a value changes."""
-
-    name = "exact"
-
-    def after(self, instant: Column) -> Column:
-        return F.timestamp_micros(F.unix_micros(instant) + F.lit(1))
-
-    def expiry(self, attempt_time: Column, window: timedelta) -> Column:
-        micros = window // timedelta(microseconds=1)
-        return F.timestamp_micros(F.unix_micros(attempt_time) + F.lit(micros + 1))
 
 
 @dataclass(frozen=True)
@@ -216,20 +203,3 @@ def changes(states: DataFrame, keys: list[str], output: list[str], floor: dateti
     first = ~F.coalesce(F.col("_previous_begun"), F.lit(False))
     changed = F.col("_begun") & (first | (F.col("_values") != F.col("_previous")))
     return rows.where((F.col(ANCHOR) > F.lit(floor)) & changed).select(*keys, ANCHOR, *output)
-
-
-def as_of(points: DataFrame, states: DataFrame, keys: list[str], output: list[str], at: str) -> DataFrame:
-    """Each row of `points` with the values of its entity's latest state at or before its `at` time."""
-    marked = points.withColumns({"_at": F.col(at), "_order": F.lit(1)})
-    known = states.select(
-        *keys, F.col(ANCHOR).alias("_at"), F.struct(*output).alias("_state"), F.lit(0).alias("_order")
-    )
-    ordered = (
-        Window.partitionBy(*keys).orderBy("_at", "_order").rowsBetween(Window.unboundedPreceding, Window.currentRow)
-    )
-    filled = marked.unionByName(known, allowMissingColumns=True).withColumn(
-        "_state", F.last("_state", ignorenulls=True).over(ordered)
-    )
-    return filled.where(F.col("_order") == 1).select(
-        *points.columns, *[F.col(f"_state.{name}").alias(name) for name in output]
-    )
