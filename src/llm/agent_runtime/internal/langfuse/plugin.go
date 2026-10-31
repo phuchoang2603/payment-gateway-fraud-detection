@@ -31,21 +31,28 @@ type choice struct {
 	label  string
 }
 
-// Prompts sets each model call's system prompt from Langfuse. It is both the
-// ADK plugin and the span processor that links the call to the prompt version:
-// ADK opens the generate_content span after the plugin returns, so the choice
-// is kept per invocation until that span starts.
+// Prompts sets each model call's system prompt from the calling agent's
+// Langfuse prompt, so sub-agents compiled into the runtime use their own. It is
+// both the ADK plugin and the span processor that links the call to the prompt
+// version: ADK opens the generate_content span after the plugin returns, so the
+// choice is kept per invocation until that span starts.
 type Prompts struct {
 	source PromptSource
-	name   string
 
 	choices sync.Map
 }
 
 var _ sdktrace.SpanProcessor = (*Prompts)(nil)
 
-func NewPrompts(source PromptSource, promptName string) *Prompts {
-	return &Prompts{source: source, name: promptName}
+func NewPrompts(source PromptSource) *Prompts {
+	return &Prompts{source: source}
+}
+
+// PromptName is the Langfuse prompt of an ADK agent. kagent names the root
+// agent after the Agent and each sub-agent after its binding, both with
+// underscores for hyphens.
+func PromptName(agentName string) string {
+	return strings.ReplaceAll(agentName, "_", "-") + "-system-prompt"
 }
 
 func (p *Prompts) Plugin() (*plugin.Plugin, error) {
@@ -56,8 +63,8 @@ func (p *Prompts) Plugin() (*plugin.Plugin, error) {
 	})
 }
 
-func (p *Prompts) choose(ctx context.Context, sessionID string) (choice, error) {
-	production, err := p.source.Prompt(ctx, p.name, Production)
+func (p *Prompts) choose(ctx context.Context, name, sessionID string) (choice, error) {
+	production, err := p.source.Prompt(ctx, name, Production)
 	if err != nil {
 		return choice{}, err
 	}
@@ -65,7 +72,7 @@ func (p *Prompts) choose(ctx context.Context, sessionID string) (choice, error) 
 	if label == Production {
 		return choice{production, label}, nil
 	}
-	variant, err := p.source.Prompt(ctx, p.name, label)
+	variant, err := p.source.Prompt(ctx, name, label)
 	if err != nil {
 		return choice{}, err
 	}
@@ -73,9 +80,10 @@ func (p *Prompts) choose(ctx context.Context, sessionID string) (choice, error) 
 }
 
 func (p *Prompts) BeforeModel(ctx agent.Context, req *model.LLMRequest) (*model.LLMResponse, error) {
-	chosen, err := p.choose(ctx, ctx.SessionID())
+	name := PromptName(ctx.AgentName())
+	chosen, err := p.choose(ctx, name, ctx.SessionID())
 	if err != nil {
-		return nil, fmt.Errorf("langfuse prompt %s: %w", p.name, err)
+		return nil, fmt.Errorf("langfuse prompt %s: %w", name, err)
 	}
 	if req.Config == nil {
 		req.Config = &genai.GenerateContentConfig{}

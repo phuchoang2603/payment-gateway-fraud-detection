@@ -128,21 +128,20 @@ spec:
           sum(max by (ate_worker_state) (ate_workerpool_workers{ate_workerpool_namespace="{{ $ns }}",ate_workerpool_name="{{ $pool.name }}",ate_worker_state=~"partial|at_capacity"}))
         threshold: {{ $pool.autoscaling.busyWorkersPerReplica | quote }}
 {{- range $agent := $agents.list }}
-{{- /* The agent card's URL: A2A clients use a URL with a path as the card location, and the gateway rewrites the
-card's endpoint to /a2a/<name>. */}}
-{{- $remote := list }}
-{{- range $name := $agent.agents | default list }}
-{{- $target := dict }}
-{{- range $candidate := $agents.list }}
-{{- if eq $candidate.name $name }}{{ $target = $candidate }}{{ end }}
-{{- end }}
-{{- $remote = append $remote (dict "name" ($name | replace "-" "_") "description" (required (printf "agents.list has no %s" $name) $target.description) "url" (printf "%s/a2a/%s/.well-known/agent-card.json" $gatewayUrl $name)) }}
-{{- end }}
 {{- $tools := list }}
 {{- range $server := $agent.mcpServers | default list }}
 {{- $_ := required (printf "gateway.mcpServers.%s is not defined" $server) (index $.Values.gateway.mcpServers $server) }}
 {{- /* No tool list: the agent gets every tool the server lists, discovered at runtime. */}}
 {{- $tools = append $tools (dict "mcp" (dict "server" (dict "kind" "RemoteMCPServer" "name" $server))) }}
+{{- end }}
+{{- range $name := $agent.agents | default list }}
+{{- $target := dict }}
+{{- range $candidate := $agents.list }}
+{{- if eq $candidate.name $name }}{{ $target = $candidate }}{{ end }}
+{{- end }}
+{{- /* kagent compiles the template into this agent's runtime as an ADK sub-agent named after the binding; the
+runtime reads that agent's Langfuse prompt by the same name. */}}
+{{- $tools = append $tools (dict "subAgent" (dict "name" ($name | replace "-" "_") "description" (required (printf "agents.list has no %s" $name) $target.description) "templateRef" (dict "name" $name))) }}
 {{- end }}
 {{- $template := dict "modelConfig" (dict "name" $agents.modelConfig) "description" $agent.description }}
 {{- with $tools }}
@@ -162,12 +161,6 @@ spec:
   env:
     - name: LANGFUSE_HOST
       value: {{ $langfuseOrigin }}
-    - name: LANGFUSE_PROMPT
-      value: {{ $agent.name }}-system-prompt
-    {{- with $remote }}
-    - name: REMOTE_AGENTS
-      value: {{ toJson . | quote }}
-    {{- end }}
     - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
       value: {{ $langfuseOrigin }}/api/public/otel/v1/traces
     - name: OTEL_EXPORTER_OTLP_TRACES_PROTOCOL

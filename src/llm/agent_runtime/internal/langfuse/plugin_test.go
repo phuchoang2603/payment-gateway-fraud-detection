@@ -35,9 +35,10 @@ func (f *fakeSource) Prompt(_ context.Context, name, label string) (Prompt, erro
 
 type callbackContext struct {
 	agent.Context
-	session, invocation string
+	agent, session, invocation string
 }
 
+func (c callbackContext) AgentName() string    { return c.agent }
 func (c callbackContext) SessionID() string    { return c.session }
 func (c callbackContext) InvocationID() string { return c.invocation }
 
@@ -67,10 +68,10 @@ func instructionText(req *model.LLMRequest) []string {
 
 func TestTheProductionPromptBecomesTheSystemInstruction(t *testing.T) {
 	source := &fakeSource{prompts: map[string]Prompt{Production: production}}
-	prompts := NewPrompts(source, "evidence-agent-system-prompt")
+	prompts := NewPrompts(source)
 	req := &model.LLMRequest{}
 
-	resp, err := prompts.BeforeModel(callbackContext{session: "s1", invocation: "i1"}, req)
+	resp, err := prompts.BeforeModel(callbackContext{agent: "evidence_agent", session: "s1", invocation: "i1"}, req)
 	if resp != nil || err != nil {
 		t.Fatalf("got %v, %v; the model call should go ahead", resp, err)
 	}
@@ -83,12 +84,12 @@ func TestTheProductionPromptBecomesTheSystemInstruction(t *testing.T) {
 }
 
 func TestThePromptComesBeforeKagentsOwnGuidance(t *testing.T) {
-	prompts := NewPrompts(&fakeSource{prompts: map[string]Prompt{Production: production}}, "p")
+	prompts := NewPrompts(&fakeSource{prompts: map[string]Prompt{Production: production}})
 	req := &model.LLMRequest{Config: &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText("Use load_skill before following a skill.", genai.RoleUser),
 	}}
 
-	if _, err := prompts.BeforeModel(callbackContext{session: "s1"}, req); err != nil {
+	if _, err := prompts.BeforeModel(callbackContext{agent: "evidence_agent", session: "s1"}, req); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"You are read-only.", "Use load_skill before following a skill."}
@@ -99,10 +100,10 @@ func TestThePromptComesBeforeKagentsOwnGuidance(t *testing.T) {
 
 func TestTheVariantVersionIsUsedForItsConversations(t *testing.T) {
 	source := &fakeSource{prompts: map[string]Prompt{Production: tested, "variant-b": variant}}
-	prompts := NewPrompts(source, "evidence-agent-system-prompt")
+	prompts := NewPrompts(source)
 	req := &model.LLMRequest{}
 
-	if _, err := prompts.BeforeModel(callbackContext{session: "s1"}, req); err != nil {
+	if _, err := prompts.BeforeModel(callbackContext{agent: "evidence_agent", session: "s1"}, req); err != nil {
 		t.Fatal(err)
 	}
 	if got := instructionText(req); !slices.Equal(got, []string{"You are read-only, briefly."}) {
@@ -119,7 +120,7 @@ func TestAMissingPromptFailsTheModelCall(t *testing.T) {
 		{prompts: map[string]Prompt{Production: tested}},
 	} {
 		req := &model.LLMRequest{}
-		if _, err := NewPrompts(source, "p").BeforeModel(callbackContext{session: "s1"}, req); err == nil {
+		if _, err := NewPrompts(source).BeforeModel(callbackContext{agent: "evidence_agent", session: "s1"}, req); err == nil {
 			t.Fatalf("%+v: expected an error", source)
 		}
 		if req.Config != nil {
@@ -144,9 +145,9 @@ func attributes(span sdktrace.ReadOnlySpan) map[attribute.Key]attribute.Value {
 }
 
 func TestTheModelCallSpanIsLinkedToTheChosenVersion(t *testing.T) {
-	prompts := NewPrompts(&fakeSource{prompts: map[string]Prompt{Production: tested, "variant-b": variant}}, "p")
+	prompts := NewPrompts(&fakeSource{prompts: map[string]Prompt{Production: tested, "variant-b": variant}})
 	tracer, recorder := recordSpans(t, prompts)
-	if _, err := prompts.BeforeModel(callbackContext{session: "s1", invocation: "i1"}, &model.LLMRequest{}); err != nil {
+	if _, err := prompts.BeforeModel(callbackContext{agent: "evidence_agent", session: "s1", invocation: "i1"}, &model.LLMRequest{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -173,7 +174,7 @@ func TestTheModelCallSpanIsLinkedToTheChosenVersion(t *testing.T) {
 }
 
 func TestTheChoiceIsDroppedWhenTheRunEnds(t *testing.T) {
-	prompts := NewPrompts(&fakeSource{prompts: map[string]Prompt{Production: production}}, "p")
+	prompts := NewPrompts(&fakeSource{prompts: map[string]Prompt{Production: production}})
 	tracer, recorder := recordSpans(t, prompts)
 	plugin, err := prompts.Plugin()
 	if err != nil {
@@ -182,7 +183,7 @@ func TestTheChoiceIsDroppedWhenTheRunEnds(t *testing.T) {
 	if plugin.Name() != "langfuse_prompts" {
 		t.Fatalf("name %q", plugin.Name())
 	}
-	if _, err := plugin.BeforeModelCallback()(callbackContext{session: "s1", invocation: "i1"}, &model.LLMRequest{}); err != nil {
+	if _, err := plugin.BeforeModelCallback()(callbackContext{agent: "evidence_agent", session: "s1", invocation: "i1"}, &model.LLMRequest{}); err != nil {
 		t.Fatal(err)
 	}
 	plugin.AfterRunCallback()(invocationContext{invocation: "i1"})
@@ -194,5 +195,19 @@ func TestTheChoiceIsDroppedWhenTheRunEnds(t *testing.T) {
 	}
 	if prompts.Shutdown(context.Background()) != nil || prompts.ForceFlush(context.Background()) != nil {
 		t.Fatal("the processor holds nothing to flush")
+	}
+}
+
+func TestEachAgentInTheRuntimeUsesItsOwnPrompt(t *testing.T) {
+	source := &fakeSource{prompts: map[string]Prompt{Production: production}}
+	prompts := NewPrompts(source)
+	for _, agentName := range []string{"coordinator", "risk_agent"} {
+		if _, err := prompts.BeforeModel(callbackContext{agent: agentName, session: "s1"}, &model.LLMRequest{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"coordinator-system-prompt@production", "risk-agent-system-prompt@production"}
+	if !slices.Equal(source.labels, want) {
+		t.Fatalf("fetched %v, want %v", source.labels, want)
 	}
 }
