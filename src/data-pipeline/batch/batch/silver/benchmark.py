@@ -1,13 +1,21 @@
+"""On-demand skewed-join benchmark over a range of payment days of one pinned silver.attempts snapshot.
+
+The range (default: the 30 days ending yesterday) keeps a run to minutes on v19; the variants share one cached read
+of it, so each measures its join, not the scan.
+"""
+
 import json
 import os
 import urllib.request
+from datetime import datetime, timezone
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
+from batch.days import day_range
 from batch.lakehouse import read_at, ref_snapshot
 from batch.metrics import phase
-from batch.silver.curate import ATTEMPTS
+from batch.silver.curate import ATTEMPTS, PAYMENT_DAY
 from batch.spark import session
 from batch.store import Store
 
@@ -173,9 +181,22 @@ def main():
     run_id = os.environ["RUN_ID"]
     spark = session("dp2-benchmark")
     try:
+        first, last = day_range(os.environ, datetime.now(timezone.utc).date())
         silver_snapshot = ref_snapshot(spark, ATTEMPTS)
-        attempts = read_at(spark, ATTEMPTS, silver_snapshot)
-        result = {"run_id": run_id, "silver_snapshot_id": silver_snapshot, **benchmark(spark, attempts)}
+        attempts = (
+            read_at(spark, ATTEMPTS, silver_snapshot)
+            .where((F.col(PAYMENT_DAY) >= first) & (F.col(PAYMENT_DAY) <= last))
+            .select("merchant_id", "started_at", "amount_minor", "outcome")
+            .persist()
+        )
+        result = {
+            "run_id": run_id,
+            "silver_snapshot_id": silver_snapshot,
+            "first": str(first),
+            "last": str(last),
+            "attempts": attempts.count(),
+            **benchmark(spark, attempts),
+        }
         Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/benchmark.json", result)
         print(json.dumps(result, sort_keys=True, default=str))
     finally:

@@ -10,10 +10,16 @@ spec:
   {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
   entrypoint: maintain
   onExit: publish
+  arguments:
+    parameters:
+      - name: task
+        value: nightly
+        enum: [nightly, zorder]
+      - name: start
+        value: ""
+      - name: end
+        value: ""
   activeDeadlineSeconds: {{ .Values.maintenance.activeDeadlineSeconds }}
-  synchronization:
-    mutexes:
-      - name: lakehouse-maintenance
   podMetadata:
     annotations:
       karpenter.sh/do-not-disrupt: "true"
@@ -21,7 +27,13 @@ spec:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
       dp-product: lakehouse
   templates:
+    # Maintenance commits to the tables the writers commit to, so it holds both writer mutexes wherever this template
+    # is referenced, including the daily schedule.
     - name: maintain
+      synchronization:
+        mutexes:
+          - name: dp-writer
+          - name: dp1-bronze-writer
       {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
       resource:
         action: create
@@ -29,7 +41,7 @@ spec:
         successCondition: status.currentState.currentStateSummary == ResourceReleased
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
         manifest: |
-          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "maintain-lakehouse" "main" "maintenance" "product" "lakehouse" "stage" "maintenance" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.maintenance.reportRoot))) | nindent 10 }}
+          {{- include "data-pipelines.spark-application" (dict "root" $ "stem" "maintain-lakehouse" "main" "maintenance" "product" "lakehouse" "stage" "maintenance" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.maintenance.reportRoot) (dict "name" "MAINTENANCE_TASK" "value" "{{workflow.parameters.task}}") (dict "name" "DP_START" "value" "{{workflow.parameters.start}}") (dict "name" "DP_END" "value" "{{workflow.parameters.end}}"))) | nindent 10 }}
 {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "maintain-lakehouse" "dataset" .Values.bronze.datasetVersion) | nindent 4 }}
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -50,6 +62,14 @@ spec:
         karpenter.sh/do-not-disrupt: "true"
     entrypoint: maintain
     onExit: publish
+    arguments:
+      parameters:
+        - name: task
+          value: nightly
+        - name: start
+          value: ""
+        - name: end
+          value: ""
     templates:
       - name: maintain
         steps:
