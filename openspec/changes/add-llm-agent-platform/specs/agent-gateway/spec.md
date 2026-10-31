@@ -40,7 +40,7 @@ Each gateway route SHALL be governed by exactly one agentgateway policy object h
 - **THEN** every route has exactly one policy targeting it
 
 ### Requirement: No path around the gateway
-Mesh authorization SHALL admit connections to the model servers only from the gateway, the endpoint picker, the benchmark client and the metrics agent's mesh identity. Connections to the gateway SHALL be admitted only from labelled LLM-client service accounts in `llm` and the Agent Substrate workers that run agent actors. Identity-less sources SHALL reach only the gateway's and endpoint picker's dedicated metrics ports.
+Mesh authorization SHALL admit connections to the model servers only from the gateway, the endpoint picker, the benchmark client and the metrics agent's mesh identity. Connections to the gateway SHALL be admitted only from labelled LLM-client service accounts in `llm`, the listed external clients, and Substrate's egress gateway, which carries the agent actors' requests. Identity-less sources SHALL reach only the gateway's and endpoint picker's dedicated metrics ports.
 
 #### Scenario: Direct call to vLLM
 - **WHEN** a pod other than the gateway or endpoint picker connects to the vLLM port
@@ -48,7 +48,7 @@ Mesh authorization SHALL admit connections to the model servers only from the ga
 
 ### Requirement: Knowledge MCP route
 The gateway SHALL route `/mcp/knowledge` to the `/mcp` endpoint of the `rag-api` service through an MCP backend, with its own policy:
-- strict API keys;
+- strict API keys, read from the `x-api-key` header so that an agent's MCP key and model key are separate credentials at egress;
 - the agents' client id allowed;
 - tool-call metrics exported for each tool, with success and failure counts.
 
@@ -62,8 +62,8 @@ Mesh authorization SHALL admit only the gateway to `rag-api`.
 - **WHEN** a pod other than the gateway calls `rag-api` directly
 - **THEN** the mesh refuses the connection
 
-### Requirement: A2A routes for every agent
-The gateway SHALL be the entry point for agent-to-agent calls. Each agent SHALL have an A2A route at `/a2a/<agent>` and at kagent's sandbox A2A path for that agent, backed by the kagent controller as an A2A backend, with the same strict API key and per-client rate limit as the other routes. A coordinator's sub-agent calls SHALL reach the sub-agent only through this route: kagent's proxy URL sends them to the sandbox egress proxy, which forwards kagent's sandbox A2A paths of the agents' namespace to the gateway and keeps the caller's host, so the agent cards the gateway rewrites point back at the proxy.
+### Requirement: A2A routes for entry agents
+The gateway SHALL be the entry point for A2A calls to agents. Each entry agent SHALL have an A2A route at `/a2a/<agent>`, rewritten to kagent's public A2A endpoint for that agent on the kagent controller through an A2A backend, with the same strict API key and per-client rate limit as the other routes. The backend SHALL sign a short-lived token for each call as the gateway's machine principal, with a platform-provided key, and the kagent controller SHALL admit A2A calls only from the gateway. Sub-agents compiled into an entry agent have no route of their own.
 
 #### Scenario: Agent card through the gateway
 - **WHEN** a client with a key fetches `/a2a/<agent>/.well-known/agent-card.json`
@@ -73,9 +73,9 @@ The gateway SHALL be the entry point for agent-to-agent calls. Each agent SHALL 
 - **WHEN** a client sends an A2A message to `/a2a/<agent>/` without a key
 - **THEN** the gateway answers 401 and the agent receives nothing
 
-#### Scenario: Coordinator delegation
-- **WHEN** the coordinator calls a sub-agent
-- **THEN** the call appears on the sub-agent's A2A route in the gateway's request metrics
+#### Scenario: Agent called
+- **WHEN** a client with a key sends a message to `/a2a/coordinator`
+- **THEN** the coordinator answers and the call appears on its A2A route in the gateway's request metrics
 
 ### Requirement: Request screening with a self-hosted decision model
 The LLM route SHALL screen each request's latest user message with a webhook guard on the app's laya decision service, after PII masking. A message that asks an agent to act (approve, block, override or change a risk decision, retry or refund a payment, change a rule, promote or deploy a model) or tries to make it ignore its rules SHALL be rejected with 403 and a read-only refusal when laya's probability reaches the configured threshold. The guard SHALL fail open, because agents hold no tools that change anything and screening is an early refusal rather than the only control. Prompts SHALL NOT leave the cluster for screening.
