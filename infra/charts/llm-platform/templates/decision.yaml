@@ -61,8 +61,6 @@ spec:
               value: /models/laya
             - name: SCREEN_THRESHOLD
               value: {{ $decision.screenThreshold | quote }}
-            - name: LAYA_DEVICE
-              value: cuda
             - name: PYTORCH_CUDA_ALLOC_CONF
               value: expandable_segments:True
           startupProbe:

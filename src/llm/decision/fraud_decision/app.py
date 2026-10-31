@@ -45,10 +45,9 @@ class GuardRequest(BaseModel):
 
 
 class Decider:
-    def __init__(self, model_dir: str, threshold: float, device: str = "cuda", cache_size: int = 512):
+    def __init__(self, model_dir: str, threshold: float, cache_size: int = 512):
         self.model_dir = model_dir
         self.threshold = threshold
-        self.device = device
         self.agent = None
         self.lock = asyncio.Lock()
         self.cache: OrderedDict[str, tuple[bool, str]] = OrderedDict()
@@ -59,20 +58,18 @@ class Decider:
         return cls(
             model_dir=os.environ.get("MODEL_DIR", "/models/laya"),
             threshold=float(os.environ.get("SCREEN_THRESHOLD", "0.5")),
-            device=os.environ.get("LAYA_DEVICE", "cuda"),
         )
 
     def load_agent(self):  # pragma: no cover
         import laya
         import torch
 
+        # laya builds fp32 weights (about 1.7 GB) and only autocasts the forward pass, and it silently falls back to
+        # the CPU when they do not fit the GPU. The shared GPU has room for them in fp16 only, so they are cast on
+        # the CPU and moved over, the way laya.Agent places itself.
         agent = laya.load(self.model_dir, device="cpu")
-        if self.device == "cpu":
-            return agent
-        # laya keeps fp32 weights and only autocasts the forward pass. On a GPU shared with the model servers the
-        # weights go there in fp16, which halves laya's share; this mirrors how laya.Agent places itself.
-        agent.model.half().to(self.device).eval()
-        agent.device, agent.dtype, agent.amp_enabled = torch.device(self.device), torch.float16, True
+        agent.model.half().to("cuda").eval()
+        agent.device, agent.dtype, agent.amp_enabled = torch.device("cuda"), torch.float16, True
         return agent
 
     async def model(self):

@@ -133,11 +133,8 @@ def test_the_model_loads_once_and_failures_are_503(monkeypatch):
 def test_configuration_comes_from_the_environment(monkeypatch):
     monkeypatch.setenv("MODEL_DIR", "/m")
     monkeypatch.setenv("SCREEN_THRESHOLD", "0.7")
-    monkeypatch.delenv("LAYA_DEVICE", raising=False)
     decider = service.Decider.from_env()
-    assert (decider.model_dir, decider.threshold, decider.device) == ("/m", 0.7, "cuda")
-    monkeypatch.setenv("LAYA_DEVICE", "cpu")
-    assert service.Decider.from_env().device == "cpu"
+    assert (decider.model_dir, decider.threshold) == ("/m", 0.7)
 
 
 def test_metrics_count_decisions(client):
