@@ -7,7 +7,7 @@ import (
 
 func TestRemoteAgentsBecomeIsolatedA2AToolsWithAPlaceholderKey(t *testing.T) {
 	agents, err := Parse(`[{"name":"evidence_agent","description":"Explains declines.",
-		"url":"http://agentgateway.llm.svc.cluster.local/a2a/evidence-agent/"}]`)
+		"url":"http://agentgateway.llm.svc.cluster.local/a2a/evidence-agent/.well-known/agent-card.json/"}]`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -18,7 +18,7 @@ func TestRemoteAgentsBecomeIsolatedA2AToolsWithAPlaceholderKey(t *testing.T) {
 	if agent.Name != "evidence_agent" || agent.Description != "Explains declines." {
 		t.Fatalf("got %+v", agent)
 	}
-	if agent.Url != "http://agentgateway.llm.svc.cluster.local/a2a/evidence-agent" {
+	if agent.Url != "http://agentgateway.llm.svc.cluster.local/a2a/evidence-agent/.well-known/agent-card.json" {
 		t.Fatalf("url %q", agent.Url)
 	}
 	if !maps.Equal(agent.Headers, map[string]string{"Authorization": "placeholder"}) {
