@@ -214,7 +214,7 @@
           "editorType": "sql",
           "queryType": "table",
           "format": 1,
-          "rawSql": "SELECT window_start, window_end, mode, built_at FROM marts.build_info"
+          "rawSql": "SELECT window_start, window_end, built_at FROM marts.build_info"
         }
       ],
       "fieldConfig": {
