@@ -14,6 +14,7 @@ PRODUCTS = ("bronze-payments", "silver-payments", "gold-features", "payment-mart
 PAGE = 100
 STAGING = "__staging"
 OTHER_TABLE = re.compile(r"\{table:([A-Za-z0-9_.]+)\}")
+LAKEHOUSE_TABLE = re.compile(rf"{LAKEHOUSE}\.`([A-Za-z0-9_]+\.[A-Za-z0-9_]+)`")
 
 
 @dataclass(frozen=True)
@@ -66,13 +67,23 @@ SPILL_SETTINGS = (
 )
 
 
-def rendered(check, snapshot=None, staging=False):
+def rendered(check, snapshot=None, staging=False, audited=None):
     """The rule's SQL against the audited data: an Iceberg table at its audited snapshot, or a mart's staging table.
 
     A query-level iceberg_snapshot_id applies to every Iceberg table the query reads, so a rule that also reads
-    another lakehouse table pins only its own table, in a subquery.
+    another lakehouse table pins only its own table, in a subquery. That other table is pinned to its own audited
+    snapshot when this run audits it too: a pipeline run writes Silver and Gold on one unpublished branch.
     """
     sql = check.query.rstrip().rstrip(";")
+    audited = audited or {}
+    sql = LAKEHOUSE_TABLE.sub(
+        lambda match: (
+            f"(SELECT * FROM {match[0]} SETTINGS iceberg_snapshot_id = {int(audited[match[1]])})"
+            if match[1] in audited
+            else match[0]
+        ),
+        sql,
+    )
     marts = staging and check.database == MARTS
     target = sql_table(f"{check.table}{STAGING}" if marts else check.table, check.database)
     sql = OTHER_TABLE.sub(lambda match: sql_table(f"{match[1]}{STAGING}" if marts else match[1], MARTS), sql)
@@ -85,7 +96,7 @@ def rendered(check, snapshot=None, staging=False):
     return f"{sql.replace('{object}', target)}\nSETTINGS {settings}"
 
 
-def test_workflow(fqn, cases, snapshot=None, staging=False):
+def test_workflow(fqn, cases, snapshot=None, staging=False, audited=None):
     return {
         "source": {
             "type": "testsuite",
@@ -108,7 +119,7 @@ def test_workflow(fqn, cases, snapshot=None, staging=False):
                         "description": case.description,
                         "testDefinitionName": "tableCustomSQLQuery",
                         "parameterValues": [
-                            {"name": "sqlExpression", "value": rendered(case, snapshot, staging)},
+                            {"name": "sqlExpression", "value": rendered(case, snapshot, staging, audited)},
                             {"name": "strategy", "value": "COUNT"},
                             {"name": "operator", "value": "=="},
                             {"name": "threshold", "value": "0"},
@@ -158,7 +169,7 @@ def main():
     tables = sorted({(check.database, check.table) for check in found})
     for database, table in tables:
         cases = [check for check in found if (check.database, check.table) == (database, table)]
-        native("test", test_workflow(cases[0].fqn, cases, snapshots.get(table), staging=bool(branch)))
+        native("test", test_workflow(cases[0].fqn, cases, snapshots.get(table), bool(branch), snapshots))
     failures = []
     for database, table in tables:
         cases = [check for check in found if (check.database, check.table) == (database, table)]

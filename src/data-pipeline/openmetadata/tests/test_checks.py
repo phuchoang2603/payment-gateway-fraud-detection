@@ -39,6 +39,15 @@ def test_a_rule_reading_another_lakehouse_table_pins_only_its_own(found):
     assert sql.endswith(f"SETTINGS {checks.SPILL_SETTINGS}")
 
 
+def test_a_rule_reading_another_audited_table_pins_it_to_its_own_snapshot(found):
+    sql = checks.rendered(
+        found[("gold.label_attempt", "gold_label_attempt_exists")], 7, audited={"silver.attempts": 5}
+    )
+
+    assert "(SELECT * FROM lakehouse.`silver.attempts` SETTINGS iceberg_snapshot_id = 5)" in sql
+    assert "(SELECT * FROM lakehouse.`gold.label_attempt` SETTINGS iceberg_snapshot_id = 7) AS l" in sql
+
+
 def test_mart_rules_audit_staging_but_report_on_the_live_table(found):
     rule = found[("fact_merchant_day", "marts_merchant_day_sums")]
 

@@ -196,7 +196,9 @@ spec:
                 - name: end
                   value: "{{ "{{item.end}}" }}"
             withParam: "{{ "{{steps.months.outputs.result}}" }}"
+      # One month at a time, and none after a failed one: each month continues from the one before.
       parallelism: 1
+      failFast: true
     - name: months
       script:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
