@@ -85,8 +85,10 @@ class ClickHouse:
             headers={"Authorization": self.auth},
         )
         try:
-            with urllib.request.urlopen(request, timeout=int(os.environ.get("MARTS_QUERY_TIMEOUT_SECONDS", "7200"))):
-                pass
+            with urllib.request.urlopen(
+                request, timeout=int(os.environ.get("MARTS_QUERY_TIMEOUT_SECONDS", "7200"))
+            ) as response:
+                response.read()
         except urllib.error.HTTPError as error:
             message = error.read().decode(errors="replace").strip()
             raise RuntimeError(f"ClickHouse rejected {label or 'a query'}: {message}") from None

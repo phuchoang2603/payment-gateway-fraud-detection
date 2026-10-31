@@ -4,6 +4,7 @@ the mart with its skip indexes disabled, all over the same pinned data and windo
 import json
 import os
 import statistics
+import time
 from datetime import date, datetime, timedelta, timezone
 
 from batch.gold import marts
@@ -11,6 +12,7 @@ from batch.store import Store
 
 SCRATCH = "marts_benchmark.fact_payment_attempt_unsorted"
 WARM_RUNS = 5
+LOG_ATTEMPTS = 10
 REFERENCE = "C_indexed_mart"
 COLD_CACHES = (
     "SYSTEM DROP MARK CACHE",
@@ -118,16 +120,22 @@ def measure(client: marts.ClickHouse, label: str, sql: str, settings: dict) -> d
         client.execute(statement)
     runs = {"cold": client.execute(sql, {**settings, "use_query_cache": "0"}, f"{label}-cold")}
     warm = [client.execute(sql, {**settings, "use_query_cache": "0"}, f"{label}-warm-{n}") for n in range(WARM_RUNS)]
-    client.execute("SYSTEM FLUSH LOGS")
-    ids = ", ".join(f"'{query_id}'" for query_id in [runs["cold"], *warm])
-    logged = {
-        row["query_id"]: row
-        for row in client.rows(
-            "SELECT query_id, query_duration_ms, read_rows, read_bytes, memory_usage, "
-            "ProfileEvents['SelectedMarks'] AS selected_marks, ProfileEvents['SelectedParts'] AS selected_parts "
-            f"FROM system.query_log WHERE type = 'QueryFinish' AND query_id IN ({ids})"
-        )
-    }
+    wanted = [runs["cold"], *warm]
+    ids = ", ".join(f"'{query_id}'" for query_id in wanted)
+    for _ in range(LOG_ATTEMPTS):
+        # A query's log entry can land after the response, so one flush may miss it.
+        client.execute("SYSTEM FLUSH LOGS")
+        logged = {
+            row["query_id"]: row
+            for row in client.rows(
+                "SELECT query_id, query_duration_ms, read_rows, read_bytes, memory_usage, "
+                "ProfileEvents['SelectedMarks'] AS selected_marks, ProfileEvents['SelectedParts'] AS selected_parts "
+                f"FROM system.query_log WHERE type = 'QueryFinish' AND query_id IN ({ids})"
+            )
+        }
+        if set(wanted) <= set(logged):
+            break
+        time.sleep(1)
     warm_logged = [logged[query_id] for query_id in warm if query_id in logged]
     return {
         "plan": plan,

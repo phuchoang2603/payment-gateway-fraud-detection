@@ -458,10 +458,11 @@ def incremental_changes(spark, snapshots: dict, start: datetime) -> dict:
     images = (
         changelog(spark, silver.ATTEMPTS, since[silver.ATTEMPTS], snapshots[silver.ATTEMPTS])
         .withColumn("attempt_time", F.coalesce(F.col("attempted_at"), F.col("started_at")))
-        .cache()
+        .localCheckpoint()
     )
     labelled = changelog(spark, silver.LABELS, since[silver.LABELS], snapshots[silver.LABELS])
-    keys = images.select(*ATTEMPT_KEY).unionByName(labelled.select(*ATTEMPT_KEY)).distinct().cache()
+    # Iceberg's row-level DELETE/MERGE cannot plan a source that still reads a changelog view, so cut the lineage.
+    keys = images.select(*ATTEMPT_KEY).unionByName(labelled.select(*ATTEMPT_KEY)).distinct().localCheckpoint()
     return {"since": since, "previous_cap": previous_cap, "images": images, "attempt_keys": keys}
 
 

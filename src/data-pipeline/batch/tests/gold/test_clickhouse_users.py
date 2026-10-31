@@ -94,7 +94,8 @@ def test_the_dashboard_user_cannot_read_the_lakehouse(server):
 
 
 def test_the_dashboard_user_cannot_write(server):
-    assert "READONLY" in send(server, USER, "INSERT INTO marts.fact_merchant_day VALUES ('2026-01-01')")
+    refused = send(server, USER, "INSERT INTO marts.fact_merchant_day VALUES ('2026-01-01')")
+    assert "READONLY" in refused or "ACCESS_DENIED" in refused
 
 
 def test_the_dashboard_user_cannot_raise_its_limits(server):

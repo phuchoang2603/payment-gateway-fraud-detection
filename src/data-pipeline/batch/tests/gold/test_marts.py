@@ -85,7 +85,7 @@ def test_rates_are_null_when_their_denominator_is_zero(client):
     rebuild(client)
 
     rows = {row["merchant_id"]: row for row in content(client, marts.MERCHANT_DAY)}
-    assert rows["m-1"]["approval_rate"] is None and rows["m-1"]["attempts"] == "1"
+    assert rows["m-1"]["approval_rate"] is None and rows["m-1"]["attempts"] == 1
     assert rows["m-2"]["risk_decline_rate"] == 1 and rows["m-2"]["chargeback_rate"] is None
 
 
@@ -109,7 +109,7 @@ def test_the_build_keeps_the_rolling_window_and_the_ttl_drops_older_days(client)
         f"VALUES ('i', 'expired', 'a', 'm', 'c', 'card', 'card', 1, 'USD', '{at(old)}', 'pending', 'open')"
     )
     client.execute("OPTIMIZE TABLE marts.fact_payment_attempt FINAL")
-    assert client.value("SELECT count() FROM marts.fact_payment_attempt WHERE payment_id = 'expired'") == "0"
+    assert client.value("SELECT count() FROM marts.fact_payment_attempt WHERE payment_id = 'expired'") == 0
 
 
 def test_two_builds_on_the_same_silver_have_equal_content(client):
@@ -148,7 +148,7 @@ def test_the_build_drops_leftover_staging(client):
     built = marts.build(client, report(), "run", RETENTION, TODAY)
 
     assert built["staged_attempts"] == 1
-    assert client.value("SELECT count() FROM marts.fact_payment_attempt__staging WHERE payment_id = 'stale'") == "0"
+    assert client.value("SELECT count() FROM marts.fact_payment_attempt__staging WHERE payment_id = 'stale'") == 0
 
 
 def test_an_incremental_build_equals_a_full_rebuild(client):
