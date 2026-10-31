@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 
+import pytest
 from pyspark.sql import functions as F
 
 from batch.bronze import ingest as bronze
@@ -12,6 +13,13 @@ from tests.lake import load_bronze, provenance
 
 DAY = 24 * 60
 FIRST = BASE.date()
+
+
+@pytest.fixture(autouse=True)
+def fresh_silver(spark):
+    """A range run keeps other days' rows, so each test starts from empty Silver."""
+    for table in silver.TABLES:
+        spark.sql(f"DROP TABLE IF EXISTS {table}")
 
 
 def run(spark, run_id, first=FIRST, last=FIRST):
