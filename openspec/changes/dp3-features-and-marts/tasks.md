@@ -100,6 +100,7 @@
   - range runs of both engines equal the same days of a full run;
   - hand-checked snapshot values;
   - a range mart rebuild equals a full one.
+- [x] 6b.6 Make `dim_customer` range-scoped: open versions only for attempts in the range, continued from the stored version at its start and linked to the stored version after it, so a run's cost follows its range.
 - [x] 6b.5 Give prod DP3 the `gold` Spark profile with a 2 GiB driver. The `large` driver was unschedulable on the on-demand pool on 2026-10-31.
 
 ## 7. Docs

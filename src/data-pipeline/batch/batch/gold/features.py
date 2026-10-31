@@ -29,7 +29,7 @@ from batch.gold.windows import (
     merge_intervals,
     window_states,
 )
-from batch.lakehouse import create_table, ref_snapshot, snapshot_info, stage
+from batch.lakehouse import create_table, ref_snapshot, snapshot_info, stage, write_ref
 from batch.metrics import phase
 from batch.silver import curate as silver
 from batch.silver import incremental
@@ -313,9 +313,24 @@ def familiar_intervals(uses: DataFrame) -> DataFrame:
     return merge_intervals(pairs, device)
 
 
-def dim_customer(profile: DataFrame) -> DataFrame:
-    """SCD2 versions: a version opens at each attempt whose tracked profile differs from the previous attempt's."""
-    intervals = familiar_intervals(profile.select(*CUSTOMER_KEY, "device_fingerprint", "started_at"))
+VERSION_COLUMNS = [
+    "customer_sk",
+    *CUSTOMER_KEY,
+    "version_number",
+    *TRACKED,
+    "profile_hash",
+    "valid_from_ts",
+    "valid_to_ts",
+    "is_current",
+    "source_payment_id",
+    "source_attempt_id",
+]
+
+
+def tracked_profiles(profile: DataFrame, uses: DataFrame) -> DataFrame:
+    """Each attempt's tracked profile and its hash, one attempt per customer instant: the last in key order. `uses`
+    must hold every device use in the familiar window before each attempt."""
+    intervals = familiar_intervals(uses.select(*CUSTOMER_KEY, "device_fingerprint", "started_at"))
     attempt = profile.select(*ATTEMPT_KEY, "customer_id", "started_at")
     familiar = (
         attempt.join(intervals, CUSTOMER_KEY)
@@ -328,28 +343,57 @@ def dim_customer(profile: DataFrame) -> DataFrame:
         F.coalesce(F.col("familiar_device_fingerprints"), F.array().cast("array<string>")),
     )
     hashed = tracked.withColumn("profile_hash", F.sha2(F.to_json(F.struct(*TRACKED)), 256))
-    # Attempts at the same instant open at most one version: the last in key order.
     instant = Window.partitionBy(*CUSTOMER_KEY, "started_at").orderBy(F.desc("payment_id"), F.desc("attempt_id"))
-    hashed = hashed.withColumn("_tie", F.row_number().over(instant)).where(F.col("_tie") == 1)
+    return hashed.withColumn("_tie", F.row_number().over(instant)).where(F.col("_tie") == 1).drop("_tie")
+
+
+def opened_versions(tracked: DataFrame, previous: DataFrame | None = None) -> DataFrame:
+    """The versions the attempts open: each attempt whose hash differs from the previous attempt's. `previous` holds
+    each customer's version open before the attempts (profile_hash, version_number), which seeds the comparison and
+    the numbering."""
     ordered = Window.partitionBy(*CUSTOMER_KEY).orderBy("started_at")
-    changes = hashed.withColumn("_previous", F.lag("profile_hash").over(ordered)).where(
+    if previous is None:
+        seeded = tracked.withColumns({"_seed": F.lit(None).cast("string"), "_base": F.lit(0)})
+    else:
+        seeds = previous.select(
+            *CUSTOMER_KEY, F.col("profile_hash").alias("_seed"), F.col("version_number").alias("_base")
+        )
+        seeded = tracked.join(seeds, CUSTOMER_KEY, "left").fillna(0, subset=["_base"])
+    before = F.coalesce(F.lag("profile_hash").over(ordered), F.col("_seed"))
+    changes = seeded.withColumn("_previous", before).where(
         F.col("_previous").isNull() | (F.col("_previous") != F.col("profile_hash"))
     )
-    valid_to = F.lead("started_at").over(ordered)
     return changes.select(
         F.sha2(
             F.concat_ws("|", "integration_id", "customer_id", F.unix_micros("started_at").cast("string")), 256
         ).alias("customer_sk"),
         *CUSTOMER_KEY,
-        F.row_number().over(ordered).alias("version_number"),
+        (F.col("_base") + F.row_number().over(ordered)).alias("version_number"),
         *TRACKED,
         "profile_hash",
         F.col("started_at").alias("valid_from_ts"),
-        valid_to.alias("valid_to_ts"),
-        valid_to.isNull().alias("is_current"),
+        F.lit(None).cast("timestamp").alias("valid_to_ts"),
+        F.lit(None).cast("boolean").alias("is_current"),
         F.col("payment_id").alias("source_payment_id"),
         F.col("attempt_id").alias("source_attempt_id"),
     )
+
+
+def linked(versions: DataFrame, following: DataFrame | None = None) -> DataFrame:
+    """valid_to_ts is the customer's next version, or `following`'s first later version (_next_from) after the last."""
+    ordered = Window.partitionBy(*CUSTOMER_KEY).orderBy("valid_from_ts")
+    if following is not None:
+        versions = versions.join(following, CUSTOMER_KEY, "left")
+    else:
+        versions = versions.withColumn("_next_from", F.lit(None).cast("timestamp"))
+    valid_to = F.coalesce(F.lead("valid_from_ts").over(ordered), F.col("_next_from"))
+    return versions.withColumns({"valid_to_ts": valid_to, "is_current": valid_to.isNull()}).select(*VERSION_COLUMNS)
+
+
+def dim_customer(profile: DataFrame) -> DataFrame:
+    """SCD2 versions over a whole history: a version opens at each attempt whose tracked profile differs from the
+    previous attempt's."""
+    return linked(opened_versions(tracked_profiles(profile, profile)))
 
 
 def label_attempt(labels: DataFrame, attempts: DataFrame) -> DataFrame:
@@ -423,29 +467,53 @@ def label_days(labels: DataFrame, attempts: DataFrame, floor, cutoff) -> list[da
 
 
 def replace_customers(spark, events, attempts, floor, cutoff, pins) -> tuple[dict, int]:
-    """Rebuild the full SCD2 history of every customer with an attempt started in the range."""
+    """Replace the SCD2 versions opened in the range, carrying on from the version each customer had open at its start.
+
+    Versions are sequential, so a range reads its customers' stored version before `floor` (the profile to compare
+    the first attempt against, and the version number to continue) and their first stored version from `cutoff`
+    (the end of its last version). Only device uses within the familiar window before the range are read. Re-running
+    a range on unchanged Silver rewrites the same rows; after Silver changes, re-run from the first changed day on.
+    """
+    template = dim_customer(profiles(events.limit(0), attempts.limit(0)))
+    create_table(spark, DIM_CUSTOMER, template, PARTITIONS[DIM_CUSTOMER]())
+    stage(spark, DIM_CUSTOMER)
+    # Pinned before the DELETE below, so recomputing a lost block never reads the rows this run removed.
+    stored = incremental.read_at(spark, DIM_CUSTOMER, ref_snapshot(spark, DIM_CUSTOMER, write_ref()))
+    in_range = started_between(attempts, floor, cutoff).where(F.col("customer_id").isNotNull())
+    opened_in_range = (F.col("valid_from_ts") >= F.lit(floor)) & (F.col("valid_from_ts") < F.lit(cutoff))
     customers = (
-        started_between(attempts, floor, cutoff)
-        .where(F.col("customer_id").isNotNull())
-        .select(*CUSTOMER_KEY)
+        in_range.select(*CUSTOMER_KEY)
+        .unionByName(stored.where(opened_in_range).select(*CUSTOMER_KEY))
         .distinct()
         # Persisted, not locally checkpointed: a lost spot executor's blocks are recomputed from the lineage.
         .persist(StorageLevel.MEMORY_AND_DISK)
     )
-    # A month's customers reach millions of payments, so every join here shuffles; a broadcast of their keys
-    # overran the driver's result limit.
-    affected = attempts.join(customers, CUSTOMER_KEY, "left_semi")
-    rows = dim_customer(profiles(events, affected))
-    create_table(spark, DIM_CUSTOMER, rows, PARTITIONS[DIM_CUSTOMER]())
-    stage(spark, DIM_CUSTOMER)
-    customers.createOrReplaceTempView("dp3_dim_customer_scope")
-    spark.sql(
-        f"DELETE FROM {DIM_CUSTOMER} WHERE (integration_id, customer_id) IN "
-        "(SELECT integration_id, customer_id FROM dp3_dim_customer_scope)"
+    mine = stored.join(customers, CUSTOMER_KEY, "left_semi")
+    latest = Window.partitionBy(*CUSTOMER_KEY).orderBy(F.desc("valid_from_ts"))
+    previous = (
+        mine.where(F.col("valid_from_ts") < F.lit(floor))
+        .withColumn("_n", F.row_number().over(latest))
+        .where(F.col("_n") == 1)
+        .drop("_n")
+        .persist(StorageLevel.MEMORY_AND_DISK)
     )
+    following = (
+        mine.where(F.col("valid_from_ts") >= F.lit(cutoff))
+        .groupBy(*CUSTOMER_KEY)
+        .agg(F.min("valid_from_ts").alias("_next_from"))
+    )
+    # attempt_started occurs at the attempt's start, so its events partition prunes to the range.
+    starts = events.where((F.col("occurred_at") >= F.lit(floor)) & (F.col("occurred_at") < F.lit(cutoff)))
+    uses = started_between(attempts, floor - FAMILIAR_WINDOW, cutoff).join(customers, CUSTOMER_KEY, "left_semi")
+    tracked = tracked_profiles(profiles(starts, in_range), uses)
+    rows = linked(previous.select(*VERSION_COLUMNS).unionByName(opened_versions(tracked, previous)), following)
+    replaced = previous.select("customer_sk").unionByName(mine.where(opened_in_range).select("customer_sk"))
+    replaced.createOrReplaceTempView("dp3_dim_customer_replaced")
+    spark.sql(f"DELETE FROM {DIM_CUSTOMER} WHERE customer_sk IN (SELECT customer_sk FROM dp3_dim_customer_replaced)")
     with_pins(rows.writeTo(DIM_CUSTOMER), pins).append()
     count = customers.count()
-    customers.unpersist()
+    for frame in (customers, previous):
+        frame.unpersist()
     return recorded(spark, DIM_CUSTOMER, pins), count
 
 

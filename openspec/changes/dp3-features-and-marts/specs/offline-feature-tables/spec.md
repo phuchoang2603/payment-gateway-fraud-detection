@@ -114,11 +114,11 @@ The values SHALL count attempt starts with attempt time in `[started_at − wind
 - **THEN** the earlier attempt's row does not count it
 
 ### Requirement: Day-range runs
-DP3 SHALL take a `start` and `end` UTC day, and without them run yesterday and the `dp3.lookbackDays` days before it. A run SHALL be a pure function of the pinned Silver snapshots. It SHALL overwrite only:
+DP3 SHALL take a `start` and `end` UTC day, and without them run yesterday and the `dp3.lookbackDays` days before it. A run SHALL be a pure function of the pinned Silver snapshots, plus, for `dim_customer`, the versions stored on either side of its range. It SHALL overwrite only:
 
 - the feature rows with anchors in the range and the snapshot rows of attempts started in it;
 - the label rows of attempts started in the range or on a day whose attempts gained a linked label available in it;
-- the full SCD2 history of every customer with an attempt started in the range.
+- the `dim_customer` versions opened in the range, continued from each customer's stored version open at the range start and closed by its first stored version after the range.
 
 It SHALL read only one longest window of history before the range. Every DP3 commit SHALL record the Silver snapshots it read and its range. Re-running a range SHALL change nothing, a backfill SHALL be the same job over a longer range, and a sequence of daily runs SHALL build the same tables as one backfill over their days.
 
