@@ -92,23 +92,12 @@ bronze:
   activeDeadlineSeconds: 7200
   kafka:
     bootstrapServers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092
-    schedule: "17 */6 * * *"
     # Must match the topic partition count of payments.events.v1 and fraud.labels.v1 in infra/charts/kafka/values.yaml.
     # The Spark Kafka source makes one task per partition, so executor cores and shuffle partitions follow this value.
     partitions: 3
     executorMemory: 6g
     executorMemoryOverhead: 1g
     ephemeralStorage: 10Gi
-silver:
-  enabled: false
-  profile: dev
-  reportRoot: s3://platform-dev/runs/payment-gateway/dp2
-  # Estimated size (duplicated IDs times 8 bytes) under which DP2 broadcasts the duplicated-ID keys as a sorted array.
-  dedupBroadcastBytes: 268435456
-  # Incremental runs reread affected payments' Bronze history from this many days before the earliest new row; it
-  # covers a payment's lifetime and the 7-21 day chargeback delay.
-  incrementalLookbackDays: 35
-  activeDeadlineSeconds: 7200
 analytics:
   enabled: false
   profile: dev
@@ -120,13 +109,13 @@ maintenance:
   reportRoot: s3://platform-dev/runs/payment-gateway/maintenance
   activeDeadlineSeconds: 7200
   schedule: "43 3 * * *"
-dp3:
+pipeline:
   enabled: false
   profile: dev
-  reportRoot: s3://platform-dev/runs/payment-gateway/dp3
+  reportRoot: s3://platform-dev/runs/payment-gateway/pipeline
   activeDeadlineSeconds: 14400
-  # Daily at 04:17 UTC, after the 03:43 maintenance; suspended. A run without start and end rebuilds yesterday and the
-  # lookback days before it, which catches late outcomes.
+  # dp-daily at 04:17 UTC, after the 03:43 maintenance; suspended. Without start and end a run covers yesterday and
+  # the lookback days before it, which catches late outcomes.
   schedule: "17 4 * * *"
   lookbackDays: 2
 marts:

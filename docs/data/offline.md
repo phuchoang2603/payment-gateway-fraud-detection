@@ -38,6 +38,19 @@ Purchase dates end on the last full day before generation. Delayed chargebacks r
 
 ## Pipeline
 
+Every layer after Bronze runs one model: `job(start, end)` reads a bounded window before its range of UTC days, overwrites only its own day partitions on a write-audit-publish branch, and is a pure function of its pinned inputs. The daily run and a backfill are the same code: `dp-daily` covers yesterday plus two lookback days, and `dp-backfill` runs the same `dp-pipeline` month by month, in order.
+
+```mermaid
+flowchart LR
+    gen["Historical generator<br/>(per-day parquet)"] -->|"dp1-bronze: overwrite version"| bronze
+    kafka["Kafka topics"] -->|"dp1-bronze: offsets read from the rows"| bronze
+    bronze[("Bronze<br/>days(occurred_at)")] -->|"silver(D): Bronze days D-1..D+1"| silver
+    silver[("Silver<br/>payment_day")] -->|"gold(D): 30 days of Silver"| gold[("Gold features,<br/>labels, dim_customer")]
+    silver -->|"ClickHouse: REPLACE PARTITION per day"| marts[("Marts")]
+    gold --> feast["Feast / training"]
+    marts --> grafana["Grafana"]
+```
+
 ### DP1: raw → Bronze
 
 Bronze keeps every delivery, including duplicates, in two tables shared by both sources: `bronze.payment_events` and `bronze.fraud_labels`.
@@ -48,39 +61,18 @@ Bronze keeps every delivery, including duplicates, in two tables shared by both 
 
 ### DP2: Bronze → Silver
 
-`historical` recomputes from pinned Bronze snapshots. `incremental` reads new append snapshots, recomputes affected payments within a 35-day lookback and replaces their rows. It refuses missing state, historical reloads, changed logic or history beyond the lookback. Consumers use Iceberg changelogs; both modes manage four tables:
+Silver is payment-scoped. Every event of a payment occurs within its 60-minute expiry, so a payment belongs to the UTC day of its first event, its `payment_day`. A run over `[start, end]` reads Bronze `occurred_at` days `start − 1` to `end + 1`, keeps the payments whose `payment_day` is in the range, and overwrites only those days. Labels are overwritten by availability day and link to the attempts of the 45 days before, which covers the 7–21 day chargeback delay. Code: [`batch/silver/curate.py`](../../src/data-pipeline/batch/batch/silver/curate.py).
 
-- **`silver.payment_events`:** one row per `event_id`. Republished copies (same content, later `recorded_at`) collapse to the earliest. Copies that differ in any other business field are conflicts: the whole payment goes to `silver.rejected_events`.
-- **`silver.rejected_events`:** all event rows of a conflicting payment, excluded from the accepted tables.
-- **`silver.attempts`:** one row per attempt with `customer_id`, `merchant_id`, `payment_method_fingerprint`, `amount_minor`, server start time, client `attempted_at`, risk decision, outcome and payment status. Lifecycle violations fail the checks.
-- **`silver.labels`:** one row per distinct label observation, classified `linked`, `pending`, `orphan` or `violation` against the payment, the attempt's start and success. A historical label whose payment has no events is an `orphan`; a live label whose payment has not arrived is `pending`. Violations and orphans fail the checks.
+- **`silver.payment_events`:** one row per `event_id`, partitioned by `payment_day` and written in `occurred_at` order. Republished copies (same content, later `recorded_at`) collapse to the earliest. Copies that differ in any other business field are conflicts: the whole payment goes to `silver.rejected_events`.
+- **`silver.rejected_events`:** all rows of a conflicting payment, excluded from the accepted tables, partitioned by `partition_day` (the payment's day, or a rejected label's availability day).
+- **`silver.attempts`:** one row per attempt with `customer_id`, `merchant_id`, `payment_method_fingerprint`, `amount_minor`, server start time, client `attempted_at`, risk decision, outcome and payment status, partitioned by `payment_day` and written in `started_at` order. Lifecycle violations fail the checks.
+- **`silver.labels`:** one row per distinct label observation, classified `linked`, `pending`, `orphan` or `violation` against the attempt, its start and success, and its payment's status. A historical label whose payment has no attempts is an `orphan`; a live label whose payment has not arrived is `pending`. Violations and orphans fail the checks.
 
-A run report records the Bronze snapshot IDs, input rows, duplicates, conflicts, rejected rows, label linkage counts, the Silver snapshot IDs with their added records, and the tasks, stages and wall time of each phase. The report is written last, after every table write.
+Deduplication is one shuffle on `event_id` within the run's payments, so its cost follows the range, not the history. The run report records the Bronze snapshot IDs, deliveries, distinct events, conflicting payments, label linkage counts, the Silver snapshot IDs and each phase's tasks and wall time.
 
 ### Prod v19 evidence
 
-| Run | Result |
-|---|---|
-| `dp1-bronze-mngks` | Succeeded, 62m02s; 983,727,083 events and 192,204,996 labels published |
-| `dp2-silver-cxjgf` | Spark completed; checks failed. Report: 19,293,494 duplicate deliveries collapsed, 964,433,589 events, 191,148,630 attempts, 192,204,996 linked labels, zero conflicting payments or rejected rows |
-| `dp2-silver-cnr27` | Historical Spark completed in about 32m; checks failed. Its four Silver snapshots are now on `main`; complete validation is still outstanding |
-| `dp2-silver-q6xgs` | Incremental Spark completed in 2m02s with zero affected payments. Checks reached `silver_unique_event`, which aborted at ClickHouse's 3.4 GiB server memory limit; subsequent checks continued |
-
-Incremental curation succeeded, but this rerun does not demonstrate new-data processing: Bronze had no new deliveries. SQL checks still cover the full relevant tables. Published Silver is available to DP3; its full validation must be resolved before treating derived training data as validated.
-
-### Remaining optimization evidence
-
-Benchmarks are deferred. Track execution and screenshots in the [open checklist](../../openspec/changes/rebuild-generation-to-silver/tasks.md); keep the change open until verification and evidence are complete.
-
-| Coursework requirement | Evidence still needed |
-|---|---|
-| Spark baseline and skew | Same pinned snapshot: baseline, AQE skew join and 16-bucket salting; equal output checksums, timings, straggler tasks and final AQE plan |
-| Duplicate handling | `full_width_group` versus `narrow_detect`: equal output, shuffle, spill and elapsed time |
-| Schema evolution | Bronze v2/v3 null counts or read plan showing missing fields become null |
-| Storage | Maintenance before/after files and bytes, partition and Z-order planning probes |
-| Pipeline and governance | Successful Argo graphs, table lineage and complete native OpenMetadata results |
-
-Each benchmark variant runs once; report observed gains only for equivalent completed outputs. If AQE does not split skew, inspect partition sizes before changing thresholds. Kafka new-data evidence waits for live traffic; capture the suspended CronWorkflow definition meanwhile. Gold indexing and feature/training evidence belong to DP3.
+Pending the v2 backfill on a clean prod cluster: `dp1-bronze` for v19, then `dp-backfill` from 2025-10-29 to the last generated day.
 
 ### Viewing Spark event logs
 
@@ -88,7 +80,7 @@ Event logs live under `runs/payment-gateway/spark-events/` in each environment's
 
 ### DP3: offline features
 
-The `dp3-gold` workflow is the Spark batch layer of a Lambda design; Flink is the speed layer. It reads Silver at its published snapshots and writes, through write-audit-publish, five gold Iceberg tables and two ClickHouse marts for a range of UTC days. Code: [`batch/gold/features.py`](../../src/data-pipeline/batch/batch/gold/features.py), [`batch/gold/windows.py`](../../src/data-pipeline/batch/batch/gold/windows.py), [`batch/gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py); definition: [`fraud-history-batch-v1`](../../contracts/features/fraud-history-batch-v1.yaml); design: [`dp3-features-and-marts`](../../openspec/changes/dp3-features-and-marts/design.md).
+DP3, the `gold` stage of `dp-pipeline`, is the Spark batch layer of a Lambda design; Flink is the speed layer. It reads Silver at its published snapshots and writes, through write-audit-publish, five gold Iceberg tables and two ClickHouse marts for a range of UTC days. Code: [`batch/gold/features.py`](../../src/data-pipeline/batch/batch/gold/features.py), [`batch/gold/windows.py`](../../src/data-pipeline/batch/batch/gold/windows.py), [`batch/gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py); definition: [`fraud-history-batch-v1`](../../contracts/features/fraud-history-batch-v1.yaml); design: [`dp3-features-and-marts`](../../openspec/changes/dp3-features-and-marts/design.md).
 
 - **Features at daily anchors.** `feat_customer_daily` and `feat_payment_method_daily` hold 7- and 30-day counts, amounts, decided and declined counts, decline rates and distinct counts at each UTC midnight `s`, over attempts with `s − window <= coalesce(attempted_at, started_at) < s` and `started_at < s` (outcome counts also need `outcome_at < s`). A row is written only where a value changes, so the value at time `t` is the entity's latest row with `event_timestamp <= t`, and an entity with no such row is unknown. A window's columns are null until Silver covers the whole window. `created` is the pinned `silver.attempts` commit time.
 - **Short-window snapshots.** `feat_attempt_rt` is the batch layer of [`fraud-snapshot-v2`](../../contracts/features/fraud-snapshot-v2.yaml), one row per attempt. It holds the customer's and payment method's 5-minute, 1-hour and 24-hour attempt counts and the customer's 24-hour distinct devices. They are taken at the attempt's `started_at`, over attempt starts that began before it, excluding starts more than 24 hours late. It is training history only; Flink serves these windows live.

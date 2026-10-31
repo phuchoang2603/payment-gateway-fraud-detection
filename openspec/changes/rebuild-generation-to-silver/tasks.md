@@ -66,7 +66,7 @@
 
 ## 8. Benchmark
 
-- [ ] 8.1 Implement the benchmark job over one pinned Silver snapshot: a skewed merchant join as a sort-merge join with three variants (AQE skew join off, AQE skew join on, salting into 16 buckets), each run once and timed through the phase helper. Each variant's output is reduced to its row count and an order-independent checksum and compared with the baseline. The report gives each variant's duration, Spark job, stage and task IDs, and the hot-key share with its denominator. Verify with CI tests that every variant returns the baseline output, that an unequal row set and a same-count changed value each fail the guard, that the salted join matches the baseline for the hot merchant, and that the hot-key share uses all attempts as its denominator. Also run the `dedup` family over the pinned Bronze events: a full-width group-by and a narrow detection variant that joins at the strategy Silver chooses, each run once and timed, reporting wall time and spill per variant, with the same row count and checksum guard. Verify with CI tests that both variants return the same output and that the narrow dedup equals the full-width pass with a shuffled and with a broadcast join.
+- [ ] 8.1 Implement the benchmark job over one pinned Silver snapshot (the dedup family was removed with the dedup broadcast on 2026-10-31): a skewed merchant join as a sort-merge join with three variants (AQE skew join off, AQE skew join on, salting into 16 buckets), each run once and timed through the phase helper. Each variant's output is reduced to its row count and an order-independent checksum and compared with the baseline. The report gives each variant's duration, Spark job, stage and task IDs, and the hot-key share with its denominator. Verify with CI tests that every variant returns the baseline output, that an unequal row set and a same-count changed value each fail the guard, that the salted join matches the baseline for the hot merchant, and that the hot-key share uses all attempts as its denominator. Also run the `dedup` family over the pinned Bronze events: a full-width group-by and a narrow detection variant that joins at the strategy Silver chooses, each run once and timed, reporting wall time and spill per variant, with the same row count and checksum guard. Verify with CI tests that both variants return the same output and that the narrow dedup equals the full-width pass with a shuffled and with a broadcast join.
 
 ## 10. ClickHouse instance
 
@@ -106,8 +106,8 @@
 - [ ] 13.4 Blocked: publish data products once OpenMetadata supports ODPS natively, or with a minimal product create.
 - [ ] 13.5 At archive, move the requirements of `openspec/specs/metadata-integrations` into `data-pipeline-orchestration` and remove that capability.
 
-## 14. Incremental Silver
+## 14. Day-range Silver
 
-- [ ] 14.1 Add `mode=historical|incremental` to `dp2-silver` (default historical) and run the suspended Kafka CronWorkflow's Silver step in incremental mode. Verify with helm lint and template for every values file.
-- [ ] 14.2 Implement incremental curation from Iceberg change data: state from the last DP2 commit's snapshot properties, new Bronze rows by incremental append read, the lookback check and refusals, and consumers reading Silver's changelog view (design decision 17). Verify with the CI equivalence test over Kafka batches, one test per refusal and the attempts changelog test.
-- [ ] 14.3 Record one incremental Silver run on prod next to the historical v19 run (rows read, payments affected, wall time) once Kafka-mode Bronze has new rows. Verify from the run report.
+- [x] 14.1 Replace the modes with day ranges (design decision 17): `payment_day` partitions, bounded Bronze reads, label linkage over 45 days, one-shuffle dedup, and the `dp-pipeline`, `dp-daily` and `dp-backfill` workflows. Remove the incremental module, the Kafka schedule, the dedup broadcast and the dedup benchmark family.
+- [x] 14.2 CI: daily Silver runs equal one backfill, a payment across midnight belongs to its first day, and the existing dedup, linkage and rerun tests run on ranges.
+- [ ] 14.3 Prod: `dp1-bronze` v19, then `dp-backfill` over v19 on a clean cluster; record row counts and per-month wall time in `docs/data/offline.md`.

@@ -9,13 +9,13 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 | Workflow | Stages | Status |
 |---|---|---|
 | `generate-historical` | Shards in parallel → publish | Done; v18 and v19 published |
-| `dp1-bronze` (historical or Kafka mode) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Historical v19 succeeded; Kafka schedule suspended |
-| `dp2-silver` | Spark curate to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Published; full validation remains incomplete |
-| `dp3-gold` (`start`/`end` day range) | Spark gold features to an audit branch → ClickHouse marts into staging → checks on the branch and staging → publish tables → publish marts → profile marts → OpenMetadata publish | Implemented; suspended daily schedule `dp3-gold-daily` runs yesterday plus two lookback days; dev and prod runs pending |
+| `dp1-bronze` (historical or Kafka source) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Implemented; Kafka runs inside `dp-daily` |
+| `dp-pipeline` (`start`/`end` days) | Spark Silver, then Spark Gold, to one audit branch → ClickHouse marts into staging → checks on the branch and staging → publish tables → publish marts → profile marts → OpenMetadata publish | Implemented |
+| `dp-daily`, `dp-backfill` | Kafka into Bronze, then `dp-pipeline` for yesterday and two lookback days (suspended cron); `dp-pipeline` month by month in order | Implemented |
 | `warehouse-benchmark` | Single on-demand stage | Implemented; prod v19 evidence pending |
-| `maintain-lakehouse`, `dp2-benchmark` | Single on-demand stage | Implemented; prod v19 evidence pending |
+| `maintain-lakehouse`, `dp2-benchmark` (skewed join) | Single on-demand stage | Implemented; prod v19 evidence pending |
 
-Bronze and Silver normally publish audit branches to `main` only after all native tests pass. Failed runs retain their branches; the exit handler records pipeline status in OpenMetadata. Silver is currently published with incomplete validation; see [run outcomes](offline.md#prod-v19-evidence). Writers use a mutex. Checks retry execution errors, not failed data rules. The suspended Kafka CronWorkflow runs Bronze followed by incremental Silver.
+Every writer publishes its audit branch to `main` only after all native tests pass. Failed runs retain their branches; the exit handler records pipeline status in OpenMetadata. Bronze holds `dp1-bronze-writer`; the `dp-pipeline` template holds `dp-writer`, so the daily run and each backfill month serialize. Checks retry execution errors, not failed data rules.
 
 ### Spark sizing and placement
 

@@ -35,11 +35,12 @@ schema:
     dataGranularityDescription: One payment attempt.
     customProperties:
       - property: partitioning
-        value: days(started_at)
+        value: payment_day
     properties:
       - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration namespace of the payment.}
       - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: Payment aggregate identity.}
       - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: Attempt identity unique within the payment.}
+      - {name: payment_day, logicalType: date, physicalType: DATE, required: true, description: 'UTC day of the payment''s first event. Every event of a payment occurs within its expiry, so a Silver run overwrites whole payment days.'}
       - {name: merchant_id, logicalType: string, physicalType: VARCHAR, description: Gateway merchant identity from the AttemptStarted context.}
       - {name: customer_id, logicalType: string, physicalType: VARCHAR, description: Gateway customer identity from the AttemptStarted context.}
       - {name: payment_method_type, logicalType: string, physicalType: VARCHAR, description: Payment method category.}

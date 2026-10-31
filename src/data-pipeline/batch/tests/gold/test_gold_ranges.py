@@ -5,6 +5,7 @@ import pytest
 from pyspark.sql import functions as F
 
 from batch.bronze import ingest as bronze
+from batch.days import day_range
 from batch.gold import features as gold
 from batch.silver import curate as silver
 from tests.events import BASE, approved, created, label, started, succeeded
@@ -52,7 +53,7 @@ def silver_history(spark, lake):
     ]
     deliver(spark, lake, bronze.EVENTS, events)
     deliver(spark, lake, bronze.LABELS, [label("pay-1", "att-1", available=DAY + 5, minutes=1)])
-    silver.run(spark, "silver-base", "historical")
+    silver.run(spark, "silver-base", FIRST, FIRST + timedelta(days=14))
 
 
 def tables(spark) -> dict:
@@ -110,8 +111,8 @@ def test_a_late_label_rebuilds_the_label_rows_of_its_attempt_day(spark, lake):
         bronze.LABELS,
         [label("pay-2", "att-2", available=20 * DAY, source="LABEL_SOURCE_CHARGEBACK", minutes=2 * DAY + 3)],
     )
-    silver.run(spark, "silver-labels", "incremental")
     arrival = (BASE + timedelta(minutes=20 * DAY)).date()
+    silver.run(spark, "silver-labels", arrival, arrival)
 
     report = gold.run(spark, "gold-2", arrival, arrival)
 
@@ -126,9 +127,9 @@ def test_a_late_label_rebuilds_the_label_rows_of_its_attempt_day(spark, lake):
 
 def test_the_daily_range_defaults_to_yesterday_and_the_lookback():
     today = date(2026, 10, 31)
-    assert gold.day_range({}, today) == (date(2026, 10, 28), date(2026, 10, 30))
-    assert gold.day_range({"DP3_LOOKBACK_DAYS": "0"}, today) == (date(2026, 10, 30), date(2026, 10, 30))
-    assert gold.day_range({"DP3_START": "2026-09-01", "DP3_END": "2026-09-30"}, today) == (
+    assert day_range({}, today) == (date(2026, 10, 28), date(2026, 10, 30))
+    assert day_range({"DP_LOOKBACK_DAYS": "0"}, today) == (date(2026, 10, 30), date(2026, 10, 30))
+    assert day_range({"DP_START": "2026-09-01", "DP_END": "2026-09-30"}, today) == (
         date(2026, 9, 1),
         date(2026, 9, 30),
     )

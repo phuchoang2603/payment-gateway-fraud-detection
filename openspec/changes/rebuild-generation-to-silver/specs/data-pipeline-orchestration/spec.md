@@ -57,22 +57,27 @@ The Bronze and Silver workflows SHALL each show the Spark, checks, publish-table
 - **THEN** the graph shows those stages without select, discover, profile, readback or accept nodes
 
 ### Requirement: Pipeline inputs
-A DP1 submission SHALL select either a historical dataset version, by source root and dataset version parameters with chart defaults selecting v18, or Kafka mode. A DP2 submission SHALL take a `mode` parameter, `historical` (the default) or `incremental`, and read published Bronze. A scheduled workflow SHALL run DP1 in Kafka mode followed by DP2 in incremental mode, and SHALL be disabled by default in every environment.
+A DP1 submission SHALL select either a historical dataset version, by source root and dataset version parameters with chart defaults selecting v18, or the Kafka source. Silver, Gold and the marts SHALL run as one `dp-pipeline` workflow taking `start` and `end` UTC days. A daily schedule SHALL run DP1 from Kafka and then `dp-pipeline` without parameters, and SHALL be suspended by default in every environment. A `dp-backfill` workflow SHALL run `dp-pipeline` month by month over a range, in date order, one month at a time.
 
 #### Scenario: Ingest a dataset version
 
 - **WHEN** a DP1 historical submission names a dataset version
 - **THEN** all stages use that version's manifest
 
-#### Scenario: Manual Silver submission
+#### Scenario: Manual pipeline submission
 
-- **WHEN** a user submits DP2 without parameters
-- **THEN** it runs in historical mode
+- **WHEN** a user submits `dp-pipeline` without parameters
+- **THEN** it covers yesterday and the lookback days before it
+
+#### Scenario: Backfill stops at a failed month
+
+- **WHEN** one month of a backfill fails
+- **THEN** the later months do not run, and a new backfill from that month resumes
 
 #### Scenario: Default schedule
 
 - **WHEN** the charts are rendered with default values
-- **THEN** the scheduled workflow exists but is suspended
+- **THEN** the daily schedule exists but is suspended
 
 ### Requirement: Catalog registration and discovery
 The data-pipelines application SHALL own the OpenMetadata connector configuration, its ExternalSecrets and the service registration. A PostSync register job SHALL create the OpenMetadata services on each deploy. Every checks run SHALL ingest the ClickHouse tables before its native tests. Kafka topics SHALL be ingested by the on-demand `metadata-discovery` WorkflowTemplate, not by a schedule. Registration SHALL NOT import contracts or data products.

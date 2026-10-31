@@ -49,7 +49,7 @@ def parameters(client: marts.ClickHouse) -> dict:
         f"FROM {marts.name(marts.BUILD_INFO)}"
     )
     if len(info) != 1:
-        raise RuntimeError("the marts have no build_info; run dp3-gold first")
+        raise RuntimeError("the marts have no build_info; run dp-pipeline first")
     start, end = date.fromisoformat(info[0]["start"]), date.fromisoformat(info[0]["end"])
     fact = marts.name(marts.FACT)
     merchants = [

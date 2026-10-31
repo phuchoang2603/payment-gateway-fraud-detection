@@ -3,13 +3,11 @@ generator:
   config: historical-dev.yaml
 bronze:
   enabled: true
-silver:
-  enabled: true
 analytics:
   enabled: true
 maintenance:
   enabled: true
-dp3:
+pipeline:
   enabled: true
 warehouseBenchmark:
   enabled: true

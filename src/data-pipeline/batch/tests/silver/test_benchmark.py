@@ -1,10 +1,8 @@
 import pytest
 from pyspark.sql import functions as F
 
-from batch.bronze.schema import EVENT_COLUMNS, business_schema
 from batch.silver import benchmark
-from batch.silver import curate as silver
-from tests.events import at, created
+from tests.events import at
 
 LOW_SKEW_THRESHOLDS = {
     "spark.sql.adaptive.coalescePartitions.enabled": "false",
@@ -99,32 +97,3 @@ def test_hot_key_share_uses_all_attempts_as_denominator(spark, attempts):
 
     assert share["merchant_id"] == "m-1"
     assert share["denominator"] == 82
-
-
-@pytest.fixture
-def duplicated_events(spark):
-    rows = [created(f"pay-{n}", f"evt-{n}", minutes=n % 60) for n in range(300)]
-    rows += [created(f"pay-{n}", f"evt-{n}", minutes=n % 60, recorded=90) for n in range(0, 300, 3)]
-    rows += [created("pay-x", "evt-x", amount=100), created("pay-x", "evt-x", amount=999)]
-    return spark.createDataFrame(rows, business_schema(spark, EVENT_COLUMNS)).withColumns(
-        {"_source": F.lit("historical"), "_ingested_at": F.current_timestamp()}
-    )
-
-
-def test_every_dedup_variant_returns_the_full_width_output(spark, duplicated_events):
-    results = benchmark.dedup_family(spark, duplicated_events, {})
-
-    assert set(results) == set(benchmark.DEDUP_VARIANTS)
-    assert {r["output_rows"] for r in results.values()} == {301}
-    assert len({r["checksum"] for r in results.values()}) == 1
-
-
-def test_narrow_detect_takes_the_strategy_the_threshold_selects(spark, duplicated_events, monkeypatch):
-    monkeypatch.setenv(silver.DEDUP_BROADCAST_ENV, "0")
-    shuffled = benchmark.dedup_family(spark, duplicated_events, {})["narrow_detect"]
-    monkeypatch.setenv(silver.DEDUP_BROADCAST_ENV, str(1 << 40))
-    broadcast = benchmark.dedup_family(spark, duplicated_events, {})["narrow_detect"]
-
-    assert shuffled["strategy"] == "shuffle"
-    assert broadcast["strategy"] == "broadcast"
-    assert shuffled["checksum"] == broadcast["checksum"]

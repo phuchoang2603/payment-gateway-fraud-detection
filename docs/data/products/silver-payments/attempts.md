@@ -30,6 +30,7 @@ Synthetic data only. Outcome pending means the processor result has not arrived 
 |  integration_id | string | *Integration namespace of the payment.*<br />• `required` |
 |  payment_id | string | *Payment aggregate identity.*<br />• `required` |
 |  attempt_id | string | *Attempt identity unique within the payment.*<br />• `required` |
+|  payment_day | date | *UTC day of the payment's first event. Every event of a payment occurs within its expiry, so a Silver run overwrites whole payment days.*<br />• `required` |
 |  merchant_id | string | *Gateway merchant identity from the AttemptStarted context.* |
 |  customer_id | string | *Gateway customer identity from the AttemptStarted context.* |
 |  payment_method_type | string | *Payment method category.* |

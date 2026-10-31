@@ -32,6 +32,7 @@ Synthetic data only. A payment appears here completely or not at all.
 |  source | string | *historical or kafka*<br />• `required` |
 |  integration_id | string | *Integration namespace of the payment.*<br />• `required` |
 |  payment_id | string | *Rejected payment identity.*<br />• `required` |
+|  partition_day | date | *The payment_day of a rejected event or attempt, or the availability day of a rejected label; the day whose run rewrites the row.*<br />• `required` |
 |  row_json | string | *Row content as JSON.*<br />• `required` |
 |  _run_id | string | *Silver run that rejected the row.*<br />• `required` |
 

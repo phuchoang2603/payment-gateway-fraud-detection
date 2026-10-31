@@ -352,31 +352,29 @@ A against C shows the full benefit of the warehouse. B against C isolates the ef
 
 **Page.** `docs/data/storage.md` § Warehouse gets one table per query and variant, with the plan excerpts.
 
-### 9. DP3 workflow
+### 9. One pipeline workflow (2026-10-31)
 
 ```text
-dp3-gold (WorkflowTemplate, mutexes: dp3-gold-writer, dp2-silver-writer, onExit: publish)
-├── features        SparkApplication batch/gold/features.py, writes audit-<workflow> branch     (ingest)
-├── marts           container batch/gold/marts.py build, writes marts.*__staging          (ingest, after features)
-├── checks          openmetadata.checks, gold-features on branch heads, payment-marts on staging   (validate)
-├── publish-tables  openmetadata.wap, fast-forwards gold main                  (after checks)
+dp-pipeline (WorkflowTemplate; the pipeline template holds mutex dp-writer; onExit: publish)
+├── silver          SparkApplication batch/silver/curate.py, writes audit-<workflow> branch   (ingest)
+├── gold            SparkApplication batch/gold/features.py, same branch                     (ingest)
+├── marts           container batch/gold/marts.py build, writes marts.*__staging          (ingest)
+├── checks          openmetadata.checks: silver-payments and gold-features on branch heads, payment-marts on staging (validate)
+├── publish-tables  openmetadata.wap, fast-forwards Silver and Gold main                    (after checks)
 ├── publish-marts   container batch/gold/marts.py publish, replaces the rebuilt partitions   (after publish-tables)
 └── profile         OpenMetadata profiler on the published marts                    (after publish-marts)
-publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, lineage on success
+dp-daily (CronWorkflow, suspended, 04:17 UTC): dp1-bronze from Kafka, then the pipeline template without a range
+dp-backfill (WorkflowTemplate): the pipeline template once per month of [start, end], in order, parallelism 1
 ```
 
-- **Publication order.** Iceberg gold is published first because it is one atomic catalog transaction. If `publish-marts` then fails, gold is current and the marts keep the previous build until the next run; the stage retries on error. Profiling runs on the published tables, because OpenMetadata profiles entities, not staging tables.
-
-- **Why `marts` runs after `features`.** It does not need `features`' output. It runs second only so that the run report can compare the Silver snapshot IDs (decision 7), and so that both stages do not compete on the prod spot pool and the small ClickHouse at once. The graph still shows the ingest stages, one validate stage and the publish steps. Parallel stages are possible later.
-- **Mutexes.** Holding `dp2-silver-writer` serializes DP3 with DP2. Argo 3.6+ supports several mutexes on one workflow (to be verified in implementation).
+- **Publication order.** Iceberg is published first because it is one atomic catalog transaction across Silver and Gold. If `publish-marts` then fails, the tables are current and the marts keep their previous days until the next run; the stage retries on error.
+- **One mutex, on the template.** The `pipeline` template holds `dp-writer` wherever it is referenced, so the daily run, manual runs and backfill months serialize. Silver no longer changes under Gold, because the same run writes both.
+- **Spark application names** are the step pod's name, unique per step, loop item and retry, so the months of one backfill never collide.
 - **Retries.** As in #102: Spark retries on error (prod: limit 10, `Always`, for spot loss), containers retry on error with limit 2, and checks are never retried.
-- **Schedule: daily, not every six hours.** DP3 is not added to the six-hourly `dp1-bronze-kafka` CronWorkflow. It gets its own suspended daily CronWorkflow `dp3-gold-daily` at 04:17 UTC, after the 03:43 maintenance run, which references the template with `workflowTemplateRef` so the template's mutexes, placement and exit handler apply.
-  - The features are daily-anchored, so a daily run is their natural cadence.
-  - A run rebuilds whole days, so a six-hourly run would redo the same day four times.
-  - The workflow-level mutexes still apply, because `workflowTemplateRef` runs the whole template rather than a `templateRef` step.
+- **Schedule: daily.** The features are daily-anchored and a run rebuilds whole days, so `dp-daily` runs once a day after the 03:43 maintenance run.
 - **RBAC.** No new RBAC is needed. The marts and benchmark containers read the `clickhouse-marts` secret that the clickhouse chart's ExternalSecret already creates in `data` for `CLICKHOUSE_MARTS_PASSWORD`; a second ExternalSecret of the same name would collide. They receive only storage and ClickHouse credentials.
 - **Values:**
-  - `dp3.enabled`, `dp3.profile`, `dp3.reportRoot`, `dp3.activeDeadlineSeconds`, `dp3.lookbackDays`;
+  - `pipeline.enabled`, `pipeline.profile`, `pipeline.reportRoot`, `pipeline.activeDeadlineSeconds`, `pipeline.schedule`, `pipeline.lookbackDays`;
   - `marts.clickhouseUrl`, `marts.resources`, `marts.retentionDays` (180 in `values.yaml`, so in both environments);
   - `warehouseBenchmark.enabled`, `warehouseBenchmark.reportRoot`;
   - `dashboards.enabled`.
@@ -395,7 +393,7 @@ The marts container requests 100m CPU and 256 Mi, because ClickHouse does the wo
 
 Decided on 2026-10-31, replacing the historical and incremental modes. DP3 is the batch layer of a Lambda design: Spark recomputes gold from Silver, the master dataset, while Flink serves the short windows live. Training reads only the batch layer.
 
-- **Parameters.** `dp3-gold` takes `start` and `end` UTC days. Without them the job runs yesterday and the `dp3.lookbackDays` (2) days before it, so late outcomes land. The daily CronWorkflow passes none; a backfill passes the first Silver day and yesterday.
+- **Parameters.** `dp-pipeline` takes `start` and `end` UTC days. Without them the job runs yesterday and the `dp3.lookbackDays` (2) days before it, so late outcomes land. The daily CronWorkflow passes none; a backfill passes the first Silver day and yesterday.
 - **Pure function per range.** A run reads Silver at its published snapshots and overwrites only:
   - feature rows with anchors in `(start, end + 1]`, using `overwrite` on an `event_timestamp` range;
   - `feat_attempt_rt` rows of attempts started in the range;

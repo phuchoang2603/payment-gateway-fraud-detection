@@ -21,8 +21,8 @@ This change plans DP3 on top of Silver, so that Feast, training, Grafana and the
 
   The marts keep a rolling 180 days through a table `TTL` that drops whole days, ready for the live simulator. A `build_info` row records each build's window and Silver snapshots. Both use time-first `ORDER BY` keys, partitions and skip indexes chosen for fixed dashboard and investigation queries. Each run fully rebuilds the marts into staging tables and swaps them in atomically, so reruns are idempotent and readers never see a partial build. There is no Spark gold mart.
 - **Warehouse indexing evidence.** An on-demand `warehouse-benchmark` workflow runs fixed queries three ways: against raw Iceberg through `lakehouse`, against an unsorted MergeTree copy, and against the indexed marts. It records rows, bytes, marks, memory, durations and `EXPLAIN indexes = 1` into a report.
-- **Day ranges, the Lambda batch layer.** `dp3-gold` takes `start` and `end` UTC days and overwrites only those days' rows, so a re-run changes nothing and a backfill is the same job over a longer range. The daily schedule runs yesterday plus a short lookback. A new `gold.feat_attempt_rt` holds each attempt's `fraud-snapshot-v2` short-window values at its start, as training history for the windows Flink serves live.
-- **DP3 orchestration.** A single `dp3-gold` Argo workflow has two ingest stages, Spark features and the ClickHouse marts build, then a validate stage. The validate stage runs the ODCS ClickHouse SQL rules as native OpenMetadata test suites and profiles the marts. The exit handler publishes pipeline status and Silver → gold lineage, as DP1 and DP2 do. The suspended Kafka schedule gains DP3 after DP2.
+- **Day ranges, the Lambda batch layer.** `dp-pipeline` takes `start` and `end` UTC days and overwrites only those days' rows, so a re-run changes nothing and a backfill is the same job over a longer range. The daily schedule runs yesterday plus a short lookback. A new `gold.feat_attempt_rt` holds each attempt's `fraud-snapshot-v2` short-window values at its start, as training history for the windows Flink serves live.
+- **One pipeline workflow.** `dp-pipeline` runs Silver, Gold and the marts for a day range on one write-audit-publish branch: Spark, ClickHouse staging, checks, then publish. `dp-daily` runs Bronze from Kafka and then the pipeline; `dp-backfill` runs it month by month.
 - **Contracts.** Two new data products: `gold-features`, for the Iceberg tables, and `payment-marts`, for the ClickHouse tables. Each has ODPS and ODCS contracts with ClickHouse-dialect quality rules. The check runner resolves each contract's own database instead of assuming `lakehouse`.
 - **ClickHouse users.**
   - `grafana`: read-only, with a constrained profile and `SELECT` on `marts.*` only.
@@ -66,7 +66,7 @@ No breaking changes. Nothing downstream consumes gold today. The feature-store p
   - `contracts/features/fraud-history-batch-v1.{yaml,examples.json}`;
   - mart DDL under `src/data-pipeline/batch/batch/gold/sql/`.
 - **Infra:**
-  - `infra/charts/data-pipelines`: the `dp3-gold` and `warehouse-benchmark` templates, the schedule step, values, and dashboard ConfigMaps;
+  - `infra/charts/data-pipelines`: the `dp-pipeline`, `dp-daily`, `dp-backfill` and `warehouse-benchmark` templates, the schedule step, values, and dashboard ConfigMaps;
   - `infra/charts/clickhouse`: the `grafana` and `marts` users and profiles, the new databases, and their ExternalSecrets;
   - `infra/charts/data-pipelines` `catalog.connectors` (which owns OpenMetadata registration since #102): ClickHouse schemas for `lakehouse` and `marts`.
 - **Images:** the Spark image ships the SQL files and the ClickHouse client library. Rebuild paths are unchanged, because the batch package is already covered.

@@ -35,7 +35,7 @@ schema:
     dataGranularityDescription: One payment lifecycle event.
     customProperties:
       - property: partitioning
-        value: days(occurred_at)
+        value: payment_day
     properties:
       - {name: event_id, logicalType: string, physicalType: VARCHAR, required: true, description: Opaque event identity; unique within this table.}
       - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: Payment aggregate identity within integration_id.}
@@ -56,6 +56,7 @@ schema:
       - {name: payment_expired, logicalType: object, description: Terminal expiry.}
       - {name: payload_case, logicalType: string, physicalType: VARCHAR, description: The protobuf oneof member the event carries or null when it carries none.}
       - {name: _source, logicalType: string, physicalType: VARCHAR, required: true, description: Source of the kept copy, historical or kafka.}
+      - {name: payment_day, logicalType: date, physicalType: DATE, required: true, description: 'UTC day of the payment''s first event. Every event of a payment occurs within its expiry, so a Silver run overwrites whole payment days.'}
     quality:
       - id: silver_unique_event
         type: sql

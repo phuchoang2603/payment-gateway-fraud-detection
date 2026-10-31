@@ -114,7 +114,7 @@ def run_historical(spark, root, version, run_id):
         report["tables"][name] = {
             "rows": sum(written.values()),
             "files": len(parts),
-            "snapshot_id": current_snapshot(spark, name, write_ref()),
+            "snapshot_id": ref_snapshot(spark, name, write_ref()),
         }
     return report
 
@@ -204,8 +204,8 @@ def run_kafka(spark, bootstrap, run_id):
             "rejected_starts": _partition_map(rejected_starts),
             "ends": _partition_map(highs),
             "snapshot_ids": {
-                table: current_snapshot(spark, table, write_ref()),
-                REJECTED: current_snapshot(spark, REJECTED, write_ref()),
+                table: ref_snapshot(spark, table, write_ref()),
+                REJECTED: ref_snapshot(spark, REJECTED, write_ref()),
             },
         }
         records.unpersist()
@@ -325,11 +325,6 @@ def ensure_tables(spark):
         f"CREATE TABLE IF NOT EXISTS {REJECTED} ({rejected_ddl()}) USING iceberg "
         f"PARTITIONED BY (days(_ingested_at)) {TABLE_PROPERTIES}"
     )
-
-
-def current_snapshot(spark, table, ref="main"):
-    """The head of a ref; main unless asked for this run's write branch. Unpublished audit branches are never read."""
-    return ref_snapshot(spark, table, ref)
 
 
 def hadoop_uri(uri):

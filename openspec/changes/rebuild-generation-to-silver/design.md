@@ -269,17 +269,17 @@ Spark applications write rolling event logs to `runs/payment-gateway/spark-event
 
 The `data-pipelines` application owns the OpenMetadata connector configuration, its ExternalSecrets and the register job. A PostSync job creates the services on each deploy. Every checks run ingests the ClickHouse tables before its native tests, so no scheduled ClickHouse discovery remains. Kafka topics are ingested by the on-demand `metadata-discovery` WorkflowTemplate. The `metadata-integrations` application is removed.
 
-### 17. Incremental Silver from Iceberg change data
+### 17. Day-range Silver (2026-10-31, replacing historical and incremental modes)
 
-`dp2-silver` takes `mode=historical|incremental`; manual runs default to historical, the suspended Kafka CronWorkflow uses incremental. Exactness rests on one invariant: every Silver rule is local to one payment (duplicate copies, conflicts that reject a whole payment, attempt lifecycles, label linkage and pending or orphan classes). Recomputing each affected payment from all of its Bronze rows and replacing its rows therefore gives the historical result, and every other payment is unchanged.
+Silver runs the same model as Gold: `job(start, end)` over UTC days, a pure function of pinned Bronze.
 
-- **State:** every DP2 commit already records the Bronze snapshot IDs it read; it now also records `dp2.mode` and `dp2.logic_version`. Incremental mode takes the newest DP2 commit in `silver.payment_events` main history (maintenance commits carry no run ID), so the state is published with, and only with, the Silver data it describes.
-- **New rows:** Bronze is append-only outside historical reloads, so Iceberg's incremental append read between the recorded and current Bronze snapshots returns exactly the new rows, without a separate offset watermark. It relies on the recorded snapshots surviving expiry (7 days, last 10 kept); a run that falls further behind is refused.
-- **Scope:** the new rows name the affected payments. Their full history is reread from both sources from 35 days (`SILVER_LOOKBACK_DAYS`) before the earliest new event time or label availability, which covers a payment's lifetime and the 7–21 day chargeback delay while still pruning partitions. A check fails the run when an affected payment already has Silver rows older than that cutoff.
-- **Replace:** the existing curation functions run on that subset; each Silver table deletes the affected payments and appends their new rows on the audit branch, then the normal checks and `publish-tables` apply. Rows must be removed as well as upserted because a conflicting redelivery moves a whole payment out of the accepted tables.
-- **Refuse:** no recorded Bronze snapshots, a non-append, non-compaction Bronze snapshot since them (a historical reload), or a different logic version fails the run with a message to run historical. There is no silent fallback.
-- **Consumers (DP3):** read Iceberg's changelog view of `silver.attempts` and `silver.labels` between the snapshot they last consumed and the current one, with net changes, so carry-over rows from rewritten files cancel out and only changed rows remain, with their old values as deletes. A historical run rewrites every row, which reads as a full reset.
-- **Verification:** a CI test replays Kafka batches (new payment, late duplicate, conflicting redelivery, label before payment, chargeback 20 days later) and compares every incremental result with a historical run over the same Bronze; each refusal has a test, and one test reads the attempts changelog across an incremental run.
+- **Payment day.** Every event of a payment occurs within its 60-minute expiry, so a payment belongs to the UTC day of its first event. Its events, attempts and rejected rows carry that `payment_day`, and the tables are partitioned by it. A run overwrites whole payment days, and nothing outside them.
+- **Bounded reads.** A run reads Bronze `occurred_at` days from `start − 1` to `end + 1`. The first day tells a payment that began before midnight from one that began after; the last day holds the tails of payments that began just before midnight.
+- **Labels.** They are overwritten by availability day and link to the attempts and rejections of the 45 days before, which covers the 7–21 day chargeback delay. A label whose payment has no attempts is an orphan (historical) or pending (live).
+- **Dedup.** It is one shuffle on `event_id` within the run's payments. The broadcast of duplicated keys, which existed for a full-history recompute of v19's 20M duplicated IDs, is gone.
+- **Layout.** Events are written in `occurred_at` order and attempts in `started_at` order, so file statistics prune Gold's and ClickHouse's time filters inside a payment day.
+- **Removed.** The modes, the change-data state and refusals, the 35-day lookback, the dedup broadcast and its benchmark family. Gold reads Silver by day, not by changelog.
+- **Verification.** CI runs a backfill and day-by-day runs over the same Bronze and compares every table. It also checks a payment across midnight.
 
 ## Risks / Trade-offs
 

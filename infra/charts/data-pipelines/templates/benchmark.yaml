@@ -1,0 +1,20 @@
+{{- if .Values.warehouseBenchmark.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: warehouse-benchmark
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
+  entrypoint: benchmark
+  activeDeadlineSeconds: {{ .Values.warehouseBenchmark.activeDeadlineSeconds }}
+  synchronization:
+    mutexes:
+      - name: dp-writer
+  podMetadata:
+    labels:
+      dp-product: payment-marts
+  templates:
+{{- include "data-pipelines.marts-step" (dict "root" $ "name" "benchmark" "command" (list "python" "-m" "batch.gold.warehouse_benchmark") "reportRoot" .Values.warehouseBenchmark.reportRoot) | nindent 4 }}
+{{- end }}
