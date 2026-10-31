@@ -22,7 +22,7 @@ Every writer publishes its audit branch to `main` only after all native tests pa
 | Workload | Prod placement and sizing |
 |---|---|
 | Large Spark jobs | Spot `aws-cpu-burst`: 11 executors × 3 cores = 33 executor cores; each 9 GiB heap + 3 GiB overhead, 24 GiB ephemeral storage |
-| Driver | Existing on-demand workers; 1 core (500m request), 4 GiB heap + 1.5 GiB overhead |
+| Driver | Spot `aws-cpu-burst` with the executors (the on-demand pool is fully requested by platform workloads); 1 core (500m request), 4 GiB heap + 1.5 GiB overhead |
 | Shuffle | 1,024 partitions, AQE coalescing with 128 MB advisory size; large v19 shuffles require more than 3–4× core count |
 | Kafka mode | One 3-core executor, three shuffle partitions matching the topics |
 | Argo steps / SQL checks | Steps on on-demand workers; SQL executes on shared ClickHouse |

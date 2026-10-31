@@ -31,10 +31,9 @@ spark:
   nodeSelector:
     karpenter.sh/nodepool: aws-cpu-burst
     karpenter.sh/capacity-type: spot
-  # A spot reclaim of the driver's node restarts the whole application, so drivers run on the on-demand baseline
-  # pool, which has about 5.8 GiB and 1 vCPU free on one node.
-  driverNodeSelector:
-    karpenter.sh/nodepool: aws-workers
+  # Drivers run on the same spot pool: the fixed on-demand pool is fully requested by platform workloads after the
+  # 2026-10-31 rebuild. A spot reclaim restarts the application, which is safe because every run overwrites only its
+  # own range on an audit branch, and the retry limit below absorbs it.
   retry:
     limit: 10
     policy: Always
