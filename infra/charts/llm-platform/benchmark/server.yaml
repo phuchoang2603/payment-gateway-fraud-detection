@@ -31,7 +31,9 @@ spec:
         - --load-format=runai_streamer
         - --model-loader-extra-config={"concurrency":16,"memory_limit":2147483648}
         - --max-model-len=16384
-        - --gpu-memory-utilization=0.80
+        # 0.84 rather than the chart's 0.80: counting CUDA graph memory in the budget leaves too little KV cache for
+        # 16384 tokens on a fresh start. The embedding server keeps its 0.12.
+        - --gpu-memory-utilization=0.84
         - --reasoning-parser=qwen3
         - --default-chat-template-kwargs={"enable_thinking":false}
         - --enable-auto-tool-choice

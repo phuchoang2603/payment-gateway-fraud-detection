@@ -42,9 +42,12 @@ models:
     replicas: 1
     # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
     stopped: false
+    # FP8 KV cache: 15% more output tokens/s at 16 concurrent requests and 65% more KV room than bf16 (benchmark, dev
+    # 2026-10-31); it also leaves room for the 16384-token context at 0.80 now that CUDA graph memory counts.
     args:
       - --max-model-len=16384
       - --gpu-memory-utilization=0.80
+      - --kv-cache-dtype=fp8
       - --reasoning-parser=qwen3
       - --default-chat-template-kwargs={"enable_thinking":false}
       - --enable-auto-tool-choice
