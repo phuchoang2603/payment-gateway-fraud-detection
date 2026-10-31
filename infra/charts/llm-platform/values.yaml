@@ -158,11 +158,13 @@ agents:
     image: ghcr.io/kagent-dev/substrate/ateworker-gvisor:v1.0.0-rc1
     sandboxClass: gvisor
     sandboxConfig: gvisor-default
+    # Substrate books each actor at kagent's runtime limit (1Gi) plus its overhead against the worker's memory limit,
+    # so 4Gi holds three actors: golden builds and conversations share the pool.
     resources:
       requests: {cpu: 100m, memory: 256Mi}
-      limits: {memory: 2Gi}
-    # KEDA scales the pool on busy workers from Substrate's own fleet metric; one worker runs one active
-    # conversation. `replicas` is the starting size, and Argo CD leaves it to KEDA afterwards.
+      limits: {memory: 4Gi}
+    # KEDA scales the pool on busy workers from Substrate's own fleet metric. `replicas` is the starting size, and
+    # Argo CD leaves it to KEDA afterwards.
     autoscaling:
       minReplicas: 2
       maxReplicas: 6
