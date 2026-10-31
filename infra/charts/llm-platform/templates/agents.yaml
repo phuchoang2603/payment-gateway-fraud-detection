@@ -128,13 +128,15 @@ spec:
           sum(max by (ate_worker_state) (ate_workerpool_workers{ate_workerpool_namespace="{{ $ns }}",ate_workerpool_name="{{ $pool.name }}",ate_worker_state=~"partial|at_capacity"}))
         threshold: {{ $pool.autoscaling.busyWorkersPerReplica | quote }}
 {{- range $agent := $agents.list }}
+{{- /* The agent card's URL: A2A clients use a URL with a path as the card location, and the gateway rewrites the
+card's endpoint to /a2a/<name>. */}}
 {{- $remote := list }}
 {{- range $name := $agent.agents | default list }}
 {{- $target := dict }}
 {{- range $candidate := $agents.list }}
 {{- if eq $candidate.name $name }}{{ $target = $candidate }}{{ end }}
 {{- end }}
-{{- $remote = append $remote (dict "name" ($name | replace "-" "_") "description" (required (printf "agents.list has no %s" $name) $target.description) "url" (printf "%s/a2a/%s" $gatewayUrl $name)) }}
+{{- $remote = append $remote (dict "name" ($name | replace "-" "_") "description" (required (printf "agents.list has no %s" $name) $target.description) "url" (printf "%s/a2a/%s/.well-known/agent-card.json" $gatewayUrl $name)) }}
 {{- end }}
 {{- $tools := list }}
 {{- range $server := $agent.mcpServers | default list }}
