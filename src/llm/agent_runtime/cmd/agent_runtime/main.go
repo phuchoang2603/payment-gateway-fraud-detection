@@ -1,5 +1,5 @@
 // Command agent-runtime is kagent's Go ADK runtime (adk/cmd/main.go at the
-// pinned kagent commit) with the Langfuse prompt plugin and REMOTE_AGENTS added.
+// pinned kagent commit) with the Langfuse prompt plugin added.
 package main
 
 import (
@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -31,7 +30,6 @@ import (
 	"github.com/kagent-dev/kagent/go/pkg/tracing"
 
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/agent-runtime/internal/langfuse"
-	"github.com/phuchoang2603/payment-gateway-fraud-detection/agent-runtime/internal/remoteagents"
 )
 
 const (
@@ -62,19 +60,7 @@ func run(logLevel, host, port, configDir string) error {
 		return fmt.Errorf("load agent config from %s (model configuration is required): %w", configDir, err)
 	}
 	agentConfig := compiled.Agent
-	remoteAgents, err := remoteagents.Parse(os.Getenv("REMOTE_AGENTS"))
-	if err != nil {
-		return err
-	}
-	agentConfig.RemoteAgents = append(agentConfig.RemoteAgents, remoteAgents...)
-	if len(remoteAgents) > 0 {
-		http.DefaultTransport = remoteagents.WithoutTenant(http.DefaultTransport, remoteAgents)
-	}
-	promptName := os.Getenv("LANGFUSE_PROMPT")
-	if promptName == "" {
-		return fmt.Errorf("LANGFUSE_PROMPT is required")
-	}
-	prompts := langfuse.NewPrompts(langfuse.NewClient(os.Getenv("LANGFUSE_HOST")), promptName)
+	prompts := langfuse.NewPrompts(langfuse.NewClient(os.Getenv("LANGFUSE_HOST")))
 	runtime := config.ProcessConfig(compiled)
 	kagentAPIURL := runtime.ControlPlaneUrl
 	if kagentAPIURL == "" {
