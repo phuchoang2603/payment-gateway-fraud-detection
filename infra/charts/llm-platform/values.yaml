@@ -194,7 +194,8 @@ agents:
       abTest:
         label: variant-b
         share: 0.5
-        config: {temperature: 0.2}
+        # The variant is the seed prompt followed by this instruction.
+        addendum: Answer in at most five sentences, then list the passages you cited.
     - name: risk-agent
       version: 0.1.0
       title: Risk agent

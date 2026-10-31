@@ -1,25 +1,24 @@
-FROM ghcr.io/astral-sh/uv:0.13.1 AS uv
-# Bookworm, like kagent's own runtime images: Substrate restores checkpoints across workers with the same glibc.
-FROM python:3.12.16-slim-bookworm AS build
-COPY --from=uv /uv /usr/local/bin/uv
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
-WORKDIR /workspace
-COPY src/llm/pyproject.toml src/llm/uv.lock ./
-COPY src/llm/common/pyproject.toml ./common/pyproject.toml
-COPY src/llm/rag_pipeline/pyproject.toml ./rag_pipeline/pyproject.toml
-COPY src/llm/rag_serving/pyproject.toml ./rag_serving/pyproject.toml
-COPY src/llm/decision/pyproject.toml ./decision/pyproject.toml
-COPY src/llm/agent_runtime ./agent_runtime
-# Precompiled bytecode: kagent waits 30 s for a golden runtime to become ready, and compiling ADK and its SDKs on
-# each start under gVisor takes longer than that.
-RUN UV_COMPILE_BYTECODE=1 uv sync --locked --no-dev --no-editable --package fraud-agent-runtime
+# kagent's Go agent runtime with the Langfuse prompt plugin. The build context is the repository root.
+# The runtime image mirrors kagent's: bash for its built-in shell tool and writable config, skills and plugin dirs.
+FROM golang:1.27.3-bookworm AS builder
 
-FROM python:3.12.16-slim-bookworm
-# kagent materializes the compiled agent configuration into /config at start.
-RUN mkdir /config && chown 65532:65532 /config
-WORKDIR /app
-COPY --from=build /workspace/.venv /app/.venv
-ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HOME=/tmp LANG=C.UTF-8
+ENV GOWORK=off
+WORKDIR /src
+COPY src/llm/agent_runtime/go.mod src/llm/agent_runtime/go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY src/llm/agent_runtime ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags='-s -w' -o /out/agent-runtime ./cmd/agent_runtime
+
+FROM alpine:3.24
+RUN apk add --no-cache bash ca-certificates && \
+    addgroup -S -g 65532 agent && \
+    adduser -S -D -u 65532 -G agent -h /home/agent agent && \
+    mkdir -p /config /skills /plugins /data/plugins && \
+    chown -R 65532:65532 /config /skills /plugins /data
+COPY --from=builder /out/agent-runtime /app/agent-runtime
 USER 65532:65532
-EXPOSE 8080
-ENTRYPOINT ["/app/.venv/bin/python", "-m", "fraud_agent_runtime", "--host", "0.0.0.0", "--port", "8080"]
+ENV HOME=/home/agent
+ENTRYPOINT ["/app/agent-runtime"]

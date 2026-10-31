@@ -1,0 +1,275 @@
+// Command agent-runtime is kagent's Go ADK runtime (adk/cmd/main.go at the
+// pinned kagent commit) with the Langfuse prompt plugin and REMOTE_AGENTS added.
+package main
+
+import (
+	"cmp"
+	"context"
+	"flag"
+	"fmt"
+	"log/slog"
+	"os"
+	"strings"
+	"time"
+
+	a2atype "github.com/a2aproject/a2a-go/v2/a2a"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
+	"github.com/kagent-dev/kagent/go/adk/pkg/a2a"
+	"github.com/kagent-dev/kagent/go/adk/pkg/app"
+	"github.com/kagent-dev/kagent/go/adk/pkg/auth"
+	"github.com/kagent-dev/kagent/go/adk/pkg/config"
+	"github.com/kagent-dev/kagent/go/adk/pkg/controllerclient"
+	kagentmemory "github.com/kagent-dev/kagent/go/adk/pkg/memory"
+	runnerpkg "github.com/kagent-dev/kagent/go/adk/pkg/runner"
+	"github.com/kagent-dev/kagent/go/adk/pkg/session"
+	"github.com/kagent-dev/kagent/go/adk/pkg/telemetry"
+	processconfig "github.com/kagent-dev/kagent/go/core/pkg/config"
+	"github.com/kagent-dev/kagent/go/pkg/logging"
+	"github.com/kagent-dev/kagent/go/pkg/tracing"
+
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/agent-runtime/internal/langfuse"
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/agent-runtime/internal/remoteagents"
+)
+
+const (
+	defaultPluginPackagesRoot = "/plugins"
+	defaultPluginDataRoot     = "/data/plugins"
+)
+
+func main() {
+	logLevel := flag.String("log-level", "", "Set the logging level (debug, info, warn, error)")
+	host := flag.String("host", "", "Set the host address to bind to (default: empty, binds to all interfaces)")
+	portFlag := flag.String("port", "", "Set the port to listen on (overrides runtime.port)")
+	filepathFlag := flag.String("filepath", "/config", "Set the config directory path")
+	flag.Parse()
+
+	if err := run(*logLevel, *host, *portFlag, *filepathFlag); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run(logLevel, host, port, configDir string) error {
+	if err := config.MaterializeFromEnv(configDir); err != nil {
+		return fmt.Errorf("materialize agent config in %s: %w", configDir, err)
+	}
+
+	compiled, agentCard, err := config.LoadAgentConfigs(configDir)
+	if err != nil {
+		return fmt.Errorf("load agent config from %s (model configuration is required): %w", configDir, err)
+	}
+	agentConfig := compiled.Agent
+	remoteAgents, err := remoteagents.Parse(os.Getenv("REMOTE_AGENTS"))
+	if err != nil {
+		return err
+	}
+	agentConfig.RemoteAgents = append(agentConfig.RemoteAgents, remoteAgents...)
+	promptName := os.Getenv("LANGFUSE_PROMPT")
+	if promptName == "" {
+		return fmt.Errorf("LANGFUSE_PROMPT is required")
+	}
+	prompts := langfuse.NewPrompts(langfuse.NewClient(os.Getenv("LANGFUSE_HOST")), promptName)
+	runtime := config.ProcessConfig(compiled)
+	kagentAPIURL := runtime.ControlPlaneUrl
+	if kagentAPIURL == "" {
+		return fmt.Errorf("runtime.control_plane_url is required")
+	}
+	logger, err := logging.New(os.Stderr, cmp.Or(logLevel, runtime.LogLevel, "info"))
+	if err != nil {
+		return err
+	}
+	slog.SetDefault(logger)
+	host = cmp.Or(host, runtime.Host)
+	if port == "" && runtime.Port != nil {
+		port = fmt.Sprint(runtime.GetPort())
+	}
+	if err := config.MaterializeAgentPlugins(
+		logging.IntoContext(context.Background(), logger), agentConfig,
+		config.AgentPluginPaths{
+			Packages: defaultPluginPackagesRoot,
+			Skills:   config.DefaultSkillsRoot,
+			Data:     defaultPluginDataRoot,
+		},
+	); err != nil {
+		return fmt.Errorf("materialize Agent Plugins: %w", err)
+	}
+	logger.Info("loaded agent config", "config_dir", configDir)
+	logger.Info("agent configuration",
+		"model", config.ModelType(agentConfig.Model),
+		"stream", agentConfig.GetStream(),
+		"http_tools", len(agentConfig.HttpTools),
+		"sse_tools", len(agentConfig.SseTools),
+		"remote_agents", len(agentConfig.RemoteAgents))
+
+	kagentName := runtime.Name
+	kagentNamespace := runtime.Namespace
+
+	// Derive app name from process identity or agent card.
+	appName := deriveAppName(kagentName, kagentNamespace, agentCard, logger)
+
+	// Fall back to appName / "default" so traces always have a non-empty service identity.
+	serviceName := kagentName
+	if serviceName == "" {
+		serviceName = appName
+	}
+	serviceNamespace := kagentNamespace
+	if serviceNamespace == "" {
+		serviceNamespace = "default"
+	}
+	// The same identity reaches the resource and every invocation span, so a
+	// consumer reads one contract whichever runtime executed the agent. Model
+	// identity stays on the model spans the ADK emits per call.
+	runtimeTelemetry := processconfig.RuntimeTelemetry(runtime.GetTelemetry()).WithEnvironment(os.Environ())
+	runtimeTelemetry.Runtime = tracing.RuntimeADKGo
+	runtimeTelemetry.AgentName = serviceName
+	runtimeTelemetry.AgentNamespace = serviceNamespace
+	providers, err := telemetry.Init(context.Background(), runtimeTelemetry)
+	if err != nil {
+		logger.Error("failed to initialize ADK telemetry", "error", err)
+	}
+	if tracerProvider, ok := otel.GetTracerProvider().(*sdktrace.TracerProvider); ok {
+		tracerProvider.RegisterSpanProcessor(prompts)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := providers.Shutdown(shutdownCtx); err != nil {
+			logger.Error("failed to shutdown telemetry providers cleanly", "error", err)
+		}
+	}()
+
+	// Create one authenticated controller channel for all kagent persistence.
+	tokenService := auth.NewKAgentTokenService(appName)
+	if err := tokenService.Start(context.Background()); err != nil {
+		logger.Error("failed to start token service", "error", err)
+	} else {
+		logger.Info("token service started")
+	}
+	defer tokenService.Stop()
+	controllerClient, err := controllerclient.New(controllerclient.Config{
+		APIURL:        kagentAPIURL,
+		AgentName:     appName,
+		TokenProvider: tokenService,
+	})
+	if err != nil {
+		return fmt.Errorf("create controller API client for %s: %w", kagentAPIURL, err)
+	}
+	defer func() {
+		if err := controllerClient.Close(); err != nil {
+			logger.Error("failed to close controller gRPC client", "error", err)
+		}
+	}()
+
+	// The executor needs a session service for its BeforeExecute callback
+	// (session creation/lookup). This must be created before the executor.
+	// AgentConfig.session_db_url selects the actor-local DurableDir store.
+	sessionService, err := session.NewService(agentConfig.SessionDbUrl)
+	if err != nil {
+		return fmt.Errorf("open local session store %s: %w", agentConfig.SessionDbUrl, err)
+	}
+	switch sessionService.(type) {
+	case *session.LocalSessionService:
+		logger.Info("using local durable-dir session store", "url", agentConfig.SessionDbUrl)
+	default:
+		logger.Info("no session DB configured, using in-memory session")
+	}
+
+	ctx := logging.IntoContext(context.Background(), logger)
+
+	// Build memory service if configured.
+	var memoryService *kagentmemory.KagentMemoryService
+	if agentConfig.Memory != nil {
+		memSvc, err := kagentmemory.New(kagentmemory.Config{
+			ControllerClient: controllerClient,
+			TTLDays:          agentConfig.Memory.TtlDays,
+			EmbeddingConfig:  agentConfig.Memory.Embedding,
+		})
+		if err != nil {
+			return fmt.Errorf("create memory service: %w", err)
+		}
+		memoryService = memSvc
+		logger.Info("memory service enabled", "app_name", appName)
+	}
+
+	runnerConfig, err := runnerpkg.CreateRunnerConfig(ctx, compiled, sessionService, appName, memoryService, controllerClient)
+	if err != nil {
+		return fmt.Errorf("create Google ADK Runner config: %w", err)
+	}
+	promptPlugin, err := prompts.Plugin()
+	if err != nil {
+		return fmt.Errorf("create Langfuse prompt plugin: %w", err)
+	}
+	runnerConfig.PluginConfig.Plugins = append(runnerConfig.PluginConfig.Plugins, promptPlugin)
+
+	stream := agentConfig.GetStream()
+	executor, err := a2a.NewKAgentExecutor(a2a.KAgentExecutorConfig{
+		RunnerConfig:   runnerConfig,
+		SessionService: sessionService,
+		Stream:         stream,
+		AppName:        appName,
+		Logger:         logger,
+		Output:         agentConfig.Output,
+		Flush:          providers.ForceFlush,
+		AgentName:      runtimeTelemetry.AgentName,
+	})
+	if err != nil {
+		return fmt.Errorf("create A2A executor: %w", err)
+	}
+
+	// Build the agent card.
+	if agentCard == nil {
+		agentCard = &a2atype.AgentCard{
+			Name:        "go-adk-agent",
+			Description: "Go-based Agent Development Kit",
+			Version:     "0.2.0",
+			SupportedInterfaces: []*a2atype.AgentInterface{
+				a2atype.NewAgentInterface("/", a2atype.TransportProtocolJSONRPC),
+			},
+		}
+	}
+	// A2A task events remain streamable even when LLM responses are not.
+	agentCard.Capabilities.Streaming = true
+
+	// Delegate the actor-local A2A server and task store to app.New.
+	kagentApp, err := app.New(app.AppConfig{
+		ControllerClient: controllerClient,
+		AgentCard:        *agentCard,
+		Host:             host,
+		MaxContentLength: runtime.MaxContentLength,
+		Port:             port,
+		AppName:          appName,
+		ShutdownTimeout:  5 * time.Second,
+		Logger:           logger,
+		Agent:            runnerConfig.Agent,
+		Telemetry:        runtimeTelemetry,
+		Flush:            providers.ForceFlush,
+	}, executor)
+	if err != nil {
+		return fmt.Errorf("create app: %w", err)
+	}
+
+	return kagentApp.Run()
+}
+
+func deriveAppName(kagentName, kagentNamespace string, agentCard *a2atype.AgentCard, logger *slog.Logger) string {
+	if kagentNamespace != "" && kagentName != "" {
+		namespace := strings.ReplaceAll(kagentNamespace, "-", "_")
+		name := strings.ReplaceAll(kagentName, "-", "_")
+		appName := namespace + "__NS__" + name
+		logger.Info("built app_name from runtime identity",
+			"kagent_namespace", kagentNamespace,
+			"kagent_name", kagentName,
+			"app_name", appName)
+		return appName
+	}
+
+	if agentCard != nil && agentCard.Name != "" {
+		logger.Info("using agent card name as app_name", "app_name", agentCard.Name)
+		return agentCard.Name
+	}
+
+	logger.Info("using default app_name", "app_name", "go-adk-agent")
+	return "go-adk-agent"
+}
