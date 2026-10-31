@@ -188,5 +188,5 @@ def test_a_range_older_than_the_window_keeps_the_live_window_end(client):
     rebuild(client)
     rebuild(client, report(old, old))
 
-    assert window_of(client)["end"] == str(TODAY - timedelta(days=1))
+    assert window_of(client)["end"] == str(TODAY - timedelta(days=3))
     assert [row["payment_id"] for row in content(client, marts.FACT)] == ["new"]
