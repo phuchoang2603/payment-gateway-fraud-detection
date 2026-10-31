@@ -19,5 +19,5 @@ WORKDIR /app
 COPY --from=build /workspace/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HOME=/tmp LANG=C.UTF-8
 USER 65532:65532
-EXPOSE 8080
-ENTRYPOINT ["/app/.venv/bin/python", "-m", "fraud_agent_runtime", "--host", "0.0.0.0", "--port", "8080"]
+EXPOSE 8081
+ENTRYPOINT ["/app/.venv/bin/python", "-m", "fraud_agent_runtime", "--host", "0.0.0.0", "--port", "8081"]
