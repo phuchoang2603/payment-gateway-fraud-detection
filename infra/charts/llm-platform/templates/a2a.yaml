@@ -1,0 +1,93 @@
+{{- $gateway := .Values.gateway }}
+{{- $agents := .Values.agents }}
+{{- $controller := $agents.a2a.controller }}
+{{- $signing := $agents.a2a.signing }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $signing.secret }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.platformSecretStore }}
+  target:
+    name: {{ $signing.secret }}
+  data:
+    - secretKey: signingKey
+      remoteRef:
+        key: {{ $signing.remoteKey }}
+{{- $routes := list }}
+{{- range $agent := $agents.list }}
+{{- if $agent.entry }}
+---
+# kagent serves every Agent's public A2A endpoint from its controller. As an A2A backend the gateway rewrites the
+# agent card's URLs to the address the caller used.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: a2a-{{ $agent.name }}
+spec:
+  a2a:
+    host: {{ $controller.host }}
+    port: {{ $controller.port }}
+  policies:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: {{ $signing.secret }}
+        alg: {{ $signing.alg }}
+        ttl: {{ $signing.ttl }}
+        claims:
+          {{- toYaml $signing.claims | nindent 10 }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: a2a-{{ $agent.name }}
+spec:
+  parentRefs:
+    - name: {{ $gateway.name }}
+      sectionName: http
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /a2a/{{ $agent.name }}}
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: a2a-{{ $agent.name }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /agents/{{ $agents.namespace }}/{{ $agent.name }}
+      timeouts:
+        request: 600s
+{{- $routes = append $routes (printf "a2a-%s" $agent.name) }}
+{{- end }}
+{{- end }}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: a2a
+spec:
+  targetRefs:
+    {{- range $route := $routes }}
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ $route }}
+    {{- end }}
+  traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      secretSelector:
+        matchLabels:
+          {{ $gateway.keyLabel }}: "true"
+    rateLimit:
+      local:
+        - requests: {{ $gateway.limits.requestsPerMinute }}
+          burst: {{ $gateway.limits.burst }}
+          unit: Minutes
+          key: apiKey.client

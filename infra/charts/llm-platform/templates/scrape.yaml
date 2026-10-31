@@ -1,0 +1,39 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: {{ .Values.gateway.name }}
+spec:
+  selector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: {{ .Values.gateway.name }}
+  podMetricsEndpoints:
+    - portNumber: 15020
+      path: /metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: {{ .Values.models.chat.name }}-scheduler
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.models.chat.name }}
+      app.kubernetes.io/component: llminferenceservice-router-scheduler
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+{{- range $model := list .Values.models.chat .Values.models.embedding }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: {{ $model.name }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $model.name }}
+      app.kubernetes.io/component: llminferenceservice-workload
+  podMetricsEndpoints:
+    - portNumber: 8000
+      path: /metrics
+{{- end }}

@@ -1,0 +1,122 @@
+{{- $decision := .Values.decision }}
+{{- $store := .Values.modelStore }}
+{{- $image := printf "%s:%s" $decision.image (required (printf "image tag missing for %s" $decision.image) (index .Values.global.imageTags $decision.image)) }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $decision.name }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $decision.name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $decision.name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $decision.name }}
+    spec:
+      serviceAccountName: {{ $decision.name }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "llm-platform.podSecurity" (dict "uid" $decision.uid) | nindent 8 }}
+      initContainers:
+        - name: fetch-model
+          image: {{ $image | quote }}
+          command: [python, -m, fraud_decision.fetch]
+          env:
+            - name: MODEL_DIR
+              value: /models/laya
+            - name: MODEL_BUCKET
+              value: {{ $store.bucket }}
+            - name: MODEL_PREFIX
+              value: {{ printf "%s/%s/%s" $store.prefix $decision.model.repo $decision.model.revision }}
+            {{- include "llm-platform.modelStoreEnv" $store | nindent 12 }}
+          securityContext:
+            {{- include "llm-platform.containerSecurity" . | nindent 12 }}
+            readOnlyRootFilesystem: true
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: models, mountPath: /models}
+            - {name: tmp, mountPath: /tmp}
+      containers:
+        - name: decision
+          image: {{ $image | quote }}
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            - name: MODEL_DIR
+              value: /models/laya
+            - name: SCREEN_THRESHOLD
+              value: {{ $decision.screenThreshold | quote }}
+            - name: OMP_NUM_THREADS
+              value: {{ $decision.threads | quote }}
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 5
+            failureThreshold: 24
+          # Ready once the model is loaded, so the gateway never waits on a cold forward pass.
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 20
+          securityContext:
+            {{- include "llm-platform.containerSecurity" . | nindent 12 }}
+            readOnlyRootFilesystem: true
+          resources:
+            {{- toYaml $decision.resources | nindent 12 }}
+          volumeMounts:
+            - {name: models, mountPath: /models, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: models
+          emptyDir: {sizeLimit: 2Gi}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $decision.name }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ $decision.name }}
+  ports:
+    - {name: http, port: 8080, targetPort: http, appProtocol: http}
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ $decision.name }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $decision.name }}
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - {{ include "llm-platform.principal" (dict "namespace" .Release.Namespace "name" .Values.gateway.name) | quote }}
+              - {{ .Values.metricsAgent | quote }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: {{ $decision.name }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $decision.name }}
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics/

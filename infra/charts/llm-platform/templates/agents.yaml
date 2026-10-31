@@ -1,0 +1,207 @@
+{{- $agents := .Values.agents }}
+{{- $ns := $agents.namespace }}
+{{- $pool := $agents.workerPool }}
+{{- $gatewayUrl := printf "http://%s.%s.svc.cluster.local" .Values.gateway.name .Release.Namespace }}
+{{- $langfuseOrigin := printf "http://langfuse-web.%s.svc.cluster.local:3000" .Release.Namespace }}
+{{- $runtime := $agents.runtime.image }}
+{{- $digest := index (.Values.global.imageDigests | default dict) $runtime }}
+{{- /* kagent admits only digest-pinned runtime images; a release always supplies the digest. */}}
+{{- $runtimeImage := ternary (printf "%s@%s" $runtime $digest) (printf "%s:%s" $runtime (index .Values.global.imageTags $runtime)) (not (empty $digest)) }}
+# Substrate's egress gateway replaces the runtime's placeholder Authorization header with this key.
+apiVersion: api.kagent.dev/v1alpha3
+kind: ModelConfig
+metadata:
+  name: {{ $agents.modelConfig }}
+  namespace: {{ $ns }}
+spec:
+  provider: OpenAI
+  model: {{ .Values.models.chat.name }}
+  apiKeySecret: llm-gateway-agents
+  apiKeySecretKey: key
+  openAI:
+    baseUrl: {{ $gatewayUrl }}/v1
+{{- range $name, $server := .Values.gateway.mcpServers }}
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: RemoteMCPServer
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+spec:
+  description: {{ $server.description | quote }}
+  url: {{ $gatewayUrl }}/mcp/{{ $name }}
+  protocol: STREAMABLE_HTTP
+  # Substrate's egress gateway injects this header too; it differs from the model's Authorization header because one
+  # origin and header can carry only one credential.
+  headersFrom:
+    - name: x-api-key
+      valueFrom:
+        type: Secret
+        name: llm-gateway-agents
+        key: key
+{{- end }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: langfuse-api
+  namespace: {{ $ns }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.secretStore }}
+  target:
+    name: langfuse-api
+    template:
+      data:
+        basic: '{{ "{{ printf \"%s:%s\" .public .secret | b64enc }}" }}'
+  data:
+    - secretKey: public
+      remoteRef:
+        key: LANGFUSE_INIT_PUBLIC_KEY
+    - secretKey: secret
+      remoteRef:
+        key: LANGFUSE_INIT_SECRET_KEY
+---
+# Agents read their prompts from Langfuse and send it their traces; the gateway injects the project's credential.
+apiVersion: api.kagent.dev/v1alpha3
+kind: EgressPolicy
+metadata:
+  name: langfuse
+  namespace: {{ $ns }}
+spec:
+  destinations:
+    - origin: {{ $langfuseOrigin }}
+      authentication:
+        header: Authorization
+        prefix: "Basic "
+        secretKeyRef:
+          name: langfuse-api
+          key: basic
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $pool.name }}-worker
+  namespace: {{ $ns }}
+automountServiceAccountToken: false
+---
+apiVersion: ate.dev/v1
+kind: WorkerPool
+metadata:
+  name: {{ $pool.name }}
+  namespace: {{ $ns }}
+  labels:
+    kagent.dev/worker-pool-name: {{ $pool.name }}
+    kagent.dev/worker-pool-namespace: {{ $ns }}
+spec:
+  replicas: {{ $pool.autoscaling.minReplicas }}
+  workerImage: {{ $pool.image }}
+  sandboxClasses:
+    - name: {{ $pool.sandboxClass }}
+      configRef:
+        name: {{ $pool.sandboxConfig }}
+  template:
+    serviceAccountName: {{ $pool.name }}-worker
+    resources:
+      {{- toYaml $pool.resources | nindent 6 }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ $pool.name }}
+  namespace: {{ $ns }}
+spec:
+  scaleTargetRef:
+    apiVersion: ate.dev/v1
+    kind: WorkerPool
+    name: {{ $pool.name }}
+  minReplicaCount: {{ $pool.autoscaling.minReplicas }}
+  maxReplicaCount: {{ $pool.autoscaling.maxReplicas }}
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: {{ $pool.autoscaling.prometheus }}
+        # Every Substrate API replica reports the whole fleet, so take the max per state before summing.
+        query: >-
+          sum(max by (ate_worker_state) (ate_workerpool_workers{ate_workerpool_namespace="{{ $ns }}",ate_workerpool_name="{{ $pool.name }}",ate_worker_state=~"partial|at_capacity"}))
+        threshold: {{ $pool.autoscaling.busyWorkersPerReplica | quote }}
+{{- range $agent := $agents.list }}
+{{- $tools := list }}
+{{- range $server := $agent.mcpServers | default list }}
+{{- $_ := required (printf "gateway.mcpServers.%s is not defined" $server) (index $.Values.gateway.mcpServers $server) }}
+{{- /* No tool list: the agent gets every tool the server lists, discovered at runtime. */}}
+{{- $tools = append $tools (dict "mcp" (dict "server" (dict "kind" "RemoteMCPServer" "name" $server))) }}
+{{- end }}
+{{- range $name := $agent.agents | default list }}
+{{- $target := dict }}
+{{- range $candidate := $agents.list }}
+{{- if eq $candidate.name $name }}{{ $target = $candidate }}{{ end }}
+{{- end }}
+{{- /* kagent compiles the template into this agent's runtime as an ADK sub-agent named after the binding; the
+runtime reads that agent's Langfuse prompt by the same name. */}}
+{{- $tools = append $tools (dict "subAgent" (dict "name" ($name | replace "-" "_") "description" (required (printf "agents.list has no %s" $name) $target.description) "templateRef" (dict "name" $name))) }}
+{{- end }}
+{{- $template := dict "modelConfig" (dict "name" $agents.modelConfig) "description" $agent.description }}
+{{- with $tools }}
+{{- $_ := set $template "tools" . }}
+{{- end }}
+{{- if $agent.entry }}
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: Harness
+metadata:
+  name: {{ $agent.name }}
+  namespace: {{ $ns }}
+spec:
+  kagent: {}
+  workload:
+    image: {{ $runtimeImage }}
+    command: [/app/agent-runtime]
+  env:
+    - name: LANGFUSE_HOST
+      value: {{ $langfuseOrigin }}
+    - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+      value: {{ $langfuseOrigin }}/api/public/otel/v1/traces
+    - name: OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+      value: http/protobuf
+    # Placeholders: Substrate's egress gateway replaces the Authorization header with the langfuse credential.
+    - name: OTEL_EXPORTER_OTLP_TRACES_HEADERS
+      value: Authorization=placeholder
+    # Only traces have a destination; there is no OpenTelemetry Collector.
+    - name: OTEL_LOGS_EXPORTER
+      value: none
+    - name: OTEL_METRICS_EXPORTER
+      value: none
+  substrate:
+    workerPoolRef:
+      name: {{ $pool.name }}
+    snapshotPolicy:
+      location: {{ $agents.snapshotRoot }}
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: Agent
+metadata:
+  name: {{ $agent.name }}
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/version: {{ $agent.version | quote }}
+spec:
+  template:
+    ref:
+      name: {{ $agent.name }}
+  harnessRef:
+    name: {{ $agent.name }}
+  egressPolicyRefs:
+    - name: langfuse
+{{- end }}
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: {{ $agent.name }}
+  namespace: {{ $ns }}
+spec:
+  {{- toYaml $template | nindent 2 }}
+{{- end }}

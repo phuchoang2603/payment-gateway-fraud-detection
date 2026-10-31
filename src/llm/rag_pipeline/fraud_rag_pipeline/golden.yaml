@@ -1,0 +1,22 @@
+recall_at_3: 0.8
+questions:
+  - question: What does the NEW_ACCOUNT_GEO_MISMATCH reason code mean?
+    doc_ids: [decline-codes, risk-policy]
+  - question: Why was a 2,500.00 order declined by the risk check?
+    doc_ids: [risk-policy, decline-codes]
+  - question: Should the buyer retry after ISSUER_DECLINED?
+    doc_ids: [decline-codes, merchant-faq]
+  - question: What happens when the processor does not answer in time?
+    doc_ids: [processor-behaviour, payment-processing, payment-flows, analyst-runbook]
+  - question: How long does a checkout payment stay open before it expires?
+    doc_ids: [merchant-faq, payment-processing, payment-flows, merchant-terms]
+  - question: Can a merchant dispute or refund a payment through the gateway?
+    doc_ids: [chargebacks, merchant-faq]
+  - question: How do I investigate a geo-mismatch decline?
+    doc_ids: [analyst-runbook]
+  - question: Is the velocity counter enforced or only observed?
+    doc_ids: [authorization-velocity, risk-policy]
+  - question: What does card testing look like?
+    doc_ids: [fraud-patterns]
+  - question: Why did my create-payment request return HTTP 409?
+    doc_ids: [merchant-faq, decline-codes, checkout-api, merchant-terms]

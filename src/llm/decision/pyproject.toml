@@ -1,0 +1,31 @@
+[project]
+name = "fraud-decision"
+version = "0.1.0"
+description = "laya decision service: the gateway's request screening webhook"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "laya==0.4.7",
+    "torch==2.14.1",
+    "transformers==5.20.0",
+    "boto3==1.43.114",
+    "fastapi==0.162.0",
+    "uvicorn==0.54.0",
+    "prometheus-client==0.24.1",
+]
+
+[dependency-groups]
+dev = ["pytest==9.2.0", "pytest-cov==7.1.0", "ruff==0.17.3"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--cov=fraud_decision --cov-report=term-missing --cov-fail-under=90"
+
+[tool.ruff]
+extend = "../pyproject.toml"
+
+[tool.coverage.run]
+omit = ["fraud_decision/__main__.py"]

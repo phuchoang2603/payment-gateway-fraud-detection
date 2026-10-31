@@ -1,0 +1,164 @@
+{{- $chat := .Values.models.chat }}
+{{- $embedding := .Values.models.embedding }}
+{{- $store := .Values.modelStore }}
+{{- $uploads := concat (list (pick $chat "repo" "revision") (pick $embedding "repo" "revision")) .Values.models.extraUploads (list .Values.decision.model) }}
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: llm-gpu
+spec:
+  devices:
+    requests:
+      - name: gpu
+        exactly:
+          deviceClassName: {{ .Values.gpu.deviceClassName }}
+          allocationMode: ExactCount
+          count: 1
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-upload-{{ toJson (list $uploads $store) | sha256sum | trunc 10 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "llm-platform.podSecurity" (dict "uid" 65532) | nindent 8 }}
+      containers:
+        - name: upload
+          image: {{ $store.uploadImage }}
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              pip install --quiet --no-cache-dir --target /work/lib $PACKAGES
+              PYTHONPATH=/work/lib exec python3 - <<'EOF'
+              import fnmatch, json, os
+              import boto3
+              from botocore.exceptions import ClientError
+              from huggingface_hub import HfApi, hf_hub_download
+
+              s3 = boto3.client("s3")
+              bucket, prefix = os.environ["BUCKET"], os.environ["PREFIX"]
+              for model in json.loads(os.environ["MODELS"]):
+                  repo, revision, files = model["repo"], model["revision"], model.get("files")
+                  for item in HfApi().list_repo_tree(repo, revision=revision, recursive=True):
+                      if not hasattr(item, "size"):
+                          continue
+                      if files and not any(fnmatch.fnmatch(item.path, pattern) for pattern in files):
+                          continue
+                      key = f"{prefix}/{repo}/{revision}/{item.path}"
+                      try:
+                          if s3.head_object(Bucket=bucket, Key=key)["ContentLength"] == item.size:
+                              continue
+                      except ClientError as error:
+                          if error.response["Error"]["Code"] not in ("404", "NoSuchKey"):
+                              raise
+                      path = hf_hub_download(repo, item.path, revision=revision, cache_dir="/work/hf")
+                      s3.upload_file(path, bucket, key)
+                      os.remove(os.path.realpath(path))
+                      print(f"uploaded s3://{bucket}/{key}", flush=True)
+                  print(f"{repo}@{revision} complete", flush=True)
+              EOF
+          env:
+            - name: PACKAGES
+              value: {{ $store.uploadPackages }}
+            - name: MODELS
+              value: {{ toJson $uploads | quote }}
+            - name: BUCKET
+              value: {{ $store.bucket }}
+            - name: PREFIX
+              value: {{ $store.prefix }}
+            - name: HOME
+              value: /work
+            - name: HF_HUB_DISABLE_TELEMETRY
+              value: "1"
+            {{- include "llm-platform.modelStoreEnv" $store | nindent 12 }}
+          securityContext:
+            {{- include "llm-platform.containerSecurity" . | nindent 12 }}
+          resources:
+            requests: {cpu: 250m, memory: 1Gi}
+            limits: {memory: 2Gi}
+          volumeMounts:
+            - {name: work, mountPath: /work}
+      volumes:
+        - name: work
+          emptyDir: {}
+{{- range $role, $model := dict "chat" $chat "embedding" $embedding }}
+---
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: {{ $model.name }}
+  {{- if $model.stopped }}
+  annotations:
+    serving.kserve.io/stop: "true"
+  {{- end }}
+spec:
+  model:
+    name: {{ $model.name }}
+    uri: {{ include "llm-platform.modelURI" (dict "store" $store "model" $model) }}
+  storageInitializer:
+    enabled: false
+  replicas: {{ $model.replicas }}
+  # Both servers hold fixed fractions of the one GPU, so a surge pod would oversubscribe it: replace in place.
+  rolloutStrategy:
+    maxSurge: 0
+    maxUnavailable: 1
+  {{- if eq $role "chat" }}
+  router:
+    gateway:
+      refs:
+        - name: {{ $.Values.gateway.name }}
+          namespace: {{ $.Release.Namespace }}
+    route:
+      http:
+        refs:
+          - name: llm
+    scheduler: {}
+  {{- end }}
+  template:
+    {{- include "llm-platform.gpuPlacement" $ | nindent 4 }}
+    securityContext:
+      {{- include "llm-platform.podSecurity" $.Values.vllm | nindent 6 }}
+    resourceClaims:
+      - name: gpu
+        resourceClaimName: llm-gpu
+    containers:
+      - name: main
+        image: {{ $.Values.vllm.image }}
+        # Replaces the preset's start script, which serves a local /mnt/models; weights stream from object storage.
+        command:
+          - vllm
+          - serve
+          - {{ include "llm-platform.modelURI" (dict "store" $store "model" $model) }}
+          - --served-model-name={{ $model.name }}
+          - --port=8000
+          - --load-format=runai_streamer
+          - {{ printf "--model-loader-extra-config=%s" $.Values.vllm.loaderConfig | quote }}
+        args:
+          {{- toYaml $model.args | nindent 10 }}
+        env:
+          - name: USER
+            value: vllm
+          {{- include "llm-platform.modelStoreEnv" $store | nindent 10 }}
+        # Streaming the weights, torch.compile and CUDA-graph capture outlast the preset's 10-minute startup window
+        # on the dev GPU; a restart repeats all of it, so the window is wider.
+        startupProbe:
+          httpGet: {path: /health, port: 8000}
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: {{ $.Values.vllm.startupFailureThreshold }}
+        resources:
+          {{- toYaml $model.resources | nindent 10 }}
+          claims:
+            - name: gpu
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: {{ $.Values.vllm.uid }}
+          {{- include "llm-platform.containerSecurity" $ | nindent 10 }}
+{{- end }}

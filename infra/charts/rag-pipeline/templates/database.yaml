@@ -1,0 +1,75 @@
+{{- $db := .Values.database }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $db.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  instances: 1
+  imageName: {{ $db.imageName }}
+  {{- with $db.nodeSelector }}
+  affinity:
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}
+  bootstrap:
+    initdb:
+      database: {{ $db.dbname }}
+      owner: rag_writer
+      secret:
+        name: rag-db-writer
+  # The reader can SELECT every table the writer (Feast) creates, including ones created later.
+  managed:
+    roles:
+      - name: rag_reader
+        ensure: present
+        login: true
+        inRoles: [pg_read_all_data]
+        passwordSecret:
+          name: rag-db-reader
+  storage:
+    storageClass: {{ .Values.storageClass }}
+    size: {{ $db.size }}
+  resources:
+    {{- toYaml $db.resources | nindent 4 }}
+---
+# Feast's Postgres online store uses pgvector but never creates the extension.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: {{ $db.name }}-{{ $db.dbname }}
+spec:
+  cluster:
+    name: {{ $db.name }}
+  name: {{ $db.dbname }}
+  owner: rag_writer
+  databaseReclaimPolicy: retain
+  extensions:
+    - name: vector
+      ensure: present
+---
+# Mesh identities, not a NetworkPolicy: in the ambient mesh, peers and the (unmeshed) CNPG operator reach the pod
+# through ztunnel, which a port-based NetworkPolicy blocks. Only the RAG workloads may use Postgres; the instance
+# manager's status port stays open to the operator.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ $db.name }}
+spec:
+  selector:
+    matchLabels:
+      cnpg.io/cluster: {{ $db.name }}
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/rag-api
+              - cluster.local/ns/{{ .Values.pipelineNamespace }}/sa/rag-pipeline
+      to:
+        - operation:
+            ports: ["5432"]
+    - to:
+        - operation:
+            ports: ["8000"]

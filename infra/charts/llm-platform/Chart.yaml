@@ -1,0 +1,10 @@
+apiVersion: v2
+name: llm-platform
+description: Self-hosted LLM serving, agent gateway, analyst agents and their registry catalog
+type: application
+version: 0.1.0
+kubeVersion: '>=1.34.0-0'
+dependencies:
+  - name: langfuse
+    version: 1.5.41
+    repository: https://langfuse.github.io/langfuse-k8s

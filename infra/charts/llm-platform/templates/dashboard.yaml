@@ -1,0 +1,10 @@
+# Picked up by the platform Grafana's dashboard sidecar.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-agents-dashboard
+  labels:
+    grafana_dashboard: "1"
+data:
+  llm-agents.json: |
+    {{- .Files.Get "files/dashboards/llm-agents.json" | nindent 4 }}

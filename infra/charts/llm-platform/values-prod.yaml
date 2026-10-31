@@ -1,0 +1,42 @@
+gpu:
+  nodeSelector:
+    karpenter.sh/nodepool: aws-gpu-training
+  tolerations:
+    - {key: burst.talos.dev/gpu-training, operator: Equal, value: "true", effect: NoSchedule}
+
+storageClass: gp3
+
+modelStore:
+  bucket: platform-prod-142737101504-us-east-1
+  endpoint: https://s3.us-east-1.amazonaws.com
+  virtualAddressing: true
+
+models:
+  chat:
+    resources:
+      requests: {cpu: "2", memory: 9Gi}
+      limits: {memory: 12Gi}
+  embedding:
+    resources:
+      requests: {cpu: 500m, memory: 2Gi}
+      limits: {memory: 4Gi}
+
+agents:
+  snapshotRoot: s3://platform-prod-142737101504-us-east-1/substrate/llm-agents/
+
+langfuseStores:
+  postgres:
+    nodeSelector:
+      karpenter.sh/capacity-type: on-demand
+  hostname: langfuse.phuchoang.sbs
+  oidc:
+    issuer: https://auth.phuchoang.sbs/dex
+
+langfuse:
+  langfuse:
+    nextauth:
+      url: https://langfuse.phuchoang.sbs
+  s3:
+    bucket: platform-prod-142737101504-us-east-1
+    endpoint: https://s3.us-east-1.amazonaws.com
+    forcePathStyle: false

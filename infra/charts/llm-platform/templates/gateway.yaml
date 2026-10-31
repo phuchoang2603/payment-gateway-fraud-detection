@@ -1,0 +1,152 @@
+{{- $gateway := .Values.gateway }}
+{{- $chat := .Values.models.chat }}
+{{- $embedding := .Values.models.embedding }}
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: {{ $gateway.name }}
+spec:
+  service:
+    spec:
+      type: ClusterIP
+  # The namespace enforces the restricted Pod Security level; the generated proxy sets everything but seccomp.
+  deployment:
+    spec:
+      template:
+        spec:
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ $gateway.name }}
+spec:
+  gatewayClassName: {{ $gateway.className }}
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: {{ $gateway.name }}
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: {{ $chat.name }}
+spec:
+  ai:
+    provider:
+      custom:
+        model: {{ $chat.name }}
+        backendRef:
+          group: inference.networking.k8s.io
+          kind: InferencePool
+          name: {{ $chat.name }}-inference-pool
+        formats:
+          - type: Completions
+            path: /v1/chat/completions
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: {{ $embedding.name }}
+spec:
+  ai:
+    provider:
+      custom:
+        model: {{ $embedding.name }}
+        backendRef:
+          kind: Service
+          name: {{ $embedding.name }}-kserve-workload-svc
+          port: 8000
+        formats:
+          - type: Embeddings
+            path: /v1/embeddings
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: llm
+spec:
+  parentRefs:
+    - name: {{ $gateway.name }}
+      sectionName: http
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /v1/embeddings}
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: {{ $embedding.name }}
+      timeouts:
+        request: 60s
+    - matches:
+        - path: {type: PathPrefix, value: /v1}
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: {{ $chat.name }}
+      timeouts:
+        request: 300s
+---
+# agentgateway applies one policy per target, so authentication, limits and guards for the route live together.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: llm
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: llm
+  traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      secretSelector:
+        matchLabels:
+          {{ $gateway.keyLabel }}: "true"
+    rateLimit:
+      local:
+        - requests: {{ $gateway.limits.requestsPerMinute }}
+          burst: {{ $gateway.limits.burst }}
+          unit: Minutes
+          key: apiKey.client
+        - tokens: {{ $gateway.limits.tokensPerMinute }}
+          unit: Minutes
+          key: apiKey.client
+  backend:
+    ai:
+      # Without this map every request is parsed as a chat completion, which rejects embedding requests.
+      routes:
+        /v1/chat/completions: Completions
+        /v1/embeddings: Embeddings
+        /v1/models: Models
+      promptGuard:
+        request:
+          - regex:
+              action: Mask
+              builtins: [CreditCard, Email, PhoneNumber]
+              matches:
+                {{- toYaml $gateway.piiPatterns | nindent 16 }}
+          # Runs after masking, so the decision service never sees the masked values.
+          - webhook:
+              action: Reject
+              failureMode: {{ .Values.decision.failureMode }}
+              backendRef:
+                kind: Service
+                name: {{ .Values.decision.name }}
+                port: 8080
+        response:
+          - regex:
+              action: Mask
+              builtins: [CreditCard, Email, PhoneNumber]
+              matches:
+                {{- toYaml $gateway.piiPatterns | nindent 16 }}

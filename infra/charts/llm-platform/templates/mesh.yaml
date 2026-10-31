@@ -1,0 +1,86 @@
+{{- $ns := .Release.Namespace }}
+{{- $chat := .Values.models.chat.name }}
+{{- $embedding := .Values.models.embedding.name }}
+{{- $gateway := include "llm-platform.principal" (dict "namespace" $ns "name" .Values.gateway.name) }}
+{{- $benchmark := include "llm-platform.principal" (dict "namespace" $ns "name" "llm-benchmark") }}
+{{- $epp := include "llm-platform.principal" (dict "namespace" $ns "name" (printf "%s-epp-sa" $chat)) }}
+{{- $metrics := .Values.metricsAgent }}
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ $chat }}-workload
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $chat }}
+      app.kubernetes.io/component: llminferenceservice-workload
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [{{ $gateway | quote }}, {{ $epp | quote }}, {{ $benchmark | quote }}, {{ $metrics | quote }}]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ $embedding }}-workload
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $embedding }}
+      app.kubernetes.io/component: llminferenceservice-workload
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [{{ $gateway | quote }}, {{ $benchmark | quote }}, {{ $metrics | quote }}]
+---
+# The scheduler's metrics port stays open to any source; ext-proc stays gateway-only.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ $chat }}-scheduler
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $chat }}
+      app.kubernetes.io/component: llminferenceservice-router-scheduler
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [{{ $gateway | quote }}]
+    - to:
+        - operation:
+            ports: ["9090"]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ .Values.gateway.name }}
+spec:
+  selector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: {{ .Values.gateway.name }}
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - {{ $benchmark | quote }}
+              {{- range .Values.gateway.namespaceClients }}
+              - {{ include "llm-platform.principal" (dict "namespace" $ns "name" .) | quote }}
+              {{- end }}
+              {{- range .Values.gateway.externalClients }}
+              - {{ . | quote }}
+              {{- end }}
+              - {{ .Values.agents.egressGateway | quote }}
+    - to:
+        - operation:
+            ports: ["15020"]
+---
+# Identity of the on-demand benchmark in benchmark/.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: llm-benchmark

@@ -1,0 +1,7 @@
+gpu:
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
+models:
+  chat:
+    # Benchmark runs (benchmark/server.yaml) hold the GPU; set back to false afterwards.
+    stopped: true

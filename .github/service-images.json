@@ -146,6 +146,60 @@
         "infra/docker/streaming.Dockerfile",
         "src/data-pipeline/streaming"
       ]
+    },
+    {
+      "service": "rag-pipeline",
+      "image-suffix": "/rag-pipeline",
+      "context": ".",
+      "dockerfile": "infra/docker/rag-pipeline.Dockerfile",
+      "paths": [
+        "infra/docker/rag-pipeline.Dockerfile",
+        "src/llm/pyproject.toml",
+        "src/llm/uv.lock",
+        "src/llm/common",
+        "src/llm/rag_pipeline",
+        "openspec/specs",
+        "contracts/payments/v1",
+        "contracts/features/fraud-snapshot-v2.yaml",
+        "docs/payment-gateway/flows.md",
+        "docs/data/products/silver-payments"
+      ]
+    },
+    {
+      "service": "rag-serving",
+      "image-suffix": "/rag-serving",
+      "context": ".",
+      "dockerfile": "infra/docker/rag-serving.Dockerfile",
+      "paths": [
+        "infra/docker/rag-serving.Dockerfile",
+        "src/llm/pyproject.toml",
+        "src/llm/uv.lock",
+        "src/llm/common",
+        "src/llm/rag_serving"
+      ]
+    },
+    {
+      "service": "decision",
+      "image-suffix": "/decision",
+      "context": ".",
+      "dockerfile": "infra/docker/decision.Dockerfile",
+      "paths": [
+        "infra/docker/decision.Dockerfile",
+        "src/llm/pyproject.toml",
+        "src/llm/uv.lock",
+        "src/llm/common/pyproject.toml",
+        "src/llm/decision"
+      ]
+    },
+    {
+      "service": "agent-runtime",
+      "image-suffix": "/agent-runtime",
+      "context": ".",
+      "dockerfile": "infra/docker/agent-runtime.Dockerfile",
+      "paths": [
+        "infra/docker/agent-runtime.Dockerfile",
+        "src/llm/agent_runtime"
+      ]
     }
   ]
 }

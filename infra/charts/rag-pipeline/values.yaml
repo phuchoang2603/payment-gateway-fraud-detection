@@ -1,0 +1,95 @@
+global:
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-pipeline: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-serving: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata: dev
+
+images:
+  pipeline:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-pipeline
+  serving:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-serving
+  metadata:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
+
+uid: 65532
+# The ingest workflow runs where Argo Workflows, Polaris and OpenMetadata already admit pipelines; the store and
+# the knowledge API stay in the release namespace (llm).
+pipelineNamespace: data
+storageClass: local-path
+secretStore: gateway-doppler
+# Platform-owned credentials: the Polaris client shared with the other lakehouse writers.
+platformSecretStore: doppler
+
+# The gateway storage identity, scoped to datasets/payment-gateway/, runs/payment-gateway/ and lakehouse/.
+storage:
+  bucket: platform-dev
+  endpoint: https://minio.home.phuchoang.sbs
+  region: us-east-1
+  pathStyle: true
+  keys:
+    AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+
+catalog:
+  restUri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
+  warehouse: lakehouse
+  clientId: platform
+  oauth2Uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
+  clientSecretKey: ICEBERG_CLIENT_SECRET
+
+openmetadata:
+  url: http://openmetadata.data.svc.cluster.local:8585/api
+  tokenKey: OPENMETADATA_TOKEN
+  clickhouseDatabase: lakehouse
+  # The checks job ingests only the knowledge tables before testing them, so it never touches other tables.
+  clickhouse:
+    hostPort: clickhouse.data.svc.cluster.local:8123
+    username: openmetadata
+    passwordKey: CLICKHOUSE_OPENMETADATA_PASSWORD
+
+# The llm-platform chart owns the gateway and the client key Secrets used here.
+gateway:
+  url: http://agentgateway.llm.svc.cluster.local
+  serviceAccount: agentgateway
+  ingestKey: LLM_GATEWAY_RAG_INGEST_API_KEY
+  apiKeySecret: llm-gateway-ragapi
+
+# The platform's metrics agent, enrolled in the ambient mesh so it can be admitted by identity.
+metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
+
+# Must match models.embedding in the llm-platform chart; a change here produces a new knowledge version.
+embedding:
+  model: qwen3-embedding
+  revision: 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3
+
+database:
+  name: rag-pgvector
+  dbname: rag
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.3-standard-trixie
+  size: 2Gi
+  nodeSelector: {}
+  writerPasswordKey: RAG_DB_WRITER_PASSWORD
+  readerPasswordKey: RAG_DB_READER_PASSWORD
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 1Gi}
+
+workflow:
+  activeDeadlineSeconds: 1800
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {memory: 2Gi}
+
+api:
+  port: 8080
+  # Identity of the on-demand load test Job; the llm-platform chart creates it for the benchmark.
+  loadTestServiceAccount: llm-benchmark
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 4
+    requestsPerSecondPerReplica: "10"
+    prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {memory: 1Gi}

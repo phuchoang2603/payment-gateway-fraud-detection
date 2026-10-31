@@ -1,0 +1,15 @@
+version: "2"
+
+# Default linters (errcheck, govet, ineffassign, staticcheck, unused) plus
+# type-checking replace separate go vet / go build steps in CI.
+linters:
+  exclusions:
+    generated: strict
+
+formatters:
+  enable:
+    - gofumpt
+  settings:
+    gofumpt:
+      extra:
+        group-params: true

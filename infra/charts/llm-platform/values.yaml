@@ -1,0 +1,360 @@
+global:
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/decision: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/agent-runtime: dev
+  # Release digests; kagent runs only digest-pinned runtime images.
+  imageDigests: {}
+
+storageClass: local-path
+
+gpu:
+  deviceClassName: gpu.nvidia.com
+  nodeSelector: {}
+  tolerations: []
+
+# Model weights live in the environment bucket and stream straight to the GPU (Run:ai Model Streamer).
+modelStore:
+  bucket: platform-dev
+  prefix: artifacts/models
+  endpoint: https://minio.home.phuchoang.sbs
+  virtualAddressing: false
+  # The platform's Kubeflow artifacts identity (scoped to artifacts/, datasets/ and runs/), synced into this namespace;
+  # model weights and Langfuse event uploads both live under artifacts/.
+  credentialsSecret: llm-object-store
+  credentialsKeys:
+    accesskey: OBJECT_ARTIFACTS_ACCESS_KEY_ID
+    secretkey: OBJECT_ARTIFACTS_SECRET_ACCESS_KEY
+  uploadImage: python:3.13-slim-bookworm
+  uploadPackages: huggingface-hub==2.2.0 boto3==1.43.114
+
+vllm:
+  image: vllm/vllm-openai:v0.32.0
+  uid: 1000
+  # 180 x 10 s = 30 minutes to load, compile and capture CUDA graphs before the kubelet restarts the server.
+  startupFailureThreshold: 180
+  loaderConfig: '{"concurrency":16,"memory_limit":2147483648}'
+
+models:
+  chat:
+    name: qwen3-8b
+    repo: Qwen/Qwen3-8B-FP8
+    revision: 220b46e3b2180893580a4454f21f22d3ebb187d3
+    replicas: 1
+    # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
+    stopped: false
+    args:
+      - --max-model-len=16384
+      - --gpu-memory-utilization=0.80
+      - --reasoning-parser=qwen3
+      - --default-chat-template-kwargs={"enable_thinking":false}
+      - --enable-auto-tool-choice
+      - --tool-call-parser=hermes
+    resources:
+      requests: {cpu: "1", memory: 8Gi}
+      limits: {memory: 12Gi}
+  embedding:
+    name: qwen3-embedding
+    repo: Qwen/Qwen3-Embedding-0.6B
+    revision: 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3
+    replicas: 1
+    # 0.12 of the 16 GB GPU leaves about 0.3 GiB of KV cache after the weights: enough for 2048 tokens, which covers
+    # knowledge chunks (at most about 400 tokens) and queries.
+    args:
+      - --runner=pooling
+      - --max-model-len=2048
+      - --gpu-memory-utilization=0.12
+    resources:
+      requests: {cpu: 250m, memory: 2Gi}
+      limits: {memory: 4Gi}
+  # Uploaded with the served models so the benchmark can compare weights.
+  extraUploads:
+    - repo: Qwen/Qwen3-8B-AWQ
+      revision: 4da05a8edb55c6046cce958586c33b61da07bb79
+
+# laya, a non-autoregressive decision model (ModernBERT-large, 421M), answers typed questions in one forward pass on
+# CPU. The gateway's screening webhook asks it whether a prompt asks an agent to act or to break its rules. Only the
+# English checkpoint is uploaded.
+decision:
+  name: decision
+  image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/decision
+  uid: 65532
+  model:
+    repo: convaiinnovations/laya
+    revision: 7b928d828b7b0e022f929d9bd2e44165aa270148
+    files: [rl_agent_config.json, model.safetensors, "encoder/*", "tokenizer/*"]
+  # Probability of "action" or "jailbreak" at or above which the gateway rejects a prompt.
+  screenThreshold: "0.5"
+  # Agents hold no tools that change anything, so screening is an early refusal rather than the only control; a
+  # decision service outage lets prompts through instead of stopping every agent.
+  failureMode: FailOpen
+  # One forward pass of the 421M encoder takes about 3 s on 2 threads; it scales with threads.
+  threads: 4
+  resources:
+    requests: {cpu: "2", memory: 2Gi}
+    limits: {memory: 3Gi}
+
+gateway:
+  name: agentgateway
+  className: agentgateway
+  keyLabel: llm.fraud-detection.dev/gateway-key
+  clients:
+    agents: LLM_GATEWAY_AGENTS_API_KEY
+    benchmark: LLM_GATEWAY_BENCHMARK_API_KEY
+    ragingest: LLM_GATEWAY_RAG_INGEST_API_KEY
+    ragapi: LLM_GATEWAY_RAG_API_KEY
+  # Each client's key Secret lands where its caller runs; the default is the release namespace.
+  clientNamespaces:
+    agents: llm-agents
+  limits:
+    requestsPerMinute: 120
+    burst: 20
+    tokensPerMinute: 60000
+  # Card numbers with spaces or dashes that the CreditCard built-in does not match.
+  piiPatterns:
+    - '\b(?:\d[ -]?){12,18}\d\b'
+  # Callers outside this namespace: the RAG ingest workflow runs in data; the kagent controller discovers the tools of
+  # each RemoteMCPServer. Agents arrive through Substrate's egress gateway (agents.egressGateway).
+  externalClients:
+    - cluster.local/ns/data/sa/rag-pipeline
+    - cluster.local/ns/kagent/sa/kagent-controller
+  # ServiceAccounts in this namespace that call the gateway, besides the benchmark: the knowledge API.
+  namespaceClients: [rag-api]
+  # MCP servers behind /mcp/<name>. Each target is a Service in this namespace.
+  mcpServers:
+    knowledge:
+      service: rag-api
+      port: 8080
+      path: /mcp
+      version: 0.1.0
+      title: Payment-gateway knowledge base
+      description: Search and read passages about decline codes, risk policy, the payment lifecycle, the checkout API and fraud features.
+  # REST APIs behind /<name>/v1, each a Service in this namespace, with client keys and limits like the LLM route.
+  apiRoutes:
+    knowledge:
+      service: rag-api
+      port: 8080
+
+secretStore: gateway-doppler
+# Platform-owned credentials this app consumes: the Kubeflow artifacts identity and the shared ClickHouse users.
+platformSecretStore: doppler
+
+# The platform's metrics agent, enrolled in the ambient mesh so it can be admitted by identity.
+metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
+
+# Agents run as kagent Agents on Agent Substrate, in their own namespace: Substrate workers run privileged gVisor
+# sandboxes outside the mesh, and an Agent's Harness can only use a WorkerPool in its own namespace.
+agents:
+  namespace: llm-agents
+  # The global model config: the chat model through the gateway, with its sampling settings. kagent's Go runtime
+  # takes those only from here, so an A/B variant differs by its prompt text.
+  modelConfig: default-model-config
+  # Every agent runs this runtime: kagent's Go runtime with each model call's system prompt and A/B variant taken
+  # from the agent's Langfuse prompt, and the call's trace linked to that prompt version.
+  runtime:
+    image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/agent-runtime
+  snapshotRoot: s3://platform-dev/substrate/llm-agents/
+  workerPool:
+    name: llm-agents
+    image: ghcr.io/kagent-dev/substrate/ateworker-gvisor:v1.0.0-rc1
+    sandboxClass: gvisor
+    sandboxConfig: gvisor-default
+    # Substrate books each actor at kagent's runtime limit (the platform's 256Mi) plus its overhead against the
+    # worker's memory limit, so a 2Gi worker holds several conversations and the golden build.
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 2Gi}
+    # KEDA scales the pool on busy workers from Substrate's own fleet metric. `replicas` is the starting size, and
+    # Argo CD leaves it to KEDA afterwards.
+    autoscaling:
+      minReplicas: 2
+      maxReplicas: 6
+      busyWorkersPerReplica: "0.7"
+      prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
+  # Substrate's egress gateway carries every actor connection and injects the gateway and Langfuse credentials, so
+  # agents never hold them. The gateway admits it by this mesh identity.
+  egressGateway: cluster.local/ns/ate-system/sa/atenet-egress
+  # kagent's public A2A endpoint, /agents/<namespace>/<name>, served by its controller. The platform's waypoint admits
+  # the gateway there by mesh identity; the gateway also signs a short-lived token per request as its machine
+  # principal, with a platform key.
+  a2a:
+    controller: {host: kagent-controller.kagent.svc.cluster.local, port: 8083}
+    signing:
+      secret: kagent-gateway-signing-key
+      remoteKey: KAGENT_GATEWAY_SIGNING_KEY
+      alg: ES256
+      ttl: 300s
+      claims: {iss: "urn:platform:kagent:gateway", sub: agentgateway, aud: kagent}
+  # Every agent is an AgentTemplate with a Langfuse prompt, `<name>-system-prompt`, and its A/B test.
+  # files/prompts/<name>.md and `abTest` only seed a prompt that does not exist yet; changes are made in Langfuse.
+  # `entry` agents run as kagent Agents behind the gateway's A2A route. The others run only inside an entry agent's
+  # runtime, as the kagent sub-agents it names in `agents` and hands conversations to.
+  list:
+    - name: evidence-agent
+      version: 0.3.0
+      title: Evidence agent
+      description: Read-only fraud-analyst agent that explains declines, risk decisions and payment behaviour from the knowledge base, citing its passages.
+      mcpServers: [knowledge]
+      abTest:
+        label: variant-b
+        share: 0.5
+        # The variant is the seed prompt followed by this instruction.
+        addendum: Answer in at most five sentences, then list the passages you cited.
+    - name: risk-agent
+      version: 0.1.0
+      title: Risk agent
+      description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, and explains what drives it.
+      abTest:
+        label: variant-b
+        share: 0.5
+        addendum: Start with the risk level in one word, then give the three strongest drivers.
+    - name: coordinator
+      version: 0.2.0
+      title: Coordinator
+      description: Read-only entry agent for fraud analysts that hands each question to the evidence or risk agent.
+      entry: true
+      agents: [evidence-agent, risk-agent]
+      abTest:
+        label: variant-b
+        share: 0.5
+        addendum: Before you transfer, tell the analyst in one sentence which specialist will answer and why.
+
+# One Job per release publishes the agents and MCP servers to agentregistry, and seeds any agent prompt that Langfuse
+# does not have yet.
+catalog:
+  image: python:3.12.16-slim-bookworm
+  registry:
+    url: http://agentregistry.agentregistry.svc:12121
+    repository: https://github.com/phuchoang2603/payment-gateway-fraud-detection
+
+# Langfuse v3 for prompt management and LLM traces. Its ClickHouse is the shared app-owned instance in `data`;
+# Postgres and Redis are instances of the platform operators in this namespace.
+langfuseStores:
+  postgres:
+    name: langfuse-postgres
+    imageName: ghcr.io/cloudnative-pg/postgresql:18.3-system-trixie
+    size: 5Gi
+    nodeSelector: {}
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 1Gi}
+  redis:
+    name: langfuse-redis
+    image: quay.io/opstree/redis:v7.2.16
+    maxmemory: 200mb
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {memory: 256Mi}
+  clickhousePasswordKey: CLICKHOUSE_LANGFUSE_PASSWORD
+  # Langfuse signs users in through the platform's Dex (client `langfuse`), matched to existing users by e-mail.
+  oidc:
+    issuer: https://auth-dev.phuchoang.sbs/dex
+    clientSecretKey: LANGFUSE_OIDC_CLIENT_SECRET
+  hostname: langfuse-dev.phuchoang.sbs
+
+langfuse:
+  fullnameOverride: langfuse
+  langfuse:
+    salt:
+      secretKeyRef: {name: langfuse, key: salt}
+    encryptionKey:
+      secretKeyRef: {name: langfuse, key: encryption-key}
+    nextauth:
+      url: https://langfuse-dev.phuchoang.sbs
+      secret:
+        secretKeyRef: {name: langfuse, key: nextauth-secret}
+    features:
+      telemetryEnabled: false
+      signUpDisabled: true
+    image:
+      tag: "3.225.11"
+      pullPolicy: IfNotPresent
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1001
+      runAsGroup: 1001
+      fsGroup: 1001
+      seccompProfile: {type: RuntimeDefault}
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities: {drop: [ALL]}
+    additionalEnv:
+      - {name: LANGFUSE_INIT_ORG_ID, value: payment-gateway}
+      - {name: LANGFUSE_INIT_ORG_NAME, value: Payment gateway}
+      - {name: LANGFUSE_INIT_PROJECT_ID, value: payment-gateway-fraud-detection}
+      - {name: LANGFUSE_INIT_PROJECT_NAME, value: payment-gateway-fraud-detection}
+      - name: LANGFUSE_INIT_PROJECT_PUBLIC_KEY
+        valueFrom: {secretKeyRef: {name: langfuse, key: init-public-key}}
+      - name: LANGFUSE_INIT_PROJECT_SECRET_KEY
+        valueFrom: {secretKeyRef: {name: langfuse, key: init-secret-key}}
+      - {name: LANGFUSE_INIT_USER_EMAIL, value: xuanphuc.a1gv@gmail.com}
+      - {name: LANGFUSE_INIT_USER_NAME, value: Operator}
+      - name: LANGFUSE_INIT_USER_PASSWORD
+        valueFrom: {secretKeyRef: {name: langfuse, key: init-user-password}}
+      - {name: AUTH_CUSTOM_CLIENT_ID, value: langfuse}
+      - name: AUTH_CUSTOM_CLIENT_SECRET
+        valueFrom: {secretKeyRef: {name: langfuse-oidc, key: client-secret}}
+      - name: AUTH_CUSTOM_ISSUER
+        valueFrom: {secretKeyRef: {name: langfuse-oidc, key: issuer}}
+      - {name: AUTH_CUSTOM_NAME, value: Dex}
+      - {name: AUTH_CUSTOM_SCOPE, value: openid email profile}
+      - {name: AUTH_CUSTOM_ALLOW_ACCOUNT_LINKING, value: "true"}
+      - {name: AUTH_DISABLE_USERNAME_PASSWORD, value: "true"}
+    # Node sizes its heap from the cgroup limit; the web server runs out of heap at 1Gi during startup. Its
+    # migrations and headless init run before it listens, so liveness waits for them.
+    web:
+      resources:
+        requests: {cpu: 250m, memory: 1Gi}
+        limits: {memory: 2Gi}
+      livenessProbe:
+        initialDelaySeconds: 180
+        failureThreshold: 6
+    worker:
+      resources:
+        requests: {cpu: 250m, memory: 512Mi}
+        limits: {memory: 1Gi}
+  postgresql:
+    deploy: false
+    host: langfuse-postgres-rw
+    port: 5432
+    args: sslmode=require
+    auth:
+      username: langfuse
+      database: langfuse
+      existingSecret: langfuse-postgres
+      secretKeys:
+        userPasswordKey: password
+  redis:
+    deploy: false
+    host: langfuse-redis
+    port: 6379
+    auth:
+      existingSecret: langfuse-redis
+      existingSecretPasswordKey: password
+  clickhouse:
+    deploy: false
+    host: clickhouse.data.svc.cluster.local
+    httpPort: 8123
+    nativePort: 9000
+    database: langfuse
+    clusterEnabled: false
+    auth:
+      username: langfuse
+      existingSecret: langfuse-clickhouse
+      existingSecretKey: password
+  s3:
+    deploy: false
+    bucket: platform-dev
+    region: us-east-1
+    endpoint: https://minio.home.phuchoang.sbs
+    forcePathStyle: true
+    accessKeyId:
+      secretKeyRef: {name: llm-object-store, key: accesskey}
+    secretAccessKey:
+      secretKeyRef: {name: llm-object-store, key: secretkey}
+    eventUpload:
+      prefix: artifacts/langfuse/events/
+    batchExport:
+      enabled: false
+    mediaUpload:
+      enabled: false
+      prefix: artifacts/langfuse/media/

@@ -1,0 +1,96 @@
+# Standalone chat server for model-server variants. Set models.chat.stopped in the chart first to free the GPU,
+# edit the args below for one variant, then: kubectl apply -f server.yaml (delete it after the run).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: llm-bench-vllm
+  namespace: llm
+  labels:
+    app.kubernetes.io/name: llm-bench-vllm
+spec:
+  serviceAccountName: llm-benchmark
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile: {type: RuntimeDefault}
+  resourceClaims:
+    - name: gpu
+      resourceClaimName: llm-gpu
+  containers:
+    - name: vllm
+      image: vllm/vllm-openai:v0.32.0
+      args:
+        - s3://platform-dev/artifacts/models/Qwen/Qwen3-8B-FP8/220b46e3b2180893580a4454f21f22d3ebb187d3
+        - --served-model-name=qwen3-8b
+        - --port=8000
+        - --load-format=runai_streamer
+        - --model-loader-extra-config={"concurrency":16,"memory_limit":2147483648}
+        - --max-model-len=16384
+        - --gpu-memory-utilization=0.80
+        - --reasoning-parser=qwen3
+        - --default-chat-template-kwargs={"enable_thinking":false}
+        - --enable-auto-tool-choice
+        - --tool-call-parser=hermes
+      env:
+        - {name: HOME, value: /home}
+        - {name: USER, value: vllm}
+        - {name: AWS_ENDPOINT_URL, value: https://minio.home.phuchoang.sbs}
+        - {name: AWS_DEFAULT_REGION, value: us-east-1}
+        - {name: AWS_EC2_METADATA_DISABLED, value: "true"}
+        - {name: RUNAI_STREAMER_S3_USE_VIRTUAL_ADDRESSING, value: "0"}
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom: {secretKeyRef: {name: llm-object-store, key: accesskey}}
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom: {secretKeyRef: {name: llm-object-store, key: secretkey}}
+      ports:
+        - {name: http, containerPort: 8000}
+      readinessProbe:
+        httpGet: {path: /health, port: 8000}
+        periodSeconds: 5
+      resources:
+        requests: {cpu: "1", memory: 8Gi}
+        limits: {memory: 12Gi}
+        claims:
+          - name: gpu
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      volumeMounts:
+        - {name: home, mountPath: /home}
+        - {name: shm, mountPath: /dev/shm}
+  volumes:
+    - name: home
+      emptyDir: {}
+    - name: shm
+      emptyDir: {medium: Memory, sizeLimit: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-bench-vllm
+  namespace: llm
+spec:
+  selector:
+    app.kubernetes.io/name: llm-bench-vllm
+  ports:
+    - {name: http, port: 8000, targetPort: http}
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: llm-bench-vllm
+  namespace: llm
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: llm-bench-vllm
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [cluster.local/ns/llm/sa/llm-benchmark]
