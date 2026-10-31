@@ -184,7 +184,7 @@ audit-{{ "{{workflow.name}}" }}
 {{- end -}}
 
 {{- define "data-pipelines.publish-tables" -}}
-- name: publish-tables
+- name: {{ .name | default "publish-tables" }}
   retryStrategy:
     limit: 2
     retryPolicy: OnError
@@ -200,7 +200,7 @@ audit-{{ "{{workflow.name}}" }}
 {{- end -}}
 
 {{- define "data-pipelines.checks" -}}
-- name: checks
+- name: {{ .name | default "checks" }}
   retryStrategy:
     limit: 2
     retryPolicy: OnError

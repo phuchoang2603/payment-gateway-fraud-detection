@@ -55,9 +55,18 @@ spec:
                   value: "{{ "{{inputs.parameters.start}}" }}"
                 - name: end
                   value: "{{ "{{inputs.parameters.end}}" }}"
+          # Write-audit-publish per layer: Silver is audited and published before Gold reads it, so Gold and the
+          # marts build on, and are checked against, published Silver. A Gold failure leaves the range's new Silver
+          # on main and its previous Gold; re-running the range rebuilds Gold.
+          - name: check-silver
+            template: check-silver
+            depends: silver
+          - name: publish-silver
+            template: publish-silver
+            depends: check-silver
           - name: gold
             template: gold
-            depends: silver
+            depends: publish-silver
             arguments:
               parameters:
                 - name: start
@@ -67,15 +76,15 @@ spec:
           - name: marts
             template: marts
             depends: gold
-          - name: checks
-            template: checks
+          - name: check-gold
+            template: check-gold
             depends: marts
-          - name: publish-tables
-            template: publish-tables
-            depends: checks
+          - name: publish-gold
+            template: publish-gold
+            depends: check-gold
           - name: publish-marts
             template: publish-marts
-            depends: publish-tables
+            depends: publish-gold
           - name: profile
             template: profile
             depends: publish-marts
@@ -106,8 +115,10 @@ spec:
         manifest: |
           {{- include "data-pipelines.spark-application" (dict "root" $ "wap" true "main" "gold/features" "product" "gold-features" "stage" "gold" "sizing" $sizing "extraEnv" $range) | nindent 10 }}
 {{- include "data-pipelines.marts-step" (dict "root" $ "name" "marts" "command" (list "python" "-m" "batch.gold.marts" "build") "reportRoot" .Values.pipeline.reportRoot) | nindent 4 }}
-{{- include "data-pipelines.checks" (dict "root" $ "product" "silver-payments,gold-features,payment-marts") | nindent 4 }}
-{{- include "data-pipelines.publish-tables" (dict "root" $ "product" "silver-payments,gold-features") | nindent 4 }}
+{{- include "data-pipelines.checks" (dict "root" $ "name" "check-silver" "product" "silver-payments") | nindent 4 }}
+{{- include "data-pipelines.checks" (dict "root" $ "name" "check-gold" "product" "gold-features,payment-marts") | nindent 4 }}
+{{- include "data-pipelines.publish-tables" (dict "root" $ "name" "publish-silver" "product" "silver-payments") | nindent 4 }}
+{{- include "data-pipelines.publish-tables" (dict "root" $ "name" "publish-gold" "product" "gold-features") | nindent 4 }}
 {{- include "data-pipelines.marts-step" (dict "root" $ "name" "publish-marts" "command" (list "python" "-m" "batch.gold.marts" "publish") "reportRoot" .Values.pipeline.reportRoot) | nindent 4 }}
 {{- include "data-pipelines.profile" (dict "root" $) | nindent 4 }}
 {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp2-silver,dp3-features,dp3-marts" "dataset" .Values.bronze.datasetVersion "report" $report) | nindent 4 }}

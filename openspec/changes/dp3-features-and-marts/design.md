@@ -357,17 +357,19 @@ A against C shows the full benefit of the warehouse. B against C isolates the ef
 ```text
 dp-pipeline (WorkflowTemplate; the pipeline template holds mutex dp-writer; onExit: publish)
 ├── silver          SparkApplication batch/silver/curate.py, writes audit-<workflow> branch   (ingest)
-├── gold            SparkApplication batch/gold/features.py, same branch                     (ingest)
+├── check-silver    openmetadata.checks: silver-payments on branch heads                     (validate)
+├── publish-silver  openmetadata.wap, fast-forwards Silver main                              (after check-silver)
+├── gold            SparkApplication batch/gold/features.py, reads published Silver           (ingest)
 ├── marts           container batch/gold/marts.py build, writes marts.*__staging          (ingest)
-├── checks          openmetadata.checks: silver-payments and gold-features on branch heads, payment-marts on staging (validate)
-├── publish-tables  openmetadata.wap, fast-forwards Silver and Gold main                    (after checks)
-├── publish-marts   container batch/gold/marts.py publish, replaces the rebuilt partitions   (after publish-tables)
+├── check-gold      openmetadata.checks: gold-features on branch heads, payment-marts on staging (validate)
+├── publish-gold    openmetadata.wap, fast-forwards Gold main                                (after check-gold)
+├── publish-marts   container batch/gold/marts.py publish, replaces the rebuilt partitions   (after publish-gold)
 └── profile         OpenMetadata profiler on the published marts                    (after publish-marts)
 dp-daily (CronWorkflow, suspended, 04:17 UTC): dp1-bronze from Kafka, then the pipeline template without a range
 dp-backfill (WorkflowTemplate): the pipeline template once per month of [start, end], in order, parallelism 1
 ```
 
-- **Publication order.** Iceberg is published first because it is one atomic catalog transaction across Silver and Gold. If `publish-marts` then fails, the tables are current and the marts keep their previous days until the next run; the stage retries on error.
+- **Write-audit-publish per layer.** Silver is audited and published before Gold reads it, so Gold and the marts build on audited Silver and a Silver problem stops the run before any Gold work. A Gold failure leaves the range's new Silver on `main` with its previous Gold; re-running the range rebuilds Gold. Gold is published before the marts; if `publish-marts` fails, the marts keep their previous days and the stage retries on error.
 - **One mutex, on the template.** The `pipeline` template holds `dp-writer` wherever it is referenced, so the daily run, manual runs and backfill months serialize. Silver no longer changes under Gold, because the same run writes both.
 - **Spark application names** are the step pod's name, unique per step, loop item and retry, so the months of one backfill never collide.
 - **Retries.** As in #102: Spark retries on error (prod: limit 10, `Always`, for spot loss), containers retry on error with limit 2, and checks are never retried.

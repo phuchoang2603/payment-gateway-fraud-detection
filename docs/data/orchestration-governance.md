@@ -10,7 +10,7 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 |---|---|---|
 | `generate-historical` | Shards in parallel → publish | Done; v18 and v19 published |
 | `dp1-bronze` (historical or Kafka source) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Implemented; Kafka runs inside `dp-daily` |
-| `dp-pipeline` (`start`/`end` days) | Spark Silver, then Spark Gold, to one audit branch → ClickHouse marts into staging → checks on the branch and staging → publish tables → publish marts → profile marts → OpenMetadata publish | Implemented |
+| `dp-pipeline` (`start`/`end` days) | Spark Silver to an audit branch → Silver checks → publish Silver → Spark Gold to the branch → ClickHouse marts into staging → Gold and marts checks → publish Gold → publish marts → profile marts → OpenMetadata publish | Implemented |
 | `dp-daily`, `dp-backfill` | Kafka into Bronze, then `dp-pipeline` for yesterday and two lookback days (suspended cron); `dp-pipeline` month by month in order | Implemented |
 | `warehouse-benchmark` | Single on-demand stage | Implemented; prod v19 evidence pending |
 | `maintain-lakehouse`, `dp2-benchmark` (skewed join) | Single on-demand stage | Implemented; prod v19 evidence pending |
