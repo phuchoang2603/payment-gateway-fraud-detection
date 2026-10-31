@@ -5,9 +5,6 @@ description = "kagent's Python agent runtime with prompts, model settings and A/
 requires-python = ">=3.12,<3.13"
 dependencies = ["kagent-adk==1.0.0rc1", "kagent-proto", "langfuse==4.15.6"]
 
-[project.scripts]
-fraud-agent-runtime = "fraud_agent_runtime.entrypoint:main"
-
 [dependency-groups]
 dev = ["pytest==9.2.0", "pytest-asyncio==1.4.0", "pytest-cov==7.1.0", "ruff==0.17.3"]
 
