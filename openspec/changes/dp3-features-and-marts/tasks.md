@@ -88,23 +88,21 @@
   Add `templates/dashboards.yaml` rendering them as ConfigMaps labelled `grafana_dashboard: "1"` with `grafana_folder`, gated by `dashboards.enabled`. Verify that the JSON parses and that CI helm template renders three ConfigMaps.
 - [x] 6.4 Make sure the Spark image's rebuild paths cover `src/data-pipeline/batch/batch/gold/sql` and the metadata image's cover the new contracts. Today both are already under their copied directories, so confirm and change nothing if so. Verify that the CI image builds succeed.
 
-## 6b. Incremental mode
+## 6b. Day ranges (decision 9b, replacing the modes on 2026-10-31)
 
-- [x] 6b.1 `dp2-silver mode=incremental` is on `main` (`a753980`). Read its decision 17 and the `curated-payments` requirements "Incremental curation" and "Silver change data for consumers", and reuse its CI test `test_the_attempts_changelog_shows_only_the_changed_attempt` as the pattern.
-- [x] 6b.2 Add `mode` to `batch/gold/features.py` and `batch/gold/marts.py`, and the `mode` parameter to `dp3-gold` (default `historical`; the daily CronWorkflow uses `incremental`):
-  - reuse `batch.silver.incremental` (`read_at`, `last_run`, `rewritten_since`) for snapshot reads and refusals rather than copying them;
-  - read the consumed `silver.*.snapshot_id` properties from the latest published gold commit, and create net changelog views of `silver.attempts` and `silver.labels` from those snapshots to current `main`;
-  - apply the refusal rules: no prior DP3 commit, `dp2.mode = historical` in the range, an expired start snapshot, a time before `H`, or a logic version change;
-  - for the feature tables, recompute the affected and expiring entities with the engine's entity- and anchor-scoped entry points, seeded from each entity's last prior row, and `MERGE` them on the audit branch;
-  - for `dim_customer`, rebuild the affected customers;
-  - for `label_attempt`, replace the rows of the attempts named in either changelog;
-  - for the marts, `REPLACE PARTITION` the affected days and months after audit;
-  - record the consumed Silver snapshot IDs in the gold commits' snapshot properties and in `build_info`.
-- [x] 6b.3 Add CI tests:
-  - an equivalence test: a sequence of real DP2 incremental runs over Kafka-style Bronze batches (a new payment, a late chargeback, a conflicting redelivery that removes attempts, a conflicting `attempt_started`, and an expiry with no new data) must give the same output from incremental DP3 after each step as from one historical run, excluding `created`;
-  - one test for each refusal rule.
+- [x] 6b.1 Replace `mode` with `start`/`end` day parameters (defaulting to yesterday plus `dp3.lookbackDays`) in `batch/gold/features.py`, `batch/gold/marts.py` and `dp3-gold`. Remove the changelog views, consumed-snapshot state, refusal rules and `EXCHANGE` publish.
+- [x] 6b.2 Make `windows.window_states` exact from a baseline anchor at the range's first midnight, with `windows.changes` for the daily change rows and `windows.as_of` for per-attempt lookups.
+- [x] 6b.3 Add `gold.feat_attempt_rt`, the `fraud-snapshot-v2` batch layer at each attempt's `started_at`. Add its contract, generated reference and lineage edge, and set `label_attempt.event_timestamp` to `started_at`.
+- [x] 6b.4 Add CI tests:
+  - daily runs build the same gold as one backfill;
+  - a re-run of a range changes nothing;
+  - a late label rebuilds its attempt day;
+  - range runs of both engines equal the same days of a full run;
+  - hand-checked snapshot values;
+  - a range mart rebuild equals a full one.
+- [x] 6b.5 Give prod DP3 the `gold` Spark profile with a 2 GiB driver. The `large` driver was unschedulable on the on-demand pool on 2026-10-31.
 
-
+## 7. Docs
 
 - [x] 7.1 Update the existing pages only:
   - `docs/data/offline.md`: DP3 section, gold schemas, naming table, Mermaid ER diagram, SCD2 and point-in-time join rules;
@@ -119,12 +117,12 @@
 
 - [ ] 8.0 Implementation started on the user's go-ahead on 2026-10-30, before the v19 Silver evidence finished; the push and deploys still wait for it. The `CLICKHOUSE_MARTS_PASSWORD` and `CLICKHOUSE_GRAFANA_PASSWORD` Doppler keys must exist in dev and prod before the first deploy.
 - [x] 8.1 Run local non-test checks only: `ruff`, `ruff format --check`, treefmt, helm lint and template for the changed charts, the contract lints, `openspec validate dp3-features-and-marts --strict` and `git diff --check`. Commit locally.
-- [ ] 8.2 Push, open the PR and inspect every CI check. Report pending or failed checks honestly.
+- [x] 8.2 Push, open the PR and inspect every CI check. Report pending or failed checks honestly. (#106 merged as `b500b61`; the day-range rewrite follows in its own PR.)
 
 ## 9. Runs and evidence (cluster)
 
 - [ ] 9.1 Dev smoke, after the PR deploys to dev. As `marts`, confirm that `SETTINGS iceberg_snapshot_id` pins a ``lakehouse.`silver.attempts` `` read, that the `SELECT ON lakehouse.*` grant and pruning on monthly filters work, and that `grafana`'s profile accepts the plugin's settings. Record the results in design.md decision 7, and choose the snapshot fallback if pinning fails. Then run `dp3-gold` and `warehouse-benchmark` on the existing v18 Silver.
-- [ ] 9.2 Prod evidence, after the PR merges and `main` releases to prod. Run `dp3-gold mode=historical` first; once live or Kafka batches flow, also run one `mode=incremental`, and record rows read, entities recomputed and wall time next to the historical run. Capture it promptly, because the rolling `TTL` shrinks the marts until the live simulator runs. Run `dp3-gold`, then `warehouse-benchmark`, on the v19 Silver. Record in the docs:
+- [ ] 9.2 Prod evidence, after the PR merges and `main` releases to prod. Run `dp3-gold` as a backfill from the first Silver day to yesterday, then one daily run without parameters, and record rows read and wall time for both. Capture it promptly, because the rolling `TTL` shrinks the marts until the live simulator runs. Run `dp3-gold`, then `warehouse-benchmark`, on the v19 Silver. Record in the docs:
   - run IDs, gold and mart row counts, DP3 phase tasks and times;
   - marts peak memory and disk;
   - check and profile outcomes, and lineage screenshots;
@@ -141,5 +139,5 @@
   - the prod runs and their outcomes;
   - the evidence and screenshots, with paths;
   - blockers and open questions;
-  - for the Feast change, the shared engine's import path and signature, and the final names, keys and locations of `gold.feat_customer_daily`, `gold.feat_payment_method_daily`, `gold.dim_customer` and `gold.label_attempt`: Iceberg catalog and namespace, entity key columns, `event_timestamp` and `created` semantics, partitioning, and the SCD2 validity columns.
+  - for the Feast change, the shared engine's import path and signature, and the final names, keys and locations of `gold.feat_customer_daily`, `gold.feat_payment_method_daily`, `gold.feat_attempt_rt`, `gold.dim_customer` and `gold.label_attempt`: Iceberg catalog and namespace, entity key columns, `event_timestamp` and `created` semantics, partitioning, and the SCD2 validity columns.
 - [ ] 10.3 Send the Feast planning thread (threadId `mcp:launch:7ca1eca307dd1025361c2668599d5e1e0680de28f6edec3ffd254c9b9283182b`, branch `plan/feast-store`) the same final table names, keys, locations and semantics with `t3_thread_send`, and tell it to rebase onto `main`. Its implementation starts on that message or the user's go-ahead.

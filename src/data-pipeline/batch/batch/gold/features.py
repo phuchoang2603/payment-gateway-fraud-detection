@@ -1,29 +1,32 @@
-"""DP3: gold features, the SCD2 customer dimension and attempt labels from pinned Silver snapshots.
+"""DP3: gold features, the SCD2 customer dimension and attempt labels for a range of UTC days, from pinned Silver.
 
-Historical mode recomputes every table. Incremental mode reads Silver's net changelog views since the snapshots the
-last DP3 run consumed and recomputes only the affected entities, customers and attempts, which leaves the tables equal
-to a historical run except for `created`.
+A run over [start, end] is a pure function of Silver: it overwrites only the rows of those days (and the label days and
+customers they touch), so re-running a range changes nothing, the daily schedule runs yesterday plus a short lookback
+for late outcomes, and a backfill is the same job over a longer range.
 """
 
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
+from functools import reduce
 
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
 from batch.gold.windows import (
     ANCHOR,
-    SINCE,
     Count,
     DailyAnchors,
     Distinct,
+    ExactAnchors,
     Ratio,
     Total,
-    change_points,
+    as_of,
+    changes,
     columns,
     merge_intervals,
+    window_states,
 )
 from batch.lakehouse import create_table, ref_snapshot, snapshot_info, stage
 from batch.metrics import phase
@@ -36,18 +39,18 @@ NAMESPACE = f"{ICEBERG_CATALOG}.gold"
 DIM_CUSTOMER = f"{NAMESPACE}.dim_customer"
 FEAT_CUSTOMER = f"{NAMESPACE}.feat_customer_daily"
 FEAT_METHOD = f"{NAMESPACE}.feat_payment_method_daily"
+FEAT_ATTEMPT_RT = f"{NAMESPACE}.feat_attempt_rt"
 LABEL_ATTEMPT = f"{NAMESPACE}.label_attempt"
-TABLES = (DIM_CUSTOMER, FEAT_CUSTOMER, FEAT_METHOD, LABEL_ATTEMPT)
-MODES = ("historical", "incremental")
-# Bump when a change to DP3 would make earlier gold rows differ from a fresh historical run.
-LOGIC_VERSION = "1"
+TABLES = (DIM_CUSTOMER, FEAT_CUSTOMER, FEAT_METHOD, FEAT_ATTEMPT_RT, LABEL_ATTEMPT)
+# Bump when a change to DP3 would make earlier gold rows differ from a fresh run over the same days.
+LOGIC_VERSION = "2"
+LOOKBACK_ENV = "DP3_LOOKBACK_DAYS"
+LOOKBACK_DEFAULT_DAYS = 2
 
 RUN_PROPERTY = "dp3.run_id"
-MODE_PROPERTY = "dp3.mode"
 LOGIC_PROPERTY = "dp3.logic_version"
 HISTORY_PROPERTY = "dp3.history_start"
-CAP_PROPERTY = "dp3.anchor_cap"
-DP2_LOGIC_PROPERTY = "silver.dp2.logic_version"
+RANGE_PROPERTY = "dp3.range"
 SILVER_PROPERTIES = {
     silver.ATTEMPTS: "silver.attempts.snapshot_id",
     silver.LABELS: "silver.labels.snapshot_id",
@@ -57,10 +60,14 @@ SILVER_PROPERTIES = {
 ATTEMPT_KEY = silver.ATTEMPT_KEY
 PAYMENT_KEY = silver.PAYMENT_KEY
 CUSTOMER_KEY = ["integration_id", "customer_id"]
+METHOD_KEY = ["integration_id", "payment_method_fingerprint"]
 WINDOWS = {"7d": timedelta(days=7), "30d": timedelta(days=30)}
-LONGEST = max(WINDOWS.values())
+RT_WINDOWS = {"5m": timedelta(minutes=5), "1h": timedelta(hours=1), "24h": timedelta(hours=24)}
+# fraud-snapshot-v2: an attempt whose time is more than this before its start is too late and contributes nothing.
+RT_HORIZON = timedelta(hours=24)
+# Reads assume an attempt's client time is at most a day after its start.
+CLOCK_MARGIN = timedelta(days=1)
 FAMILIAR_WINDOW = timedelta(days=90)
-RULE = DailyAnchors()
 DAY = timedelta(days=1)
 
 DECIDED = "outcome IN ('succeeded', 'declined')"
@@ -79,33 +86,77 @@ COMMON = [
 @dataclass(frozen=True)
 class View:
     table: str
-    key: str
+    keys: tuple
     measures: tuple
 
     @property
-    def keys(self) -> list[str]:
-        return ["integration_id", self.key]
+    def output(self) -> list[str]:
+        return columns(self.measures, WINDOWS)
 
     @property
     def columns(self) -> list[str]:
-        return [*self.keys, ANCHOR, "created", *columns(self.measures, WINDOWS)]
+        return [*self.keys, ANCHOR, "created", *self.output]
 
 
 CUSTOMER = View(
     FEAT_CUSTOMER,
-    "customer_id",
+    tuple(CUSTOMER_KEY),
     (
         *COMMON,
         Distinct("distinct_device_count", "device_fingerprint"),
         Distinct("distinct_payment_method_count", "payment_method_fingerprint"),
     ),
 )
-METHOD = View(FEAT_METHOD, "payment_method_fingerprint", (*COMMON, Distinct("distinct_customer_count", "customer_id")))
+METHOD = View(FEAT_METHOD, tuple(METHOD_KEY), (*COMMON, Distinct("distinct_customer_count", "customer_id")))
 VIEWS = (CUSTOMER, METHOD)
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    """One entity view of fraud-snapshot-v2, as of each attempt's start."""
+
+    keys: tuple
+    measures: tuple
+    output: tuple
+
+
+RT_VIEWS = (
+    Snapshot(
+        tuple(CUSTOMER_KEY),
+        (
+            Count("customer_snapshot_attempt_count"),
+            Distinct("customer_snapshot_distinct_devices", "device_fingerprint"),
+        ),
+        (
+            "customer_snapshot_attempt_count_5m",
+            "customer_snapshot_attempt_count_1h",
+            "customer_snapshot_attempt_count_24h",
+            "customer_snapshot_distinct_devices_24h",
+        ),
+    ),
+    Snapshot(
+        tuple(METHOD_KEY),
+        (Count("method_snapshot_attempt_count"),),
+        (
+            "method_snapshot_attempt_count_5m",
+            "method_snapshot_attempt_count_1h",
+            "method_snapshot_attempt_count_24h",
+        ),
+    ),
+)
+RT_COLUMNS = [
+    *ATTEMPT_KEY,
+    "customer_id",
+    "payment_method_fingerprint",
+    ANCHOR,
+    "created",
+    *[name for view in RT_VIEWS for name in view.output],
+]
 PARTITIONS = {
     DIM_CUSTOMER: lambda: F.months("valid_from_ts"),
     FEAT_CUSTOMER: lambda: F.days(ANCHOR),
     FEAT_METHOD: lambda: F.days(ANCHOR),
+    FEAT_ATTEMPT_RT: lambda: F.days(ANCHOR),
     LABEL_ATTEMPT: lambda: F.days(ANCHOR),
 }
 TRACKED = [
@@ -131,14 +182,12 @@ def utc(micros) -> datetime:
     return datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(microseconds=int(micros))
 
 
-def iso(value: datetime) -> str:
-    return value.isoformat()
+def midnight(day: date) -> datetime:
+    return datetime.combine(day, time(), tzinfo=timezone.utc)
 
 
-def valid_attempts(attempts: DataFrame) -> DataFrame:
-    return attempts.where(F.col("lifecycle_valid")).withColumn(
-        "attempt_time", F.coalesce(F.col("attempted_at"), F.col("started_at"))
-    )
+def with_attempt_time(attempts: DataFrame) -> DataFrame:
+    return attempts.withColumn("attempt_time", F.coalesce(F.col("attempted_at"), F.col("started_at")))
 
 
 def history_start(attempts: DataFrame):
@@ -154,23 +203,72 @@ def commit_time(spark, table, snapshot) -> datetime:
     return utc(row["micros"])
 
 
-def midnight(value: datetime) -> datetime:
-    return value.replace(hour=0, minute=0, second=0, microsecond=0)
+def started_between(frame: DataFrame, first: datetime, after: datetime) -> DataFrame:
+    return frame.where((F.col("started_at") >= F.lit(first)) & (F.col("started_at") < F.lit(after)))
 
 
-def features(view: View, attempts: DataFrame, start, cap, created, scope=None, seeds=None) -> DataFrame:
-    rows = change_points(
-        attempts.where(F.col(view.key).isNotNull()),
-        view.keys,
+def day_ranges(days: list[date]) -> list[tuple[date, date]]:
+    """Consecutive days merged into [first, after) ranges."""
+    ranges = []
+    for day in sorted(set(days)):
+        if ranges and ranges[-1][1] == day:
+            ranges[-1] = (ranges[-1][0], day + DAY)
+        else:
+            ranges.append((day, day + DAY))
+    return ranges
+
+
+def on_days(column: str, days: list[date]):
+    """A filter Iceberg can push down: the column falls on one of the days."""
+    return reduce(
+        lambda left, right: left | right,
+        [(F.col(column) >= F.lit(midnight(a))) & (F.col(column) < F.lit(midnight(b))) for a, b in day_ranges(days)],
+        F.lit(False),
+    )
+
+
+def daily_features(view: View, attempts: DataFrame, start, floor, cutoff, created) -> DataFrame:
+    """Change rows at the daily anchors in (floor, cutoff], from every attempt still in a window at floor."""
+    read = started_between(attempts, floor - max(WINDOWS.values()) - CLOCK_MARGIN, cutoff)
+    states = window_states(
+        read.where(F.col(view.keys[1]).isNotNull()),
+        list(view.keys),
         list(view.measures),
         WINDOWS,
-        RULE,
+        DailyAnchors(),
         start,
-        cap,
-        scope,
-        seeds,
+        floor,
+        cutoff,
     )
-    return rows.withColumn("created", F.lit(created)).select(*view.columns)
+    return (
+        changes(states, list(view.keys), view.output, floor)
+        .withColumn("created", F.lit(created))
+        .select(*view.columns)
+    )
+
+
+def attempt_snapshots(attempts: DataFrame, start, floor, cutoff, created) -> DataFrame:
+    """Each attempt started in [floor, cutoff) with its customer and method snapshot values at its start: the batch
+    view of fraud-snapshot-v2, counting every attempt start, valid or not, in time to be seen then."""
+    read = started_between(attempts, floor - max(RT_WINDOWS.values()) - CLOCK_MARGIN, cutoff).where(
+        F.col("attempt_time") >= F.col("started_at") - F.expr(f"INTERVAL {int(RT_HORIZON.total_seconds())} SECONDS")
+    )
+    points = started_between(attempts, floor, cutoff).select(
+        *ATTEMPT_KEY, "customer_id", "payment_method_fingerprint", F.col("started_at").alias(ANCHOR)
+    )
+    for view in RT_VIEWS:
+        states = window_states(
+            read.where(F.col(view.keys[1]).isNotNull()),
+            list(view.keys),
+            list(view.measures),
+            RT_WINDOWS,
+            ExactAnchors(),
+            start,
+            floor,
+            cutoff,
+        )
+        points = as_of(points, states, list(view.keys), list(view.output), ANCHOR)
+    return points.withColumn("created", F.lit(created)).select(*RT_COLUMNS)
 
 
 def profiles(events: DataFrame, attempts: DataFrame) -> DataFrame:
@@ -252,7 +350,7 @@ def label_attempt(labels: DataFrame, attempts: DataFrame) -> DataFrame:
         )
     )
     keyed = attempts.select(
-        *ATTEMPT_KEY, "customer_id", "payment_method_fingerprint", F.col("attempt_time").alias(ANCHOR)
+        *ATTEMPT_KEY, "customer_id", "payment_method_fingerprint", F.col("started_at").alias(ANCHOR)
     )
     return earliest.join(keyed, ATTEMPT_KEY).select(
         *ATTEMPT_KEY,
@@ -272,19 +370,11 @@ def with_pins(writer, pins: dict):
     return writer
 
 
-def write(spark, table: str, frame: DataFrame, pins: dict) -> dict:
+def overwrite(spark, table: str, frame: DataFrame, condition, pins: dict) -> dict:
+    """Replace the table's rows matching `condition` with `frame` on this run's branch."""
     create_table(spark, table, frame, PARTITIONS[table]())
     stage(spark, table)
-    with_pins(frame.writeTo(table), pins).overwrite(F.lit(True))
-    return recorded(spark, table, pins)
-
-
-def replace(spark, table: str, frame: DataFrame, pins: dict, delete_sql: str) -> dict:
-    """Delete the recomputed rows on this run's branch, then append them, recording this run on the last commit."""
-    create_table(spark, table, frame, PARTITIONS[table]())
-    stage(spark, table)
-    spark.sql(delete_sql)
-    with_pins(frame.writeTo(table), pins).append()
+    with_pins(frame.writeTo(table), pins).overwrite(condition)
     return recorded(spark, table, pins)
 
 
@@ -306,270 +396,111 @@ def silver_inputs(spark):
     return snapshots, frames
 
 
-def run(spark, run_id, mode="historical"):
-    if mode not in MODES:
-        raise ValueError(f"mode must be one of {', '.join(MODES)}, not {mode}")
+def label_days(labels: DataFrame, attempts: DataFrame, floor, cutoff) -> list[date]:
+    """Start days of the attempts that gained a linked label available in [floor, cutoff)."""
+    arrived = labels.where(
+        (F.col("linkage") == "linked")
+        & (F.col("label_available_at") >= F.lit(floor))
+        & (F.col("label_available_at") < F.lit(cutoff))
+    ).select(*ATTEMPT_KEY)
+    rows = attempts.join(arrived, ATTEMPT_KEY, "left_semi").select(F.to_date("started_at").alias("day")).distinct()
+    return [row["day"] for row in rows.collect()]
+
+
+def replace_customers(spark, events, attempts, floor, cutoff, pins) -> tuple[dict, int]:
+    """Rebuild the full SCD2 history of every customer with an attempt started in the range."""
+    customers = (
+        started_between(attempts, floor, cutoff)
+        .where(F.col("customer_id").isNotNull())
+        .select(*CUSTOMER_KEY)
+        .distinct()
+        .localCheckpoint()
+    )
+    affected = attempts.join(customers, CUSTOMER_KEY, "left_semi")
+    starts = events.join(F.broadcast(affected.select(*PAYMENT_KEY).distinct()), PAYMENT_KEY, "left_semi")
+    rows = dim_customer(profiles(starts, affected))
+    create_table(spark, DIM_CUSTOMER, rows, PARTITIONS[DIM_CUSTOMER]())
+    stage(spark, DIM_CUSTOMER)
+    customers.createOrReplaceTempView("dp3_dim_customer_scope")
+    spark.sql(
+        f"DELETE FROM {DIM_CUSTOMER} WHERE (integration_id, customer_id) IN "
+        "(SELECT integration_id, customer_id FROM dp3_dim_customer_scope)"
+    )
+    with_pins(rows.writeTo(DIM_CUSTOMER), pins).append()
+    return recorded(spark, DIM_CUSTOMER, pins), customers.count()
+
+
+def run(spark, run_id: str, start_day: date, end_day: date) -> dict:
+    if start_day > end_day:
+        raise ValueError(f"start {start_day} is after end {end_day}")
     phases = {}
     snapshots, frames = silver_inputs(spark)
-    attempts = valid_attempts(frames[silver.ATTEMPTS])
+    everything = with_attempt_time(frames[silver.ATTEMPTS])
+    attempts = everything.where(F.col("lifecycle_valid"))
     start = history_start(attempts)
     if start is None:
         raise ValueError("silver.attempts has no lifecycle-valid attempts")
     created = commit_time(spark, silver.ATTEMPTS, snapshots[silver.ATTEMPTS])
-    cap = midnight(created)
-    attempts_summary = spark.sql(
-        f"SELECT summary FROM {silver.ATTEMPTS}.snapshots WHERE snapshot_id = {snapshots[silver.ATTEMPTS]}"
-    ).first()["summary"]
+    floor, cutoff = midnight(start_day), midnight(end_day + DAY)
     pins = {
         **{prop: str(snapshots[table]) for table, prop in SILVER_PROPERTIES.items()},
-        DP2_LOGIC_PROPERTY: (attempts_summary or {}).get(incremental.LOGIC_PROPERTY, ""),
         RUN_PROPERTY: run_id,
-        MODE_PROPERTY: mode,
         LOGIC_PROPERTY: LOGIC_VERSION,
-        HISTORY_PROPERTY: iso(start),
-        CAP_PROPERTY: iso(cap),
+        HISTORY_PROPERTY: start.isoformat(),
+        RANGE_PROPERTY: f"{start_day}/{end_day}",
     }
     tables = {}
-    scope_report = {}
-    affected_days = None
-    consumed = None
-    if mode == "historical":
-        for view in VIEWS:
-            with phase(spark, phases, f"write {view.table.split('.')[-1]}"):
-                tables[view.table] = write(spark, view.table, features(view, attempts, start, cap, created), pins)
-        with phase(spark, phases, "write dim_customer"):
-            profile = profiles(frames[silver.PAYMENT_EVENTS], attempts)
-            tables[DIM_CUSTOMER] = write(spark, DIM_CUSTOMER, dim_customer(profile), pins)
-        with phase(spark, phases, "write label_attempt"):
-            tables[LABEL_ATTEMPT] = write(spark, LABEL_ATTEMPT, label_attempt(frames[silver.LABELS], attempts), pins)
-    else:
-        with phase(spark, phases, "scope"):
-            changes = incremental_changes(spark, snapshots, start)
-        for view in VIEWS:
-            with phase(spark, phases, f"write {view.table.split('.')[-1]}"):
-                tables[view.table], scope_report[view.table] = replace_features(
-                    spark, view, attempts, changes, start, cap, created, pins
-                )
-        with phase(spark, phases, "write dim_customer"):
-            tables[DIM_CUSTOMER], scope_report[DIM_CUSTOMER] = replace_customers(
-                spark, frames[silver.PAYMENT_EVENTS], attempts, changes, pins
-            )
-        with phase(spark, phases, "write label_attempt"):
-            tables[LABEL_ATTEMPT], scope_report[LABEL_ATTEMPT] = replace_labels(
-                spark, frames[silver.LABELS], attempts, changes, pins
-            )
-        with phase(spark, phases, "affected days"):
-            affected_days = changed_days(changes, attempts)
-        consumed = {table.split(".", 1)[1]: snapshot for table, snapshot in changes["since"].items()}
-        changes["images"].unpersist()
-        changes["attempt_keys"].unpersist()
+    for view in VIEWS:
+        with phase(spark, phases, f"write {view.table.split('.')[-1]}"):
+            rows = daily_features(view, attempts, start, floor, cutoff, created)
+            within = (F.col(ANCHOR) > F.lit(floor)) & (F.col(ANCHOR) <= F.lit(cutoff))
+            tables[view.table] = overwrite(spark, view.table, rows, within, pins)
+    with phase(spark, phases, "write feat_attempt_rt"):
+        rows = attempt_snapshots(everything, start, floor, cutoff, created)
+        within = (F.col(ANCHOR) >= F.lit(floor)) & (F.col(ANCHOR) < F.lit(cutoff))
+        tables[FEAT_ATTEMPT_RT] = overwrite(spark, FEAT_ATTEMPT_RT, rows, within, pins)
+    with phase(spark, phases, "write label_attempt"):
+        range_days = [start_day + n * DAY for n in range((end_day - start_day).days + 1)]
+        days = sorted({*range_days, *label_days(frames[silver.LABELS], attempts, floor, cutoff)})
+        scoped = attempts.where(on_days("started_at", days))
+        labels = frames[silver.LABELS].join(scoped.select(*ATTEMPT_KEY), ATTEMPT_KEY, "left_semi")
+        tables[LABEL_ATTEMPT] = overwrite(
+            spark, LABEL_ATTEMPT, label_attempt(labels, scoped), on_days(ANCHOR, days), pins
+        )
+    with phase(spark, phases, "write dim_customer"):
+        tables[DIM_CUSTOMER], customers = replace_customers(
+            spark, frames[silver.PAYMENT_EVENTS], attempts, floor, cutoff, pins
+        )
     report = {
         "run_id": run_id,
-        "mode": mode,
+        "start": str(start_day),
+        "end": str(end_day),
         "silver_snapshots": {table.split(".", 1)[1]: snapshot for table, snapshot in snapshots.items()},
-        "created": iso(created),
-        "history_start": iso(start),
-        "anchor_cap": iso(cap),
+        "created": created.isoformat(),
+        "history_start": start.isoformat(),
+        "days": [str(day) for day in days],
+        "customers": customers,
         "tables": tables,
-        "scope": scope_report,
-        "affected_days": affected_days,
-        "consumed": consumed,
         "phases": phases,
     }
     Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/gold.json", report)
     return report
 
 
-def previous_state(spark) -> dict:
-    """The consumed state of the last published DP3 run, which every gold table must share."""
-    summaries = {table: incremental.last_run(spark, table, RUN_PROPERTY) for table in TABLES}
-    missing = [table for table, summary in summaries.items() if summary is None]
-    if missing:
-        raise incremental.IncrementalRefused(
-            f"no published DP3 run recorded its Silver snapshots on {', '.join(missing)}"
-        )
-    runs = {summary.get(RUN_PROPERTY) for summary in summaries.values()}
-    if len(runs) > 1:
-        raise incremental.IncrementalRefused(
-            f"the gold tables were last written by different DP3 runs: {sorted(runs)}"
-        )
-    state = summaries[FEAT_CUSTOMER]
-    if state.get(LOGIC_PROPERTY) != LOGIC_VERSION:
-        raise incremental.IncrementalRefused(
-            f"the last DP3 run used logic version {state.get(LOGIC_PROPERTY)}, not {LOGIC_VERSION}"
-        )
-    return state
-
-
-def silver_range(spark, table: str, since: int, current: int, dp2_logic: str) -> str | None:
-    """Why Silver's main between two snapshots cannot be read as changes, or None."""
-    snapshots = {
-        row["snapshot_id"]: (row["parent_id"], row["summary"] or {})
-        for row in spark.sql(f"SELECT snapshot_id, parent_id, summary FROM {table}.snapshots").collect()
-    }
-    if since not in snapshots:
-        return f"{table} snapshot {since} has expired; DP3 must run within the snapshot retention"
-    node = current
-    while node != since:
-        if node not in snapshots:
-            return f"{table} main no longer descends from snapshot {since}"
-        parent, summary = snapshots[node]
-        if summary.get("dp2.mode") == "historical":
-            return f"{table} snapshot {node} is a historical DP2 run, which rewrites every row"
-        logic = summary.get(incremental.LOGIC_PROPERTY)
-        if logic is not None and logic != dp2_logic:
-            return f"{table} snapshot {node} used DP2 logic version {logic}, not {dp2_logic}"
-        node = parent
-    return None
-
-
-def changelog(spark, table: str, since: int, current: int) -> DataFrame:
-    """Silver's net row changes between two main snapshots, as DELETE (old) and INSERT (new) images."""
-    if since == current:
-        return (
-            incremental.read_at(spark, table, current).limit(0).withColumn("_change_type", F.lit(None).cast("string"))
-        )
-    name = f"dp3_{table.split('.')[-1]}_changes"
-    spark.sql(
-        f"CALL {ICEBERG_CATALOG}.system.create_changelog_view("
-        f"table => '{table.split('.', 1)[1]}', "
-        f"options => map('start-snapshot-id', '{since}', 'end-snapshot-id', '{current}'), "
-        f"net_changes => true, changelog_view => '{name}')"
-    ).collect()
-    return spark.table(name)
-
-
-def incremental_changes(spark, snapshots: dict, start: datetime) -> dict:
-    state = previous_state(spark)
-    if state.get(HISTORY_PROPERTY) != iso(start):
-        raise incremental.IncrementalRefused(
-            f"the earliest Silver attempt day moved from {state.get(HISTORY_PROPERTY)} to {iso(start)}"
-        )
-    previous_cap = datetime.fromisoformat(state[CAP_PROPERTY])
-    if previous_cap < start + LONGEST:
-        raise incremental.IncrementalRefused("feature coverage was still incomplete at the last DP3 anchor")
-    since = {table: int(state[prop]) for table, prop in SILVER_PROPERTIES.items()}
-    dp2_logic = state.get(DP2_LOGIC_PROPERTY, "")
-    for table in (silver.ATTEMPTS, silver.LABELS):
-        reason = silver_range(spark, table, since[table], snapshots[table], dp2_logic)
-        if reason:
-            raise incremental.IncrementalRefused(f"{reason}; run dp3-gold with mode=historical")
-    # Both images of every changed attempt, valid or not: a superset of the entities to recompute is still exact.
-    images = (
-        changelog(spark, silver.ATTEMPTS, since[silver.ATTEMPTS], snapshots[silver.ATTEMPTS])
-        .withColumn("attempt_time", F.coalesce(F.col("attempted_at"), F.col("started_at")))
-        .localCheckpoint()
-    )
-    labelled = changelog(spark, silver.LABELS, since[silver.LABELS], snapshots[silver.LABELS])
-    # Iceberg's row-level DELETE/MERGE cannot plan a source that still reads a changelog view, so cut the lineage.
-    keys = images.select(*ATTEMPT_KEY).unionByName(labelled.select(*ATTEMPT_KEY)).distinct().localCheckpoint()
-    return {"since": since, "previous_cap": previous_cap, "images": images, "attempt_keys": keys}
-
-
-def replace_features(spark, view: View, attempts, changes, start, cap, created, pins):
-    next_anchor = changes["previous_cap"] + DAY
-    entry = F.greatest(RULE.after(F.col("attempt_time")), RULE.after(F.col("started_at")))
-    affected = changes["images"].where(F.col(view.key).isNotNull()).groupBy(*view.keys).agg(F.min(entry).alias(SINCE))
-    # Entities whose values move between the previous and the new anchor cap without changed data: an attempt
-    # still leaving the longest window, or one entering after the previous cap.
-    still_leaving = changes["previous_cap"] - LONGEST
-    expiring = (
-        attempts.where(
-            (F.col("attempt_time") >= F.lit(still_leaving))
-            | (F.greatest("started_at", F.coalesce("outcome_at", "started_at")) >= F.lit(changes["previous_cap"]))
-        )
-        .where(F.col(view.key).isNotNull())
-        .select(*view.keys)
-        .distinct()
-        .withColumn(SINCE, F.lit(next_anchor))
-    )
-    scope = (
-        affected.unionByName(expiring)
-        .groupBy(*view.keys)
-        .agg(F.least(F.min(SINCE), F.lit(next_anchor)).alias(SINCE))
-        .cache()
-    )
-    current = incremental.read_at(spark, view.table, ref_snapshot(spark, view.table))
-    latest = Window.partitionBy(*view.keys).orderBy(F.desc(ANCHOR))
-    seeds = (
-        current.join(scope, view.keys)
-        .where(F.col(ANCHOR) < F.col(SINCE))
-        .withColumn("_latest", F.row_number().over(latest))
-        .where(F.col("_latest") == 1)
-        .drop("_latest", SINCE)
-    )
-    inputs = attempts.join(scope.select(*view.keys), view.keys, "left_semi")
-    rows = features(view, inputs, start, cap, created, scope, seeds)
-    scope_view = f"dp3_{view.table.split('.')[-1]}_scope"
-    scope.createOrReplaceTempView(scope_view)
-    on = " AND ".join(f"t.{key} = s.{key}" for key in view.keys)
-    entities = scope.count()
-    info = replace(
-        spark,
-        view.table,
-        rows,
-        pins,
-        f"MERGE INTO {view.table} t USING {scope_view} s ON {on} AND t.{ANCHOR} >= s.{SINCE} WHEN MATCHED THEN DELETE",
-    )
-    scope.unpersist()
-    return info, {"entities": entities}
-
-
-def replace_customers(spark, events, attempts, changes, pins):
-    customers = changes["images"].select(*CUSTOMER_KEY).where(F.col("customer_id").isNotNull()).distinct().cache()
-    affected = attempts.join(customers, CUSTOMER_KEY, "left_semi")
-    starts = events.join(F.broadcast(affected.select(*PAYMENT_KEY).distinct()), PAYMENT_KEY, "left_semi")
-    rows = dim_customer(profiles(starts, affected))
-    customers.createOrReplaceTempView("dp3_dim_customer_scope")
-    count = customers.count()
-    info = replace(
-        spark,
-        DIM_CUSTOMER,
-        rows,
-        pins,
-        f"DELETE FROM {DIM_CUSTOMER} WHERE (integration_id, customer_id) IN "
-        "(SELECT integration_id, customer_id FROM dp3_dim_customer_scope)",
-    )
-    customers.unpersist()
-    return info, {"customers": count}
-
-
-def replace_labels(spark, labels, attempts, changes, pins):
-    keys = changes["attempt_keys"]
-    scoped_attempts = attempts.join(keys, ATTEMPT_KEY, "left_semi")
-    scoped_labels = labels.join(keys, ATTEMPT_KEY, "left_semi")
-    keys.createOrReplaceTempView("dp3_label_attempt_scope")
-    info = replace(
-        spark,
-        LABEL_ATTEMPT,
-        label_attempt(scoped_labels, scoped_attempts),
-        pins,
-        f"DELETE FROM {LABEL_ATTEMPT} WHERE (integration_id, payment_id, attempt_id) IN "
-        "(SELECT integration_id, payment_id, attempt_id FROM dp3_label_attempt_scope)",
-    )
-    return info, {"attempts": keys.count()}
-
-
-def changed_days(changes, attempts) -> list[str]:
-    """Start days whose marts rows can differ: both images of changed attempts and the attempts of changed labels."""
-    days = (
-        changes["images"]
-        .select(F.to_date("started_at").alias("day"))
-        .unionByName(
-            attempts.join(changes["attempt_keys"], ATTEMPT_KEY, "left_semi").select(
-                F.to_date("started_at").alias("day")
-            )
-        )
-    )
-    return sorted(str(row["day"]) for row in days.distinct().collect())
+def day_range(environ, today: date) -> tuple[date, date]:
+    """DP3_START and DP3_END, or yesterday and the lookback days before it."""
+    end = date.fromisoformat(environ["DP3_END"]) if environ.get("DP3_END") else today - DAY
+    if environ.get("DP3_START"):
+        return date.fromisoformat(environ["DP3_START"]), end
+    return end - timedelta(days=int(environ.get(LOOKBACK_ENV, LOOKBACK_DEFAULT_DAYS))), end
 
 
 def main():
     run_id = os.environ["RUN_ID"]
-    mode = os.environ.get("GOLD_MODE", "historical")
+    start_day, end_day = day_range(os.environ, datetime.now(timezone.utc).date())
     spark = session("dp3-gold")
     try:
-        report = run(spark, run_id, mode)
+        report = run(spark, run_id, start_day, end_day)
         print(json.dumps(report, sort_keys=True, default=str))
     finally:
         spark.stop()

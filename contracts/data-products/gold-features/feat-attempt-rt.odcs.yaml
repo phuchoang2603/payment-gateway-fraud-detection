@@ -1,0 +1,88 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:gold-feat-attempt-rt
+name: Gold attempt snapshot features
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: The batch layer of the fraud-snapshot-v2 windows, the customer and payment-method snapshot values each attempt would have been scored with at its start.
+  usage: Training history for the streaming feature views. Join on the attempt key, or as a Feast batch source on the customer or payment-method key with event_timestamp. Live values come from the Flink speed layer, not from this table.
+  limitations: Synthetic data only. An attempt counts when it started before the anchor; Flink's observed availability can lag that by its processing delay.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, gold, features]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+  - property: definition
+    value: contracts/features/fraud-snapshot-v2.yaml
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: lakehouse
+    description: Iceberg table feat_attempt_rt in schema gold, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.
+schema:
+  - name: feat_attempt_rt
+    physicalName: gold.feat_attempt_rt
+    logicalType: object
+    physicalType: table
+    description: One row per (integration_id, payment_id, attempt_id), valid or not.
+    dataGranularityDescription: One payment attempt at its start.
+    customProperties:
+      - property: partitioning
+        value: days(event_timestamp)
+    properties:
+      - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Integration namespace of the payment.'}
+      - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Payment aggregate identity.'}
+      - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Attempt identity within the payment.'}
+      - {name: customer_id, logicalType: string, physicalType: VARCHAR, description: 'Customer of the attempt; null leaves the customer columns null.'}
+      - {name: payment_method_fingerprint, logicalType: string, physicalType: VARCHAR, description: 'Payment method of the attempt; null leaves the method columns null.'}
+      - {name: event_timestamp, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: 'The attempt''s started_at, when it was scored; the anchor of its values.'}
+      - {name: created, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: 'Commit time of the silver.attempts snapshot of the run that last recomputed the row.'}
+      - {name: customer_snapshot_attempt_count_5m, logicalType: integer, physicalType: BIGINT, description: 'The customer''s other attempts with attempt time in the 5 minutes before the anchor that started before it. Null until the window is covered.'}
+      - {name: customer_snapshot_attempt_count_1h, logicalType: integer, physicalType: BIGINT, description: 'As above over 1 hour.'}
+      - {name: customer_snapshot_attempt_count_24h, logicalType: integer, physicalType: BIGINT, description: 'As above over 24 hours.'}
+      - {name: customer_snapshot_distinct_devices_24h, logicalType: integer, physicalType: BIGINT, description: 'Distinct non-null device fingerprints over those 24-hour attempts.'}
+      - {name: method_snapshot_attempt_count_5m, logicalType: integer, physicalType: BIGINT, description: 'The payment method''s other attempts with attempt time in the 5 minutes before the anchor that started before it. Null until the window is covered.'}
+      - {name: method_snapshot_attempt_count_1h, logicalType: integer, physicalType: BIGINT, description: 'As above over 1 hour.'}
+      - {name: method_snapshot_attempt_count_24h, logicalType: integer, physicalType: BIGINT, description: 'As above over 24 hours.'}
+    quality:
+      - id: gold_rt_unique
+        type: sql
+        description: Each attempt has one row.
+        query: |
+          SELECT count(*) FROM (
+            SELECT sipHash128(integration_id, payment_id, attempt_id) AS k FROM {object}
+            GROUP BY k HAVING count(*) > 1
+          ) AS duplicates
+        mustBe: 0
+      - id: gold_rt_windows
+        type: sql
+        description: Counts never shrink as the window grows, distinct devices never exceed the 24-hour count, and an entity's columns are null when its key is.
+        query: |
+          SELECT count(*) FROM {object}
+          WHERE customer_snapshot_attempt_count_5m > customer_snapshot_attempt_count_1h
+            OR customer_snapshot_attempt_count_1h > customer_snapshot_attempt_count_24h
+            OR customer_snapshot_distinct_devices_24h > customer_snapshot_attempt_count_24h
+            OR method_snapshot_attempt_count_5m > method_snapshot_attempt_count_1h
+            OR method_snapshot_attempt_count_1h > method_snapshot_attempt_count_24h
+            OR (customer_id IS NULL AND customer_snapshot_attempt_count_24h IS NOT NULL)
+            OR (payment_method_fingerprint IS NULL AND method_snapshot_attempt_count_24h IS NOT NULL)
+        mustBe: 0
+      - id: gold_rt_attempt_exists
+        type: sql
+        description: Every row is an attempt in silver.attempts.
+        query: |
+          SELECT count(*) FROM {object} AS r
+          LEFT JOIN (
+            SELECT integration_id, payment_id, attempt_id, 1 AS present FROM lakehouse.`silver.attempts`
+          ) AS a USING (integration_id, payment_id, attempt_id)
+          WHERE coalesce(a.present, 0) = 0
+        mustBe: 0

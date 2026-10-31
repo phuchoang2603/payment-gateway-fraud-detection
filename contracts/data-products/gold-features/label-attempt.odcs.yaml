@@ -7,7 +7,7 @@ status: active
 domain: fraud-detection
 description:
   purpose: The earliest linked label of each attempt per label source, keyed for point-in-time joins with the feature tables.
-  usage: Filter label_available_at <= the training cutoff, then use the rows as the Feast entity dataframe on the customer or payment-method key and event_timestamp. Simulation truth and chargebacks are separate rows; a missing chargeback is not a negative.
+  usage: Filter label_available_at <= the training cutoff, then use the rows as the Feast entity dataframe on the customer or payment-method key and event_timestamp, or join feat_attempt_rt on the attempt key. Simulation truth and chargebacks are separate rows; a missing chargeback is not a negative.
   limitations: Synthetic data only. Simulation truth is an oracle that production would not have; chargebacks arrive 7 to 21 days after success.
 team:
   name: Fraud data platform
@@ -42,7 +42,7 @@ schema:
       - {name: attempt_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Attempt identity within the payment.'}
       - {name: customer_id, logicalType: string, physicalType: VARCHAR, required: true, description: 'Customer of the attempt, the customer feature join key.'}
       - {name: payment_method_fingerprint, logicalType: string, physicalType: VARCHAR, required: true, description: 'Payment method of the attempt, the payment-method feature join key.'}
-      - {name: event_timestamp, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: 'Attempt time, coalesce(attempted_at, started_at), as in the feature definition.'}
+      - {name: event_timestamp, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: 'The attempt''s started_at, when it was scored: the point-in-time join time for every feature table.'}
       - {name: label, logicalType: boolean, physicalType: BOOLEAN, required: true, description: 'is_fraud of the earliest observation from this source.'}
       - {name: label_source, logicalType: string, physicalType: VARCHAR, required: true, description: 'LABEL_SOURCE_SIMULATION_TRUTH or LABEL_SOURCE_CHARGEBACK.'}
       - {name: label_available_at, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: 'Earliest time the label may be used.'}

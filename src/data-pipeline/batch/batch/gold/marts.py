@@ -1,9 +1,6 @@
-"""DP3 marts: ClickHouse builds them from the lakehouse into staging tables, the checks audit staging, and publish
-moves staging into the live tables.
-
-A historical build rebuilds every day of the retention window and publishes by EXCHANGE TABLES. An incremental build
-rebuilds only the start days DP3's Silver changelog named, and publishes them by REPLACE PARTITION, so the live marts
-equal a historical build over the same Silver.
+"""DP3 marts: ClickHouse rebuilds the start days of a DP3 run from the lakehouse into staging tables, the checks audit
+staging, and publish replaces those days' partitions in the live tables. A rebuilt day depends only on Silver, so a
+re-run changes nothing and a backfill is a longer range.
 """
 
 import base64
@@ -63,10 +60,6 @@ FACT_COLUMNS = [
     "outcome_at",
     "payment_status",
 ]
-
-
-class MartsRefused(RuntimeError):
-    """An incremental marts build cannot be exact; run dp3-gold with mode=historical."""
 
 
 class ClickHouse:
@@ -158,12 +151,19 @@ def drop_staging(client: ClickHouse) -> None:
         client.execute(f"DROP TABLE IF EXISTS {name(table, staging=True)}")
 
 
+def rebuilt_days(gold_report: dict, start: date, last: date) -> list[date]:
+    """The run's days, plus the days whose chargeback window completes within it, inside [start, last]."""
+    first, end = date.fromisoformat(gold_report["start"]), date.fromisoformat(gold_report["end"])
+    maturing = [first + timedelta(days=n - CHARGEBACK_DAYS + 1) for n in range((end - first).days + 1)]
+    days = {*map(date.fromisoformat, gold_report["days"]), *maturing}
+    return sorted(day for day in days if start <= day <= last)
+
+
 def build(client: ClickHouse, gold_report: dict, run_id: str, retention_days: int, today: date) -> dict:
     snapshots = gold_report["silver_snapshots"]
     attempts_snapshot = snapshots["silver.attempts"]
     labels_snapshot = snapshots["silver.labels"]
-    mode = gold_report["mode"]
-    cap = datetime.fromisoformat(gold_report["anchor_cap"]).date()
+    complete_before = date.fromisoformat(gold_report["end"]) + timedelta(days=1)
     started = time.perf_counter()
     drop_staging(client)
     for table in LIVE:
@@ -176,16 +176,8 @@ def build(client: ClickHouse, gold_report: dict, run_id: str, retention_days: in
         f"SELECT toString(max(toDate(started_at))) FROM "
         f"{pinned(SILVER_ATTEMPTS, attempts_snapshot, 'started_at', 'lifecycle_valid')} AS a"
     )
-    end = date.fromisoformat(last) if last else start - timedelta(days=1)
-    every_day = [start + timedelta(days=n) for n in range((end - start).days + 1)]
-    if mode == "historical":
-        days = every_day
-        months = months_of(days)
-    else:
-        previous_cap = check_incremental(client, gold_report)
-        days = sorted(day for day in map(date.fromisoformat, gold_report["affected_days"]) if start <= day <= end)
-        flipped = [day for day in every_day if previous_cap < day + timedelta(days=CHARGEBACK_DAYS) <= cap]
-        months = months_of([*days, *flipped])
+    days = rebuilt_days(gold_report, start, date.fromisoformat(last)) if last else []
+    months = months_of(days)
 
     if days:
         client.execute(
@@ -219,15 +211,13 @@ LEFT JOIN {name(LABELS, staging=True)} AS l USING (integration_id, payment_id, a
             f"fact-{month}",
         )
 
-    if mode == "historical":
-        source = name(FACT, staging=True)
-    else:
+    if months:
+        # A merchant-day partition is a month, so the live days of the touched months are regrouped with the staged ones.
         source = (
-            f"(SELECT * FROM {name(FACT)} WHERE toYYYYMM(started_at) IN ({', '.join(months) or '0'}) "
-            f"AND toDate(started_at) >= toDate('{start}') AND toDate(started_at) NOT IN ({day_list(days) or 'toDate(0)'}) "
+            f"(SELECT * FROM {name(FACT)} WHERE toYYYYMM(started_at) IN ({', '.join(months)}) "
+            f"AND toDate(started_at) >= toDate('{start}') AND toDate(started_at) NOT IN ({day_list(days)}) "
             f"UNION ALL SELECT * FROM {name(FACT, staging=True)})"
         )
-    if months:
         client.execute(
             f"""INSERT INTO {name(MERCHANT_DAY, staging=True)}
 SELECT integration_id, merchant_id, day, attempts, decided, succeeded, risk_declined, processor_declined,
@@ -236,7 +226,7 @@ SELECT integration_id, merchant_id, day, attempts, decided, succeeded, risk_decl
   if(decided = 0, NULL, risk_declined / decided),
   if(truth_labelled = 0, NULL, truth_fraud / truth_labelled),
   if(succeeded = 0, NULL, chargebacks / succeeded),
-  day + {CHARGEBACK_DAYS} <= toDate('{cap}')
+  day + {CHARGEBACK_DAYS} <= toDate('{complete_before}')
 FROM (
   SELECT integration_id, merchant_id, toDate(started_at) AS day,
     count() AS attempts,
@@ -259,7 +249,7 @@ FROM (
         )
     client.execute(
         f"""INSERT INTO {name(BUILD_INFO, staging=True)} VALUES (
-'{run_id}', '{mode}', toDate('{start}'), toDate('{end}'), [{day_list(days)}], toDate('{cap}'),
+'{run_id}', toDate('{start}'), toDate('{last or start}'), [{day_list(days)}], toDate('{complete_before}'),
 {int(attempts_snapshot)}, {int(labels_snapshot)}, {int(snapshots["silver.payment_events"])}, now64(6))"""
     )
     client.execute(f"DROP TABLE IF EXISTS {name(LABELS, staging=True)}")
@@ -283,36 +273,14 @@ FROM (
         raise RuntimeError(f"staged {staged} attempts but Silver holds {expected} on the rebuilt days")
     return {
         "run_id": run_id,
-        "mode": mode,
         "window_start": str(start),
-        "window_end": str(end),
+        "window_end": last,
         "rebuilt_days": len(days),
         "months": months,
         "staged_attempts": staged,
         "seconds": round(time.perf_counter() - started, 2),
         "queries": query_metrics(client),
     }
-
-
-def check_incremental(client: ClickHouse, gold_report: dict) -> date:
-    """The live marts must have been built from the snapshots DP3 consumed; returns their anchor cap."""
-    rows = client.rows(
-        f"SELECT silver_attempts_snapshot_id, silver_labels_snapshot_id, toString(anchor_cap) AS anchor_cap "
-        f"FROM {name(BUILD_INFO)}"
-    )
-    consumed = gold_report.get("consumed") or {}
-    if len(rows) != 1:
-        raise MartsRefused("the live marts have no build_info; run dp3-gold with mode=historical")
-    live = rows[0]
-    if (int(live["silver_attempts_snapshot_id"]), int(live["silver_labels_snapshot_id"])) != (
-        int(consumed.get("silver.attempts", -1)),
-        int(consumed.get("silver.labels", -1)),
-    ):
-        raise MartsRefused(
-            "the live marts were not built from the Silver snapshots the last DP3 run consumed; "
-            "run dp3-gold with mode=historical"
-        )
-    return date.fromisoformat(live["anchor_cap"])
 
 
 def query_metrics(client: ClickHouse) -> dict:
@@ -329,39 +297,31 @@ def query_metrics(client: ClickHouse) -> dict:
 
 
 def publish(client: ClickHouse, retention_days: int, today: date) -> dict:
-    info = client.rows(f"SELECT mode, rebuilt_days FROM {name(BUILD_INFO, staging=True)}")
+    info = client.rows(f"SELECT rebuilt_days FROM {name(BUILD_INFO, staging=True)}")
     if len(info) != 1:
         raise RuntimeError("no staged marts build to publish")
-    mode = info[0]["mode"]
-    published = {}
-    if mode == "historical":
-        for table in LIVE:
-            client.execute(f"EXCHANGE TABLES {name(table)} AND {name(table, staging=True)}")
-            published[table] = "exchanged"
-    else:
-        start = window(retention_days, today)
-        days = [date.fromisoformat(day) for day in info[0]["rebuilt_days"]]
-        published[FACT] = replace_partitions(client, FACT, [str(day) for day in days], "toDate(started_at)")
-        staged_months = client.rows(
-            f"SELECT DISTINCT toString(toYYYYMM(day)) AS month FROM {name(MERCHANT_DAY, staging=True)}"
+    start = window(retention_days, today)
+    days = [date.fromisoformat(day) for day in info[0]["rebuilt_days"]]
+    published = {FACT: replace_partitions(client, FACT, [str(day) for day in days], "toDate(started_at)")}
+    staged_months = client.rows(
+        f"SELECT DISTINCT toString(toYYYYMM(day)) AS month FROM {name(MERCHANT_DAY, staging=True)}"
+    )
+    months = sorted({*months_of(days), *(row["month"] for row in staged_months)})
+    published[MERCHANT_DAY] = replace_partitions(client, MERCHANT_DAY, months, "toYYYYMM(day)")
+    expired = [
+        row["day"]
+        for row in client.rows(
+            f"SELECT DISTINCT toString(toDate(started_at)) AS day FROM {name(FACT)} WHERE started_at < toDate('{start}')"
         )
-        months = sorted({*months_of(days), *(row["month"] for row in staged_months)})
-        published[MERCHANT_DAY] = replace_partitions(client, MERCHANT_DAY, months, "toYYYYMM(day)")
-        expired = [
-            row["day"]
-            for row in client.rows(
-                f"SELECT DISTINCT toString(toDate(started_at)) AS day FROM {name(FACT)} "
-                f"WHERE started_at < toDate('{start}')"
-            )
-        ]
-        for day in expired:
-            client.execute(f"ALTER TABLE {name(FACT)} DROP PARTITION '{day}'")
-        client.execute(f"DELETE FROM {name(MERCHANT_DAY)} WHERE day < toDate('{start}')")
-        client.execute(f"EXCHANGE TABLES {name(BUILD_INFO)} AND {name(BUILD_INFO, staging=True)}")
-        published[BUILD_INFO] = "exchanged"
-        published["expired_days"] = len(expired)
+    ]
+    for day in expired:
+        client.execute(f"ALTER TABLE {name(FACT)} DROP PARTITION '{day}'")
+    client.execute(f"DELETE FROM {name(MERCHANT_DAY)} WHERE day < toDate('{start}')")
+    client.execute(f"EXCHANGE TABLES {name(BUILD_INFO)} AND {name(BUILD_INFO, staging=True)}")
+    published[BUILD_INFO] = "exchanged"
+    published["expired_days"] = len(expired)
     drop_staging(client)
-    return {"mode": mode, "published": published}
+    return {"published": published}
 
 
 def replace_partitions(client: ClickHouse, table: str, partitions: list[str], expression: str) -> dict:

@@ -54,6 +54,7 @@ GOLD_DIM_CUSTOMER = table("gold.dim_customer")
 GOLD_FEAT_CUSTOMER = table("gold.feat_customer_daily")
 GOLD_FEAT_METHOD = table("gold.feat_payment_method_daily")
 GOLD_LABEL_ATTEMPT = table("gold.label_attempt")
+GOLD_FEAT_ATTEMPT_RT = table("gold.feat_attempt_rt")
 MART_FACT = table("fact_payment_attempt", MARTS)
 MART_MERCHANT_DAY = table("fact_merchant_day", MARTS)
 
@@ -92,6 +93,7 @@ def edges(dataset_version: str) -> list[Edge]:
         Edge(SILVER_EVENTS, GOLD_DIM_CUSTOMER, "dp3-features"),
         Edge(SILVER_ATTEMPTS, GOLD_FEAT_CUSTOMER, "dp3-features"),
         Edge(SILVER_ATTEMPTS, GOLD_FEAT_METHOD, "dp3-features"),
+        Edge(SILVER_ATTEMPTS, GOLD_FEAT_ATTEMPT_RT, "dp3-features"),
         Edge(SILVER_ATTEMPTS, GOLD_LABEL_ATTEMPT, "dp3-features"),
         Edge(SILVER_LABELS, GOLD_LABEL_ATTEMPT, "dp3-features"),
         Edge(SILVER_ATTEMPTS, MART_FACT, "dp3-marts"),

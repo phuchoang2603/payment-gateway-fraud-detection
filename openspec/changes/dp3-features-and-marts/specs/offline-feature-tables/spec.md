@@ -63,7 +63,7 @@ A new version SHALL start at the first attempt, ordered by start time and then a
 - **THEN** the dimension has one current version starting at the customer's first attempt
 
 ### Requirement: Daily-anchored history features
-`gold.feat_customer_daily` and `gold.feat_payment_method_daily` SHALL hold the `fraud-history-batch-v1` quantities for 7- and 30-day windows. The anchor `s` is a UTC midnight, and each window covers attempts with attempt time in `[s − window, s)`. Each row SHALL carry the entity key, `event_timestamp` = `s`, and `created`, which is the commit time of the pinned `silver.attempts` snapshot. A row SHALL exist for an entity at an anchor exactly when any of its quantities differs from its previous row, including the first anchor after its last attempt leaves the 30-day window. The latest row at or before any time therefore equals the definition at the latest anchor at or before that time. Anchors SHALL NOT be later than the last midnight at or before the pinned Silver commit. A window not fully covered by Silver history SHALL make its quantities null, not zero.
+`gold.feat_customer_daily` and `gold.feat_payment_method_daily` SHALL hold the `fraud-history-batch-v1` quantities for 7- and 30-day windows. The anchor `s` is a UTC midnight, and each window covers attempts with attempt time in `[s − window, s)`. Each row SHALL carry the entity key, `event_timestamp` = `s`, and `created`, which is the commit time of the pinned `silver.attempts` snapshot. A row SHALL exist for an entity at an anchor exactly when any of its quantities differs from its previous row, including the first anchor after its last attempt leaves the 30-day window. The latest row at or before any time therefore equals the definition at the latest anchor at or before that time. A window not fully covered by Silver history SHALL make its quantities null, not zero.
 
 #### Scenario: Attempt leaves the 7-day window
 
@@ -72,7 +72,7 @@ A new version SHALL start at the first attempt, ordered by start time and then a
 
 #### Scenario: Point-in-time lookup excludes the scored attempt's day
 
-- **WHEN** a training example has attempt time t on day D
+- **WHEN** a training example is scored at time t on day D
 - **THEN** the latest feature row at or before t has `event_timestamp` at or before D 00:00 and includes no attempt from day D
 
 #### Scenario: Early history
@@ -84,7 +84,7 @@ A new version SHALL start at the first attempt, ordered by start time and then a
 `gold.label_attempt` SHALL hold one row per attempt and label source (simulation truth or chargeback), using the earliest available linked observation for that pair. Each row SHALL carry:
 
 - the attempt key, customer key and payment-method key;
-- `event_timestamp`, equal to the attempt time used by the features;
+- `event_timestamp`, equal to the attempt's `started_at`, the time it was scored;
 - `label` (fraud or not), `label_source` and `label_available_at`.
 
 Consumers SHALL be able to join it to the feature tables on entity key and `event_timestamp`, and to filter it by `label_available_at` at a training cutoff, without reading Silver. The absence of a chargeback row SHALL NOT be represented as a negative label.
@@ -94,34 +94,43 @@ Consumers SHALL be able to join it to the feature tables on entity key and `even
 - **WHEN** a training cutoff precedes a chargeback's `label_available_at`
 - **THEN** filtering `label_available_at <= cutoff` excludes that row, and the attempt has no chargeback label at that cutoff
 
-### Requirement: Incremental gold mode
-DP3 SHALL accept `mode=historical` or `mode=incremental`, with `historical` as the default for manual submits. Every DP3 commit SHALL record the Silver snapshots it consumed. In incremental mode, DP3 SHALL read the net Iceberg changelog of `silver.attempts` and `silver.labels` between those snapshots and the current published Silver. In that changelog, a changed or removed attempt appears as its old row (delete) and its new row (insert). DP3 SHALL then recompute only:
+### Requirement: Short-window snapshot features
+`gold.feat_attempt_rt` SHALL be the batch layer of `fraud-snapshot-v2`, with one row per Silver attempt, valid or not. For each attempt it SHALL hold the windowed values at its `started_at`:
 
-- the affected customers and payment methods;
-- the entities whose windows change between the previous and new anchor caps;
-- the affected payments' labels;
+- the customer's attempt counts over 5 minutes, 1 hour and 24 hours;
+- the customer's distinct devices over 24 hours;
+- the payment method's attempt counts over 5 minutes, 1 hour and 24 hours.
 
-and replace their rows on the audit branch. The result SHALL equal a historical run over the same Silver in every column except `created`, which keeps the commit time of the Silver snapshot that last recomputed the row. Incremental mode SHALL refuse to run, naming historical mode as the remedy, when there is no prior DP3 run, when a Silver commit in the range was made by a historical DP2 run, when a consumed snapshot has expired, when an affected time precedes the coverage start, or when the DP2 or DP3 logic version changed.
+The values SHALL count attempt starts with attempt time in `[started_at − window, started_at)` that started before `started_at`, excluding starts whose attempt time is more than 24 hours before their own start. `event_timestamp` SHALL equal `started_at`. An entity's columns SHALL be null when its key is null, and a window's columns SHALL be null until Silver covers it. The table is training history only; the Flink speed layer serves these windows online.
 
-#### Scenario: Incremental equals historical
+#### Scenario: The scored attempt is not in its own window
 
-- **WHEN** DP3 runs incrementally after each of several DP2 incremental runs
-- **THEN** every gold table equals a historical DP3 run over the final Silver, apart from `created`
+- **WHEN** a customer's first attempt starts
+- **THEN** its row has a 5-minute count of 0
 
-#### Scenario: Window expiry without new data
+#### Scenario: Late start
 
-- **WHEN** an entity has no changed payments but its only attempt leaves the 7-day window between two DP3 runs
-- **THEN** the incremental run writes its expiry row at the same anchor a historical run would
+- **WHEN** an attempt has an attempt time before an earlier attempt's start but starts after it
+- **THEN** the earlier attempt's row does not count it
 
-#### Scenario: Removed attempt
+### Requirement: Day-range runs
+DP3 SHALL take a `start` and `end` UTC day, and without them run yesterday and the `dp3.lookbackDays` days before it. A run SHALL be a pure function of the pinned Silver snapshots. It SHALL overwrite only:
 
-- **WHEN** a conflicting redelivery makes DP2 remove a payment's attempts
-- **THEN** incremental DP3 recomputes the removed attempts' customers and cards and drops their contributions, matching a historical run
+- the feature rows with anchors in the range and the snapshot rows of attempts started in it;
+- the label rows of attempts started in the range or on a day whose attempts gained a linked label available in it;
+- the full SCD2 history of every customer with an attempt started in the range.
 
-#### Scenario: Historical DP2 run since the last DP3 run
+It SHALL read only one longest window of history before the range. Every DP3 commit SHALL record the Silver snapshots it read and its range. Re-running a range SHALL change nothing, a backfill SHALL be the same job over a longer range, and a sequence of daily runs SHALL build the same tables as one backfill over their days.
 
-- **WHEN** a `silver.attempts` commit after the consumed snapshot has `dp2.mode = historical`
-- **THEN** incremental DP3 fails and asks for a historical DP3 run
+#### Scenario: Daily runs equal a backfill
+
+- **WHEN** DP3 runs once per day over a range, and separately once over the whole range, on the same Silver
+- **THEN** every gold table holds the same rows apart from `created`
+
+#### Scenario: Late chargeback
+
+- **WHEN** a chargeback for an attempt started on day D becomes available on day E and DP3 runs only E
+- **THEN** the run rewrites the label rows of day D, including the chargeback row
 
 ### Requirement: Gold table layout
 Feature and label tables SHALL be partitioned by day of `event_timestamp`, and `dim_customer` by day of `valid_from_ts`. Every gold table SHALL be created with hash write distribution and the lakehouse target file size, and SHALL be covered by the `maintain-lakehouse` compaction and snapshot expiry.

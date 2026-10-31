@@ -5,8 +5,8 @@ also need outcome_at < s). So each attempt contributes over an anchor interval [
 anchor after its attempt time and start (and outcome) and leaves at the first anchor whose window begins after its
 attempt time. A value at an anchor is the running sum of +/- deltas at those interval ends; a distinct count first
 merges each value's intervals. The anchor rule decides which instants are anchors: UTC midnights for the daily
-tables, or every microsecond for exact change instants. Rows are kept only where the served value changes, so the
-latest row at or before any anchor is its value.
+tables, or every microsecond for exact change instants. Values at a run's anchors are exact when the run reads every
+attempt still in a window at its first anchor, so a run over any date range needs only that much history.
 """
 
 from dataclasses import dataclass
@@ -97,25 +97,21 @@ def columns(measures, windows: dict) -> list[str]:
     return [f"{measure.name}_{window}" for window in windows for measure in measures]
 
 
-def change_points(
+def window_states(
     attempts: DataFrame,
     keys: list[str],
     measures: list,
     windows: dict[str, timedelta],
     rule,
     history_start: datetime,
+    floor: datetime,
     cutoff: datetime,
-    scope: DataFrame | None = None,
-    seeds: DataFrame | None = None,
 ) -> DataFrame:
-    """Change-point rows of `measures` per entity `keys` at the anchors of `rule`, up to `cutoff`.
+    """Each entity's served values at `floor` and at every later anchor up to `cutoff` where a value may change.
 
-    `attempts` has the keys, attempt_time, started_at, outcome_at and every column the measures read. A window's
-    columns are null at anchors before history_start + window, where coverage is incomplete.
-
-    With `scope` (keys and `since`), only anchors at or after each entity's since are computed, from every attempt
-    still in a window there; `seeds` (keys, event_timestamp and the output columns) holds each entity's last row
-    before since, so a recomputed row that repeats it is dropped.
+    `attempts` has the keys, attempt_time, started_at, outcome_at and every column the measures read. The values are
+    exact when it holds every attempt still in a window at `floor`. A window's columns are null at anchors before
+    history_start + window, where coverage is incomplete. `_empty` marks rows where nothing is in any window.
     """
     additive = [m for m in measures if isinstance(m, (Count, Total))]
     distinct = [m for m in measures if isinstance(m, Distinct)]
@@ -130,10 +126,6 @@ def change_points(
             **{f"_exit_{w}": rule.expiry(F.col("attempt_time"), length) for w, length in windows.items()},
         }
     )
-    if scope is not None:
-        base = base.join(scope, keys).withColumns(
-            {"_enter": F.greatest("_enter", SINCE), "_gated": F.greatest("_gated", SINCE)}
-        )
 
     def contributes(measure, window):
         start = F.col("_gated" if measure.outcome else "_enter")
@@ -181,11 +173,8 @@ def change_points(
             )
             distinct_deltas.append(merged.select(*keys, F.explode(ends).alias("_event")).select(*keys, "_event.*"))
 
-    entities = base.select(*keys).distinct() if scope is None else scope.select(*keys, SINCE)
-    marks = [F.lit(history_start + length) for length in windows.values()]
-    if scope is not None:
-        marks.append(F.col(SINCE))
-    anchor_rows = entities.select(*keys, F.explode(F.array(*marks)).alias(ANCHOR))
+    marks = [F.lit(floor), *[F.lit(history_start + length) for length in windows.values()]]
+    anchor_rows = base.select(*keys).distinct().select(*keys, F.explode(F.array(*marks)).alias(ANCHOR))
 
     deltas = reduce(
         lambda left, right: left.unionByName(right, allowMissingColumns=True),
@@ -196,11 +185,8 @@ def change_points(
     )
     running = Window.partitionBy(*keys).orderBy(ANCHOR).rowsBetween(Window.unboundedPreceding, Window.currentRow)
     state = summed.select(*keys, ANCHOR, *[F.sum(name).over(running).alias(name) for name in raw])
-    state = state.where(F.col(ANCHOR) <= F.lit(cutoff))
-    if scope is not None:
-        state = state.join(scope, keys).where(F.col(ANCHOR) >= F.col(SINCE)).drop(SINCE)
+    state = state.where((F.col(ANCHOR) >= F.lit(floor)) & (F.col(ANCHOR) <= F.lit(cutoff)))
 
-    output = columns(measures, windows)
     served = {}
     for w, length in windows.items():
         covered = F.col(ANCHOR) >= F.lit(history_start + length)
@@ -213,22 +199,35 @@ def change_points(
                 value = F.col(name)
             served[name] = F.when(covered, value)
     empty = reduce(lambda left, right: left & right, [F.col(name) == 0 for name in raw])
-    rows = state.select(*keys, ANCHOR, *[served[name].alias(name) for name in output], empty.alias("_empty"))
+    return state.select(
+        *keys, ANCHOR, *[served[name].alias(name) for name in columns(measures, windows)], empty.alias("_empty")
+    )
 
-    rows = rows.withColumn("_seed", F.lit(False))
-    if seeds is not None:
-        rows = rows.unionByName(
-            seeds.select(*keys, ANCHOR, *output).withColumns({"_empty": F.lit(False), "_seed": F.lit(True)})
-        )
+
+def changes(states: DataFrame, keys: list[str], output: list[str], floor: datetime) -> DataFrame:
+    """The rows after `floor` whose values differ from the entity's previous row; `floor` rows are the baseline. An
+    empty row after an empty one is no change, so an entity has no row until something is in a window."""
     ordered = Window.partitionBy(*keys).orderBy(ANCHOR)
-    # An entity has no row until its state is first non-empty, so earlier anchors are not a previous row.
-    begun = F.max((~F.col("_empty") | F.col("_seed")).cast("int")).over(
-        ordered.rowsBetween(Window.unboundedPreceding, Window.currentRow)
-    )
-    rows = rows.withColumn("_begun", begun).where(F.col("_begun") == 1)
     # to_json compares rows null-safely; a hash would let (null, 1) and (1, null) collide.
-    kept = rows.withColumn("_values", F.to_json(F.struct(*output))).withColumn(
-        "_previous", F.lag("_values").over(ordered)
+    rows = states.withColumns(
+        {"_values": F.to_json(F.struct(*output)), "_previous_empty": F.lag("_empty").over(ordered)}
+    ).withColumn("_previous", F.lag("_values").over(ordered))
+    changed = (F.col("_values") != F.col("_previous")) & ~(F.col("_empty") & F.col("_previous_empty"))
+    return rows.where((F.col(ANCHOR) > F.lit(floor)) & changed).select(*keys, ANCHOR, *output)
+
+
+def as_of(points: DataFrame, states: DataFrame, keys: list[str], output: list[str], at: str) -> DataFrame:
+    """Each row of `points` with the values of its entity's latest state at or before its `at` time."""
+    marked = points.withColumns({"_at": F.col(at), "_order": F.lit(1)})
+    known = states.select(
+        *keys, F.col(ANCHOR).alias("_at"), F.struct(*output).alias("_state"), F.lit(0).alias("_order")
     )
-    kept = kept.where(~F.col("_seed") & (F.col("_previous").isNull() | (F.col("_values") != F.col("_previous"))))
-    return kept.select(*keys, ANCHOR, *output)
+    ordered = (
+        Window.partitionBy(*keys).orderBy("_at", "_order").rowsBetween(Window.unboundedPreceding, Window.currentRow)
+    )
+    filled = marked.unionByName(known, allowMissingColumns=True).withColumn(
+        "_state", F.last("_state", ignorenulls=True).over(ordered)
+    )
+    return filled.where(F.col("_order") == 1).select(
+        *points.columns, *[F.col(f"_state.{name}").alias(name) for name in output]
+    )

@@ -36,9 +36,9 @@ Constraints:
 **Non-Goals:**
 
 - Feast repository objects, materialization, TTLs and feature services (roadmap steps 2–7).
-- Streaming features into the offline store; training; drift.
+- Flink's live features (the speed layer); training; drift.
 - The LLM platform (#103), and the MCP tool itself.
-- DP2's incremental mode. It is on `main` (`a753980`, decision 17 of `rebuild-generation-to-silver`) and publishes its changes through Iceberg change data, with no feed table. DP3's incremental mode, which consumes that change data, is in scope here (decision 9b).
+- DP2's incremental mode. It is on `main` (`a753980`, decision 17 of `rebuild-generation-to-silver`) and publishes its changes through Iceberg change data, with no feed table. DP3 does not consume it: it runs day ranges (decision 9b).
 - Making the platform changes: they are listed, not made.
 
 ## Decisions
@@ -70,18 +70,18 @@ A DBeaver ER export of the ClickHouse `marts` and `lakehouse.gold` tables is cap
 
 *Alternative:* gold facts in Iceberg, built by Spark. Rejected by the agreed scope: ClickHouse already reads the lake, and a Spark mart would add a write path without adding evidence.
 
-### 2. DP3 reads pinned Silver and recomputes gold in full
+### 2. DP3 reads pinned Silver and recomputes day ranges
 
 - **Pinned inputs.** The `gold` Spark job (`batch/gold/features.py`) reads `silver.attempts`, `silver.payment_events` and `silver.labels` at their current snapshot IDs, which it records, with `versionAsOf`, as DP2 does.
 - **Writes: write-audit-publish, as Bronze and Silver do since `78765df`.**
-  - **Write.** The job runs with `spark.wap.branch = audit-<workflow>` and calls `batch.lakehouse.stage()` on each gold table before writing, so the branch starts from `main`. Each write uses `overwrite(lit(True))`, with `create` on first use. Each commit carries the Silver snapshot IDs through the Iceberg 1.12 write option `snapshot-property.silver.<table>.snapshot_id`.
+  - **Write.** The job runs with `spark.wap.branch = audit-<workflow>` and calls `batch.lakehouse.stage()` on each gold table before writing, so the branch starts from `main`. Each write overwrites only the run's rows (decision 9b), with `create` on first use. Each commit carries the Silver snapshot IDs through the Iceberg 1.12 write option `snapshot-property.silver.<table>.snapshot_id`.
   - **Audit.** The checks stage runs every `gold-features` rule against the branch heads, pinned with `SETTINGS iceberg_snapshot_id`.
   - **Publish.** The shared `publish-tables` step (`openmetadata.wap`) fast-forwards `main` for all four tables in one catalog transaction, only after every check passes.
   - **Readers.** Feast, training and ClickHouse read `main` only, so they never see unaudited gold.
   - **Failure.** A failed run leaves its branch behind for diagnosis.
   - **Inputs.** DP3 reads Silver at its published `main` refs, through `ref_snapshot`, never an audit branch.
-- **Why full recompute.** Silver itself is fully recomputed, so any day can change and there is nothing incremental to follow. Full recompute is idempotent by construction.
-- **`created`.** `created` is the commit timestamp of the pinned `silver.attempts` snapshot, not wall-clock time. It is deterministic for one input, increases across Silver runs, and is at or after every anchor in the table, because anchors stop at the last midnight before that commit. The rerun-equality test therefore compares every column.
+- **Why day ranges.** A range's rows depend only on Silver, so overwriting them is idempotent by construction, and the daily run and a backfill are the same job (decision 9b).
+- **`created`.** `created` is the commit timestamp of the pinned `silver.attempts` snapshot, not wall-clock time. It is deterministic for one input and increases across Silver runs. The range-equality tests compare every column except `created`.
 - **Contributing rows.** Only lifecycle-valid attempts contribute. Their count is zero anyway, by Silver's checks.
 - **Run report.** A report at `runs/payment-gateway/dp3/<run>/gold.json` records:
   - the Silver snapshot IDs;
@@ -96,7 +96,7 @@ A DBeaver ER export of the ClickHouse `marts` and `lakehouse.gold` tables is cap
 - **Benchmark and report code:** results are small aggregates, so Arrow transfer would save nothing measurable.
 - **Where it does matter (follow-ups):** Feast `get_historical_features` and training read large point-in-time joins into Python. That change should enable Arrow transfer (`spark.sql.execution.arrow.pyspark.enabled`, `to_arrow()`), and it can measure the gain against the non-Arrow path. The generator already writes Parquet through `pyarrow`.
 
-*Alternative:* `MERGE INTO` SCD2 and incremental feature days. Rejected: Silver can rewrite history, so a merge-based dimension would drift from it.
+*Alternative:* changelog-driven incremental runs. Rejected on 2026-10-31: they needed consumed-snapshot state, refusal rules and a separate historical mode, while day ranges get the same idempotency from overwriting pure functions of Silver.
 
 ### 3. Feature grain: daily anchors, change-point rows
 
@@ -294,7 +294,7 @@ TTL day + INTERVAL {retention_days} DAY DELETE;
 - **Granularity.** Bloom filters use `GRANULARITY 4`, one index block per 4 × 8192 rows, to balance index size against skipping. Customer IDs are near-unique per granule block, which is why a bloom filter is chosen over a set index.
 - **Projections.** A customer-ordered projection would beat the bloom filter on Q2 but double storage. Prod's 30 Gi PVC is shared with Langfuse, so projections are not used. Revisit them if the evidence shows a weak bloom result.
 
-### 7. Mart build: monthly batches, staging, exchange
+### 7. Mart build: monthly batches, staging, partition replace
 
 **Job.** `batch/gold/marts.py` runs as a plain container on the Spark image, which already carries the `batch` package. It talks to ClickHouse over HTTP as user `marts` through a small standard-library client, as the chart's setup job and the tests do, so the image gains no dependency.
 
@@ -309,15 +309,15 @@ TTL day + INTERVAL {retention_days} DAY DELETE;
    - Labels are filtered to `occurred_at` within the month and `label_available_at >= month start`, which prunes earlier partitions and uses file statistics to skip later ones.
    - The join runs with `join_algorithm = 'full_sorting_merge'`, external sort and group-by thresholds, and the profile's memory limit: the settings that let the v19 Silver checks finish on the prod instance. Hash and grace-hash joins are not used.
    Labels are first aggregated once per attempt into an internal `marts.attempt_labels__staging` MergeTree table (earliest simulation truth and scenario, earliest chargeback), so each monthly insert joins a sorted local table instead of rereading Iceberg labels; it is dropped after the inserts.
-4. Build `fact_merchant_day__staging` from the staged fact with one `INSERT … SELECT … GROUP BY`, and write `build_info__staging`: one row with the run and mode, `window_start`, `window_end`, `rebuilt_days` (every day of the window for a historical build), `anchor_cap`, the Silver snapshot IDs and `built_at`. The mart rules scope their reconciliation to `rebuilt_days`, so one rule set audits both a full build and an incremental one.
-5. Reconcile: the staged fact's row count must equal the lifecycle-valid count of `lakehouse.`silver.attempts`` inside the window. A mismatch fails before the swap.
+4. Build `fact_merchant_day__staging` from the staged fact with one `INSERT … SELECT … GROUP BY`, and write `build_info__staging`: one row with the run, `window_start`, `window_end`, `rebuilt_days`, `chargebacks_complete_before` (the day after the run's last day), the Silver snapshot IDs and `built_at`. The build rebuilds only `rebuilt_days`: the DP3 run's days, its label days and the days whose 21-day chargeback window completes in its range, inside the window. The merchant mart regroups the months containing them from the live fact and the staged days. The mart rules scope their reconciliation to `rebuilt_days`.
+5. Reconcile: the staged fact's row count must equal the lifecycle-valid count of `lakehouse.`silver.attempts`` on the rebuilt days. A mismatch fails before the swap.
 
    **Write-audit-publish for the marts.** The `__staging` tables are the audit copy, the ClickHouse counterpart of the Iceberg audit branch. The marts stage ends after step 5 and leaves staging in place. The checks stage then runs every `payment-marts` rule against the staging tables: when `WAP_BRANCH` is set, `{object}` resolves to `marts.<table>__staging`. Results attach to the live table's OpenMetadata entity, the same way Iceberg rules audit a branch but report on the table. Only a separate `publish-marts` step, after all checks pass, runs step 6.
-6. Run `EXCHANGE TABLES marts.fact_payment_attempt AND marts.fact_payment_attempt__staging`, then the same for the merchant and `build_info` tables, one statement each. Each exchange is atomic in an Atomic database, but a multi-pair exchange is not atomic as a batch, so there is no benefit to combining them. Then drop the staging tables, which now hold the old data. `EXCHANGE` has no privilege of its own: it needs `SELECT`, `INSERT`, `CREATE TABLE` and `DROP TABLE` on both tables.
+6. Replace each rebuilt day of `fact_payment_attempt` and each rebuilt month of `fact_merchant_day` with `ALTER TABLE … REPLACE PARTITION … FROM` the staging table, or drop it when staging has none. Each replace is atomic. Drop days older than the window, then exchange `build_info` with its staging copy and drop the staging tables.
 
 **Consistency.** Spark pins Silver by snapshot ID. The marts stage reads the Spark stage's report and passes the same IDs to every lakehouse read with `SETTINGS iceberg_snapshot_id = <id>`. ClickHouse documents that setting (25.4+) only for the `iceberg()` table function and the Iceberg engine. The 26.x source reads it from the query context regardless of table kind, but no test covers DataLakeCatalog tables, so a dev spike confirms it on ``lakehouse.`silver.attempts` `` before implementation relies on it. Either way, the DP2 writer mutex (decision 9) keeps Silver unchanged while DP3 runs. If the spike fails, the stage compares `system.iceberg_history`'s current snapshot with the pinned ID and fails on a mismatch.
 
-**Idempotency.** The same Silver snapshot gives the same marts. A failed check or a crash before publication leaves the live tables untouched. A crash between exchanges in `publish-marts` is the only partially published state: the step retries on error, and the next run rebuilds and audits all tables again.
+**Idempotency.** The same Silver snapshot gives the same marts. A failed check or a crash before publication leaves the live tables untouched. A crash between partition replaces in `publish-marts` is the only partially published state: the step retries on error, and re-running the range rebuilds and audits the same days.
 
 **Storage.** With the 180-day prod window, `fact_payment_attempt` holds about 100M rows, estimated at 3–4 GB compressed, or 6–8 GB while a build holds both copies. That fits the existing 30 Gi PVC beside Langfuse, so the PVC is unchanged.
 
@@ -325,7 +325,7 @@ TTL day + INTERVAL {retention_days} DAY DELETE;
 
 **Consequence while live data is off.** v19 and v18 end on 2026-10-28. Until the live simulator feeds new days, each rebuild and each `TTL` merge drops the oldest days. The marts empty out about 180 days after the last generated day, around 2027-04-26. The prod evidence (the benchmark, dashboards and profiles) must therefore be captured soon after the v19 DP3 run, and each report records `build_info`'s window. The Iceberg gold tables are unaffected: they keep all of Silver.
 
-*Alternative:* incremental `REPLACE PARTITION` by month, after comparing per-month fingerprints between Iceberg and the mart. Deferred: a full rebuild is simpler, and Silver itself is not yet incremental.
+*Alternative:* `EXCHANGE TABLES` after rebuilding the whole window. Replaced on 2026-10-31: rebuilding only the run's days makes the daily run cheap and a backfill the same code path.
 
 ### 8. Warehouse indexing evidence
 
@@ -360,7 +360,7 @@ dp3-gold (WorkflowTemplate, mutexes: dp3-gold-writer, dp2-silver-writer, onExit:
 ├── marts           container batch/gold/marts.py build, writes marts.*__staging          (ingest, after features)
 ├── checks          openmetadata.checks, gold-features on branch heads, payment-marts on staging   (validate)
 ├── publish-tables  openmetadata.wap, fast-forwards gold main                  (after checks)
-├── publish-marts   container batch/gold/marts.py publish, exchanges staging into live   (after publish-tables)
+├── publish-marts   container batch/gold/marts.py publish, replaces the rebuilt partitions   (after publish-tables)
 └── profile         OpenMetadata profiler on the published marts                    (after publish-marts)
 publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, lineage on success
 ```
@@ -372,11 +372,11 @@ publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, l
 - **Retries.** As in #102: Spark retries on error (prod: limit 10, `Always`, for spot loss), containers retry on error with limit 2, and checks are never retried.
 - **Schedule: daily, not every six hours.** DP3 is not added to the six-hourly `dp1-bronze-kafka` CronWorkflow. It gets its own suspended daily CronWorkflow `dp3-gold-daily` at 04:17 UTC, after the 03:43 maintenance run, which references the template with `workflowTemplateRef` so the template's mutexes, placement and exit handler apply.
   - The features are daily-anchored, so a daily run is their natural cadence.
-  - The marts are rebuilt in full, so a six-hourly rebuild would cost four times as much for no gain until incremental mode exists.
+  - A run rebuilds whole days, so a six-hourly run would redo the same day four times.
   - The workflow-level mutexes still apply, because `workflowTemplateRef` runs the whole template rather than a `templateRef` step.
 - **RBAC.** No new RBAC is needed. The marts and benchmark containers read the `clickhouse-marts` secret that the clickhouse chart's ExternalSecret already creates in `data` for `CLICKHOUSE_MARTS_PASSWORD`; a second ExternalSecret of the same name would collide. They receive only storage and ClickHouse credentials.
 - **Values:**
-  - `dp3.enabled`, `dp3.profile`, `dp3.reportRoot`, `dp3.activeDeadlineSeconds`;
+  - `dp3.enabled`, `dp3.profile`, `dp3.reportRoot`, `dp3.activeDeadlineSeconds`, `dp3.lookbackDays`;
   - `marts.clickhouseUrl`, `marts.resources`, `marts.retentionDays` (180 in `values.yaml`, so in both environments);
   - `warehouseBenchmark.enabled`, `warehouseBenchmark.reportRoot`;
   - `dashboards.enabled`.
@@ -387,56 +387,25 @@ publish (exit): pipelines dp3-features,dp3-marts; status, Silver snapshot IDs, l
 | Environment | Profile | Basis |
 |---|---|---|
 | dev | `dev`: 1 executor × 2 cores, 16 shuffle partitions | v18 is under 1M attempts, and the gold tables are each under 1M rows |
-| prod | `large`, as Silver uses it: 11 executors × 3 cores, 9 GiB plus 3 GiB overhead, 24 GiB ephemeral storage, on spot `aws-cpu-burst`; the driver on the on-demand `aws-workers` pool through `spark.driverNodeSelector`; 2,048 shuffle partitions set by `dp3.profile` | About 200M attempts produce about 1.2B interval-delta rows per window family before aggregation. The shuffle is estimated at 40–60 GB across 11 executors, under the 264 GiB of executor ephemeral storage. The first v19 run records tasks and time per phase, which confirms or lowers the profile, as for Silver. |
+| prod | `gold`: 11 executors × 3 cores, 9 GiB plus 2 GiB overhead, 24 GiB ephemeral storage, on spot `aws-cpu-burst`; a 2 GiB driver on the on-demand `aws-workers` pool through `spark.driverNodeSelector`, because the `large` driver's 5.5 GiB did not fit that pool's spare memory on 2026-10-31; 1,024 shuffle partitions | About 200M attempts produce about 1.2B interval-delta rows per window family before aggregation. The shuffle is estimated at 40–60 GB across 11 executors, under the 264 GiB of executor ephemeral storage. The first v19 run records tasks and time per phase, which confirms or lowers the profile, as for Silver. |
 
 The marts container requests 100m CPU and 256 Mi, because ClickHouse does the work. ClickHouse itself is sized by the clickhouse chart. Every DP3 step pod uses `data-pipelines.workflowPlacement` and the SparkApplication uses the shared driver placement, so in prod no step or driver runs on spot nodes.
 
-### 9b. Incremental mode
+### 9b. Day ranges: the Lambda batch layer
 
-`dp3-gold` takes `mode=historical|incremental`. `historical` is decisions 2–8, a full recompute, and it is the default for manual submits and the mode for the v19 evidence. `incremental` must leave gold and the marts equal to a historical run over the same Silver, except for `created` (below). CI checks this.
+Decided on 2026-10-31, replacing the historical and incremental modes. DP3 is the batch layer of a Lambda design: Spark recomputes gold from Silver, the master dataset, while Flink serves the short windows live. Training reads only the batch layer.
 
-**Input: Iceberg change data, not a feed table.** This is DP2 decision 17 and the "Silver change data for consumers" requirement.
-- **State.** Every DP3 commit records the `main` snapshots it consumed as snapshot properties: `silver.attempts.snapshot_id`, `silver.labels.snapshot_id` and `silver.payment_events.snapshot_id`. `marts.build_info` records the same IDs. The next incremental run reads its start points from the latest published gold commit.
-- **Change sets.** For `silver.attempts` and `silver.labels`, the run creates a changelog view between the consumed snapshot and the current `main` snapshot, with net changes:
-
-  ```sql
-  CALL lake.system.create_changelog_view(
-    table => 'silver.attempts',
-    options => map('start-snapshot-id', '<consumed>', 'end-snapshot-id', '<main>'),
-    net_changes => true)
-  ```
-
-  Net changes cancel the carry-over rows from rewritten files, including DP2's delete-and-append of unchanged attempts and compaction rewrites. Only real changes remain, so the DELETE rows give the old image and the INSERT rows give the new one. That provides both images' `customer_id`, `payment_method_fingerprint`, `attempted_at` and `started_at` directly.
-- **Rejected payments.** DP2 replaces whole payments, so a conflicting redelivery removes a payment's attempts. Those removals show up as DELETEs and drive the recompute of their old entities.
-- **Why the attempts changelog also covers `dim_customer`'s profile.** The profile comes from `attempt_started` events. A changed `attempt_started` with the same `event_id` is a conflict, which deletes the attempt rows, and a new `attempt_started` inserts an attempt row. So every profile change surfaces in the attempts changelog, and `silver.payment_events` needs no changelog of its own. Its snapshot ID is still recorded and pinned for reads. The equivalence test includes a conflicting `attempt_started` case to protect this.
-
-**Refusals.** Incremental mode fails, with no silent fallback, and asks for a historical DP3 run when:
-- there is no published DP3 commit recording consumed Silver snapshots;
-- any `silver.attempts` or `silver.labels` commit in the range has `dp2.mode = historical`, checked by walking the `snapshots` metadata table's summaries between start and end. A historical DP2 run rewrites every row, so it means a full reset;
-- a consumed start snapshot no longer exists. Silver keeps snapshots for 7 days, with the last 10 always kept, so DP3 must run at least weekly to stay incremental;
-- the earliest Silver attempt day `H` differs from the one the last run recorded (`dp3.history_start`), or coverage was still incomplete at the last anchor cap;
-- the gold tables were last written by different DP3 runs;
-- a `dp2.logic_version` in the range differs from the one recorded on the last consumed snapshot, or DP3's own logic or contract version changed.
-
-**Per table:**
-
-| Table | Incremental update |
-|---|---|
-| `feat_*_daily` | The entities to recompute are the affected customers and cards from both images, plus every entity with an attempt in `[C0 − 30 days, C1)`, where `C0` and `C1` are the previous and new anchor caps. Those entities need their new expiry or arrival rows even without changed data. For each one, recompute anchors from `min(earliest affected anchor, C0 + 1 day)`, reading its attempts from 30 days before that anchor. Seed the change-point comparison with its last existing row before that anchor, then replace its rows at and after that anchor in one `MERGE` on the audit branch. The shared engine's entity- and anchor-scoped entry points do this. |
-| `dim_customer` | Rebuild the affected customers' full version history from Silver and replace their rows. The familiar-device set is evaluated only at attempts, so time passing alone changes nothing. |
-| `label_attempt` | Replace the rows of the attempts named in either changelog. |
-| `fact_payment_attempt` | Rebuild only the affected start days inside the retention window into staging. Those are the start days of changed attempts in both images, plus the attempts' start days for changed labels, looked up in the attempts changelog or on `main`. Then audit them, then `ALTER TABLE … REPLACE PARTITION <day> FROM …__staging` for each day in `publish-marts`. Each replace is atomic per day, matching the daily partitions. |
-| `fact_merchant_day` | Rebuild the affected months (monthly partitions, small) from the published fact, then `REPLACE PARTITION`. Update `build_info`. |
-
-**Anchors advance with Silver.** The anchor cap is the day of the pinned `silver.attempts` commit, so new anchors, including expiry rows, appear only after a DP2 run commits. A DP2 incremental run with nothing new commits nothing, which leaves the features at the last cap until data arrives.
-
-**`created` in incremental mode.** A row keeps the Silver commit time of the run that last recomputed it. A historical run stamps every row with the current commit time. That is the only allowed difference, so the equivalence test compares every column except `created`. The `created >= event_timestamp` rule still holds, and Feast uses `created` only to break ties between rows with the same `event_timestamp`.
-
-**Schedule.** The suspended daily `dp3-gold` CronWorkflow runs `mode=incremental`, after the six-hourly Kafka schedule's DP2 incremental runs. A refusal fails the scheduled run visibly; the operator then submits `mode=historical`.
-
-**ClickHouse reads.** The marts stage reads the changed days from Silver `main` at the pinned snapshot IDs (`SETTINGS iceberg_snapshot_id`), so it stays consistent with Spark's view.
-
-**Cost.** With the live simulator at one payment every 30 seconds (about 2,900 a day), an incremental run touches a few thousand payments and their entities' last 30 days. A historical run rereads all of v19 Silver. The prod evidence records one of each.
+- **Parameters.** `dp3-gold` takes `start` and `end` UTC days. Without them the job runs yesterday and the `dp3.lookbackDays` (2) days before it, so late outcomes land. The daily CronWorkflow passes none; a backfill passes the first Silver day and yesterday.
+- **Pure function per range.** A run reads Silver at its published snapshots and overwrites only:
+  - feature rows with anchors in `(start, end + 1]`, using `overwrite` on an `event_timestamp` range;
+  - `feat_attempt_rt` rows of attempts started in the range;
+  - `label_attempt` rows of attempts started in the range, or on a day whose attempts gained a linked label available in it;
+  - the full SCD2 history of every customer with an attempt started in the range: delete those customers, then append.
+- **Exact from one window of history.** `windows.window_states` adds a baseline anchor at the range's first midnight for every entity it reads. The values there and after are exact once the run reads every attempt still in a window then: starts from the longest window, plus one day for client clocks, before the range. `windows.changes` then keeps a daily row only where it differs from the entity's previous row, with the baseline as the first previous row. A range's rows therefore equal the same days of any longer run, and daily runs build what one backfill builds. CI checks both.
+- **Short-window snapshots.** `feat_attempt_rt` takes each attempt's customer and payment-method `fraud-snapshot-v2` values at its `started_at`, the scoring time. It computes exact-instant states with `ExactAnchors`, then an as-of lookup per attempt. Starts count once they started before the anchor, and starts whose attempt time is more than 24 hours before their start are too late, as in the v2 horizon. Flink's observed availability can lag `started_at` by its processing delay; that residual skew is accepted. `label_attempt.event_timestamp` is `started_at` too, so every point-in-time join uses the scoring time.
+- **Late Silver changes.** The lookback covers late outcomes. A Silver change to an older day (a DP2 historical rebuild or a redelivery) needs a re-run from the first changed day. There is no hidden state to repair, so that re-run is the whole fix.
+- **Marts.** The mart build follows the run's days (decision 7).
+- **Records.** Every gold commit records the Silver snapshot IDs, the logic version, the coverage start and the range (`dp3.range`). The report lists the range, the rebuilt label days and the customers it replaced.
 
 ### 10. Contracts and checks
 

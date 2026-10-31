@@ -125,8 +125,10 @@ dp3:
   profile: dev
   reportRoot: s3://platform-dev/runs/payment-gateway/dp3
   activeDeadlineSeconds: 14400
-  # Daily at 04:17 UTC, after the 03:43 maintenance; the CronWorkflow runs incremental mode and is suspended.
+  # Daily at 04:17 UTC, after the 03:43 maintenance; suspended. A run without start and end rebuilds yesterday and the
+  # lookback days before it, which catches late outcomes.
   schedule: "17 4 * * *"
+  lookbackDays: 2
 marts:
   clickhouseUrl: http://clickhouse.data.svc.cluster.local:8123
   user: marts

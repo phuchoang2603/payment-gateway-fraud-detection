@@ -11,7 +11,7 @@ from batch.gold import features as gold
 from batch.gold import marts
 from batch.silver import curate as silver
 from batch.spark import ICEBERG_CATALOG
-from tests.events import approved, created, label, started, succeeded
+from tests.events import BASE, approved, created, label, started, succeeded
 from tests.lake import load_bronze
 
 CONTRACTS = Path(__file__).resolve().parents[4] / "contracts" / "data-products"
@@ -81,7 +81,8 @@ def test_every_lakehouse_and_mart_rule_analyzes_on_the_pinned_clickhouse(spark, 
         [label("pay-1", "att-1", available=10)],
     )
     silver.run(spark, "contract-sql")
-    gold.run(spark, "contract-sql")
+    day = BASE.date()
+    gold.run(spark, "contract-sql", day, day)
     for database in (DATABASE, marts.DATABASE):
         assert run_sql(clickhouse, f"DROP DATABASE IF EXISTS {database} SYNC") is None
         assert run_sql(clickhouse, f"CREATE DATABASE {database}") is None

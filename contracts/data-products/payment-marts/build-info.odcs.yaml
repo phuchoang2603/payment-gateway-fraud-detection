@@ -35,11 +35,10 @@ schema:
     dataGranularityDescription: One marts build.
     properties:
       - {name: run_id, logicalType: string, physicalType: String, required: true, description: 'Workflow run that built the marts.'}
-      - {name: mode, logicalType: string, physicalType: LowCardinality(String), required: true, description: 'historical for a full rebuild or incremental for a partition replace.'}
       - {name: window_start, logicalType: date, physicalType: Date, required: true, description: 'First start day kept by the retention window.'}
       - {name: window_end, logicalType: date, physicalType: Date, required: true, description: 'Latest start day in Silver at the pinned snapshot.'}
-      - {name: rebuilt_days, logicalType: array, physicalType: Array(Date), required: true, description: 'Start days this build rebuilt; every day of the window for a historical build.'}
-      - {name: anchor_cap, logicalType: date, physicalType: Date, required: true, description: 'UTC day of the pinned silver.attempts commit, the chargeback-completeness cutoff.'}
+      - {name: rebuilt_days, logicalType: array, physicalType: Array(Date), required: true, description: 'Start days this build rebuilt: the DP3 run''s days, the days its labels touched and the days whose chargeback window completes in its range.'}
+      - {name: chargebacks_complete_before, logicalType: date, physicalType: Date, required: true, description: 'The day after the DP3 run''s last day; a start day''s chargeback window is complete when it ends by then.'}
       - {name: silver_attempts_snapshot_id, logicalType: integer, physicalType: Int64, required: true, description: 'silver.attempts snapshot the build read.'}
       - {name: silver_labels_snapshot_id, logicalType: integer, physicalType: Int64, required: true, description: 'silver.labels snapshot the build read.'}
       - {name: silver_payment_events_snapshot_id, logicalType: integer, physicalType: Int64, required: true, description: 'silver.payment_events snapshot of the same DP3 run.'}

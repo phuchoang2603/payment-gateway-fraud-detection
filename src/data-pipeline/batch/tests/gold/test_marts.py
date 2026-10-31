@@ -57,13 +57,15 @@ def label(client, payment, day, source=marts.TRUTH, fraud=True, observation="o")
     )
 
 
-def report(mode="historical", days=None, consumed=None):
+def report(first=None, last=None):
+    """A DP3 report over [first, last], every day of the retention window by default."""
+    first = first or TODAY - timedelta(days=RETENTION + 30)
+    last = last or TODAY - timedelta(days=1)
     return {
-        "mode": mode,
+        "start": str(first),
+        "end": str(last),
+        "days": [str(first + timedelta(days=n)) for n in range((last - first).days + 1)],
         "silver_snapshots": {"silver.attempts": 11, "silver.labels": 12, "silver.payment_events": 13},
-        "anchor_cap": f"{TODAY}T00:00:00+00:00",
-        "affected_days": days,
-        "consumed": consumed,
     }
 
 
@@ -151,25 +153,21 @@ def test_the_build_drops_leftover_staging(client):
     assert client.value("SELECT count() FROM marts.fact_payment_attempt__staging WHERE payment_id = 'stale'") == 0
 
 
-def test_an_incremental_build_equals_a_full_rebuild(client):
+def test_a_range_rebuild_equals_a_full_rebuild(client):
     changed, untouched = TODAY - timedelta(days=20), TODAY - timedelta(days=40)
     attempt(client, "p-1", changed)
     attempt(client, "p-2", untouched)
     rebuild(client)
     attempt(client, "p-3", changed, merchant="m-2")
     label(client, "p-1", changed, source=marts.CHARGEBACK)
-    consumed = {"silver.attempts": 11, "silver.labels": 12}
 
-    rebuild(client, report("incremental", [str(changed)], consumed))
-    incremental = {table: content(client, table) for table in (marts.FACT, marts.MERCHANT_DAY)}
+    rebuild(client, report(changed, changed))
+    ranged = {table: content(client, table) for table in (marts.FACT, marts.MERCHANT_DAY)}
     rebuild(client)
 
-    assert {table: content(client, table) for table in (marts.FACT, marts.MERCHANT_DAY)} == incremental
+    assert {table: content(client, table) for table in (marts.FACT, marts.MERCHANT_DAY)} == ranged
 
 
-def test_an_incremental_build_refuses_marts_built_from_other_snapshots(client):
-    attempt(client, "p-1", TODAY - timedelta(days=2))
-    rebuild(client)
-
-    with pytest.raises(marts.MartsRefused):
-        marts.build(client, report("incremental", [], {"silver.attempts": 1, "silver.labels": 2}), "run", 180, TODAY)
+def test_a_range_also_rebuilds_the_days_whose_chargeback_window_completes_in_it():
+    days = marts.rebuilt_days(report(date(2026, 10, 30), date(2026, 10, 30)), date(2026, 1, 1), date(2026, 10, 30))
+    assert days == [date(2026, 10, 10), date(2026, 10, 30)]

@@ -54,7 +54,7 @@ def publish_status(sdk, name: str, argo_status: str, run_id: str, parameters=Non
 
 
 def run_parameters(uri: str):
-    """The Silver snapshots and mode a DP3 run read, from its report; None when the run wrote no report."""
+    """The day range and Silver snapshots of a DP3 run, from its report; None when the run wrote no report."""
     if not uri:
         return None
     parsed = urlsplit(uri)
@@ -81,7 +81,11 @@ def run_parameters(uri: str):
             return None
         body = path.read_bytes()
     report = json.loads(body)
-    return {"mode": report.get("mode"), "silver_snapshots": report.get("silver_snapshots")}
+    return {
+        "start": report.get("start"),
+        "end": report.get("end"),
+        "silver_snapshots": report.get("silver_snapshots"),
+    }
 
 
 def ensure_dataset(sdk, version: str) -> None:

@@ -1,4 +1,3 @@
-import copy
 import json
 import math
 from datetime import datetime, timedelta, timezone
@@ -9,9 +8,7 @@ from pyspark.sql import functions as F
 
 from batch.gold import features as gold
 from batch.gold.windows import ANCHOR
-from batch.silver import curate as silver
-from tests.events import approved, at, created, label, started, succeeded
-from tests.lake import load_bronze
+from tests.events import at
 
 EXAMPLES = json.loads(
     (Path(__file__).resolve().parents[5] / "contracts/features/fraud-history-batch-v1.examples.json").read_text()
@@ -70,18 +67,23 @@ def example_attempts(case):
     return rows
 
 
+def valid(spark, rows):
+    return gold.with_attempt_time(spark.createDataFrame(rows, ATTEMPT_COLUMNS)).where(F.col("lifecycle_valid"))
+
+
 @pytest.mark.parametrize("case", EXAMPLES["cases"], ids=[case["name"] for case in EXAMPLES["cases"]])
 def test_the_feature_definition_examples(spark, case):
     view = VIEWS[case.get("view", EXAMPLES["defaults"]["view"])]
     entity = case.get("entity", EXAMPLES["defaults"]["entity"])
-    attempts = gold.valid_attempts(spark.createDataFrame(example_attempts(case), ATTEMPT_COLUMNS))
+    attempts = valid(spark, example_attempts(case))
     start = gold.history_start(attempts)
-    cap = gold.midnight(instant(case.get("cutoff", EXAMPLES["defaults"]["cutoff"])))
+    cutoff = gold.midnight(instant(case.get("cutoff", EXAMPLES["defaults"]["cutoff"])).date())
 
-    rows = gold.features(view, attempts, start, cap, cap)
+    rows = gold.daily_features(view, attempts, start, start - gold.DAY, cutoff, cutoff)
 
+    key = view.keys[1]
     selected = rows.where(
-        (F.col("integration_id") == entity["integration_id"]) & (F.col(view.key) == entity[view.key])
+        (F.col("integration_id") == entity["integration_id"]) & (F.col(key) == entity[key])
     ).withColumn("_micros", F.unix_micros(ANCHOR))
     actual = sorted((row.asDict() for row in selected.collect()), key=lambda row: row["_micros"])
     expected = case["expected"]
@@ -92,6 +94,100 @@ def test_the_feature_definition_examples(spark, case):
                 assert got[column] == value, f"{case['name']} {want['event_timestamp']} {column}"
             else:
                 assert math.isclose(got[column], value), f"{case['name']} {want['event_timestamp']} {column}"
+
+
+def attempt(payment, customer, card, device, started, attempted=None, merchant="m", outcome="succeeded", lag=1):
+    return (
+        "i",
+        payment,
+        "a",
+        customer,
+        card,
+        merchant,
+        device,
+        100,
+        "USD",
+        at(started),
+        None if attempted is None else at(attempted),
+        outcome,
+        at(started + lag),
+        None,
+        True,
+    )
+
+
+def history(days=50):
+    """Two customers sharing a card, with gaps long enough for the 7- and 30-day windows to empty."""
+    rows = []
+    for day in range(days):
+        if day % 9 < 4:
+            rows.append(attempt(f"c-{day}", "c", "card-1", f"d-{day % 3}", day * 1440 + 60, merchant=f"m-{day % 2}"))
+        if day % 13 == 0:
+            rows.append(attempt(f"k-{day}", "k", "card-1", "d-k", day * 1440 + 600, outcome="declined"))
+    return rows
+
+
+def test_a_range_run_writes_exactly_the_full_run_rows_of_its_days(spark):
+    attempts = valid(spark, history())
+    start = gold.history_start(attempts)
+    cutoff = start + 50 * gold.DAY
+    for view in gold.VIEWS:
+        full = gold.daily_features(view, attempts, start, start - gold.DAY, cutoff, cutoff)
+        floor = start + 17 * gold.DAY
+        upper = start + 41 * gold.DAY
+        expected = full.where((F.col(ANCHOR) > F.lit(floor)) & (F.col(ANCHOR) <= F.lit(upper)))
+        ranged = gold.daily_features(view, attempts, start, floor, upper, cutoff)
+        assert ranged.count() > 0
+        assert ranged.exceptAll(expected).count() == 0, view.table
+        assert expected.exceptAll(ranged).count() == 0, view.table
+
+
+def test_attempt_snapshots_count_earlier_starts_in_each_window_at_the_attempt_start(spark):
+    rows = [
+        attempt("p-0", "c", "card", "d-1", 2000),
+        attempt("p-1", "c", "card", "d-2", 2002),
+        attempt("p-2", "c", "card-2", "d-2", 2030, attempted=2001),
+        attempt("p-3", "c", "card", None, 2040),
+        attempt("p-4", "c", "card", "d-9", 2041, attempted=500),
+        attempt("p-5", "c", None, "d-3", 3500),
+    ]
+    attempts = gold.with_attempt_time(spark.createDataFrame(rows, ATTEMPT_COLUMNS))
+    start = gold.history_start(attempts)
+    floor = gold.midnight(at(1440).date())
+    computed = gold.attempt_snapshots(attempts, start, floor, floor + 2 * gold.DAY, floor)
+    snapshots = {row.payment_id: row for row in computed.withColumn("_at", F.unix_micros(ANCHOR)).collect()}
+
+    assert set(snapshots) == {"p-0", "p-1", "p-2", "p-3", "p-4", "p-5"}
+    customer = {
+        payment: (
+            row.customer_snapshot_attempt_count_5m,
+            row.customer_snapshot_attempt_count_1h,
+            row.customer_snapshot_attempt_count_24h,
+            row.customer_snapshot_distinct_devices_24h,
+        )
+        for payment, row in snapshots.items()
+    }
+    assert customer["p-0"] == (0, 0, None, None)
+    assert customer["p-1"] == (1, 1, None, None)
+    # p-2 was attempted at 2001 but started at 2030, so it counts from 2030 at its attempt time.
+    assert customer["p-3"][:2] == (0, 3)
+    # p-4 was attempted more than 24 hours before it started: too late to count anywhere.
+    assert customer["p-5"][:2] == (0, 0)
+    assert snapshots["p-3"].method_snapshot_attempt_count_1h == 2
+    assert snapshots["p-5"].method_snapshot_attempt_count_1h is None
+    assert snapshots["p-0"]._at == micros(at(2000).isoformat())
+
+
+def test_attempt_snapshots_of_a_range_equal_the_full_run(spark):
+    attempts = gold.with_attempt_time(spark.createDataFrame(history(20), ATTEMPT_COLUMNS))
+    start = gold.history_start(attempts)
+    full = gold.attempt_snapshots(attempts, start, start, start + 20 * gold.DAY, start)
+    floor, upper = start + 6 * gold.DAY, start + 11 * gold.DAY
+    expected = full.where((F.col(ANCHOR) >= F.lit(floor)) & (F.col(ANCHOR) < F.lit(upper)))
+    ranged = gold.attempt_snapshots(attempts, start, floor, upper, start)
+    assert ranged.count() > 0
+    assert ranged.exceptAll(expected).count() == 0
+    assert expected.exceptAll(ranged).count() == 0
 
 
 def profile_row(attempt, day, device, address="A", customer="c"):
@@ -150,14 +246,12 @@ def test_customer_versions_follow_address_and_familiar_device_changes(spark):
 
 
 def test_attempt_labels_keep_the_earliest_linked_observation_per_source(spark):
-    attempts = gold.valid_attempts(
-        spark.createDataFrame(
-            [
-                ("i", "p-1", "a", "c", "card", "m", "d", 100, "USD", at(0), None, "succeeded", at(1), None, True),
-                ("i", "p-2", "a", "c", "card", "m", "d", 100, "USD", at(5), at(4), "pending", None, None, True),
-            ],
-            ATTEMPT_COLUMNS,
-        )
+    attempts = valid(
+        spark,
+        [
+            ("i", "p-1", "a", "c", "card", "m", "d", 100, "USD", at(0), None, "succeeded", at(1), None, True),
+            ("i", "p-2", "a", "c", "card", "m", "d", 100, "USD", at(5), at(4), "pending", None, None, True),
+        ],
     )
     truth, chargeback = "LABEL_SOURCE_SIMULATION_TRUTH", "LABEL_SOURCE_CHARGEBACK"
     labels = spark.createDataFrame(
@@ -179,40 +273,3 @@ def test_attempt_labels_keep_the_earliest_linked_observation_per_source(spark):
     assert rows[("p-1", truth)].label is False
     assert rows[("p-1", chargeback)].label is True
     assert rows[("p-1", truth)]._at == micros(at(0).isoformat())
-
-
-def shipped_to(event, address):
-    changed = copy.deepcopy(event)
-    changed["attempt_started"]["context"]["snapshot"]["shipping"]["address_fingerprint"] = address
-    return changed
-
-
-def test_a_rerun_on_the_same_silver_writes_identical_gold(spark, report_root):
-    for table in gold.TABLES:
-        spark.sql(f"DROP TABLE IF EXISTS {table}")
-    load_bronze(
-        spark,
-        [
-            created("pay-1", "e-1"),
-            started("pay-1", "e-2", 2, 1, "att-1"),
-            approved("pay-1", "e-3", 3, 2, "att-1"),
-            succeeded("pay-1", "e-4", 4, 3, "att-1"),
-            created("pay-2", "f-1", minutes=3000),
-            shipped_to(started("pay-2", "f-2", 2, 3001, "att-2"), "g"),
-        ],
-        [label("pay-1", "att-1", available=10)],
-    )
-    silver.run(spark, "silver")
-
-    first = gold.run(spark, "gold-1")
-    snapshots = {table: info["snapshot_id"] for table, info in first["tables"].items()}
-    gold.run(spark, "gold-2")
-
-    for table, snapshot in snapshots.items():
-        before = spark.read.option("versionAsOf", snapshot).table(table)
-        after = spark.table(table)
-        assert before.exceptAll(after).count() == 0, table
-        assert after.exceptAll(before).count() == 0, table
-    assert spark.table(gold.DIM_CUSTOMER).count() == 2
-    assert spark.table(gold.LABEL_ATTEMPT).count() == 1
-    assert spark.table(gold.FEAT_CUSTOMER).count() > 0

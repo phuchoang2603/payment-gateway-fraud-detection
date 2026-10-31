@@ -11,7 +11,7 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 | `generate-historical` | Shards in parallel → publish | Done; v18 and v19 published |
 | `dp1-bronze` (historical or Kafka mode) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Historical v19 succeeded; Kafka schedule suspended |
 | `dp2-silver` | Spark curate to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Published; full validation remains incomplete |
-| `dp3-gold` (historical or incremental mode) | Spark gold features to an audit branch → ClickHouse marts into staging → checks on the branch and staging → publish tables → publish marts → profile marts → OpenMetadata publish | Implemented; suspended daily schedule `dp3-gold-daily` runs incremental mode; dev and prod runs pending |
+| `dp3-gold` (`start`/`end` day range) | Spark gold features to an audit branch → ClickHouse marts into staging → checks on the branch and staging → publish tables → publish marts → profile marts → OpenMetadata publish | Implemented; suspended daily schedule `dp3-gold-daily` runs yesterday plus two lookback days; dev and prod runs pending |
 | `warehouse-benchmark` | Single on-demand stage | Implemented; prod v19 evidence pending |
 | `maintain-lakehouse`, `dp2-benchmark` | Single on-demand stage | Implemented; prod v19 evidence pending |
 
