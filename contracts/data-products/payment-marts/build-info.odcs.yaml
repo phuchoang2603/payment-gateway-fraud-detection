@@ -36,7 +36,7 @@ schema:
     properties:
       - {name: run_id, logicalType: string, physicalType: String, required: true, description: 'Workflow run that built the marts.'}
       - {name: window_start, logicalType: date, physicalType: Date, required: true, description: 'First start day kept by the retention window.'}
-      - {name: window_end, logicalType: date, physicalType: Date, required: true, description: 'Last start day the marts cover: the DP3 run''s last day, or the latest Silver start day if earlier.'}
+      - {name: window_end, logicalType: date, physicalType: Date, required: true, description: 'Last start day the live marts cover after publish: the latest of this build''s last day and the previous build''s window_end; window_start minus one day when the window is empty.'}
       - {name: rebuilt_days, logicalType: array, physicalType: Array(Date), required: true, description: 'Start days this build rebuilt: the DP3 run''s days, the days its labels touched and the days whose chargeback window completes in its range.'}
       - {name: chargebacks_complete_before, logicalType: date, physicalType: Date, required: true, description: 'The day after the DP3 run''s last day; a start day''s chargeback window is complete when it ends by then.'}
       - {name: silver_attempts_snapshot_id, logicalType: integer, physicalType: Int64, required: true, description: 'silver.attempts snapshot the build read.'}
@@ -46,7 +46,7 @@ schema:
     quality:
       - id: marts_build_info_one_row
         type: sql
-        description: The table holds exactly one row, and its window is ordered.
+        description: The table holds exactly one row, and its window is ordered or empty.
         query: |
-          SELECT abs(toInt64(count()) - 1) + countIf(window_start > window_end) FROM {object}
+          SELECT abs(toInt64(count()) - 1) + countIf(window_start > window_end + 1) FROM {object}
         mustBe: 0

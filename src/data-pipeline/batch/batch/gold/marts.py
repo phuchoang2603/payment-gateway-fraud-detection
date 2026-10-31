@@ -180,6 +180,14 @@ def build(client: ClickHouse, gold_report: dict, run_id: str, retention_days: in
         last = str(min(date.fromisoformat(last), complete_before - timedelta(days=1)))
     days = rebuilt_days(gold_report, start, date.fromisoformat(last)) if last else []
     months = months_of(days)
+    # build_info describes the live marts after publish, which keep the newer days of earlier runs; an empty window
+    # ends the day before it starts.
+    live_end = client.value(f"SELECT toString(max(window_end)) FROM {name(BUILD_INFO)}")
+    window_end = max(
+        start - timedelta(days=1),
+        *([date.fromisoformat(last)] if last else []),
+        *([date.fromisoformat(live_end)] if live_end else []),
+    )
 
     if days:
         client.execute(
@@ -251,7 +259,7 @@ FROM (
         )
     client.execute(
         f"""INSERT INTO {name(BUILD_INFO, staging=True)} VALUES (
-'{run_id}', toDate('{start}'), toDate('{last or start}'), [{day_list(days)}], toDate('{complete_before}'),
+'{run_id}', toDate('{start}'), toDate('{window_end}'), [{day_list(days)}], toDate('{complete_before}'),
 {int(attempts_snapshot)}, {int(labels_snapshot)}, {int(snapshots["silver.payment_events"])}, now64(6))"""
     )
     client.execute(f"DROP TABLE IF EXISTS {name(LABELS, staging=True)}")
@@ -276,7 +284,7 @@ FROM (
     return {
         "run_id": run_id,
         "window_start": str(start),
-        "window_end": last,
+        "window_end": str(window_end),
         "rebuilt_days": len(days),
         "months": months,
         "staged_attempts": staged,

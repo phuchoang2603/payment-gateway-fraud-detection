@@ -29,7 +29,7 @@ Holds only the latest build; earlier builds are in the DP3 run reports.
 | ----- | ---- | ---------- |
 |  run_id | string | *Workflow run that built the marts.*<br />• `required` |
 |  window_start | date | *First start day kept by the retention window.*<br />• `required` |
-|  window_end | date | *Last start day the marts cover: the DP3 run's last day, or the latest Silver start day if earlier.*<br />• `required` |
+|  window_end | date | *Last start day the live marts cover after publish: the latest of this build's last day and the previous build's window_end; window_start minus one day when the window is empty.*<br />• `required` |
 |  rebuilt_days | array | *Start days this build rebuilt: the DP3 run's days, the days its labels touched and the days whose chargeback window completes in its range.*<br />• `required` |
 |  chargebacks_complete_before | date | *The day after the DP3 run's last day; a start day's chargeback window is complete when it ends by then.*<br />• `required` |
 |  silver_attempts_snapshot_id | integer | *silver.attempts snapshot the build read.*<br />• `required` |

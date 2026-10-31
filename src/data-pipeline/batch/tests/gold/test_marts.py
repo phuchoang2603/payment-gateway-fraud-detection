@@ -171,3 +171,22 @@ def test_a_range_rebuild_equals_a_full_rebuild(client):
 def test_a_range_also_rebuilds_the_days_whose_chargeback_window_completes_in_it():
     days = marts.rebuilt_days(report(date(2026, 10, 30), date(2026, 10, 30)), date(2026, 1, 1), date(2026, 10, 30))
     assert days == [date(2026, 10, 10), date(2026, 10, 30)]
+
+
+def window_of(client):
+    return client.rows("SELECT toString(window_start) AS start, toString(window_end) AS end FROM marts.build_info")[0]
+
+
+def test_a_range_older_than_the_window_keeps_the_live_window_end(client):
+    old = TODAY - timedelta(days=RETENTION + 40)
+    attempt(client, "old", old)
+    rebuild(client, report(old, old))
+    empty = window_of(client)
+    assert empty["end"] == str(date.fromisoformat(empty["start"]) - timedelta(days=1))
+
+    attempt(client, "new", TODAY - timedelta(days=3))
+    rebuild(client)
+    rebuild(client, report(old, old))
+
+    assert window_of(client)["end"] == str(TODAY - timedelta(days=3))
+    assert [row["payment_id"] for row in content(client, marts.FACT)] == ["new"]

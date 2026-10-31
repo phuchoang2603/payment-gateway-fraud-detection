@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from functools import reduce
 
+from pyspark import StorageLevel
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
@@ -67,6 +68,20 @@ RT_WINDOWS = {"5m": timedelta(minutes=5), "1h": timedelta(hours=1), "24h": timed
 RT_HORIZON = timedelta(hours=24)
 # Reads assume an attempt's client time is at most a day after its start.
 CLOCK_MARGIN = timedelta(days=1)
+WINDOW_COLUMNS = [
+    *silver.ATTEMPT_KEY,
+    "customer_id",
+    "payment_method_fingerprint",
+    "merchant_id",
+    "device_fingerprint",
+    "amount_minor",
+    "started_at",
+    "attempted_at",
+    "outcome",
+    "outcome_at",
+    "decline_source",
+    "lifecycle_valid",
+]
 FAMILIAR_WINDOW = timedelta(days=90)
 DAY = timedelta(days=1)
 
@@ -416,9 +431,10 @@ def replace_customers(spark, events, attempts, floor, cutoff, pins) -> tuple[dic
         .distinct()
         .localCheckpoint()
     )
+    # A month's customers reach millions of payments, so every join here shuffles; a broadcast of their keys
+    # overran the driver's result limit.
     affected = attempts.join(customers, CUSTOMER_KEY, "left_semi")
-    starts = events.join(F.broadcast(affected.select(*PAYMENT_KEY).distinct()), PAYMENT_KEY, "left_semi")
-    rows = dim_customer(profiles(starts, affected))
+    rows = dim_customer(profiles(events, affected))
     create_table(spark, DIM_CUSTOMER, rows, PARTITIONS[DIM_CUSTOMER]())
     stage(spark, DIM_CUSTOMER)
     customers.createOrReplaceTempView("dp3_dim_customer_scope")
@@ -435,8 +451,7 @@ def run(spark, run_id: str, start_day: date, end_day: date) -> dict:
         raise ValueError(f"start {start_day} is after end {end_day}")
     phases = {}
     snapshots, frames = silver_inputs(spark)
-    everything = with_attempt_time(frames[silver.ATTEMPTS])
-    attempts = everything.where(F.col("lifecycle_valid"))
+    attempts = with_attempt_time(frames[silver.ATTEMPTS]).where(F.col("lifecycle_valid"))
     start = history_start(attempts)
     if start is None:
         raise ValueError("silver.attempts has no lifecycle-valid attempts")
@@ -450,15 +465,24 @@ def run(spark, run_id: str, start_day: date, end_day: date) -> dict:
         RANGE_PROPERTY: f"{start_day}/{end_day}",
     }
     tables = {}
+    # Both window engines read the same history: the range plus one longest window, pruned to their columns.
+    history = max(*WINDOWS.values(), *RT_WINDOWS.values()) + CLOCK_MARGIN
+    windowed = (
+        started_between(frames[silver.ATTEMPTS], floor - history, cutoff)
+        .select(*WINDOW_COLUMNS)
+        .transform(with_attempt_time)
+        .persist(StorageLevel.MEMORY_AND_DISK)
+    )
     for view in VIEWS:
         with phase(spark, phases, f"write {view.table.split('.')[-1]}"):
-            rows = daily_features(view, attempts, start, floor, cutoff, created)
+            rows = daily_features(view, windowed.where(F.col("lifecycle_valid")), start, floor, cutoff, created)
             within = (F.col(ANCHOR) > F.lit(floor)) & (F.col(ANCHOR) <= F.lit(cutoff))
             tables[view.table] = overwrite(spark, view.table, rows, within, pins)
     with phase(spark, phases, "write feat_attempt_rt"):
-        rows = attempt_snapshots(everything, start, floor, cutoff, created)
+        rows = attempt_snapshots(windowed, start, floor, cutoff, created)
         within = (F.col(ANCHOR) >= F.lit(floor)) & (F.col(ANCHOR) < F.lit(cutoff))
         tables[FEAT_ATTEMPT_RT] = overwrite(spark, FEAT_ATTEMPT_RT, rows, within, pins)
+    windowed.unpersist()
     with phase(spark, phases, "write label_attempt"):
         range_days = [start_day + n * DAY for n in range((end_day - start_day).days + 1)]
         days = sorted({*range_days, *label_days(frames[silver.LABELS], attempts, floor, cutoff)})
