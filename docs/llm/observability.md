@@ -5,15 +5,15 @@ What the platform records about the models, the gateway, the agents and the know
 | Signal | Source | Store | Look at |
 |---|---|---|---|
 | Metrics | vLLM, the endpoint picker, agentgateway, `rag-api` | VictoriaMetrics (scraped by the platform's vmagent) | Grafana Explore |
-| Agent traces | kagent's own OpenTelemetry instrumentation | Langfuse | Langfuse traces |
-| Prompt versions | The catalog job, from Git | Langfuse | Langfuse prompts |
-| AI assets | The catalog job, from the chart values and `tools/list` | OpenMetadata | OpenMetadata API |
+| Agent traces | kagent's Go runtime (OpenTelemetry), linked to prompt versions by our plugin | Langfuse | Langfuse traces |
+| Prompts, versions and A/B tests | Langfuse, seeded once from Git | Langfuse | Langfuse prompts |
+| Agent, tool and screening metrics | agentgateway, `rag-api`, the decision service | VictoriaMetrics | Grafana "LLM agents" dashboard |
 
 The gateway exports no traces; its view is covered by its metrics. There is no OpenTelemetry Collector: each source exports to one store natively.
 
 ## Metrics
 
-Scrape configuration: [`infra/charts/llm-platform/templates/scrape.yaml`](../../infra/charts/llm-platform/templates/scrape.yaml) and the `VMPodScrape` in [`infra/charts/rag-pipeline/templates/api.yaml`](../../infra/charts/rag-pipeline/templates/api.yaml). The Grafana dashboard is a later change; the queries below run in Explore.
+Scrape configuration: [`infra/charts/llm-platform/templates/scrape.yaml`](../../infra/charts/llm-platform/templates/scrape.yaml) and the `VMPodScrape` in [`infra/charts/rag-pipeline/templates/api.yaml`](../../infra/charts/rag-pipeline/templates/api.yaml). The queries below run in Explore; the agent-facing ones are also on the [dashboard](#grafana-dashboard).
 
 | What | Metric |
 |---|---|
@@ -47,28 +47,47 @@ PII guardrail                     request: allow 14, mask 12 · response: allow 
 
 The two MCP 500s are the cold-start timeout that loading the Feast store at start-up fixed.
 
+## Grafana dashboard
+
+The "LLM agents" dashboard ([`files/dashboards/llm-agents.json`](../../infra/charts/llm-platform/files/dashboards/llm-agents.json)) shows A2A calls and failures per agent route, MCP tool calls by outcome, gateway screening decisions and laya's forward pass, and the model's tokens, time to first token and round-trip. Over the evidence runs on 2026-10-31 (16:15 to 17:00 UTC): 32 calls to `/a2a/coordinator`, 15 `search_knowledge` calls, all successful:
+
+![Grafana LLM agents dashboard: A2A calls per agent, MCP tool calls by outcome, screening](images/observability-agents-dashboard.png)
+
 ## Langfuse
 
-Self-hosted Langfuse v3 (3.225.11) in `llm`, on the shared ClickHouse, behind the platform's Dex proxy ([`langfuse.yaml`](../../infra/charts/llm-platform/templates/langfuse.yaml)).
+Self-hosted Langfuse v3 (3.225.11) in `llm`, on the shared ClickHouse, behind the platform's Dex proxy ([`langfuse.yaml`](../../infra/charts/llm-platform/templates/langfuse.yaml)). It holds the agents' prompts and their A/B tests, and their traces.
 
-**Agent traces.** kagent's Go runtime exports each agent's spans over OTLP to Langfuse through the sandbox egress proxy, with a basic-auth header built from the project keys. A question becomes one trace: the agent span, one generation per model call with its tokens, and the tool calls. The platform turns kagent tracing on (`otel.tracing.enabled`); each agent sets its own endpoint. The trace of the UI chat above, 9.43 s:
+### Traces
 
-![Langfuse trace: invoke_agent evidence_agent, generate_content qwen3-8b (809 → 41 tokens), search_knowledge, generate_content qwen3-8b (2,323 → 249 tokens)](images/observability-langfuse-trace.png)
+kagent's Go runtime exports each conversation's spans over OTLP to Langfuse; Substrate's egress gateway adds the project's basic-auth key. A conversation is one trace: the A2A request, the coordinator's `invoke_agent` span with its model call, `transfer_to_agent`, the sub-agent's `invoke_agent` span with its tool calls and model calls, and the task-store calls. Each model call (`generate_content qwen3-8b`) carries its tokens and is linked to the prompt version it used:
 
-**Prompts.** Git is the source; the release catalog job publishes each agent's prompt as a new `production` version when its text changes, with the agent version as commit message:
+![Langfuse trace: coordinator 1,864 → 24 tokens, transfer_to_agent, evidence_agent 2,234 → 86 tokens, the model call linked to evidence-agent-system-prompt v3](images/observability-langfuse-trace.png)
 
-![Langfuse prompt evidence-agent-system-prompt: version 1, labels production and latest, "evidence-agent 0.3.0 from Git"](images/observability-langfuse-prompt.png)
+Message content is not recorded on the spans (kagent's default); the trace has the structure, timings, token counts and prompt versions.
 
-## AI assets in OpenMetadata
+### Prompts
 
-The release catalog job registers the LLM platform from the `llm-platform` values over OpenMetadata's REST API: the LLM service (the gateway endpoint), both models with their pinned revisions, each MCP server with the tools it lists, and each agent as an AI application linked to its model, its MCP servers and the knowledge table. OpenMetadata 2.0.7's UI has no pages for these entity types yet, so they are read through the API:
+Each agent's system prompt is the Langfuse prompt `<agent>-system-prompt`. Its `production` label is what agents use; the release catalog job only creates a prompt that does not exist yet, from [`files/prompts/<agent>.md`](../../infra/charts/llm-platform/files/prompts), so edits made in Langfuse are kept. On 2026-10-31 a new production version of the evidence prompt was published in Langfuse ("lead with the decline reason", v3); the next conversations used v3 without a release (3 model calls on v3 in the following 15 conversations, the rest on the variant):
 
-```text
-GET /api/v1/services/llmServices/name/agent-gateway       serviceType CustomLLM, "Self-hosted models behind the agent gateway at http://agentgateway.llm.svc.cluster.local/v1; clients use API keys."
-GET /api/v1/llmModels/name/agent-gateway.qwen3-8b         baseModel Qwen/Qwen3-8B-FP8, modelVersion 220b46e3b2180893580a4454f21f22d3ebb187d3, provider Qwen
-GET /api/v1/llmModels/name/agent-gateway.qwen3-embedding  baseModel Qwen/Qwen3-Embedding-0.6B, modelVersion 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3, provider Qwen
-GET /api/v1/mcpServers/name/agent-gateway-mcp.knowledge   DataAccess, StreamableHTTP, tools search_knowledge and get_knowledge_chunk (descriptions from the server)
-GET /api/v1/aiApplications/name/evidence-agent            Agent, primary model agent-gateway.qwen3-8b, tools [mcpServer knowledge], knowledgeBases [table knowledge.chunks]
-```
+![Langfuse prompt evidence-agent-system-prompt: v3 production "Edited in Langfuse", v2 variant-b and v1 seeded from Git](images/observability-langfuse-prompt.png)
+
+### A/B tests
+
+A test is part of the prompt: the `production` version's config names the other label and the share of conversations it gets, for example `{"abTest": {"label": "variant-b", "share": 0.5}}`. The runtime hashes the prompt name and the conversation, so a conversation keeps its side for every model call, and each agent in it is split on its own. The trace is tagged with each tested agent's side (`evidence-agent:variant-b`), and every model call is linked to its version, so Langfuse compares the versions directly. Ending a test is a config edit in Langfuse; adopting the variant is moving the `production` label.
+
+The seeds give every agent a variant that adds one instruction to its prompt. Prompt metrics on dev after 15 conversations on 2026-10-31 (the variant counts also include earlier runs):
+
+| Prompt | Version | Median latency | Median output tokens | Model calls |
+|---|---|---|---|---|
+| evidence-agent | v3 production | 2.38 s | 86 | 3 |
+| evidence-agent | v2 variant-b ("at most five sentences") | 2.09 s | 57 | 35 |
+| coordinator | v1 production | 0.83 s | 24 | 5 |
+| coordinator | v2 variant-b ("say which specialist") | 1.44 s | 23 | 36 |
+| risk-agent | v1 production | 4.56 s | 182 | 20 |
+| risk-agent | v2 variant-b ("risk level in one word first") | 0.97 s | 24 | 2 |
+
+The shorter-answer variants produce fewer output tokens; the risk variant has two calls, too few to judge.
+
+![Langfuse prompt metrics for evidence-agent-system-prompt: production and variant-b side by side](images/observability-langfuse-ab.png)
 
 The RAG run's lineage and quality checks are on the [RAG](rag.md#governance) page.

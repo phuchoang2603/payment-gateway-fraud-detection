@@ -49,12 +49,12 @@ Feast is built as one change after Bronze and Silver merge. Until then the strea
 |---|---|---|---|
 | Inference | Qwen3-8B (FP8) chat and Qwen3-Embedding on vLLM through KServe, one shared GPU | [Inference](../llm/inference.md) | Done on dev; benchmark planned |
 | Agent gateway | One gateway for models, MCP tools and REST APIs: per-client keys, rate and token limits, PII masking, mesh-only access | [Agent gateway](../llm/gateway.md) | Done on dev |
-| Agents | Global model config, `evidence-agent` with the knowledge tools, sandboxed on Agent Substrate with warm start, registry | [Agents](../llm/agents.md) | Done on dev; agent pool autoscaling waits on Substrate; risk and coordinator agents and the A2A gateway planned |
+| Agents | Global model config; the `coordinator` entry agent behind the A2A gateway with `evidence-agent` (knowledge tools) and `risk-agent` as sub-agents; sandboxed on Agent Substrate with warm start and KEDA-scaled workers; registry | [Agents](../llm/agents.md) | Done on dev; the risk agent's scoring tool planned |
 | Retrieval | RAG pipeline into Iceberg and a Feast pgvector store, governed in OpenMetadata; Web API by id and MCP tools, autoscaled by KEDA | [RAG](../llm/rag.md) | Done on dev |
-| Prompt management | Prompts versioned in Git, published to Langfuse as production versions | [Agents](../llm/agents.md#prompts) | Done on dev |
-| A/B tests | A/B tests for agent model configs and LLM versions, with dashboards | [Agents](../llm/agents.md) | Planned |
-| Agent tracing | Agent traces from kagent to Langfuse; LLM, gateway and API metrics in VictoriaMetrics | [Observability](../llm/observability.md) | Done on dev; Grafana dashboard planned |
-| Decision model | Self-hosted laya on CPU for coordinator routing and gateway request screening | [Agents](../llm/agents.md) | Planned |
+| Prompt management | Prompts managed and versioned in Langfuse (seeded from Git); agents read them at each model call | [Observability](../llm/observability.md#prompts) | Done on dev |
+| A/B tests | Prompt A/B tests per agent in Langfuse, compared per version; LLM-version tests on prod | [Observability](../llm/observability.md#ab-tests) | Prompt tests done on dev; LLM versions planned for prod |
+| Agent tracing | Agent traces from kagent to Langfuse, linked to prompt versions; LLM, gateway and API metrics in VictoriaMetrics with a Grafana dashboard | [Observability](../llm/observability.md) | Done on dev |
+| Decision model | Self-hosted laya on CPU screening requests at the gateway | [Agent gateway](../llm/gateway.md#security-and-policy) | Done on dev |
 | GPU scheduling | Kueue queueing for GPU training and serving workloads | [Agents](../llm/agents.md) | Planned |
 | Model loading | GPUDirect Storage for model weights on supported GPUs and local NVMe | [Agents](../llm/agents.md) | Planned |
 
