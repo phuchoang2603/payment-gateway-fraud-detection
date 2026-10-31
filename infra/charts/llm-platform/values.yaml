@@ -145,11 +145,11 @@ metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
 # sandboxes outside the mesh, and an Agent's Harness can only use a WorkerPool in its own namespace.
 agents:
   namespace: llm-agents
-  # The global model config: the chat model through the gateway. Sampling settings per prompt version come from
-  # Langfuse.
+  # The global model config: the chat model through the gateway, with its sampling settings. kagent's Go runtime
+  # takes those only from here, so an A/B variant differs by its prompt text.
   modelConfig: default-model-config
-  # Every agent runs this runtime: kagent's Python runtime with each model call's prompt, model settings and A/B
-  # variant taken from the agent's Langfuse prompt, and the call's trace linked to that prompt version.
+  # Every agent runs this runtime: kagent's Go runtime with each model call's system prompt and A/B variant taken
+  # from the agent's Langfuse prompt, and the call's trace linked to that prompt version.
   runtime:
     image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/agent-runtime
   snapshotRoot: s3://platform-dev/substrate/llm-agents/
