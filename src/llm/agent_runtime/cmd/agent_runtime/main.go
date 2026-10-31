@@ -61,6 +61,7 @@ func run(logLevel, host, port, configDir string) error {
 	}
 	agentConfig := compiled.Agent
 	prompts := langfuse.NewPrompts(langfuse.NewClient(os.Getenv("LANGFUSE_HOST")))
+	prompts.ConversationFile = "/run/kagent/identity/name"
 	runtime := config.ProcessConfig(compiled)
 	kagentAPIURL := runtime.ControlPlaneUrl
 	if kagentAPIURL == "" {

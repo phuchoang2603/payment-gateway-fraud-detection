@@ -1,8 +1,10 @@
 package langfuse
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -39,6 +41,11 @@ type choice struct {
 // choice is kept per invocation until that span starts.
 type Prompts struct {
 	source PromptSource
+	// ConversationFile holds the conversation's key for the A/B split. kagent
+	// gives every conversation the same ADK session id inside its Substrate
+	// actor, so the key is the actor's name, which Substrate projects into the
+	// file on every run and restore. Without the file, the session id is used.
+	ConversationFile string
 
 	choices sync.Map
 }
@@ -54,6 +61,15 @@ func NewPrompts(source PromptSource) *Prompts {
 // underscores for hyphens.
 func PromptName(agentName string) string {
 	return strings.ReplaceAll(agentName, "_", "-") + "-system-prompt"
+}
+
+func (p *Prompts) conversation(ctx agent.Context) string {
+	if p.ConversationFile != "" {
+		if name, err := os.ReadFile(p.ConversationFile); err == nil && len(bytes.TrimSpace(name)) > 0 {
+			return string(bytes.TrimSpace(name))
+		}
+	}
+	return ctx.SessionID()
 }
 
 func (p *Prompts) Plugin() (*plugin.Plugin, error) {
@@ -86,7 +102,7 @@ func (p *Prompts) choose(ctx context.Context, name, sessionID string) (choice, e
 
 func (p *Prompts) BeforeModel(ctx agent.Context, req *model.LLMRequest) (*model.LLMResponse, error) {
 	name := PromptName(ctx.AgentName())
-	chosen, err := p.choose(ctx, name, ctx.SessionID())
+	chosen, err := p.choose(ctx, name, p.conversation(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("langfuse prompt %s: %w", name, err)
 	}
