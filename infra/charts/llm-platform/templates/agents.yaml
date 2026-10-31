@@ -147,6 +147,7 @@ runtime reads that agent's Langfuse prompt by the same name. */}}
 {{- with $tools }}
 {{- $_ := set $template "tools" . }}
 {{- end }}
+{{- if $agent.entry }}
 ---
 apiVersion: api.kagent.dev/v1alpha3
 kind: Harness
@@ -180,14 +181,6 @@ spec:
       location: {{ $agents.snapshotRoot }}
 ---
 apiVersion: api.kagent.dev/v1alpha3
-kind: AgentTemplate
-metadata:
-  name: {{ $agent.name }}
-  namespace: {{ $ns }}
-spec:
-  {{- toYaml $template | nindent 2 }}
----
-apiVersion: api.kagent.dev/v1alpha3
 kind: Agent
 metadata:
   name: {{ $agent.name }}
@@ -202,4 +195,13 @@ spec:
     name: {{ $agent.name }}
   egressPolicyRefs:
     - name: langfuse
+{{- end }}
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: {{ $agent.name }}
+  namespace: {{ $ns }}
+spec:
+  {{- toYaml $template | nindent 2 }}
 {{- end }}

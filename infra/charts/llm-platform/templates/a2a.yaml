@@ -19,6 +19,7 @@ spec:
         key: {{ $signing.remoteKey }}
 {{- $routes := list }}
 {{- range $agent := $agents.list }}
+{{- if $agent.entry }}
 ---
 # kagent serves every Agent's public A2A endpoint from its controller. As an A2A backend the gateway rewrites the
 # agent card's URLs to the address the caller used.
@@ -64,6 +65,7 @@ spec:
       timeouts:
         request: 600s
 {{- $routes = append $routes (printf "a2a-%s" $agent.name) }}
+{{- end }}
 {{- end }}
 ---
 apiVersion: agentgateway.dev/v1alpha1
