@@ -85,14 +85,6 @@ bronze:
   reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp1
   historicalProfile: large
   activeDeadlineSeconds: 14400
-silver:
-  enabled: true
-  profile: large
-  # v19 has about 20M duplicated IDs (about 160 MB as a sorted int64 array), so duplicates are flagged map-side and the
-  # events keep their Bronze layout instead of shuffling by event_id.
-  dedupBroadcastBytes: 1073741824
-  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp2
-  activeDeadlineSeconds: 14400
 analytics:
   enabled: true
   profile: large
@@ -101,10 +93,10 @@ maintenance:
   enabled: true
   profile: large
   reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/maintenance
-dp3:
+pipeline:
   enabled: true
   profile: gold
-  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp3
+  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/pipeline
 warehouseBenchmark:
   enabled: true
   reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/warehouse-benchmark

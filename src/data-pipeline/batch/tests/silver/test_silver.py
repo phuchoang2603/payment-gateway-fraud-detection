@@ -1,12 +1,29 @@
 import json
+from datetime import timedelta
 
+import pytest
 from pyspark.sql import functions as F
 
 from batch.bronze import ingest as bronze
 from batch.bronze.schema import LABEL_COLUMNS, business_schema
+from batch.days import every_day
 from batch.silver import curate as silver
-from tests.events import approved, at, created, declined, label, requested, started, succeeded
+from tests.events import BASE, approved, at, created, declined, label, requested, started, succeeded
 from tests.lake import load_bronze, provenance
+
+DAY = 24 * 60
+FIRST = BASE.date()
+
+
+@pytest.fixture(autouse=True)
+def fresh_silver(spark):
+    """A range run keeps other days' rows, so each test starts from empty Silver."""
+    for table in silver.TABLES:
+        spark.sql(f"DROP TABLE IF EXISTS {table}")
+
+
+def run(spark, run_id, first=FIRST, last=FIRST):
+    return silver.run(spark, run_id, first, last)
 
 
 def test_identical_copies_collapse_to_earliest_and_conflicts_leave_the_accepted_tables(spark, report_root):
@@ -19,7 +36,7 @@ def test_identical_copies_collapse_to_earliest_and_conflicts_leave_the_accepted_
     ]
     load_bronze(spark, events, [])
 
-    report = silver.run(spark, "run-1")
+    report = run(spark, "run-1")
 
     accepted = spark.table(silver.PAYMENT_EVENTS)
     assert [r.event_id for r in accepted.collect()] == ["evt-1"]
@@ -28,7 +45,7 @@ def test_identical_copies_collapse_to_earliest_and_conflicts_leave_the_accepted_
     assert {r.reason for r in rejected.collect()} == {"evt-2"}
     assert rejected.where(F.col("payment_id") == "pay-2").count() == 3
     assert report["events"]["distinct_events"] == 3
-    assert report["events"]["conflicting_events"] == 1
+    assert report["events"]["conflicting_payments"] == 1
     assert spark.table(silver.PAYMENT_EVENTS).where(F.col("payment_id") == "pay-2").count() == 0
 
 
@@ -56,7 +73,7 @@ def test_attempt_lifecycle_and_label_linkage(spark, report_root):
     ]
     load_bronze(spark, events, labels)
 
-    silver.run(spark, "run-2")
+    run(spark, "run-2")
 
     attempts = {r.attempt_id: r for r in spark.table(silver.ATTEMPTS).collect()}
     assert attempts["att-1"].outcome == "declined"
@@ -84,7 +101,7 @@ def test_labels_without_their_payment_are_orphans_when_historical_and_pending_wh
     historical.writeTo(bronze.LABELS).append()
     live.writeTo(bronze.LABELS).append()
 
-    silver.run(spark, "run-orphans")
+    run(spark, "run-orphans")
 
     linkage = {r.payment_id: r.linkage for r in spark.table(silver.LABELS).collect()}
     assert linkage == {"pay-gone": "orphan", "pay-later": "pending"}
@@ -94,16 +111,84 @@ def test_rerun_on_unchanged_bronze_produces_equal_tables(spark, report_root):
     events = [created("pay-1", "evt-1"), started("pay-1", "evt-2", 2, 1, "att-1")]
     load_bronze(spark, events, [label("pay-1", "att-1", available=5)])
 
-    first_report = silver.run(spark, "run-3")
+    first_report = run(spark, "run-3")
     first = spark.table(silver.ATTEMPTS)
-    second_report = silver.run(spark, "run-4")
+    run(spark, "run-4")
     second = spark.table(silver.ATTEMPTS)
 
     assert first.exceptAll(second).count() == 0
     assert second.exceptAll(first).count() == 0
-    assert second_report["lifecycle_invalid"] == 0
+    assert second.where(~F.col("lifecycle_valid")).count() == 0
     snapshots = json.loads((report_root / "run-4" / "silver.json").read_text())["silver_snapshots"]
     assert set(snapshots) == {silver.PAYMENT_EVENTS, silver.ATTEMPTS, silver.LABELS, silver.REJECTED}
     assert (
         first_report["silver_snapshots"][silver.ATTEMPTS]["snapshot_id"] != snapshots[silver.ATTEMPTS]["snapshot_id"]
     )
+
+
+def payment(n, minutes, attempt=True):
+    events = [created(f"pay-{n}", f"e-{n}-1", minutes=minutes)]
+    if attempt:
+        events += [
+            started(f"pay-{n}", f"e-{n}-2", 2, minutes + 1, f"att-{n}"),
+            approved(f"pay-{n}", f"e-{n}-3", 3, minutes + 2, f"att-{n}"),
+            succeeded(f"pay-{n}", f"e-{n}-4", 4, minutes + 3, f"att-{n}"),
+        ]
+    return events
+
+
+def history():
+    # pay-2 begins two minutes before midnight UTC and finishes after it; pay-4 has a conflicting redelivery.
+    midnight = DAY - 12 * 60
+    events = [
+        *payment(1, 0),
+        *payment(2, midnight - 2),
+        *payment(3, midnight + 30),
+        *payment(4, 3 * DAY),
+        created("pay-4", "e-4-1", minutes=3 * DAY, amount=999),
+    ]
+    labels = [
+        label("pay-1", "att-1", available=2 * DAY),
+        label("pay-3", "att-3", available=2 * DAY + 60, source="LABEL_SOURCE_CHARGEBACK", minutes=midnight + 33),
+    ]
+    return events, labels
+
+
+def tables(spark):
+    return {table: spark.table(table).drop("_run_id").localCheckpoint() for table in silver.TABLES}
+
+
+def test_a_payment_belongs_to_the_day_of_its_first_event(spark, report_root):
+    events, labels = history()
+    load_bronze(spark, events, labels)
+
+    run(spark, "first-day", FIRST + timedelta(days=1), FIRST + timedelta(days=1))
+
+    by_payment = {r.payment_id: r.payment_day for r in spark.table(silver.ATTEMPTS).collect()}
+    assert by_payment == {"pay-3": FIRST + timedelta(days=1)}
+    run(spark, "day-zero", FIRST, FIRST)
+    late = spark.table(silver.PAYMENT_EVENTS).where(F.col("payment_id") == "pay-2")
+    assert {r.payment_day for r in late.collect()} == {FIRST}
+    assert late.count() == 4
+
+
+def test_daily_runs_build_the_same_silver_as_one_backfill(spark, report_root):
+    events, labels = history()
+    load_bronze(spark, events, labels)
+    last = FIRST + timedelta(days=4)
+
+    run(spark, "backfill", FIRST, last)
+    backfill = tables(spark)
+    for table in silver.TABLES:
+        spark.sql(f"DROP TABLE IF EXISTS {table}")
+    for day in every_day(FIRST, last):
+        run(spark, f"daily-{day}", day, day)
+    daily = tables(spark)
+
+    for table in silver.TABLES:
+        only_backfill = [r.asDict() for r in backfill[table].exceptAll(daily[table]).collect()]
+        only_daily = [r.asDict() for r in daily[table].exceptAll(backfill[table]).collect()]
+        assert not only_backfill and not only_daily, f"{table}: {only_backfill} vs {only_daily}"
+    linkage = {r.payment_id: r.linkage for r in daily[silver.LABELS].collect()}
+    assert linkage == {"pay-1": "linked", "pay-3": "linked"}
+    assert {r.payment_id for r in daily[silver.REJECTED].collect()} == {"pay-4"}

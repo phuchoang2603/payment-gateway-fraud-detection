@@ -5,17 +5,9 @@ import urllib.request
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from batch.bronze.ingest import EVENTS as BRONZE_EVENTS
-from batch.bronze.ingest import current_snapshot
+from batch.lakehouse import read_at, ref_snapshot
 from batch.metrics import phase
-from batch.silver.curate import (
-    ATTEMPTS,
-    dedup_broadcast_threshold,
-    full_width_dedup,
-    narrow_dedup,
-    plan_dedup,
-    with_event_hash,
-)
+from batch.silver.curate import ATTEMPTS
 from batch.spark import session
 from batch.store import Store
 
@@ -168,58 +160,11 @@ def spill_bytes(spark, stage_ids: list) -> dict:
     }
 
 
-def full_width_group(hashed: DataFrame):
-    return full_width_dedup(hashed), None
-
-
-def narrow_detect(hashed: DataFrame):
-    plan = plan_dedup(hashed, dedup_broadcast_threshold())
-    distinct, _ = narrow_dedup(hashed, plan)
-    return distinct, plan
-
-
-DEDUP_VARIANTS = {"full_width_group": full_width_group, "narrow_detect": narrow_detect}
-
-
-def dedup_variant(spark, events: DataFrame, name: str, build, phases: dict):
-    hashed = with_event_hash(events)
-    with phase(spark, phases, f"dedup {name}"):
-        frame, plan = build(hashed)
-        try:
-            rows, checksum, _ = fingerprint(frame)
-        finally:
-            if plan is not None:
-                plan["duplicated"].unpersist()
-    return rows, checksum, plan, spill_bytes(spark, phases[f"dedup {name}"]["stage_ids"])
-
-
-def dedup_family(spark, events: DataFrame, phases: dict) -> dict:
-    events.count()
-    results, baseline = {}, None
-    for name, build in DEDUP_VARIANTS.items():
-        rows, checksum, plan, spill = dedup_variant(spark, events, name, build, phases)
-        guard = (rows, checksum)
-        if baseline is None:
-            baseline = guard
-        same_output(baseline, guard, name)
-        results[name] = {
-            "output_rows": rows,
-            "checksum": str(checksum),
-            "seconds": phases[f"dedup {name}"]["seconds"],
-            "spill": spill,
-        }
-        if plan is not None:
-            results[name]["strategy"] = plan["strategy"]
-            results[name]["estimated_bytes"] = plan["estimated_bytes"]
-    return results
-
-
-def benchmark(spark, attempts: DataFrame, events: DataFrame) -> dict:
+def benchmark(spark, attempts: DataFrame) -> dict:
     phases: dict = {}
     return {
         "hot_key": hot_key_share(attempts),
         "skewed_merchant_join": skewed_merchant_join(spark, attempts, phases),
-        "dedup": dedup_family(spark, events, phases),
         "phases": phases,
     }
 
@@ -228,16 +173,9 @@ def main():
     run_id = os.environ["RUN_ID"]
     spark = session("dp2-benchmark")
     try:
-        silver_snapshot = current_snapshot(spark, ATTEMPTS)
-        bronze_snapshot = current_snapshot(spark, BRONZE_EVENTS)
-        attempts = spark.read.option("versionAsOf", silver_snapshot).table(ATTEMPTS)
-        events = spark.read.option("versionAsOf", bronze_snapshot).table(BRONZE_EVENTS)
-        result = {
-            "run_id": run_id,
-            "silver_snapshot_id": silver_snapshot,
-            "bronze_snapshot_id": bronze_snapshot,
-            **benchmark(spark, attempts, events),
-        }
+        silver_snapshot = ref_snapshot(spark, ATTEMPTS)
+        attempts = read_at(spark, ATTEMPTS, silver_snapshot)
+        result = {"run_id": run_id, "silver_snapshot_id": silver_snapshot, **benchmark(spark, attempts)}
         Store(os.environ["RUN_REPORT_ROOT"]).write_json(f"{run_id}/benchmark.json", result)
         print(json.dumps(result, sort_keys=True, default=str))
     finally:

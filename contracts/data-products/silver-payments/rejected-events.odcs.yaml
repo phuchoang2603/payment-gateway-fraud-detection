@@ -33,12 +33,16 @@ schema:
     physicalType: table
     description: One row per rejected Bronze row, carrying its content as JSON.
     dataGranularityDescription: One row of a conflicting payment.
+    customProperties:
+      - property: partitioning
+        value: partition_day
     properties:
       - {name: rejected_table, logicalType: string, physicalType: VARCHAR, required: true, description: payment_events, attempts or labels.}
       - {name: reason, logicalType: string, physicalType: VARCHAR, required: true, description: The conflicting event_id, or the linkage rule that failed.}
       - {name: source, logicalType: string, physicalType: VARCHAR, required: true, description: historical or kafka, from Bronze.}
       - {name: integration_id, logicalType: string, physicalType: VARCHAR, required: true, description: Integration namespace of the payment.}
       - {name: payment_id, logicalType: string, physicalType: VARCHAR, required: true, description: Rejected payment identity.}
+      - {name: partition_day, logicalType: date, physicalType: DATE, required: true, description: 'The payment_day of a rejected event or attempt, or the availability day of a rejected label; the day whose run rewrites the row.'}
       - {name: row_json, logicalType: string, physicalType: VARCHAR, required: true, description: Row content as JSON.}
       - {name: _run_id, logicalType: string, physicalType: VARCHAR, required: true, description: Silver run that rejected the row.}
     quality:

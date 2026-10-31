@@ -1,6 +1,6 @@
 import os
 
-from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame, SparkSession
 
 TARGET_FILE_BYTES = 256 * 1024 * 1024
 TABLE_PROPERTIES = (
@@ -52,7 +52,11 @@ def file_stats(spark: SparkSession, table: str):
     return {"files": row["files"], "bytes": int(row["bytes"])}
 
 
-def create_table(spark: SparkSession, name: str, frame, partition=None, properties=WRITE_PROPERTIES) -> None:
+def create_table(
+    spark: SparkSession, name: str, frame, partition=None, properties=WRITE_PROPERTIES, order: str | None = None
+) -> None:
+    """Create the table on first use. `order` sorts rows within each written file, so file statistics prune reads on
+    that column (Spark's and ClickHouse's) without a global sort."""
     if spark.catalog.tableExists(name):
         return
     spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {name.rsplit('.', 1)[0]}")
@@ -62,6 +66,29 @@ def create_table(spark: SparkSession, name: str, frame, partition=None, properti
     if partition is not None:
         creator = creator.partitionedBy(partition)
     creator.create()
+    if order is not None:
+        spark.sql(f"ALTER TABLE {name} WRITE LOCALLY ORDERED BY {order}")
+
+
+def read_at(spark: SparkSession, table: str, snapshot) -> DataFrame:
+    """The table at a snapshot; a table without one is empty."""
+    if snapshot is None:
+        return spark.table(table).limit(0)
+    return spark.read.option("versionAsOf", snapshot).table(table)
+
+
+def pinned_writer(frame: DataFrame, table: str, pins: dict):
+    writer = frame.writeTo(table)
+    for key, value in pins.items():
+        writer = writer.option(f"snapshot-property.{key}", value)
+    return writer
+
+
+def overwrite(spark: SparkSession, table: str, frame: DataFrame, condition, pins: dict) -> dict:
+    """Replace the rows matching `condition` with `frame` on this run's write ref, recording `pins` on the commit."""
+    stage(spark, table)
+    pinned_writer(frame, table, pins).overwrite(condition)
+    return snapshot_info(spark, table)
 
 
 def snapshot_info(spark: SparkSession, table: str) -> dict:

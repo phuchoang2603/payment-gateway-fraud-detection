@@ -103,6 +103,8 @@
 - [x] 6b.6 Make `dim_customer` range-scoped: open versions only for attempts in the range, continued from the stored version at its start and linked to the stored version after it, so a run's cost follows its range.
 - [x] 6b.5 Give prod DP3 the `gold` Spark profile with a 2 GiB driver. The `large` driver was unschedulable on the on-demand pool on 2026-10-31.
 
+- [x] 6b.7 Run Silver, Gold and the marts as one `dp-pipeline` (decision 9) with `dp-daily` and an ordered month-by-month `dp-backfill`, under one template-level mutex, with Spark applications named after their step pods.
+
 ## 7. Docs
 
 - [x] 7.1 Update the existing pages only:

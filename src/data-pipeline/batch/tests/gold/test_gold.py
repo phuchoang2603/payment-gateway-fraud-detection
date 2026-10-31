@@ -67,8 +67,14 @@ def example_attempts(case):
     return rows
 
 
+def frame(spark, rows):
+    """Silver attempts: a payment begins at its attempt's start in these tests."""
+    attempts = spark.createDataFrame(rows, ATTEMPT_COLUMNS).withColumn("payment_day", F.to_date("started_at"))
+    return gold.with_attempt_time(attempts)
+
+
 def valid(spark, rows):
-    return gold.with_attempt_time(spark.createDataFrame(rows, ATTEMPT_COLUMNS)).where(F.col("lifecycle_valid"))
+    return frame(spark, rows).where(F.col("lifecycle_valid"))
 
 
 @pytest.mark.parametrize("case", EXAMPLES["cases"], ids=[case["name"] for case in EXAMPLES["cases"]])
@@ -151,7 +157,7 @@ def test_attempt_snapshots_count_earlier_starts_in_each_window_at_the_attempt_st
         attempt("p-4", "c", "card", "d-9", 2041, attempted=500),
         attempt("p-5", "c", None, "d-3", 3500),
     ]
-    attempts = gold.with_attempt_time(spark.createDataFrame(rows, ATTEMPT_COLUMNS))
+    attempts = frame(spark, rows)
     start = gold.history_start(attempts)
     floor = gold.midnight(at(1440).date())
     computed = gold.attempt_snapshots(attempts, start, floor, floor + 2 * gold.DAY, floor)
@@ -179,7 +185,7 @@ def test_attempt_snapshots_count_earlier_starts_in_each_window_at_the_attempt_st
 
 
 def test_attempt_snapshots_of_a_range_equal_the_full_run(spark):
-    attempts = gold.with_attempt_time(spark.createDataFrame(history(20), ATTEMPT_COLUMNS))
+    attempts = frame(spark, history(20))
     start = gold.history_start(attempts)
     full = gold.attempt_snapshots(attempts, start, start, start + 20 * gold.DAY, start)
     floor, upper = start + 6 * gold.DAY, start + 11 * gold.DAY

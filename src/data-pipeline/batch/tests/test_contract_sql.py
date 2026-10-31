@@ -80,8 +80,8 @@ def test_every_lakehouse_and_mart_rule_analyzes_on_the_pinned_clickhouse(spark, 
         ],
         [label("pay-1", "att-1", available=10)],
     )
-    silver.run(spark, "contract-sql")
     day = BASE.date()
+    silver.run(spark, "contract-sql", day, day)
     gold.run(spark, "contract-sql", day, day)
     for database in (DATABASE, marts.DATABASE):
         assert run_sql(clickhouse, f"DROP DATABASE IF EXISTS {database} SYNC") is None

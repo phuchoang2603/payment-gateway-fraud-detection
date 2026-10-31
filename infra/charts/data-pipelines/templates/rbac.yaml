@@ -1,4 +1,4 @@
-{{- if or .Values.bronze.enabled .Values.silver.enabled .Values.analytics.enabled }}
+{{- if or .Values.bronze.enabled .Values.pipeline.enabled .Values.analytics.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:

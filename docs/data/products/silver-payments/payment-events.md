@@ -46,5 +46,6 @@ Synthetic data only. Payments whose deliveries conflict are excluded and listed 
 |  payment_expired | object | *Terminal expiry.* |
 |  payload_case | string | *The protobuf oneof member the event carries or null when it carries none.* |
 |  _source | string | *Source of the kept copy*<br />• `required` |
+|  payment_day | date | *UTC day of the payment's first event. Every event of a payment occurs within its expiry, so a Silver run overwrites whole payment days.*<br />• `required` |
 
 ## SLA Properties

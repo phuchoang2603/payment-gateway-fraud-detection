@@ -4,44 +4,23 @@ Curate Bronze payment events and fraud labels into deduplicated events, one row 
 
 ## ADDED Requirements
 
-### Requirement: Full recompute from pinned Bronze snapshots
-DP2 SHALL read both Bronze tables at snapshot IDs fixed when the run starts. In historical mode it SHALL replace `silver.payment_events`, `silver.attempts` and `silver.labels` entirely. Each Silver commit SHALL record the Bronze snapshot IDs it was built from. Rerunning on the same Bronze snapshots SHALL produce the same content. Historical and Kafka rows SHALL be curated by the same rules.
+### Requirement: Day-range curation from pinned Bronze
+DP2 SHALL take a `start` and `end` UTC day, and without them run yesterday and the configured lookback days before it. It SHALL read both Bronze tables at snapshot IDs fixed when the run starts. Each payment SHALL belong to the UTC day of its first event, its `payment_day`. A run SHALL read Bronze events whose `occurred_at` falls between the day before `start` and the day after `end`, curate the payments whose `payment_day` is in the range, and overwrite only those `payment_day` partitions of `silver.payment_events`, `silver.attempts` and `silver.rejected_events`. It SHALL overwrite `silver.labels` by availability day, linking each label to the attempts of the 45 days before. Each Silver commit SHALL record the Bronze snapshot IDs and the range. A run SHALL be a pure function of its Bronze snapshots: re-running a range changes nothing, and daily runs SHALL build the same tables as one run over their days. Historical and Kafka rows SHALL be curated by the same rules.
 
 #### Scenario: Bronze advances during a run
 
 - **WHEN** Bronze receives a new commit while DP2 is running
 - **THEN** DP2 output reflects only the snapshots recorded at its start
 
-#### Scenario: Rerun on unchanged Bronze
+#### Scenario: Payment across midnight
 
-- **WHEN** DP2 runs twice without Bronze changes
-- **THEN** all three Silver tables have equal content after each run
+- **WHEN** a payment's first event occurs at 23:58 UTC and its last at 00:01
+- **THEN** all its rows carry the first day as `payment_day`, and only a run covering that day writes them
 
-### Requirement: Incremental curation
-In incremental mode DP2 SHALL read the Bronze rows appended since the Bronze snapshot IDs recorded on the last DP2 commit of `silver.payment_events` main, using Iceberg's incremental append read, recompute every payment those rows name from all of its Bronze rows of both sources within a lookback (`SILVER_LOOKBACK_DAYS`, default 35 days before the earliest new row's event or label availability time), and replace those payments' rows in the four Silver tables on the run's audit branch. Every DP2 commit SHALL record the Bronze snapshot IDs, the mode and the Silver logic version as snapshot properties. Silver after an incremental run SHALL equal Silver after a historical run over the same Bronze. The run SHALL fail, naming historical mode, when no published DP2 commit records its Bronze snapshots, when Bronze main changed other than by appends or compaction since them, when the recorded logic version differs from the current one, or when an affected payment has Silver rows older than the lookback cutoff.
+#### Scenario: Daily runs equal a backfill
 
-#### Scenario: New Kafka deliveries
-
-- **WHEN** Bronze receives a new payment, a late duplicate, a conflicting redelivery, a label before its payment, or a chargeback weeks later
-- **THEN** an incremental run leaves the four Silver tables equal to a historical run over the same Bronze
-
-#### Scenario: Historical reload since the last run
-
-- **WHEN** a DP1 historical run overwrote Bronze after the last DP2 run
-- **THEN** incremental mode fails and asks for a historical run instead of guessing
-
-#### Scenario: Payment history older than the lookback
-
-- **WHEN** an affected payment already has Silver rows before the lookback cutoff
-- **THEN** incremental mode fails and names the lookback setting
-
-### Requirement: Silver change data for consumers
-Downstream pipelines SHALL read what a DP2 run changed through Iceberg's changelog view of the Silver tables between two published snapshots, with net changes, rather than a separate feed table. A historical run rewrites every row, which consumers treat as a full reset.
-
-#### Scenario: Consumer reads an incremental run
-
-- **WHEN** an incremental run changes one attempt's outcome
-- **THEN** the net changelog of `silver.attempts` between the run's snapshots holds that attempt's old row as a delete and its new row as an insert, and no unchanged attempt
+- **WHEN** DP2 runs once per day over a range, and separately once over the whole range, on the same Bronze
+- **THEN** the four Silver tables hold the same rows apart from `_run_id`
 
 ### Requirement: Event deduplication and conflicts
 `silver.payment_events` SHALL contain one row per `event_id`. Deliveries of the same `event_id` SHALL collapse when they agree on every business field except `recorded_at`, which republished exports advance. The hash that decides this SHALL include `schema_version` and ignore `recorded_at` and provenance. Of the collapsing copies, the one with the earliest `recorded_at` SHALL be kept. Deliveries of the same `event_id` that differ in any other business field SHALL be conflicts: the run SHALL succeed, every row of that payment SHALL be written to `silver.rejected_events` with its conflict reason, and the payment SHALL be excluded from `silver.payment_events`, `silver.attempts` and `silver.labels`. Deduplication SHALL join the duplicated event IDs back to Bronze as a broadcast join when their estimated size is under `SILVER_DEDUP_BROADCAST_BYTES` (default 256 MB) and as a shuffled join otherwise, with identical output; the run report SHALL record the chosen strategy and the number of duplicated event IDs.
@@ -92,7 +71,7 @@ Downstream pipelines SHALL read what a DP2 run changed through Iceberg's changel
 - **WHEN** a label references an attempt that does not exist and the payment is `succeeded` or `expired`
 - **THEN** the label is a `violation`
 
-#### Scenario: Historical label whose payment has no events
+#### Scenario: Historical label whose payment has no attempts
 
 - **WHEN** a historical label references a payment that has no events in the complete source
 - **THEN** the label is an `orphan` and the Silver checks fail
@@ -161,14 +140,3 @@ The repository SHALL provide an on-demand Spark benchmark that runs one skewed m
 
 - **WHEN** the benchmark completes
 - **THEN** the report lists each variant's duration, stage IDs and task count, and the hot merchant share with its denominator
-
-### Requirement: Silver dedup benchmark
-The benchmark job SHALL run the deduplication of the pinned Bronze events in two variants, each once and timed through the phase helper: a full-width group-by over every row, and a narrow detection of duplicated IDs that joins them back with the strategy Silver chooses for the estimated size. Each variant's output SHALL be reduced to its row count and an order-independent checksum, and the narrow variant SHALL equal the full-width variant on both before any duration is reported. The report SHALL give each variant's duration, its spill in memory and on disk, and its output row count; the narrow variant also reports its strategy and estimated bytes.
-
-#### Scenario: Variant output differs
-- **WHEN** the narrow variant's row count or checksum differs from the full-width variant
-- **THEN** the benchmark fails without reporting a duration for either variant
-
-#### Scenario: Report content
-- **WHEN** the benchmark completes
-- **THEN** the report lists each variant's duration, spill and output row count

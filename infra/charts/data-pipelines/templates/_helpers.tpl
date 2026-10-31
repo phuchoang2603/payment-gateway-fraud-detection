@@ -281,7 +281,8 @@ audit-{{ "{{workflow.name}}" }}
 apiVersion: spark.apache.org/v1
 kind: SparkApplication
 metadata:
-  name: {{ printf "%s-%s-%s" .stem "{{workflow.uid}}" "{{retries}}" }}
+  # The step pod's name is unique per step, loop item and retry, so a backfill's months never collide.
+  name: {{ "{{pod.name}}" | quote }}
   namespace: {{ .root.Values.namespace }}
   labels:
     dp-product: {{ .product }}

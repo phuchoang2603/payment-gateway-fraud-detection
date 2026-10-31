@@ -1,0 +1,216 @@
+{{- if .Values.pipeline.enabled }}
+{{- $sizing := index .Values.spark.profiles .Values.pipeline.profile }}
+{{- $report := printf "%s/%s/gold.json" .Values.pipeline.reportRoot "{{workflow.name}}" }}
+{{- $range := list (dict "name" "DP_START" "value" "{{inputs.parameters.start}}") (dict "name" "DP_END" "value" "{{inputs.parameters.end}}") (dict "name" "DP_LOOKBACK_DAYS" "value" (toString .Values.pipeline.lookbackDays)) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.pipeline.reportRoot) }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: dp-pipeline
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
+  entrypoint: run
+  onExit: publish
+  arguments:
+    parameters:
+      - name: start
+        value: ""
+      - name: end
+        value: ""
+  activeDeadlineSeconds: {{ .Values.pipeline.activeDeadlineSeconds }}
+  podMetadata:
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
+    labels:
+      {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
+  templates:
+    - name: run
+      steps:
+        - - name: pipeline
+            template: pipeline
+            arguments:
+              parameters:
+                - name: start
+                  value: "{{ "{{workflow.parameters.start}}" }}"
+                - name: end
+                  value: "{{ "{{workflow.parameters.end}}" }}"
+    # Silver, Gold and the marts for one range of UTC days, on one write-audit-publish branch. The mutex sits on this
+    # template so the daily run and every backfill month serialize, wherever they reference it.
+    - name: pipeline
+      synchronization:
+        mutexes:
+          - name: dp-writer
+      inputs:
+        parameters:
+          - name: start
+          - name: end
+      dag:
+        tasks:
+          - name: silver
+            template: silver
+            arguments:
+              parameters:
+                - name: start
+                  value: "{{ "{{inputs.parameters.start}}" }}"
+                - name: end
+                  value: "{{ "{{inputs.parameters.end}}" }}"
+          - name: gold
+            template: gold
+            depends: silver
+            arguments:
+              parameters:
+                - name: start
+                  value: "{{ "{{inputs.parameters.start}}" }}"
+                - name: end
+                  value: "{{ "{{inputs.parameters.end}}" }}"
+          - name: marts
+            template: marts
+            depends: gold
+          - name: checks
+            template: checks
+            depends: marts
+          - name: publish-tables
+            template: publish-tables
+            depends: checks
+          - name: publish-marts
+            template: publish-marts
+            depends: publish-tables
+          - name: profile
+            template: profile
+            depends: publish-marts
+    - name: silver
+      inputs:
+        parameters:
+          - name: start
+          - name: end
+      {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          {{- include "data-pipelines.spark-application" (dict "root" $ "wap" true "main" "silver/curate" "product" "silver-payments" "stage" "silver" "sizing" $sizing "extraEnv" $range) | nindent 10 }}
+    - name: gold
+      inputs:
+        parameters:
+          - name: start
+          - name: end
+      {{- include "data-pipelines.spark.retry" $ | nindent 6 }}
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.currentState.currentStateSummary == ResourceReleased
+        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
+        manifest: |
+          {{- include "data-pipelines.spark-application" (dict "root" $ "wap" true "main" "gold/features" "product" "gold-features" "stage" "gold" "sizing" $sizing "extraEnv" $range) | nindent 10 }}
+{{- include "data-pipelines.marts-step" (dict "root" $ "name" "marts" "command" (list "python" "-m" "batch.gold.marts" "build") "reportRoot" .Values.pipeline.reportRoot) | nindent 4 }}
+{{- include "data-pipelines.checks" (dict "root" $ "product" "silver-payments,gold-features,payment-marts") | nindent 4 }}
+{{- include "data-pipelines.publish-tables" (dict "root" $ "product" "silver-payments,gold-features") | nindent 4 }}
+{{- include "data-pipelines.marts-step" (dict "root" $ "name" "publish-marts" "command" (list "python" "-m" "batch.gold.marts" "publish") "reportRoot" .Values.pipeline.reportRoot) | nindent 4 }}
+{{- include "data-pipelines.profile" (dict "root" $) | nindent 4 }}
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp2-silver,dp3-features,dp3-marts" "dataset" .Values.bronze.datasetVersion "report" $report) | nindent 4 }}
+---
+# Daily: Kafka into Bronze, then yesterday and the lookback days through Silver, Gold and the marts.
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: dp-daily
+  namespace: {{ .Values.namespace }}
+spec:
+  schedules:
+    - {{ .Values.pipeline.schedule | quote }}
+  suspend: true
+  concurrencyPolicy: Forbid
+  workflowSpec:
+    serviceAccountName: data-pipelines
+    {{- include "data-pipelines.workflowPlacement" $ | nindent 4 }}
+    entrypoint: daily
+    onExit: publish
+    arguments:
+      parameters:
+        - name: source
+          value: kafka
+        - name: dataset-version
+          value: {{ .Values.bronze.datasetVersion | quote }}
+    podMetadata:
+      annotations:
+        karpenter.sh/do-not-disrupt: "true"
+      labels:
+        {{- include "data-pipelines.kafkaClientLabels" $ | nindent 8 }}
+    templates:
+      - name: daily
+        steps:
+          - - name: bronze
+              templateRef:
+                name: dp1-bronze
+                template: bronze
+          - - name: pipeline
+              templateRef:
+                name: dp-pipeline
+                template: pipeline
+              arguments:
+                parameters:
+                  - name: start
+                    value: ""
+                  - name: end
+                    value: ""
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp1-bronze-kafka,dp2-silver,dp3-features,dp3-marts" "dataset" .Values.bronze.datasetVersion "report" $report) | nindent 6 }}
+---
+# Backfill: the same pipeline month by month, in date order, one month at a time. dim_customer continues each month
+# from the versions the month before published, so order matters; a failure stops the rest, and a new backfill from
+# the failed month resumes.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: dp-backfill
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
+  entrypoint: backfill
+  onExit: publish
+  arguments:
+    parameters:
+      - name: start
+      - name: end
+  podMetadata:
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
+    labels:
+      {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
+  templates:
+    - name: backfill
+      steps:
+        - - name: months
+            template: months
+        - - name: month
+            templateRef:
+              name: dp-pipeline
+              template: pipeline
+            arguments:
+              parameters:
+                - name: start
+                  value: "{{ "{{item.start}}" }}"
+                - name: end
+                  value: "{{ "{{item.end}}" }}"
+            withParam: "{{ "{{steps.months.outputs.result}}" }}"
+      parallelism: 1
+    - name: months
+      script:
+        image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
+        command: [python3]
+        source: |
+          import json
+          from datetime import date, timedelta
+
+          start, end = date.fromisoformat("{{ "{{workflow.parameters.start}}" }}"), date.fromisoformat("{{ "{{workflow.parameters.end}}" }}")
+          months = []
+          while start <= end:
+              after = date(start.year + start.month // 12, start.month % 12 + 1, 1)
+              months.append({"start": str(start), "end": str(min(after - timedelta(days=1), end))})
+              start = after
+          print(json.dumps(months))
+{{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp2-silver,dp3-features,dp3-marts" "dataset" .Values.bronze.datasetVersion "report" $report) | nindent 4 }}
+{{- end }}
