@@ -146,7 +146,7 @@
 - [x] 7.3 Chat with `evidence-agent` in the kagent UI (port-forward), and capture the ModelConfig and agent pages. Run three concurrent sandboxed conversations on one worker and capture the worker count, actor states and answer times. Recorded on dev 2026-10-30 (agents.md): kagent chat with a search_knowledge call and cited chunk ids, ModelConfig and MCP pages; three concurrent sandboxed conversations on the two-worker pool (13.3 s, 26.2 s, 45.8 s) and a resume after 60 s idle in 5.2 s.
 - [x] 7.4 Verify that the registry lists `evidence-agent` 0.3.0 and the `knowledge` MCP server, and that Langfuse shows `evidence-agent-system-prompt` as the production version; capture both UIs. Recorded on dev 2026-10-30 (agents.md, observability.md): registry lists evidenceagent 0.3.0 and the knowledge MCP server; Langfuse shows evidence-agent-system-prompt version 1 as production.
 - [x] 7.5 After section 5, verify that OpenMetadata shows the LLM service, both models and the agent application linked to `qwen3-8b`, and capture it. Recorded on dev 2026-10-30 through the OpenMetadata API (2.0.7 has no UI pages for these entity types); see 4b.10.
-- [ ] 7.6 Run the benchmark baseline and each optimization (design.md decision 9) on dev by applying the rendered Job with `kubectl`, plus the gateway end-to-end run. Keep only improving settings, and set the gateway limits from the measured capacity. Record each run's command, image digest, args and date.
+- [x] 7.6 Run the benchmark baseline and each optimization (design.md decision 9) on dev by applying the rendered Job with `kubectl`, plus the gateway end-to-end run. Keep only improving settings, and set the gateway limits from the measured capacity. Record each run's command, image digest, args and date. Recorded on dev 2026-10-31 (benchmark.md): baseline, six model-server variants and the cold start on a standalone server, FP8 KV cache kept (601 vs 521 output tokens/s at 16), and the gateway run on analyst questions (about 1 s added before the first token, from screening). Gateway limits unchanged: they are per client and below the measured capacity.
 
 - [x] 7.7 Release `rag-pipeline` to dev and let its per-image `Workflow` run `rag-knowledge`. Record: Recorded on dev 2026-10-30 (rag.md): run rag-knowledge-07ae38319a, 17 documents, 161 chunks, recall@3 0.9, HNSW used, all 6 checks, lineage; an unchanged corpus skips after publish. The stale-id and broken-document runs were dropped at the user's request (record only what the rubric asks).
   - the version, chunk count, step durations and check results;
@@ -160,7 +160,7 @@
 ## 7b. Rubric screenshots (dev; stored in `docs/llm/images/`, each embedded in the page named, with a sentence on what it proves)
 
 - [x] 7b.1 Inference platform (`inference.md`): both `LLMInferenceService`s Ready with their pods, `nvidia-smi` showing both processes on the one GPU, and the custom model's name and revision. Recorded on dev 2026-10-30.
-- [ ] 7b.2 Benchmark (`benchmark.md`): the baseline and each optimization's results table, with the command and date.
+- [x] 7b.2 Benchmark (`benchmark.md`): the baseline and each optimization's results table, with the command and date. Recorded on dev 2026-10-31.
 - [x] 7b.3 Agent gateway security and policy (`gateway.md`): the 7.2 terminal run (401 without or with a wrong key, chat and embedding with the agents key, PII masked, 429 burst, mesh refusal), plus links to the Gateway, HTTPRoute and `AgentgatewayPolicy` YAML. Recorded on dev 2026-10-30.
 - [x] 7b.4 MCP gateway (`rag.md`): `tools/list` and a `search_knowledge` call through `/mcp/knowledge` with the agents key, the same call refused without a key and refused when calling `rag-api` directly, plus a link to the MCP route and policy YAML. Recorded on dev 2026-10-30.
 - [x] 7b.5 Global ModelConfig and agent (`agents.md`): the kagent UI's ModelConfig page pointing at the gateway, and a chat with `evidence-agent` that calls the knowledge tools and cites chunk ids, plus links to the Agent YAML. Recorded on dev 2026-10-30. Re-recorded on dev 2026-10-31 after section 5d.
@@ -179,7 +179,7 @@
 
 ## 8. Documentation and cleanup
 
-- [x] 8.1 Write the LLM pages as separate, focused notes, each with its captures and links to code at a commit: Done except benchmark.md, which waits for 7.6.
+- [x] 8.1 Write the LLM pages as separate, focused notes, each with its captures and links to code at a commit: Done; benchmark.md recorded 2026-10-31.
   - `docs/llm/inference.md`: model servers, the GPU split and rollout strategy, weight streaming, placement, cache;
   - `docs/llm/gateway.md`: the Gateway, routes (`/v1`, `/mcp/<server>`, `/<api>/v1`), keys, limits, PII masking, mesh rules;
   - `docs/llm/agents.md` (update): ModelConfig, `evidence-agent` and its tools, the sandboxed warm copy on Substrate, the registry, the autoscaling decision table;

@@ -47,7 +47,7 @@ Feast is built as one change after Bronze and Silver merge. Until then the strea
 
 | Area | Capability | Page | Status |
 |---|---|---|---|
-| Inference | Qwen3-8B (FP8) chat and Qwen3-Embedding on vLLM through KServe, one shared GPU | [Inference](../llm/inference.md) | Done on dev; benchmark planned |
+| Inference | Qwen3-8B (FP8) chat and Qwen3-Embedding on vLLM through KServe, one shared GPU | [Inference](../llm/inference.md) | Done on dev; [benchmark](../llm/benchmark.md) with FP8 KV cache kept |
 | Agent gateway | One gateway for models, MCP tools and REST APIs: per-client keys, rate and token limits, PII masking, mesh-only access | [Agent gateway](../llm/gateway.md) | Done on dev |
 | Agents | Global model config; the `coordinator` entry agent behind the A2A gateway with `evidence-agent` (knowledge tools) and `risk-agent` as sub-agents; sandboxed on Agent Substrate with warm start and KEDA-scaled workers; registry | [Agents](../llm/agents.md) | Done on dev; the risk agent's scoring tool planned |
 | Retrieval | RAG pipeline into Iceberg and a Feast pgvector store, governed in OpenMetadata; Web API by id and MCP tools, autoscaled by KEDA | [RAG](../llm/rag.md) | Done on dev |

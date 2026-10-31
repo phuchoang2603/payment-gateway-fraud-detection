@@ -16,7 +16,7 @@ Both are KServe `LLMInferenceService`s. The chat model runs behind llm-d's endpo
 
 ## One GPU, two models
 
-Each environment has one GPU, so both models share it through a single DRA `ResourceClaim` (`llm-gpu`), each vLLM process with a fixed memory fraction: 0.80 for chat and 0.12 for embeddings. The embedding server's context is capped at 2 048 tokens so its KV cache fits the small share; knowledge chunks are at most about 400 tokens.
+Each environment has one GPU, so both models share it through a single DRA `ResourceClaim` (`llm-gpu`), each vLLM process with a fixed memory fraction: 0.80 for chat and 0.12 for embeddings. The chat server keeps its KV cache in FP8, which the [benchmark](benchmark.md) kept for throughput and cache room. The embedding server's context is capped at 2 048 tokens so its KV cache fits the small share; knowledge chunks are at most about 400 tokens.
 
 On dev both processes run on the RTX 5060 Ti (16 GiB), reported by each pod's `nvidia-smi` under the same GPU UUID:
 
