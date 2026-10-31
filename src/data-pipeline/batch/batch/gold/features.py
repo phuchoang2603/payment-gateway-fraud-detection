@@ -429,7 +429,8 @@ def replace_customers(spark, events, attempts, floor, cutoff, pins) -> tuple[dic
         .where(F.col("customer_id").isNotNull())
         .select(*CUSTOMER_KEY)
         .distinct()
-        .localCheckpoint()
+        # Persisted, not locally checkpointed: a lost spot executor's blocks are recomputed from the lineage.
+        .persist(StorageLevel.MEMORY_AND_DISK)
     )
     # A month's customers reach millions of payments, so every join here shuffles; a broadcast of their keys
     # overran the driver's result limit.
@@ -443,7 +444,9 @@ def replace_customers(spark, events, attempts, floor, cutoff, pins) -> tuple[dic
         "(SELECT integration_id, customer_id FROM dp3_dim_customer_scope)"
     )
     with_pins(rows.writeTo(DIM_CUSTOMER), pins).append()
-    return recorded(spark, DIM_CUSTOMER, pins), customers.count()
+    count = customers.count()
+    customers.unpersist()
+    return recorded(spark, DIM_CUSTOMER, pins), count
 
 
 def run(spark, run_id: str, start_day: date, end_day: date) -> dict:
