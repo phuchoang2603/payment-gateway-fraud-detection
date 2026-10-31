@@ -132,8 +132,4 @@ Required test coverage of 90% reached. Total coverage: 98.52%
 ## CI/CD
 
 - CI runs lint, format and tests for each workspace member and builds the `rag-pipeline` and `rag-serving` images when their sources change (including the corpus sources the image copies in).
-- The release publishes `deploy/dev`; Argo CD syncs the chart, and the new pipeline image starts its run.
-
-![GitHub Actions Python CI: all jobs green, including src/rag/common, pipeline and serving (before the move to src/llm)](images/cicd-python-ci.png)
-
-![GitHub Actions service images: rag-pipeline and rag-serving built, and the deploy job](images/cicd-images-and-deploy.png)
+- The release publishes `deploy/dev`; Argo CD syncs the chart, and the new pipeline image starts its run in Argo Workflows ([a complete run](#a-complete-run-on-dev)).
