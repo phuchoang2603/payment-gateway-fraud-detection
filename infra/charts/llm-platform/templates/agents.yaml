@@ -3,43 +3,23 @@
 {{- $pool := $agents.workerPool }}
 {{- $gatewayUrl := printf "http://%s.%s.svc.cluster.local" .Values.gateway.name .Release.Namespace }}
 {{- $langfuseOrigin := printf "http://langfuse-web.%s.svc.cluster.local:3000" .Release.Namespace }}
-{{- /* One Agent per agent, plus one per A/B variant: the same template with another model config. */}}
-{{- $deployed := list }}
-{{- range $agent := $agents.list }}
-{{- $deployed = append $deployed (dict "agent" $agent "name" $agent.name "modelConfig" $agents.modelConfig) }}
-{{- with $agent.abTest }}
-{{- $deployed = append $deployed (dict "agent" $agent "name" .variant "modelConfig" .modelConfig) }}
-{{- end }}
-{{- end }}
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: agent-prompts
-  namespace: {{ $ns }}
-data:
-  {{- range $agent := $agents.list }}
-  {{ $agent.name }}.md: |
-    {{- $.Files.Get (printf "files/prompts/%s.md" $agent.name) | required (printf "files/prompts/%s.md is missing" $agent.name) | nindent 4 }}
-  {{- end }}
-{{- range $name, $settings := $agents.modelConfigs }}
----
+{{- $runtime := $agents.runtime.image }}
+{{- $digest := index (.Values.global.imageDigests | default dict) $runtime }}
+{{- /* kagent admits only digest-pinned runtime images; a release always supplies the digest. */}}
+{{- $runtimeImage := ternary (printf "%s@%s" $runtime $digest) (printf "%s:%s" $runtime (index .Values.global.imageTags $runtime)) (not (empty $digest)) }}
 # Substrate's egress gateway replaces the runtime's placeholder Authorization header with this key.
 apiVersion: api.kagent.dev/v1alpha3
 kind: ModelConfig
 metadata:
-  name: {{ $name }}
+  name: {{ $agents.modelConfig }}
   namespace: {{ $ns }}
 spec:
   provider: OpenAI
-  model: {{ $.Values.models.chat.name }}
+  model: {{ .Values.models.chat.name }}
   apiKeySecret: llm-gateway-agents
   apiKeySecretKey: key
   openAI:
     baseUrl: {{ $gatewayUrl }}/v1
-    {{- with $settings }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
-{{- end }}
 {{- range $name, $server := .Values.gateway.mcpServers }}
 ---
 apiVersion: api.kagent.dev/v1alpha3
@@ -60,12 +40,11 @@ spec:
         name: llm-gateway-agents
         key: key
 {{- end }}
-{{- if $agents.tracing.enabled }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
-  name: langfuse-otlp
+  name: langfuse-api
   namespace: {{ $ns }}
 spec:
   refreshInterval: 1h
@@ -73,7 +52,7 @@ spec:
     kind: ClusterSecretStore
     name: {{ .Values.secretStore }}
   target:
-    name: langfuse-otlp
+    name: langfuse-api
     template:
       data:
         basic: '{{ "{{ printf \"%s:%s\" .public .secret | b64enc }}" }}'
@@ -85,11 +64,11 @@ spec:
       remoteRef:
         key: LANGFUSE_INIT_SECRET_KEY
 ---
-# The trace endpoint is granted from the Harness's OTLP setting; this adds the project's basic-auth credential.
+# Agents read their prompts from Langfuse and send it their traces; the gateway injects the project's credential.
 apiVersion: api.kagent.dev/v1alpha3
 kind: EgressPolicy
 metadata:
-  name: langfuse-traces
+  name: langfuse
   namespace: {{ $ns }}
 spec:
   destinations:
@@ -98,9 +77,8 @@ spec:
         header: Authorization
         prefix: "Basic "
         secretKeyRef:
-          name: langfuse-otlp
+          name: langfuse-api
           key: basic
-{{- end }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -149,21 +127,50 @@ spec:
         query: >-
           sum(max by (ate_worker_state) (ate_workerpool_workers{ate_workerpool_namespace="{{ $ns }}",ate_workerpool_name="{{ $pool.name }}",ate_worker_state=~"partial|at_capacity"}))
         threshold: {{ $pool.autoscaling.busyWorkersPerReplica | quote }}
+{{- range $agent := $agents.list }}
+{{- $remote := list }}
+{{- range $name := $agent.agents | default list }}
+{{- $target := dict }}
+{{- range $candidate := $agents.list }}
+{{- if eq $candidate.name $name }}{{ $target = $candidate }}{{ end }}
+{{- end }}
+{{- $remote = append $remote (dict "name" ($name | replace "-" "_") "description" (required (printf "agents.list has no %s" $name) $target.description) "url" (printf "%s/a2a/%s" $gatewayUrl $name)) }}
+{{- end }}
+{{- $tools := list }}
+{{- range $server := $agent.mcpServers | default list }}
+{{- $_ := required (printf "gateway.mcpServers.%s is not defined" $server) (index $.Values.gateway.mcpServers $server) }}
+{{- /* No tool list: the agent gets every tool the server lists, discovered at runtime. */}}
+{{- $tools = append $tools (dict "mcp" (dict "server" (dict "kind" "RemoteMCPServer" "name" $server))) }}
+{{- end }}
+{{- $template := dict "modelConfig" (dict "name" $agents.modelConfig) "description" $agent.description }}
+{{- with $tools }}
+{{- $_ := set $template "tools" . }}
+{{- end }}
 ---
 apiVersion: api.kagent.dev/v1alpha3
 kind: Harness
 metadata:
-  name: {{ $agents.harness }}
+  name: {{ $agent.name }}
   namespace: {{ $ns }}
 spec:
   kagent: {}
-  {{- if $agents.tracing.enabled }}
+  workload:
+    image: {{ $runtimeImage }}
+    command: [fraud-agent-runtime, --host, 0.0.0.0, --port, "8080"]
   env:
+    - name: LANGFUSE_HOST
+      value: {{ $langfuseOrigin }}
+    - name: LANGFUSE_PROMPT
+      value: {{ $agent.name }}-system-prompt
+    {{- with $remote }}
+    - name: REMOTE_AGENTS
+      value: {{ toJson . | quote }}
+    {{- end }}
     - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
       value: {{ $langfuseOrigin }}/api/public/otel/v1/traces
     - name: OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
       value: http/protobuf
-    # A placeholder: Substrate's egress gateway replaces it with the langfuse-traces credential.
+    # Placeholders: Substrate's egress gateway replaces the Authorization header with the langfuse credential.
     - name: OTEL_EXPORTER_OTLP_TRACES_HEADERS
       value: Authorization=placeholder
     # Only traces have a destination; there is no OpenTelemetry Collector.
@@ -171,41 +178,16 @@ spec:
       value: none
     - name: OTEL_METRICS_EXPORTER
       value: none
-  {{- end }}
   substrate:
     workerPoolRef:
       name: {{ $pool.name }}
     snapshotPolicy:
       location: {{ $agents.snapshotRoot }}
-{{- range $deploy := $deployed }}
-{{- $agent := $deploy.agent }}
-{{- $tools := list }}
-{{- range $server := $agent.mcpServers | default list }}
-{{- $_ := required (printf "gateway.mcpServers.%s is not defined" $server) (index $.Values.gateway.mcpServers $server) }}
-{{- /* No tool list: the agent gets every tool the server lists, discovered at runtime. */}}
-{{- $tools = append $tools (dict "mcp" (dict "server" (dict "kind" "RemoteMCPServer" "name" $server))) }}
-{{- end }}
-{{- range $sub := $agent.agents | default list }}
-{{- $target := dict }}
-{{- range $candidate := $agents.list }}
-{{- if eq $candidate.name $sub }}{{ $target = $candidate }}{{ end }}
-{{- end }}
-{{- $_ := required (printf "agents.list has no %s" $sub) $target.description }}
-{{- $tools = append $tools (dict "subAgent" (dict "name" ($sub | replace "-" "_") "description" $target.description "templateRef" (dict "name" $sub))) }}
-{{- end }}
-{{- $_ := required (printf "agents.modelConfigs.%s is not defined" $deploy.modelConfig) (hasKey $agents.modelConfigs $deploy.modelConfig | ternary "ok" "") }}
-{{- $template := dict
-  "modelConfig" (dict "name" $deploy.modelConfig)
-  "description" $agent.description
-  "systemPromptFrom" (dict "name" "agent-prompts" "key" (printf "%s.md" $agent.name)) }}
-{{- with $tools }}
-{{- $_ := set $template "tools" . }}
-{{- end }}
 ---
 apiVersion: api.kagent.dev/v1alpha3
 kind: AgentTemplate
 metadata:
-  name: {{ $deploy.name }}
+  name: {{ $agent.name }}
   namespace: {{ $ns }}
 spec:
   {{- toYaml $template | nindent 2 }}
@@ -213,18 +195,16 @@ spec:
 apiVersion: api.kagent.dev/v1alpha3
 kind: Agent
 metadata:
-  name: {{ $deploy.name }}
+  name: {{ $agent.name }}
   namespace: {{ $ns }}
   labels:
     app.kubernetes.io/version: {{ $agent.version | quote }}
 spec:
   template:
     ref:
-      name: {{ $deploy.name }}
+      name: {{ $agent.name }}
   harnessRef:
-    name: {{ $agents.harness }}
-  {{- if $agents.tracing.enabled }}
+    name: {{ $agent.name }}
   egressPolicyRefs:
-    - name: langfuse-traces
-  {{- end }}
+    - name: langfuse
 {{- end }}

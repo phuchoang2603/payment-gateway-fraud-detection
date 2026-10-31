@@ -13,12 +13,9 @@
 {{- $catalog = append $catalog (toYaml $entry) }}
 {{- end }}
 {{- range $agent := .Values.agents.list }}
-{{- $notes := list (printf "Model config %s (%s through the agent gateway); system prompt %s-system-prompt in Langfuse." $.Values.agents.modelConfig $.Values.models.chat.name $agent.name) }}
+{{- $notes := list (printf "%s through the agent gateway; system prompt, model settings and A/B tests in Langfuse as %s-system-prompt." $.Values.models.chat.name $agent.name) }}
 {{- with $agent.agents }}
-{{- $notes = append $notes (printf "Runs %s as sub-agents in its own runtime." (join ", " .)) }}
-{{- end }}
-{{- with $agent.abTest }}
-{{- $notes = append $notes (printf "A/B test: %d%% of its A2A traffic goes to %s with model config %s." (int .weight) .variant .modelConfig) }}
+{{- $notes = append $notes (printf "Calls %s over A2A through the agent gateway." (join ", " .)) }}
 {{- end }}
 {{- $entry := dict
   "apiVersion" "ar.dev/v1alpha1"
@@ -41,7 +38,7 @@
 {{- end }}
 {{- $agentList := list }}
 {{- range $agent := .Values.agents.list }}
-{{- $agentList = append $agentList (pick $agent "name" "version") }}
+{{- $agentList = append $agentList (pick $agent "name" "version" "abTest") }}
 {{- end }}
 {{- $data := dict
   "registry.yaml" (join "\n---\n" $catalog)

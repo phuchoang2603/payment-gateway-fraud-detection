@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -9,6 +10,12 @@ from pathlib import Path
 
 RELEASE_FILE = "infra/argocd/app-of-apps/release.yaml"
 WORKFLOW = ".github/workflows/release.yml"
+MANIFEST_TYPES = (
+    "application/vnd.oci.image.index.v1+json, "
+    "application/vnd.docker.distribution.manifest.list.v2+json, "
+    "application/vnd.oci.image.manifest.v1+json, "
+    "application/vnd.docker.distribution.manifest.v2+json"
+)
 
 
 def git(*arguments):
@@ -118,7 +125,16 @@ def publish():
         for tag in tags.values()
     ):
         raise ValueError("invalid service image tags")
-    release = {"global": {"targetRevision": revision, "imageTags": tags}}
+    digests = {
+        repository: image_digest(repository, tag) for repository, tag in tags.items()
+    }
+    release = {
+        "global": {
+            "targetRevision": revision,
+            "imageTags": tags,
+            "imageDigests": digests,
+        }
+    }
     git("switch", "--force-create", branch, revision)
     Path(RELEASE_FILE).write_text(json.dumps(release, indent=2) + "\n")
     git("config", "user.name", "github-actions[bot]")
@@ -131,6 +147,30 @@ def publish():
         "origin",
         f"HEAD:refs/heads/{branch}",
     )
+
+
+def image_digest(repository, tag):
+    """The registry digest of repository:tag, for workloads that only accept digest-pinned images."""
+    name = repository.removeprefix("ghcr.io/")
+    credentials = base64.b64encode(
+        f"x-access-token:{os.environ['GITHUB_TOKEN']}".encode()
+    ).decode()
+    request = urllib.request.Request(
+        f"https://ghcr.io/token?scope=repository:{name}:pull",
+        headers={"Authorization": f"Basic {credentials}"},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        token = json.load(response)["token"]
+    request = urllib.request.Request(
+        f"https://ghcr.io/v2/{name}/manifests/{tag}",
+        method="HEAD",
+        headers={"Authorization": f"Bearer {token}", "Accept": MANIFEST_TYPES},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        digest = response.headers["Docker-Content-Digest"]
+    if not re.fullmatch(r"sha256:[a-f0-9]{64}", digest or ""):
+        raise ValueError(f"no digest for {repository}:{tag}")
+    return digest
 
 
 def workflow_runs(repository, sha):
