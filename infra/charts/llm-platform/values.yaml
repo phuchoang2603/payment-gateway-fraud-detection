@@ -36,7 +36,6 @@ models:
     name: qwen3-8b
     repo: Qwen/Qwen3-8B-FP8
     revision: 220b46e3b2180893580a4454f21f22d3ebb187d3
-    description: Chat model (FP8) served by vLLM through KServe LLMInferenceService with the llm-d endpoint picker.
     replicas: 1
     # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
     stopped: false
@@ -54,7 +53,6 @@ models:
     name: qwen3-embedding
     repo: Qwen/Qwen3-Embedding-0.6B
     revision: 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3
-    description: 1024-dimension embedding model served by vLLM's pooling runner; embeds the knowledge base and queries.
     replicas: 1
     # 0.12 of the 16 GB GPU leaves about 0.3 GiB of KV cache after the weights: enough for 2048 tokens, which covers
     # knowledge chunks (at most about 400 tokens) and queries.
@@ -71,8 +69,8 @@ models:
       revision: 4da05a8edb55c6046cce958586c33b61da07bb79
 
 # laya, a non-autoregressive decision model (ModernBERT-large, 421M), answers typed questions in one forward pass on
-# CPU: which agent should answer an analyst's question (the coordinator's routing tool) and whether a prompt asks an
-# agent to act or to break its rules (the gateway's screening webhook). Only the English checkpoint is uploaded.
+# CPU. The gateway's screening webhook asks it whether a prompt asks an agent to act or to break its rules. Only the
+# English checkpoint is uploaded.
 decision:
   name: decision
   image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/decision
@@ -101,7 +99,6 @@ gateway:
     benchmark: LLM_GATEWAY_BENCHMARK_API_KEY
     ragingest: LLM_GATEWAY_RAG_INGEST_API_KEY
     ragapi: LLM_GATEWAY_RAG_API_KEY
-    catalog: LLM_GATEWAY_CATALOG_API_KEY
   # Each client's key Secret lands where its caller runs; the default is the release namespace.
   clientNamespaces:
     agents: llm-agents
@@ -117,8 +114,8 @@ gateway:
   externalClients:
     - cluster.local/ns/data/sa/rag-pipeline
     - cluster.local/ns/kagent/sa/kagent-controller
-  # ServiceAccounts in this namespace that call the gateway, besides the benchmark: the knowledge API and the catalog.
-  namespaceClients: [rag-api, llm-catalog]
+  # ServiceAccounts in this namespace that call the gateway, besides the benchmark: the knowledge API.
+  namespaceClients: [rag-api]
   # MCP servers behind /mcp/<name>. Each target is a Service in this namespace.
   mcpServers:
     knowledge:
@@ -128,15 +125,6 @@ gateway:
       version: 0.1.0
       title: Payment-gateway knowledge base
       description: Search and read passages about decline codes, risk policy, the payment lifecycle, the checkout API and fraud features.
-      # Data the server reads, linked in OpenMetadata to each agent that uses it.
-      tables: ['clickhouse.default.lakehouse."knowledge.chunks"']
-    decision:
-      service: decision
-      port: 8080
-      path: /mcp
-      version: 0.1.0
-      title: Agent routing
-      description: Choose the specialist agent that should answer an analyst's question, with the laya decision model.
   # REST APIs behind /<name>/v1, each a Service in this namespace, with client keys and limits like the LLM route.
   apiRoutes:
     knowledge:
@@ -197,15 +185,14 @@ agents:
       ttl: 300s
       claims: {iss: "urn:platform:kagent:gateway", sub: agentgateway, aud: kagent}
   # Each agent's system prompt is files/prompts/<name>.md, versioned with the agent and published to the registry.
-  # `routing` is what the coordinator's routing tool reads to pick the agent; `agents` are its sub-agents, compiled
-  # into its runtime from their templates.
+  # `agents` are an agent's sub-agents, compiled into its runtime from their templates; its model picks one by their
+  # descriptions.
   # `abTest` runs a variant with another model config behind the same A2A route and splits its traffic by weight.
   list:
     - name: evidence-agent
       version: 0.3.0
       title: Evidence agent
       description: Read-only fraud-analyst agent that explains declines, risk decisions and payment behaviour from the knowledge base, citing its passages.
-      routing: what a decline or reason code means, why payments of a kind are declined, risk policy, the payment lifecycle, the checkout API, or what a fraud feature means in general
       mcpServers: [knowledge]
       abTest:
         variant: evidence-agent-b
@@ -215,26 +202,19 @@ agents:
       version: 0.1.0
       title: Risk agent
       description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, and explains what drives it.
-      routing: the fraud risk, score, features or likely outcome of one specific payment, card, customer or merchant
     - name: coordinator
       version: 0.1.0
       title: Coordinator
-      description: Read-only entry agent for fraud analysts that routes each question to the evidence or risk agent with the laya routing tool and combines their answers.
-      mcpServers: [decision]
+      description: Read-only entry agent for fraud analysts that hands each question to the evidence or risk sub-agent and combines their answers.
       agents: [evidence-agent, risk-agent]
 
 # One Job per release publishes the catalog from these values and the prompt files: agents and MCP servers to
-# agentregistry, prompts to Langfuse, and models, MCP servers (with the tools they list) and agents to OpenMetadata.
+# agentregistry, and prompts to Langfuse.
 catalog:
   image: python:3.12.16-slim-bookworm
   registry:
     url: http://agentregistry.agentregistry.svc:12121
     repository: https://github.com/phuchoang2603/payment-gateway-fraud-detection
-  openmetadata:
-    url: http://openmetadata.data.svc.cluster.local:8585/api
-    tokenKey: OPENMETADATA_TOKEN
-    llmService: agent-gateway
-    mcpService: agent-gateway-mcp
 
 # Langfuse v3 for prompt management and LLM traces. Its ClickHouse is the shared app-owned instance in `data`;
 # Postgres and Redis are instances of the platform operators in this namespace.

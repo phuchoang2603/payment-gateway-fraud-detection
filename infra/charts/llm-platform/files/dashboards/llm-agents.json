@@ -194,7 +194,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (tool) (increase({__name__=~\"knowledge_mcp_tool_calls_total|decision_mcp_tool_calls_total\"}[$__range]))",
+          "expr": "sum by (tool) (increase(knowledge_mcp_tool_calls_total[$__range]))",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -234,7 +234,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (tool, outcome) (rate({__name__=~\"knowledge_mcp_tool_calls_total|decision_mcp_tool_calls_total\"}[$__rate_interval]))",
+          "expr": "sum by (tool, outcome) (rate(knowledge_mcp_tool_calls_total[$__rate_interval]))",
           "legendFormat": "{{tool}} {{outcome}}",
           "refId": "A"
         }
@@ -287,7 +287,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (tool) (increase({__name__=~\"knowledge_mcp_tool_calls_total|decision_mcp_tool_calls_total\",outcome=\"failure\"}[$__range]))",
+          "expr": "sum by (tool) (increase(knowledge_mcp_tool_calls_total{outcome=\"failure\"}[$__range]))",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -309,7 +309,7 @@
     },
     {
       "type": "row",
-      "title": "Routing and screening (laya)",
+      "title": "Screening (laya)",
       "id": 8,
       "collapsed": false,
       "gridPos": {
@@ -317,58 +317,6 @@
         "w": 24,
         "x": 0,
         "y": 17
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Coordinator routing decisions",
-      "id": 9,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "VictoriaMetrics"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 18
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "VictoriaMetrics"
-          },
-          "expr": "sum by (agent) (increase(decision_route_total[$__rate_interval]))",
-          "legendFormat": "{{agent}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "stacking": {
-              "mode": "normal"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
       }
     },
     {
@@ -381,8 +329,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
+        "w": 12,
+        "x": 0,
         "y": 18
       },
       "targets": [
@@ -443,8 +391,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
+        "w": 12,
+        "x": 12,
         "y": 18
       },
       "targets": [

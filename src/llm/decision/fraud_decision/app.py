@@ -1,20 +1,15 @@
 import asyncio
 import hashlib
-import json
 import os
 from collections import OrderedDict
 from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from mcp.server.mcpserver import MCPServer
-from mcp.server.transport_security import TransportSecuritySettings
 from prometheus_client import Counter, Histogram, make_asgi_app
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 SCREENS = Counter("decision_screen_total", "Gateway screening decisions", ["action", "reason"])
-ROUTES = Counter("decision_route_total", "Coordinator routing decisions", ["agent"])
-TOOL_CALLS = Counter("decision_mcp_tool_calls_total", "Decision MCP tool calls", ["tool", "outcome"])
 LATENCY = Histogram("decision_predict_seconds", "laya forward pass", ["kind"])
 
 # One question, so screening costs one forward pass of the encoder.
@@ -36,16 +31,6 @@ REFUSAL = (
 )
 
 
-class Route(BaseModel):
-    agent: str
-    confidence: float
-    probabilities: dict[str, float]
-
-
-class RouteRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=4000)
-
-
 class Message(BaseModel):
     role: str
     content: str
@@ -60,20 +45,18 @@ class GuardRequest(BaseModel):
 
 
 class Decider:
-    def __init__(self, model_dir: str, routes: dict[str, str], threshold: float, cache_size: int = 512):
+    def __init__(self, model_dir: str, threshold: float, cache_size: int = 512):
         self.model_dir = model_dir
-        self.routes = routes
         self.threshold = threshold
         self.agent = None
         self.lock = asyncio.Lock()
-        self.cache: OrderedDict[str, dict] = OrderedDict()
+        self.cache: OrderedDict[str, tuple[bool, str]] = OrderedDict()
         self.cache_size = cache_size
 
     @classmethod
     def from_env(cls) -> "Decider":
         return cls(
             model_dir=os.environ.get("MODEL_DIR", "/models/laya"),
-            routes=json.loads(os.environ.get("ROUTES", "{}")),
             threshold=float(os.environ.get("SCREEN_THRESHOLD", "0.5")),
         )
 
@@ -98,87 +81,38 @@ class Decider:
         except HTTPException:
             pass
 
-    async def predict(self, kind: str, state: dict, questions: dict) -> dict:
-        agent = await self.model()
-        with LATENCY.labels(kind).time():
-            result = await asyncio.to_thread(agent.predict, state, questions)
-        return result["answers"]
-
-    async def route(self, question: str) -> Route:
-        if not self.routes:
-            raise ValueError("no agents to route to")
-        questions = {
-            "agent": {
-                "type": "choice",
-                "instructions": "Which specialist agent should answer `question`?",
-                "criteria": self.routes,
-            }
-        }
-        answer = (await self.predict("route", {"question": question}, questions))["agent"]
-        ROUTES.labels(answer["choice"]).inc()
-        return Route(
-            agent=answer["choice"], confidence=answer["answer_confidence"], probabilities=answer["probabilities"]
-        )
-
     # Agents re-send the same user turn on every model call of a conversation, so screening results are cached.
     async def screen(self, prompt: str) -> tuple[bool, str]:
         key = hashlib.sha256(prompt.encode()).hexdigest()
         if key in self.cache:
             self.cache.move_to_end(key)
-            return self.cache[key]["blocked"], self.cache[key]["reason"]
-        probabilities = (await self.predict("screen", {"prompt": prompt}, SCREEN_QUESTIONS))["request"][
-            "probabilities"
-        ]
+            return self.cache[key]
+        agent = await self.model()
+        with LATENCY.labels("screen").time():
+            result = await asyncio.to_thread(agent.predict, {"prompt": prompt}, SCREEN_QUESTIONS)
+        probabilities = result["answers"]["request"]["probabilities"]
         reason = max(("action", "jailbreak"), key=probabilities.get)
         if probabilities[reason] < self.threshold:
             reason = "ok"
-        self.cache[key] = {"blocked": reason != "ok", "reason": reason}
+        self.cache[key] = (reason != "ok", reason)
         if len(self.cache) > self.cache_size:
             self.cache.popitem(last=False)
-        return reason != "ok", reason
+        return self.cache[key]
 
 
 decider = Decider.from_env()
-mcp = MCPServer(
-    name="decision",
-    instructions="Routing for the fraud-analyst coordinator. Ask which specialist agent should answer a question.",
-)
-
-
-@mcp.tool()
-async def route_question(question: str) -> Route:
-    """Choose the specialist agent that should answer an analyst's question. Returns the agent name, the
-    calibrated confidence and the probability of every agent."""
-    request = RouteRequest(question=question)
-    try:
-        result = await decider.route(request.question)
-    except Exception:
-        TOOL_CALLS.labels("route_question", "failure").inc()
-        raise
-    TOOL_CALLS.labels("route_question", "success").inc()
-    return result
-
-
-# Callers are restricted by mesh authorization to the agent gateway, which rewrites Host, so the
-# SDK's DNS-rebinding check (meant for browser-reachable local servers) is disabled.
-mcp_app = mcp.streamable_http_app(
-    stateless_http=True,
-    json_response=True,
-    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
-)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    async with mcp.session_manager.run():
-        warming = asyncio.create_task(decider.warm())
-        try:
-            yield
-        finally:
-            warming.cancel()
+    warming = asyncio.create_task(decider.warm())
+    try:
+        yield
+    finally:
+        warming.cancel()
 
 
-app = FastAPI(title="laya decision service", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="laya screening service", version="0.2.0", lifespan=lifespan)
 
 
 @app.get("/healthz")
@@ -210,7 +144,6 @@ async def screen_request(request: GuardRequest) -> dict:
 
 
 app.mount("/metrics", make_asgi_app())
-app.mount("/", mcp_app)
 
 
 def main() -> None:  # pragma: no cover
