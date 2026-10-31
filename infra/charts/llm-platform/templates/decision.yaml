@@ -1,16 +1,6 @@
 {{- $decision := .Values.decision }}
 {{- $store := .Values.modelStore }}
 {{- $image := printf "%s:%s" $decision.image (required (printf "image tag missing for %s" $decision.image) (index .Values.global.imageTags $decision.image)) }}
-{{- $routes := dict }}
-{{- range $agent := .Values.agents.list }}
-{{- range $name := $agent.agents | default list }}
-{{- $target := dict }}
-{{- range $candidate := $.Values.agents.list }}
-{{- if eq $candidate.name $name }}{{ $target = $candidate }}{{ end }}
-{{- end }}
-{{- $_ := set $routes $name (required (printf "agents.list has no %s" $name) ($target.routing | default $target.description)) }}
-{{- end }}
-{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -64,8 +54,6 @@ spec:
           env:
             - name: MODEL_DIR
               value: /models/laya
-            - name: ROUTES
-              value: {{ toJson $routes | quote }}
             - name: SCREEN_THRESHOLD
               value: {{ $decision.screenThreshold | quote }}
             - name: OMP_NUM_THREADS

@@ -41,55 +41,21 @@
 {{- end }}
 {{- $agentList := list }}
 {{- range $agent := .Values.agents.list }}
-{{- $agentList = append $agentList (dict "name" $agent.name "version" $agent.version "description" $agent.description "mcpServers" ($agent.mcpServers | default list) "agents" ($agent.agents | default list)) }}
+{{- $agentList = append $agentList (pick $agent "name" "version") }}
 {{- end }}
-{{- $gatewayUrl := printf "http://%s.%s.svc.cluster.local" .Values.gateway.name .Release.Namespace }}
-{{- $om := $catalog_.openmetadata }}
-{{- $models := list }}
-{{- range $model := list .Values.models.chat .Values.models.embedding }}
-{{- $models = append $models (pick $model "name" "repo" "revision" "description") }}
-{{- end }}
-{{- $servers := list }}
-{{- range $name, $server := .Values.gateway.mcpServers }}
-{{- $servers = append $servers (dict "name" $name "url" (printf "%s/mcp/%s" $gatewayUrl $name) "description" $server.description "tables" ($server.tables | default list)) }}
-{{- end }}
-{{- $assets := dict
-  "llmService" (dict "name" $om.llmService "baseUrl" (printf "%s/v1" $gatewayUrl))
-  "models" $models
-  "primaryModel" .Values.models.chat.name
-  "mcpService" $om.mcpService
-  "mcpServers" $servers }}
 {{- $data := dict
   "registry.yaml" (join "\n---\n" $catalog)
   "agents.json" (toJson $agentList)
-  "assets.json" (toJson $assets)
   "publish.py" (.Files.Get "files/catalog.py") }}
 {{- range $agent := .Values.agents.list }}
 {{- $_ := set $data (printf "prompt-%s.md" $agent.name) ($.Files.Get (printf "files/prompts/%s.md" $agent.name)) }}
 {{- end }}
-{{- /* Release image tags are part of the hash, so a new MCP server image (new tools) re-runs the catalog. */}}
-{{- $hash := list $data (.Values.global | default dict).imageTags | toJson | sha256sum | trunc 10 }}
+{{- $hash := $data | toJson | sha256sum | trunc 10 }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: llm-catalog
 automountServiceAccountToken: false
----
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: llm-catalog-openmetadata
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: {{ .Values.secretStore }}
-  target:
-    name: llm-catalog-openmetadata
-  data:
-    - secretKey: token
-      remoteRef:
-        key: {{ $om.tokenKey }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -129,12 +95,6 @@ spec:
               valueFrom: {secretKeyRef: {name: langfuse, key: init-public-key}}
             - name: LANGFUSE_SECRET_KEY
               valueFrom: {secretKeyRef: {name: langfuse, key: init-secret-key}}
-            - name: GATEWAY_API_KEY
-              valueFrom: {secretKeyRef: {name: llm-gateway-catalog, key: key}}
-            - name: OPENMETADATA_URL
-              value: {{ $om.url }}
-            - name: OPENMETADATA_TOKEN
-              valueFrom: {secretKeyRef: {name: llm-catalog-openmetadata, key: token}}
             - {name: HOME, value: /tmp}
             - {name: PYTHONDONTWRITEBYTECODE, value: "1"}
             - {name: PYTHONUNBUFFERED, value: "1"}
