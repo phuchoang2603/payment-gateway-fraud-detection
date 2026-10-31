@@ -44,7 +44,7 @@ FEAT_ATTEMPT_RT = f"{NAMESPACE}.feat_attempt_rt"
 LABEL_ATTEMPT = f"{NAMESPACE}.label_attempt"
 TABLES = (DIM_CUSTOMER, FEAT_CUSTOMER, FEAT_METHOD, FEAT_ATTEMPT_RT, LABEL_ATTEMPT)
 # Bump when a change to DP3 would make earlier gold rows differ from a fresh run over the same days.
-LOGIC_VERSION = "2"
+LOGIC_VERSION = "3"
 LOOKBACK_ENV = "DP3_LOOKBACK_DAYS"
 LOOKBACK_DEFAULT_DAYS = 2
 
@@ -174,15 +174,15 @@ PARTITIONS = {
     FEAT_ATTEMPT_RT: lambda: F.days(ANCHOR),
     LABEL_ATTEMPT: lambda: F.days(ANCHOR),
 }
-TRACKED = [
+PROFILE_ATTRIBUTES = [
     "external_buyer_id",
     "customer_account_created_at",
     "shipping_country",
     "shipping_region",
     "shipping_postal_code",
     "shipping_address_fingerprint",
-    "familiar_device_fingerprints",
 ]
+TRACKED = [*PROFILE_ATTRIBUTES, "familiar_device_fingerprints"]
 START_PROFILE = {
     "external_buyer_id": "attempt_started.context.customer.external_buyer_id",
     "customer_account_created_at": "attempt_started.context.snapshot.customer_account_created_at",
@@ -327,22 +327,33 @@ VERSION_COLUMNS = [
 ]
 
 
-def tracked_profiles(profile: DataFrame, uses: DataFrame) -> DataFrame:
-    """Each attempt's tracked profile and its hash, one attempt per customer instant: the last in key order. `uses`
-    must hold every device use in the familiar window before each attempt."""
-    intervals = familiar_intervals(uses.select(*CUSTOMER_KEY, "device_fingerprint", "started_at"))
-    attempt = profile.select(*ATTEMPT_KEY, "customer_id", "started_at")
-    familiar = (
-        attempt.join(intervals, CUSTOMER_KEY)
-        .where((F.col("start") <= F.col("started_at")) & (F.col("started_at") < F.col("end")))
-        .groupBy(*ATTEMPT_KEY)
-        .agg(F.array_sort(F.collect_set("device_fingerprint")).alias("familiar_device_fingerprints"))
+def familiar_sets(profile: DataFrame, intervals: DataFrame) -> DataFrame:
+    """Each attempt with `familiar_set`, an XOR fingerprint of the devices familiar at its start: one ordered pass per
+    customer in which each interval's start and end toggle its device's hash, so no attempt joins every interval. A
+    device's merged intervals never overlap, so its hash is in the running XOR exactly while one of them holds."""
+    toggle = F.xxhash64("device_fingerprint")
+    edges = intervals.select(*CUSTOMER_KEY, F.col("start").alias("_at"), toggle.alias("_toggle")).unionByName(
+        intervals.select(*CUSTOMER_KEY, F.col("end").alias("_at"), toggle.alias("_toggle"))
     )
-    tracked = profile.join(familiar, ATTEMPT_KEY, "left").withColumn(
-        "familiar_device_fingerprints",
-        F.coalesce(F.col("familiar_device_fingerprints"), F.array().cast("array<string>")),
+    points = profile.withColumns({"_at": F.col("started_at"), "_toggle": F.lit(0).cast("long")})
+    # Edges at an attempt's instant apply first: intervals are [start, end).
+    ordered = (
+        Window.partitionBy(*CUSTOMER_KEY)
+        .orderBy("_at", F.col("payment_id").asc_nulls_first(), F.col("attempt_id").asc_nulls_first())
+        .rowsBetween(Window.unboundedPreceding, Window.currentRow)
     )
-    hashed = tracked.withColumn("profile_hash", F.sha2(F.to_json(F.struct(*TRACKED)), 256))
+    swept = points.unionByName(edges, allowMissingColumns=True).withColumn(
+        "familiar_set", F.bit_xor("_toggle").over(ordered)
+    )
+    return swept.where(F.col("payment_id").isNotNull()).drop("_at", "_toggle")
+
+
+def tracked_profiles(profile: DataFrame, intervals: DataFrame) -> DataFrame:
+    """Each attempt's profile hash over its attributes and familiar-device fingerprint, one attempt per customer
+    instant: the last in key order. `intervals` must cover the familiar window before each attempt."""
+    hashed = familiar_sets(profile, intervals).withColumn(
+        "profile_hash", F.sha2(F.to_json(F.struct(*PROFILE_ATTRIBUTES, "familiar_set")), 256)
+    )
     instant = Window.partitionBy(*CUSTOMER_KEY, "started_at").orderBy(F.desc("payment_id"), F.desc("attempt_id"))
     return hashed.withColumn("_tie", F.row_number().over(instant)).where(F.col("_tie") == 1).drop("_tie")
 
@@ -369,13 +380,28 @@ def opened_versions(tracked: DataFrame, previous: DataFrame | None = None) -> Da
         ).alias("customer_sk"),
         *CUSTOMER_KEY,
         (F.col("_base") + F.row_number().over(ordered)).alias("version_number"),
-        *TRACKED,
+        *PROFILE_ATTRIBUTES,
         "profile_hash",
         F.col("started_at").alias("valid_from_ts"),
         F.lit(None).cast("timestamp").alias("valid_to_ts"),
         F.lit(None).cast("boolean").alias("is_current"),
         F.col("payment_id").alias("source_payment_id"),
         F.col("attempt_id").alias("source_attempt_id"),
+    )
+
+
+def with_familiar_devices(versions: DataFrame, intervals: DataFrame) -> DataFrame:
+    """The sorted familiar devices at each version's start; only versions, far fewer than attempts, join intervals."""
+    devices = (
+        versions.select("customer_sk", *CUSTOMER_KEY, "valid_from_ts")
+        .join(intervals, CUSTOMER_KEY)
+        .where((F.col("start") <= F.col("valid_from_ts")) & (F.col("valid_from_ts") < F.col("end")))
+        .groupBy("customer_sk")
+        .agg(F.array_sort(F.collect_set("device_fingerprint")).alias("familiar_device_fingerprints"))
+    )
+    return versions.join(devices, "customer_sk", "left").withColumn(
+        "familiar_device_fingerprints",
+        F.coalesce(F.col("familiar_device_fingerprints"), F.array().cast("array<string>")),
     )
 
 
@@ -393,7 +419,8 @@ def linked(versions: DataFrame, following: DataFrame | None = None) -> DataFrame
 def dim_customer(profile: DataFrame) -> DataFrame:
     """SCD2 versions over a whole history: a version opens at each attempt whose tracked profile differs from the
     previous attempt's."""
-    return linked(opened_versions(tracked_profiles(profile, profile)))
+    intervals = familiar_intervals(profile)
+    return linked(with_familiar_devices(opened_versions(tracked_profiles(profile, intervals)), intervals))
 
 
 def label_attempt(labels: DataFrame, attempts: DataFrame) -> DataFrame:
@@ -505,14 +532,17 @@ def replace_customers(spark, events, attempts, floor, cutoff, pins) -> tuple[dic
     # attempt_started occurs at the attempt's start, so its events partition prunes to the range.
     starts = events.where((F.col("occurred_at") >= F.lit(floor)) & (F.col("occurred_at") < F.lit(cutoff)))
     uses = started_between(attempts, floor - FAMILIAR_WINDOW, cutoff).join(customers, CUSTOMER_KEY, "left_semi")
-    tracked = tracked_profiles(profiles(starts, in_range), uses)
-    rows = linked(previous.select(*VERSION_COLUMNS).unionByName(opened_versions(tracked, previous)), following)
+    intervals = familiar_intervals(uses).persist(StorageLevel.MEMORY_AND_DISK)
+    opened = with_familiar_devices(
+        opened_versions(tracked_profiles(profiles(starts, in_range), intervals), previous), intervals
+    )
+    rows = linked(previous.select(*VERSION_COLUMNS).unionByName(opened, allowMissingColumns=False), following)
     replaced = previous.select("customer_sk").unionByName(mine.where(opened_in_range).select("customer_sk"))
     replaced.createOrReplaceTempView("dp3_dim_customer_replaced")
     spark.sql(f"DELETE FROM {DIM_CUSTOMER} WHERE customer_sk IN (SELECT customer_sk FROM dp3_dim_customer_replaced)")
     with_pins(rows.writeTo(DIM_CUSTOMER), pins).append()
     count = customers.count()
-    for frame in (customers, previous):
+    for frame in (customers, previous, intervals):
         frame.unpersist()
     return recorded(spark, DIM_CUSTOMER, pins), count
 

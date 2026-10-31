@@ -38,7 +38,7 @@ Synthetic data only. The profile is observed from attempt_started contexts, so a
 |  shipping_postal_code | string | *Shipping postal code of the checkout.* |
 |  shipping_address_fingerprint | string | *Synthetic fingerprint of the shipping address.* |
 |  familiar_device_fingerprints | array | *Sorted devices the customer used on at least two attempts in the 90 days up to and including the version's attempt.* |
-|  profile_hash | string | *SHA-256 over the JSON of every tracked attribute.*<br />• `required` |
+|  profile_hash | string | *SHA-256 over the JSON of the tracked attributes and an XOR fingerprint (xxhash64) of the familiar devices; it changes exactly when a version opens.*<br />• `required` |
 |  valid_from_ts | timestamp | *started_at of the attempt that opened the version.*<br />• `required` |
 |  valid_to_ts | timestamp | *valid_from_ts of the next version; null for the current version.* |
 |  is_current | boolean | *True only for the version with valid_to_ts null.*<br />• `required` |
