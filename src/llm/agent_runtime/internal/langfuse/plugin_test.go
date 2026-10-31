@@ -3,7 +3,10 @@ package langfuse
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -228,5 +231,43 @@ func TestAnAgentWithoutATestLinksItsPromptButAddsNoTag(t *testing.T) {
 	}
 	if _, ok := linked[traceTagsAttribute]; ok {
 		t.Fatalf("tagged without a test: %v", linked[traceTagsAttribute])
+	}
+}
+
+func TestTheSplitFollowsTheActorsConversationNotTheSharedSessionID(t *testing.T) {
+	source := &fakeSource{prompts: map[string]Prompt{Production: tested, "variant-b": variant}}
+	prompts := NewPrompts(source)
+	prompts.ConversationFile = t.TempDir() + "/name"
+	sides := map[string]bool{}
+	for i := range 40 {
+		name := fmt.Sprintf("session-%d\n", i)
+		if err := os.WriteFile(prompts.ConversationFile, []byte(name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		half := &Prompt{Name: "evidence-agent-system-prompt", Config: Config{ABTest: &ABTest{Label: "variant-b", Share: share(0.5)}}}
+		source.prompts[Production] = *half
+		source.labels = nil
+		if _, err := prompts.BeforeModel(callbackContext{agent: "evidence_agent", session: "conversation"}, &model.LLMRequest{}); err != nil {
+			t.Fatal(err)
+		}
+		want := VariantLabel(*half, strings.TrimSpace(name))
+		sides[want] = true
+		if got := source.labels[len(source.labels)-1]; got != "evidence-agent-system-prompt@"+want {
+			t.Fatalf("%s: fetched %s, want side %s", strings.TrimSpace(name), got, want)
+		}
+	}
+	if len(sides) != 2 {
+		t.Fatalf("40 conversations all fell on %v", sides)
+	}
+}
+
+func TestWithoutTheActorFileTheSessionIDIsTheKey(t *testing.T) {
+	prompts := NewPrompts(&fakeSource{})
+	prompts.ConversationFile = t.TempDir() + "/missing"
+	if got := prompts.conversation(callbackContext{session: "s1"}); got != "s1" {
+		t.Fatalf("got %q", got)
+	}
+	if got := NewPrompts(&fakeSource{}).conversation(callbackContext{session: "s2"}); got != "s2" {
+		t.Fatalf("got %q", got)
 	}
 }
