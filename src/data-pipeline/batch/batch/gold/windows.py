@@ -111,7 +111,9 @@ def window_states(
 
     `attempts` has the keys, attempt_time, started_at, outcome_at and every column the measures read. The values are
     exact when it holds every attempt still in a window at `floor`. A window's columns are null at anchors before
-    history_start + window, where coverage is incomplete. `_empty` marks rows where nothing is in any window.
+    history_start + window, where coverage is incomplete. `_begun` marks rows at or after the entity's first non-empty
+    anchor; it is exact whenever coverage is incomplete, because such a floor lies within one window of the history
+    start, so the run read all history.
     """
     additive = [m for m in measures if isinstance(m, (Count, Total))]
     distinct = [m for m in measures if isinstance(m, Distinct)]
@@ -185,6 +187,8 @@ def window_states(
     )
     running = Window.partitionBy(*keys).orderBy(ANCHOR).rowsBetween(Window.unboundedPreceding, Window.currentRow)
     state = summed.select(*keys, ANCHOR, *[F.sum(name).over(running).alias(name) for name in raw])
+    empty = reduce(lambda left, right: left & right, [F.col(name) == 0 for name in raw])
+    state = state.withColumn("_begun", F.max((~empty).cast("int")).over(running) == 1)
     state = state.where((F.col(ANCHOR) >= F.lit(floor)) & (F.col(ANCHOR) <= F.lit(cutoff)))
 
     served = {}
@@ -198,21 +202,19 @@ def window_states(
             else:
                 value = F.col(name)
             served[name] = F.when(covered, value)
-    empty = reduce(lambda left, right: left & right, [F.col(name) == 0 for name in raw])
-    return state.select(
-        *keys, ANCHOR, *[served[name].alias(name) for name in columns(measures, windows)], empty.alias("_empty")
-    )
+    return state.select(*keys, ANCHOR, *[served[name].alias(name) for name in columns(measures, windows)], "_begun")
 
 
 def changes(states: DataFrame, keys: list[str], output: list[str], floor: datetime) -> DataFrame:
     """The rows after `floor` whose values differ from the entity's previous row; `floor` rows are the baseline. An
-    empty row after an empty one is no change, so an entity has no row until something is in a window."""
+    entity has no row until it is first non-empty, and then always a row there."""
     ordered = Window.partitionBy(*keys).orderBy(ANCHOR)
     # to_json compares rows null-safely; a hash would let (null, 1) and (1, null) collide.
     rows = states.withColumns(
-        {"_values": F.to_json(F.struct(*output)), "_previous_empty": F.lag("_empty").over(ordered)}
+        {"_values": F.to_json(F.struct(*output)), "_previous_begun": F.lag("_begun").over(ordered)}
     ).withColumn("_previous", F.lag("_values").over(ordered))
-    changed = (F.col("_values") != F.col("_previous")) & ~(F.col("_empty") & F.col("_previous_empty"))
+    first = ~F.coalesce(F.col("_previous_begun"), F.lit(False))
+    changed = F.col("_begun") & (first | (F.col("_values") != F.col("_previous")))
     return rows.where((F.col(ANCHOR) > F.lit(floor)) & changed).select(*keys, ANCHOR, *output)
 
 

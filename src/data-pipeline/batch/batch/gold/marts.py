@@ -176,6 +176,8 @@ def build(client: ClickHouse, gold_report: dict, run_id: str, retention_days: in
         f"SELECT toString(max(toDate(started_at))) FROM "
         f"{pinned(SILVER_ATTEMPTS, attempts_snapshot, 'started_at', 'lifecycle_valid')} AS a"
     )
+    if last:
+        last = str(min(date.fromisoformat(last), complete_before - timedelta(days=1)))
     days = rebuilt_days(gold_report, start, date.fromisoformat(last)) if last else []
     months = months_of(days)
 

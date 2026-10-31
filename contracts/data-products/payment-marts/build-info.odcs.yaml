@@ -36,7 +36,7 @@ schema:
     properties:
       - {name: run_id, logicalType: string, physicalType: String, required: true, description: 'Workflow run that built the marts.'}
       - {name: window_start, logicalType: date, physicalType: Date, required: true, description: 'First start day kept by the retention window.'}
-      - {name: window_end, logicalType: date, physicalType: Date, required: true, description: 'Latest start day in Silver at the pinned snapshot.'}
+      - {name: window_end, logicalType: date, physicalType: Date, required: true, description: 'Last start day the marts cover: the DP3 run''s last day, or the latest Silver start day if earlier.'}
       - {name: rebuilt_days, logicalType: array, physicalType: Array(Date), required: true, description: 'Start days this build rebuilt: the DP3 run''s days, the days its labels touched and the days whose chargeback window completes in its range.'}
       - {name: chargebacks_complete_before, logicalType: date, physicalType: Date, required: true, description: 'The day after the DP3 run''s last day; a start day''s chargeback window is complete when it ends by then.'}
       - {name: silver_attempts_snapshot_id, logicalType: integer, physicalType: Int64, required: true, description: 'silver.attempts snapshot the build read.'}

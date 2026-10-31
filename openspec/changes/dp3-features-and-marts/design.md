@@ -301,7 +301,7 @@ TTL day + INTERVAL {retention_days} DAY DELETE;
 **Steps:**
 
 1. Drop any `marts.*__staging` tables left by a failed run, then create empty staging tables from the DDL.
-2. Compute the window from the wall clock, matching the tables' `TTL`. `window_start = today − (marts.retentionDays − 1)`, with 180 days in dev and prod. `window_end` is the latest Silver start day. The build inserts only attempts inside the window, so it never writes rows that the `TTL` would expire straight away.
+2. Compute the window from the wall clock, matching the tables' `TTL`. `window_start = today − (marts.retentionDays − 1)`, with 180 days in dev and prod. `window_end` is the DP3 run's last day, or the latest Silver start day if earlier. The build inserts only attempts inside the window, so it never writes rows that the `TTL` would expire straight away.
 
    **Why a wall-clock `TTL`.** This is the standard ClickHouse retention for event data: `TTL … + INTERVAL N DAY DELETE`, with `ttl_only_drop_parts = 1` on day partitions, so expired days leave as whole partitions with no part rewrites. It is the right shape once the live simulator feeds Bronze, then Silver and DP3, continuously. Rebuilds and the background `TTL` then agree on one rolling 180-day window. The `{retention_days}` placeholder in the DDL comes from `marts.retentionDays`.
 3. For each month in the window, run one `INSERT INTO marts.fact_payment_attempt__staging SELECT … FROM lakehouse.`silver.attempts` LEFT JOIN (labels aggregated per attempt) …`:
