@@ -9,6 +9,12 @@ spec:
   serviceAccountName: data-pipelines
   {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
   entrypoint: run
+  arguments:
+    parameters:
+      - name: start
+        value: ""
+      - name: end
+        value: ""
   activeDeadlineSeconds: {{ .Values.analytics.activeDeadlineSeconds }}
   podMetadata:
     annotations:
@@ -25,5 +31,5 @@ spec:
         successCondition: status.currentState.currentStateSummary == ResourceReleased
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
         manifest: |
-          {{- include "data-pipelines.spark-application" (dict "root" $ "main" "silver/benchmark" "product" "silver-payments" "stage" "dp2-benchmark" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" $.Values.analytics.reportRoot) )) | nindent 10 }}
+          {{- include "data-pipelines.spark-application" (dict "root" $ "main" "silver/benchmark" "product" "silver-payments" "stage" "dp2-benchmark" "sizing" $sizing "extraEnv" (list (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" $.Values.analytics.reportRoot) (dict "name" "DP_START" "value" "{{workflow.parameters.start}}") (dict "name" "DP_END" "value" "{{workflow.parameters.end}}") (dict "name" "DP_LOOKBACK_DAYS" "value" "29") )) | nindent 10 }}
 {{- end }}

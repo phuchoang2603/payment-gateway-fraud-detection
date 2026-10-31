@@ -28,13 +28,13 @@ The implementation merged in [PR #102](https://github.com/phuchoang2603/payment-
 |---|---|---|
 | Partitioning | Bronze by `_source` and `days(occurred_at)` (labels by `days(label_available_at)`); Silver by day | One-day and one-month reads touch only their partitions |
 | Write distribution | `write.distribution-mode=hash` and a target file size on every table, except the historical Bronze and Silver event writes, which use `distribution-mode=none` with the fanout writer | Without it, each Spark task writes one small file per partition it touches. Historical files hold one purchase day each and Silver reads Bronze files back, so those tasks already touch only a few day partitions; at v19 the hash shuffle cost about 217 GB of executor disk for no extra clustering |
-| Compaction | Bronze Kafka-mode appends | Frequent small appends create many small files; `rewrite_data_files` with `binpack` merges them |
-| Z-order | `silver.attempts` by `customer_id` and `payment_method_fingerprint`, as a sort rewrite in `maintain-lakehouse` | Feature queries filter one customer or card over a window; clustering lets file statistics skip files. The maintenance report compares file planning before and after the rewrite |
-| Maintenance | All tables | `rewrite_data_files` with `binpack` (a Z-order sort for `silver.attempts`), `rewrite_manifests`, and `expire_snapshots` (older than 7 days, last 10 kept) so pinned Silver runs keep their snapshots |
+| Compaction | Bronze, the files of the last 3 days of Kafka appends | Kafka runs append small files; `rewrite_data_files` with `binpack` and an `_ingested_at` filter merges only those. Silver and Gold need none: every run rewrites whole day partitions at the 256 MB target |
+| Z-order | `silver.attempts` by `customer_id` and `payment_method_fingerprint`, one month at a time, on demand (`maintain-lakehouse task=zorder start end`) | Feature queries filter one customer or card over a window; clustering lets file statistics skip files. The report compares one customer's planned files and bytes for that month before and after |
+| Maintenance | All tables, nightly | `expire_snapshots` (older than 7 days, last 10 kept) and dropping `audit-*` branches older than 7 days, which would otherwise pin their files; no full-table rewrites, so its cost does not grow with history |
 
 Kafka offsets are derived from the Bronze rows themselves, not from snapshot metadata, so compaction and snapshot expiry never lose ingestion progress.
 
-`maintain-lakehouse` is on demand; its daily 03:43 UTC CronWorkflow is suspended. It reports before/after files and bytes plus plan-only partition and Z-order probes. Historical Silver rewrites its files; incremental mode replaces affected payments, so later writes can change clustering. Maintenance and measured layout benefits are deferred until after Gold work.
+`maintain-lakehouse` (task `nightly`) runs from a suspended daily 03:43 UTC CronWorkflow and holds `dp-writer` and `dp1-bronze-writer`, so it never commits alongside a pipeline run. It reports before/after files and bytes per table and the branches it dropped; task `zorder` is the on-demand storage evidence.
 
 ## Warehouse
 

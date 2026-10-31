@@ -20,9 +20,6 @@ spec:
       - name: dataset-version
         value: {{ .Values.bronze.datasetVersion | quote }}
   activeDeadlineSeconds: {{ .Values.bronze.activeDeadlineSeconds }}
-  synchronization:
-    mutexes:
-      - name: dp1-bronze-writer
   podMetadata:
     annotations:
       karpenter.sh/do-not-disrupt: "true"
@@ -30,7 +27,11 @@ spec:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
       dp-product: bronze-payments
   templates:
+    # The mutex sits on this template so dp-daily's Kafka step, which references it, holds it too.
     - name: bronze
+      synchronization:
+        mutexes:
+          - name: dp1-bronze-writer
       dag:
         tasks:
           - name: spark-historical
