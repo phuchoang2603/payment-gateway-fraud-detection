@@ -163,7 +163,7 @@ func TestTheModelCallSpanIsLinkedToTheChosenVersion(t *testing.T) {
 	if linked[promptNameAttribute].AsString() != "evidence-agent-system-prompt" || linked[promptVersionAttribute].AsInt64() != 4 {
 		t.Fatalf("prompt link %v", linked)
 	}
-	if got := linked[traceTagsAttribute].AsStringSlice(); !slices.Equal(got, []string{"variant:variant-b"}) {
+	if got := linked[traceTagsAttribute].AsStringSlice(); !slices.Equal(got, []string{"evidence-agent:variant-b"}) {
 		t.Fatalf("tags %v", got)
 	}
 	for _, span := range ended[1:] {
@@ -209,5 +209,24 @@ func TestEachAgentInTheRuntimeUsesItsOwnPrompt(t *testing.T) {
 	want := []string{"coordinator-system-prompt@production", "risk-agent-system-prompt@production"}
 	if !slices.Equal(source.labels, want) {
 		t.Fatalf("fetched %v, want %v", source.labels, want)
+	}
+}
+
+func TestAnAgentWithoutATestLinksItsPromptButAddsNoTag(t *testing.T) {
+	prompts := NewPrompts(&fakeSource{prompts: map[string]Prompt{Production: production}})
+	tracer, recorder := recordSpans(t, prompts)
+	if _, err := prompts.BeforeModel(callbackContext{agent: "risk_agent", session: "s1", invocation: "i1"}, &model.LLMRequest{}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, span := tracer.Start(context.Background(), "generate_content gpt-oss", trace.WithAttributes(invocationIDAttribute.String("i1")))
+	span.End()
+
+	linked := attributes(recorder.Ended()[0])
+	if linked[promptVersionAttribute].AsInt64() != 3 {
+		t.Fatalf("prompt link %v", linked)
+	}
+	if _, ok := linked[traceTagsAttribute]; ok {
+		t.Fatalf("tagged without a test: %v", linked[traceTagsAttribute])
 	}
 }

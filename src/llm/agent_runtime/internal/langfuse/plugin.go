@@ -28,7 +28,8 @@ type PromptSource interface {
 
 type choice struct {
 	prompt Prompt
-	label  string
+	// tag names the agent's A/B side on the trace, or is empty when its prompt runs no test.
+	tag string
 }
 
 // Prompts sets each model call's system prompt from the calling agent's
@@ -69,14 +70,18 @@ func (p *Prompts) choose(ctx context.Context, name, sessionID string) (choice, e
 		return choice{}, err
 	}
 	label := VariantLabel(production, sessionID)
+	tag := ""
+	if test := production.Config.ABTest; test != nil && test.Label != "" {
+		tag = strings.TrimSuffix(name, "-system-prompt") + ":" + label
+	}
 	if label == Production {
-		return choice{production, label}, nil
+		return choice{production, tag}, nil
 	}
 	variant, err := p.source.Prompt(ctx, name, label)
 	if err != nil {
 		return choice{}, err
 	}
-	return choice{variant, label}, nil
+	return choice{variant, tag}, nil
 }
 
 func (p *Prompts) BeforeModel(ctx agent.Context, req *model.LLMRequest) (*model.LLMResponse, error) {
@@ -113,8 +118,10 @@ func (p *Prompts) OnStart(_ context.Context, span sdktrace.ReadWriteSpan) {
 		span.SetAttributes(
 			promptNameAttribute.String(chosen.prompt.Name),
 			promptVersionAttribute.Int(chosen.prompt.Version),
-			traceTagsAttribute.StringSlice([]string{"variant:" + chosen.label}),
 		)
+		if chosen.tag != "" {
+			span.SetAttributes(traceTagsAttribute.StringSlice([]string{chosen.tag}))
+		}
 		return
 	}
 }

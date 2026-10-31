@@ -13,9 +13,16 @@
 {{- $catalog = append $catalog (toYaml $entry) }}
 {{- end }}
 {{- range $agent := .Values.agents.list }}
-{{- $notes := list (printf "%s through the agent gateway; system prompt, model settings and A/B tests in Langfuse as %s-system-prompt." $.Values.models.chat.name $agent.name) }}
+{{- if $agent.entry }}
+{{- $notes := list (printf "%s through the agent gateway; each agent's system prompt and A/B test in Langfuse as <agent>-system-prompt." $.Values.models.chat.name) }}
+{{- $servers := $agent.mcpServers | default list }}
 {{- with $agent.agents }}
-{{- $notes = append $notes (printf "Calls %s over A2A through the agent gateway." (join ", " .)) }}
+{{- $notes = append $notes (printf "Hands questions to its sub-agents %s, which run inside it." (join ", " .)) }}
+{{- range $name := . }}
+{{- range $candidate := $.Values.agents.list }}
+{{- if eq $candidate.name $name }}{{ $servers = concat $servers ($candidate.mcpServers | default list) }}{{ end }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- $entry := dict
   "apiVersion" "ar.dev/v1alpha1"
@@ -27,7 +34,7 @@
     "source" (dict
       "repository" (dict "url" $registry.repository "subfolder" "infra/charts/llm-platform")
       "protocol" "A2A")) }}
-{{- with $agent.mcpServers }}
+{{- with uniq $servers }}
 {{- $refs := list }}
 {{- range $server := . }}
 {{- $refs = append $refs (dict "kind" "MCPServer" "name" $server "tag" (index $.Values.gateway.mcpServers $server).version) }}
@@ -35,6 +42,7 @@
 {{- $_ := set $entry.spec "mcpServers" $refs }}
 {{- end }}
 {{- $catalog = append $catalog (toYaml $entry) }}
+{{- end }}
 {{- end }}
 {{- $agentList := list }}
 {{- range $agent := .Values.agents.list }}

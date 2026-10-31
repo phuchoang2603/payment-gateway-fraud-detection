@@ -184,9 +184,10 @@ agents:
       alg: ES256
       ttl: 300s
       claims: {iss: "urn:platform:kagent:gateway", sub: agentgateway, aud: kagent}
-  # Langfuse holds each agent's system prompt, `<name>-system-prompt`, and its A/B tests. files/prompts/<name>.md and
-  # `abTest` only seed a prompt that does not exist yet; changes are made in Langfuse.
-  # `agents` are other agents this one hands conversations to, compiled into its runtime as kagent sub-agents.
+  # Every agent is an AgentTemplate with a Langfuse prompt, `<name>-system-prompt`, and its A/B test.
+  # files/prompts/<name>.md and `abTest` only seed a prompt that does not exist yet; changes are made in Langfuse.
+  # `entry` agents run as kagent Agents behind the gateway's A2A route. The others run only inside an entry agent's
+  # runtime, as the kagent sub-agents it names in `agents` and hands conversations to.
   list:
     - name: evidence-agent
       version: 0.3.0
@@ -202,11 +203,20 @@ agents:
       version: 0.1.0
       title: Risk agent
       description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, and explains what drives it.
+      abTest:
+        label: variant-b
+        share: 0.5
+        addendum: Start with the risk level in one word, then give the three strongest drivers.
     - name: coordinator
       version: 0.2.0
       title: Coordinator
       description: Read-only entry agent for fraud analysts that hands each question to the evidence or risk agent.
+      entry: true
       agents: [evidence-agent, risk-agent]
+      abTest:
+        label: variant-b
+        share: 0.5
+        addendum: Before you transfer, tell the analyst in one sentence which specialist will answer and why.
 
 # One Job per release publishes the agents and MCP servers to agentregistry, and seeds any agent prompt that Langfuse
 # does not have yet.
