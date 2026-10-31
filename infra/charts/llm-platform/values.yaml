@@ -43,10 +43,11 @@ models:
     # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
     stopped: false
     # FP8 KV cache: 15% more output tokens/s at 16 concurrent requests and 65% more KV room than bf16 (benchmark, dev
-    # 2026-10-31); it also leaves room for the 16384-token context at 0.80 now that CUDA graph memory counts.
+    # 2026-10-31). 0.78 leaves room on the shared GPU for laya; an 8192-token context still fits in its KV cache and
+    # covers an agent turn with its prompt, history and retrieved passages.
     args:
-      - --max-model-len=16384
-      - --gpu-memory-utilization=0.80
+      - --max-model-len=8192
+      - --gpu-memory-utilization=0.78
       - --kv-cache-dtype=fp8
       - --reasoning-parser=qwen3
       - --default-chat-template-kwargs={"enable_thinking":false}
@@ -75,7 +76,7 @@ models:
       revision: 4da05a8edb55c6046cce958586c33b61da07bb79
 
 # laya, a non-autoregressive decision model (ModernBERT-large, 421M), answers typed questions in one forward pass on
-# CPU. The gateway's screening webhook asks it whether a prompt asks an agent to act or to break its rules. Only the
+# the shared GPU, in fp16 (about 0.85 GiB of weights). The gateway's screening webhook asks it whether a prompt asks an agent to act or to break its rules. Only the
 # English checkpoint is uploaded.
 decision:
   name: decision
@@ -90,11 +91,10 @@ decision:
   # Agents hold no tools that change anything, so screening is an early refusal rather than the only control; a
   # decision service outage lets prompts through instead of stopping every agent.
   failureMode: FailOpen
-  # One forward pass of the 421M encoder takes about 3 s on 2 threads; it scales with threads.
-  threads: 4
   resources:
-    requests: {cpu: "2", memory: 2Gi}
-    limits: {memory: 3Gi}
+    requests: {cpu: 500m, memory: 2Gi}
+    # laya loads in fp32 on the CPU before it moves to the GPU in fp16.
+    limits: {memory: 4Gi}
 
 gateway:
   name: agentgateway

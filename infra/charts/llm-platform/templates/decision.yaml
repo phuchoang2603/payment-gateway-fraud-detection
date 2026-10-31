@@ -23,6 +23,11 @@ spec:
     spec:
       serviceAccountName: {{ $decision.name }}
       automountServiceAccountToken: false
+      {{- include "llm-platform.gpuPlacement" $ | nindent 6 }}
+      # laya shares the model servers' GPU through the same claim; it takes what their memory fractions leave.
+      resourceClaims:
+        - name: gpu
+          resourceClaimName: llm-gpu
       securityContext:
         {{- include "llm-platform.podSecurity" (dict "uid" $decision.uid) | nindent 8 }}
       initContainers:
@@ -56,8 +61,10 @@ spec:
               value: /models/laya
             - name: SCREEN_THRESHOLD
               value: {{ $decision.screenThreshold | quote }}
-            - name: OMP_NUM_THREADS
-              value: {{ $decision.threads | quote }}
+            - name: LAYA_DEVICE
+              value: cuda
+            - name: PYTORCH_CUDA_ALLOC_CONF
+              value: expandable_segments:True
           startupProbe:
             httpGet: {path: /healthz, port: http}
             periodSeconds: 5
@@ -74,6 +81,8 @@ spec:
             readOnlyRootFilesystem: true
           resources:
             {{- toYaml $decision.resources | nindent 12 }}
+            claims:
+              - name: gpu
           volumeMounts:
             - {name: models, mountPath: /models, readOnly: true}
             - {name: tmp, mountPath: /tmp}
