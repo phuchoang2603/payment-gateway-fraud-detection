@@ -449,10 +449,14 @@ def recorded(spark, table: str, pins: dict) -> dict:
 
 
 def silver_inputs(spark):
-    snapshots = {table: ref_snapshot(spark, table) for table in SILVER_PROPERTIES}
+    """Silver as this run's Silver stage left it: its audit branch head, which is unpublished until the run's checks
+    pass, or main when Silver ran separately."""
+    snapshots = {
+        table: ref_snapshot(spark, table, write_ref()) or ref_snapshot(spark, table) for table in SILVER_PROPERTIES
+    }
     missing = [table for table, snapshot in snapshots.items() if snapshot is None]
     if missing:
-        raise ValueError(f"Silver has no published snapshot for {', '.join(missing)}")
+        raise ValueError(f"Silver has no snapshot for {', '.join(missing)}")
     frames = {table: read_at(spark, table, snapshot) for table, snapshot in snapshots.items()}
     return snapshots, frames
 
