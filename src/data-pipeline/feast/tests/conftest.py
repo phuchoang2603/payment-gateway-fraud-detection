@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -66,7 +67,7 @@ def feature_store(tmp_path, redis_address, monkeypatch):
 
     monkeypatch.setenv("FEAST_STREAM_EPOCHS", "history-ci,live-ci")
     configuration = RepoConfig(
-        project="ci",
+        project=f"ci_{uuid4().hex}",
         provider="local",
         registry=str(tmp_path / "registry.pb"),
         entity_key_serialization_version=3,
