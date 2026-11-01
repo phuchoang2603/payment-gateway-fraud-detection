@@ -277,9 +277,10 @@ spec:
           {{- if eq $mode "seed" }}
           - name: DATASET_VERSION
             value: {{ $.Values.bronze.datasetVersion | quote }}
-          - {name: HISTORY_SORT_MEMORY, value: 6GB}
-          # PyIceberg reads each data file whole on one thread per CPU; two keep at most two files in memory.
-          - {name: PYICEBERG_MAX_WORKERS, value: "2"}
+          # DuckDB's sort and the Bronze file PyIceberg is decoding share the 10Gi limit; a decoded file takes a few
+          # GiB, so one reader thread and a 4 GB sort leave headroom.
+          - {name: HISTORY_SORT_MEMORY, value: 4GB}
+          - {name: PYICEBERG_MAX_WORKERS, value: "1"}
           {{- end }}
           {{- if has $mode (list "seed" "writer") }}
           - name: HISTORY_SEED_REPORT
