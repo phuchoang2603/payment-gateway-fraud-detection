@@ -23,7 +23,7 @@ Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT
 
 Tables are Iceberg, registered in the Polaris REST catalog that the `lakehouse` chart deploys. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
 
-Prod v19 holds Bronze in full, and Silver, Gold and the marts from 2025-10-29 to 2026-08-31, with the backfill continuing to 2026-10-28; see [the run](offline.md#prod-v19-run).
+Prod v19 holds Bronze in full, and Silver and Gold from 2025-10-29 to 2026-10-28; see [the run](offline.md#prod-v19-run).
 
 | Technique | Applied to | Why |
 |---|---|---|
@@ -82,4 +82,23 @@ The ID and fingerprint columns use `CODEC(ZSTD(3))`. They hold random UUIDs and 
 
 Retention is a wall-clock `TTL` of 90 days with `ttl_only_drop_parts`, matching the rolling window each build inserts; `marts.build_info` records the window, the rebuilt days and the Silver snapshots. Builds join with external sort-merge and spill, the settings the v19 checks needed above.
 
-**Evidence.** `EXPLAIN indexes = 1` and `system.query_log` (read rows, bytes, selected marks) for Q0–Q4 on the published prod marts, recorded with `build_info`'s window, once the backfill has filled the 90-day window (2026-08-04 to 2026-10-28). The on-demand `warehouse-benchmark` can additionally compare raw Iceberg, an unsorted copy and the indexed mart, but the evidence does not depend on it.
+**Evidence.** Each fixed query on the prod marts over the full window (2026-08-04 to 2026-10-28: 44.2M rows, 576 parts, 5,732 granules), from `EXPLAIN indexes = 1` and `system.query_log`, warm, with the query and query-condition caches off. The hot merchant is the one with the most attempts, the customer the one with the most attempts and the card the one shared by the most customers.
+
+| Query | Pruned by | Granules read | Rows read | Time | Without skip indexes |
+|---|---|---|---|---|---|
+| Q0 last day by hour | partition and key on `toDate(started_at)` | 64 (7 parts) | 0.5M | 13 ms | same |
+| Q1 hot merchant, 30 days | key: day, then merchant | 1,248 of the 2,020 in 30 days | 10.2M | 340 ms | same |
+| Q1 median merchant, 30 days | key: day, then merchant | 199, one per day part | 1.6M | 54 ms | same |
+| Q2 customer, 30 days | key: day; bloom filter `ix_customer` | 1,451 of 2,020 | 11.4M | 745 ms | 2,020 granules, 15.7M rows, 827 ms |
+| Q3 card across customers | bloom filter `ix_method` | 296 of 5,732 | 2.3M | 158 ms | 5,732 granules, 44.2M rows, 1,905 ms |
+| Q4 declines by outcome | `set(8)` on `outcome` | 5,732, no skipping | 44.2M | 352 ms | 278 ms |
+| Q5 hot merchant's daily KPIs | `fact_merchant_day` key | 57 of 165 | 0.5M | 12 ms | same |
+
+What it shows:
+
+- **The time-first key carries most queries.** Q0 reads 1% of the fact, and one merchant's 30 days read only its own key range in each day: one granule a day for a median merchant. The hot merchant still reads 60% of those days, because it makes about half of all attempts.
+- **The card bloom filter pays; the customer one barely does.** A card's attempts sit in a few granules, so `ix_method` skips 95% and is 12× faster. The busiest customer's attempts are spread over most days of the month, so `ix_customer` skips only 28%.
+- **`set(8)` on `outcome` does not help a common value.** Declines occur in every granule, so the index skips nothing and adds about 70 ms. The `minmax` on `risk_score` is not measured, because the historical rule-based policy records no score.
+- **The daily mart answers KPIs without the fact:** 12 ms against 340 ms for the same merchant and month from attempts.
+
+The on-demand `warehouse-benchmark` can additionally compare raw Iceberg and an unsorted copy, but it makes a second 6 GiB copy of the fact on the shared 30 GiB volume, so it was not run on prod.
