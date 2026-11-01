@@ -40,7 +40,7 @@ spec:
           - name: dp-writer
       steps:
         - - {name: materialize, template: materialize}
-        - - {name: check, template: check}
+        - - {name: verify, template: verify}
     - name: materialize
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
@@ -67,10 +67,10 @@ spec:
         - name: spill
           emptyDir:
             sizeLimit: {{ .Values.featureStore.spillSize }}
-    - name: check
+    - name: verify
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.feast "global" .Values.global) | quote }}
-        command: [python, -m, fraud_feast.check_online]
+        command: [python, -m, fraud_feast.verify_online]
         env:
           - name: RUN_REPORT
             value: {{ $report | quote }}
@@ -95,7 +95,7 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: feast-push-replay
+  name: feature-writer-replay
   namespace: {{ .Values.namespace }}
 spec:
   serviceAccountName: data-pipelines
@@ -113,11 +113,11 @@ spec:
     - name: replay
       synchronization:
         mutexes:
-          - name: feast-push-online
+          - name: feature-writer-online
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.feast "global" .Values.global) | quote }}
-        command: [python, -m, fraud_feast.push_job]
-        args: [--to, online, --from, {{ "{{workflow.parameters.from}}" | quote }}, --until, {{ "{{workflow.parameters.until}}" | quote }}]
+        command: [python, -m, fraud_feast.stream_writer]
+        args: [--store, online, --from, {{ "{{workflow.parameters.from}}" | quote }}, --until, {{ "{{workflow.parameters.until}}" | quote }}]
         env:
           - name: FEATURE_EPOCH
             value: {{ .Values.featureStore.epoch | quote }}
@@ -129,5 +129,5 @@ spec:
             value: {{ printf "%s/replay/{{workflow.name}}.json" .Values.featureStore.reportRoot | quote }}
           {{- include "data-pipelines.env" . | nindent 10 }}
           {{- include "data-pipelines.feastEnv" . | nindent 10 }}
-    {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "feast-push-online" "dataset" .Values.bronze.datasetVersion "report" (printf "%s/replay/{{workflow.name}}.json" .Values.featureStore.reportRoot)) | nindent 4 }}
+    {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "feature-writer-online" "dataset" .Values.bronze.datasetVersion "report" (printf "%s/replay/{{workflow.name}}.json" .Values.featureStore.reportRoot)) | nindent 4 }}
 {{- end }}

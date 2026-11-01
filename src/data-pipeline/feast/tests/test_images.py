@@ -69,7 +69,7 @@ def test_runtime_image_build_and_packaged_repository(runtime_image):
             [
                 python,
                 "-c",
-                "import importlib.resources, sys; import fraud_feast.push_job, fraud_feast.check_online; assert sys.version_info[:2] == (3,12); assert importlib.resources.files('fraud_feast').joinpath('feature_store.yaml').is_file()",
+                "import importlib.resources, sys; import fraud_feast.stream_writer, fraud_feast.verify_online; assert sys.version_info[:2] == (3,12); assert importlib.resources.files('fraud_feast').joinpath('feature_store.yaml').is_file()",
             ]
         )
         assert code == 0, output.decode()

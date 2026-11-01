@@ -11,8 +11,8 @@ from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan
 
 from fraud_feast.apply import ensure_tables
 from fraud_feast.lake import catalog, read_json, write_json
-from fraud_feast.push_job import OfflineWriter, decode, properties
 from fraud_feast.repo import KEYS, TABLES
+from fraud_feast.stream_writer import OfflineWriter, decode, properties
 
 
 def rest(path):

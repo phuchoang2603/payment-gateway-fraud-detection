@@ -10,9 +10,13 @@ ROOT = Path(__file__).resolve().parents[4]
 
 def test_feature_lineage_has_pipeline_only_online_targets_and_history_tables():
     edges = lineage.edges("v19")
-    selected = [edge for edge in edges if edge.pipeline.startswith("feast-") or edge.pipeline == "stream-history"]
+    selected = [
+        edge
+        for edge in edges
+        if edge.pipeline.startswith("feature-writer-") or edge.pipeline in ("feast-materialize", "stream-history")
+    ]
     assert len(selected) == 7
-    online = [edge for edge in selected if edge.pipeline in ("feast-push-online", "feast-materialize")]
+    online = [edge for edge in selected if edge.pipeline in ("feature-writer-online", "feast-materialize")]
     assert all(edge.target.kind == "pipeline" for edge in online)
     history = [edge for edge in selected if edge.pipeline == "stream-history"]
     assert {edge.source for edge in history} == {lineage.BRONZE_EVENTS}
@@ -29,7 +33,7 @@ def test_feature_lineage_has_pipeline_only_online_targets_and_history_tables():
 def test_replay_history_and_materialization_reports_keep_governance_parameters(tmp_path):
     for report in (
         {"start": "2025-09-01", "end": "2025-10-01", "sampled": 12, "since": "2025-09-01", "checked": True},
-        {"to": "online", "from": {"0": 1}, "until": {"0": 10}, "rows": 9},
+        {"store": "online", "from": {"0": 1}, "until": {"0": 10}, "rows": 9},
         {
             "start": "2025-09-01",
             "end": "2025-10-01",

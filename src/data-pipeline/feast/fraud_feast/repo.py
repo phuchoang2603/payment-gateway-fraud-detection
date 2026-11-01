@@ -102,5 +102,5 @@ def definitions():
         *views,
         request_context,
         request_features,
-        FeatureService(name="fraud_model_v1", features=[*views, request_features]),
+        FeatureService(name="payment_risk_v1", features=[*views, request_features]),
     ]

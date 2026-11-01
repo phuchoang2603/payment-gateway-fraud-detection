@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from fraud_feast import check_online, materialize
+from fraud_feast import materialize, verify_online
 from fraud_feast.repo import DAILY_FIELDS
 
 DAY = datetime(2025, 9, 1, tzinfo=UTC)
@@ -41,12 +41,12 @@ def test_overlap_rewrites_equal_anchor_and_deleted_entity_keeps_prior_value(spar
     for scope in KEYS:
         save(scope, [("updated", 1), ("deleted", 1)])
     first = materialize.run(spark, feature_store, now, 2)
-    assert check_online.validate(feature_store, first) == 4
+    assert verify_online.validate(feature_store, first) == 4
     assert all(w["start"] == (now - DAILY_TTL).isoformat() for w in first["windows"].values())
     for scope in KEYS:
         save(scope, [("updated", 2)])
     report = materialize.run(spark, feature_store, now + timedelta(hours=1), 2)
-    assert check_online.validate(feature_store, report) == 2
+    assert verify_online.validate(feature_store, report) == 2
     for scope, key in KEYS.items():
         assert report["windows"][f"{scope}_daily"]["start"] == (now - timedelta(days=3)).isoformat()
         for entity, expected in [("updated", 2), ("deleted", 1)]:
@@ -56,7 +56,7 @@ def test_overlap_rewrites_equal_anchor_and_deleted_entity_keeps_prior_value(spar
             ).to_dict()
             assert result["attempt_count_7d"] == [expected]
     explicit = materialize.run(spark, feature_store, now + timedelta(hours=2), 2, DAY.date())
-    assert check_online.validate(feature_store, explicit) == 2
+    assert verify_online.validate(feature_store, explicit) == 2
     assert all(w["start"] == DAY.isoformat() for w in explicit["windows"].values())
     assert all(
         w["end"] == (now + timedelta(hours=2)).isoformat() for w in explicit["windows"].values()
@@ -71,4 +71,4 @@ def test_missing_online_sample_fails(feature_store):
         **dict.fromkeys(FIELDS, 7),
     }
     with pytest.raises(ValueError, match="differs"):
-        check_online.validate(feature_store, {"samples": {"customer": [expected]}})
+        verify_online.validate(feature_store, {"samples": {"customer": [expected]}})

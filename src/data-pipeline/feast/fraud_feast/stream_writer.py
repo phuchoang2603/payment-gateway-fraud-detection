@@ -256,7 +256,7 @@ def batches(consumer, topic, starts, ends, stopped, batch_size=1000):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--to", choices=("online", "offline"), required=True)
+    parser.add_argument("--store", choices=("online", "offline"), required=True)
     parser.add_argument("--from", dest="start")
     parser.add_argument("--until")
     parser.add_argument("--history-start")
@@ -266,13 +266,18 @@ def main():
         parser.error("--from and --until are required together")
     if bool(args.history_start) != bool(args.history_end):
         parser.error("--history-start and --history-end are required together")
-    if args.start and args.to != "online":
+    if args.start and args.store != "online":
         parser.error("bounded replay is online only")
     epoch = os.environ["FEATURE_EPOCH"]
     if epoch not in epochs():
-        raise ValueError("push epoch is not selected by the repository")
+        raise ValueError("writer epoch is not selected by the repository")
     if args.history_start:
-        if args.to != "offline" or args.start or not args.history_end or epoch.startswith("live"):
+        if (
+            args.store != "offline"
+            or args.start
+            or not args.history_end
+            or epoch.startswith("live")
+        ):
             parser.error(
                 "history requires offline, a history epoch and both days, without a replay range"
             )
@@ -284,9 +289,9 @@ def main():
     consumer = Consumer(
         {
             "bootstrap.servers": os.environ["FEATURE_KAFKA_BROKERS"],
-            "group.id": f"feast-replay-{args.to}-{os.environ.get('RUN_ID', 'bounded')}"
+            "group.id": f"feature-writer-replay-{args.store}-{os.environ.get('RUN_ID', 'bounded')}"
             if replay
-            else f"feast-push-{args.to}",
+            else f"feature-writer-{args.store}",
             "enable.auto.commit": False,
             "enable.auto.offset.store": False,
             "auto.offset.reset": "error",
@@ -302,7 +307,7 @@ def main():
     partitions = sorted(consumer.list_topics(topic, timeout=30).topics[topic].partitions)
     writer = None
     feature_store = None
-    if args.to == "offline":
+    if args.store == "offline":
         lake = catalog()
         writer = OfflineWriter(
             {scope: lake.load_table(name) for scope, name in TABLES.items()}, epoch
@@ -351,7 +356,7 @@ def main():
         if os.environ.get("RUN_REPORT"):
             write_json(
                 os.environ["RUN_REPORT"],
-                {"to": args.to, "from": starts, "until": ends, "rows": written},
+                {"store": args.store, "from": starts, "until": ends, "rows": written},
             )
     finally:
         consumer.close()

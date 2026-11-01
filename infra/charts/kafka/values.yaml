@@ -12,7 +12,7 @@ kafka:
   minInsyncReplicas: 1
   clientNamespace: payment-gateway
   dataNamespace: data
-  dataClients: [fraud-streaming, feast-writer, feast-push-online, feast-push-offline, data-pipelines]
+  dataClients: [fraud-streaming, feast-writer, feature-writer-online, feature-writer-offline, data-pipelines]
   storage:
     size: 5Gi
   jvmOptions:

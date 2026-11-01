@@ -129,7 +129,7 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
     result = (
         feature_store.get_historical_features(
             entity_df=entities,
-            features=feature_store.get_feature_service("fraud_model_v1"),
+            features=feature_store.get_feature_service("payment_risk_v1"),
             full_feature_names=True,
         )
         .to_arrow()
@@ -173,7 +173,7 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
             response = client.post(
                 "/get-online-features",
                 json={
-                    "feature_service": "fraud_model_v1",
+                    "feature_service": "payment_risk_v1",
                     "entities": entities,
                     "full_feature_names": True,
                 },

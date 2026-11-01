@@ -91,7 +91,7 @@ def run_parameters(uri: str):
         "windows",
         "sampled",
         "checked",
-        "to",
+        "store",
         "from",
         "until",
         "rows",

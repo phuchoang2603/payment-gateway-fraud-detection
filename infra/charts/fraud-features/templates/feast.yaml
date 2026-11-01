@@ -1,5 +1,5 @@
 {{- if .Values.feast.enabled }}
-{{- range $mode, $name := dict "online" "feast-push-online" "offline" "feast-push-offline" "serve" "feast-server" }}
+{{- range $mode, $name := dict "online" "feature-writer-online" "offline" "feature-writer-offline" "serve" "feast-server" }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -42,8 +42,8 @@ spec:
           image: {{ include "fraud-features.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
           imagePullPolicy: {{ $.Values.images.feast.pullPolicy }}
           {{- if ne $mode "serve" }}
-          command: [python, -m, fraud_feast.push_job]
-          args: [--to, {{ $mode }}]
+          command: [python, -m, fraud_feast.stream_writer]
+          args: [--store, {{ $mode }}]
           {{- end }}
           securityContext:
             allowPrivilegeEscalation: false

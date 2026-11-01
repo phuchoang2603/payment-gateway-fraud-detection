@@ -11,15 +11,15 @@ The catalog SHALL record the streaming feature job as a pipeline with its runs, 
 #### Scenario: Catalog outage
 
 - **WHEN** OpenMetadata is unavailable
-- **THEN** the streaming job, the push jobs and the feature server keep running
+- **THEN** the streaming job, the stream writers and the feature server keep running
 
 ### Requirement: Feature store lineage and status
-The catalog SHALL show lineage from the feature journal topic into the `feast-push-online` pipeline, and through the `feast-push-offline` pipeline to `gold.feat_stream_customer` and `gold.feat_stream_payment_method`. It SHALL also show lineage from `gold.feat_customer_daily` and `gold.feat_payment_method_daily` into the `feast-materialize` pipeline. `feast-materialize` SHALL record each run's status, materialization windows, optional since, and the sample count. Push replays SHALL record their range. The online store is not a catalogued asset.
+The catalog SHALL show lineage from the feature journal topic into the `feature-writer-online` pipeline, and through the `feature-writer-offline` pipeline to `gold.feat_stream_customer` and `gold.feat_stream_payment_method`. It SHALL also show lineage from `gold.feat_customer_daily` and `gold.feat_payment_method_daily` into the `feast-materialize` pipeline. `feast-materialize` SHALL record each run's status, materialization windows, optional since, and the sample count. Push replays SHALL record their range. The online store is not a catalogued asset.
 
 #### Scenario: Trace the journal downstream
 
 - **WHEN** a user inspects the journal topic's lineage
-- **THEN** they see `feast-push-online` downstream, and the streaming job and `payments.events.v1` upstream
+- **THEN** they see `feature-writer-online` downstream, and the streaming job and `payments.events.v1` upstream
 
 #### Scenario: Trace a daily feature table downstream
 
@@ -32,4 +32,4 @@ The catalog SHALL show lineage from Bronze `payment_events`, through the `stream
 #### Scenario: Trace a stream feature table to its history
 
 - **WHEN** a user inspects `gold.feat_stream_customer` lineage
-- **THEN** they see both `feast-push-offline` from the journal and `stream-history` from Bronze `payment_events`, with the latest unit's range and gate outcome
+- **THEN** they see both `feature-writer-offline` from the journal and `stream-history` from Bronze `payment_events`, with the latest unit's range and gate outcome

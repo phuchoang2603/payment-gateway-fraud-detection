@@ -6,8 +6,14 @@ import pytest
 
 from fraud_feast.apply import stream_schema
 from fraud_feast.contracts.features.v2.features_pb2 import SnapshotUpdate
-from fraud_feast.push_job import DEFINITION_HASH, OfflineWriter, decode, watermarks, write_online
 from fraud_feast.repo import KEYS, STREAM_FIELDS, TABLES
+from fraud_feast.stream_writer import (
+    DEFINITION_HASH,
+    OfflineWriter,
+    decode,
+    watermarks,
+    write_online,
+)
 
 DAY = datetime(2025, 9, 1, tzinfo=UTC)
 
@@ -136,7 +142,7 @@ def test_older_online_revision_does_not_replace_newer_and_null_is_unknown(featur
 def test_invalid_journal_stops_continuous_job_before_kafka_commit(lake, monkeypatch):
     from unittest.mock import Mock
 
-    from fraud_feast import push_job
+    from fraud_feast import stream_writer
 
     consumer = Mock()
     consumer.list_topics.return_value.topics = {"journal": SimpleNamespace(partitions={0: None})}
@@ -147,16 +153,16 @@ def test_invalid_journal_stops_continuous_job_before_kafka_commit(lake, monkeypa
     message.offset.return_value = 0
     message.value.return_value = b""
     consumer.poll.return_value = message
-    monkeypatch.setattr(push_job, "Consumer", lambda _: consumer)
-    monkeypatch.setattr(push_job, "catalog", lambda: lake)
-    monkeypatch.setattr(push_job.signal, "signal", lambda *_: None)
+    monkeypatch.setattr(stream_writer, "Consumer", lambda _: consumer)
+    monkeypatch.setattr(stream_writer, "catalog", lambda: lake)
+    monkeypatch.setattr(stream_writer.signal, "signal", lambda *_: None)
     monkeypatch.setenv("FEATURE_EPOCH", "live-ci")
     monkeypatch.setenv("FEAST_STREAM_EPOCHS", "live-ci")
     monkeypatch.setenv("FEATURE_UPDATE_TOPIC", "journal")
     monkeypatch.setenv("FEATURE_KAFKA_BROKERS", "unused")
-    monkeypatch.setattr("sys.argv", ["push_job", "--to", "offline"])
+    monkeypatch.setattr("sys.argv", ["stream_writer", "--store", "offline"])
     with pytest.raises(ValueError, match="payload"):
-        push_job.main()
+        stream_writer.main()
     consumer.commit.assert_not_called()
     consumer.close.assert_called_once()
     assert all(lake.load_table(name).current_snapshot() is None for name in TABLES.values())

@@ -15,7 +15,7 @@ The final-coursework feature-store rows ask for:
 - a TTL for each feature table, with its reason;
 - an offline store that a training notebook reads through Feast, joined with the label table.
 
-This change builds that in the shape of the coursework's Feast lecture and the `card-fraud-platform` example, with one engine per feature. Spark owns the daily windows. Flink owns the short windows, both live and for history, which comes from a range-addressable Kappa replay through the same job. No feature has two implementations that could drift apart. The first training replay uses `start=2026-07-29`, `end=2026-10-29` (exclusive), the last three months of v19, and runs in prod, where DP3 runs. Simulation-truth training labels require no chargeback maturity gaps.
+This change assigns one engine to each feature definition so training and serving share its meaning. Spark owns the daily windows. Flink owns the short windows, both live and for history, which comes from a range-addressable Kappa replay through the same job. No feature has two implementations that could drift apart. The first training replay uses `start=2026-07-29`, `end=2026-10-29` (exclusive), the last three months of v19, and runs in prod, where DP3 runs. Simulation-truth training labels require no chargeback maturity gaps.
 
 ## What Changes
 
@@ -25,27 +25,27 @@ This change builds that in the shape of the coursework's Feast lecture and the `
   - **Stream views:** `customer_stream` and `payment_method_stream`, as `PushSource`s whose offline source is `gold.feat_stream_customer` and `gold.feat_stream_payment_method`, filtered to the configured epochs.
   - **TTLs** follow the longest window plus delay: 31 days 12 hours for the daily views, 24 hours 5 minutes for the stream views. The documentation records the reasons.
   - **Registry:** persistent, in object storage, written by a deploy-time `feast apply`.
-- **One feature service, `fraud_model_v1`.** It covers the four stored views and the pure Python request_features on-demand view. Training requests it through `get_historical_features`, with `gold.label_attempt`'s simulation-truth rows as the entity dataframe at plain `started_at`, and so does Go Fraud. Stream rows become visible one microsecond after they are written, so a snapshot that counts the scored attempt is never returned. Training retrieval runs Feast's Spark offline store in local mode, in one Kubeflow Pipelines step.
-- **Push jobs.** One `push_job` module runs as two Deployments; each commits its Kafka offsets only after its write:
-  - **A** (`--to online`) pushes journal snapshots to Redis through `FeatureStore.push`;
-  - **B** (`--to offline`) appends them to the stream tables with PyIceberg, with the Kafka offsets in the Iceberg commit.
+- **One feature service, `payment_risk_v1`.** It covers the four stored views and the pure Python request_features on-demand view. Training requests it through `get_historical_features`, with `gold.label_attempt`'s simulation-truth rows as the entity dataframe at plain `started_at`, and so does Go Fraud. Stream rows become visible one microsecond after they are written, so a snapshot that counts the scored attempt is never returned. Training retrieval runs Feast's Spark offline store in local mode, in one Kubeflow Pipelines step.
+- **Stream writers.** One `stream_writer` module runs as two Deployments; each commits its Kafka offsets only after its write:
+  - **Online writer** (`--store online`) pushes journal snapshots to Redis through `FeatureStore.push`;
+  - **Offline writer** (`--store offline`) appends them to the stream tables with PyIceberg, with the Kafka offsets in the Iceberg commit.
 
-  Only A replays an explicit offset or time range. B has one exactly-once append path.
+  Only the online writer replays an explicit offset or time range. The offline writer has one exactly-once append path.
 - **Stream history by Kappa replay.** An on-demand `stream-history` workflow, run month by month:
   1. it seeds isolated topics from Bronze;
   2. it replays them through the live Flink job in logical-clock mode under epoch `history-v19`;
-  3. the workflow deletes the month's history rows, then B appends through its normal path.
+  3. the workflow deletes the month's history rows, then the offline writer appends through its normal path.
 
   It takes explicit start and end days, and rerunning a range replaces the same rows.
 - **Materialization.** A `feast-materialize` Argo workflow runs on its own daily schedule after `dp-daily`, and on demand after a `dp-backfill`:
   1. it runs local Spark materialization with lookback plus one day of overlap;
-  2. a check_online stage validates a sample of newest keys.
+  2. a verify_online stage validates a sample of newest keys.
 
   An optional since day starts a backfill reload, always ending now. Deleted entities retain old online values until TTL.
 - **Idempotent runs.** History deletes and rebuilds its month; online replay keeps newest snapshots; materialization writes latest rows through now.
-- **Arrow.** Arrow transfer is enabled wherever data crosses into Python: the Spark offline store's Arrow setting, `to_arrow()` retrieval, and push job B's Arrow appends.
+- **Arrow.** Arrow transfer is enabled wherever data crosses into Python: the Spark offline store's Arrow setting, `to_arrow()` retrieval, and offline writer's Arrow appends.
 - **Go Fraud (BREAKING for the evidence contract).**
-  - It makes one `get-online-features` call for `fraud_model_v1`, with natural keys and raw request fields, transformed by Feast.
+  - It makes one `get-online-features` call for `payment_risk_v1`, with natural keys and raw request fields, transformed by Feast.
   - It applies the same TTL rule as training, at the scoring time.
   - It stays shadow-only, and rules remain authoritative.
   - Its evidence moves from `features.v1` into a fraud-owned `fraud.v1` message, with the old field number reserved.
@@ -53,11 +53,11 @@ This change builds that in the shape of the coursework's Feast lecture and the `
   - Flink (new epoch `live-v19`);
   - the live simulator on the v19 manifest at 1 payment every 30 seconds, in bounded evidence runs;
   - Redis sized for v19 (about 6 GiB);
-  - the push jobs, the feature server, `feast-materialize` and `stream-history`;
+  - the stream writers, the feature server, `feast-materialize` and `stream-history`;
   - Go Fraud retrieval in shadow mode.
 - **Governance (roadmap step 8).**
   - **Flink:** OpenMetadata's native Flink connector catalogues the streaming job, with SDK lineage as the fallback for the PyFlink Kafka edges.
-  - **New jobs:** the push jobs, the stream history and materialization publish lineage and status.
+  - **New jobs:** the stream writers, the stream history and materialization publish lineage and status.
 - **Removed:**
   - `fraud-snapshot-v1` and the `features.v1` protobuf package, with its Python and Go bindings;
   - the v1 reference calculation and the v1 Feast writer;
@@ -70,21 +70,21 @@ This change builds that in the shape of the coursework's Feast lecture and the `
 
 ### New Capabilities
 
-- `feature-store`: covers the Feast project and its registry; the natural-key entities; the daily and stream views with their TTLs; the single feature service; point-in-time offline retrieval with Arrow; the push jobs and their replay; the stream history replay; materialization with overlap and an online check; and online serving.
+- `feature-store`: covers the Feast project and its registry; the natural-key entities; the daily and stream views with their TTLs; the single feature service; point-in-time offline retrieval with Arrow; the stream writers and their replay; the stream history replay; materialization with overlap and an online check; and online serving.
 
 ### Modified Capabilities
 
-- `streaming-fraud-features`: removes the journal-only output requirement, because the push jobs now consume the journal.
-- `fraud-decision`: historical-feature retrieval becomes enabled shadow-only through `fraud_model_v1`, with per-view statuses and the shared TTL rule.
+- `streaming-fraud-features`: removes the journal-only output requirement, because the stream writers now consume the journal.
+- `fraud-decision`: historical-feature retrieval becomes enabled shadow-only through `payment_risk_v1`, with per-view statuses and the shared TTL rule.
 - `fraud-feature-contracts`: adds serving parity, and requires short-window history to come from the streaming job itself. It is ADDED only while DP3 is unarchived; retiring v1 waits for DP3's archive.
-- `data-pipeline-orchestration`: adds the `feast-materialize`, `feast-push-replay` and `stream-history` workflows (ADDED only).
-- `data-catalog-governance`: adds the streaming-job catalogue and lineage, plus the push-job, stream-history and materialization lineage and status (ADDED only).
+- `data-pipeline-orchestration`: adds the `feast-materialize`, `feature-writer-replay` and `stream-history` workflows (ADDED only).
+- `data-catalog-governance`: adds the streaming-job catalogue and lineage, plus the stream-writer, stream-history and materialization lineage and status (ADDED only).
 - `talos-gitops-deployment`: prod enables Flink, the live simulator, the feature store and Fraud retrieval in shadow mode.
 
 ## Impact
 
 - **Code:**
-  - `src/data-pipeline/feast`: rewritten on Python 3.12 with `feast[redis]==0.67.0`, `pyiceberg` and `confluent-kafka`, plus a `spark` extra. It holds the repository, apply, push jobs, materialize, online check and server.
+  - `src/data-pipeline/feast`: rewritten on Python 3.12 with `feast[redis]==0.67.0`, `pyiceberg` and `confluent-kafka`, plus a `spark` extra. It holds the repository, apply, stream writers, materialize, online verification and server.
   - `src/data-pipeline/streaming`: the history seed, which encodes Bronze events into the replay topics.
   - `src/data-pipeline/features`: the v1 reference is removed.
   - `src/data-pipeline/openmetadata`: the Flink connector, lineage and pipelines.
@@ -94,8 +94,8 @@ This change builds that in the shape of the coursework's Feast lecture and the `
   - `contracts/features/v1` and `fraud-snapshot-v1.*` are removed;
   - `fraud-snapshot-v2.examples.json` gains lateness-boundary cases.
 - **Infra:**
-  - `infra/charts/fraud-features`: the push jobs, the server, the PostSync apply, Redis sizing and prod enablement, Flink `live-v19`;
-  - `infra/charts/data-pipelines`: the `feast-materialize`, `feast-push-replay` and `stream-history` templates, the materialization CronWorkflow, RBAC for the history FlinkDeployment, and the Flink connector;
+  - `infra/charts/fraud-features`: the stream writers, the server, the PostSync apply, Redis sizing and prod enablement, Flink `live-v19`;
+  - `infra/charts/data-pipelines`: the `feast-materialize`, `feature-writer-replay` and `stream-history` templates, the materialization CronWorkflow, RBAC for the history FlinkDeployment, and the Flink connector;
   - `infra/charts/kafka`: ACLs for the history topics;
   - `infra/charts/live-traffic`: prod values;
   - `infra/charts/payment-gateway`: Fraud feature configuration;

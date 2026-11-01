@@ -22,7 +22,6 @@ Constraints:
 - **ClickHouse sizing:** prod has a 4 GiB memory limit (about 3.4 GiB for the server) and a 30 Gi PVC. Dev has a 12 GiB limit and must run on dev-server1 or dev-server2. On v19, a full-history Silver check join exhausted the prod server with hash joins and passed only with external sort-merge (`docs/data/storage.md`, "Full-load check optimization on v19"). `openmetadata.checks` now appends those spill settings to every rule.
 - **Platform ownership:** Grafana (VictoriaMetrics k8s stack, `observability`), Doppler and OpenMetadata belong to the platform. This repository only requests changes to them.
 - **Process:** no local tests, and no cluster actions while planning.
-- **Coursework examples** (`../fsds/example-proj`, read only): `card-fraud-platform` uses `feat_` tables with `event_timestamp = day + 1` and `created`, a fully rebuilt hash-diff SCD2 `dim_customer` (`valid_to` exclusive, one-current and no-overlap tests), a `label_` table, and a naming table with an ERD. None of the examples use ClickHouse, OpenMetadata, Argo or a Grafana warehouse datasource, so those parts are designed here from the platform's own docs.
 
 ## Goals / Non-Goals
 
@@ -157,7 +156,7 @@ Keys are (`integration_id`, `customer_id`) and (`integration_id`, `payment_metho
 
 *Alternatives:*
 
-- One row per entity per active day, as the coursework example does. Rejected: values go stale after expiry, so point-in-time lookups would be wrong.
+- One row per entity per active day. Rejected: values go stale after expiry, so point-in-time lookups would be wrong.
 - One row per attempt at `t`. Rejected because of the training/serving skew above.
 
 ### 4. `dim_customer` SCD2 over the observed profile

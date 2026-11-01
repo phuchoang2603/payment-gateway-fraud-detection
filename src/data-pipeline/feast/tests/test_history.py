@@ -3,12 +3,12 @@ from datetime import timedelta
 
 import pyarrow as pa
 import pytest
-from test_push_job import DAY, row
+from test_stream_writer import DAY, row
 
 from fraud_feast import history
 from fraud_feast.apply import stream_schema
-from fraud_feast.push_job import OfflineWriter, watermarks
 from fraud_feast.repo import KEYS, TABLES
+from fraud_feast.stream_writer import OfflineWriter, watermarks
 
 
 def test_month_prepare_replaces_only_its_epoch_and_resets_journal_progress(lake, monkeypatch):

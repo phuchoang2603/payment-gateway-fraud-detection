@@ -49,7 +49,7 @@ func TestOneNaturalKeyServiceRequest(t *testing.T) {
 			Entities         map[string][]any `json:"entities"`
 			FullFeatureNames bool             `json:"full_feature_names"`
 		}
-		if json.NewDecoder(r.Body).Decode(&request) != nil || request.FeatureService != "fraud_model_v1" || !request.FullFeatureNames || request.Entities["integration_id"][0] != "integration" || len(request.Entities) != 11 || request.Entities["has_device"][0] != false || request.Entities["ip_country"][0] != nil || request.Entities["amount_minor"][0] != float64(500) || request.Entities["item_count"][0] != float64(2) || request.Entities["scored_at"][0] != now.Format(time.RFC3339Nano) || request.Entities["merchant_account_created_at"][0] != now.Add(-24*time.Hour).Format(time.RFC3339Nano) {
+		if json.NewDecoder(r.Body).Decode(&request) != nil || request.FeatureService != "payment_risk_v1" || !request.FullFeatureNames || request.Entities["integration_id"][0] != "integration" || len(request.Entities) != 11 || request.Entities["has_device"][0] != false || request.Entities["ip_country"][0] != nil || request.Entities["amount_minor"][0] != float64(500) || request.Entities["item_count"][0] != float64(2) || request.Entities["scored_at"][0] != now.Format(time.RFC3339Nano) || request.Entities["merchant_account_created_at"][0] != now.Add(-24*time.Hour).Format(time.RFC3339Nano) {
 			t.Error("invalid feature service request")
 		}
 		reply := response{}
@@ -75,7 +75,7 @@ func TestOneNaturalKeyServiceRequest(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client, err := New(Config{URL: server.URL, FeatureService: "fraud_model_v1", Timeout: time.Second, DailyTTL: time.Hour, StreamTTL: time.Hour})
+	client, err := New(Config{URL: server.URL, FeatureService: "payment_risk_v1", Timeout: time.Second, DailyTTL: time.Hour, StreamTTL: time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}

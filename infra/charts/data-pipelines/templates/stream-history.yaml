@@ -231,8 +231,8 @@ spec:
         {{- else }}
         image: {{ include "data-pipelines.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
         {{- if eq $mode "writer" }}
-        command: [python, -m, fraud_feast.push_job]
-        args: [--to, offline, --history-start, {{ "{{inputs.parameters.start}}" | quote }}, --history-end, {{ "{{inputs.parameters.end}}" | quote }}]
+        command: [python, -m, fraud_feast.stream_writer]
+        args: [--store, offline, --history-start, {{ "{{inputs.parameters.start}}" | quote }}, --history-end, {{ "{{inputs.parameters.end}}" | quote }}]
         {{- else }}
         command: [python, -m, fraud_feast.history]
         {{- if eq $mode "prepare" }}

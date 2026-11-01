@@ -110,7 +110,7 @@ type history struct {
 func (h *history) Read(context.Context, application.Request) application.FeatureObservation {
 	h.calls++
 	value := h.value
-	return application.FeatureObservation{Service: "fraud_model_v1", Views: map[string]application.ViewObservation{"customer_daily": {Status: "available", Values: map[string]application.FeatureValue{"attempt_count_7d": {Integer: &value}}}, "payment_method_daily": {Status: "timeout"}}}
+	return application.FeatureObservation{Service: "payment_risk_v1", Views: map[string]application.ViewObservation{"customer_daily": {Status: "available", Values: map[string]application.FeatureValue{"attempt_count_7d": {Integer: &value}}}, "payment_method_daily": {Status: "timeout"}}}
 }
 
 func TestAssessmentResponseLossReplaysOriginalEvidenceAndRejectsExpiredRecovery(t *testing.T) {
