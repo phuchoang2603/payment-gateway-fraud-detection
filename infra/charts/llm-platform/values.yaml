@@ -84,7 +84,6 @@ models:
     repo: vllm-sr/d3-edge
     revision: c454ee39b862248d70abd7f84195d2f54ffe6d43
     cacheSize: 2Gi
-    stopped: true
     image: vllm/vllm-openai:nightly-2b009fc6d1493a9a1ad19f4d0c7230b7e6b7e63a@sha256:1b7aee4c157c2c8f48aaf34de137d1eebfb2eea8445549789188c2280883f8d7
     replicas: 1
     args:
