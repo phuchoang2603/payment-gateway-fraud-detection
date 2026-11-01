@@ -123,7 +123,8 @@ def test_source_progress_refreshes_crossed_offsets_and_rejects_partial_broker_re
     monkeypatch.setattr(operators, "AdminClient", lambda config: admin)
     monkeypatch.setattr(operators, "decode", lambda raw: (None, anchor))
     monkeypatch.setattr(operators.time, "monotonic", lambda: 1)
-    observer = operators.ObserveSource(brokers="broker", topic="source", partitions=3, logical=True)
+    monkeypatch.setattr(operators, "micros", lambda: anchor)
+    observer = operators.ObserveSource(brokers="broker", topic="source", partitions=3)
     observer.open(SimpleNamespace(get_state=lambda descriptor: state, get_metrics_group=Mock))
     first = next(observer.process_element((b"", "source", 0, 3, CREATED), None))
     assert [(p.partition, p.consumed, p.high_watermark) for p in first.progress] == [

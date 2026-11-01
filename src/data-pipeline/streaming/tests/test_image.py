@@ -15,7 +15,7 @@ from testcontainers.core.image import DockerImage
 from testcontainers.core.network import Network
 from testcontainers.core.wait_strategies import HttpWaitStrategy
 
-from fraud_streaming.model import HOUR, entity_key
+from fraud_streaming.model import DAY, HOUR, entity_key
 from fraud_streaming.wire import DEFINITION_HASH, PaymentEvent, SnapshotUpdate
 
 
@@ -191,13 +191,37 @@ def test_image_kafka_journal_and_checkpoint_recovery():
 
                         job_id = await_result(running_job)
 
+                        input_end = 0
+                        sequence = 0
+
+                        def barrier(instant):
+                            nonlocal sequence
+                            producer.produce(
+                                clock,
+                                partition=0,
+                                value=json.dumps(
+                                    {
+                                        "clock_us": instant,
+                                        "sequence": sequence,
+                                        "input_offsets": {"0": input_end},
+                                    }
+                                ),
+                            )
+                            assert producer.flush(10) == 0
+                            sequence += 1
+
+                        barrier(anchor - 8 * DAY)
+
                         def send(attempt, instant, *, customer="customer", attempted_at=None):
+                            nonlocal input_end
                             records = lifecycle(
                                 attempt, instant, customer=customer, attempted_at=attempted_at
                             )
                             for record in records:
                                 producer.produce(source, key=attempt, value=record, partition=0)
                             assert producer.flush(10) == 0
+                            input_end += len(records)
+                            barrier(instant + 1_000_000)
                             return records
 
                         latest = {}
@@ -230,9 +254,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
 
                         first = send("one", anchor)
                         receive(lambda values: len(values) == 2)
-                        producer.produce(
-                            clock, value=json.dumps({"clock_us": anchor + HOUR + 2_000_000})
-                        )
+                        barrier(anchor + HOUR + 2_000_000)
                         assert producer.flush(10) == 0
                         receive(
                             lambda values: all(
@@ -247,6 +269,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                         for record in (garbage, conflict):
                             producer.produce(source, key="poison", value=record, partition=0)
                         assert producer.flush(10) == 0
+                        input_end += 2
                         second = send("two", anchor + HOUR + 3_000_000)
                         receive(
                             lambda values: all(
@@ -270,6 +293,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                         for record in second:
                             producer.produce(source, key="two", value=record, partition=0)
                         assert producer.flush(10) == 0
+                        input_end += len(second)
                         send("three", anchor + HOUR + 5_000_000, customer="other-customer")
                         receive(
                             lambda values: (

@@ -22,6 +22,7 @@ from fraud_streaming.model import (
     entity_key,
     lateness_bucket,
 )
+from fraud_streaming.replay import OffsetBarrier
 from fraud_streaming.wire import decode, snapshot
 
 log = logging.getLogger(__name__)
@@ -132,8 +133,25 @@ class ObserveSource(KeyedProcessFunction):
         self.watermarks = {}
         self.last_poll = 0
         self.rejected = reject_counters(runtime_context)
+        if self.logical:
+            if self.partitions != 1 or not self.clock_topic:
+                raise ValueError("logical replay requires one input partition and a clock topic")
+            self.barrier = runtime_context.get_state(
+                ValueStateDescriptor("replay-offset-barriers-v1", Types.PICKLED_BYTE_ARRAY())
+            )
 
     def process_element(self, row, ctx):
+        if not self.logical:
+            yield from self.observe(row)
+            return
+        barrier = self.barrier.value() or OffsetBarrier(self.topic, self.clock_topic)
+        control = json.loads(bytes(row[0])) if row[1] == self.clock_topic else None
+        ready = barrier.accept(row, control)
+        self.barrier.update(barrier)
+        for item in ready:
+            yield from self.observe(item)
+
+    def observe(self, row):
         raw, topic, partition, offset, timestamp = row
         fact = rejected = None
         source = None
@@ -231,6 +249,9 @@ class Deduplicate(KeyedProcessFunction):
         self.state = runtime_context.get_state(
             ValueStateDescriptor(f"{self.scope}-identity-v3", Types.STRING())
         )
+        self.expires = runtime_context.get_state(
+            ValueStateDescriptor(f"{self.scope}-identity-expiry-v1", Types.LONG())
+        )
         self.rejected = reject_counters(runtime_context)
         metrics = runtime_context.get_metrics_group()
         self.too_late = metrics.counter("too_late")
@@ -256,6 +277,9 @@ class Deduplicate(KeyedProcessFunction):
                 )
             )
             return
+        if self.logical and self.expires.value() is not None and packet.now >= self.expires.value():
+            self.state.clear()
+            self.expires.clear()
         content = dedup_content(self.scope, fact)
         status = dedup_status(self.state.value(), content)
         if status == "duplicate":
@@ -268,11 +292,15 @@ class Deduplicate(KeyedProcessFunction):
         if self.scope == "event":
             self.lateness[lateness_bucket(packet.now - fact.started_at)].inc()
         self.state.update(content)
+        self.expires.update(fact.started_at + DEDUP_RETENTION)
         register(ctx, fact.started_at + DEDUP_RETENTION, self.logical)
         yield packet
 
     def on_timer(self, timestamp, ctx):
-        self.state.clear()
+        expiry = self.expires.value()
+        if expiry is not None and timestamp * 1000 >= expiry:
+            self.state.clear()
+            self.expires.clear()
         return ()
 
 
@@ -312,6 +340,9 @@ class Aggregate(KeyedProcessFunction):
             packet.bootstrap,
             max_entries=self.max_entries,
         )
+        if self.logical:
+            while state.next_timer is not None and state.next_timer <= packet.now:
+                yield from self.emit(state, state.next_timer, ctx)
         state.add(packet)
         now = packet.now if self.logical else micros()
         yield from self.emit(state, now, ctx)
@@ -319,5 +350,8 @@ class Aggregate(KeyedProcessFunction):
     def on_timer(self, timestamp, ctx):
         state = self.state.value()
         if state is not None:
-            now = timestamp * 1000 if self.logical else micros()
-            yield from self.emit(state, now, ctx)
+            if self.logical:
+                while state.next_timer is not None and state.next_timer <= timestamp * 1000:
+                    yield from self.emit(state, state.next_timer, ctx)
+            else:
+                yield from self.emit(state, micros(), ctx)

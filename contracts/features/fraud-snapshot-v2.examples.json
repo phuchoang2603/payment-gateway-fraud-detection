@@ -410,6 +410,62 @@
     }
    ],
    "error": "conflicting event identity/content"
+  },
+  {
+   "name": "lateness_24h_minus_1us",
+   "events": [
+    {
+     "use": "start",
+     "recorded_at": "2025-09-01T12:00:00+00:00",
+     "attempt_started": {
+      "signals": {
+       "attempted_at": "2025-08-31T12:00:00.000001+00:00"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": 0,
+     "customer_snapshot_attempt_count_1h": 0,
+     "customer_snapshot_attempt_count_24h": 1,
+     "customer_snapshot_distinct_devices_24h": 1,
+     "method_snapshot_attempt_count_5m": 0,
+     "method_snapshot_attempt_count_1h": 0,
+     "method_snapshot_attempt_count_24h": 1
+    }
+   }
+  },
+  {
+   "name": "lateness_24h_plus_1us",
+   "events": [
+    {
+     "use": "start",
+     "recorded_at": "2025-09-01T12:00:00+00:00",
+     "attempt_started": {
+      "signals": {
+       "attempted_at": "2025-08-31T11:59:59.999999+00:00"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "values": {
+     "amount_minor": 100,
+     "customer_account_age_hours": 744,
+     "ip_shipping_country_mismatch": null,
+     "customer_snapshot_attempt_count_5m": 0,
+     "customer_snapshot_attempt_count_1h": 0,
+     "customer_snapshot_attempt_count_24h": 0,
+     "customer_snapshot_distinct_devices_24h": 0,
+     "method_snapshot_attempt_count_5m": 0,
+     "method_snapshot_attempt_count_1h": 0,
+     "method_snapshot_attempt_count_24h": 0
+    }
+   }
   }
  ]
 }
