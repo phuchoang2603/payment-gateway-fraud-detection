@@ -20,10 +20,6 @@ DAY = datetime(2025, 9, 1, tzinfo=UTC)
 
 @pytest.mark.parametrize("scope,view", [("customer", 1), ("payment_method", 2)])
 def test_shared_row_mapping_delays_visibility_until_after_online_write(scope, view):
-    import hashlib
-
-    from fraud_streaming.model import entity_key
-
     update = SnapshotUpdate(
         schema_version=1,
         definition={"version": "fraud-snapshot-v2", "sha256": DEFINITION_HASH},
@@ -37,16 +33,8 @@ def test_shared_row_mapping_delays_visibility_until_after_online_write(scope, vi
     )
     for name in ("anchor", "source_available_at", "online_write_at"):
         getattr(update, name).FromDatetime(DAY)
-    progress = update.source_progress.add(
-        topic="payments", partition=0, consumed_offset=0, observed_high_watermark=1
-    )
-    progress.observed_at.FromDatetime(DAY)
-    update.snapshot_id = hashlib.sha256(update.SerializeToString(deterministic=True)).hexdigest()
     message = SimpleNamespace(
         value=lambda: update.SerializeToString(deterministic=True),
-        key=lambda: entity_key(
-            "live-ci", "customer" if view == 1 else "method", "i", "entity"
-        ).encode(),
         timestamp=lambda: (1, int(DAY.timestamp() * 1000)),
         partition=lambda: 0,
         offset=lambda: 0,
@@ -218,59 +206,47 @@ def test_live_conflict_refreshes_offsets_and_deduplicates(lake, monkeypatch):
     assert all(table.scan().to_arrow().num_rows == 2 for table in job.tables.values())
 
 
-@pytest.mark.parametrize("history_mode", [False, True])
-def test_bounded_reads_stop_at_stable_partition_eof(history_mode):
+def test_history_reads_every_partition_to_committed_eof():
     import threading
     from unittest.mock import Mock
 
     from confluent_kafka import KafkaError
 
     consumer = Mock()
-    record = Mock()
+    record, first_eof, second_eof = Mock(), Mock(), Mock()
     record.error.return_value = None
     record.partition.return_value = 0
     record.offset.return_value = 0
-    eof = Mock()
-    eof.error.return_value.code.return_value = KafkaError._PARTITION_EOF
-    eof.partition.return_value = 0
-    eof.offset.return_value = 2
-    consumer.poll.side_effect = [record, eof]
-    history = Mock() if history_mode else None
-    if history:
-        history.ends.return_value = True
-    result = list(
-        batches(
-            consumer,
-            "journal",
-            {0: 0},
-            None if history else {0: 20},
-            threading.Event(),
-            history=history,
-        )
-    )
-    assert [message for batch, _ in result for message in batch] == [record]
-    assert result[-1][1] == {0: 2}
+    for partition, message in enumerate((first_eof, second_eof)):
+        message.error.return_value.code.return_value = KafkaError._PARTITION_EOF
+        message.partition.return_value = partition
+        message.offset.return_value = 2
+    consumer.poll.side_effect = [record, first_eof, second_eof]
+    result = list(batches(consumer, "journal", {0: 0, 1: 0}, threading.Event(), history=True))
+    assert result == [([record], {0: 2, 1: 2})]
     consumer.get_watermark_offsets.assert_not_called()
+    consumer.seek.assert_not_called()
 
 
-def test_history_discards_early_eof_and_drains_again_after_flink_finishes():
+def test_live_ignores_eof_until_stopped():
     import threading
     from unittest.mock import Mock
 
     from confluent_kafka import KafkaError
 
-    consumer, history = Mock(), Mock()
-    history.ends.side_effect = [False, False, True]
-    early, record, final = Mock(), Mock(), Mock()
-    for message in (early, final):
-        message.error.return_value.code.return_value = KafkaError._PARTITION_EOF
-        message.partition.return_value = 0
-    early.offset.return_value = 0
-    final.offset.return_value = 2
-    record.error.return_value = None
-    record.partition.return_value = 0
-    record.offset.return_value = 0
-    consumer.poll.side_effect = [early, record, final]
-    result = list(batches(consumer, "journal", {0: 0}, None, threading.Event(), history=history))
-    assert result == [([record], {0: 2})]
-    assert consumer.seek.call_args.args[0].offset == 1
+    consumer = Mock()
+    stopped = threading.Event()
+    eof = Mock()
+    eof.error.return_value.code.return_value = KafkaError._PARTITION_EOF
+    eof.partition.return_value = 0
+    eof.offset.return_value = 0
+
+    def poll(_):
+        if consumer.poll.call_count > 1:
+            stopped.set()
+        return eof
+
+    consumer.poll.side_effect = poll
+    assert list(batches(consumer, "journal", {0: 0}, stopped)) == []
+    assert consumer.poll.call_count == 2
+    consumer.pause.assert_not_called()

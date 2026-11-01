@@ -82,6 +82,7 @@ def main():
     env.enable_checkpointing(10_000)
     table = StreamTableEnvironment.create(env)
     topics = ";".join([source, clock_topic] if logical else [source])
+    bounded = "'scan.bounded.mode' = 'latest-offset'," if logical else ""
     table.execute_sql(
         f"""CREATE TABLE payment_source (
             payload BYTES,
@@ -97,6 +98,7 @@ def main():
             'properties.isolation.level' = 'read_committed',
             'properties.auto.offset.reset' = 'none',
             'scan.startup.mode' = {sql_literal("earliest-offset" if logical else "latest-offset")},
+            {bounded}
             'format' = 'raw'
         )"""
     )

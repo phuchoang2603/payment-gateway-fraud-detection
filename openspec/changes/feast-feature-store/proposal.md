@@ -26,7 +26,7 @@ This change assigns one engine to each feature definition so training and servin
   - **TTLs** follow the longest window plus delay: 31 days 12 hours for the daily views, 24 hours 5 minutes for the stream views. The documentation records the reasons.
   - **Registry:** persistent, in object storage, written by a deploy-time `feast apply`.
 - **One feature service, `payment_risk_v1`.** It covers the four stored views and the pure Python request_features on-demand view. Training requests it through `get_historical_features`, with `gold.label_attempt`'s simulation-truth rows as the entity dataframe at plain `started_at`, and so does Go Fraud. Stream rows become visible one microsecond after they are written, so a snapshot that counts the scored attempt is never returned. Training retrieval runs Feast's Spark offline store in local mode, in one Kubeflow Pipelines step.
-- **One stream writer.** The `feature-writer` Deployment and consumer group run `stream_writer`: each live batch pushes online first, then buffered rows append to Iceberg every five minutes or 100,000 rows with their Kafka offsets. Restarts resume from transactional Iceberg table properties that survive snapshot expiry. `--history` writes offline only; `--from`/`--until` replays online only.
+- **One stream writer.** The `feature-writer` Deployment and consumer group run `stream_writer`: each live batch pushes online first, then buffered rows append to Iceberg every five minutes or 100,000 rows with their Kafka offsets. Restarts resume from transactional Iceberg table properties that survive snapshot expiry. `--history` writes offline only. Redis stream recovery materializes the last STREAM_TTL from the batch sources.
 - **Stream history by Kappa replay.** An on-demand `stream-history` workflow, run month by month:
   1. it seeds isolated topics from Bronze;
   2. it replays them through the live Flink job in logical-clock mode under epoch `history-v19`;
@@ -38,7 +38,7 @@ This change assigns one engine to each feature definition so training and servin
   2. a verify_online stage validates a sample of newest keys.
 
   An optional since day starts a backfill reload, always ending now. Deleted entities retain old online values until TTL.
-- **Idempotent runs.** History deletes and rebuilds its month; online replay keeps newest snapshots; materialization writes latest rows through now.
+- **Idempotent runs.** History deletes and rebuilds its month; materialization writes latest rows through now.
 - **Arrow.** Arrow transfer is enabled wherever data crosses into Python: the Spark offline store's Arrow setting, `to_arrow()` retrieval, and feature writer's Arrow appends.
 - **Go Fraud (BREAKING for the evidence contract).**
   - It makes one `get-online-features` call for `payment_risk_v1`, with natural keys and raw request fields, transformed by Feast.
@@ -80,7 +80,7 @@ This change assigns one engine to each feature definition so training and servin
 - `payment-contracts`: removes synchronous submission observations from the risk dependency contract.
 - `fraud-decision`: removes synchronous submission observations; historical-feature retrieval becomes enabled shadow-only through `payment_risk_v1`, with per-view statuses and the shared TTL rule.
 - `fraud-feature-contracts`: adds serving parity, and requires short-window history to come from the streaming job itself. It is ADDED only while DP3 is unarchived; retiring v1 waits for DP3's archive.
-- `data-pipeline-orchestration`: adds the `feast-materialize`, `feature-writer-replay` and `stream-history` workflows (ADDED only).
+- `data-pipeline-orchestration`: adds the `feast-materialize` and `stream-history` workflows (ADDED only).
 - `data-catalog-governance`: adds the streaming-job catalogue and lineage, plus the stream-writer, stream-history and materialization lineage and status (ADDED only).
 - `talos-gitops-deployment`: data-pipelines owns feature infrastructure behind one flag, enabled in dev and disabled in prod until provisioning.
 
@@ -97,7 +97,7 @@ This change assigns one engine to each feature definition so training and servin
   - `contracts/features/v1` and `fraud-snapshot-v1.*` are removed;
   - `fraud-snapshot-v2.examples.json` gains lateness-boundary cases.
 - **Infra:**
-  - `infra/charts/data-pipelines`: Flink, Redis, the stream writer, server and apply hook under `features.enabled` (dev on, prod off until provisioned); the `feast-materialize`, `feature-writer-replay` and `stream-history` templates, the materialization CronWorkflow, RBAC for the history FlinkDeployment, and the Flink connector;
+  - `infra/charts/data-pipelines`: Flink, Redis, the stream writer, server and apply hook under `features.enabled` (dev on, prod off until provisioned); the `feast-materialize` and `stream-history` templates, the materialization CronWorkflow, RBAC for the history FlinkDeployment, and the Flink connector;
   - `infra/charts/kafka`: ACLs for the history topics;
   - `infra/charts/live-traffic`: prod values;
   - `infra/charts/payment-gateway`: Fraud feature configuration and removal of the dedicated submission Redis;

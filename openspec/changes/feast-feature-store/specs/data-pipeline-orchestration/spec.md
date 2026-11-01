@@ -13,16 +13,8 @@ Materialization SHALL run as an Argo workflow, `feast-materialize`, with two sta
 - **WHEN** `feast-materialize` starts while `dp-pipeline` runs
 - **THEN** it waits for DP3 to finish
 
-### Requirement: Push replay workflow
-An online-only bounded replay of the feature writer SHALL run as an on-demand Argo workflow, `feature-writer-replay`, with from and until journal range parameters and an exit-handler publication. Replays SHALL be serialized by a mutex. It SHALL NOT be scheduled.
-
-#### Scenario: Two replays submitted together
-
-- **WHEN** two replays are submitted at once
-- **THEN** the second waits for the first to finish
-
 ### Requirement: Stream history workflow
-The stream history SHALL run as an on-demand Argo workflow, `stream-history`, with optional start and end days. For each month in order, it SHALL seed isolated topics, replay through a run-scoped streaming deployment, and replace each table’s history-epoch unit with an initial short range delete followed by separate batch commits. Each commit SHALL use the shared refresh/retry helper. Training SHALL NOT run during a replay or before all units pass their gates. The history writer SHALL retry failed units from offset zero through committed partition EOF, without a prepare step or offset resume. An exit handler SHALL delete the deployment and topics, and SHALL publish each unit's outcome on success and on failure. Runs SHALL be serialized by their own mutex. It SHALL NOT be scheduled.
+The stream history SHALL run as an on-demand Argo workflow, `stream-history`, with optional start and end days. For each month in order, it SHALL seed isolated topics, await FINISHED on a bounded run-scoped streaming deployment, then replace each table’s history-epoch unit with an initial short range delete followed by separate batch commits. Each commit SHALL use the shared refresh/retry helper. Training SHALL NOT run during a replay or before all units pass their gates. The history writer SHALL retry failed units from offset zero through committed partition EOF, without a prepare step or offset resume. An exit handler SHALL delete the deployment and topics, and SHALL publish each unit's outcome on success and on failure. Runs SHALL be serialized by their own mutex. It SHALL NOT be scheduled.
 
 #### Scenario: Replay stage fails
 

@@ -34,14 +34,14 @@ def test_feature_lineage_traces_writer_and_history_tables():
     assert all("redis" not in edge.target.fqn.lower() for edge in selected)
 
 
-def test_replay_history_and_materialization_reports_keep_governance_parameters(tmp_path):
+def test_history_and_materialization_reports_keep_governance_parameters(tmp_path):
     for report in (
         {"start": "2025-09-01", "end": "2025-10-01", "sampled": 12, "since": "2025-09-01", "checked": True},
-        {"mode": "replay", "from": {"0": 1}, "until": {"0": 10}, "rows": 9},
         {
             "start": "2025-09-01",
             "end": "2025-10-01",
             "gate": False,
+            "job_state": "FINISHED",
             "counts": {"rejects": 1},
             "seed": {"events_per_second": 12},
         },

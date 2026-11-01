@@ -13,6 +13,7 @@ spec:
   arguments:
     parameters:
       - {name: since, value: ""}
+      - {name: stream-recovery, value: "false"}
   podMetadata:
     labels:
       app.kubernetes.io/name: data-pipelines
@@ -38,6 +39,8 @@ spec:
             value: {{ .Values.pipeline.lookbackDays | quote }}
           - name: SINCE_DAY
             value: {{ "{{workflow.parameters.since}}" | quote }}
+          - name: STREAM_RECOVERY
+            value: {{ "{{workflow.parameters.stream-recovery}}" | quote }}
           - name: RUN_REPORT
             value: {{ $report | quote }}
           {{- include "data-pipelines.env" $ | nindent 10 }}
@@ -74,43 +77,4 @@ spec:
   workflowSpec:
     workflowTemplateRef:
       name: feast-materialize
----
-apiVersion: argoproj.io/v1alpha1
-kind: WorkflowTemplate
-metadata:
-  name: feature-writer-replay
-  namespace: {{ .Values.namespace }}
-spec:
-  serviceAccountName: data-pipelines
-  {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
-  entrypoint: replay
-  onExit: publish
-  arguments:
-    parameters:
-      - {name: from}
-      - {name: until}
-  podMetadata:
-    labels:
-      app.kubernetes.io/name: data-pipelines
-  templates:
-    - name: replay
-      synchronization:
-        mutexes:
-          - name: feature-writer
-      container:
-        image: {{ include "data-pipelines.image" (dict "image" .Values.images.feast "global" .Values.global) | quote }}
-        command: [python, -m, fraud_feast.stream_writer]
-        args: [--from, {{ "{{workflow.parameters.from}}" | quote }}, --until, {{ "{{workflow.parameters.until}}" | quote }}]
-        env:
-          - name: FEATURE_EPOCH
-            value: {{ .Values.features.epoch | quote }}
-          - name: FEATURE_UPDATE_TOPIC
-            value: {{ printf "fraud.feature-updates.v2.%s" .Values.features.epoch | quote }}
-          - name: RUN_ID
-            value: {{ "{{workflow.name}}" | quote }}
-          - name: RUN_REPORT
-            value: {{ printf "%s/replay/{{workflow.name}}.json" .Values.features.reportRoot | quote }}
-          {{- include "data-pipelines.env" . | nindent 10 }}
-          {{- include "data-pipelines.feastEnv" . | nindent 10 }}
-    {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "feature-writer" "dataset" .Values.bronze.datasetVersion "report" (printf "%s/replay/{{workflow.name}}.json" .Values.features.reportRoot)) | nindent 4 }}
 {{- end }}

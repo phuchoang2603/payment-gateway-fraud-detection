@@ -3,22 +3,30 @@ import os
 from datetime import UTC, date, datetime, time, timedelta
 
 from fraud_feast.lake import write_json
-from fraud_feast.repo import DAILY_FIELDS, DAILY_TABLES, DAILY_TTL, KEYS
+from fraud_feast.repo import DAILY_FIELDS, DAILY_TABLES, DAILY_TTL, KEYS, STREAM_TTL
 from fraud_feast.runtime import store
 
 
-def run(spark, feature_store, now, lookback_days, since=None):
+def run(spark, feature_store, now, lookback_days, since=None, *, stream_recovery=False):
     from pyspark.sql import functions as F
 
     if lookback_days < 0:
         raise ValueError("lookback days must be nonnegative")
-    feature_store.config.online_store.skip_dedup = True
+    feature_store.config.online_store.skip_dedup = not stream_recovery
     report = {
         "now": now.isoformat(),
         "since": str(since) if since else None,
         "windows": {},
         "samples": {},
     }
+    if stream_recovery:
+        start = now - STREAM_TTL
+        views = [f"{scope}_stream" for scope in KEYS]
+        feature_store.materialize(start, now, feature_views=views)
+        report["windows"] = {
+            view: {"start": start.isoformat(), "end": now.isoformat()} for view in views
+        }
+        return report
     for scope, table in DAILY_TABLES.items():
         view = f"{scope}_daily"
         previous = feature_store.get_feature_view(view).most_recent_end_time
@@ -52,7 +60,14 @@ def run(spark, feature_store, now, lookback_days, since=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--since", default=os.environ.get("SINCE_DAY") or None)
+    parser.add_argument(
+        "--stream-recovery",
+        action="store_true",
+        default=os.environ.get("STREAM_RECOVERY", "false") == "true",
+    )
     args = parser.parse_args()
+    if args.stream_recovery and args.since:
+        parser.error("--stream-recovery uses STREAM_TTL and cannot take --since")
     since = date.fromisoformat(args.since) if args.since else None
     from pyspark.sql import SparkSession
 
@@ -62,7 +77,12 @@ def main():
     ).getOrCreate()
     try:
         report = run(
-            spark, feature_store, datetime.now(UTC), int(os.environ["DP_LOOKBACK_DAYS"]), since
+            spark,
+            feature_store,
+            datetime.now(UTC),
+            int(os.environ.get("DP_LOOKBACK_DAYS", "0")),
+            since,
+            stream_recovery=args.stream_recovery,
         )
         write_json(os.environ["RUN_REPORT"], report)
     finally:

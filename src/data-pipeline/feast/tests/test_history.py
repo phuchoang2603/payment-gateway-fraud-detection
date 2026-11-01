@@ -147,20 +147,43 @@ def test_history_buffers_kafka_batches_and_flushes_remainder(lake, monkeypatch, 
         assert watermarks(table, "history-ci") == {}
 
 
-def test_gate_requires_decode_success_and_all_input_not_reject_count_equality():
+def test_gate_requires_decode_success_and_finished_job_not_reject_count_equality():
     report = {
         "seed": {"done": True, "input_end": 10, "clock_end": 5},
-        "consumed": {"input": 10, "clock": 5},
+        "job_state": "FINISHED",
         "counts": {"decode_rejects": 0, "duplicates": 12, "too_late": 8, "rejects": 20},
     }
     history.validate_gate(report)
-    for broken in ("decode", "input", "clock", "seed"):
+    for broken in ("decode", "job_state", "seed"):
         changed = deepcopy(report)
         if broken == "decode":
             changed["counts"]["decode_rejects"] = 1
         elif broken == "seed":
             changed["seed"]["done"] = False
         else:
-            changed["consumed"][broken] -= 1
+            changed["job_state"] = "RUNNING"
         with pytest.raises(ValueError):
             history.validate_gate(changed)
+
+
+def test_history_report_requires_finished_flink_and_reads_seed_once(monkeypatch, tmp_path):
+    import json
+
+    seed = tmp_path / "seed.json"
+    seed.write_text(json.dumps({"done": True, "input_end": 10, "clock_end": 5}))
+    report = tmp_path / "report.json"
+    monkeypatch.setenv("FEATURE_EPOCH", "history-ci")
+    monkeypatch.setenv("HISTORY_SEED_REPORT", str(seed))
+    monkeypatch.setenv("RUN_REPORT", str(report))
+    state = ["RUNNING"]
+    monkeypatch.setattr(history, "rest", lambda _: {"jobs": [{"jid": "job", "state": state[0]}]})
+    monkeypatch.setattr(history, "counters", lambda _: {"decode_rejects": 0})
+    replay = history.HistoryReplay("2026-07-29", "2026-08-01")
+    with pytest.raises(ValueError, match="finished"):
+        replay.report(10)
+    state[0] = "FINISHED"
+    replay.report(10)
+    result = json.loads(report.read_text())
+    history.validate_gate(result)
+    assert result["rows"] == 10
+    assert result["seed"]["input_end"] == 10

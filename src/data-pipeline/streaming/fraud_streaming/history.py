@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from confluent_kafka import ConsumerGroupTopicPartitions, Producer, TopicPartition
+from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient, NewTopic
 from google.protobuf.json_format import ParseDict
 
@@ -89,26 +89,6 @@ def write_report(report):
         Path(os.environ["HISTORY_SEED_REPORT"]).write_bytes(body)
 
 
-def wait_for_lag(admin, epoch, produced, bound, timeout=600):
-    deadline = time.monotonic() + timeout
-    while produced > bound:
-        group = f"fraud-features-{epoch}"
-        offsets = (
-            admin.list_consumer_group_offsets(
-                [ConsumerGroupTopicPartitions(group, [TopicPartition(topics(epoch)[0], 0)])],
-                request_timeout=30,
-            )[group]
-            .result()
-            .topic_partitions
-        )
-        consumed = max(offsets[0].offset, 0)
-        if produced - consumed <= bound:
-            return
-        if time.monotonic() > deadline:
-            raise TimeoutError("history replay stopped advancing")
-        time.sleep(2)
-
-
 def seed(start, end):
     import duckdb
     from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan
@@ -135,7 +115,6 @@ def seed(start, end):
         "SELECT * FROM bronze ORDER BY recorded_at, integration_id, payment_id, aggregate_version, event_id, _source_file, _kafka_offset"
     ).to_arrow_reader(1000)
     brokers = os.environ["KAFKA_BROKERS"]
-    admin = AdminClient({"bootstrap.servers": brokers})
     producer = Producer(
         {
             "bootstrap.servers": brokers,
@@ -189,7 +168,6 @@ def seed(start, end):
                 )
                 offset += 1
             clock(int(row["recorded_at"].replace(tzinfo=UTC).timestamp() * 1_000_000))
-            wait_for_lag(admin, epoch, offset, 1000)
         clock(int((until + timedelta(days=1, milliseconds=1)).timestamp() * 1_000_000))
         report = {
             "start": start,
@@ -244,17 +222,14 @@ def main():
                     raise TimeoutError("history topics were not deleted")
                 time.sleep(1)
                 existing = set(admin.list_topics(timeout=30).topics)
-            configs = {"retention.ms": "604800000", "cleanup.policy": "delete"}
+            configs = {"retention.ms": "-1", "retention.bytes": "-1", "cleanup.policy": "delete"}
             for name, future in admin.create_topics(
                 [
                     NewTopic(
                         name,
                         num_partitions=1,
                         replication_factor=int(os.environ.get("HISTORY_REPLICATION_FACTOR", "1")),
-                        config={
-                            **configs,
-                            **({"retention.bytes": "1073741824"} if name == names[0] else {}),
-                        },
+                        config=configs,
                     )
                     for name in names
                 ]

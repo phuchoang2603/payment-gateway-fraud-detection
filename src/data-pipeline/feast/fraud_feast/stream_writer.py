@@ -34,9 +34,6 @@ def decode(message, epoch):
     if not raw or len(raw) > 128 * 1024:
         raise ValueError("invalid journal payload size")
     update = SnapshotUpdate.FromString(raw)
-    identity = SnapshotUpdate()
-    identity.CopyFrom(update)
-    identity.ClearField("snapshot_id")
     if (
         update.schema_version != 1
         or update.definition.version != "fraud-snapshot-v2"
@@ -48,22 +45,9 @@ def decode(message, epoch):
         or not update.revision
         or not update.HasField("coverage")
         or not update.HasField("values")
-        or update.snapshot_id
-        != hashlib.sha256(identity.SerializeToString(deterministic=True)).hexdigest()
     ):
         raise ValueError("incompatible snapshot identity")
     scope = "customer" if update.view == 1 else "payment_method"
-    digest = hashlib.sha256()
-    for value in (
-        epoch,
-        "customer" if update.view == 1 else "method",
-        update.integration_id,
-        update.entity_id,
-    ):
-        encoded = value.encode()
-        digest.update(str(len(encoded)).encode() + b":" + encoded)
-    if message.key() != digest.hexdigest().encode():
-        raise ValueError("journal key does not match snapshot")
     for field in ("anchor", "source_available_at", "online_write_at"):
         if not update.HasField(field) or getattr(update, field).nanos % 1000:
             raise ValueError("snapshot requires microsecond timestamps")
@@ -92,24 +76,6 @@ def decode(message, epoch):
             values[name] = getattr(update.values, field) if present else None
     if scope == "payment_method" and update.values.HasField("distinct_devices_24h"):
         raise ValueError("method snapshot contains customer values")
-    if not update.source_progress:
-        raise ValueError("missing source progress")
-    seen = set()
-    for progress in update.source_progress:
-        key = progress.topic, progress.partition
-        if (
-            not progress.topic
-            or progress.partition < 0
-            or progress.consumed_offset < -1
-            or progress.observed_high_watermark <= progress.consumed_offset
-            or not progress.HasField("observed_at")
-            or key in seen
-        ):
-            raise ValueError("invalid source progress")
-        if progress.observed_at.nanos % 1000:
-            raise ValueError("source observation requires microsecond timestamps")
-        progress.observed_at.ToDatetime(tzinfo=UTC)
-        seen.add(key)
     timestamp_type, timestamp = message.timestamp()
     if timestamp_type == 0 or timestamp < 0:
         raise ValueError("journal record has no timestamp")
@@ -212,9 +178,7 @@ class IcebergWriter:
 
 
 class StreamWriter:
-    def __init__(
-        self, offline=None, feature_store=None, *, offline_interval=300, offline_rows=100000
-    ):
+    def __init__(self, offline, feature_store=None, *, offline_interval=300, offline_rows=100000):
         if offline_interval <= 0 or offline_rows <= 0:
             raise ValueError("offline flush bounds must be positive")
         self.offline = offline
@@ -231,8 +195,6 @@ class StreamWriter:
                 write_online(
                     self.feature_store, f"{scope}_stream", rows[scope], STREAM_FIELDS[scope]
                 )
-        if self.offline is None:
-            return False
         for scope in KEYS:
             self.pending[scope].extend(rows[scope])
         self.offsets = dict(offsets)
@@ -244,7 +206,7 @@ class StreamWriter:
         return False
 
     def flush(self):
-        if self.offline is None or self.offsets is None:
+        if self.offsets is None:
             return False
         self.offline.append(self.pending, self.offsets)
         self.pending = {scope: [] for scope in KEYS}
@@ -253,54 +215,13 @@ class StreamWriter:
         return True
 
 
-def resolve_range(consumer, topic, value, partitions):
-    if value.startswith("{"):
-        offsets = {int(k): int(v) for k, v in json.loads(value).items()}
-        if set(offsets) != set(partitions) or any(v < 0 for v in offsets.values()):
-            raise ValueError("range must name every partition with a nonnegative offset")
-        return offsets
-    instant = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if instant.tzinfo is None:
-        raise ValueError("replay timestamps must include UTC offset")
-    resolved = consumer.offsets_for_times(
-        [TopicPartition(topic, p, int(instant.timestamp() * 1000)) for p in partitions],
-        timeout=30,
-    )
-    return {
-        item.partition: item.offset
-        if item.offset >= 0
-        else consumer.get_watermark_offsets(item, timeout=30)[1]
-        for item in resolved
-    }
-
-
-def retained(consumer, topic, starts, ends=None):
-    for partition, start in starts.items():
-        low, high = consumer.get_watermark_offsets(TopicPartition(topic, partition), timeout=30)
-        if start < low or start > high or (ends and not start <= ends[partition] <= high):
-            raise ValueError("journal range is no longer retained or exceeds its end")
-
-
-def batches(consumer, topic, starts, ends, stopped, batch_size=1000, history=None):
+def batches(consumer, topic, starts, stopped, batch_size=1000, *, history=False):
     consumer.assign([TopicPartition(topic, p, start) for p, start in starts.items()])
     positions = dict(starts)
     finished = set()
-    eof = set()
-    draining = False
     pending = []
     touched = time.monotonic()
     while not stopped.is_set() and len(finished) < len(starts):
-        if history is not None and not draining and history.ends():
-            draining = True
-            eof.clear()
-            for partition, offset in positions.items():
-                consumer.seek(TopicPartition(topic, partition, offset))
-        if draining:
-            finished.update(eof)
-        if ends is not None:
-            finished.update(p for p in starts if positions[p] >= ends[p])
-        if len(finished) == len(starts):
-            break
         message = consumer.poll(1)
         if message is not None:
             partition = message.partition()
@@ -308,52 +229,38 @@ def batches(consumer, topic, starts, ends, stopped, batch_size=1000, history=Non
                 if message.error().code() != KafkaError._PARTITION_EOF:
                     raise RuntimeError("journal consumer failed")
                 positions[partition] = max(positions[partition], message.offset())
-                eof.add(partition)
-                if ends is not None:
+                if history:
                     finished.add(partition)
                     consumer.pause([TopicPartition(topic, partition)])
             else:
-                eof.discard(partition)
-                if ends is None or message.offset() < ends[partition]:
-                    pending.append(message)
-                    positions[partition] = message.offset() + 1
-                else:
-                    positions[partition] = ends[partition]
-                    finished.add(partition)
-                    consumer.pause([TopicPartition(topic, partition)])
+                pending.append(message)
+                positions[partition] = message.offset() + 1
         if len(pending) >= batch_size or time.monotonic() - touched >= 5:
             yield pending, dict(positions)
             pending = []
             touched = time.monotonic()
     if pending:
         yield pending, dict(positions)
-    if stopped.is_set() and (ends is not None or history is not None):
+    if stopped.is_set() and history:
         raise RuntimeError("bounded replay interrupted")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--from", dest="start")
-    parser.add_argument("--until")
     parser.add_argument("--history", action="store_true")
     parser.add_argument("--history-start")
     parser.add_argument("--history-end")
     parser.add_argument("--offline-interval", type=float, default=300)
     parser.add_argument("--offline-rows", type=int, default=100000)
     args = parser.parse_args()
-    if bool(args.start) != bool(args.until):
-        parser.error("--from and --until are required together")
-    if (
-        args.history != bool(args.history_start and args.history_end)
-        or (not args.history and (args.history_start or args.history_end))
-        or (args.history and args.start)
+    if args.history != bool(args.history_start and args.history_end) or (
+        not args.history and (args.history_start or args.history_end)
     ):
-        parser.error("--history requires both history days and no replay range")
+        parser.error("--history requires both history days")
     epoch = os.environ["FEATURE_EPOCH"]
     if epoch not in epochs() or args.history != epoch.startswith("history-"):
         raise ValueError("writer mode must match a configured live or history epoch")
     topic = os.environ["FEATURE_UPDATE_TOPIC"]
-    replay = args.start is not None
     history = None
     if args.history:
         from fraud_feast.history import HistoryReplay
@@ -362,13 +269,8 @@ def main():
     consumer = Consumer(
         {
             "bootstrap.servers": os.environ["FEATURE_KAFKA_BROKERS"],
-            "group.id": f"feature-writer-replay-{os.environ.get('RUN_ID', 'bounded')}"
-            if replay
-            else f"feature-writer-{epoch}"
-            if history
-            else "feature-writer",
+            "group.id": f"feature-writer-{epoch}" if history else "feature-writer",
             "enable.auto.commit": False,
-            "enable.auto.offset.store": False,
             "auto.offset.reset": "error",
             "isolation.level": "read_committed",
             "enable.partition.eof": True,
@@ -381,57 +283,39 @@ def main():
         signal.signal(sig, lambda *_: stopped.set())
     try:
         partitions = sorted(consumer.list_topics(topic, timeout=30).topics[topic].partitions)
-        offline = None
-        if not replay:
-            lake = catalog()
-            tables = {scope: lake.load_table(name) for scope, name in TABLES.items()}
-            offline = IcebergWriter(tables, epoch, history=args.history)
-            if history:
-                offline.delete_range(history.first, history.last)
+        lake = catalog()
+        tables = {scope: lake.load_table(name) for scope, name in TABLES.items()}
+        offline = IcebergWriter(tables, epoch, history=args.history)
+        if history:
+            offline.delete_range(history.first, history.last)
         writer = StreamWriter(
             offline,
             None if history else store(online=True),
             offline_interval=args.offline_interval,
             offline_rows=args.offline_rows,
         )
-        if replay:
-            starts = resolve_range(consumer, topic, args.start, partitions)
-            ends = resolve_range(consumer, topic, args.until, partitions)
-        elif history:
-            starts, ends = dict.fromkeys(partitions, 0), None
-        else:
-            starts, ends = offline.resume(partitions), None
-        retained(consumer, topic, starts, ends)
+        starts = dict.fromkeys(partitions, 0) if history else offline.resume(partitions)
         written = 0
         offsets = starts
-        for messages, offsets in batches(consumer, topic, starts, ends, stopped, history=history):
+        for messages, offsets in batches(consumer, topic, starts, stopped, history=args.history):
             rows = {scope: [] for scope in KEYS}
             for message in messages:
                 scope, row, _ = decode(message, epoch)
                 if history is None or history.first <= row["event_timestamp"] < history.last:
                     rows[scope].append(row)
-            if writer.write(rows, offsets) and not (history or replay):
-                consumer.commit(
-                    offsets=[TopicPartition(topic, p, offset) for p, offset in offsets.items()],
-                    asynchronous=False,
-                )
+            writer.write(rows, offsets)
             written += sum(map(len, rows.values()))
         if stopped.is_set() and history:
             raise RuntimeError("history replay interrupted")
-        if writer.flush() and not (history or replay):
-            consumer.commit(
-                offsets=[TopicPartition(topic, p, offset) for p, offset in offsets.items()],
-                asynchronous=False,
-            )
+        writer.flush()
         if history:
             history.report(written)
         elif os.environ.get("RUN_REPORT"):
             write_json(
                 os.environ["RUN_REPORT"],
                 {
-                    "mode": "replay" if replay else "live",
+                    "mode": "live",
                     "from": starts,
-                    "until": ends,
                     "rows": written,
                 },
             )

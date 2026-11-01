@@ -70,18 +70,18 @@ spec:
           - {name: end}
       steps:
         - - {name: topics, template: topics}
-        - - name: flink
-            template: flink
-            arguments:
-              parameters:
-                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
         - - name: seed
             template: seed
             arguments:
               parameters:
                 - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
                 - {name: end, value: {{ "{{inputs.parameters.end}}" | quote }}}
-          - name: writer
+        - - name: flink
+            template: flink
+            arguments:
+              parameters:
+                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+        - - name: writer
             template: writer
             arguments:
               parameters:
@@ -99,7 +99,8 @@ spec:
       resource:
         action: create
         setOwnerReference: true
-        successCondition: status.jobStatus.state == RUNNING
+        successCondition: status.jobStatus.state == FINISHED
+        failureCondition: status.jobStatus.state == FAILED
         manifest: |
           apiVersion: flink.apache.org/v1beta1
           kind: FlinkDeployment
@@ -119,6 +120,7 @@ spec:
               metrics.internal.query-service.port: '6125'
               python.executable: /app/.venv/bin/python
               python.client.executable: /app/.venv/bin/python
+              execution.shutdown-on-application-finish: "false"
               execution.checkpointing.interval: 10s
               execution.checkpointing.storage: filesystem
               execution.checkpointing.mode: EXACTLY_ONCE

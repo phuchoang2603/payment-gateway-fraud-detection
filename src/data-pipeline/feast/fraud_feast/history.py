@@ -1,13 +1,9 @@
 import json
 import os
-import time
 import urllib.request
 from collections import Counter
 from datetime import UTC, date, datetime
 from urllib.parse import urlencode
-
-from confluent_kafka import ConsumerGroupTopicPartitions, TopicPartition
-from confluent_kafka.admin import AdminClient
 
 from fraud_feast.lake import read_json, write_json
 
@@ -17,44 +13,11 @@ def rest(path):
         return json.load(response)
 
 
-def consumed(admin, seed):
-    epoch = os.environ["FEATURE_EPOCH"]
-    group = f"fraud-features-{epoch}"
-    offsets = (
-        admin.list_consumer_group_offsets(
-            [
-                ConsumerGroupTopicPartitions(
-                    group,
-                    [
-                        TopicPartition(f"payments.events.{epoch}", 0),
-                        TopicPartition(f"fraud.clock.{epoch}", 0),
-                    ],
-                )
-            ],
-            request_timeout=30,
-        )[group]
-        .result()
-        .topic_partitions
-    )
-    by_topic = {item.topic: item.offset for item in offsets}
-    result = {
-        "input": by_topic[f"payments.events.{epoch}"],
-        "clock": by_topic[f"fraud.clock.{epoch}"],
-    }
-    return (
-        result
-        if result["input"] >= seed["input_end"] and result["clock"] >= seed["clock_end"]
-        else None
-    )
-
-
-def checkpoints():
-    running = [job["jid"] for job in rest("/jobs/overview")["jobs"] if job["state"] == "RUNNING"]
-    if len(running) != 1:
-        raise ValueError("history must have exactly one running Flink job")
-    job = running[0]
-    latest = rest(f"/jobs/{job}/checkpoints").get("latest", {}).get("completed")
-    return job, latest["id"] if latest else -1
+def finished_job():
+    jobs = rest("/jobs/overview")["jobs"]
+    if len(jobs) != 1 or jobs[0]["state"] != "FINISHED":
+        raise ValueError("history requires exactly one finished Flink job")
+    return jobs[0]["jid"]
 
 
 def counters(job):
@@ -97,57 +60,30 @@ def bounds(start, end):
 class HistoryReplay:
     def __init__(self, start, end):
         self.first, self.last = bounds(start, end)
-        self.admin = AdminClient({"bootstrap.servers": os.environ["FEATURE_KAFKA_BROKERS"]})
         self.start, self.end = start, end
-        self.seed = self.progress = self.checkpoint = None
-        self.last_check = 0
-        self.deadline = time.monotonic() + int(os.environ.get("HISTORY_TIMEOUT_SECONDS", "259200"))
-
-    def ends(self):
-        if time.monotonic() > self.deadline:
-            raise TimeoutError("history unit did not finish before its deadline")
-        if time.monotonic() - self.last_check < 5:
-            return False
-        self.last_check = time.monotonic()
-        self.seed = read_json(os.environ["HISTORY_SEED_REPORT"])
-        if self.seed and self.seed.get("failed"):
-            raise RuntimeError("history seed failed")
-        if self.seed and self.seed.get("done"):
-            self.progress = consumed(self.admin, self.seed)
-            if self.progress:
-                _, latest = checkpoints()
-                if self.checkpoint is None:
-                    self.checkpoint = latest
-                elif latest >= self.checkpoint + 2:
-                    return True
-        return False
 
     def report(self, rows):
-        job, _ = checkpoints()
+        job = finished_job()
         write_json(
             os.environ["RUN_REPORT"],
             {
                 "start": self.start,
                 "end": self.end,
                 "epoch": os.environ["FEATURE_EPOCH"],
-                "seed": self.seed,
+                "seed": read_json(os.environ["HISTORY_SEED_REPORT"]),
                 "counts": counters(job),
                 "rows": rows,
-                "consumed": self.progress,
+                "job_state": "FINISHED",
                 "gate": False,
             },
         )
 
 
 def validate_gate(report):
-    seed, progress = report["seed"], report["consumed"]
+    seed = report["seed"]
     if not seed or not seed.get("done") or report["counts"]["decode_rejects"]:
         raise ValueError("history seed is incomplete or replay has decode rejects")
-    if (
-        not progress
-        or progress["input"] < seed["input_end"]
-        or progress["clock"] < seed["clock_end"]
-    ):
+    if report["job_state"] != "FINISHED":
         raise ValueError("history has not consumed every seeded record")
 
 

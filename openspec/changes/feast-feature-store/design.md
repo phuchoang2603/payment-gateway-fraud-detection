@@ -43,7 +43,7 @@ See proposal.md for the motivation. The current state that shapes the design:
 - Use the platform's existing Argo orchestration, Iceberg on Polaris, and Flink v2 journal.
 - **One engine per feature.** Spark owns the daily windows, for training and serving. Flink owns the short windows, for history (a replay of v19) and live, so no feature has two implementations that could drift apart.
 - **One feature service, `payment_risk_v1`,** for training and serving.
-- **Idempotent, range-addressable runs.** Rerunning the stream history, materialization or a push replay over the same range leaves the same rows and values, with no duplicates. History takes start/end days, online replay takes from/until, and materialization takes an optional since day with its end always now.
+- **Idempotent, range-addressable runs.** Rerunning the stream history or materialization over the same range leaves the same rows and values, with no duplicates. History takes start/end days, and materialization takes an optional since day with its end always now.
 - **Online values that follow DP3's reruns,** including the lookback days that rewrite older anchors.
 - **Running in prod,** where DP3 and its evidence run.
 
@@ -68,7 +68,7 @@ See proposal.md for the motivation. The current state that shapes the design:
 | `apply.py` | `feast apply` | Argo CD PostSync Job | `data-platform-spark` with the Feast virtualenv |
 | `materialize.py` | Decision 6 | Argo container step, local Spark | `data-platform-spark` with the Feast virtualenv |
 | `verify_online.py` | The online read-back check | Argo container step | `feast` |
-| `stream_writer.py` | Live online and offline writes, `--history` offline-only, or bounded online replay | One Deployment, plus the replay and history WorkflowTemplates | `feast` |
+| `stream_writer.py` | Live online and offline writes, `--history` offline-only | One Deployment and the history WorkflowTemplate | `feast` |
 | server | `feast serve` on port 6566 | Deployment | `feast` |
 
 - **History seed.** `fraud_streaming.history` (decision 8) lives with the Flink job, because it encodes events with the job's own `wire.py` descriptors. It runs on the streaming image.
@@ -139,15 +139,15 @@ payment_risk_v1 = FeatureService(name="payment_risk_v1",
 - **Why the stream views need live Flink.** Training on the short windows only makes sense if scoring sees them fresh. Without live Flink they would be stale or null at scoring time, so Flink `live-v19` and the feature writer ship with the stream views.
 - **Versioning.** A model with other inputs gets `payment_risk_v2`.
 
-### 5. One feature writer and online replay
+### 5. One feature writer
 
 `fraud_feast.stream_writer` runs as one `feature-writer` Deployment with consumer group `feature-writer`, read-committed isolation and manual commits.
 
 1. **Decode and map.** Validate the v2 identity against the SHA-256 read from the contract definition file at import. One shared mapper sets natural keys, `event_timestamp = online_write_at + 1µs`, Kafka timestamp as `created`, values, epoch, revision and Kafka coordinates. Invalid records stop consumption without committing.
 2. **Push online.** Each batch calls `store.push("<view>_push", df, to=PushMode.ONLINE)` before any offline commit. Every stream view also includes the always-set snapshot `epoch`, excluded from the model service, so public push writes null coverage over any previous epoch’s counts. Redis ignores repeated or older timestamps.
 3. **Append offline.** Buffer rows until `offline_interval` (default 300 seconds) or `offline_rows` (default 100,000), then append once per Iceberg table with exclusive Kafka offsets in the table property `kafka.offsets.<epoch>` set in the same transaction; graceful shutdown flushes the buffer. Table properties survive snapshot expiry, so stream tables remain in nightly maintenance. Live and history writes share one refresh-and-retry helper: on `CommitFailedException`, refresh the table and retry the short transaction up to four attempts with exponential backoff. Live writes recompute the batch against the refreshed offsets on every attempt. PyIceberg's public append API is used because Feast's SparkSource query/table write path does not implement offline push.
-4. **Restart.** Resume from the minimum of the two tables' Iceberg offsets, filtering out each table's already committed rows. A crash between online push and offline commit only re-pushes those rows. Kafka offsets are committed after both table writes for lag visibility, never used for recovery.
-5. **Modes.** Live writes online and offline. `--history --history-start <day> --history-end <day>` deletes only the unit’s epoch and time range in one short commit per table, then buffers through the same StreamWriter as live mode (100,000 rows or 300 seconds), committing each flushed buffer through IcebergWriter and the same retry helper; the final flush writes the remainder. No transaction stays open across batches, so live writes and nightly compaction can proceed. It reads temporary topics from offset zero, skips lead-in and out-of-range rows, and never stores or resumes history offsets. Failed units retry from zero through Argo. A running or failed unit is partially visible; training must wait for the entire replay to pass its gates. `--from`/`--until` is online-only bounded replay over retained offsets or UTC timestamps, without Kafka commits or Iceberg writes.
+4. **Restart.** Resume from the minimum of the two tables' Iceberg offsets, filtering out each table's already committed rows. A crash between online push and offline commit only re-pushes those rows. Iceberg offset properties are the only recovery source; the writer never commits Kafka consumer-group offsets. No repository dashboard or alert uses its group lag.
+5. **Modes.** Live writes online and offline. `--history --history-start <day> --history-end <day>` deletes only the unit’s epoch and time range in one short commit per table, then buffers through the same StreamWriter as live mode (100,000 rows or 300 seconds), committing each flushed buffer through IcebergWriter and the same retry helper; the final flush writes the remainder. No transaction stays open across batches, so live writes and nightly compaction can proceed. It reads temporary topics from offset zero, skips lead-in and out-of-range rows, and never stores or resumes history offsets. Failed units retry from zero through Argo. A running or failed unit is partially visible; training must wait for the entire replay to pass its gates. Redis stream recovery uses `fraud_feast.materialize --stream-recovery` over the last STREAM_TTL from the stream batch sources.
 
 CI covers push-before-commit, timed and row-count flushing, partial-table commit recovery, older and repeated Redis writes, new-epoch null coverage replacement and fail-before-commit on malformed journal records. History retries failed units by deleting their partial rows and replaying from offset zero. CI covers real commit conflicts, concurrent live commits between history batches and an interrupted unit rerun without duplicates.
 
@@ -188,15 +188,15 @@ An optional `since` day overrides the start after a backfill; the end is always 
 
 **`stream-history`** is an on-demand WorkflowTemplate with `start` and `end` days, defaulting to `[2026-07-29, 2026-10-29)`. It processes one month at a time, in order, under mutex `stream-history`, and stops at the first failed month. For each month:
 
-1. **Topics.** Recreate the epoch's topics: `payments.events.history-v19`, `fraud.clock.history-v19`, `fraud.feature-updates.v2.history-v19` and `fraud.feature-rejects.v1.history-v19`. The input topic has a `retention.bytes` cap.
+1. **Topics.** Recreate the epoch's topics: `payments.events.history-v19`, `fraud.clock.history-v19`, `fraud.feature-updates.v2.history-v19` and `fraud.feature-rejects.v1.history-v19`. Cleanup removes them after each unit.
 2. **Seed.** `fraud_streaming.history` reads the month from Bronze `payment_events`, plus one day of lead-in, in source order. It encodes each event as the `payments.v1` envelope with the descriptors Flink decodes (`wire.py`), and writes the input and clock topics.
-   - It pauses while the replay's consumer lag exceeds a bound, so Kafka never holds more than a slice of the month.
+   - Seeding finishes before Flink starts; Kafka retains the whole unit until cleanup, without a size or age retention cap.
    - A CI round-trip test proves that a Bronze row, encoded, decodes to the same event in `wire.decode`. The seed uses the streaming project's history dependency group.
-3. **Replay ordering (approved 2026-10-31).** History input and clock topics each have one partition. Each clock control carries a sequence and exclusive input-offset barrier. The source buffers both streams in checkpointed state, releases input only through the next barrier, then advances the clock. An initial offset-zero barrier fixes the bootstrap instant. The seed bounds outstanding batches by checkpointed consumer lag. Missing, regressing or oversized barriers fail the replay. This extends the existing Flink logical-clock protocol because Kafka orders records only within a topic partition; without the offset barrier, a clock can overtake input and change lateness and expiry results.
+3. **Replay ordering (approved 2026-10-31).** History input and clock topics each have one partition. Each clock control carries a sequence and exclusive input-offset barrier. The source buffers both streams in checkpointed state, releases input only through the next barrier, then advances the clock. An initial offset-zero barrier fixes the bootstrap instant. Missing, regressing or oversized barriers fail the replay. This extends the existing Flink logical-clock protocol because Kafka orders records only within a topic partition; without the offset barrier, a clock can overtake input and change lateness and expiry results.
 
-   **Replay.** The mutex-serialized `fraud-streaming-<history epoch>` FlinkDeployment uses the live job’s image in logical-clock mode with epoch `history-v19`, from empty state. Flink’s shared Role permits get only on the named live and history Deployments. One day of lead-in fills every 24-hour window and the dedup horizon, so months are independent.
-4. **Offline write.** The history writer deletes the unit’s history-epoch rows in one short commit per table, then buffers through StreamWriter with the live row/time bounds and commits each flushed buffer through IcebergWriter, including the final remainder. Deletes and appends share the live writer’s refresh, bounded retry and backoff helper; history writes no offsets or properties. It skips lead-in rows (`event_timestamp < start`) and rows at or after the exclusive end. Reads start at zero and drain to read-committed partition EOF after Flink consumes the seed and completes two further checkpoints. No high watermark determines the end: an open transaction can put it beyond the last stable offset. Bounded online replay likewise ends at the requested offset or partition EOF, whichever comes first. The month is visible partially while it runs or after failure. Argo retries from the initial range delete, rebuilding one copy of its rows. Nothing trains during a replay; training starts only after all units pass the gate.
-5. **Gate.** Check the decode-reject count is zero and checkpointed input offsets at every seeded record's end (and the final clock control consumed). Duplicates and too-late rejects are reported, not gated. Snapshots carry no attempt IDs, so an attempts-in-snapshots gate is impossible. Counts and consumed offsets go to the run report and pipeline status.
+   **Replay.** Each unit runs topics → seed → Flink FINISHED → writer → gate → cleanup. In logical-clock mode only, the Kafka SQL source uses `scan.bounded.mode=latest-offset` with earliest startup offsets. The mutex-serialized `fraud-streaming-<history epoch>` FlinkDeployment uses the live job’s image in logical-clock mode with epoch `history-v19`, from empty state. Flink’s shared Role permits get only on the named live and history Deployments. One day of lead-in fills every 24-hour window and the dedup horizon, so months are independent. History sets `execution.shutdown-on-application-finish=false` so REST counters remain available until cleanup. Verified against Flink 2.2.1 and Kafka connector 5.0.0-2.2: the [final checkpoint before task exit](https://nightlies.apache.org/flink/flink-docs-release-2.2/docs/dev/datastream/fault-tolerance/checkpointing/#waiting-for-the-final-checkpoint-before-task-exit) completes the two-phase sink commit before FINISHED; no checkpoint-count heuristic is needed.
+4. **Offline write.** The history writer deletes the unit’s history-epoch rows in one short commit per table, then buffers through StreamWriter with the live row/time bounds and commits each flushed buffer through IcebergWriter, including the final remainder. Deletes and appends share the live writer’s refresh, bounded retry and backoff helper; history writes no offsets or properties. It skips lead-in rows (`event_timestamp < start`) and rows at or after the exclusive end. After Flink reaches FINISHED, reads start at zero and stop at read-committed partition EOF, including the final committed sink transaction. There is no seed polling, checkpoint heuristic or high-watermark end calculation. The month is visible partially while it runs or after failure. Argo retries from the initial range delete, rebuilding one copy of its rows. Nothing trains during a replay; training starts only after all units pass the gate.
+5. **Gate.** Check the decode-reject count is zero, the seed completed, and the bounded Flink job reached FINISHED, which requires consuming both seeded topics to their end. Duplicates and too-late rejects are reported, not gated. Snapshots carry no attempt IDs, so an attempts-in-snapshots gate is impossible. Counts, seeded offsets and job state go to the run report and pipeline status.
 6. **Cleanup.** An exit handler deletes the FlinkDeployment and the epoch's topics, on success and failure.
 
 **History and live ranges.** History covers the v19 dataset range. Live `live-v19` starts afterwards, from the live simulator's own events, so the epochs never overlap. Live Flink starts empty, and its windows report unknown coverage for their first 24 hours. Training uses only history.
@@ -254,7 +254,7 @@ Kafka access follows the existing unauthenticated-listener and network-policy pa
 - **New pipelines:**
   - `feature-writer`: the journal topic → the pipeline → `gold.feat_stream_*`; Redis is not catalogued.
 
-  The continuous writer is published by `metadata-discovery`, and replays add their range to the run status.
+  The continuous writer is published by `metadata-discovery`, and history runs add their range to the run status.
   - `feast-materialize`: `gold.feat_*_daily` → the pipeline, with status, materialization windows, optional since and sample count, and no output edge.
   - `stream-history`: Bronze `payment_events` → `gold.feat_stream_*`, with each month's range, epoch, counts and gate outcome.
 
@@ -286,7 +286,7 @@ No new Doppler keys. Requests:
 - **[Training/serving skew of the DP3 delay]** → Training sees the daily anchor at midnight, while serving gets it after `dp-daily` and materialization (about 07:00 UTC). The definition's `availability` block records this, and the TTL's 12 hours covers it.
 - **[The v19 replay takes days]** → Month-sized, restartable ranges, parallelism set from the first month's measured rate, and the first training replay limited to `[2026-07-29, 2026-10-29)`.
 - **[The seed encodes events differently from production]** → A CI round trip through `wire.decode`, and the per-month gate on decode rejects and consumed input offsets.
-- **[Kafka disk during the replay]** → The seed pauses on consumer lag, and the input topic has a `retention.bytes` cap.
+- **[Kafka disk during the replay]** → Kafka must hold the entire seeded month and its output until unit cleanup; provision disk accordingly.
 - **[Training/serving skew of Flink's processing delay]** → History has none; serving misses attempts Flink has not processed yet. The page states it, and the evidence samples it.
 - **[Flink's first 24 hours have unknown coverage]** → Serving reports those values as unknown, never zero. Training history uses the replay's one-day lead-in.
 - **[DP3 rewrites older anchors]** → Overlap covers daily lookback; backfills require an explicit since day.
@@ -294,7 +294,7 @@ No new Doppler keys. Requests:
 
 - **[Prod Redis memory]** → Only keys within the TTL are written, and `key_ttl_seconds` drops stale hashes. The first prod materialization records key counts and memory.
 - **[TTL expiry turns dormant zeros into unknowns]** → Accepted, and applied identically offline and online.
-- **[A push replay beyond the journal's retention]** → It fails on missing offsets. Flink then repopulates keys as entities act, and expiry snapshots cover quiet ones within 24 hours.
+- **[Stream Redis loss]** → Materialize the last STREAM_TTL from the stream batch sources with `--stream-recovery`.
 - **[Feature server latency inside Go's 100 ms budget]** → One call. A shadow timeout never changes the decision.
 - **[The Flink connector cannot see PyFlink Kafka sources]** → The SDK fallback.
 
@@ -306,7 +306,7 @@ No new Doppler keys. Requests:
    - a `dp-backfill`, then `feast-materialize`;
    - a `dp-pipeline` run without a range (yesterday plus the lookback) and `feast-materialize` again, refreshing the lookback days;
    - `feast-materialize` with an explicit since day, run twice;
-   - a push replay over a range, run twice;
+   - stream Redis recovery through materialization, run twice;
    - `stream-history` over one v18 month, then rerun over one of its days, with equal row counts;
    - a Fraud read.
 3. **After merge and platform provisioning, enable `data-pipelines.features.enabled` in prod:**
