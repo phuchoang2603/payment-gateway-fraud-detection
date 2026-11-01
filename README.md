@@ -34,7 +34,7 @@ Everything runs on two Talos Kubernetes clusters (Proxmox dev, AWS prod), deploy
 
 ## LLM and agent platform
 
-Read-only analyst agents explain declines, risk decisions and payment behaviour. A coordinator hands each question to the evidence agent (knowledge base, cited passages) or the risk agent (online features, the fraud model's score and the knowledge base). Every model, tool and agent call goes through agentgateway, which adds client keys, rate and token limits, PII masking and a request screen by the d3-edge decision model. The models run on vLLM through KServe and llm-d on one shared GPU, and Langfuse holds the agents' prompts, A/B tests and traces. The risk agent's feature and scoring tools arrive with the feature-store work.
+Read-only analyst agents explain declines, risk decisions and payment behaviour. A coordinator hands each question to the evidence agent (knowledge base, cited passages) or the risk agent (online features, the fraud model's score and the knowledge base). Every model, tool and agent call goes through agentgateway, which adds client keys, rate and token limits, PII masking and a request screen by the d3-edge decision model. The models run on vLLM through KServe and llm-d on one shared GPU, and Langfuse holds the agents' prompts, A/B tests and traces.
 
 ![LLM and agent platform: clients, agentgateway, kagent agents on Agent Substrate, KServe model servers, MCP tools and ML inference, data pipelines and operations](docs/llm/images/llm-architecture.png)
 
