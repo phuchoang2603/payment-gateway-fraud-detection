@@ -14,20 +14,36 @@ spec:
           allocationMode: ExactCount
           count: 1
 {{- range $role, $model := dict "chat" $chat "embedding" $embedding "decision" $decision }}
+{{- $uri := printf "hf://%s:%s" $model.repo $model.revision }}
+---
+# KServe keeps the model on the GPU nodes' local disk. Its admission links an LLMInferenceService whose URI matches a
+# cache to the cached copy, so the cache exists first.
+apiVersion: serving.kserve.io/v1alpha1
+kind: LocalModelNamespaceCache
+metadata:
+  name: {{ $model.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  sourceModelUri: {{ $uri }}
+  modelSize: {{ $model.cacheSize }}
+  nodeGroups: [{{ $.Values.gpu.localModelNodeGroup }}]
 ---
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceService
 metadata:
   name: {{ $model.name }}
-  {{- if $model.stopped }}
   annotations:
+    # Changes with the cache, so the service is re-admitted and linked to it.
+    llm.fraud-detection.dev/model-cache: {{ $uri | sha256sum | trunc 12 }}
+    {{- if $model.stopped }}
     serving.kserve.io/stop: "true"
-  {{- end }}
+    {{- end }}
 spec:
   model:
     name: {{ $model.name }}
-    # KServe's storage initializer downloads the pinned revision into /mnt/models before the server starts.
-    uri: {{ printf "hf://%s:%s" $model.repo $model.revision }}
+    # Served from the local cache; without one, KServe's storage initializer downloads the revision into /mnt/models.
+    uri: {{ $uri }}
   replicas: {{ $model.replicas }}
   # The servers hold fixed fractions of the one GPU, so a surge pod would oversubscribe it: replace in place.
   rolloutStrategy:

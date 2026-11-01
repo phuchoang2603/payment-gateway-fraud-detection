@@ -42,7 +42,7 @@ $ curl localhost:8000/v1/models   # inside each pod
 
 ## Weights and start-up
 
-- Each `LLMInferenceService` names its model as `hf://<repo>:<revision>`. KServe's storage initializer downloads that pinned revision into the pod's `/mnt/models` before vLLM starts, and vLLM loads it with InstantTensor (`--load-format=instanttensor`). A restart downloads again; a KServe LocalModelCache on the GPU node would keep the files between restarts without a chart change.
+- Each `LLMInferenceService` names its model as `hf://<repo>:<revision>`. KServe's storage initializer downloads that pinned revision into the pod's `/mnt/models` before vLLM starts, and vLLM loads it with InstantTensor (`--load-format=instanttensor`). Each model also has a KServe `LocalModelNamespaceCache` on the platform's `llm-gpu` node group, so the files are downloaded once to the GPU node's disk and every start reads them from there.
 - The rollout strategy is `maxSurge: 0, maxUnavailable: 1`: a surge pod would ask for a second share of the one GPU and never schedule.
 - The start-up probe allows up to 180 failures (30 minutes) for the first weight load and CUDA graph capture; liveness only starts after it.
 

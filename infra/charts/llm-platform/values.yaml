@@ -8,6 +8,8 @@ storageClass: local-path
 
 gpu:
   deviceClassName: gpu.nvidia.com
+  # The platform's KServe LocalModelNodeGroup on the GPU nodes.
+  localModelNodeGroup: llm-gpu
   nodeSelector: {}
   tolerations: []
 
@@ -32,6 +34,7 @@ models:
     name: qwen35-4b
     repo: RedHatAI/Qwen3.5-4B-FP8-dynamic
     revision: 397b7ba47a99b3221ebfc0cfc5a279118cb733ad
+    cacheSize: 9Gi
     replicas: 1
     # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
     stopped: false
@@ -60,6 +63,7 @@ models:
     name: qwen3-embedding
     repo: Qwen/Qwen3-Embedding-0.6B
     revision: 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3
+    cacheSize: 2Gi
     replicas: 1
     # 0.12 of the 16 GB GPU leaves about 0.3 GiB of KV cache after the weights: enough for 2048 tokens, which covers
     # knowledge chunks (at most about 400 tokens) and queries.
@@ -78,6 +82,7 @@ models:
     name: d3-edge
     repo: vllm-sr/d3-edge
     revision: c454ee39b862248d70abd7f84195d2f54ffe6d43
+    cacheSize: 2Gi
     image: vllm/vllm-openai:nightly-2b009fc6d1493a9a1ad19f4d0c7230b7e6b7e63a@sha256:1b7aee4c157c2c8f48aaf34de137d1eebfb2eea8445549789188c2280883f8d7
     replicas: 1
     args:
