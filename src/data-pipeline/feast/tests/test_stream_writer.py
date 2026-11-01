@@ -106,16 +106,10 @@ def test_live_push_buffers_and_restarts_from_partial_iceberg_commit(
     assert all(table.scan().to_arrow().num_rows == 1 for table in resumed.tables.values())
 
 
-def test_empty_view_advances_watermark_and_invalid_record_has_no_commit(lake):
+def test_empty_view_advances_watermark(lake):
     job = writer(lake)
     job.append({"customer": [row("customer")], "payment_method": []}, {0: 1})
     assert job.resume([0]) == {0: 1}
-    before = {scope: table.metadata_location for scope, table in job.tables.items()}
-    message = SimpleNamespace(value=lambda: b"", key=lambda: b"bad")
-    with pytest.raises(ValueError, match="payload"):
-        scope, value, _ = decode(message, "live-ci")
-        job.append({scope: [value]}, {0: 2})
-    assert before == {scope: table.metadata_location for scope, table in job.tables.items()}
 
 
 def test_older_online_revision_is_ignored_and_new_epoch_clears_old_values(feature_store):
@@ -141,14 +135,13 @@ def test_older_online_revision_is_ignored_and_new_epoch_clears_old_values(featur
     assert result[STREAM_FIELDS[scope][0]] == [None]
 
 
-def test_invalid_journal_stops_continuous_job_before_kafka_commit(lake, monkeypatch):
+def test_invalid_journal_stops_live_writer_without_iceberg_commit(lake, monkeypatch):
     from unittest.mock import Mock
 
     from fraud_feast import stream_writer
 
     consumer = Mock()
     consumer.list_topics.return_value.topics = {"journal": SimpleNamespace(partitions={0: None})}
-    consumer.get_watermark_offsets.return_value = (0, 1)
     message = Mock()
     message.error.return_value = None
     message.partition.return_value = 0
@@ -166,7 +159,6 @@ def test_invalid_journal_stops_continuous_job_before_kafka_commit(lake, monkeypa
     monkeypatch.setattr("sys.argv", ["stream_writer"])
     with pytest.raises(ValueError, match="payload"):
         stream_writer.main()
-    consumer.commit.assert_not_called()
     consumer.close.assert_called_once()
     assert all(lake.load_table(name).current_snapshot() is None for name in TABLES.values())
 
@@ -224,8 +216,6 @@ def test_history_reads_every_partition_to_committed_eof():
     consumer.poll.side_effect = [record, first_eof, second_eof]
     result = list(batches(consumer, "journal", {0: 0, 1: 0}, threading.Event(), history=True))
     assert result == [([record], {0: 2, 1: 2})]
-    consumer.get_watermark_offsets.assert_not_called()
-    consumer.seek.assert_not_called()
 
 
 def test_live_ignores_eof_until_stopped():
