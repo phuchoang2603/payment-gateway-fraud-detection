@@ -174,10 +174,10 @@ def run(spark, feature_store, lake, now, state, start=None, end=None):
         feature_store.materialize_incremental(now, feature_views=views)
     for scope, table in tables.items():
         name = f"lake.{DAILY_TABLES[scope]}"
-        current = spark.read.option("snapshot-id", pins[scope]).table(name)
+        current = spark.read.option("versionAsOf", pins[scope]).table(name)
         consumed = (state or {}).get("pins", {}).get(scope)
         prior = (
-            spark.read.option("snapshot-id", consumed).table(name)
+            spark.read.option("versionAsOf", consumed).table(name)
             if consumed is not None and table.snapshot_by_id(consumed)
             else None
         )
