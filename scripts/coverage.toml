@@ -1,0 +1,7 @@
+[tool.coverage.run]
+branch = true
+omit = ["tests/*", ".venv/*"]
+
+[tool.coverage.report]
+skip_empty = true
+precision = 1
