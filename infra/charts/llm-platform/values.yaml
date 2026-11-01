@@ -336,13 +336,14 @@ langfuse:
       - {name: AUTH_CUSTOM_ALLOW_ACCOUNT_LINKING, value: "true"}
       - {name: AUTH_DISABLE_USERNAME_PASSWORD, value: "true"}
     # Node sizes its heap from the cgroup limit; the web server runs out of heap at 1Gi during startup. Its
-    # migrations and headless init run before it listens, so liveness waits for them.
+    # migrations and headless init run before it listens, so liveness waits for them: a fresh v4 database runs 463
+    # Postgres migrations, which outlasted a 180 s wait on dev and left one half-applied.
     web:
       resources:
         requests: {cpu: 250m, memory: 1Gi}
         limits: {memory: 2Gi}
       livenessProbe:
-        initialDelaySeconds: 180
+        initialDelaySeconds: 600
         failureThreshold: 6
     worker:
       resources:
