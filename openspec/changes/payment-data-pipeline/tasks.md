@@ -41,7 +41,7 @@
 - [x] 7.2 Capture the Argo backfill timelines, the OpenMetadata data quality page and the source → Bronze → Silver → Gold → marts lineage.
 - [ ] 7.3 Finish `dp-backfill-drbzt` (2026-05-01 to 2026-10-28) and add its months to the evidence table.
 - [ ] 7.4 After the backfill, count Bronze rows per `schema_version` with and without `assessment_id` as the schema-evolution evidence.
-- [ ] 7.5 Once the platform adds `data` to Grafana's dashboard sidecar and provisions the `clickhouse-marts` datasource, capture the three dashboards.
+- [x] 7.5 Capture the three Grafana dashboards (May 2026; refresh over the full window after 7.3).
 - [ ] 7.6 Record `EXPLAIN indexes = 1` for the fixed mart queries once the marts hold the backfilled window.
 
 ## 8. Close
