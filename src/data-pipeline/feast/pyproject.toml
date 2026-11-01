@@ -14,7 +14,7 @@ dependencies = [
 spark = ["feast[spark]==0.67.0", "pyspark==4.1.3"]
 
 [dependency-groups]
-dev = ["httpx>=0.28,<1", "pytest==9.0.2", "ruff==0.14.14", "testcontainers[redis,kafka]==4.15.0", "pyspark==4.1.3"]
+dev = ["httpx>=0.28,<1", "hypothesis[crosshair]==6.170.14", "pytest==9.0.2", "ruff==0.14.14", "testcontainers[redis,kafka]==4.15.0", "pyspark==4.1.3"]
 
 [build-system]
 requires = ["uv_build>=0.13,<0.14"]

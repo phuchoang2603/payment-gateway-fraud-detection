@@ -1,6 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
+
 from fraud_feast.training import entity_rows
 
 
@@ -80,3 +82,17 @@ def test_entities_join_valid_attempt_request_and_available_simulation_truth(spar
         assert row.amount_minor == 500 and row.item_count == 2
         assert row.ip_country is None and row.payment_method_fingerprint is None
         assert row.has_device is False
+
+
+# Boundary values of the cohort and cutoff: an empty or reversed range, and a cutoff without an offset.
+@pytest.mark.parametrize(
+    ("start", "end", "cutoff", "error"),
+    [
+        ("2026-08-01", "2026-08-01", "2026-09-01T00:00:00Z", "precede"),
+        ("2026-08-02", "2026-08-01", "2026-09-01T00:00:00Z", "precede"),
+        ("2026-08-01", "2026-08-02", "2026-09-01T00:00:00", "UTC offset"),
+    ],
+)
+def test_entity_rows_rejects_bad_bounds(start, end, cutoff, error):
+    with pytest.raises(ValueError, match=error):
+        entity_rows(None, start, end, cutoff)

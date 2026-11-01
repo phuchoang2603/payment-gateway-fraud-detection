@@ -42,3 +42,11 @@ def test_download_checks_integrity_before_replacing_a_jar(tmp_path, monkeypatch,
             spark_jars.install(tmp_path)
         assert target.read_bytes() == b"previous jar"
     assert list(tmp_path.iterdir()) == [target]
+
+
+def test_main_installs_into_the_given_directory(tmp_path, monkeypatch):
+    installed = []
+    monkeypatch.setattr(spark_jars, "install", installed.append)
+    monkeypatch.setattr("sys.argv", ["spark_jars", str(tmp_path)])
+    spark_jars.main()
+    assert installed == [tmp_path]

@@ -240,3 +240,140 @@ def test_live_ignores_eof_until_stopped():
     assert list(batches(consumer, "journal", {0: 0}, stopped)) == []
     assert consumer.poll.call_count == 2
     consumer.pause.assert_not_called()
+
+
+def snapshot(view=1, **changes):
+    update = SnapshotUpdate(
+        schema_version=1,
+        definition={"version": "fraud-snapshot-v2", "sha256": DEFINITION_HASH},
+        epoch="live-ci",
+        view=view,
+        integration_id="i",
+        entity_id="entity",
+        revision=1,
+        coverage={"five_minutes": 2, "one_hour": 2, "twenty_four_hours": 2},
+        values={"attempt_count_5m": 1, "attempt_count_1h": 1, "attempt_count_24h": 1}
+        | ({"distinct_devices_24h": 1} if view == 1 else {}),
+    )
+    for name in ("anchor", "source_available_at", "online_write_at"):
+        getattr(update, name).FromDatetime(DAY)
+    for change in changes.pop("apply", ()):
+        change(update)
+    return update
+
+
+def message(update, timestamp=(1, 0)):
+    raw = (
+        update.SerializeToString(deterministic=True)
+        if isinstance(update, SnapshotUpdate)
+        else update
+    )
+    return SimpleNamespace(
+        value=lambda: raw, timestamp=lambda: timestamp, partition=lambda: 0, offset=lambda: 0
+    )
+
+
+def later(field, seconds):
+    return lambda update: getattr(update, field).FromDatetime(DAY + timedelta(seconds=seconds))
+
+
+# Every rejection the writer guards, one partition each; a valid customer and method snapshot decode.
+@pytest.mark.parametrize(
+    ("record", "error"),
+    [
+        (b"", "payload size"),
+        (b"x" * (128 * 1024 + 1), "payload size"),
+        (snapshot(apply=[lambda u: setattr(u, "schema_version", 2)]), "identity"),
+        (snapshot(apply=[lambda u: setattr(u, "epoch", "live-other")]), "identity"),
+        (snapshot(apply=[lambda u: setattr(u, "view", 3)]), "identity"),
+        (
+            snapshot(apply=[lambda u: u.anchor.FromNanoseconds(u.anchor.ToNanoseconds() + 1)]),
+            "microsecond",
+        ),
+        (snapshot(apply=[later("anchor", 1)]), "precedes anchor"),
+        (snapshot(apply=[later("source_available_at", 1)]), "availability follows"),
+        (snapshot(apply=[lambda u: setattr(u.coverage, "one_hour", 3)]), "coverage"),
+        (snapshot(apply=[lambda u: setattr(u.coverage, "one_hour", 1)]), "conflicts with coverage"),
+        (
+            snapshot(view=2, apply=[lambda u: setattr(u.values, "distinct_devices_24h", 1)]),
+            "customer values",
+        ),
+    ],
+)
+def test_decode_rejects_invalid_snapshots(record, error):
+    with pytest.raises(ValueError, match=error):
+        decode(message(record), "live-ci")
+
+
+@pytest.mark.parametrize(
+    ("timestamp", "valid"), [((1, 0), True), ((0, 0), False), ((1, -1), False)]
+)
+def test_decode_requires_a_record_timestamp(timestamp, valid):
+    if valid:
+        assert decode(message(snapshot(view=2), timestamp), "live-ci")[0] == "payment_method"
+    else:
+        with pytest.raises(ValueError, match="timestamp"):
+            decode(message(snapshot(), timestamp), "live-ci")
+
+
+def run_main(lake, monkeypatch, argv, epoch, messages, env=None):
+    import threading
+    from unittest.mock import Mock
+
+    from fraud_feast import stream_writer
+
+    consumer = Mock()
+    consumer.list_topics.return_value.topics = {"journal": SimpleNamespace(partitions={0: None})}
+    monkeypatch.setattr(stream_writer, "Consumer", lambda config: consumer)
+    monkeypatch.setattr(stream_writer, "catalog", lambda: lake)
+    monkeypatch.setattr(stream_writer.signal, "signal", lambda *_: None)
+    monkeypatch.setattr(stream_writer, "store", lambda **_: None)
+    monkeypatch.setattr(stream_writer, "write_online", lambda *args: None)
+    monkeypatch.setattr(
+        stream_writer,
+        "batches",
+        lambda consumer, topic, starts, stopped, history: iter([(messages, {0: len(messages)})]),
+    )
+    for name, value in {
+        "FEATURE_EPOCH": epoch,
+        "FEAST_STREAM_EPOCHS": "history-ci,live-ci",
+        "FEATURE_UPDATE_TOPIC": "journal",
+        "FEATURE_KAFKA_BROKERS": "kafka",
+        **(env or {}),
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr("sys.argv", ["stream_writer", *argv])
+    stream_writer.main()
+    consumer.close.assert_called_once()
+    return threading
+
+
+def test_live_main_writes_and_reports(lake, monkeypatch, tmp_path):
+    import json
+
+    report = tmp_path / "live.json"
+    record = snapshot()
+    record.online_write_at.FromDatetime(DAY + timedelta(hours=1))
+    run_main(lake, monkeypatch, [], "live-ci", [message(record)], {"RUN_REPORT": str(report)})
+    assert json.loads(report.read_text()) == {"mode": "live", "from": {"0": 0}, "rows": 1}
+    assert lake.load_table(TABLES["customer"]).scan().to_arrow().num_rows == 1
+
+
+# Partitions of the writer's mode flags.
+@pytest.mark.parametrize(
+    ("argv", "epoch", "failure"),
+    [
+        (["--history"], "history-ci", SystemExit),
+        (["--history-start", "2026-08-01"], "live-ci", SystemExit),
+        (
+            ["--history", "--history-start", "2025-09-01", "--history-end", "2025-09-02"],
+            "live-ci",
+            ValueError,
+        ),
+        ([], "history-ci", ValueError),
+        ([], "unknown-ci", ValueError),
+    ],
+)
+def test_main_rejects_mismatched_modes(lake, monkeypatch, argv, epoch, failure):
+    with pytest.raises(failure):
+        run_main(lake, monkeypatch, argv, epoch, [])

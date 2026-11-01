@@ -3,30 +3,6 @@ import pytest
 from fraud_feast.runtime import config
 
 
-def test_offline_store_needs_no_redis(monkeypatch):
-    for name, value in {
-        "FEAST_REGISTRY": "registry.pb",
-        "ICEBERG_REST_URI": "http://localhost:8181/api/catalog",
-        "ICEBERG_WAREHOUSE": "warehouse",
-        "ICEBERG_CLIENT_ID": "test",
-        "ICEBERG_CLIENT_SECRET": "test",
-        "ICEBERG_OAUTH2_URI": "http://localhost:8181/api/catalog/v1/oauth/tokens",
-        "S3_ENDPOINT": "http://localhost:9000",
-        "S3_PATH_STYLE": "true",
-        "AWS_ACCESS_KEY_ID": "test",
-        "AWS_SECRET_ACCESS_KEY": "test",
-        "AWS_REGION": "us-east-1",
-    }.items():
-        monkeypatch.setenv(name, value)
-    monkeypatch.delenv("FEAST_REDIS_ADDR", raising=False)
-    monkeypatch.delenv("FEAST_REDIS_PASSWORD", raising=False)
-    configuration = config(redis=False)
-    assert configuration.online_store is None
-    assert configuration.offline_store.type == "spark"
-    with pytest.raises(KeyError):
-        config()
-
-
 def test_registry_reads_the_object_without_head_bucket(monkeypatch):
     from unittest.mock import MagicMock
 
@@ -50,3 +26,62 @@ def test_registry_reads_the_object_without_head_bucket(monkeypatch):
     )
     with pytest.raises(FileNotFoundError):
         store.get_registry_proto()
+
+
+ENV = {
+    "FEAST_REGISTRY": "registry.pb",
+    "ICEBERG_REST_URI": "http://localhost:8181/api/catalog",
+    "ICEBERG_WAREHOUSE": "warehouse",
+    "ICEBERG_CLIENT_ID": "test",
+    "ICEBERG_CLIENT_SECRET": "test",
+    "ICEBERG_OAUTH2_URI": "http://localhost:8181/api/catalog/v1/oauth/tokens",
+    "S3_ENDPOINT": "http://localhost:9000",
+    "S3_PATH_STYLE": "true",
+    "AWS_ACCESS_KEY_ID": "test",
+    "AWS_SECRET_ACCESS_KEY": "test",
+    "AWS_REGION": "us-east-1",
+}
+
+
+# Partitions of the Redis password: plain, containing a comma or quote (escaped for Feast's JSON decoding), empty.
+@pytest.mark.parametrize(
+    ("password", "encoded"),
+    [("plain", '"plain"'), ("a,b", '"a\\u002cb"'), ('q"uote', '"q\\"uote"'), ("", None)],
+)
+def test_redis_connection_encodes_the_password(monkeypatch, password, encoded):
+    monkeypatch.setenv("FEAST_REDIS_ADDR", "redis:6379")
+    monkeypatch.setenv("FEAST_REDIS_PASSWORD", password)
+    from fraud_feast.runtime import redis_connection
+
+    if encoded is None:
+        with pytest.raises(ValueError):
+            redis_connection()
+        return
+    assert (
+        redis_connection()
+        == f"redis:6379,password={encoded},socket_timeout=2,socket_connect_timeout=2"
+    )
+
+
+# Partitions of the store mode: offline Spark with Redis, online with a file offline store, offline without Redis.
+@pytest.mark.parametrize(
+    ("kwargs", "offline", "online"),
+    [
+        ({}, "spark", "redis"),
+        ({"online": True}, "file", "redis"),
+        ({"redis": False}, "spark", None),
+    ],
+)
+def test_config_modes(monkeypatch, kwargs, offline, online):
+    for name, value in {
+        **ENV,
+        "FEAST_REDIS_ADDR": "redis:6379",
+        "FEAST_REDIS_PASSWORD": "p",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("SPARK_MASTER", raising=False)
+    configuration = config(**kwargs)
+    assert configuration.offline_store.type == offline
+    assert (configuration.online_store.type if configuration.online_store else None) == online
+    if offline == "spark":
+        assert configuration.offline_store.spark_conf["spark.master"] == "local[*]"
