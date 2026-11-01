@@ -327,6 +327,11 @@ audit-{{ "{{workflow.name}}" }}
 
 {{- define "data-pipelines.profile" -}}
 - name: profile
+{{- with .mutex }}
+  synchronization:
+    mutexes:
+      - name: {{ . }}
+{{- end }}
   retryStrategy:
     limit: 2
     retryPolicy: OnError

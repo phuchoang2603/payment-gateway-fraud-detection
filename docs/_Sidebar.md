@@ -5,7 +5,6 @@
 - [Architecture](payment-gateway/architecture.md)
 - [Flows](payment-gateway/flows.md)
 - [Conventions](payment-gateway/conventions.md)
-- [Docker images](payment-gateway/docker.md)
 
 **Data**
 
@@ -25,7 +24,7 @@
 
 - [Agents](llm/agents.md)
 - [Inference](llm/inference.md)
-- [LLM benchmark](llm/benchmark.md)
+- [Policy](llm/policy.md)
 - [Agent gateway](llm/gateway.md)
 - [RAG](llm/rag.md)
 - [Observability](llm/observability.md)
@@ -34,6 +33,7 @@
 
 - [CI](deployment/ci.md)
 - [CD](deployment/cd.md)
+- [Docker images](deployment/docker.md)
 - [Infrastructure](deployment/infra.md)
 - [Security](deployment/security.md)
 - [Observability](deployment/observability.md)

@@ -5,27 +5,6 @@ Coordinate finite data-pipeline stages through the shared cluster execution serv
 
 ## Requirements
 
-### Requirement: Observable ingest and validate stages
-DP1 SHALL expose distinct ingest and validate stages with input, output and run references. Validation SHALL begin only after the candidate snapshot set is recorded, including both outputs for historical exports and explicit unchanged-port references for recurring batches. Stage results SHALL distinguish failed data checks, execution errors and governance publication errors.
-
-#### Scenario: Inspect a historical workflow
-
-- **WHEN** a user inspects a DP1 run
-- **THEN** they can identify its source manifest, ingest result, validated snapshots, validation outcome and governance outcome
-
-### Requirement: Versioned-export batch selection
-Each historical-mode workflow submission SHALL select one completed, immutable source export through `source-root` and `dataset-version` parameters, with chart-configured defaults selecting a freshly generated and validated v17 source. Scale generation SHALL NOT be a prerequisite for development ingestion; later full-volume acceptance SHALL remain separate. Every stage SHALL use the selected parameters consistently. Subsequent historical batches SHALL select newly completed export versions. Recurring landing mode SHALL select completed input units through durable input tracking; a schedule alone SHALL NOT constitute discovery or retry safety.
-
-#### Scenario: Process the next completed export
-
-- **WHEN** a submission overrides the source root and dataset version for a newly completed export
-- **THEN** all stages use that export's manifest and embedded inventory, and writes remain isolated from other source versions
-
-#### Scenario: Resubmit an accepted export
-
-- **WHEN** the same completed export is submitted after its source version is accepted
-- **THEN** the run reuses its recorded snapshots without adding deliveries or treating the submission as new source data
-
 ### Requirement: Operator-managed Spark stages
 Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for each Spark stage attempt, owned by the workflow so that it is removed with it. Native discovery and ClickHouse SQL checks SHALL run as one finite container stage using the server-matched official ingestion runtime. Publication SHALL use the thin metadata image. The platform-owned Apache Spark Operator SHALL manage driver and executor lifecycle with operator restarts disabled. Stage success SHALL require a successful terminal application status; failed applications and deadlines SHALL fail the stage with diagnostics.
 
@@ -33,19 +12,6 @@ Argo SHALL create and watch an Apache `spark.apache.org/v1` SparkApplication for
 
 - **WHEN** a SparkApplication fails or its stage exceeds its deadline
 - **THEN** its Argo stage fails with application diagnostics and its driver and executors are removed
-
-### Requirement: Publication despite upstream failure
-The workflow SHALL persist validation evidence before signaling failed quality checks and attempt governance publication on success and failure paths. Missing reports SHALL be recorded as execution errors. Publication failure SHALL preserve the original data outcome and support metadata-only replay.
-
-#### Scenario: A quality check fails
-
-- **WHEN** native SQL validation computes a failed assertion
-- **THEN** the workflow retains the native failed result and durable report before signaling failure; governance readback preserves that failure rather than projecting a custom result
-
-#### Scenario: OpenMetadata recovers after an outage
-
-- **WHEN** a persisted run is replayed for metadata publication only
-- **THEN** publication uses the original reports, snapshots and run identity without starting ingest or validation again
 
 ### Requirement: Scoped workload configuration
 Pipeline stages SHALL use centrally supplied endpoints, explicit resource budgets and separate scoped workflow, data and metadata identities. Secrets SHALL be supplied externally and excluded from manifests, reports and logs. Consumer resources SHALL NOT install shared controllers.
@@ -55,53 +21,134 @@ Pipeline stages SHALL use centrally supplied endpoints, explicit resource budget
 - **WHEN** a required permission, credential or service endpoint is unavailable
 - **THEN** preflight identifies the missing prerequisite and the run does not claim successful ingestion or platform readiness
 
-### Requirement: Direct batch execution
-The workflow SHALL proceed from input/run-context preflight to ingestion without a disposable-table compatibility smoke stage. The CLI SHALL NOT expose a rollout-only smoke command. Source integrity, persisted-data validation, governance acceptance and lifecycle cleanup SHALL remain enforced.
-
-#### Scenario: Submit a historical batch
-
-- **WHEN** manifest/run-context preflight succeeds
-- **THEN** ingestion starts without creating a disposable compatibility table
-
-### Requirement: Recurring bounded ingestion
-DP1 SHALL support Argo-scheduled finite runs over newly completed immutable landing inputs, reusing its ingest, validate, publish and accept stages. Input progress SHALL identify files or completed batches independently of event dates. Historical exports SHALL remain an explicit input mode. Overlapping runs SHALL preserve writer serialization and cleanup guarantees; a run with no new input SHALL be a no-op without rewriting accepted data.
-
-#### Scenario: Late file in an older date partition
-
-- **WHEN** a new completed landing file contains events older than the latest processed event date
-- **THEN** the next eligible run selects it once as input without rescanning accepted files as new deliveries
-
-#### Scenario: Retry or metadata outage
-
-- **WHEN** a recurring run is retried after an uncertain commit or governance failure
-- **THEN** durable batch identity and recorded snapshots support recovery without adding ingestion-generated copies, and metadata-only replay does not start Spark
-
 ### Requirement: Native metadata workflow execution
-Argo SHALL schedule native OpenMetadata metadata/profiler/test-suite workflows from the server-matched runtime. Explicit governance synchronization and readback SHALL use one idempotent SDK path in the thin metadata image rather than one graph node per API operation. Credentials and permissions SHALL remain scoped to actual operations. Native ingestion process success SHALL NOT imply passing data quality. Result acceptance SHALL require the complete expected successful assertion set correlated with immutable source, contract, policy and snapshot references. Deterministic quality failures SHALL NOT be retried for a passing outcome.
+The checks stage SHALL run native OpenMetadata discovery for the run's tables followed by the test suite derived from the contracts, from the server-matched runtime. Process success SHALL NOT imply passing data quality: the stage SHALL succeed only when every expected test for the run reports Success. Credentials and permissions SHALL remain scoped to actual operations.
 
 #### Scenario: Native job succeeds with a failed test
 
-- **WHEN** a native quality job exits successfully but a required result is Failed, Aborted, stale or absent
-- **THEN** DP1 refuses acceptance and persists the actual quality or execution outcome
-
-Recurring execution SHALL use immutable pending selections and accepted progress, a daily UTC CronWorkflow, shared writer serialization and bounded selection resources. No-input runs SHALL skip Spark and native checks; daily ingestion SHALL skip profiling explicitly, with bounded profiling available through a separate on-demand Argo entrypoint.
-
-### Requirement: Readable stage dependencies
-The Argo graph SHALL expose select, ingest, discover, validate, profile and publish/readback/accept stages with direct dependencies and readable names. Validate and profile SHALL be eligible to run concurrently after discovery with isolated per-run configuration and bounded resources. Acceptance SHALL join their declared outcomes. API call details SHALL remain in stage logs, not expand into a request-per-node graph. Metadata replay and no-input paths SHALL retain their existing short-circuit behavior, writer serialization and exit cleanup.
-
-#### Scenario: Inspect the stage graph
-
-- **WHEN** a user opens a normal DP1 run
-- **THEN** the graph shows the stage dependencies and parallel validate/profile for historical runs (recurring runs skip profiling) branch without expanding individual metadata API requests
-
-#### Scenario: Profile and validation overlap
-
-- **WHEN** native validation and profiling execute concurrently
-- **THEN** each uses isolated configuration and the recorded candidate context, and acceptance cannot hide a required stage failure or change the snapshot selection
+- **WHEN** the native test container exits successfully but a required result is Failed, Aborted or absent
+- **THEN** the checks stage fails with that result
 
 ### Requirement: Shared metadata connections
-Pipeline-specific discovery, profiling and snapshot validation SHALL consume centrally managed connector configuration while retaining their own run context, ordering and acceptance readback. Scheduled service discovery SHALL NOT substitute for candidate-specific pipeline acceptance or mutate its native quality definitions/results.
+Pipeline-specific discovery and native check execution SHALL consume centrally managed connector configuration while retaining their own run context and ordering. Scheduled service discovery SHALL NOT substitute for candidate-specific pipeline checks or mutate their native quality definitions or results.
 
 #### Scenario: Discover a newly created pipeline table
 - **WHEN** ingestion creates candidate tables before scheduled discovery runs
-- **THEN** the pipeline explicitly discovers them through the shared connection before executing its snapshot-specific checks
+- **THEN** the pipeline explicitly discovers them through the shared connection before executing its checks
+
+### Requirement: Write-audit-publish pipeline workflows
+DP1 Bronze (`dp1-bronze`) and the Silver, Gold and marts pipeline (`dp-pipeline`) SHALL write through write-audit-publish. Spark writes to an `audit-<workflow>` Iceberg branch, the contract SQL checks run against that branch's heads, and a publish stage fast-forwards each table's main branch only after every check of its layer succeeds. The marts use `__staging` tables in the same role. OpenMetadata publication SHALL be the exit handler. Readers of another pipeline's tables SHALL read main. Publication SHALL run whether the earlier stages succeed or fail, recording the run outcome. Stage results SHALL distinguish failed data checks from execution errors.
+
+#### Scenario: Inspect a workflow
+
+- **WHEN** a user opens a DP1 or `dp-pipeline` run
+- **THEN** they see its stages, its input (dataset version, Kafka offsets or day range), its committed snapshots, its check outcome and its publication outcome
+
+#### Scenario: Checks fail before publication
+
+- **WHEN** a check fails on the audit branch
+- **THEN** main is unchanged, the branch is kept for diagnosis, downstream pipelines keep reading the previous published data, and the workflow fails while publication still records the failed run
+
+### Requirement: Single-level retry and writer serialization
+Each stage SHALL have one bounded Argo retry policy for execution errors; nested retries SHALL NOT be used, and failed data checks SHALL NOT be retried. Spark stage retries SHALL be safe: historical and day-range writes are idempotent overwrites, failed Kafka appends commit nothing, and a table a run rewrites in several commits (`gold.dim_customer`) has its audit branch reset to main before a retried attempt reads it. Each workflow SHALL hold a mutex so that only one writer per pipeline runs at a time. Cancelling a workflow SHALL remove its SparkApplications. A platform-owned native Kubernetes admission policy SHALL reject Workflow deletion in `data` unless its recorded phase is Succeeded, Failed or Error, and SHALL reject setting `spec.shutdown: Terminate` unless the existing phase is Pending or terminal. Workflows in other namespaces SHALL remain unaffected.
+
+#### Scenario: Retry after transient driver failure
+
+- **WHEN** Argo retries a Spark stage after an execution error
+- **THEN** the retry produces the same Bronze or Silver content as a single successful attempt
+
+#### Scenario: Delete or hard-terminate an active workflow
+
+- **WHEN** a user requests deletion or hard termination of a running Workflow in `data`
+- **THEN** Kubernetes rejects the request with guidance to use graceful stop
+
+### Requirement: Readable workflow graph
+The DP1 workflow SHALL show its Spark, checks, publish-tables and publish stages, and `dp-pipeline` SHALL show its silver, check-silver, publish-silver, gold, marts, check-gold, publish-gold, publish-marts and profile stages, each with direct dependencies and readable names. The benchmarks and lakehouse maintenance SHALL be separate on-demand workflow templates. Metadata API call details SHALL remain in stage logs.
+
+#### Scenario: Inspect the stage graph
+
+- **WHEN** a user opens a normal DP1 or `dp-pipeline` run
+- **THEN** the graph shows those stages without select, discover, readback or accept nodes
+
+### Requirement: Pipeline inputs
+A DP1 submission SHALL select either a historical dataset version, by source root and dataset version parameters with chart defaults selecting v18, or the Kafka source. Silver, Gold and the marts SHALL run as one `dp-pipeline` workflow taking `start` and `end` UTC days. A daily schedule SHALL run DP1 from Kafka and then `dp-pipeline` without parameters, and SHALL be suspended by default in every environment. A `dp-backfill` workflow SHALL run `dp-pipeline` month by month over a range, in date order, one month at a time.
+
+#### Scenario: Ingest a dataset version
+
+- **WHEN** a DP1 historical submission names a dataset version
+- **THEN** all stages use that version's manifest
+
+#### Scenario: Manual pipeline submission
+
+- **WHEN** a user submits `dp-pipeline` without parameters
+- **THEN** it covers yesterday and the lookback days before it
+
+#### Scenario: Backfill stops at a failed month
+
+- **WHEN** one month of a backfill fails
+- **THEN** the later months do not run, and a new backfill from that month resumes
+
+#### Scenario: Default schedule
+
+- **WHEN** the charts are rendered with default values
+- **THEN** the daily schedule exists but is suspended
+
+### Requirement: Catalog registration and discovery
+The data-pipelines application SHALL own the OpenMetadata connector configuration, its ExternalSecrets and the service registration. A PostSync register job SHALL create the OpenMetadata services on each deploy. Every checks run SHALL ingest the ClickHouse tables before its native tests. Kafka topics SHALL be ingested by the on-demand `metadata-discovery` WorkflowTemplate, not by a schedule. Registration SHALL NOT import contracts or data products.
+
+#### Scenario: Deploy registers services
+- **WHEN** data-pipelines syncs
+- **THEN** the register job creates or updates the OpenMetadata services, and no discovery CronWorkflow exists
+
+### Requirement: One pipeline workflow for Silver, Gold and the marts
+Silver, Gold and the marts SHALL run as one Argo workflow template, `dp-pipeline`, over a `start` and `end` UTC day range, using write-audit-publish like DP1. Its stages SHALL be:
+
+1. **Silver:** Spark writes the Silver tables for the range to the run's audit branch; the Silver contract tests run against the branch heads; only after they pass is Silver's `main` fast-forwarded.
+2. **Gold, after Silver is published:** Spark writes the gold tables for the range from published Silver to the branch; the Gold contract tests run against the branch heads; only after they pass is Gold's `main` fast-forwarded.
+3. **Marts, after Silver is published and alongside Gold:** a ClickHouse stage builds the range's mart days from published Silver into staging tables; the mart contract tests run against staging; only after they pass are the staged partitions published and the marts profiled.
+
+The Gold and mart branches SHALL NOT depend on each other. The mart build, the Gold and mart checks and the mart profiling SHALL hold one ClickHouse mutex, so they never run on the server at the same time. No reader of `main` or the live marts SHALL see a run's output before its checks pass. An exit handler SHALL publish the run outcome on success and failure. Every stage SHALL retry only on execution errors, never on failed checks.
+
+#### Scenario: Inspect a pipeline run
+
+- **WHEN** a user opens a `dp-pipeline` run
+- **THEN** they see the Silver stages, then the Gold and mart branches side by side, with the range and the publication outcome
+
+#### Scenario: Mart build fails
+
+- **WHEN** the mart build fails
+- **THEN** the mart checks do not run, the live marts keep their previous days, Gold still publishes if its checks pass, and the workflow fails
+
+#### Scenario: Gold check fails
+
+- **WHEN** a gold contract rule fails on the audit branch
+- **THEN** Gold `main` is unchanged, the branch remains for diagnosis, the marts still publish if their checks pass, and the workflow fails
+
+### Requirement: Pipeline writer serialization
+The `pipeline` template SHALL hold one writer mutex, so the daily run, manual runs and every backfill month serialize wherever the template is referenced. Gold's Spark and the marts stage SHALL read published Silver: the snapshots the run itself published, or `main` when its Silver stage was skipped. A backfill SHALL run its months in date order, one at a time, because `dim_customer` continues each range from the versions stored before it.
+
+#### Scenario: Daily run during a backfill
+
+- **WHEN** the daily schedule fires while a backfill month runs
+- **THEN** the daily pipeline waits for that month to finish
+
+### Requirement: On-demand warehouse benchmark
+The warehouse indexing benchmark SHALL be a separate on-demand workflow template with a single stage. It SHALL hold the pipeline writer mutex, so it does not measure the marts while they are rebuilt.
+
+#### Scenario: Benchmark during a DP3 run
+
+- **WHEN** the benchmark is submitted while `dp-pipeline` runs
+- **THEN** it waits for the pipeline run to finish
+
+### Requirement: Skip unchanged stages
+Every Silver and Gold commit SHALL record its day range, its input snapshot IDs and the code version that wrote it, and `marts.build_info` SHALL record the marts' range, Silver snapshot IDs and code version. Before each of Silver, Gold and the marts, a plan step SHALL compare the head of `main` (or the live `build_info`) with the range, the current input snapshots and the current code version; when every table matches, the stage's build, checks and publish SHALL be skipped. Output without a recorded code version SHALL never match, and a run without an explicit range SHALL never skip Silver or Gold.
+
+#### Scenario: Re-run after the marts failed
+
+- **WHEN** a range is re-run with the same image after its Silver and Gold were published and its mart build failed
+- **THEN** Silver and Gold are skipped and only the marts are built, checked and published
+
+#### Scenario: New code
+
+- **WHEN** a range is re-run after a new batch image is released
+- **THEN** no stage is skipped

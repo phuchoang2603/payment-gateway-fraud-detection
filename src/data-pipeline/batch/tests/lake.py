@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from pyspark.sql import functions as F
 
 from batch.bronze import ingest as bronze
@@ -5,6 +7,12 @@ from batch.bronze.schema import EVENT_COLUMNS, LABEL_COLUMNS, business_schema
 
 TOPICS = {bronze.EVENTS: "payments.events.v1", bronze.LABELS: "fraud.labels.v1"}
 COLUMNS = {bronze.EVENTS: EVENT_COLUMNS, bronze.LABELS: LABEL_COLUMNS}
+
+
+def chunks(first: date, last: date, cuts: set[int]) -> list[tuple[date, date]]:
+    """[first, last] split into consecutive ranges, a new one starting at each day offset in cuts."""
+    bounds = [0, *sorted(cuts), (last - first).days + 1]
+    return [(first + timedelta(days=a), first + timedelta(days=b - 1)) for a, b in zip(bounds, bounds[1:])]
 
 
 def provenance(frame, source):

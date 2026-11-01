@@ -4,17 +4,17 @@ The offline path turns a reproducible synthetic history into curated tables and 
 
 - Generator code: [`src/data-pipeline/simulator/simulator`](../../src/data-pipeline/simulator/simulator) (`world.py`, `lifecycle.py`, `historical.py`, `store.py`).
 - Pipeline code: [`src/data-pipeline/batch/batch`](../../src/data-pipeline/batch/batch) (Spark and ClickHouse jobs) and [`src/data-pipeline/openmetadata/openmetadata`](../../src/data-pipeline/openmetadata/openmetadata) (checks, publish, lineage).
-- Design: the [`payment-data-pipeline`](../../openspec/changes/payment-data-pipeline/design.md) change. Workflows, contracts and the catalog are on [orchestration and governance](orchestration-governance.md); table layout and the warehouse are on [storage](storage.md).
+- Design: the archived [`payment-data-pipeline`](../../openspec/changes/archive/2026-11-01-payment-data-pipeline/design.md) change; current requirements are in [`openspec/specs`](../../openspec/specs). Workflows, contracts and the catalog are on [orchestration and governance](orchestration-governance.md); table layout and the warehouse are on [storage](storage.md).
 
 ## Data problems and how they are solved
 
 | Problem | Handling | Evidence |
 |---|---|---|
 | Skew | One merchant takes about 56% of purchases. Spark AQE splits skewed partitions; the marts keep a time-first key so the hot merchant does not decide the layout, and the overview dashboard shows the hot merchant's share | 56.3% top-merchant share in v18, about 56% in v19 samples |
-| Schema evolution | Event schema 3 adds `assessment_id`, `evidence_sha256` and `user_agent_family` on 2026-04-30. DP1 reads `.v2` and `.v3` files together with `mergeSchema`, so absent version-2 fields become null; a Bronze rule requires them present exactly from version 3 | Every `.v2` file lacks the fields and every `.v3` file has them; the Bronze rule passes on v19 |
-| Duplicates | About 2% of events are republished with a later `recorded_at`. Silver collapses equal business content per `event_id` and quarantines whole payments whose copies differ | `silver.rejected_events`: 0 rows through 2026-05-31 |
-| High cardinality | 3M customers, their payment methods and devices are kept as integration-scoped keys; features use exact distinct counts over merged intervals, and the marts use bloom-filter indexes for per-customer and per-card lookups | Gold feature tables: 177M customer and 185M card rows through April |
-| Delayed labels | Chargebacks arrive 7–21 days after the attempt. Silver links labels to the attempts of the 45 days before their availability day; Gold keeps `label_available_at` for the training cutoff | `silver.labels`: 116.5M rows through May, linkage checks pass |
+| Schema evolution | Event schema 3 adds `assessment_id`, `evidence_sha256` and `user_agent_family` on 2026-04-30. DP1 reads `.v2` and `.v3` files together with `mergeSchema`, so absent version-2 fields become null; a Bronze rule requires them present exactly from version 3 | Bronze v19: version 2 is 514,342,841 events (2025-10-29 to 2026-04-29) and none of its 101,943,941 risk decisions has either field; version 3 is 469,384,242 events from 2026-04-30 and all 93,028,261 of its risk decisions have both |
+| Duplicates | About 2% of events are republished with a later `recorded_at`. Silver collapses equal business content per `event_id` and quarantines whole payments whose copies differ | `silver.rejected_events`: 0 rows for the year |
+| High cardinality | 3M customers, their payment methods and devices are kept as integration-scoped keys; features use exact distinct counts over merged intervals, and the marts use bloom-filter indexes for per-customer and per-card lookups | Gold feature tables: 348M customer and 363M card rows for the year |
+| Delayed labels | Chargebacks arrive 7–21 days after the attempt. Silver links labels to the attempts of the 45 days before their availability day; Gold keeps `label_available_at` for the training cutoff | `silver.labels`: 192.2M rows for the year, linkage checks pass |
 
 The published interface is the contracts: [payment events](products/historical-payments/payment-events.md) and [fraud labels](products/historical-payments/fraud-labels.md).
 
@@ -59,7 +59,7 @@ flowchart LR
     plG --> plM[plan-marts] --> m[marts] --> cm[check-marts] --> pm[publish-marts] --> p[profile]
 ```
 
-Silver is audited and published before anything downstream reads it. Gold and the marts both read published Silver and nothing of each other, so they run side by side: the Gold Spark job overlaps the ClickHouse mart build, and the mart build and the two checks take turns on ClickHouse through one mutex. Each branch publishes when its own checks pass.
+Silver is audited and published before anything downstream reads it. Gold and the marts both read published Silver and nothing of each other, so they run side by side: the Gold Spark job overlaps the ClickHouse mart build, and the mart build, the two checks and the mart profile take turns on ClickHouse through one mutex. Each branch publishes when its own checks pass.
 
 Each plan step skips its stage when the head of `main` (or the live `build_info`, for the marts) already holds this range's output from the same input snapshots by the same batch image. Re-running a range after a later stage failed therefore resumes at that stage instead of rebuilding Silver and Gold.
 
@@ -118,32 +118,38 @@ Bronze v19, then `dp-backfill` from 2025-10-29 on the prod cluster (11 spot exec
 | 2026-06 | `dp-backfill-wjc8k` | 9 | 3.6 | 9 | 14.5 | 20.5 | | 61 |
 | 2026-07 | `dp-backfill-8h7gq` | 15 | 4 | 14 | 10 | 0.5 | 1.1 | 44 |
 | 2026-08 | `dp-backfill-8h7gq` | 14.5 | 3.8 | 13.7 | 11.1 | 7.7 | 1.1 | 44 |
+| 2026-09 | `dp-backfill-ww2pp` | skipped | skipped | 13.8 | 10.8 | 12.7 | 1.2 | 28 |
+| 2026-10 (28 days) | `dp-backfill-ww2pp` | 12.5 | 3.5 | 11.9 | 10.9 | 16.2 | 1.3 | 50 |
 
 What the table shows:
 
 - **Spark stays flat.** Silver and Gold read only their range, so they take 9–19 minutes a month whatever the history before them.
-- **Whole-table checks grew; range-scoped ones do not.** From November to March the checks audited whole tables and grew with every published month (March: 18 + 28 minutes). From April each rule reads only the audited commit's range: 3–4 and 9–15 minutes.
-- **The mart window.** Until May the backfilled days were older than the mart window and built nothing. June rebuilt 56 days one day at a time, rescanning the whole label summary for each (20.5 minutes, about 22 s a day). From July the window is 90 days (from 2026-08-04 on 2026-11-01), so July builds nothing, and August's 28 days were joined in 64 hash buckets (7.7 minutes, about 16.5 s a day) while Gold ran.
-- **Gold and the marts side by side.** July and August took 44 minutes: Silver, its checks, Gold and its checks, with the mart build hidden behind Gold.
-- **Failures cost one month.** A month's failure stopped the backfill and the next run resumed at that month; after a later stage failed, a re-run now skips the stages whose output is already on `main` (see [pipeline](#pipeline)). Silver over three months at once overflowed the executors' 24 GiB of local disk, so the backfill stays monthly.
+- **Whole-table checks grew; [range-scoped](orchestration-governance.md#range-scoped-validation) ones do not.** November to March audited whole tables and grew with every published month; from April each rule reads only the audited commit's range.
+- **The mart window.** Until May the backfilled days were older than the mart window and built nothing. June rebuilt 56 days one day at a time; from July the window is 90 days (from 2026-08-04 on 2026-11-01), so July builds nothing and August builds 28 days in buckets while Gold runs. September and October rebuild 58 and 73 days, their label lookback included, at about 13 s a day; October's longer build held the ClickHouse mutex, so its check-gold waited 6 minutes.
+- **Failures cost one month, and a re-run skips what is published.** A month's failure stops the backfill and the next run resumes at that month. September's first run published Silver before check-gold failed on a full ClickHouse disk; the re-run found that Silver unchanged on `main` and skipped it and its checks. Silver over three months at once overflowed the executors' 24 GiB of local disk, so the backfill stays monthly.
+
+What changed between the rows, and why, is in [optimization techniques](#optimization-techniques).
 
 ![Before: whole-table checks grow month by month (November to January)](images/argo-backfill-unscoped-checks.png)
 
 ![After: April with range-scoped checks, then May's first marts build](images/argo-backfill-scoped-checks.png)
 
-Published row counts (Iceberg `main`, 2025-10-29 to 2026-08-31; the backfill continues to 2026-10-28):
+![September and October 2026 in one backfill: September's Silver, its checks and publish are skipped as already on main, and in both months Gold and the marts run side by side after Silver](images/argo-backfill-parallel-skip.png)
+
+Published row counts (Iceberg `main`, 2025-10-29 to 2026-10-28):
 
 | Table | Rows |
 |---|---|
-| `silver.payment_events` | 811,615,605 |
-| `silver.attempts` | 160,860,987 |
-| `silver.labels` | 161,710,464 |
+| `silver.payment_events` | 964,433,589 |
+| `silver.attempts` | 191,148,630 |
+| `silver.labels` | 192,163,964 |
 | `silver.rejected_events` | 0 |
-| `gold.dim_customer` | 29,057,482 |
-| `gold.feat_customer_daily` | 291,919,198 |
-| `gold.feat_payment_method_daily` | 304,404,578 |
-| `gold.label_attempt` | 161,710,464 |
-| `marts.fact_payment_attempt` | 13,921,891 (2026-08-04 to 2026-08-31, the 90-day window so far; 1.91 GiB, 147 bytes a row) |
+| `gold.dim_customer` | 34,004,866 |
+| `gold.feat_customer_daily` | 348,030,903 |
+| `gold.feat_payment_method_daily` | 362,959,360 |
+| `gold.label_attempt` | 192,163,964 |
+| `marts.fact_payment_attempt` | 44,209,535 (2026-08-04 to 2026-10-28, the 90-day window; 6.05 GiB, 147 bytes a row) |
+| `marts.fact_merchant_day` | 1,327,898 |
 
 Every Silver, Gold and mart rule passed in OpenMetadata: 58 tests on 15 tables. Lineage runs from the v19 dataset through Bronze and Silver to the Gold tables and marts; see [orchestration and governance](orchestration-governance.md#catalog).
 
@@ -153,21 +159,21 @@ Each technique was adopted after a measured failure or cost on the v19 backfill;
 
 | Technique | Problem | Result |
 |---|---|---|
-| Range model: overwrite only the run's days | Full-history recomputes grew with history; rebuilding every customer's `dim_customer` history was OOMKilled in January | Silver 9–15 minutes a month from November to August |
+| Range model: overwrite only the run's days | Full-history recomputes grew with history; rebuilding every customer's `dim_customer` history was OOMKilled in January | Silver 9–15 minutes a month from November to October |
 | Payment-day partitions, rows written in time order | Time filters scanned whole tables | Gold, checks and marts prune to the run's days through partitions and file statistics |
 | Local fanout writes for day-laid input | The hash distribution shuffle wrote 202 GB on the DP1 historical write (below) | Historical Bronze and Silver write without that shuffle |
 | Narrow deduplication within the range | A broadcast of v19's 20M duplicated event IDs exceeded the driver's result size | One shuffle on `event_id` per month |
-| Change-point feature rows | One row per entity per day would be about 1.1B rows a year per table | 292M customer and 304M card rows for ten months |
+| Change-point feature rows | One row per entity per day would be about 1.1B rows a year per table | 348M customer and 363M card rows for the year |
 | XOR sweep for familiar devices | Joining every attempt to its customer's device intervals was OOMKilled even per month | One ordered window pass per customer |
 | `persist(MEMORY_AND_DISK)` instead of `localCheckpoint` | Spot reclaims lost locally checkpointed blocks and failed the stage | Lost blocks are recomputed from lineage |
 | Range-scoped checks (`additional_table_filters`) | Whole-table checks grew every month; scoping through a `SELECT *` subquery ran ClickHouse out of memory | check-silver + check-gold: 18 + 28 minutes (March) → 3 + 9 (April) |
 | Branch reset before the `dim_customer` rewrite | Its delete and append are two commits; a retry after a failure between them read the delete and would have dropped history | Every attempt starts from `main` |
 | Gold executor 9g + 3g → 7g + 5g, `MALLOC_ARENA_MAX=2` | Gold executors were OOMKilled in native memory while tasks peaked at 331 MB | Same 12 GiB pod, more room outside the heap |
 | Label summary in 8 hash passes of its own columns | June's summary read every label column in one group-by and exceeded the marts user's 2 GiB | One pass: 822 MiB, 18 s |
-| Mart fact joined in 64 hash buckets of staged attempts and labels | The monthly sort-merge join exceeded 2 GiB in May; the per-day joins that replaced it rescanned all labels for every day | August: 28 days in 7.7 minutes (16.5 s a day; June's per-day build took 22 s a day) |
+| Mart fact joined in 64 hash buckets of staged attempts and labels | The monthly sort-merge join exceeded 2 GiB in May; the per-day joins that replaced it rescanned all labels for every day | August: 28 days in 7.7 minutes, October: 73 days in 16.2 (13–16.5 s a day; June's per-day build took 22 s a day) |
 | ZSTD on the ID and fingerprint columns, 90-day window | Random UUIDs and hashes took about 240 bytes a row under LZ4; a 180-day window and its staging copies would not fit the 30 GiB volume | 147 bytes a row; the 90-day fact is about 6 GiB |
 | Gold and the marts side by side | The mart build waited for Gold although it reads only Silver | July and August: 44 minutes a month, the mart build behind Gold |
-| Skip a stage whose output is already on `main` | A re-run after a later failure rebuilt every layer (June's re-run redid 22 minutes of published Silver and Gold) | Plan steps compare range, input snapshots and batch image; a re-run resumes at the failed stage |
+| Skip a stage whose output is already on `main` | A re-run after a later failure rebuilt every layer (June's re-run redid 22 minutes of published Silver and Gold) | Plan steps compare range, input snapshots and batch image; September's re-run skipped its published Silver and took 28 minutes |
 | Drivers on on-demand nodes, executors on spot | A reclaimed driver restarts the whole application | Spot loss costs only executor retries |
 
 ![DP1 historical write before local fanout: 202 GB of shuffle write for the hash distribution](images/spark-dp1-hash-write-stages.png)
@@ -175,6 +181,11 @@ Each technique was adopted after a measured failure or cost on the v19 backfill;
 ### Viewing Spark event logs
 
 Event logs live under `runs/payment-gateway/spark-events/` in each environment's bucket. Start a throwaway History Server using the deployed `data-platform-spark` image, `gateway-storage` credentials and `sparkEventLogDir` from the environment's chart values. Invoke `/opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer` with the S3A settings in `SPARK_HISTORY_OPTS`, port-forward port 18080, capture the required jobs, stages and plans, then delete the pod. Save PNGs under `docs/data/images/`.
+
+## Novel ideas
+
+- **Write-audit-publish on Iceberg branches, audited only where the run wrote.** Every layer writes to an `audit-<workflow>` branch, the contract's SQL rules run as native OpenMetadata tests against that branch's snapshot, and only a clean audit fast-forwards `main`. A consumer therefore never reads an unaudited row. The rules see only the range the audited commit records, through ClickHouse `additional_table_filters` and without rewriting the rule's SQL, so a check costs one month whatever the history behind it. See [range-scoped validation](orchestration-governance.md#range-scoped-validation).
+- **Resumable re-runs from snapshot lineage, with no state store.** Each Silver and Gold commit records its day range, the input snapshot IDs it read and the batch image in its Iceberg summary, and the marts record the same in `build_info`. Before a stage, a plan step compares these with what the run would write and skips the stage when they match. Re-running a failed month therefore resumes at the failed stage, and the record of what was built travels with the data. See [pipeline](#pipeline).
 
 ## Schemas and naming
 

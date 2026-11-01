@@ -9,6 +9,21 @@ GitOps deploys the same application charts to dev and prod. CI publishes a compl
 
 ## Releases
 
+```mermaid
+flowchart LR
+    PR["Trusted pull request"] --> CI
+    MAIN["Push to main"] --> CI
+    CI["CI, Go CI, Python CI"] --> PLAN["Release planner: rebuild only images whose build paths changed"]
+    PLAN --> IMG["Image builds"] --> GHCR[("GHCR")]
+    IMG --> REL["release.yaml: chart revision and image tags"]
+    REL -->|"pull request"| DEV["deploy/dev"]
+    REL -->|"main"| PROD["deploy/prod"]
+    DEV --> ACD["Argo CD, dev cluster"]
+    PROD --> ACP["Argo CD, prod cluster"]
+    ACD & ACP --> APPS["Application charts"]
+    DOP["Doppler"] -->|"External Secrets"| APPS
+```
+
 - The roots are `infra/argocd/dev/root.yaml` and `infra/argocd/prod/root.yaml`. Each release records one chart source revision and per-service image tags in `infra/argocd/app-of-apps/release.yaml`.
 - Images carry `pr-<number>-<full-sha>` or `main-<full-sha>` tags. The release planner (`scripts/release.py`) compares each image's build paths (`.github/service-images.json`) against its last deployed commit and rebuilds only changed images; unchanged images keep their tags, and an unreachable recorded commit counts as changed. Chart-only releases reuse every tag.
 - Draft PRs skip the service-image release workflow; marking a PR ready for review enables dev publication.

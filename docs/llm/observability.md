@@ -41,7 +41,7 @@ MCP tool calls                    search_knowledge success: 12
 Gateway routes                    llm 200: 245, 401: 6, 429: 20 · mcp-knowledge 200: 726, 202: 661, 401: 4, 500: 2 · api-knowledge 200: 182, 401: 3
 Tokens per request (average)      input 301, output 112
 Generation round-trip p95         1.21 s
-vLLM time to first token p95      qwen3-8b 0.24 s, qwen3-embedding 0.41 s
+vLLM time to first token p95      qwen35-4b 0.24 s, qwen3-embedding 0.41 s
 PII guardrail                     request: allow 14, mask 12 · response: allow 26
 ```
 
@@ -59,7 +59,7 @@ Self-hosted Langfuse v4 (4.72.0, chart 2.2.0) in `llm`, on the shared ClickHouse
 
 ### Traces
 
-kagent's Go runtime exports each conversation's spans over OTLP to Langfuse; Substrate's egress gateway adds the project's basic-auth key. A conversation is one trace: the A2A request, the coordinator's `invoke_agent` span with its model call, `transfer_to_agent`, the sub-agent's `invoke_agent` span with its tool calls and model calls, and the task-store calls. Each model call (`generate_content qwen3-8b`) carries its tokens and is linked to the prompt version it used:
+kagent's Go runtime exports each conversation's spans over OTLP to Langfuse; Substrate's egress gateway adds the project's basic-auth key. A conversation is one trace: the A2A request, the coordinator's `invoke_agent` span with its model call, `transfer_to_agent`, the sub-agent's `invoke_agent` span with its tool calls and model calls, and the task-store calls. Each model call (`generate_content qwen35-4b`) carries its tokens and is linked to the prompt version it used:
 
 ![Langfuse trace: coordinator 1,864 → 24 tokens, transfer_to_agent, evidence_agent 2,234 → 86 tokens, the model call linked to evidence-agent-system-prompt v3](images/observability-langfuse-trace.png)
 

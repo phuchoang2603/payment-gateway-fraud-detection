@@ -10,14 +10,36 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 |---|---|---|
 | `generate-historical` | Shards in parallel → publish | Done; v18 and v19 published |
 | `dp1-bronze` (historical or Kafka source) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Done on prod v19; Kafka runs inside `dp-daily` |
-| `dp-pipeline` (`start`/`end` days) | Plan → Spark Silver to an audit branch → Silver checks → publish Silver, then side by side: Spark Gold to the branch → Gold checks → publish Gold, and ClickHouse marts into staging → mart checks → publish marts → profile; each plan step skips a stage whose output on main is unchanged; OpenMetadata publish on exit | Running on prod v19; see [the run](offline.md#prod-v19-run) |
+| `dp-pipeline` (`start`/`end` days) | Silver, then Gold and the marts side by side, each as plan → build on an audit branch or staging → checks → publish; OpenMetadata publish on exit. Stages and skipping: [pipeline](offline.md#pipeline) | Running on prod v19; see [the run](offline.md#prod-v19-run) |
 | `dp-daily`, `dp-backfill` | Kafka into Bronze, then `dp-pipeline` for yesterday and two lookback days (suspended cron); `dp-pipeline` month by month in order, stopping at the first failed month | `dp-backfill` running; `dp-daily` suspended |
 | `maintain-lakehouse` | Task `nightly` (suspended cron) or `zorder` over one month | Implemented |
 | `feast-materialize` (`since` day, `stream-recovery`) | `feast apply` registry → materialize the daily views from each view's last end minus lookback (or `since`) through now → `verify_online` compares 200 newest keys with the offline rows; `stream-recovery` instead rebuilds the stream views from the last 24 hours 5 minutes | `feast-materialize-daily` cron, suspended |
 | `stream-history` (`start`/`end` days) | Plan 7-day units → per unit, in parallel up to `historyParallelism`: topics → seed from Bronze → bounded Flink until FINISHED → history writer → gate → cleanup and OpenMetadata publish | On demand |
 | `warehouse-benchmark`, `dp2-benchmark` (skewed join) | Single on-demand stage | Tools only; the evidence comes from the backfill |
 
-Every writer publishes its audit branch to `main` only after all native tests pass. Failed runs keep their branches until nightly maintenance drops branches older than seven days; the exit handler records pipeline status in OpenMetadata. Bronze holds `dp1-bronze-writer`; the `dp-pipeline` template holds `dp-writer`, so the daily run, each backfill month and maintenance serialize. Checks retry execution errors, not failed data rules. A platform admission policy rejects deleting or terminating an active workflow in `data`; stop runs with `shutdown: Stop`.
+Every writer publishes its audit branch to `main` only after all native tests pass. Failed runs keep their branches until nightly maintenance drops branches older than seven days; the exit handler records pipeline status in OpenMetadata. Bronze holds `dp1-bronze-writer`; the `dp-pipeline` template holds `dp-writer`, so the daily run, each backfill month and maintenance serialize. Checks retry execution errors, not failed data rules. The diagram shows Silver and Gold; the marts audit staging tables instead of a branch (see [storage](storage.md#running-sql-inside-clickhouses-limits)).
+
+```mermaid
+sequenceDiagram
+    participant W as Spark writer
+    participant I as Iceberg audit branch
+    participant C as Checks
+    participant CH as ClickHouse
+    participant OM as OpenMetadata
+    participant M as main
+    W->>I: overwrite the run's days, record range and input snapshots
+    C->>CH: contract rules on the audited snapshot, scoped to the range
+    CH-->>C: violation count per rule
+    C->>OM: native test results
+    alt every rule returns 0
+        C->>M: fast-forward main to the audited snapshot
+    else a rule fails
+        C--xM: main unchanged, branch kept for seven days
+    end
+    Note over OM: exit handler publishes run status and lineage
+```
+
+A platform admission policy rejects deleting or terminating an active workflow in `data`; stop runs with `shutdown: Stop`.
 
 ### Spark sizing and placement
 
@@ -53,7 +75,7 @@ Historical source contracts describe schema and meaning only. Bronze, Silver, go
 
 Each rule is pinned to its table's audited snapshot and audits only the rows the run could write. The checks read the range the audited commit records (`dp2.range` for Silver, `dp3.range` for Gold) and pass it to ClickHouse as `additional_table_filters = {'lakehouse.<schema.table>': '<filter>'}`: `payment_day` for Silver events and attempts, `partition_day` for rejected events, the availability day for labels, and the anchor or validity day for Gold. The key must not be quoted with backticks, or ClickHouse silently filters nothing. Other audited tables a rule references are pinned to their own audited snapshots, and every rule runs with external sort, external group-by and `full_sorting_merge`. Saved test definitions are not reused; the processor upserts the current contract rules.
 
-The effect on the backfill: unscoped, check-silver and check-gold grew from 5 and 7 minutes (November) to 18 and 28 (March) as months were published; scoped, April took 3 and 9. A first attempt at scoping wrapped each table in a `SELECT * … WHERE` subquery, which made ClickHouse materialize it and ran out of memory on `silver_attempt_amount_context`; the setting keeps the rule's own plan.
+The effect on the backfill is in [the prod run](offline.md#prod-v19-run). A first attempt at scoping wrapped each table in a `SELECT * … WHERE` subquery, which made ClickHouse materialize it and ran out of memory on `silver_attempt_amount_context`; the setting keeps the rule's own plan.
 
 ![OpenMetadata data quality: 58 tests, all passing](images/openmetadata-data-quality.png)
 

@@ -6,7 +6,7 @@
   - the training entity timestamp is plain `started_at`; stream rows map `event_timestamp = online_write_at + 1µs` in the writer; simulation-truth labels; training retrieval runs Feast's Spark offline store in local mode in one KFP step.
 
   Verify with `openspec validate feast-feature-store --strict`.
-- [x] 0.2 Rebase `feat/feast-feature-store` onto `origin/main` at `371d2ca`. Confirm that DP3 no longer computes `gold.feat_attempt_rt` or Spark short windows. The user authorized code implementation and a draft PR on 2026-10-31. DP3 now lives in `payment-data-pipeline`; its v1 retirement requirements stay pending until that change is archived. Validate this change with `openspec validate feast-feature-store --strict`.
+- [x] 0.2 Rebase `feat/feast-feature-store` onto `origin/main` at `371d2ca`. Confirm that DP3 no longer computes `gold.feat_attempt_rt` or Spark short windows. The user authorized code implementation and a draft PR on 2026-10-31. DP3 now lives in the archived `payment-data-pipeline` change, whose specs are the main specs. Validate this change with `openspec validate feast-feature-store --strict`.
 - [x] 0.3 Send the design's platform requests through the user: prod Redis capacity, the Flink operator and checkpoint path in prod, `data` network paths, the Flink connector in ingestion, `feast/` bucket write, spot capacity for the multi-day history FlinkDeployment in prod, and prod Kafka storage sized for one seeded v19 month plus its journal. Make no cluster changes. Verify that each answer is recorded in design.md.
 
 ## 1. Contracts and v1 cleanup

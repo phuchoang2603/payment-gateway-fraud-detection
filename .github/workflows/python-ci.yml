@@ -34,7 +34,7 @@ jobs:
   python:
     needs: projects
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.projects.outputs.matrix) }}
@@ -61,4 +61,11 @@ jobs:
       - name: Python lint, format and tests
         env:
           PY_PROJECT: ${{ matrix.project }}
+          CI_TEST_REPORTS: /tmp/python-test-evidence
         run: bash scripts/ci-checks.sh python "$PY_PROJECT"
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: python-test-evidence-${{ matrix.id }}
+          path: /tmp/python-test-evidence
+          if-no-files-found: warn

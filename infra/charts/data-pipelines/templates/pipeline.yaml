@@ -77,9 +77,9 @@ spec:
             depends: check-silver
             when: "{{ "{{tasks.plan-silver.outputs.parameters.decision}}" }} == run"
           # Gold and the marts both read published Silver and nothing of each other, so they run side by side: the Gold
-          # Spark job overlaps the ClickHouse mart build. The mart build and the two checks share the dp-clickhouse mutex,
-          # so the small ClickHouse server runs one of them at a time. A failure in one branch leaves the other's output
-          # publishable, and the run fails.
+          # Spark job overlaps the ClickHouse mart build. The mart build, the two checks and the mart profile share the
+          # dp-clickhouse mutex, so the small ClickHouse server runs one of them at a time. A failure in one branch
+          # leaves the other's output publishable, and the run fails.
           - name: plan-gold
             template: plan-gold
             depends: publish-silver
@@ -178,7 +178,7 @@ spec:
 {{- include "data-pipelines.publish-tables" (dict "root" $ "name" "publish-silver" "product" "silver-payments") | nindent 4 }}
 {{- include "data-pipelines.publish-tables" (dict "root" $ "name" "publish-gold" "product" "gold-features") | nindent 4 }}
 {{- include "data-pipelines.marts-step" (dict "root" $ "name" "publish-marts" "command" (list "python" "-m" "batch.gold.marts" "publish") "reportRoot" .Values.pipeline.reportRoot) | nindent 4 }}
-{{- include "data-pipelines.profile" (dict "root" $) | nindent 4 }}
+{{- include "data-pipelines.profile" (dict "root" $ "mutex" "dp-clickhouse") | nindent 4 }}
 {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp2-silver,dp3-features,dp3-marts" "dataset" .Values.bronze.datasetVersion "report" $report) | nindent 4 }}
 ---
 # Daily: Kafka into Bronze, then yesterday and the lookback days through Silver, Gold and the marts.

@@ -13,11 +13,15 @@ check_projects() {
 }
 
 check_python() (
+  local reports="$report_dir/${1#src/}"
+  mkdir -p "$reports"
   cd "$1"
   uv run --locked ruff check .
   uv run --locked ruff format --check .
   if [[ -d tests ]]; then
-    uv run --locked pytest -q --durations=10
+    COVERAGE_FILE="$reports/.coverage" uv run --locked --with "pytest-cov==$PYTEST_COV" pytest -q --durations=10 \
+      --cov=. --cov-config="$coverage_config" --cov-report=term \
+      --cov-report="xml:$reports/coverage.xml" --cov-report="html:$reports/coverage-html"
   fi
 )
 
@@ -72,6 +76,7 @@ check_chart() {
 
 DATACONTRACT_CLI=1.2.7
 DATAPRODUCT_CLI=0.3.2
+PYTEST_COV=7.0.0
 
 check_sql_jobs() {
   local rendered
@@ -108,6 +113,9 @@ case "${1:-}" in
     done < <(find contracts/data-products -mindepth 2 -maxdepth 2 -name product.odps.yaml -print0 | sort -z)
     ;;
   python)
+    report_dir="$(realpath -m "${CI_TEST_REPORTS:-$(mktemp -d)}")"
+    coverage_config="$(realpath scripts/coverage.toml)"
+    mkdir -p "$report_dir"
     if [[ -n "${2:-}" ]]; then
       check_python "$2"
     else

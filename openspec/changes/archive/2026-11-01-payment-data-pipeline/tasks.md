@@ -42,11 +42,11 @@
 
 - [x] 7.1 Backfill 2025-10-29 to 2026-04-30 on prod v19 and record per-month stage times in `docs/data/offline.md`.
 - [x] 7.2 Capture the Argo backfill timelines, the OpenMetadata data quality page and the source → Bronze → Silver → Gold → marts lineage.
-- [ ] 7.3 Finish the backfill (May in `dp-backfill-drbzt`, June in `dp-backfill-wjc8k`, July to 2026-10-28 in `dp-backfill-8h7gq`; through August recorded) and add September and October to the evidence table.
-- [ ] 7.4 After the backfill, count Bronze rows per `schema_version` with and without `assessment_id` as the schema-evolution evidence.
+- [x] 7.3 Finish the backfill (May in `dp-backfill-drbzt`, June in `dp-backfill-wjc8k`, July to 2026-10-28 in `dp-backfill-8h7gq`; through August recorded) and add September and October to the evidence table.
+- [x] 7.4 After the backfill, count Bronze rows per `schema_version` with and without `assessment_id` as the schema-evolution evidence.
 - [x] 7.5 Capture the three Grafana dashboards (May 2026, under the 180-day window kept then).
-- [ ] 7.6 Record `EXPLAIN indexes = 1` for the fixed mart queries once the marts hold the backfilled window.
+- [x] 7.6 Record `EXPLAIN indexes = 1` for the fixed mart queries once the marts hold the backfilled window.
 
 ## 8. Close
 
-- [ ] 8.1 Archive this change after 7.3, 7.4 and 7.6, syncing the delta specs into `openspec/specs/`; verify with `openspec validate --strict --all`.
+- [x] 8.1 Archive this change after 7.3, 7.4 and 7.6, syncing the delta specs into `openspec/specs/`; verify with `openspec validate --strict --all`.

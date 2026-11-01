@@ -87,6 +87,7 @@ require (
 require (
 	github.com/phuchoang2603/payment-gateway-fraud-detection/shared v0.0.0
 	go.opentelemetry.io/otel/metric v1.47.0
+	pgregory.net/rapid v1.2.0
 )
 
 replace github.com/phuchoang2603/payment-gateway-fraud-detection/shared => ../shared

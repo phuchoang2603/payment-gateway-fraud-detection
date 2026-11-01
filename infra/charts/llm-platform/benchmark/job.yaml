@@ -29,7 +29,7 @@ spec:
             - |
               for concurrency in $CONCURRENCY; do
                 vllm bench serve --backend openai-chat --base-url "$TARGET" --endpoint /v1/chat/completions \
-                  --model qwen3-8b --tokenizer Qwen/Qwen3-8B \
+                  --model qwen35-4b --tokenizer RedHatAI/Qwen3.5-4B-FP8-dynamic \
                   --dataset-name prefix_repetition --prefix-repetition-num-prefixes 3 \
                   --prefix-repetition-prefix-len 1500 --prefix-repetition-suffix-len 100 \
                   --prefix-repetition-output-len 150 --ignore-eos --seed 20261029 \
@@ -40,7 +40,7 @@ spec:
               done
           env:
             - name: TARGET
-              value: http://qwen3-8b-kserve-workload-svc.llm.svc.cluster.local:8000
+              value: http://qwen35-4b-kserve-workload-svc.llm.svc.cluster.local:8000
             - name: CONCURRENCY
               value: "1 2 4 8 16"
             - name: HOME

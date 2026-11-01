@@ -18,14 +18,6 @@ OpenMetadata with persistent PostgreSQL and OpenSearch SHALL be the catalog unde
 - **WHEN** deployed catalog services restart
 - **THEN** previously published product, table, contract, lineage and validation metadata remains available from persistent state
 
-### Requirement: Product and contract discovery
-The catalog SHALL expose source and bronze products, owners, classifications and output assets with the corresponding ODPS/ODCS identities, versions and artifact references. Historical source assets SHALL identify the immutable dataset manifest without creating a catalog entity for every file.
-
-#### Scenario: Discover a bronze output
-
-- **WHEN** a user opens a bronze product output
-- **THEN** they can identify its owner, table schema, contract version, source product dependency and selected source-manifest reference
-
 ### Requirement: Authoritative contract publication
 Git-versioned ODCS contracts SHALL remain authoritative. OpenMetadata SHALL expose native contracts with the complete original ODCS YAML, identities, versions, hashes and artifact references. Native contracts SHALL populate inspectable normalized nested schema, active raw quality-test references, declared owners and supported declared semantics/security/SLA fields, without inventing absent guarantees. Native contract source URLs SHALL use stable canonical repository paths. Contract provenance SHALL retain the full Git revision, immutable artifact URL and content hash separately; execution parameters SHALL retain the publication Git revision. An unrelated deployment revision SHALL NOT change the canonical contract link or require a shared server fork. Original YAML alone SHALL NOT satisfy native mapping. Native schemas and quality-rule metadata SHALL preserve the declared rules without modifying Git contracts or immutable source manifests. Native OpenMetadata quality workflows SHALL execute Git-derived ClickHouse SQL as the sole bronze quality path. Catalog configuration SHALL NOT become an independent rule source or retain a custom GX result projection.
 
@@ -46,35 +38,6 @@ Native ClickHouse discovery, profiling, quality execution and lineage SHALL addr
 
 - **WHEN** a native OpenMetadata SQL workflow checks an Iceberg table discovered through ClickHouse
 - **THEN** its native test definitions and results appear on the discovered entity with matching run, contract and snapshot references
-
-### Requirement: Source pipeline and table lineage
-The catalog SHALL expose each actual historical or clean-landing source port through the DP1 pipeline to its corresponding bronze output using supported source assets and canonical table identities. Events and labels SHALL be independent ingestion outputs; the catalog SHALL NOT fabricate an events-to-labels ingestion edge. Declared label/event dependencies SHALL remain contract semantics for silver, without implying raw business validation. Exact manifests/batches and snapshot references SHALL be available from the associated execution.
-
-#### Scenario: Trace a bronze label table
-
-- **WHEN** a user inspects its lineage and associated DP1 execution
-- **THEN** they can trace the actual label source and ingestion pipeline to the label output, including its source/batch and snapshot identity, without treating the event table as the label ingestion source
-
-### Requirement: Reproducible assertion evidence
-The catalog SHALL retain quality-test definitions and successful, failed or errored execution evidence linked to contract rules, data assets and run identity. Durable bounded reports SHALL retain exact source, contract, feature-definition, policy, run and snapshot references and duplicate-aware conservation evidence. V16 source/live checks SHALL NOT substitute for persisted-bronze or governance acceptance. Failed assertions and execution errors SHALL remain distinct. Publication retries SHALL preserve logical rule/run identity and original outcomes.
-
-#### Scenario: Deliberate contract violation
-
-- **WHEN** an isolated candidate fails a contract rule
-- **THEN** OpenMetadata shows that failed rule on the corresponding table with a reference to the durable report, and the candidate is not reported as accepted
-
-#### Scenario: Metadata-only recovery
-
-- **WHEN** publishing a stored validation result is retried
-- **THEN** the same logical test and execution are addressed without creating a second table or changing the recorded data outcome
-
-### Requirement: Catalog acceptance readback
-DP1 governance acceptance SHALL verify product asset lists and entity-side membership, declared owners, nested schemas, native contract fields and active quality references, actual source/output lineage, current pipeline tasks and execution inputs/outputs/status, declared profile scope and the complete expected native quality result set by catalog readback with bounded indexing retries. A stale execution, empty required task/I/O mapping or hash-only contract SHALL NOT satisfy acceptance. Every required result SHALL be Success and match the recorded run/source/contract/snapshots. Failed, Aborted, missing, stale or incomplete results SHALL prevent acceptance even if the native workflow container exits zero. A successful emit or healthy deployment alone SHALL NOT count as complete governance acceptance.
-
-#### Scenario: Search index is delayed
-
-- **WHEN** metadata submission succeeds but required assets or results are not yet visible
-- **THEN** bounded readback retries occur, and unresolved absence is reported as incomplete governance rather than a passing run
 
 ### Requirement: Single governance catalog
 OpenMetadata SHALL be the sole governance catalog and publication target, with a single publisher path and no dual publication. Ordinary catalog publication SHALL NOT mutate source data or lake snapshots. A separately scoped fresh-start reset SHALL follow the ownership and quiescence requirements below.
@@ -97,21 +60,13 @@ OpenMetadata SHALL be reachable at its HTTPS Cloudflare Tunnel hostname, authent
 - **WHEN** a caller requests protected metadata without authentication
 - **THEN** the API rejects the request and does not disclose catalog data
 
-### Requirement: Recurring batch governance identity
-Recurring runs SHALL publish source/batch lineage, validation outcomes and exact changed/unchanged output snapshot references on canonical assets scoped to their source environment. Publication retries SHALL use persisted evidence without re-ingesting data. Missing synthetic manifest identities SHALL NOT prevent representation of real landing inputs or cause fabricated historical provenance.
-
-#### Scenario: Publish a recurring batch
-
-- **WHEN** recurring data checks pass and catalog readback completes
-- **THEN** its accepted evidence identifies immutable landing inputs, source origin, validated snapshot set and applicable contracts without requiring separate real/simulator catalog infrastructure in the current environment
-
 ### Requirement: Clean native catalog artifacts
-Implementation SHALL remove obsolete DP1-owned catalog registrations, contracts/products/pipelines, old test definitions/cases/results, incorrect lineage and stale executions, including compatibility artifacts. A fresh-start reset SHALL inventory and delete only explicitly owned DP1 bronze data, run/acceptance/progress state and superseded repository receipts after suspending schedules and verifying Spark/query quiescence. It SHALL NOT remove the RustFS catalog service, shared backing services, unrelated metadata/lake assets, simulator historical/streaming sources or producer offsets. Unresolved ownership SHALL prevent deletion of the affected resource. Current artifacts SHALL be recreated without migration, aliases, imported acceptance or dual publication. The single SDK synchronization path SHALL own explicit governance metadata; native workflows SHALL own discovery, profiling and quality results.
+Implementation SHALL remove obsolete DP1-owned catalog registrations, contracts, products, pipelines, test definitions, results, lineage and executions from the previous pipeline, including archive assets. Deletion SHALL be limited to explicitly owned DP1 assets and SHALL NOT remove the catalog service, shared backing services, unrelated assets, historical source objects or Kafka topics. Current artifacts SHALL be recreated without migration or imported results. The publication SDK path SHALL own explicit governance metadata; native workflows SHALL own discovery and quality results.
 
 #### Scenario: Replace old DP1 registrations
 
-- **WHEN** obsolete DP1-owned catalog artifacts are removed
-- **THEN** native discovery becomes the sole table identity path, unrelated assets and immutable sources remain intact and fresh acceptance cannot reuse deleted or superseded DP1 records
+- **WHEN** obsolete DP1 catalog artifacts are removed
+- **THEN** only the rebuilt pipeline's assets remain for Bronze, and unrelated assets and source objects are intact
 
 ### Requirement: Current pipeline execution metadata
 The catalog SHALL expose pipeline tasks/dependencies, owners, product membership, source links and current execution status. Execution and supported task inputs/outputs SHALL identify actual source assets and canonical outputs; linked immutable receipts SHALL identify selected manifests/batches, counts, run/contract identities and independent snapshots. A new run SHALL NOT display an unrelated old execution as its own. Metadata-only recovery SHALL preserve original native outcomes and execution identity.
@@ -120,14 +75,6 @@ The catalog SHALL expose pipeline tasks/dependencies, owners, product membership
 
 - **WHEN** a user opens the pipeline after a fresh accepted run
 - **THEN** its tasks, status, Argo links, actual inputs and independent outputs match that run rather than a historical execution
-
-### Requirement: Meaningful scoped native profiling
-Native profiling SHALL expose supported useful scalar-column statistics beyond table row/column counts, with explicit eligible columns, sample/row bounds, execution policy, timeout, collection time and sampled/full coverage. V16 development acceptance SHALL exercise meaningful column profiling. Daily recurring ingestion SHALL skip profiling explicitly; a separate on-demand Argo entrypoint SHALL collect bounded profiles when requested. Unsupported nested/binary metrics SHALL be excluded explicitly. Latest-state profiles SHALL NOT be reported as snapshot-specific acceptance or business/distribution validity.
-
-#### Scenario: Inspect a development profile
-
-- **WHEN** the v16 native profiling stage completes
-- **THEN** supported scalar-column statistics and their collection/sampling scope are visible on the canonical assets and linked to the recorded run without inventing snapshot coverage
 
 ### Requirement: Knowledge-base product in the catalog
 The RAG knowledge pipeline SHALL be governed like the other data pipelines:
@@ -138,3 +85,91 @@ The RAG knowledge pipeline SHALL be governed like the other data pipelines:
 #### Scenario: Successful knowledge run
 - **WHEN** a `rag-knowledge` run completes
 - **THEN** OpenMetadata shows the run status, the passing contract test results on `knowledge.chunks`, and lineage from the corpus version container to that table
+
+### Requirement: Product discovery
+The catalog SHALL expose the Bronze and Silver tables with their schemas, the native quality test results written by each run, and their lineage from the historical source and the payment topics through DP1 and DP2. ODCS contracts and ODPS data products SHALL NOT be imported into OpenMetadata until its importer accepts the ODCS v3 files as written. Git SHALL remain the authority for contracts and products.
+
+#### Scenario: Discover a Silver table
+
+- **WHEN** a user opens a Silver table in OpenMetadata
+- **THEN** they can see its schema, its native test results from the latest run, and its lineage to the Bronze tables
+
+### Requirement: Bronze and Silver lineage
+The catalog SHALL expose lineage from the historical source and from the `payments.events.v1` and `fraud.labels.v1` topics through the DP1 pipeline to the corresponding Bronze tables, and from the Bronze tables through the DP2 pipeline to the Silver tables. Events and labels SHALL be independent Bronze outputs; the catalog SHALL NOT fabricate an events-to-labels ingestion edge. The run's dataset version, Kafka offsets or Bronze snapshot IDs SHALL be available from the associated pipeline execution.
+
+#### Scenario: Trace a Silver label table
+
+- **WHEN** a user inspects `silver.labels` lineage
+- **THEN** they can trace it through DP2 to both Bronze tables and through DP1 to the label topic and the historical source
+
+### Requirement: Native assertion evidence
+The catalog SHALL retain native quality-test definitions and Success, Failed or Aborted results linked to contract rules, tables and run identity. Run reports SHALL retain the exact input, contract and snapshot references. Failed assertions and execution errors SHALL remain distinct.
+
+#### Scenario: Contract violation
+
+- **WHEN** a committed table fails a contract rule
+- **THEN** OpenMetadata shows that failed test on the table with the run identity, and the run is reported as failed
+
+### Requirement: Run acceptance from native results
+A run SHALL succeed only when every expected native test for that run's tables reports Success. Publication SHALL write products, contracts, lineage and the pipeline execution status; a publication failure SHALL fail the publish stage without changing the recorded data or check outcome. Full catalog asset readback SHALL NOT be a run stage.
+
+#### Scenario: Native test result missing
+
+- **WHEN** the checks stage cannot find a Success result for an expected test of the run
+- **THEN** the run fails and does not report passing checks
+
+### Requirement: Kafka run governance identity
+Kafka-mode runs SHALL publish their topic offset ranges, committed snapshots and check outcomes on the same canonical assets as historical runs. No fabricated dataset version or manifest SHALL be attributed to Kafka input.
+
+#### Scenario: Publish a Kafka-mode run
+
+- **WHEN** a Kafka-mode DP1 run completes
+- **THEN** its pipeline execution identifies the topics, partitions, start and end offsets and the Bronze snapshots it committed
+
+### Requirement: DP3 lineage
+The catalog SHALL expose lineage through the DP3 pipelines:
+
+- from `silver.attempts` and `silver.payment_events` to `gold.dim_customer`;
+- from `silver.attempts` to the `gold.feat_` tables;
+- from `silver.attempts` and `silver.labels` to `gold.label_attempt`;
+- from `silver.attempts` and `silver.labels` to `marts.fact_payment_attempt`;
+- from `marts.fact_payment_attempt` to `marts.fact_merchant_day`.
+
+The pipeline execution SHALL identify the Silver snapshot IDs the run read.
+
+#### Scenario: Trace a feature table
+
+- **WHEN** a user inspects `gold.feat_customer_daily` lineage
+- **THEN** they can trace it through DP3 to `silver.attempts`, and from there through DP2 and DP1 to the historical source and Kafka topics
+
+### Requirement: Gold validation evidence
+Every quality rule in the `gold-features` and `payment-marts` contracts SHALL run as a native OpenMetadata test case on its table, through the shared ClickHouse connection. A DP3 run SHALL succeed only when the latest result of every expected test for its tables is Success.
+
+#### Scenario: Overlapping dimension versions
+
+- **WHEN** a DP3 run writes two overlapping versions for one customer
+- **THEN** the dimension's no-overlap test fails in OpenMetadata and the DP3 run fails
+
+### Requirement: Scoped mart profiling
+After the marts are published, DP3 SHALL run native OpenMetadata profiling for the `marts` tables only, recording row counts and column metrics with each run. It SHALL NOT profile Bronze, Silver or gold Iceberg tables. A profiling failure SHALL fail the stage.
+
+#### Scenario: Profile after a rebuild
+
+- **WHEN** a DP3 run publishes its marts
+- **THEN** OpenMetadata shows a fresh profile for `fact_payment_attempt` and `fact_merchant_day` with the current row counts
+
+### Requirement: Range-scoped validation
+Each Silver and Gold contract rule SHALL audit only the rows the run could write. The checks stage SHALL read the range recorded on the audited commit (`dp2.range` or `dp3.range`) and restrict the rule's table to it through ClickHouse `additional_table_filters`. Other audited tables a rule references SHALL be pinned to their audited snapshots. A commit without a recorded range SHALL be audited in full.
+
+#### Scenario: One month of a backfill
+
+- **WHEN** the checks run for a backfill month after earlier months are published
+- **THEN** each rule reads that month's partitions only, and its duration does not grow with the months before it
+
+### Requirement: Lineage on every run
+The exit handler SHALL publish each pipeline's lineage edges whether the workflow succeeded or failed, because the edges describe the pipeline's structure and a stopped backfill has already published earlier months. The execution status SHALL still record the run's outcome.
+
+#### Scenario: Backfill stops at a later month
+
+- **WHEN** a backfill publishes some months and then fails
+- **THEN** OpenMetadata shows lineage from the historical source through Bronze and Silver to the gold tables and marts, and a failed execution for the run

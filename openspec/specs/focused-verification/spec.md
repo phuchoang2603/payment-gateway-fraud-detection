@@ -44,38 +44,6 @@ Local checks SHALL be proportional; CI SHALL own full image verification.
 - **WHEN** a change reports passing checks or workload acceptance
 - **THEN** its report identifies the current revision, executed checks and remaining unverified behavior
 
-### Requirement: Generator behavior tests
-
-Simulator tests SHALL protect reproducibility for a small fixed configuration, identity vectors, Arrow schema parity with ODCS, schema evolution, duplicates, format-3 raw task inventory, physical schema/date counts, truth separation and publication refusal on integrity or byte failure. Small tests SHALL also protect worker-independent records, verified resume, publication exclusivity and resource/size failure gates. They SHALL use local outputs and storage fault doubles without requiring object storage or network access.
-
-#### Scenario: Offline test run
-
-- **WHEN** simulator tests run in CI without storage credentials
-- **THEN** they generate to a temporary directory and verify raw publication behaviors without native DuckDB validation
-
-#### Scenario: Interrupted upload and changed execution settings
-
-- **WHEN** a small run stops around upload/checkpoint acknowledgement and resumes with changed parallelism
-- **THEN** its records, counts, physical schemas and duplicate behavior equal an uninterrupted run
-- **AND** corrupt output, incompatible inputs or a competing writer cannot be silently accepted
-
-#### Scenario: Bounded-resource failure
-
-- **WHEN** an injected scratch or upload limit prevents completion
-- **THEN** the test verifies diagnostic failure and absent completion manifest while valid checkpointed work remains resumable
-
-#### Scenario: Normal command lifecycle
-
-- **WHEN** the same command is run against prepared or completed output
-- **THEN** it automatically resumes compatible preparation or finishes cleanup without additional mode flags
-- **AND** prepare-only leaves generated inventory ready without sorting, and completion declares skipped source checks with the DP1 gate
-
-#### Scenario: Publication failure and retry
-
-- **WHEN** post-publication cleanup partially fails
-- **THEN** tests verify a visible failure, accurate successful-delete accounting and recovery by rerunning the same command without rewriting completed output
-- **AND** cleanup removes only transient `_run/` objects and retains every listed raw source file
-
 ### Requirement: Go service tests
 
 The Go CI job SHALL lint and test every Go module.
@@ -92,98 +60,14 @@ The Go CI job SHALL lint and test every Go module.
 - **WHEN** the store integration test applies a transition with a stale expected version against CI Postgres
 - **THEN** the transition is rejected, no ledger event is inserted, and the test passes
 
-### Requirement: Measured generator scale evidence
-
-Scale acceptance SHALL record the source/configuration/contract revisions, pilot and full-run commands, hardware, seed, elapsed time, throughput, peak process-tree memory and scratch, physical/uncompressed raw source bytes, additive distributions and separately identified downstream validation reports. CI SHALL NOT generate 100 GB. Estimates and slices SHALL be labelled and SHALL NOT substitute for a measured full-source run.
-
-#### Scenario: Accept the large dataset
-
-- **WHEN** an operator reports completion of the 100 GB dataset
-- **THEN** the evidence identifies its immutable completion manifest and actual source-file byte total, separate full-data Spark/GX results for both persisted Bronze tables plus verified governance through DP1 and measured resource use
-- **AND** it distinguishes pilot projections and subset checks from full-run observations
-
-### Requirement: Raw inventory behavior tests
-
-Small tests SHALL verify `manifest_version: 3`, `source_layout: task-fragments-v1`, exact `raw/{table}/{task.key}/v{schema_version}.parquet` keys and per-file checksum/bytes/rows/schema version/`partitions: {date: rows}`. They SHALL exercise multi-date fragments, delayed labels, physical schema cutover and duplicate preservation without a sorting or compaction assumption. Reports SHALL distinguish configured pools from observed additive counters and mark cardinality validation downstream.
-
-#### Scenario: Exact DP1 consumption
-
-- **WHEN** a source root has listed raw files and additional unlisted objects
-- **THEN** DP1 validates and consumes exactly the listed files, derives Bronze dates from row timestamps and preserves duplicate deliveries and delayed labels
-- **AND** mismatched integrity/schema/count metadata or failed Spark/GX quality prevents Bronze acceptance
-
-#### Scenario: No permanent legacy migration path
-
-- **WHEN** inspecting the maintained simulator command and runtime surface
-- **THEN** no legacy migration command, fragment-copy adapter or retired-configuration normalization remains
-- **AND** core tests retain coverage of compatible generation resume, manifest integrity and publication retries
-
-### Requirement: Historical evidence boundary
-
-Legacy pilot, separate-process native-validation measurements and prior checked tasks SHALL remain explicitly historical. They SHALL NOT establish implementation, new raw-layout measurements or live `v8` validation. The product-version change to `5.0.0` SHALL preserve logical ODCS contracts.
-
-#### Scenario: New scale evidence
-
-- **WHEN** new raw-publication or full-run quality acceptance is reported
-- **THEN** evidence distinguishes measured raw bytes and additive statistics from old compacted/native-validation measurements, projections and downstream cardinality checks
-- **AND** no validation claim is inferred for existing live `v8`
-
 ### Requirement: Cross-language simulation contracts
 
-CI SHALL reuse coverage and add only distinct wire/identity/retry checks: packaged generated protobuf contracts, historical-compatible Parquet decoding, profile mismatch, current-time starts, historical mapping and idempotency. It SHALL verify tokens/card numbers stay out of logs/Kafka. Dedicated config/default/getter tests, exhaustive per-card tests and exact wall-clock assertions SHALL NOT be required.
+CI SHALL reuse coverage and add only distinct wire, identity and retry checks: packaged generated protobuf contracts, protobuf decoding into the Bronze schema, current-time starts, historical mapping and idempotency. It SHALL verify that tokens and card numbers stay out of logs and Kafka. Dedicated config/default/getter tests, exhaustive per-card tests and exact wall-clock assertions SHALL NOT be required.
 
 #### Scenario: Protobuf events and labels
 
-- **WHEN** CI decodes representative contracted protobuf events/labels through the Python landing adapter
-- **THEN** their Parquet business columns match the existing historical Arrow schemas while original wire bytes remain available without registry framing
-
-### Requirement: Immutable landing and DP1 interface evidence
-
-Archiver verification SHALL demonstrate historical-compatible Parquet business schemas and byte/provenance preservation, duplicate conservation, low-traffic rotation, completed-object visibility and stable selected objects across retries. The written DP1 handoff SHALL specify late-file discovery, immutable batch retry/readback, contextual history and label maturity; implementation/evidence of DP1 multi-source ingestion is deferred to its next slice. A failed prerequisite SHALL block rollout.
-
-#### Scenario: Archiver restart after publication
-
-- **WHEN** archival restarts after writing a completed object selected by ingestion
-- **THEN** that object remains unchanged and records/provenance remain recoverable with any replay duplicates identified
-
-### Requirement: Historical and runtime evidence boundaries
-
-Verification SHALL preserve source datasets, published contracts/bands and prior passed/failed results. Generator diagnostics SHALL remain distinct from enforced checks under the implemented DP1 policy. Historical acceptance and one-off publication SHALL NOT imply live or v12 DP1 acceptance. Tests/builds SHALL run in CI; local verification SHALL use non-test checks.
-
-#### Scenario: Citing historical evidence
-
-- **WHEN** an accepted v11 run or published v12 rewrite is cited during rollout
-- **THEN** it remains separate from separately measured live recovery/landing and still-pending DP1 acceptance evidence
-
-### Requirement: Deferred source gate verification
-Focused checks SHALL cover explicit deferred-source preflight, preservation of its gate in persisted validation evidence and rejection of acceptance without passing results for both persisted tables and verified governance.
-
-#### Scenario: Deferred source is ingested but validation fails
-
-- **WHEN** a source declares the supported DP1 gate and persisted bronze violates a contract
-- **THEN** the validation report retains the source declaration and acceptance remains refused
-
-### Requirement: Data-pipeline behavioral verification
-Bounded CI fixtures SHALL protect the distinct behavioral risks: source integrity/lossless normalization, duplicate-preserving ingestion, uncertain commits/replay, snapshot isolation, nested raw schema/transport semantics, native result completeness and metadata-only recovery. Source business-rule coverage SHALL remain separate from raw bronze acceptance; transferred silver SQL SHALL remain planned work. Existing CI entrypoints SHALL be reused; obsolete GX/HTTP-publisher tests SHALL be removed. Focused coverage SHALL verify native contract field mapping, unresolved required owners, actual source edges, current task/execution I/O, idempotent SDK synchronization and truthful profile scope. No configuration-only test suites, per-option/property matrices, new CI jobs or duplicate layer assertions SHALL be added. Tests and image builds SHALL run only in CI; local checks SHALL be limited to lint/format/schema/OpenSpec validation and diff review. Ordinary CI SHALL NOT require live credentials.
-
-#### Scenario: Verify changes without infrastructure access
-
-- **WHEN** DP1 behavioral checks run in CI
-- **THEN** bounded fixtures and suitable local/fake boundaries exercise the relevant failure paths without reading live source exports or contacting production services
-
-#### Scenario: Raw and business validation boundaries
-
-- **WHEN** supported raw deliveries include incomplete lifecycles or independently arriving labels
-- **THEN** bronze checks schema, transport and exact conservation without claiming business-rule or as-of acceptance
-- **AND** source business checks and planned silver rules retain their distinct scope and semantic identities
-
-### Requirement: Recurring ingestion verification
-CI SHALL cover no-input runs, newly completed files in older date partitions, changed-content rejection, preserved source duplicates, retry/uncertain-commit recovery, metadata-only recovery, independent delayed labels, retained source origin, valid simulation-truth training targets and separation of informational bands from blocking checks using bounded fixtures. Separate live recurring acceptance SHALL demonstrate repeated runs, late input and recovery with exact input/output accounting and catalog readback; historical acceptance SHALL NOT establish recurring readiness.
-
-#### Scenario: Advance across multiple batches
-
-- **WHEN** two completed input batches, a late file and a retried committed batch are processed
-- **THEN** all original deliveries remain accounted for without ingestion-generated duplicates and accepted snapshot/progress references are reproducible
+- **WHEN** CI decodes representative contracted protobuf events and labels as DP1 Kafka mode does
+- **THEN** their business columns have the same types as the same records ingested from generated historical Parquet
 
 ### Requirement: Native ClickHouse integration evidence
 Implementation SHALL verify direct RustFS SigV4 access, external-catalog discovery, nested schemas, snapshot-specific SQL and native OpenMetadata passing/failing quality results with the selected versions. This SHALL be implementation acceptance rather than a per-batch disposable compatibility stage. Previous GX/native acceptance SHALL NOT establish acceptance of the rewritten integration or survive as an active compatibility path. SQL execution failure or unsupported discovery SHALL be reported without a hidden legacy fallback.
@@ -192,13 +76,6 @@ Implementation SHALL verify direct RustFS SigV4 access, external-catalog discove
 
 - **WHEN** ClickHouse can query a table but OpenMetadata cannot natively discover or profile its external-catalog identity correctly
 - **THEN** integration readiness remains unverified and DP1 does not claim completed native acceptance
-### Requirement: Fresh integration acceptance
-The rewritten integration SHALL establish fresh v16 historical and recurring acceptance after scoped DP1 cleanup. Readback SHALL reject YAML-only contracts, empty required ownership/task/I/O, fabricated event-to-label lineage, stale executions, missing reverse product membership and falsely snapshot-scoped profiles. UI inspection SHALL verify the contract, product, lineage and pipeline/profile views separately from API correctness. Existing CI checks and the existing image workflow SHALL be reused; no redundant configuration-only suite or new independent check job SHALL be introduced.
-
-#### Scenario: Data checks pass but execution metadata is stale
-
-- **WHEN** raw checks and conservation pass while the catalog still exposes an unrelated old execution or omits required native contract fields
-- **THEN** data outcomes remain recorded but governance and overall DP1 acceptance remain incomplete
 
 ### Requirement: Late and duplicate injection verification
 
@@ -208,3 +85,30 @@ Verification SHALL reuse focused scenarios for seeded late and redelivery select
 
 - **WHEN** the CI broker check publishes one event with redelivery selected
 - **THEN** exactly one marked, byte-identical copy appears on the same partition and is not copied again
+
+### Requirement: Rebuilt generator behavior tests
+
+Simulator tests SHALL protect reproducibility for a small fixed configuration across worker counts and interruption, identity vectors, the entity world rebuilt from a recorded configuration, the schema version change boundary, identical duplicates, the per-day layout and manifest, refusal of a changed configuration or published version, and truth/chargeback separation. They SHALL use local outputs without object storage or network access.
+
+#### Scenario: Offline test run
+
+- **WHEN** simulator tests run in CI without storage credentials
+- **THEN** they generate to a temporary directory and verify per-day files, the manifest and the schema change boundary
+
+#### Scenario: Interrupted run
+
+- **WHEN** a small run stops after some days and is rerun with a different worker count
+- **THEN** its records and manifest equal those of an uninterrupted run
+
+### Requirement: Bronze and Silver behavioral verification
+Bounded CI fixtures SHALL protect the distinct behavioral risks: historical listing, per-file row checks and idempotent rerun, Kafka offset continuity, empty runs, Kafka and historical decoding parity, and atomic offset commits, lossless casting, Silver identical-duplicate collapse and conflict failure, attempt outcomes and lifecycle validity, every label linkage class and availability violation, rerun equality, and contract-to-native-test preparation. Broker-backed checks SHALL stay opt-in like existing broker tests. No configuration-only suites, per-option matrices, new CI jobs or duplicate layer assertions SHALL be added. Tests and image builds SHALL run only in CI; local checks SHALL be limited to lint, format, schema and OpenSpec validation and diff review. Ordinary CI SHALL NOT require live credentials.
+
+#### Scenario: Verify changes without infrastructure access
+
+- **WHEN** pipeline behavioral checks run in CI
+- **THEN** local Spark and fixture data exercise the failure paths without reading live sources or contacting deployed services
+
+#### Scenario: Label linkage cases
+
+- **WHEN** Silver curation runs on fixtures with linked, pending and violating labels
+- **THEN** each label receives its expected class and a violation fails the Silver checks

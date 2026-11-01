@@ -1,15 +1,17 @@
+import itertools
 import json
 from datetime import timedelta
 
 import pytest
+from hypothesis import example, given, settings
+from hypothesis import strategies as st
 from pyspark.sql import functions as F
 
 from batch.bronze import ingest as bronze
 from batch.bronze.schema import LABEL_COLUMNS, business_schema
-from batch.days import every_day
 from batch.silver import curate as silver
 from tests.events import BASE, approved, at, created, declined, label, requested, started, succeeded
-from tests.lake import load_bronze, provenance
+from tests.lake import chunks, load_bronze, provenance
 
 DAY = 24 * 60
 FIRST = BASE.date()
@@ -172,23 +174,39 @@ def test_a_payment_belongs_to_the_day_of_its_first_event(spark, report_root):
     assert late.count() == 4
 
 
-def test_daily_runs_build_the_same_silver_as_one_backfill(spark, report_root):
+def test_any_split_of_a_range_and_any_rerun_build_the_same_silver_as_one_backfill(spark, report_root):
     events, labels = history()
     load_bronze(spark, events, labels)
-    last = FIRST + timedelta(days=4)
+    span = 4
+    last = FIRST + timedelta(days=span)
 
     run(spark, "backfill", FIRST, last)
     backfill = tables(spark)
-    for table in silver.TABLES:
-        spark.sql(f"DROP TABLE IF EXISTS {table}")
-    for day in every_day(FIRST, last):
-        run(spark, f"daily-{day}", day, day)
-    daily = tables(spark)
-
-    for table in silver.TABLES:
-        only_backfill = [r.asDict() for r in backfill[table].exceptAll(daily[table]).collect()]
-        only_daily = [r.asDict() for r in daily[table].exceptAll(backfill[table]).collect()]
-        assert not only_backfill and not only_daily, f"{table}: {only_backfill} vs {only_daily}"
-    linkage = {r.payment_id: r.linkage for r in daily[silver.LABELS].collect()}
+    linkage = {r.payment_id: r.linkage for r in backfill[silver.LABELS].collect()}
     assert linkage == {"pay-1": "linked", "pay-3": "linked"}
-    assert {r.payment_id for r in daily[silver.REJECTED].collect()} == {"pay-4"}
+    assert {r.payment_id for r in backfill[silver.REJECTED].collect()} == {"pay-4"}
+    runs = itertools.count()
+    offsets = st.integers(0, span)
+
+    def assert_backfill(step):
+        current = tables(spark)
+        for table in silver.TABLES:
+            only_backfill = [r.asDict() for r in backfill[table].exceptAll(current[table]).collect()]
+            only_current = [r.asDict() for r in current[table].exceptAll(backfill[table]).collect()]
+            assert not only_backfill and not only_current, f"{step} {table}: {only_backfill} vs {only_current}"
+
+    # Each example is several Spark runs, so few examples; the explicit one is the daily schedule.
+    @settings(max_examples=3, deadline=None, database=None, derandomize=True)
+    @given(cuts=st.sets(st.integers(1, span)), rerun=st.tuples(offsets, offsets).map(sorted))
+    @example(cuts=set(range(1, span + 1)), rerun=[1, 3])
+    def split(cuts, rerun):
+        for table in silver.TABLES:
+            spark.sql(f"DROP TABLE IF EXISTS {table}")
+        for start, end in chunks(FIRST, last, cuts):
+            run(spark, f"chunk-{next(runs)}", start, end)
+        assert_backfill(f"split before {sorted(cuts)}")
+
+        run(spark, f"rerun-{next(runs)}", FIRST + timedelta(days=rerun[0]), FIRST + timedelta(days=rerun[1]))
+        assert_backfill(f"rerun of {rerun}")
+
+    split()
