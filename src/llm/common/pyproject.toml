@@ -1,0 +1,23 @@
+[project]
+name = "fraud-rag-common"
+version = "0.1.0"
+description = "Feast knowledge-store definitions and the embedding client shared by the RAG pipeline and serving"
+requires-python = ">=3.12,<3.13"
+dependencies = ["feast[postgres]==0.67.0", "httpx==0.28.1"]
+
+[dependency-groups]
+dev = ["pytest==9.2.0", "ruff==0.17.3"]
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "fraud_rag_common"
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+extend = "../pyproject.toml"

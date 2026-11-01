@@ -1,0 +1,19 @@
+## ADDED Requirements
+
+### Requirement: LLM platform application
+The app-of-apps SHALL deploy chart `infra/charts/llm-platform` as application `llm-platform` into the platform-owned `llm` namespace, which is enrolled in the ambient mesh at the `restricted` Pod Security level. It SHALL be enabled in dev and disabled in prod until the user explicitly confirms enabling it. Its credentials SHALL come from `gateway-doppler`. It SHALL consume the platform's KServe, agentgateway, kagent, agentregistry and Agent Substrate controllers and CRDs, and SHALL NOT install, adopt or delete them, their namespaces or the GPU NodePool.
+
+#### Scenario: Render both environments
+- **WHEN** the dev and prod roots are rendered
+- **THEN** dev contains the `llm-platform` Application and prod does not
+
+#### Scenario: Remove the application
+- **WHEN** the `llm-platform` application is deleted
+- **THEN** shared controllers, CRDs, GatewayClasses, NodePools and the `llm` namespace remain
+
+### Requirement: RAG pipeline application
+The app-of-apps SHALL deploy chart `infra/charts/rag-pipeline` as application `rag-pipeline` into the platform-owned `llm` namespace, enabled where `llm-platform` is enabled and disabled in prod until the user confirms. Its credentials SHALL come from `gateway-doppler`, except the Polaris client secret, which comes from the platform `doppler` store as for the other lakehouse writers. Its workflow SHALL run only after the platform has added `llm` to the Argo Workflows controller's namespaces.
+
+#### Scenario: Render both environments
+- **WHEN** the dev and prod roots are rendered
+- **THEN** dev contains the `rag-pipeline` Application and prod does not

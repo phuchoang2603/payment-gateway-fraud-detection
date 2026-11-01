@@ -1,0 +1,4 @@
+gpu:
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
+

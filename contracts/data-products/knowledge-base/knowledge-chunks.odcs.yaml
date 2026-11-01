@@ -1,0 +1,88 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:knowledge-chunks
+name: RAG knowledge chunks
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: One row per knowledge-base chunk per knowledge version, with its text, provenance and embedding, as written by the rag-knowledge pipeline.
+  usage: Agents read the current version through the knowledge API and MCP tools, never this table directly. Use this table for history, lineage and quality checks. The current version is the one with the latest event_timestamp.
+  limitations: Documents describe gateway behaviour only; they hold no payment, label or customer data. Hand-written documents are synthetic and say so. Embeddings come from Qwen3-Embedding-0.6B through the agent gateway and change whenever the model or chunker changes.
+team:
+  name: Fraud data platform
+  members:
+    - username: phuchoang2603
+      role: owner
+tags: [synthetic, knowledge, rag]
+customProperties:
+  - property: sqlDialect
+    value: clickhouse
+servers:
+  - server: clickhouse
+    type: clickhouse
+    environment: dev
+    host: clickhouse.data.svc.cluster.local
+    port: 8123
+    database: lakehouse
+    description: Iceberg table chunks in schema knowledge, read through the ClickHouse lakehouse database. The rule placeholder {object} stands for the fully qualified table.
+schema:
+  - name: chunks
+    physicalName: knowledge.chunks
+    logicalType: object
+    physicalType: table
+    description: Append-only history of knowledge chunks; each knowledge version is written once.
+    dataGranularityDescription: One chunk of one document in one knowledge version.
+    customProperties:
+      - property: partitioning
+        value: identity(knowledge_version)
+    properties:
+      - {name: chunk_id, logicalType: string, physicalType: VARCHAR, required: true, description: "Stable chunk identity, doc_id#section-slug with an optional -n part suffix."}
+      - {name: doc_id, logicalType: string, physicalType: VARCHAR, required: true, description: "Source document identity."}
+      - {name: title, logicalType: string, physicalType: VARCHAR, required: true, description: "Document title."}
+      - {name: section, logicalType: string, physicalType: VARCHAR, required: true, description: "Heading path of the chunk within its document."}
+      - {name: audience, logicalType: string, physicalType: VARCHAR, required: true, description: "analyst, merchant or both."}
+      - {name: synthetic, logicalType: boolean, physicalType: BOOLEAN, required: true, description: "True for hand-written synthetic documents, false for documents rendered from repository sources."}
+      - {name: source_path, logicalType: string, physicalType: VARCHAR, required: true, description: "Repository sources the document was rendered from or must agree with, separated by semicolons."}
+      - {name: text, logicalType: string, physicalType: VARCHAR, required: true, description: "Chunk text, prefixed with the document title and section."}
+      - {name: content_sha256, logicalType: string, physicalType: VARCHAR, required: true, description: "SHA-256 of the chunk text."}
+      - {name: embedding, logicalType: array, physicalType: ARRAY, required: true, description: "Unit-norm 1024-dimension document embedding.", items: {name: value, logicalType: number, physicalType: FLOAT}}
+      - {name: knowledge_version, logicalType: string, physicalType: VARCHAR, required: true, description: "Hash of the documents, chunker settings and embedding model with its revision."}
+      - {name: event_timestamp, logicalType: timestamp, physicalType: TIMESTAMPTZ, required: true, description: "Time the version was chunked."}
+    quality:
+      - id: knowledge_row_count
+        type: sql
+        description: The current version has between 50 and 5000 chunks.
+        query: |
+          SELECT count(*) FROM (SELECT count() AS chunks FROM {object} WHERE knowledge_version = (SELECT argMax(knowledge_version, event_timestamp) FROM {object})) AS current WHERE chunks NOT BETWEEN 50 AND 5000
+        mustBe: 0
+      - id: knowledge_unique_chunk_id
+        type: sql
+        description: Each chunk appears once in the current version.
+        query: |
+          SELECT count(*) FROM (SELECT chunk_id FROM {object} WHERE knowledge_version = (SELECT argMax(knowledge_version, event_timestamp) FROM {object}) GROUP BY chunk_id HAVING count(*) > 1) AS duplicates
+        mustBe: 0
+      - id: knowledge_text_bounds
+        type: sql
+        description: Every chunk in the current version has between 40 and 6000 characters of text.
+        query: |
+          SELECT count(*) FROM {object} WHERE knowledge_version = (SELECT argMax(knowledge_version, event_timestamp) FROM {object}) AND (text IS NULL OR lengthUTF8(text) < 40 OR lengthUTF8(text) > 6000)
+        mustBe: 0
+      - id: knowledge_embedding_shape
+        type: sql
+        description: Every embedding in the current version has 1024 non-null, finite values and unit norm. Iceberg list elements read back as nullable in ClickHouse.
+        query: |
+          SELECT count(*) FROM {object} WHERE knowledge_version = (SELECT argMax(knowledge_version, event_timestamp) FROM {object}) AND (length(embedding) != 1024 OR arrayExists(x -> x IS NULL OR NOT isFinite(assumeNotNull(x)), embedding) OR abs(sqrt(arraySum(x -> assumeNotNull(x) * assumeNotNull(x), embedding)) - 1) > 0.001)
+        mustBe: 0
+      - id: knowledge_synthetic_flagged
+        type: sql
+        description: Each document is flagged consistently, and every synthetic document carries its disclaimer.
+        query: |
+          SELECT count(*) FROM (SELECT doc_id FROM {object} WHERE knowledge_version = (SELECT argMax(knowledge_version, event_timestamp) FROM {object}) GROUP BY doc_id HAVING uniqExact(synthetic) > 1 OR (max(synthetic) AND countIf(position(text, 'Synthetic document') > 0) = 0)) AS unflagged
+        mustBe: 0
+      - id: knowledge_no_card_or_email
+        type: sql
+        description: No chunk in the current version contains a card-number-like digit run or an e-mail address.
+        query: |
+          SELECT count(*) FROM {object} WHERE knowledge_version = (SELECT argMax(knowledge_version, event_timestamp) FROM {object}) AND (match(text, '(?:\\d[ -]?){12,18}\\d') OR match(text, '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}'))
+        mustBe: 0

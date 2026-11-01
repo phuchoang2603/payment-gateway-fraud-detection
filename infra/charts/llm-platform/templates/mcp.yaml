@@ -1,0 +1,61 @@
+{{- $gateway := .Values.gateway }}
+{{- range $name, $server := $gateway.mcpServers }}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-{{ $name }}
+spec:
+  mcp:
+    targets:
+      - name: {{ $name }}
+        static:
+          host: {{ $server.service }}.{{ $.Release.Namespace }}.svc.cluster.local
+          port: {{ $server.port }}
+          path: {{ $server.path }}
+          protocol: StreamableHTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-{{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gateway.name }}
+      sectionName: http
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /mcp/{{ $name }}}
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: mcp-{{ $name }}
+      timeouts:
+        request: 60s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-{{ $name }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mcp-{{ $name }}
+  traffic:
+    # MCP clients send their key in x-api-key, so agents' model and tool credentials stay on separate headers.
+    apiKeyAuthentication:
+      mode: Strict
+      location:
+        header:
+          name: x-api-key
+      secretSelector:
+        matchLabels:
+          {{ $gateway.keyLabel }}: "true"
+    rateLimit:
+      local:
+        - requests: {{ $gateway.limits.requestsPerMinute }}
+          burst: {{ $gateway.limits.burst }}
+          unit: Minutes
+          key: apiKey.client
+{{- end }}
