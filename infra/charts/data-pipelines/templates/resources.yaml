@@ -11,6 +11,8 @@ kind: ExternalSecret
 metadata:
   name: {{ .name }}
   namespace: {{ $.Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   refreshInterval: 1h
   secretStoreRef:
