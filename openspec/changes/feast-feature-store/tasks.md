@@ -3,7 +3,7 @@
 - [x] 0.1 Rebase `plan/feast-store` onto `main` at `bb8dc67`, with DP3 run by `dp-pipeline`, `dp-daily` and `dp-backfill` under the `dp-writer` mutex. Update the artifacts for one engine per feature (user decision 2026-10-31):
   - Spark DP3 owns the daily windows; take the rerun ranges from `dp3.range`, use the `dp-writer` mutex, schedule materialization after `dp-daily`, and set the daily TTL delay to 12 hours;
   - Flink owns the short windows: live through push jobs A and B, and history through the `stream-history` Kappa replay into `gold.feat_stream_*` (decision 8);
-  - the training entity timestamp is `started_at − 1µs`.
+  - the training entity timestamp is plain `started_at`; stream rows map `event_timestamp = online_write_at + 1µs` in both push jobs; simulation-truth labels; training retrieval runs Feast's Spark offline store in local mode in one KFP step.
 
   Verify with `openspec validate feast-feature-store --strict`.
 - [x] 0.2 Rebase `feat/feast-feature-store` onto `origin/main` at `371d2ca`. Confirm that DP3 no longer computes `gold.feat_attempt_rt` or Spark short windows. The user authorized code implementation and a draft PR on 2026-10-31. `dp3-features-and-marts` remains unarchived, so its v1 retirement requirements stay pending. Validate this change with `openspec validate feast-feature-store --strict`.
@@ -23,6 +23,7 @@
 ## 2. Feast project
 
 - [x] 2.1 Rework `src/data-pipeline/feast`:
+  - `fraud_feast` installable with the `spark` extra, and `spark.master` taken from the environment (default: the SparkApplication; `local[*]` for training retrieval).
   - Python 3.12, `feast[redis]==0.67.0`, `pyiceberg`, `confluent-kafka`, and a `spark` extra;
   - `feature_store.yaml` per decision 1: the Polaris catalog and Arrow in `spark_conf`, `spark.engine`, `pull_latest_features`, Redis `key_ttl_seconds`, and the configured stream epochs;
   - delete the v1 modules and tests.
@@ -30,8 +31,9 @@
   Verify that `uv lock`, `ruff` and `ruff format --check` pass locally.
 - [x] 2.2 Add `fraud_feast/repo.py` (decisions 2–4: entities, the four views with explicit schemas, the stream views' epoch-filtered queries, TTLs and tags, and `fraud_model_v1`) and `fraud_feast/apply.py` (creates the two stream tables, then applies). Verify in CI with:
   - a test that `repo.py`'s fields equal each definition file's feature list per entity;
-  - one local-warehouse test that applies the repository and runs `get_historical_features(fraud_model_v1).to_arrow()` with `full_feature_names=True` and `label_attempt` rows. It covers the daily row on day D, a row whose `created` is later than `t`, TTL expiry to null, a snapshot at exactly `started_at` excluded by the `− 1µs` timestamp, values read across a history and a live epoch with an unconfigured epoch ignored, and null method values for a null payment method.
+  - one local-warehouse test that applies the repository and runs `get_historical_features(fraud_model_v1).to_arrow()` with `full_feature_names=True` and `label_attempt` rows. It covers the daily row on day D, a row whose `created` is later than `t`, TTL expiry to null, a snapshot written at exactly `started_at` invisible at `started_at` while a daily row anchored at that instant is returned, values read across a history and a live epoch with an unconfigured epoch ignored, and null method values for a null payment method.
 - [x] 2.3 Add `fraud_feast/push_job.py` (decision 5): `--to online|offline`, the continuous modes, the `--from`/`--until` replay, and B's history mode (per-day overwrite of the history epoch, lead-in dropped). Replace `tests/test_writer.py` with `test_push_job.py` on the existing Redis container and a local warehouse, covering:
+  - Both modes map `event_timestamp = online_write_at + 1µs` in one shared row mapper, with a unit test of the mapping.
   - an older revision not replacing a newer online value;
   - offline resume from the commit's offsets after a crash before the Kafka commit;
   - an offline replay run twice over a committed range, leaving one row per record and the watermark unchanged;
@@ -91,7 +93,7 @@
 ## 6. Docs
 
 - [ ] 6.1 Update the existing pages only:
-  - `docs/ml/feature-store.md`: the flow diagram (one engine per feature), entities, views, the TTL table and reasons, `fraud_model_v1` and the `− 1µs` training timestamp, the parity exceptions, push jobs A and B and their replay, the Kappa stream history and why it replaced a batch implementation, materialization with rerun ranges and explicit ranges, and Arrow;
+  - `docs/ml/feature-store.md`: the flow diagram (one engine per feature), entities, views, the TTL table and reasons, `fraud_model_v1`, the `+ 1µs` visibility of stream rows, the parity exceptions, push jobs A and B and their replay, the Kappa stream history and why it replaced a batch implementation, materialization with rerun ranges and explicit ranges, and Arrow;
   - `docs/data/online.md`: the push jobs and prod `live-v19`, replacing the "disabled until" sentences;
   - `docs/data/orchestration-governance.md`: `feast-materialize`, `feast-push-replay`, `stream-history`, their range parameters, and the Flink connector;
   - `docs/data/offline.md`: the stream tables and their epochs;
@@ -121,7 +123,7 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 - [ ] 8.2 Prod, after merge:
   - confirm the apply Job;
   - after the v19 `dp-backfill`, run `feast-materialize` (a full refresh);
-  - run `stream-history` with `start=2026-07-01`, `end=2026-10-08` (exclusive), month by month, setting parallelism from the first month's measured rate; the workflow adds its own one-day lead-in and the served model's training waits for this range;
+  - run `stream-history` with `start=2026-07-29`, `end=2026-10-29` (exclusive), month by month, setting parallelism from the first month's measured rate; the workflow adds its own one-day lead-in and the served model's training waits for this range;
   - start Flink `live-v19` and push jobs A and B;
   - unsuspend `dp-daily` and `feast-materialize-daily`, run the simulator for the evidence window (7 days by default), and sample Fraud evidence;
   - run a sample `get_historical_features(fraud_model_v1)` over a v19 cohort;

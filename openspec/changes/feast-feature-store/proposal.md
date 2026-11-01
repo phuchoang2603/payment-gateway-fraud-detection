@@ -25,7 +25,7 @@ This change builds that in the shape of the coursework's Feast lecture and the `
   - **Stream views:** `customer_stream` and `payment_method_stream`, as `PushSource`s whose offline source is `gold.feat_stream_customer` and `gold.feat_stream_payment_method`, filtered to the configured epochs.
   - **TTLs** follow the longest window plus delay: 31 days 12 hours for the daily views, 24 hours 5 minutes for the stream views. The documentation records the reasons.
   - **Registry:** persistent, in object storage, written by a deploy-time `feast apply`.
-- **One feature service, `fraud_model_v1`.** It covers all four views. Training requests it through `get_historical_features`, with `gold.label_attempt` as the entity dataframe at `started_at − 1µs`, and so does Go Fraud.
+- **One feature service, `fraud_model_v1`.** It covers all four views. Training requests it through `get_historical_features`, with `gold.label_attempt`'s simulation-truth rows as the entity dataframe at plain `started_at`, and so does Go Fraud. Stream rows become visible one microsecond after they are written, so a snapshot that counts the scored attempt is never returned. Training retrieval runs Feast's Spark offline store in local mode, in one Kubeflow Pipelines step.
 - **Push jobs.** One `push_job` module runs as two Deployments; each commits its Kafka offsets only after its write:
   - **A** (`--to online`) pushes journal snapshots to Redis through `FeatureStore.push`;
   - **B** (`--to offline`) appends them to the stream tables with PyIceberg, with the Kafka offsets in the Iceberg commit.
@@ -111,4 +111,4 @@ This change builds that in the shape of the coursework's Feast lecture and the `
   - spot capacity for the multi-day history FlinkDeployment.
 
   See design, Platform requests.
-- **Sequencing:** implementation on `feat/feast-feature-store`, rebased onto `origin/main` at `371d2ca`, with the user's go-ahead. Training reads only through Feast after the stream history for `[2026-07-01, 2026-10-08)` exists; there is no interim Spark dry run.
+- **Sequencing:** implementation on `feat/feast-feature-store`, rebased onto `origin/main` at `371d2ca`, with the user's go-ahead. Training reads only through Feast after the stream history for `[2026-07-29, 2026-10-29)` exists; there is no interim Spark dry run.

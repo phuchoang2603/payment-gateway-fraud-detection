@@ -57,7 +57,7 @@ One versioned feature service, `fraud_model_v1`, SHALL name exactly the model in
 - **THEN** `fraud_model_v2` is added, and `fraud_model_v1` keeps its feature list
 
 ### Requirement: Point-in-time offline retrieval
-The offline store SHALL read only the gold Iceberg tables, through the distributed engine on the Iceberg catalog, never by loading a whole table into one process. For each entity row at time `t`, retrieval SHALL return the latest row of each requested view with `event_timestamp <= t` within its TTL. Ties SHALL resolve to the greatest `created`. Rows SHALL NOT be excluded because `created` is later than `t`. Simulation-truth rows of the label table SHALL be usable as the entity rows, one per attempt, with `event_timestamp` one microsecond before the attempt's start, so no stream snapshot that counts the scored attempt is returned. A positive training label SHALL require a chargeback row with `label = true` and `label_available_at <= cutoff`. Training retrieval SHALL request `fraud_model_v1` with `full_feature_names=True`, producing `<view>__<feature>` columns without collisions between views. Retrieval into Python SHALL use Arrow columnar transfer.
+The offline store SHALL read only the gold Iceberg tables, through the distributed engine on the Iceberg catalog, never by loading a whole table into one process. For each entity row at time `t`, retrieval SHALL return the latest row of each requested view with `event_timestamp <= t` within its TTL. Ties SHALL resolve to the greatest `created`. Rows SHALL NOT be excluded because `created` is later than `t`. Simulation-truth rows of the label table with `label_available_at <= cutoff` SHALL be usable directly as the entity rows, one per attempt, with `event_timestamp` equal to the attempt's start, the scoring time, and their `label` as the training label. Stream rows SHALL become visible one microsecond after their online write time, so no stream snapshot that counts the scored attempt is returned at its start. Training retrieval SHALL request `fraud_model_v1` with `full_feature_names=True`, producing `<view>__<feature>` columns without collisions between views. Retrieval into Python SHALL use Arrow columnar transfer.
 
 #### Scenario: Daily row on the scored attempt's day
 
@@ -71,18 +71,18 @@ The offline store SHALL read only the gold Iceberg tables, through the distribut
 
 #### Scenario: Snapshot at the scored attempt's start
 
-- **WHEN** a stream snapshot at exactly the scored attempt's `started_at` already counts that attempt
-- **THEN** retrieval for that attempt returns the previous snapshot
+- **WHEN** a stream snapshot written at exactly the scored attempt's `started_at` already counts that attempt
+- **THEN** retrieval at that `started_at` returns the previous snapshot, and a daily row anchored at exactly that instant is returned
 
 #### Scenario: Label not yet available
 
-- **WHEN** a chargeback's `label_available_at` is after the cutoff
-- **THEN** that attempt's simulation-truth entity row remains included, but that chargeback does not make its training label positive
+- **WHEN** a simulation-truth label's `label_available_at` is after the cutoff
+- **THEN** that attempt has no entity row
 
 ### Requirement: Streaming push jobs
 Two continuously running jobs SHALL consume the v2 feature journal of the configured epoch with read-committed isolation, each with its own consumer group:
 
-- **Online job:** pushes each snapshot to the stream views' online store, keyed by natural keys, with the snapshot's online write time as its event time.
+- **Online job:** pushes each snapshot to the stream views' online store, keyed by natural keys, with its online write time plus one microsecond as its event time.
 - **Offline job:** appends each snapshot to the stream feature tables, with the same event time, the record's commit time as `created`, and its epoch, revision and Kafka partition and offset.
 
 Each job SHALL commit Kafka offsets only after its write is accepted. The offline job SHALL record its offsets in the same table commit as its rows and resume from them, so a restart neither repeats nor skips rows. An older or repeated revision SHALL NOT replace a newer online value. A record that fails v2 identity validation SHALL stop the job without committing.
