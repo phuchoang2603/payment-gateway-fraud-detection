@@ -14,7 +14,7 @@ Natural-key point-in-time retrieval over configured epochs; unknown coverage rem
 Flink snapshot journal persisted by Feast push job B.
 
 ### Limitations
-Synthetic data only. Event time is the online write time; created breaks ties.
+Synthetic data only. Event time is one microsecond after the online write time; created breaks ties.
 
 ## Servers
 | Name | Type | Attributes |

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 from feast import FeatureView
+from pyspark.sql import functions as F
 
 from fraud_feast.repo import DAILY_FIELDS, DAILY_TABLES, KEYS, STREAM_FIELDS, TABLES, definitions
 
@@ -46,10 +47,11 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
             (
                 "i",
                 "entity",
-                day,
+                day + timedelta(hours=hour),
                 day + timedelta(days=2),
-                *[1.0 if f.startswith("decline_rate") else 7 for f in fields],
+                *[1.0 if f.startswith("decline_rate") else count for f in fields],
             )
+            for hour, count in ((0, 7), (24, 8))
         ]
         spark.createDataFrame(rows, columns).writeTo(f"lake.{DAILY_TABLES[scope]}").using(
             "iceberg"
@@ -62,7 +64,7 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
             (
                 "i",
                 "entity",
-                day + timedelta(hours=hour),
+                day + timedelta(hours=hour, microseconds=1),
                 day + timedelta(days=2),
                 epoch,
                 *[count] * len(STREAM_FIELDS[scope]),
@@ -71,7 +73,7 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
                 (1, "history-ci", 1),
                 (2, "live-ci", 2),
                 (3, "ignored", 99),
-                (4, "live-ci", 4),
+                (24, "live-ci", 4),
             )
         ]
         spark.createDataFrame(rows, columns).writeTo(f"lake.{TABLES[scope]}").using(
@@ -79,24 +81,44 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
         ).createOrReplace()
     started = [
         day + timedelta(hours=1, minutes=1),
-        day + timedelta(hours=4),
+        day + timedelta(days=1),
         day + timedelta(days=33),
+        day + timedelta(hours=2, minutes=1),
+        day,
+        day + timedelta(days=1, microseconds=1),
     ]
     labels = pd.DataFrame(
         {
-            "label_attempt": ["history", "live", "expired", "no-method"],
-            "integration_id": ["i"] * 4,
-            "customer_id": ["entity"] * 4,
-            "payment_method_fingerprint": ["entity", "entity", "entity", None],
-            "event_timestamp": [
-                *[t - timedelta(microseconds=1) for t in started],
-                day + timedelta(hours=2, minutes=1),
-            ],
+            "label_attempt": ["history", "live", "expired", "no-method", "midnight", "visible"],
+            "integration_id": ["i"] * len(started),
+            "customer_id": ["entity"] * len(started),
+            "payment_method_fingerprint": ["entity", "entity", "entity", None, "entity", "entity"],
+            "event_timestamp": started,
+            "label": [True, False, False, True, False, True],
         }
+    )
+    cutoff = day + timedelta(days=40)
+    source = labels.assign(
+        label_source="LABEL_SOURCE_SIMULATION_TRUTH", label_available_at=labels["event_timestamp"]
+    )
+    chargeback = source.iloc[[0]].assign(label_source="LABEL_SOURCE_CHARGEBACK", label=False)
+    unavailable = source.iloc[[0]].assign(
+        label_attempt="unavailable", label_available_at=cutoff + timedelta(microseconds=1)
+    )
+    spark.createDataFrame(pd.concat([source, chargeback, unavailable])).writeTo(
+        "lake.gold.label_attempt"
+    ).using("iceberg").createOrReplace()
+    entities = (
+        spark.table("lake.gold.label_attempt")
+        .where(
+            (F.col("label_source") == "LABEL_SOURCE_SIMULATION_TRUTH")
+            & (F.col("label_available_at") <= F.lit(cutoff))
+        )
+        .drop("label_source", "label_available_at")
     )
     result = (
         feature_store.get_historical_features(
-            entity_df=labels,
+            entity_df=entities,
             features=feature_store.get_feature_service("fraud_model_v1"),
             full_feature_names=True,
         )
@@ -107,6 +129,11 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
     assert result.loc["history", "customer_daily__attempt_count_7d"] == 7
     assert result.loc["history", "customer_stream__customer_snapshot_attempt_count_5m"] == 1
     assert result.loc["live", "customer_stream__customer_snapshot_attempt_count_5m"] == 2
+    assert result.loc["live", "customer_daily__attempt_count_7d"] == 8
+    assert result.loc["midnight", "customer_daily__attempt_count_7d"] == 7
+    assert pd.isna(result.loc["midnight", "customer_stream__customer_snapshot_attempt_count_5m"])
+    assert result.loc["visible", "customer_stream__customer_snapshot_attempt_count_5m"] == 4
+    assert result["label"].to_dict() == labels.set_index("label_attempt")["label"].to_dict()
     assert pd.isna(result.loc["expired", "customer_daily__attempt_count_7d"])
     assert pd.isna(result.loc["expired", "customer_stream__customer_snapshot_attempt_count_5m"])
     assert pd.isna(result.loc["no-method", "payment_method_daily__attempt_count_7d"])

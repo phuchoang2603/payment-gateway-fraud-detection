@@ -6,7 +6,7 @@ import signal
 import tempfile
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import reduce
 from pathlib import Path
 
@@ -113,7 +113,8 @@ def decode(message, epoch):
     row = {
         "integration_id": update.integration_id,
         KEYS[scope]: update.entity_id,
-        "event_timestamp": update.online_write_at.ToDatetime(tzinfo=UTC),
+        "event_timestamp": update.online_write_at.ToDatetime(tzinfo=UTC)
+        + timedelta(microseconds=1),
         "created": datetime.fromtimestamp(timestamp / 1000, UTC),
         "epoch": epoch,
         "revision": update.revision,

@@ -6,11 +6,53 @@ import pyarrow.parquet as pq
 import pytest
 
 from fraud_feast.apply import stream_schema
+from fraud_feast.contracts.features.v2.features_pb2 import SnapshotUpdate
 from fraud_feast.history import publish_day
-from fraud_feast.push_job import OfflineWriter, decode, watermarks, write_online
+from fraud_feast.push_job import DEFINITION_HASH, OfflineWriter, decode, watermarks, write_online
 from fraud_feast.repo import KEYS, STREAM_FIELDS, TABLES
 
 DAY = datetime(2025, 9, 1, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("scope,view", [("customer", 1), ("payment_method", 2)])
+def test_shared_row_mapping_delays_visibility_until_after_online_write(scope, view):
+    import hashlib
+
+    from fraud_streaming.model import entity_key
+
+    update = SnapshotUpdate(
+        schema_version=1,
+        definition={"version": "fraud-snapshot-v2", "sha256": DEFINITION_HASH},
+        epoch="live-ci",
+        view=view,
+        integration_id="i",
+        entity_id="entity",
+        revision=1,
+        coverage={"five_minutes": 1, "one_hour": 1, "twenty_four_hours": 1},
+        values={},
+    )
+    for name in ("anchor", "source_available_at", "online_write_at"):
+        getattr(update, name).FromDatetime(DAY)
+    progress = update.source_progress.add(
+        topic="payments", partition=0, consumed_offset=0, observed_high_watermark=1
+    )
+    progress.observed_at.FromDatetime(DAY)
+    update.snapshot_id = hashlib.sha256(update.SerializeToString(deterministic=True)).hexdigest()
+    message = SimpleNamespace(
+        value=lambda: update.SerializeToString(deterministic=True),
+        key=lambda: entity_key(
+            "live-ci", "customer" if view == 1 else "method", "i", "entity"
+        ).encode(),
+        timestamp=lambda: (1, int(DAY.timestamp() * 1000)),
+        partition=lambda: 0,
+        offset=lambda: 0,
+    )
+    mapped_scope, mapped, original = decode(message, "live-ci")
+    assert mapped_scope == scope
+    assert mapped["event_timestamp"] == DAY + timedelta(microseconds=1)
+    assert mapped["created"] == DAY
+    assert original.online_write_at.ToDatetime(tzinfo=UTC) == DAY
+    assert all(mapped[field] is None for field in STREAM_FIELDS[scope])
 
 
 def row(scope, offset=0, *, at=DAY, value=1, epoch="live-ci"):
