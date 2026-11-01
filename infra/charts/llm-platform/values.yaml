@@ -111,6 +111,8 @@ gateway:
     benchmark: LLM_GATEWAY_BENCHMARK_API_KEY
     ragingest: LLM_GATEWAY_RAG_INGEST_API_KEY
     ragapi: LLM_GATEWAY_RAG_API_KEY
+    # Langfuse's decision-model evaluators call d3-edge on /v1/systemone.
+    langfuse: LLM_GATEWAY_LANGFUSE_API_KEY
   # Each client's key Secret lands where its caller runs; the default is the release namespace.
   clientNamespaces:
     agents: llm-agents
@@ -151,8 +153,8 @@ gateway:
   externalClients:
     - cluster.local/ns/data/sa/rag-pipeline
     - cluster.local/ns/kagent/sa/kagent-controller
-  # ServiceAccounts in this namespace that call the gateway, besides the benchmark: the knowledge API.
-  namespaceClients: [rag-api]
+  # ServiceAccounts in this namespace that call the gateway, besides the benchmark: the knowledge API and Langfuse.
+  namespaceClients: [rag-api, langfuse]
   # MCP servers behind /mcp/<name>. Each target is a Service in this namespace.
   mcpServers:
     knowledge:

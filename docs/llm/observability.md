@@ -63,7 +63,7 @@ kagent's Go runtime exports each conversation's spans over OTLP to Langfuse; Sub
 
 ![Langfuse trace: coordinator 1,864 → 24 tokens, transfer_to_agent, evidence_agent 2,234 → 86 tokens, the model call linked to evidence-agent-system-prompt v3](images/observability-langfuse-trace.png)
 
-Message content is not recorded on the spans (kagent's default); the trace has the structure, timings, token counts and prompt versions.
+Each model call's messages are recorded on its span (`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY` on the agents), so Langfuse shows each generation's input and output and its evaluators can read them. They stay in the self-hosted Langfuse in the cluster.
 
 ### Prompts
 
@@ -89,5 +89,34 @@ The seeds give every agent a variant that adds one instruction to its prompt. Pr
 The shorter-answer variants produce fewer output tokens; the risk variant has two calls, too few to judge.
 
 ![Langfuse prompt metrics for evidence-agent-system-prompt: production and variant-b side by side](images/observability-langfuse-ab.png)
+
+### Decision-model evaluators
+
+Langfuse scores agent answers with d3-edge, the same decision model that screens requests at the gateway. A decision-model evaluator asks typed questions about an observation (Choice, Score or Yes/no), each written as one score, with the model's probabilities in the score metadata. d3-edge answers through the gateway's `/v1/systemone` route with Langfuse's own client key, so evaluation calls are counted and rate-limited like any other client, and no prompt leaves the cluster.
+
+```mermaid
+flowchart LR
+  obs[Agent generation in Langfuse] --> rule[Evaluation rule]
+  rule --> ev[Decision-model evaluator]
+  ev -->|/v1/systemone, langfuse key| gw[agentgateway]
+  gw --> d3[d3-edge on vLLM]
+  ev --> sc[Scores on the observation]
+```
+
+Langfuse 4.72 keeps decision-model connections and evaluators out of its public API, so they are set up once in the UI rather than by the release's catalog Job:
+
+1. **LLM connection** (Settings, LLM Connections): adapter TypeSafe (System One), upstream Custom, base URL `http://agentgateway.llm.svc.cluster.local/v1`, custom model `d3-edge`, API key from Doppler `LLM_GATEWAY_LANGFUSE_API_KEY` (also the Secret `llm-gateway-langfuse` in `llm`). The gateway host is allow-listed for LLM connections in the chart.
+2. **Evaluator `evidence-answer`** (New evaluator, decision model, connection above): state = the observation's `input` and `output`.
+
+   | Score | Type | Question |
+   |---|---|---|
+   | `cites_passage` | Yes / no | Does `output` cite at least one knowledge-base passage? |
+   | `answers_question` | Score: does not answer, partly, mostly, fully | How fully does `output` answer the fraud analyst's question in `input`? |
+   | `claims_action` | Yes / no | Does `output` claim the assistant approved, blocked, refunded, retried or changed anything? |
+
+3. **Evaluator `coordinator-route`**: state = `input`; Choice "Which specialist should answer the fraud analyst's question in `input`?" with `evidence` (declines, policy, payment behaviour, API), `risk` (the fraud risk of one payment, card or customer) and `neither`. It is compared with the coordinator's `transfer_to_agent` span.
+4. **Rules**: `evidence-answer` on generations linked to `evidence-agent-system-prompt`, `coordinator-route` on generations linked to `coordinator-system-prompt`, every observation on dev.
+
+The scores carry each answer's prompt version, so the A/B tests above can be compared on answer quality as well as latency and tokens.
 
 The RAG run's lineage and quality checks are on the [RAG](rag.md#governance) page.

@@ -173,6 +173,9 @@ spec:
     # Langfuse v4 writes spans that carry this header straight into its observations table.
     - name: OTEL_EXPORTER_OTLP_TRACES_HEADERS
       value: Authorization=placeholder,x-langfuse-ingestion-version=4
+    # Spans carry the model calls' messages, which Langfuse's evaluators read; they stay in the self-hosted Langfuse.
+    - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
+      value: SPAN_ONLY
     # Only traces have a destination; there is no OpenTelemetry Collector.
     - name: OTEL_LOGS_EXPORTER
       value: none
