@@ -39,7 +39,7 @@ func TestViewAvailabilityBoundaries(t *testing.T) {
 	}
 }
 
-func TestOneNaturalKeyServiceRequest(t *testing.T) {
+func TestStoreAndForwardUsesServerScoringTimeForRequestAndViewAvailability(t *testing.T) {
 	calls := 0
 	now := time.Now().UTC()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +63,13 @@ func TestOneNaturalKeyServiceRequest(t *testing.T) {
 						value = json.RawMessage("false")
 					}
 				}
-				timestamp := now
+				timestamp := now.Add(-time.Minute)
+				if view == "payment_method_stream" {
+					timestamp = now.Add(time.Microsecond)
+				}
+				if view == "customer_daily" {
+					timestamp = now.Add(-time.Hour - time.Microsecond)
+				}
 				if view == "request_features" {
 					timestamp = time.Unix(0, 0).UTC()
 				}
@@ -80,13 +86,21 @@ func TestOneNaturalKeyServiceRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	observation := client.Read(context.Background(), application.Request{Identity: application.Identity{IntegrationID: "integration"}, CustomerID: "customer", MethodFingerprint: "method", MerchantAccountCreatedAt: now.Add(-24 * time.Hour), ItemCount: 2, Input: domain.Input{AttemptedAt: now, AmountMinor: 500}})
+	client.now = func() time.Time { return now }
+	observation := client.Read(context.Background(), application.Request{ScoredAt: now, Identity: application.Identity{IntegrationID: "integration"}, CustomerID: "customer", MethodFingerprint: "method", MerchantAccountCreatedAt: now.Add(-24 * time.Hour), ItemCount: 2, Input: domain.Input{AttemptedAt: now.Add(-10 * time.Minute), AmountMinor: 500}})
 	if calls != 1 || len(observation.Views) != 5 {
 		t.Fatalf("calls = %d, views = %d", calls, len(observation.Views))
 	}
-	for _, view := range observation.Views {
-		if view.Status != "available" {
-			t.Fatalf("null coverage status = %s", view.Status)
+	for name, view := range observation.Views {
+		want := "available"
+		if name == "customer_daily" {
+			want = "expired"
+		}
+		if name == "payment_method_stream" {
+			want = "future"
+		}
+		if view.Status != want {
+			t.Fatalf("%s status = %s, want %s", name, view.Status, want)
 		}
 	}
 }

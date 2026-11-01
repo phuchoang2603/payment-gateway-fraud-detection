@@ -74,6 +74,7 @@ The pure baseline rules SHALL remain deterministic for their input and policy ve
 
 Historical-feature retrieval SHALL have a bounded deadline and explicit per-view statuses. Historical-feature retrieval SHALL be shadow-only wherever it is enabled. It SHALL be enabled only where the online feature store runs.
 
+- **Clock.** Scoring SHALL capture the server decision time before retrieval, send it as scored_at, evaluate TTL and future timestamps against it, and persist the same value as EvaluatedAt. Client attempted_at SHALL NOT control freshness.
 - **Request.** Retrieval SHALL request the configured model feature service in one call, keyed by the integration, customer and payment-method natural keys and raw request-context fields in the same entities map. Feast SHALL compute model request features in request_features; rules SHALL retain their own logic.
 - **Statuses.** It SHALL record a status for each view:
   - `missing` when the entity has no row;
@@ -105,3 +106,8 @@ Retrieval failure SHALL be recorded without changing the existing valid rules de
 
 - **WHEN** the stored stream snapshot's event timestamp is after the scored attempt's start
 - **THEN** evidence records that view as future and uses none of its values
+
+#### Scenario: Store-and-forward attempt
+
+- **WHEN** client attempted_at is minutes before the server decision time
+- **THEN** request features, TTL and future classification use the server time persisted as EvaluatedAt

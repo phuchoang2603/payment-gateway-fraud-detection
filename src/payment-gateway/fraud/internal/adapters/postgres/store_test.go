@@ -103,12 +103,14 @@ func TestConcurrentClaimsFencedRecoveryAndImmutableCompletion(t *testing.T) {
 }
 
 type history struct {
-	calls int
-	value int64
+	calls    int
+	value    int64
+	scoredAt time.Time
 }
 
-func (h *history) Read(context.Context, application.Request) application.FeatureObservation {
+func (h *history) Read(_ context.Context, request application.Request) application.FeatureObservation {
 	h.calls++
+	h.scoredAt = request.ScoredAt
 	value := h.value
 	return application.FeatureObservation{Service: "payment_risk_v1", Views: map[string]application.ViewObservation{"customer_daily": {Status: "available", Values: map[string]application.FeatureValue{"attempt_count_7d": {Integer: &value}}}, "payment_method_daily": {Status: "timeout"}}}
 }
@@ -122,9 +124,14 @@ func TestAssessmentResponseLossReplaysOriginalEvidenceAndRejectsExpiredRecovery(
 		t.Fatal(err)
 	}
 	input := request()
+	input.Input.AttemptedAt = time.Now().UTC().Add(-10 * time.Minute)
+	before := time.Now().UTC()
 	original, err := first.Decide(context.Background(), input)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !observed.scoredAt.Equal(original.Evidence.EvaluatedAt) || observed.scoredAt.Before(before) || !observed.scoredAt.After(input.Input.AttemptedAt) {
+		t.Fatal("feature scoring time differs from server decision time")
 	}
 	observed.value = 99
 	replica, err := application.New(store, observed, config)

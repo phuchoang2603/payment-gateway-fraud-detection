@@ -92,7 +92,7 @@ func (c *Client) Read(ctx context.Context, request application.Request) (observa
 		FullFeatureNames bool             `json:"full_feature_names"`
 	}{c.config.FeatureService, map[string][]any{
 		"integration_id": {request.IntegrationID}, "customer_id": {request.CustomerID}, "payment_method_fingerprint": {request.MethodFingerprint},
-		"scored_at": {request.Input.AttemptedAt.Format(time.RFC3339Nano)}, "amount_minor": {request.Input.AmountMinor},
+		"scored_at": {request.ScoredAt.Format(time.RFC3339Nano)}, "amount_minor": {request.Input.AmountMinor},
 		"customer_account_created_at": {request.Input.CustomerCreatedAt.Format(time.RFC3339Nano)}, "merchant_account_created_at": {request.MerchantAccountCreatedAt.Format(time.RFC3339Nano)},
 		"shipping_country": {request.Input.ShippingCountry}, "ip_country": {request.Input.IPCountry}, "item_count": {request.ItemCount}, "has_device": {request.HasDevice},
 	}, true})
@@ -137,7 +137,7 @@ func (c *Client) Read(ctx context.Context, request application.Request) (observa
 		if strings.HasSuffix(name, "_stream") {
 			ttl = c.config.StreamTTL
 		}
-		observation.Views[name] = evaluate(name, names, fields, request.Input.AttemptedAt, ttl)
+		observation.Views[name] = evaluate(name, names, fields, request.ScoredAt, ttl)
 	}
 	return observation
 }

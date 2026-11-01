@@ -24,6 +24,7 @@ type (
 	Request  struct {
 		Identity
 		Digest                        string
+		ScoredAt                      time.Time
 		CustomerID, MethodFingerprint string
 		Input                         domain.Input
 		MerchantAccountCreatedAt      time.Time
@@ -115,6 +116,7 @@ func (s *Service) Decide(ctx context.Context, request Request) (Result, error) {
 		result.Replayed = true
 		return result, nil
 	}
+	request.ScoredAt = s.now().UTC()
 	result := Result{Evidence: Evidence{
 		SchemaVersion: 2, AssessmentID: claim.ID, RequestDigest: request.Digest, Identity: request.Identity,
 		CustomerID: request.CustomerID, MethodFingerprint: request.MethodFingerprint, Input: request.Input, HistoricalShadowOnly: true,
@@ -144,7 +146,7 @@ func (s *Service) Decide(ctx context.Context, request Request) (Result, error) {
 		return Result{}, ctx.Err()
 	}
 	result.Evidence.Decision = domain.Evaluate(request.Input)
-	result.Evidence.EvaluatedAt = s.now().UTC()
+	result.Evidence.EvaluatedAt = request.ScoredAt
 	encoded, err := json.Marshal(result.Evidence)
 	if err != nil {
 		s.fail(ctx, claim)
