@@ -192,7 +192,7 @@ spec:
           - --served-model-name={{ $model.name }}
           - --port=8000
           - --load-format=runai_streamer
-          - {{ printf "--model-loader-extra-config=%s" $.Values.vllm.loaderConfig | quote }}
+          - {{ printf "--model-loader-extra-config=%s" ($model.loaderConfig | default $.Values.vllm.loaderConfig) | quote }}
         args:
           {{- toYaml $model.args | nindent 10 }}
         env:
