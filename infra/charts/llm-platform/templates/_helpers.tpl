@@ -27,24 +27,3 @@ allowPrivilegeEscalation: false
 capabilities:
   drop: [ALL]
 {{- end -}}
-
-{{- define "llm-platform.modelURI" -}}
-{{- printf "s3://%s/%s/%s/%s" .store.bucket .store.prefix .model.repo .model.revision -}}
-{{- end -}}
-
-{{- define "llm-platform.modelStoreEnv" -}}
-- name: AWS_ENDPOINT_URL
-  value: {{ .endpoint }}
-- name: AWS_DEFAULT_REGION
-  value: us-east-1
-- name: AWS_EC2_METADATA_DISABLED
-  value: "true"
-- name: RUNAI_STREAMER_S3_USE_VIRTUAL_ADDRESSING
-  value: {{ ternary "1" "0" .virtualAddressing | quote }}
-- name: AWS_ACCESS_KEY_ID
-  valueFrom:
-    secretKeyRef: {name: {{ .credentialsSecret }}, key: accesskey}
-- name: AWS_SECRET_ACCESS_KEY
-  valueFrom:
-    secretKeyRef: {name: {{ .credentialsSecret }}, key: secretkey}
-{{- end -}}

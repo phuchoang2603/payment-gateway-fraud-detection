@@ -2,11 +2,3 @@ gpu:
   nodeSelector:
     nvidia.com/gpu.present: "true"
 
-# Karpenter's AWS burst nodes cannot reach the home MinIO that holds the dev bucket.
-modelStore:
-  uploadAffinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - {key: karpenter.sh/nodepool, operator: DoesNotExist}

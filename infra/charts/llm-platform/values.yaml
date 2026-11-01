@@ -11,29 +11,19 @@ gpu:
   nodeSelector: {}
   tolerations: []
 
-# Model weights live in the environment bucket and stream straight to the GPU (Run:ai Model Streamer).
-modelStore:
-  bucket: platform-dev
-  prefix: artifacts/models
-  endpoint: https://minio.home.phuchoang.sbs
-  virtualAddressing: false
-  # The platform's Kubeflow artifacts identity (scoped to artifacts/, datasets/ and runs/), synced into this namespace;
-  # model weights and Langfuse event uploads both live under artifacts/.
+# The platform's Kubeflow artifacts identity (scoped to artifacts/, datasets/ and runs/), synced into this namespace for
+# Langfuse's event uploads.
+objectStore:
   credentialsSecret: llm-object-store
   credentialsKeys:
     accesskey: OBJECT_ARTIFACTS_ACCESS_KEY_ID
     secretkey: OBJECT_ARTIFACTS_SECRET_ACCESS_KEY
-  uploadImage: python:3.13-slim-bookworm
-  uploadPackages: huggingface-hub==2.2.0 boto3==1.43.114
-  # Placement of the upload Job, for environments where not every node reaches the bucket.
-  uploadAffinity: {}
 
 vllm:
   image: vllm/vllm-openai:v0.32.0
   uid: 1000
   # 180 x 10 s = 30 minutes to load, compile and capture CUDA graphs before the kubelet restarts the server.
   startupFailureThreshold: 180
-  loaderConfig: '{"concurrency":16,"memory_limit":2147483648}'
 
 models:
   chat:
@@ -88,9 +78,6 @@ models:
     name: d3-edge
     repo: vllm-sr/d3-edge
     revision: c454ee39b862248d70abd7f84195d2f54ffe6d43
-    # The readout head ships as a second weights file that vLLM loads separately, which its streamer loader does not
-    # do; the upload writes it into the backbone's file under the name vLLM gives it, so the server streams one file.
-    merge: {file: readout.safetensors, into: model-00001-of-00001.safetensors, prefix: score.}
     image: vllm/vllm-openai:nightly-2b009fc6d1493a9a1ad19f4d0c7230b7e6b7e63a@sha256:1b7aee4c157c2c8f48aaf34de137d1eebfb2eea8445549789188c2280883f8d7
     replicas: 1
     args:
@@ -100,17 +87,11 @@ models:
       # Its linear-attention layers keep fp32 state per sequence; at vLLM's default sequence count that state alone
       # (1.59 GiB) outgrew the share on dev. Screening sends a handful of requests at a time.
       - --max-num-seqs=16
-    # Its weights are about 1.2 GB, so the streamer needs a smaller CPU buffer than the default 2 GiB.
-    loaderConfig: '{"concurrency":16,"memory_limit":536870912}'
     # The nightly's API server and engine processes hold about 3.6 GiB before the weights load; at 4Gi the server was
-    # OOM-killed as streaming began (dev, 2026-11-01).
+    # OOM-killed while loading (dev, 2026-11-01).
     resources:
       requests: {cpu: 250m, memory: 2Gi}
       limits: {memory: 6Gi}
-  # Uploaded with the served models so the benchmark can compare weights.
-  extraUploads:
-    - repo: Qwen/Qwen3-8B-AWQ
-      revision: 4da05a8edb55c6046cce958586c33b61da07bb79
 
 gateway:
   name: agentgateway

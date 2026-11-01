@@ -165,6 +165,8 @@ The pool is shared with Kubeflow training and limited to one node, so serving an
 
 ### 7. Model weights in object storage, streamed to the GPU
 
+**Update (user decision, 2026-11-01):** replaced. Each `LLMInferenceService` names its pinned revision as `hf://<repo>:<revision>`; KServe's storage initializer downloads it into `/mnt/models` and vLLM loads it with InstantTensor. This removes the upload Job, the bucket copy, the Run:ai streamer and its CPU buffer, and the step that merged d3's readout file into its backbone, since vLLM's local loader reads that file itself. A restart downloads again, which a KServe LocalModelCache on the GPU node would avoid without a chart change. The text below records the streaming design.
+
 Weights live once per environment in the platform bucket under `artifacts/models/<repo>/<revision>/`:
 - dev: MinIO `platform-dev`;
 - prod: S3 `platform-prod-…`.

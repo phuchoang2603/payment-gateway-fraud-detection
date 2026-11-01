@@ -7,7 +7,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - Serve Qwen3.5-4B (FP8) for chat and Qwen3-Embedding-0.6B for embeddings on vLLM through KServe `LLMInferenceService`s. KServe runs llm-d's endpoint picker (EPP) and InferencePool for the chat model.
   - Both share one GPU through a single DRA claim, each process with a fixed memory fraction: the RTX 5060 Ti on dev, and on prod the shared `aws-gpu-training` Spot pool, which the platform restricts to `g6.xlarge` (L4).
   - One chat replica serves every agent through vLLM's continuous batching. The benchmark measures its capacity, and a second GPU replica behind the same InferencePool is the scale-out path.
-  - Model weights live once per environment in the platform bucket (`artifacts/models/`) and stream straight to the GPU with Run:ai Model Streamer. No serving node writes them to disk, which matters because the dev GPU node is also the control plane.
+  - KServe's storage initializer downloads each model's pinned Hugging Face revision into the pod before vLLM starts, and vLLM loads it with InstantTensor.
 - Run one agentgateway `Gateway` in the `llm` namespace. It is both the inference gateway (an OpenAI-compatible `/v1` route to the chat pool and the embedding service) and the single entry point for MCP and A2A.
   - The LLM route requires a per-client API key and applies request and token rate limits and PII masking (card numbers, e-mail, phone) on prompts and responses.
   - Istio ambient stays the mesh: mesh authorization admits only the gateway (and the endpoint picker) to the model servers.
@@ -64,7 +64,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 ## Impact
 
 - **Infra:**
-  - A new chart `infra/charts/llm-platform`: chat and embedding `LLMInferenceService`s, a shared GPU ResourceClaim, the model upload Job, Gateway, HTTPRoutes, AgentgatewayPolicies, API-key ExternalSecrets, Istio AuthorizationPolicies, kagent ModelConfig, RemoteMCPServer, AgentTemplates, Harness, Agent, EgressPolicy, WorkerPool and its ScaledObject, prompt seeds as files, the catalog job (registry and prompt seeds), Langfuse, and scrape configuration. The benchmark manifests live in `infra/charts/llm-platform/benchmark/`.
+  - A new chart `infra/charts/llm-platform`: chat and embedding `LLMInferenceService`s, a shared GPU ResourceClaim, Gateway, HTTPRoutes, AgentgatewayPolicies, API-key ExternalSecrets, Istio AuthorizationPolicies, kagent ModelConfig, RemoteMCPServer, AgentTemplates, Harness, Agent, EgressPolicy, WorkerPool and its ScaledObject, prompt seeds as files, the catalog job (registry and prompt seeds), Langfuse, and scrape configuration. The benchmark manifests live in `infra/charts/llm-platform/benchmark/`.
   - The `llm-platform` entry in `infra/argocd/app-of-apps/values.yaml`, disabled in `values-prod.yaml`.
   - A new chart `infra/charts/rag-pipeline`, application `rag-pipeline` in `llm` (enabled in dev, disabled in prod), containing:
     - the `rag-knowledge` WorkflowTemplate and its per-image `Workflow`;

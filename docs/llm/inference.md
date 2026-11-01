@@ -17,7 +17,7 @@ Both are KServe `LLMInferenceService`s. The chat model runs behind llm-d's endpo
 
 ## One GPU, two models
 
-Each environment has one GPU, so the three models share it through a single DRA `ResourceClaim` (`llm-gpu`), each vLLM process with a fixed memory fraction: 0.76 for chat (8192-token context), 0.12 for embeddings and 0.10 for the `d3-edge` decision model that screens gateway requests ([gateway](gateway.md#security-and-policy)). The decision model runs on a vLLM nightly pinned by digest, because release 0.32 does not serve it on `/v1/systemone`. Its weights stream from the bucket like the others; its readout head ships as a second file that vLLM's streamer loader does not read, so the model-upload Job writes it into the backbone's file as `score.weight`. The chat server keeps its KV cache in FP8, which the [benchmark](benchmark.md) kept for throughput and cache room. The embedding server's context is capped at 2 048 tokens so its KV cache fits the small share; knowledge chunks are at most about 400 tokens.
+Each environment has one GPU, so the three models share it through a single DRA `ResourceClaim` (`llm-gpu`), each vLLM process with a fixed memory fraction: 0.76 for chat (8192-token context), 0.12 for embeddings and 0.10 for the `d3-edge` decision model that screens gateway requests ([gateway](gateway.md#security-and-policy)). The decision model runs on a vLLM nightly pinned by digest, because release 0.32 does not serve it on `/v1/systemone`. The chat server keeps its KV cache in FP8, which the [benchmark](benchmark.md) kept for throughput and cache room. The embedding server's context is capped at 2 048 tokens so its KV cache fits the small share; knowledge chunks are at most about 400 tokens.
 
 On dev both processes run on the RTX 5060 Ti (16 GiB), reported by each pod's `nvidia-smi` under the same GPU UUID:
 
@@ -42,7 +42,7 @@ $ curl localhost:8000/v1/models   # inside each pod
 
 ## Weights and start-up
 
-- Weights live once per environment in the platform bucket under `artifacts/models/<repo>/<revision>/`, uploaded by the chart's upload Job. vLLM streams them straight to the GPU with the Run:ai Model Streamer, so no node writes them to local disk; the dev GPU node is also the control plane.
+- Each `LLMInferenceService` names its model as `hf://<repo>:<revision>`. KServe's storage initializer downloads that pinned revision into the pod's `/mnt/models` before vLLM starts, and vLLM loads it with InstantTensor (`--load-format=instanttensor`). A restart downloads again; a KServe LocalModelCache on the GPU node would keep the files between restarts without a chart change.
 - The rollout strategy is `maxSurge: 0, maxUnavailable: 1`: a surge pod would ask for a second share of the one GPU and never schedule.
 - The start-up probe allows up to 180 failures (30 minutes) for the first weight load and CUDA graph capture; liveness only starts after it.
 
