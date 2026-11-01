@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from batch.days import day_range
+from batch.lakehouse import code_version
 from batch.store import Store
 
 DATABASE = "marts"
@@ -420,7 +421,7 @@ def main():
     retention_days = int(os.environ.get("MARTS_RETENTION_DAYS", "90"))
     today = datetime.now(timezone.utc).date()
     first, end = day_range(os.environ, today)
-    code = os.environ.get("DP_CODE_VERSION", "")
+    code = code_version()
     client = connect()
     if command == "plan":
         snapshots = json.loads(os.environ["SILVER_SNAPSHOTS"])

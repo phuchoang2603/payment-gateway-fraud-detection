@@ -128,13 +128,18 @@ Every Silver and Gold commit SHALL record its day range, its input snapshot IDs 
 
 #### Scenario: Re-run after the marts failed
 
-- **WHEN** a range is re-run with the same image after its Silver and Gold were published and its mart build failed
+- **WHEN** a range is re-run with the same batch code after its Silver and Gold were published and its mart build failed
 - **THEN** Silver and Gold are skipped and only the marts are built, checked and published
 
 #### Scenario: New code
 
-- **WHEN** a range is re-run after a new batch image is released
+- **WHEN** a range is re-run after the batch package's Python or SQL changed
 - **THEN** no stage is skipped
+
+#### Scenario: Image rebuilt for other files
+
+- **WHEN** the batch image is rebuilt because a contract changed, with the batch package unchanged
+- **THEN** a re-run still skips the stages whose output is on `main`
 
 ## REMOVED Requirements
 
