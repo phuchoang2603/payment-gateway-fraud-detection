@@ -130,6 +130,8 @@ features:
   epoch: live-v19
   historyEpoch: history-v19
   checkpointRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/flink/history
+  # Burst nodes have 40Gi root disks, too small for Spark spill or a week's DuckDB sort.
+  scratchClass: gp3
   replicationFactor: 1
   historyStart: "2026-07-29"
   historyEnd: "2026-10-29"

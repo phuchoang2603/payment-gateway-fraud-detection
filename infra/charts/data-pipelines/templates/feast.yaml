@@ -26,6 +26,7 @@ spec:
         - - {name: materialize, template: materialize}
         - - {name: verify, template: verify}
     - name: materialize
+      {{- include "data-pipelines.placement" $ | nindent 6 }}
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
         command: [/opt/data-pipeline/feast/.venv/bin/python, -m, fraud_feast.materialize]
@@ -50,9 +51,7 @@ spec:
         volumeMounts:
           - {name: spill, mountPath: /tmp/spark}
       volumes:
-        - name: spill
-          emptyDir:
-            sizeLimit: {{ .Values.features.spillSize }}
+        {{- include "data-pipelines.featureScratch" (dict "root" $ "name" "spill" "size" .Values.features.spillSize) | nindent 8 }}
     - name: verify
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.feast "global" .Values.global) | quote }}

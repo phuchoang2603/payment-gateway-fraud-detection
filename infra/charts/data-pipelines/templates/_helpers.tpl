@@ -144,6 +144,25 @@ nodeSelector:
 {{- end }}
 {{- end -}}
 
+{{- /* A large feature-store step: on the Spark executors' pool, with a scratch volume for disk spill. Node root
+disks are too small for it, so the scratch is a claim on features.scratchClass when one is set. */}}
+{{- define "data-pipelines.featureScratch" -}}
+- name: {{ .name }}
+  {{- if .root.Values.features.scratchClass }}
+  ephemeral:
+    volumeClaimTemplate:
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ .root.Values.features.scratchClass }}
+        resources:
+          requests:
+            storage: {{ .size }}
+  {{- else }}
+  emptyDir:
+    sizeLimit: {{ .size }}
+  {{- end }}
+{{- end -}}
+
 {{- define "data-pipelines.placement" -}}
 {{- with .Values.spark.nodeSelector }}
 nodeSelector:

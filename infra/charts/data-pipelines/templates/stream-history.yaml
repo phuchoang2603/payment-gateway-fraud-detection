@@ -209,6 +209,9 @@ spec:
               state: running
     {{- range $mode := list "topics" "seed" "writer" "gate" "delete-topics" }}
     - name: {{ $mode }}
+      {{- if has $mode (list "seed" "writer") }}
+      {{- include "data-pipelines.placement" $ | nindent 6 }}
+      {{- end }}
       {{- if eq $mode "writer" }}
       retryStrategy:
         limit: 3
@@ -287,14 +290,20 @@ spec:
           {{- end }}
         resources:
           {{- if eq $mode "seed" }}
-          # DuckDB sorts a week of Bronze under HISTORY_SORT_MEMORY and spills the rest to disk; the Arrow batches
-          # and the producer queue need the headroom above it.
-          requests: {cpu: "1", memory: 8Gi, ephemeral-storage: 40Gi}
-          limits: {memory: 10Gi, ephemeral-storage: 60Gi}
+          # DuckDB sorts a week of Bronze under HISTORY_SORT_MEMORY and spills the rest to the sort volume; the Arrow
+          # batches and the producer queue need the headroom above it.
+          requests: {cpu: "1", memory: 8Gi, ephemeral-storage: 2Gi}
+          limits: {memory: 10Gi, ephemeral-storage: 4Gi}
           {{- else }}
-          requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 10Gi}
-          limits: {memory: 4Gi, ephemeral-storage: 30Gi}
+          requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 2Gi}
+          limits: {memory: 4Gi, ephemeral-storage: 4Gi}
           {{- end }}
+        {{- if eq $mode "seed" }}
+        volumeMounts:
+          - {name: sort, mountPath: /tmp/history-sort}
+      volumes:
+        {{- include "data-pipelines.featureScratch" (dict "root" $ "name" "sort" "size" "60Gi") | nindent 8 }}
+        {{- end }}
     {{- end }}
     - name: cleanup
       inputs:
