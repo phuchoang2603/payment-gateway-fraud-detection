@@ -24,7 +24,7 @@
 
 - [Agents](llm/agents.md)
 - [Inference](llm/inference.md)
-- [LLM benchmark](llm/benchmark.md)
+- [Policy](llm/policy.md)
 - [Agent gateway](llm/gateway.md)
 - [RAG](llm/rag.md)
 - [Observability](llm/observability.md)

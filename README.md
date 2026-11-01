@@ -34,11 +34,11 @@ Docs: [offline data](https://github.com/phuchoang2603/payment-gateway-fraud-dete
 
 ## LLM and agents
 
-A coordinator agent hands each analyst question to the evidence agent (knowledge base, cited passages) or the risk agent (online features, the fraud model's score, the knowledge base). Every model, tool and agent call passes agentgateway: client keys, rate and token limits, PII masking and a request screen by the d3-edge decision model. Models run on vLLM through KServe and llm-d on a shared GPU; Langfuse holds prompts, A/B tests and traces.
+A coordinator agent hands each analyst question to the evidence agent (knowledge base, cited passages) or the risk agent (online features, the fraud model's score, the knowledge base). Every model, tool and agent call passes agentgateway: client keys, rate and token limits, PII masking and a request screen by the d3-edge Jev decision model. Models run on vLLM through KServe and llm-d on a shared GPU; Langfuse holds prompts, A/B tests and traces.
 
 ![LLM and agents: clients, agentgateway, kagent agents on Agent Substrate, inference on KServe, MCP tools and ML inference, data pipelines and operations](docs/llm/images/llm-architecture.png)
 
-Docs: [agents](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/agents) · [inference](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/inference) · [benchmark](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/benchmark) · [agent gateway](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/gateway) · [RAG](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/rag) · [observability](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/llm-observability) · diagram source [`llm-architecture.excalidraw`](docs/llm/images/llm-architecture.excalidraw)
+Docs: [agents](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/agents) · [inference](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/inference) · [agent gateway](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/gateway) · [policy](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/policy) · [RAG](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/rag) · [observability](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/llm-observability) · diagram source [`llm-architecture.excalidraw`](docs/llm/images/llm-architecture.excalidraw)
 
 ## Deployment and security
 

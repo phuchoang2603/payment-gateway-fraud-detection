@@ -14,7 +14,7 @@ Fraud analysts ask an agent about decline codes, risk decisions and payment beha
 | kagent | Defining agents: model config, templates, tools, sub-agents, UI chat, the public A2A endpoint |
 | Agent Substrate | Running them: one gVisor actor per conversation, suspended to a snapshot when idle and resumed on any worker; the egress gateway that injects credentials |
 | Agent runtime (ours) | kagent's Go ADK runtime plus a Langfuse plugin: each model call's system prompt and A/B variant from Langfuse, linked to the trace |
-| agentgateway | Every A2A, model and tool call: keys, limits, screening, PII masking ([gateway](gateway.md)) |
+| agentgateway | Every A2A, model and tool call: keys and limits ([gateway](gateway.md)), the request screen and PII masking ([policy](policy.md)) |
 | `rag-api` | The knowledge tools; their list lives in its code ([RAG](rag.md)) |
 | Langfuse | The prompts, their versions and A/B tests, and the agents' traces ([observability](observability.md#langfuse)) |
 | agentregistry | The catalog of agents and MCP servers |
@@ -116,5 +116,5 @@ Langfuse is the source of each agent's system prompt and A/B test. [`files/promp
 
 ## Known limits
 
-- qwen3-8b sometimes answers an evidence question without calling the knowledge tools; the answer then has no citation. A question that asks for the passages makes it search.
+- The chat model sometimes answers an evidence question without calling the knowledge tools; the answer then has no citation. A question that asks for the passages makes it search.
 - In one of 16 conversations sent four at a time, the first message was refused ("retry after the session becomes available"), and one UI chat lost its stream after the tool result. A retry answered both.
