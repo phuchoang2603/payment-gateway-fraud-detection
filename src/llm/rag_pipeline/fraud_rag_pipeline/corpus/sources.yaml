@@ -21,12 +21,6 @@ documents:
     render: markdown
     sources: [openspec/specs/fraud-decision/spec.md]
     drop_sections: [Purpose]
-  - doc_id: authorization-velocity
-    title: Authorization velocity counters (observe-only)
-    audience: analyst
-    render: markdown
-    sources: [openspec/specs/authorization-velocity/spec.md]
-    drop_sections: [Purpose]
   - doc_id: checkout-api
     title: Merchant checkout API
     audience: merchant
