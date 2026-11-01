@@ -35,7 +35,7 @@ def test_bronze_round_trip_normalizes_envelope_and_preserves_attempt():
     assert fact.customer == "c"
     assert fact.method == "card"
     assert recorded == int(datetime(2025, 9, 1, 11, 59, tzinfo=UTC).timestamp() * 1_000_000)
-    assert fact.device == "d"
+    assert fact.device == "prior-device"
     invalid = bronze()
     invalid["schema_version"] = 1
     with pytest.raises(ValueError, match="unsupported"):
@@ -59,13 +59,20 @@ def test_clock_overtaking_replay_matches_reference_and_audits_duplicates():
         )
     packets.extend(barrier.accept((raw, "input", 0, 0, 0)))
     state = Entity("customer", fact.integration, fact.customer, now - 2 * DAY)
+    quantities = None
     for payload, topic, *_ in packets:
         if topic == "input":
             value, instant = decode(payload)
             state.add(Packet(value, instant, now - 2 * DAY, ()))
         else:
             instant = json.loads(payload)["clock_us"]
-        quantities = state.advance(instant)
+        while state.next_timer is not None and state.next_timer <= instant:
+            emitted = state.advance(state.next_timer)
+            if emitted is not None:
+                quantities = emitted
+        emitted = state.advance(instant)
+        if emitted is not None:
+            quantities = emitted
     assert quantities is not None
     expected = compute(
         current=FIXTURES["defaults"]["current"],
@@ -73,10 +80,15 @@ def test_clock_overtaking_replay_matches_reference_and_audits_duplicates():
         cutoff=datetime.fromtimestamp(end / 1_000_000, UTC).isoformat(),
         views=FIXTURES["defaults"]["views"],
     )
-    assert (
-        quantities[1]["attempt_count_24h"]
-        == expected["values"]["customer_snapshot_attempt_count_24h"]
-    )
+    assert quantities[1] == {
+        field: expected["values"][f"customer_snapshot_{field}"]
+        for field in (
+            "attempt_count_5m",
+            "attempt_count_1h",
+            "attempt_count_24h",
+            "distinct_devices_24h",
+        )
+    }
     audit = Audit()
     audit.observe(raw, 0)
     audit.observe(raw, 1)
