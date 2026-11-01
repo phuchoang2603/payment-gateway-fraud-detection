@@ -263,13 +263,16 @@ checks:
   nativeTimeoutSeconds: 1500
 featureStore:
   enabled: false
+  driverMemory: 6g
+  spillSize: 100Gi
+  materializeResources:
+    requests: {cpu: "2", memory: 8Gi, ephemeral-storage: 100Gi}
+    limits: {memory: 12Gi, ephemeral-storage: 110Gi}
   registry: s3://platform-dev/feast/payment-gateway/registry.pb
-  materializeState: s3://platform-dev/feast/payment-gateway/materialize-state.json
   reportRoot: s3://platform-dev/runs/payment-gateway/feast
   epochs: history-v18,live-v18
   epoch: live-v18
   historyEpoch: history-v18
-  profile: dev
   redisAddress: payment-gateway-feast-redis:6379
   redisSecret: payment-gateway-feast-redis
   schedule: 47 6 * * *

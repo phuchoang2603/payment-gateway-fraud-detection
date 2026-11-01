@@ -157,7 +157,6 @@ dependencies = [
     { name = "duckdb" },
     { name = "protobuf" },
     { name = "pyiceberg", extra = ["pyarrow"] },
-    { name = "pyroaring" },
 ]
 
 [package.dev-dependencies]
@@ -173,7 +172,6 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1.4,<2" },
     { name = "protobuf", specifier = "==7.36.1" },
     { name = "pyiceberg", extras = ["pyarrow"], specifier = ">=0.10,<0.11" },
-    { name = "pyroaring", specifier = ">=1,<2" },
 ]
 
 [package.metadata.requires-dev]

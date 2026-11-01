@@ -2,7 +2,7 @@
 name = "fraud-history-seed"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["pyiceberg[pyarrow]>=0.10,<0.11", "boto3>=1.38,<2", "duckdb>=1.4,<2", "pyroaring>=1,<2", "confluent-kafka==2.12.0", "protobuf==7.36.1"]
+dependencies = ["pyiceberg[pyarrow]>=0.10,<0.11", "boto3>=1.38,<2", "duckdb>=1.4,<2", "confluent-kafka==2.12.0", "protobuf==7.36.1"]
 
 [dependency-groups]
 dev = ["pytest==9.0.2", "ruff==0.14.14"]

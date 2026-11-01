@@ -69,6 +69,12 @@ spec:
           - {name: start}
           - {name: end}
       steps:
+        - - name: prepare
+            template: prepare
+            arguments:
+              parameters:
+                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+                - {name: end, value: {{ "{{inputs.parameters.end}}" | quote }}}
         - - {name: topics, template: topics}
         - - name: flink
             template: flink
@@ -201,9 +207,9 @@ spec:
               parallelism: 1
               upgradeMode: stateless
               state: running
-    {{- range $mode := list "topics" "seed" "writer" "gate" "purge" "delete-topics" }}
+    {{- range $mode := list "topics" "seed" "writer" "gate" "prepare" "delete-topics" }}
     - name: {{ $mode }}
-      {{- if has $mode (list "seed" "writer" "gate") }}
+      {{- if has $mode (list "seed" "writer" "gate" "prepare") }}
       inputs:
         parameters:
           - {name: start}
@@ -229,7 +235,11 @@ spec:
         args: [--to, offline, --history-start, {{ "{{inputs.parameters.start}}" | quote }}, --history-end, {{ "{{inputs.parameters.end}}" | quote }}]
         {{- else }}
         command: [python, -m, fraud_feast.history]
-        args: {{ if eq $mode "purge" }}[--cleanup]{{ else }}[]{{ end }}
+        {{- if eq $mode "prepare" }}
+        args: [prepare, --start, {{ "{{inputs.parameters.start}}" | quote }}, --end, {{ "{{inputs.parameters.end}}" | quote }}]
+        {{- else }}
+        args: [gate]
+        {{- end }}
         {{- end }}
         {{- end }}
         env:
@@ -245,7 +255,7 @@ spec:
             value: {{ $.Values.featureStore.replicationFactor | quote }}
           - name: HISTORY_FLINK_URL
             value: {{ "http://{{workflow.name}}-history-rest:8081" | quote }}
-          {{- if has $mode (list "seed" "writer" "gate") }}
+          {{- if has $mode (list "seed" "writer" "gate" "prepare") }}
           - name: HISTORY_SEED_REPORT
             value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}-seed.json" $.Values.featureStore.reportRoot | quote }}
           - name: RUN_REPORT
@@ -265,7 +275,6 @@ spec:
         - - name: delete-topics
             template: delete-topics
             continueOn: {failed: true, error: true}
-        - - {name: purge, template: purge}
     - name: stop
       resource:
         action: delete

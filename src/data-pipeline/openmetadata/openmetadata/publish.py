@@ -86,13 +86,11 @@ def run_parameters(uri: str):
         "end",
         "silver_snapshots",
         "now",
-        "pins",
-        "refreshed",
-        "full_refresh",
+        "since",
+        "consumed",
         "windows",
         "sampled",
         "checked",
-        "default",
         "to",
         "from",
         "until",
@@ -100,7 +98,6 @@ def run_parameters(uri: str):
         "epoch",
         "seed",
         "counts",
-        "observed",
         "gate",
     )
     return {key: report.get(key) for key in fields if key in report or key in ("start", "end", "silver_snapshots")}

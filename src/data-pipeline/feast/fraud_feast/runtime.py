@@ -31,12 +31,11 @@ def config(*, online=False):
 
     if online:
         values["offline_store"] = {"type": "file"}
-        values.pop("batch_engine")
     values = expand(values)
     if not online:
-        if os.environ.get("SPARK_MASTER"):
-            values["offline_store"]["spark_conf"]["spark.master"] = os.environ["SPARK_MASTER"]
-        values["batch_engine"]["spark_conf"] = values["offline_store"]["spark_conf"]
+        values["offline_store"]["spark_conf"]["spark.master"] = os.environ.get(
+            "SPARK_MASTER", "local[*]"
+        )
     return RepoConfig(**values)
 
 

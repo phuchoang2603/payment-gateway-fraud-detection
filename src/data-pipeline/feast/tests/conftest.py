@@ -76,7 +76,6 @@ def feature_store(tmp_path, redis_address, monkeypatch):
             "key_ttl_seconds": 2764800,
         },
         offline_store={"type": "spark", "spark_conf": {"spark.sql.session.timeZone": "UTC"}},
-        batch_engine={"type": "spark.engine"},
         materialization={"pull_latest_features": True},
     )
     store = FeatureStore(config=configuration)

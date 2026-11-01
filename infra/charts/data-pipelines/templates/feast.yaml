@@ -29,8 +29,7 @@ spec:
   onExit: publish
   arguments:
     parameters:
-      - {name: start, value: ""}
-      - {name: end, value: ""}
+      - {name: since, value: ""}
   podMetadata:
     labels:
       app.kubernetes.io/name: data-pipelines
@@ -42,27 +41,41 @@ spec:
       steps:
         - - {name: materialize, template: materialize}
         - - {name: check, template: check}
-        - - {name: consume-state, template: consume-state}
     - name: materialize
-      resource:
-        action: create
-        setOwnerReference: true
-        successCondition: status.currentState.currentStateSummary == ResourceReleased
-        failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
-        manifest: |
-          {{- include "data-pipelines.spark-application" (dict "root" $ "main" "" "mainFile" "local:///opt/data-pipeline/feast/.venv/lib/python3.12/site-packages/fraud_feast/materialize.py" "python" "/opt/data-pipeline/feast/.venv/bin/python" "feast" true "product" "feature-store" "stage" "materialize" "sizing" (index .Values.spark.profiles .Values.featureStore.profile) "extraEnv" (list (dict "name" "RUN_REPORT" "value" $report) (dict "name" "START_DAY" "value" "{{workflow.parameters.start}}") (dict "name" "END_DAY" "value" "{{workflow.parameters.end}}"))) | nindent 10 }}
-    {{- range $name, $args := dict "check" (list) "consume-state" (list "--publish") }}
-    - name: {{ $name }}
       container:
-        image: {{ include "data-pipelines.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
+        image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
+        command: [/opt/data-pipeline/feast/.venv/bin/python, -m, fraud_feast.materialize]
+        env:
+          - {name: SPARK_MASTER, value: "local[*]"}
+          - {name: PYSPARK_PYTHON, value: /opt/data-pipeline/feast/.venv/bin/python}
+          - {name: SPARK_LOCAL_DIRS, value: /tmp/spark}
+          - name: PYSPARK_SUBMIT_ARGS
+            value: {{ printf "--driver-memory %s pyspark-shell" .Values.featureStore.driverMemory | quote }}
+          - name: DP_LOOKBACK_DAYS
+            value: {{ .Values.pipeline.lookbackDays | quote }}
+          - name: SINCE_DAY
+            value: {{ "{{workflow.parameters.since}}" | quote }}
+          - name: RUN_REPORT
+            value: {{ $report | quote }}
+          {{- include "data-pipelines.env" $ | nindent 10 }}
+          {{- include "data-pipelines.feastEnv" $ | nindent 10 }}
+        resources:
+          {{- toYaml .Values.featureStore.materializeResources | nindent 10 }}
+        volumeMounts:
+          - {name: spill, mountPath: /tmp/spark}
+      volumes:
+        - name: spill
+          emptyDir:
+            sizeLimit: {{ .Values.featureStore.spillSize }}
+    - name: check
+      container:
+        image: {{ include "data-pipelines.image" (dict "image" .Values.images.feast "global" .Values.global) | quote }}
         command: [python, -m, fraud_feast.check_online]
-        args: {{ $args | toJson }}
         env:
           - name: RUN_REPORT
             value: {{ $report | quote }}
           {{- include "data-pipelines.env" $ | nindent 10 }}
           {{- include "data-pipelines.feastEnv" $ | nindent 10 }}
-    {{- end }}
     {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "feast-materialize" "dataset" .Values.bronze.datasetVersion "report" $report) | nindent 4 }}
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -91,7 +104,6 @@ spec:
   onExit: publish
   arguments:
     parameters:
-      - {name: to, value: offline, enum: [online, offline]}
       - {name: from}
       - {name: until}
   podMetadata:
@@ -101,11 +113,11 @@ spec:
     - name: replay
       synchronization:
         mutexes:
-          - name: {{ "feast-push-{{workflow.parameters.to}}" | quote }}
+          - name: feast-push-online
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.feast "global" .Values.global) | quote }}
         command: [python, -m, fraud_feast.push_job]
-        args: [--to, {{ "{{workflow.parameters.to}}" | quote }}, --from, {{ "{{workflow.parameters.from}}" | quote }}, --until, {{ "{{workflow.parameters.until}}" | quote }}]
+        args: [--to, online, --from, {{ "{{workflow.parameters.from}}" | quote }}, --until, {{ "{{workflow.parameters.until}}" | quote }}]
         env:
           - name: FEATURE_EPOCH
             value: {{ .Values.featureStore.epoch | quote }}
@@ -117,5 +129,5 @@ spec:
             value: {{ printf "%s/replay/{{workflow.name}}.json" .Values.featureStore.reportRoot | quote }}
           {{- include "data-pipelines.env" . | nindent 10 }}
           {{- include "data-pipelines.feastEnv" . | nindent 10 }}
-    {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "feast-push-{{workflow.parameters.to}}" "dataset" .Values.bronze.datasetVersion "report" (printf "%s/replay/{{workflow.name}}.json" .Values.featureStore.reportRoot)) | nindent 4 }}
+    {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "feast-push-online" "dataset" .Values.bronze.datasetVersion "report" (printf "%s/replay/{{workflow.name}}.json" .Values.featureStore.reportRoot)) | nindent 4 }}
 {{- end }}

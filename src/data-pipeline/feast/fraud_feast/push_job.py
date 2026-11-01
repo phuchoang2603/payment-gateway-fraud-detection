@@ -3,19 +3,14 @@ import hashlib
 import json
 import os
 import signal
-import tempfile
 import threading
 import time
 from datetime import UTC, datetime, timedelta
-from functools import reduce
-from pathlib import Path
 
 import pandas as pd
 import pyarrow as pa
-import pyarrow.parquet as pq
 from confluent_kafka import Consumer, KafkaError, TopicPartition
 from feast.data_source import PushMode
-from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan, Or
 
 from fraud_feast.apply import stream_schema
 from fraud_feast.contracts.features.v2.features_pb2 import SnapshotUpdate
@@ -146,7 +141,7 @@ def write_online(feature_store, view, rows, fields, *, push=False):
         else:
             feature_store.write_to_online_store(view, present)
     if missing.any():
-        # Feast 0.67's public write skips all-null rows, including coverage and deletion tombstones.
+        # Feast 0.67's public write skips all-null rows, including unknown coverage.
         feature_store._get_provider().ingest_df(
             feature_store.get_feature_view(view), data.loc[missing]
         )
@@ -162,23 +157,6 @@ def watermarks(table, epoch):
 
 def properties(epoch, offsets):
     return {"kafka.epoch": epoch, "kafka.offsets": json.dumps(offsets, sort_keys=True)}
-
-
-def offset_filter(epoch, starts, ends):
-    partitions = [
-        And(
-            EqualTo("_kafka_partition", partition),
-            And(
-                GreaterThanOrEqual("_kafka_offset", start),
-                LessThan("_kafka_offset", ends[partition]),
-            ),
-        )
-        for partition, start in starts.items()
-        if start < ends[partition]
-    ]
-    if not partitions:
-        raise ValueError("empty replay range")
-    return And(EqualTo("epoch", epoch), reduce(Or, partitions))
 
 
 class OfflineWriter:
@@ -209,30 +187,6 @@ class OfflineWriter:
                 else:
                     with transaction.update_snapshot(
                         snapshot_properties=properties(self.epoch, ends)
-                    ).fast_append():
-                        pass
-
-    def validate_replay(self, starts, ends):
-        for table in self.tables.values():
-            table.refresh()
-            mark = watermarks(table, self.epoch)
-            if any(ends[p] > mark.get(p, 0) for p in starts):
-                raise ValueError("offline replay extends past the committed watermark")
-
-    def replay(self, files, starts, ends):
-        self.validate_replay(starts, ends)
-        predicate = offset_filter(self.epoch, starts, ends)
-        for scope, table in self.tables.items():
-            prior = watermarks(table, self.epoch)
-            with table.transaction() as transaction:
-                transaction.delete(predicate, snapshot_properties=properties(self.epoch, prior))
-                for path in files[scope]:
-                    transaction.append(
-                        pq.read_table(path), snapshot_properties=properties(self.epoch, prior)
-                    )
-                if not files[scope]:
-                    with transaction.update_snapshot(
-                        snapshot_properties=properties(self.epoch, prior)
                     ).fast_append():
                         pass
 
@@ -312,6 +266,8 @@ def main():
         parser.error("--from and --until are required together")
     if bool(args.history_start) != bool(args.history_end):
         parser.error("--history-start and --history-end are required together")
+    if args.start and args.to != "online":
+        parser.error("bounded replay is online only")
     epoch = os.environ["FEATURE_EPOCH"]
     if epoch not in epochs():
         raise ValueError("push epoch is not selected by the repository")
@@ -356,8 +312,6 @@ def main():
     if replay:
         starts = resolve_range(consumer, topic, args.start, partitions)
         ends = resolve_range(consumer, topic, args.until, partitions)
-        if writer:
-            writer.validate_replay(starts, ends)
     elif writer:
         starts, ends = writer.resume(partitions), None
     else:
@@ -370,46 +324,30 @@ def main():
         }
         ends = None
     retained(consumer, topic, starts, ends)
-    files = {scope: [] for scope in KEYS}
     written = 0
     try:
-        with tempfile.TemporaryDirectory() as directory:
-            for messages, offsets in batches(consumer, topic, starts, ends, stopped):
-                rows = {scope: [] for scope in KEYS}
-                for message in messages:
-                    scope, row, _ = decode(message, epoch)
-                    rows[scope].append(row)
-                if writer and replay:
-                    for scope, values in rows.items():
-                        if values:
-                            path = Path(directory) / f"{scope}-{len(files[scope])}.parquet"
-                            pq.write_table(
-                                pa.Table.from_pylist(
-                                    values, schema=stream_schema(scope).as_arrow()
-                                ),
-                                path,
-                            )
-                            files[scope].append(path)
-                elif writer:
-                    writer.append(rows, offsets)
-                else:
-                    for scope in KEYS:
-                        write_online(
-                            feature_store,
-                            f"{scope}_stream",
-                            rows[scope],
-                            STREAM_FIELDS[scope],
-                            push=True,
-                        )
-                if not replay:
-                    consumer.commit(
-                        offsets=[TopicPartition(topic, p, offset) for p, offset in offsets.items()],
-                        asynchronous=False,
+        for messages, offsets in batches(consumer, topic, starts, ends, stopped):
+            rows = {scope: [] for scope in KEYS}
+            for message in messages:
+                scope, row, _ = decode(message, epoch)
+                rows[scope].append(row)
+            if writer:
+                writer.append(rows, offsets)
+            else:
+                for scope in KEYS:
+                    write_online(
+                        feature_store,
+                        f"{scope}_stream",
+                        rows[scope],
+                        STREAM_FIELDS[scope],
+                        push=True,
                     )
-                written += len(messages)
-            if writer and replay:
-                retained(consumer, topic, starts, ends)
-                writer.replay(files, starts, ends)
+            if not replay:
+                consumer.commit(
+                    offsets=[TopicPartition(topic, p, offset) for p, offset in offsets.items()],
+                    asynchronous=False,
+                )
+            written += len(messages)
         if os.environ.get("RUN_REPORT"):
             write_json(
                 os.environ["RUN_REPORT"],

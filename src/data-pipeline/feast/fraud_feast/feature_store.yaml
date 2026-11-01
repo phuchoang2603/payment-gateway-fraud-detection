@@ -30,7 +30,5 @@ offline_store:
     spark.sql.catalog.lake.s3.access-key-id: ${AWS_ACCESS_KEY_ID}
     spark.sql.catalog.lake.s3.secret-access-key: ${AWS_SECRET_ACCESS_KEY}
     spark.sql.catalog.lake.client.region: ${AWS_REGION}
-batch_engine:
-  type: spark.engine
 materialization:
   pull_latest_features: true

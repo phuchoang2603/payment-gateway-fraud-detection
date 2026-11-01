@@ -14,7 +14,7 @@ The catalog SHALL record the streaming feature job as a pipeline with its runs, 
 - **THEN** the streaming job, the push jobs and the feature server keep running
 
 ### Requirement: Feature store lineage and status
-The catalog SHALL show lineage from the feature journal topic into the `feast-push-online` pipeline, and through the `feast-push-offline` pipeline to `gold.feat_stream_customer` and `gold.feat_stream_payment_method`. It SHALL also show lineage from `gold.feat_customer_daily` and `gold.feat_payment_method_daily` into the `feast-materialize` pipeline. `feast-materialize` SHALL record each run's status, the window or explicit range, and the number of refreshed entities. Push replays SHALL record their range. The online store is not a catalogued asset.
+The catalog SHALL show lineage from the feature journal topic into the `feast-push-online` pipeline, and through the `feast-push-offline` pipeline to `gold.feat_stream_customer` and `gold.feat_stream_payment_method`. It SHALL also show lineage from `gold.feat_customer_daily` and `gold.feat_payment_method_daily` into the `feast-materialize` pipeline. `feast-materialize` SHALL record each run's status, materialization windows, optional since, and the sample count. Push replays SHALL record their range. The online store is not a catalogued asset.
 
 #### Scenario: Trace the journal downstream
 

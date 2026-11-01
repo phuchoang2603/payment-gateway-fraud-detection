@@ -4,7 +4,7 @@ from fraud_feast.runtime import config
 
 
 @pytest.mark.parametrize("master", [None, "local[*]"])
-def test_spark_master_uses_environment_or_preserves_spark_application(master, monkeypatch):
+def test_spark_master_defaults_to_local_and_allows_environment_override(master, monkeypatch):
     values = {
         "FEAST_REDIS_PASSWORD": "test",
         "FEAST_REDIS_ADDR": "localhost:6379",
@@ -27,6 +27,5 @@ def test_spark_master_uses_environment_or_preserves_spark_application(master, mo
     else:
         monkeypatch.setenv("SPARK_MASTER", master)
     configuration = config()
-    assert configuration.offline_store.spark_conf.get("spark.master") == master
-    assert configuration.batch_engine.spark_conf == configuration.offline_store.spark_conf
+    assert configuration.offline_store.spark_conf.get("spark.master") == (master or "local[*]")
     assert config(online=True).offline_store.type == "file"

@@ -4,7 +4,7 @@
 
 Velocity and historical-feature retrieval SHALL have separate deadlines, statuses and policy modes. Initial velocity checks SHALL be observe-only. Historical-feature retrieval SHALL be shadow-only wherever it is enabled. It SHALL be enabled only where the online feature store runs.
 
-- **Request.** Retrieval SHALL request the configured model feature service in one call, keyed by the integration, customer and payment-method natural keys.
+- **Request.** Retrieval SHALL request the configured model feature service in one call, keyed by the integration, customer and payment-method natural keys and raw request-context fields in the same entities map. Feast SHALL compute model request features in request_features; rules SHALL retain their own logic.
 - **Statuses.** It SHALL record a status for each view:
   - `missing` when the entity has no row;
   - `expired` when the scoring time minus the view's event timestamp exceeds the view's TTL;
@@ -12,7 +12,7 @@ Velocity and historical-feature retrieval SHALL have separate deadlines, statuse
   - `timeout` or `error` for dependency failures and malformed responses;
   - `available` otherwise.
 - **Unknown values.** Values of a view that is not available SHALL be recorded as unknown, never as zero. Null values in an available view SHALL remain unknown.
-- **Evidence.** Evidence SHALL record the feature service name, each view's status, event timestamp, read time and values.
+- **Evidence.** Evidence SHALL record the feature service name, each view's status, event timestamp, read time and values, including nullable booleans from request_features. Request features SHALL be available at the scoring time, independently of stored-view TTLs.
 
 Failure of either dependency SHALL be recorded without changing the existing valid rules decision. A required dependency or assessment execution failure SHALL block authorization with an operational error, not fabricate a fraud decline or silently approve. Future model enforcement SHALL require an explicit compatible missing-feature policy. Counter observations and snapshot values SHALL remain separate populations.
 

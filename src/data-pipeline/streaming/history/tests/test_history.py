@@ -90,10 +90,10 @@ def test_clock_overtaking_replay_matches_reference_and_audits_duplicates():
         )
     }
     audit = Audit()
-    audit.observe(raw, 0)
-    audit.observe(raw, 1)
+    audit.observe(raw)
+    audit.observe(raw)
     assert audit.counts["duplicates"] == 1
-    assert list(audit.accepted) == [0]
+    assert audit.counts["accepted"] == 1
 
 
 def test_audit_24_hour_lateness_boundary():
@@ -104,6 +104,6 @@ def test_audit_24_hour_lateness_boundary():
             recorded - timedelta(days=1, microseconds=delta)
         ).isoformat()
         audit = Audit()
-        audit.observe(encode(row), 0)
+        audit.observe(encode(row))
         assert audit.counts["too_late"] == late
-        assert len(audit.accepted) == 1 - late
+        assert audit.counts["accepted"] == 1 - late

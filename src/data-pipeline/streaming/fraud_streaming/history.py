@@ -1,5 +1,4 @@
 import argparse
-import hashlib
 import json
 import os
 import time
@@ -16,7 +15,6 @@ from confluent_kafka.admin import AdminClient, NewTopic
 from google.protobuf.json_format import ParseDict
 from pyiceberg.catalog import load_catalog
 from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan
-from pyroaring import BitMap
 
 from fraud_streaming.model import DAY, DEDUP_RETENTION, dedup_content, dedup_status
 from fraud_streaming.wire import PaymentEvent, decode
@@ -49,11 +47,10 @@ class Audit:
         self.events = {}
         self.attempts = {}
         self.expiry = []
-        self.accepted = BitMap()
         self.counts = Counter(events=0, attempts=0, duplicates=0, too_late=0)
         self.now = 0
 
-    def observe(self, raw, offset):
+    def observe(self, raw):
         import heapq
 
         fact, recorded = decode(raw)
@@ -77,13 +74,14 @@ class Audit:
             content = dedup_content(scope, fact)
             status = dedup_status(seen.get(key), content)
             if status == "conflict":
-                raise ValueError("conflicting Bronze attempt in replay")
+                self.counts["conflicts"] += 1
+                return
             if status == "duplicate":
                 self.counts["duplicates"] += 1
                 return
             seen[key] = content
             heapq.heappush(self.expiry, (fact.started_at + DEDUP_RETENTION, scope, key))
-        self.accepted.add(offset)
+        self.counts["accepted"] += 1
 
 
 def lake():
@@ -223,7 +221,7 @@ def seed(start, end):
         for batch in reader:
             for row in batch.to_pylist():
                 raw = encode(row)
-                audit.observe(raw, offset)
+                audit.observe(raw)
                 producer.produce(
                     input_topic,
                     partition=0,
@@ -244,8 +242,6 @@ def seed(start, end):
             "counts": dict(audit.counts),
             "input_end": offset,
             "clock_end": sequence,
-            "accepted": len(audit.accepted),
-            "accepted_sha256": hashlib.sha256(audit.accepted.serialize()).hexdigest(),
             "events_per_second": offset / max(time.monotonic() - began, 1),
             "done": True,
         }

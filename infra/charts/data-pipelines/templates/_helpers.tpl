@@ -289,7 +289,7 @@ metadata:
     dp-stage: {{ .stage }}
     dp-workflow: {{ "{{workflow.name}}" | quote }}
 spec:
-  pyFiles: {{ .mainFile | default (printf "local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/batch/%s.py" .main) | quote }}
+  pyFiles: {{ printf "local:///opt/data-pipeline/batch/.venv/lib/python3.12/site-packages/batch/%s.py" .main | quote }}
   runtimeVersions:
     sparkVersion: "4.1.3"
   sparkConf:
@@ -324,7 +324,7 @@ spec:
     spark.storage.decommission.enabled: "true"
     spark.storage.decommission.shuffleBlocks.enabled: "true"
     spark.storage.decommission.rddBlocks.enabled: "true"
-    spark.pyspark.python: {{ .python | default "/opt/data-pipeline/batch/.venv/bin/python" | quote }}
+    spark.pyspark.python: "/opt/data-pipeline/batch/.venv/bin/python"
     {{- with .root.Values.sparkEventLogDir }}
     spark.eventLog.enabled: "true"
     spark.eventLog.dir: {{ . | quote }}
@@ -356,9 +356,6 @@ spec:
                 ephemeral-storage: {{ $sizing.driver.ephemeralStorage | quote }}
             env:
               {{- include "data-pipelines.env" .root | nindent 14 }}
-              {{- if .feast }}
-              {{- include "data-pipelines.feastEnv" .root | nindent 14 }}
-              {{- end }}
               - name: SPARK_SHUFFLE_PARTITIONS
                 value: {{ $sizing.shufflePartitions | quote }}
               {{- if .wap }}
@@ -389,9 +386,6 @@ spec:
                 ephemeral-storage: {{ $sizing.executor.ephemeralStorage | quote }}
             env:
               {{- include "data-pipelines.env" .root | nindent 14 }}
-              {{- if .feast }}
-              {{- include "data-pipelines.feastEnv" .root | nindent 14 }}
-              {{- end }}
 {{- end -}}
 
 {{- define "data-pipelines.feastEnv" -}}
@@ -401,8 +395,6 @@ spec:
   value: {{ .Values.featureStore.registry | quote }}
 - name: FEAST_STREAM_EPOCHS
   value: {{ .Values.featureStore.epochs | quote }}
-- name: FEAST_MATERIALIZE_STATE
-  value: {{ .Values.featureStore.materializeState | quote }}
 - name: FEAST_REDIS_ADDR
   value: {{ .Values.featureStore.redisAddress | quote }}
 - name: FEAST_REDIS_PASSWORD

@@ -25,28 +25,27 @@ This change builds that in the shape of the coursework's Feast lecture and the `
   - **Stream views:** `customer_stream` and `payment_method_stream`, as `PushSource`s whose offline source is `gold.feat_stream_customer` and `gold.feat_stream_payment_method`, filtered to the configured epochs.
   - **TTLs** follow the longest window plus delay: 31 days 12 hours for the daily views, 24 hours 5 minutes for the stream views. The documentation records the reasons.
   - **Registry:** persistent, in object storage, written by a deploy-time `feast apply`.
-- **One feature service, `fraud_model_v1`.** It covers all four views. Training requests it through `get_historical_features`, with `gold.label_attempt`'s simulation-truth rows as the entity dataframe at plain `started_at`, and so does Go Fraud. Stream rows become visible one microsecond after they are written, so a snapshot that counts the scored attempt is never returned. Training retrieval runs Feast's Spark offline store in local mode, in one Kubeflow Pipelines step.
+- **One feature service, `fraud_model_v1`.** It covers the four stored views and the pure Python request_features on-demand view. Training requests it through `get_historical_features`, with `gold.label_attempt`'s simulation-truth rows as the entity dataframe at plain `started_at`, and so does Go Fraud. Stream rows become visible one microsecond after they are written, so a snapshot that counts the scored attempt is never returned. Training retrieval runs Feast's Spark offline store in local mode, in one Kubeflow Pipelines step.
 - **Push jobs.** One `push_job` module runs as two Deployments; each commits its Kafka offsets only after its write:
   - **A** (`--to online`) pushes journal snapshots to Redis through `FeatureStore.push`;
   - **B** (`--to offline`) appends them to the stream tables with PyIceberg, with the Kafka offsets in the Iceberg commit.
 
-  Both can replay an explicit offset or time range as a bounded job, without duplicating rows or moving a key backwards.
+  Only A replays an explicit offset or time range. B has one exactly-once append path.
 - **Stream history by Kappa replay.** An on-demand `stream-history` workflow, run month by month:
   1. it seeds isolated topics from Bronze;
   2. it replays them through the live Flink job in logical-clock mode under epoch `history-v19`;
-  3. push job B overwrites the month's days in the stream tables.
+  3. the workflow deletes the month's history rows, then B appends through its normal path.
 
   It takes explicit start and end days, and rerunning a range replaces the same rows.
 - **Materialization.** A `feast-materialize` Argo workflow runs on its own daily schedule after `dp-daily`, and on demand after a `dp-backfill`:
-  1. it runs `materialize-incremental` for the daily views on Spark;
-  2. it refreshes the entities in the day ranges DP3 rewrote, read from each gold commit's `dp3.range`;
-  3. a `check_online` stage validates the result.
+  1. it runs local Spark materialization with lookback plus one day of overlap;
+  2. a check_online stage validates a sample of newest keys.
 
-  An explicit start and end day refreshes the entities in that range instead.
-- **Idempotent runs.** Rerunning the stream history, materialization or a push replay over the same range leaves the same rows and values. Each one's explicit range overrides its watermark.
+  An optional since day starts a backfill reload, always ending now. Deleted entities retain old online values until TTL.
+- **Idempotent runs.** History deletes and rebuilds its month; online replay keeps newest snapshots; materialization writes latest rows through now.
 - **Arrow.** Arrow transfer is enabled wherever data crosses into Python: the Spark offline store's Arrow setting, `to_arrow()` retrieval, and push job B's Arrow appends.
 - **Go Fraud (BREAKING for the evidence contract).**
-  - It makes one `get-online-features` call for `fraud_model_v1`, with natural keys.
+  - It makes one `get-online-features` call for `fraud_model_v1`, with natural keys and raw request fields, transformed by Feast.
   - It applies the same TTL rule as training, at the scoring time.
   - It stays shadow-only, and rules remain authoritative.
   - Its evidence moves from `features.v1` into a fraud-owned `fraud.v1` message, with the old field number reserved.
@@ -71,7 +70,7 @@ This change builds that in the shape of the coursework's Feast lecture and the `
 
 ### New Capabilities
 
-- `feature-store`: covers the Feast project and its registry; the natural-key entities; the daily and stream views with their TTLs; the single feature service; point-in-time offline retrieval with Arrow; the push jobs and their replay; the stream history replay; incremental materialization with rerun refreshes and an online check; and online serving.
+- `feature-store`: covers the Feast project and its registry; the natural-key entities; the daily and stream views with their TTLs; the single feature service; point-in-time offline retrieval with Arrow; the push jobs and their replay; the stream history replay; materialization with overlap and an online check; and online serving.
 
 ### Modified Capabilities
 
@@ -107,7 +106,6 @@ This change builds that in the shape of the coursework's Feast lecture and the `
   - `data` network paths;
   - the Flink connector in OpenMetadata ingestion;
   - bucket write access for `feast/`;
-  - on-demand capacity for one more Spark driver;
   - spot capacity for the multi-day history FlinkDeployment.
 
   See design, Platform requests.

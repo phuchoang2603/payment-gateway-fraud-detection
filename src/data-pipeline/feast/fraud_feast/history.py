@@ -1,20 +1,17 @@
 import argparse
-import hashlib
 import json
 import os
 import time
 import urllib.request
 from collections import Counter
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 
-import pyarrow as pa
 from confluent_kafka import Consumer, TopicPartition
 from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan
-from pyroaring import BitMap
 
-from fraud_feast.apply import ensure_tables, stream_schema
+from fraud_feast.apply import ensure_tables
 from fraud_feast.lake import catalog, read_json, write_json
-from fraud_feast.push_job import decode
+from fraud_feast.push_job import OfflineWriter, decode, properties
 from fraud_feast.repo import KEYS, TABLES
 
 
@@ -23,70 +20,92 @@ def rest(path):
         return json.load(response)
 
 
-def completed(consumer, seed):
+def consumed(consumer, seed):
     epoch = os.environ["FEATURE_EPOCH"]
-    source = f"payments.events.{epoch}"
-    clock = f"fraud.clock.{epoch}"
-    offsets = consumer.committed([TopicPartition(source, 0), TopicPartition(clock, 0)], timeout=30)
-    return offsets[0].offset >= seed["input_end"] and offsets[1].offset >= seed["clock_end"]
+    offsets = consumer.committed(
+        [TopicPartition(f"payments.events.{epoch}", 0), TopicPartition(f"fraud.clock.{epoch}", 0)],
+        timeout=30,
+    )
+    result = {"input": offsets[0].offset, "clock": offsets[1].offset}
+    return (
+        result
+        if result["input"] >= seed["input_end"] and result["clock"] >= seed["clock_end"]
+        else None
+    )
 
 
 def checkpoints():
-    jobs = rest("/jobs/overview")["jobs"]
-    running = [job["jid"] for job in jobs if job["state"] == "RUNNING"]
+    running = [job["jid"] for job in rest("/jobs/overview")["jobs"] if job["state"] == "RUNNING"]
     if len(running) != 1:
         raise ValueError("history must have exactly one running Flink job")
     job = running[0]
-    result = rest(f"/jobs/{job}/checkpoints")
-    latest = result.get("latest", {}).get("completed")
+    latest = rest(f"/jobs/{job}/checkpoints").get("latest", {}).get("completed")
     return job, latest["id"] if latest else -1
 
 
 def counters(job):
-    result = Counter(duplicates=0, too_late=0, rejects=0)
+    result = Counter(duplicates=0, too_late=0, rejects=0, decode_rejects=0)
     for vertex in rest(f"/jobs/{job}")["vertices"]:
         prefix = f"/jobs/{job}/vertices/{vertex['id']}/subtasks/metrics"
-        available = rest(prefix)
         names = [
             item["id"]
-            for item in available
+            for item in rest(prefix)
             if item["id"].endswith(("duplicates_dropped", "too_late", "rejected"))
         ]
         if names:
             from urllib.parse import urlencode
 
             for metric in rest(prefix + "?" + urlencode({"get": ",".join(names), "agg": "sum"})):
+                name = metric["id"]
+                count = int(float(metric.get("sum", 0)))
                 key = (
                     "duplicates"
-                    if metric["id"].endswith("duplicates_dropped")
+                    if name.endswith("duplicates_dropped")
                     else "too_late"
-                    if metric["id"].endswith("too_late")
+                    if name.endswith("too_late")
                     else "rejects"
                 )
-                result[key] += int(float(metric.get("sum", 0)))
+                result[key] += count
+                if name.endswith("rejected") and any(
+                    f"reject_class.{kind}." in name
+                    for kind in ("undecodable", "invalid_event", "invalid_context")
+                ):
+                    result["decode_rejects"] += count
     return dict(result)
 
 
-def staging_names():
-    run = os.environ["RUN_ID"].replace("-", "_")
-    if not run.replace("_", "").isalnum():
-        raise ValueError("invalid history run id")
-    return {scope: f"gold._history_{run}_{scope}" for scope in KEYS}
+def bounds(start, end):
+    first = datetime.combine(date.fromisoformat(start), datetime.min.time(), UTC)
+    last = datetime.combine(date.fromisoformat(end), datetime.min.time(), UTC)
+    if not os.environ["FEATURE_EPOCH"].startswith("history-") or first >= last:
+        raise ValueError("history requires a history epoch and a nonempty range")
+    return first, last
+
+
+def prepare(start, end):
+    first, last = bounds(start, end)
+    epoch = os.environ["FEATURE_EPOCH"]
+    lake = catalog()
+    ensure_tables(lake)
+    predicate = And(
+        EqualTo("epoch", epoch),
+        And(GreaterThanOrEqual("event_timestamp", first), LessThan("event_timestamp", last)),
+    )
+    for name in TABLES.values():
+        table = lake.load_table(name)
+        with table.transaction() as transaction:
+            transaction.delete(predicate)
+            with transaction.update_snapshot(
+                snapshot_properties=properties(epoch, {0: 0})
+            ).fast_append():
+                pass
 
 
 def run(start, end):
+    first, last = bounds(start, end)
     epoch = os.environ["FEATURE_EPOCH"]
-    if not epoch.startswith("history-") or date.fromisoformat(start) >= date.fromisoformat(end):
-        raise ValueError("history requires a history epoch and a nonempty range")
     lake = catalog()
-    ensure_tables(lake)
-    names = staging_names()
-    for scope, name in names.items():
-        if lake.table_exists(name):
-            lake.purge_table(name)
-        source = lake.load_table(TABLES[scope])
-        lake.create_table(name, schema=stream_schema(scope), partition_spec=source.spec())
-    tables = {scope: lake.load_table(name) for scope, name in names.items()}
+    writer = OfflineWriter({scope: lake.load_table(name) for scope, name in TABLES.items()}, epoch)
     topic = os.environ["FEATURE_UPDATE_TOPIC"]
     consumer = Consumer(
         {
@@ -99,15 +118,11 @@ def run(start, end):
             "allow.auto.create.topics": False,
         }
     )
-    consumer.assign([TopicPartition(topic, 0, 0)])
-    observed = {scope: BitMap() for scope in KEYS}
+    start_offset = writer.resume([0])[0]
+    consumer.assign([TopicPartition(topic, 0, start_offset)])
     rows_written = Counter()
-    first = datetime.combine(date.fromisoformat(start), datetime.min.time(), UTC)
-    last = datetime.combine(date.fromisoformat(end), datetime.min.time(), UTC)
-    seed = None
-    checkpoint = None
-    ends = None
-    position = 0
+    seed = progress = checkpoint = ends = None
+    position = start_offset
     last_check = 0
     deadline = time.monotonic() + int(os.environ.get("HISTORY_TIMEOUT_SECONDS", "259200"))
     try:
@@ -119,54 +134,39 @@ def run(start, end):
             for message in messages:
                 if message.error():
                     raise RuntimeError("history journal consumer failed")
-                scope, row, update = decode(message, epoch)
-                for progress in update.source_progress:
-                    if (
-                        progress.topic == f"payments.events.{epoch}"
-                        and progress.partition == 0
-                        and progress.consumed_offset >= 0
-                    ):
-                        observed[scope].add(progress.consumed_offset)
+                scope, row, _ = decode(message, epoch)
                 if first <= row["event_timestamp"] < last:
                     rows[scope].append(row)
                 position = message.offset() + 1
-            for scope, values in rows.items():
-                if values:
-                    tables[scope].append(
-                        pa.Table.from_pylist(values, schema=stream_schema(scope).as_arrow())
-                    )
+            if messages:
+                writer.append(rows, {0: position})
+                consumer.commit(offsets=[TopicPartition(topic, 0, position)], asynchronous=False)
+                for scope, values in rows.items():
                     rows_written[scope] += len(values)
             if ends is None and time.monotonic() - last_check >= 5:
                 seed = read_json(os.environ["HISTORY_SEED_REPORT"])
                 if seed and seed.get("failed"):
                     raise RuntimeError("history seed failed")
-                if seed and seed.get("done") and completed(consumer, seed):
-                    job, latest = checkpoints()
-                    if checkpoint is None:
-                        checkpoint = latest
-                    elif latest >= checkpoint + 2:
-                        ends = consumer.get_watermark_offsets(TopicPartition(topic, 0), timeout=30)[
-                            1
-                        ]
+                if seed and seed.get("done"):
+                    progress = consumed(consumer, seed)
+                    if progress:
+                        job, latest = checkpoints()
+                        if checkpoint is None:
+                            checkpoint = latest
+                        elif latest >= checkpoint + 2:
+                            ends = consumer.get_watermark_offsets(
+                                TopicPartition(topic, 0), timeout=30
+                            )[1]
                 last_check = time.monotonic()
-        if seed is None:
-            raise ValueError("history seed report is missing")
         job, _ = checkpoints()
         report = {
             "start": start,
             "end": end,
             "epoch": epoch,
-            "staging": names,
             "seed": seed,
             "counts": counters(job),
             "rows": dict(rows_written),
-            "observed": {
-                scope: {
-                    "count": len(bitmap),
-                    "sha256": hashlib.sha256(bitmap.serialize()).hexdigest(),
-                }
-                for scope, bitmap in observed.items()
-            },
+            "consumed": progress,
             "gate": False,
         }
         write_json(os.environ["RUN_REPORT"], report)
@@ -175,58 +175,33 @@ def run(start, end):
 
 
 def validate_gate(report):
-    counts = report["counts"]
-    seed = report["seed"]
-    if counts["rejects"] or any(counts[k] != seed["counts"][k] for k in ("duplicates", "too_late")):
-        raise ValueError("history rejection counts differ from Bronze")
-    for scope in KEYS:
-        if (
-            report["observed"][scope]["count"] != seed["accepted"]
-            or report["observed"][scope]["sha256"] != seed["accepted_sha256"]
-        ):
-            raise ValueError("history snapshots are missing seeded attempts")
-
-
-def publish_day(target, source, epoch, day):
-    start = datetime.combine(day, datetime.min.time(), UTC)
-    end = start + timedelta(days=1)
-    predicate = And(
-        EqualTo("epoch", epoch),
-        And(GreaterThanOrEqual("event_timestamp", start), LessThan("event_timestamp", end)),
-    )
-    with target.transaction() as transaction:
-        transaction.delete(
-            predicate, snapshot_properties={"history.epoch": epoch, "history.day": str(day)}
-        )
-        for batch in source.scan(row_filter=predicate).to_arrow_batch_reader():
-            transaction.append(
-                pa.Table.from_batches([batch]),
-                snapshot_properties={"history.epoch": epoch, "history.day": str(day)},
-            )
+    seed, progress = report["seed"], report["consumed"]
+    if not seed or not seed.get("done") or report["counts"]["decode_rejects"]:
+        raise ValueError("history seed is incomplete or replay has decode rejects")
+    if (
+        not progress
+        or progress["input"] < seed["input_end"]
+        or progress["clock"] < seed["clock_end"]
+    ):
+        raise ValueError("history has not consumed every seeded record")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cleanup", action="store_true")
+    parser.add_argument("action", choices=("prepare", "gate"))
+    parser.add_argument("--start")
+    parser.add_argument("--end")
     args = parser.parse_args()
-    lake = catalog()
-    if args.cleanup:
-        for name in staging_names().values():
-            if lake.table_exists(name):
-                lake.purge_table(name)
-        return
-    uri = os.environ["RUN_REPORT"]
-    report = read_json(uri)
-    validate_gate(report)
-    first, last = date.fromisoformat(report["start"]), date.fromisoformat(report["end"])
-    for scope, name in report["staging"].items():
-        target, source = lake.load_table(TABLES[scope]), lake.load_table(name)
-        day = first
-        while day < last:
-            publish_day(target, source, report["epoch"], day)
-            day += timedelta(days=1)
-    report["gate"] = True
-    write_json(uri, report)
+    if args.action == "prepare":
+        if not args.start or not args.end:
+            parser.error("prepare requires start and end")
+        prepare(args.start, args.end)
+    else:
+        uri = os.environ["RUN_REPORT"]
+        report = read_json(uri)
+        validate_gate(report)
+        report["gate"] = True
+        write_json(uri, report)
 
 
 if __name__ == "__main__":

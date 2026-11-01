@@ -28,8 +28,8 @@ def test_feature_lineage_has_pipeline_only_online_targets_and_history_tables():
 
 def test_replay_history_and_materialization_reports_keep_governance_parameters(tmp_path):
     for report in (
-        {"start": "2025-09-01", "end": "2025-10-01", "refreshed": 12, "pins": {"customer": 42}, "checked": True},
-        {"to": "offline", "from": {"0": 1}, "until": {"0": 10}, "rows": 9},
+        {"start": "2025-09-01", "end": "2025-10-01", "sampled": 12, "since": "2025-09-01", "checked": True},
+        {"to": "online", "from": {"0": 1}, "until": {"0": 10}, "rows": 9},
         {
             "start": "2025-09-01",
             "end": "2025-10-01",
