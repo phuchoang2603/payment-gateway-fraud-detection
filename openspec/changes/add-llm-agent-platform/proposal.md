@@ -86,5 +86,5 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 - **Platform dependency:** the talos-proxmox components in design.md decision 13 must be live in an environment before the chart's resources can reconcile there.
 - **Docs:**
   - new: `docs/llm/inference.md`, `docs/llm/gateway.md`, `docs/llm/observability.md`, `docs/llm/benchmark.md`, `docs/llm/rag.md` (and `docs/llm/agents.md` updated);
-  - updated where behaviour changes: `docs/llm/agents.md`, `docs/overview/roadmap.md`, `docs/overview/architecture.md`, `docs/deployment/cd.md` (applications table), `docs/deployment/security.md` (keys), `docs/data/orchestration-governance.md` (RAG lineage), `docs/_Sidebar.md`.
+  - updated where behaviour changes: `docs/llm/agents.md`, `docs/Home.md` (roadmap, architecture), `docs/deployment/cd.md` (applications table), `docs/deployment/security.md` (keys), `docs/data/orchestration-governance.md` (RAG lineage), `docs/_Sidebar.md`.
 - **No change** to the payment gateway, data pipelines or their contracts. Agents never sit in the payment decision path.

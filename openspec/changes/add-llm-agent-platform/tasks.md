@@ -194,8 +194,8 @@
 - [x] 8.1b Write `docs/llm/rag.md` from the 7.7 and 7.8 runs: corpus, versioning, workflow, stores, checks, lineage, the Web API with its load-test results, and the MCP tool. Done.
 - [x] 8.2 Update only the affected parts of (no single catch-all platform page): Done.
   - `docs/llm/agents.md` (status and component table);
-  - `docs/overview/roadmap.md` (LLM rows and the Knative/KEDA mapping);
-  - `docs/overview/architecture.md` (deployable units);
+  - `docs/Home.md` roadmap (LLM rows and the Knative/KEDA mapping);
+  - `docs/Home.md` architecture (deployable units);
   - `docs/deployment/cd.md` (applications table);
   - `docs/deployment/security.md` (new keys);
   - `docs/deployment/infra.md` (the prod GPU pool's instance type);

@@ -7,7 +7,7 @@ The gateway and its fraud decisioning path. The [verification evidence](../../op
 - [Payment flows](flows.md): identity, checkout and payment-authority contracts, with the checkout and recovery sequence.
 - [Service conventions](conventions.md): code layout, dependency direction and per-service ownership rules.
 - [Docker images](docker.md): image builds for every service.
-- [Platform architecture](../overview/architecture.md): deployable units, ownership boundaries and the full deployment diagram.
+- [Platform architecture](../Home.md#architecture): deployable units, ownership boundaries and the full deployment diagram.
 
 ## Gateway design
 
@@ -47,10 +47,10 @@ The first working slice is hosted checkout → rules-based fraud decision → si
 
 Later gateway work adds authorization/capture and refunds; database sharding follows measured load. Feature serving and model inference arrive through the [ML serving](../ml/serving.md) path.
 
-The domain is in the [proposal](../overview/proposal.md); status is in the [roadmap](../overview/roadmap.md).
+The domain is in the [proposal](../Home.md#domain); status is in the [roadmap](../Home.md#roadmap).
 
 ## Feature-contract boundary
 
-The attempt event carries the immutable checkout context in event schema 3. See [payment flows](flows.md) and the [feature store](../ml/feature-store.md). Rules-only Fraud persists assessment claims and immutable evidence in its own database. Submission counters are observe-only; observation failures preserve valid rules outcomes. Shadow feature retrieval is disabled in every environment until the [feature-store change](../overview/roadmap.md#feature-store-build-order); retrieval acceptance and KServe integration are pending.
+The attempt event carries the immutable checkout context in event schema 3. See [payment flows](flows.md) and the [feature store](../ml/feature-store.md). Rules-only Fraud persists assessment claims and immutable evidence in its own database. Submission counters are observe-only; observation failures preserve valid rules outcomes. Shadow feature retrieval is disabled in every environment until the [feature-store change](../ml/feature-store.md#build-order); retrieval acceptance and KServe integration are pending.
 
 Authorization counts use Redis millisecond time and `(r-window,r]`; retries retain their original registration. Process changes start a conservative 60 s coverage warmup. Runtime variables and initial observation thresholds are in [CD runtime configuration](../deployment/cd.md#runtime-configuration). The Flink controller is installed through `talos-proxmox`; the feature chart owns epoch-scoped paths below `runs/payment-gateway/flink/` in the environment platform bucket and object credentials from gateway Doppler. Checkpoint recovery for the v2 job is covered in CI and [recorded in dev](../data/online.md#restart); outage/load evidence is pending.

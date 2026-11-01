@@ -1,6 +1,6 @@
 # Payment Gateway and Real-Time Fraud Detection
 
-A payment gateway for a refurbished-electronics marketplace, with a real-time fraud decision on every payment attempt. Its events and a synthetic history feed a lakehouse, a feature store and a fraud model, and read-only analyst agents explain declines and risk decisions on top. Synthetic cards only. The [proposal](docs/overview/proposal.md) covers the domain, the data problems and the AI problem.
+A payment gateway for a refurbished-electronics marketplace, with a real-time fraud decision on every payment attempt. Its events and a synthetic history feed a lakehouse, a feature store and a fraud model, and read-only analyst agents explain declines and risk decisions on top. Synthetic cards only. [Home](docs/Home.md) covers the domain, the data problems, the AI problem, the architecture and the roadmap.
 
 - [Overview](#overview)
 - [Ecommerce payment gateway integration](#ecommerce-payment-gateway-integration)
@@ -31,7 +31,7 @@ flowchart LR
     AG --> KS
 ```
 
-Docs: [architecture](docs/overview/architecture.md) · [proposal](docs/overview/proposal.md) · [roadmap](docs/overview/roadmap.md)
+Docs: [domain](docs/Home.md#domain) · [architecture](docs/Home.md#architecture) · [roadmap](docs/Home.md#roadmap)
 
 ## Ecommerce payment gateway integration
 

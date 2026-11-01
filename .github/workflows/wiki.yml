@@ -19,11 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      # The wiki opens on Home; it is the architecture page, with its links rewritten for the docs root.
-      - name: Use the architecture page as the wiki home
-        run: >-
-          sed -E 's#\]\(([A-Za-z0-9_-]+\.md)#](overview/\1#g; s#\]\(\.\./#](#g'
-          docs/overview/architecture.md > docs/Home.md
       # Includes link conversion for nested docs and repository source files.
       - uses: Andrew-Chen-Wang/github-wiki-action@93c86ef70e8354bbd677185b355ba164cb29288f
         with:

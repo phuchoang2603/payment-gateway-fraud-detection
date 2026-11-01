@@ -1,8 +1,4 @@
-**Overview**
-
-- [Proposal](overview/proposal.md)
-- [Architecture](overview/architecture.md)
-- [Roadmap](overview/roadmap.md)
+[Home](Home.md)
 
 **Payment gateway**
 
