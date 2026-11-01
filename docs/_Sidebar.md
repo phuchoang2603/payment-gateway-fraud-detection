@@ -1,5 +1,3 @@
-[Home](Home.md)
-
 **Overview**
 
 - [Proposal](overview/proposal.md)

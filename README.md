@@ -1,13 +1,19 @@
 # Payment Gateway and Real-Time Fraud Detection
 
-An ecommerce payment gateway with real-time fraud decisioning. A refurbished-electronics marketplace sends checkout snapshots; the gateway owns hosted checkout, payment attempts, risk decisions, simulated processing and signed outcome webhooks, using synthetic cards only. Its payment events, together with a reproducible synthetic history, feed a lakehouse, a feature store and a fraud model that predicts, at decision time, whether an attempt is fraudulent. The domain, data problems and AI problem are in the [proposal](docs/overview/proposal.md).
+A payment gateway for a refurbished-electronics marketplace, with a real-time fraud decision on every payment attempt. Its events and a synthetic history feed a lakehouse, a feature store and a fraud model, and read-only analyst agents explain declines and risk decisions on top. Synthetic cards only. The [proposal](docs/overview/proposal.md) covers the domain, the data problems and the AI problem.
 
-## Table of contents
+## Contents
 
 - [System overview](#system-overview)
 - [LLM and agent platform](#llm-and-agent-platform)
-- [Repository structure](#repository-structure)
 - [Documentation](#documentation)
+  - [Overview](#overview)
+  - [Payment gateway](#payment-gateway)
+  - [Data](#data)
+  - [ML](#ml)
+  - [LLM](#llm)
+  - [Deployment](#deployment)
+- [Repository structure](#repository-structure)
 - [Getting started](#getting-started)
 
 ## System overview
@@ -30,15 +36,43 @@ flowchart LR
     F -.->|"planned"| KS
 ```
 
-Everything runs on two Talos Kubernetes clusters (Proxmox dev, AWS prod), deployed by Argo CD from release branches. The full deployment view is in [architecture](docs/overview/architecture.md).
+Two Talos Kubernetes clusters (Proxmox dev, AWS prod), deployed by Argo CD from release branches. Deployment view: [architecture](docs/overview/architecture.md).
 
 ## LLM and agent platform
 
-Read-only analyst agents explain declines, risk decisions and payment behaviour. A coordinator hands each question to the evidence agent (knowledge base, cited passages) or the risk agent (online features, the fraud model's score and the knowledge base). Every model, tool and agent call goes through agentgateway, which adds client keys, rate and token limits, PII masking and a request screen by the d3-edge decision model. The models run on vLLM through KServe and llm-d on one shared GPU, and Langfuse holds the agents' prompts, A/B tests and traces.
+A coordinator agent hands each analyst question to the evidence agent (knowledge base, cited passages) or the risk agent (online features, the fraud model's score, the knowledge base). Every model, tool and agent call passes agentgateway: client keys, rate and token limits, PII masking and a request screen by the d3-edge decision model. Models run on vLLM through KServe and llm-d on a shared GPU; Langfuse holds prompts, A/B tests and traces.
 
-![LLM and agent platform: clients, agentgateway, kagent agents on Agent Substrate, KServe model servers, MCP tools and ML inference, data pipelines and operations](docs/llm/images/llm-architecture.png)
+![LLM and agent platform: clients, agentgateway, kagent agents on Agent Substrate, inference on KServe, MCP tools and ML inference, data pipelines and operations](docs/llm/images/llm-architecture.png)
 
-The diagram's source is [`llm-architecture.excalidraw`](docs/llm/images/llm-architecture.excalidraw); the pages under [docs/llm](docs/llm) cover each part.
+Diagram source: [`llm-architecture.excalidraw`](docs/llm/images/llm-architecture.excalidraw).
+
+## Documentation
+
+Pages live in [`docs/`](docs) and are published to the [project wiki](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki).
+
+### [Overview](docs/overview/proposal.md)
+
+[Proposal](docs/overview/proposal.md) · [architecture](docs/overview/architecture.md) · [roadmap](docs/overview/roadmap.md)
+
+### [Payment gateway](docs/payment-gateway/architecture.md)
+
+[Architecture](docs/payment-gateway/architecture.md) · [flows](docs/payment-gateway/flows.md) · [conventions](docs/payment-gateway/conventions.md) · [Docker images](docs/payment-gateway/docker.md)
+
+### [Data](docs/data/offline.md)
+
+[Offline data](docs/data/offline.md) · [online data](docs/data/online.md) · [storage](docs/data/storage.md) · [orchestration and governance](docs/data/orchestration-governance.md)
+
+### [ML](docs/ml/feature-store.md)
+
+[Feature store](docs/ml/feature-store.md) · [training](docs/ml/training.md) · [serving](docs/ml/serving.md) · [background](docs/ml/background.md)
+
+### [LLM](docs/llm/agents.md)
+
+[Agents](docs/llm/agents.md) · [inference](docs/llm/inference.md) · [benchmark](docs/llm/benchmark.md) · [agent gateway](docs/llm/gateway.md) · [RAG](docs/llm/rag.md) · [observability](docs/llm/observability.md)
+
+### [Deployment](docs/deployment/cd.md)
+
+[CI](docs/deployment/ci.md) · [CD](docs/deployment/cd.md) · [infrastructure](docs/deployment/infra.md) · [security](docs/deployment/security.md) · [observability](docs/deployment/observability.md)
 
 ## Repository structure
 
@@ -66,23 +100,10 @@ The diagram's source is [`llm-architecture.excalidraw`](docs/llm/images/llm-arch
 │       ├── feast/            # Feast writer and feature server
 │       ├── features/         # Reference feature implementation
 │       ├── batch/            # Bronze, Silver, maintenance and analytics Spark jobs
-│       └── openmetadata/ # Metadata integrations, native checks and lineage publication
+│       └── openmetadata/     # Metadata integrations, native checks and lineage publication
 └── devenv.nix, devenv.yaml   # Development environment
 ```
 
-## Documentation
-
-All documentation lives in [`docs/`](docs/Home.md) and is published to the [project wiki](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki).
-
-| Section | Pages |
-|---|---|
-| Overview | [Proposal](docs/overview/proposal.md), [architecture](docs/overview/architecture.md), [roadmap](docs/overview/roadmap.md) |
-| Payment gateway | [Architecture](docs/payment-gateway/architecture.md), [flows](docs/payment-gateway/flows.md), [conventions](docs/payment-gateway/conventions.md), [Docker images](docs/payment-gateway/docker.md) |
-| Data | [Offline data](docs/data/offline.md), [online data](docs/data/online.md), [storage](docs/data/storage.md), [orchestration and governance](docs/data/orchestration-governance.md) |
-| ML | [Feature store](docs/ml/feature-store.md), [training](docs/ml/training.md), [serving](docs/ml/serving.md), [background](docs/ml/background.md) |
-| LLM | [Agents](docs/llm/agents.md) |
-| Deployment | [CI](docs/deployment/ci.md), [CD](docs/deployment/cd.md), [infrastructure](docs/deployment/infra.md), [security](docs/deployment/security.md), [observability](docs/deployment/observability.md) |
-
 ## Getting started
 
-See [CONTRIBUTING.md](CONTRIBUTING.md): install Nix and devenv, then run `devenv shell`.
+Install Nix and devenv, then run `devenv shell`; details in [CONTRIBUTING.md](CONTRIBUTING.md).
