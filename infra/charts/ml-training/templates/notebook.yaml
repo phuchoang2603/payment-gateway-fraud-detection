@@ -1,0 +1,71 @@
+{{- if .Values.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fraud-explore
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.notebook.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.notebook.storageSize }}
+---
+apiVersion: kubeflow.org/v1
+kind: Notebook
+metadata:
+  name: fraud-explore
+  namespace: {{ .Values.namespace }}
+  annotations:
+    kubeflow-resource-stopped: "true"
+spec:
+  template:
+    spec:
+      serviceAccountName: fraud-training
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: fraud-explore
+          image: {{ include "ml-training.image" . }}
+          workingDir: /home/ml
+          command:
+            - sh
+            - -c
+            - cp -n /opt/notebooks/*.ipynb /home/ml/ || true; exec jupyter lab --ServerApp.ip=0.0.0.0 --ServerApp.port=8888 --ServerApp.token= --ServerApp.password= --ServerApp.allow_origin=* --ServerApp.base_url="$NB_PREFIX"
+          env:
+            {{- include "ml-training.workerEnv" . | nindent 12 }}
+            - name: ML_NAMESPACE
+              value: {{ .Values.namespace | quote }}
+            - name: ML_IMAGE
+              value: {{ include "ml-training.image" . | quote }}
+            - name: RUN_ROOT
+              value: {{ printf "%s/notebook" .Values.config.RUN_ROOT | quote }}
+            - name: FEAST_REGISTRY
+              value: {{ .Values.config.FEAST_REGISTRY | quote }}
+            - name: FEAST_STREAM_EPOCHS
+              value: {{ .Values.config.FEAST_STREAM_EPOCHS | quote }}
+            - name: FEAST_S3_ENDPOINT_URL
+              value: {{ .Values.config.S3_ENDPOINT | quote }}
+          ports:
+            - name: notebook-port
+              containerPort: 8888
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.notebook.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: workspace
+              mountPath: /home/ml
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: fraud-explore
+{{- end }}

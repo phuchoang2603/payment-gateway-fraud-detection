@@ -3,3 +3,5 @@ namePrefix: payment-gateway-prod
 applications:
   live-traffic:
     enabled: true
+  ml-training:
+    enabled: true

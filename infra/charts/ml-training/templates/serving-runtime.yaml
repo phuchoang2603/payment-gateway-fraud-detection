@@ -1,0 +1,28 @@
+{{- if .Values.enabled }}
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+metadata:
+  name: payment-risk-predictor
+  namespace: {{ .Values.namespace }}
+spec:
+  supportedModelFormats:
+    - name: payment-risk
+      autoSelect: true
+  protocolVersions: [v1]
+  containers:
+    - name: kserve-container
+      image: {{ include "ml-training.imageOf" (dict "root" . "repository" .Values.predictor.repository) }}
+      args: ["--model_name={{`{{.Name}}`}}"]
+      ports:
+        - containerPort: 8080
+          protocol: TCP
+      resources:
+        {{- toYaml .Values.serving.resources | nindent 8 }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ALL]
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+{{- end }}

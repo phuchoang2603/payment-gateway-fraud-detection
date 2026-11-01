@@ -187,6 +187,32 @@
         "infra/docker/agent-runtime.Dockerfile",
         "src/llm/agent_runtime"
       ]
+    },
+    {
+      "service": "ml",
+      "image-suffix": "/ml",
+      "context": ".",
+      "dockerfile": "infra/docker/ml.Dockerfile",
+      "paths": [
+        "infra/docker/ml.Dockerfile",
+        "src/ml/pyproject.toml",
+        "src/ml/uv.lock",
+        "src/ml/risk_model",
+        "src/ml/notebooks",
+        "src/data-pipeline/feast"
+      ]
+    },
+    {
+      "service": "predictor",
+      "image-suffix": "/predictor",
+      "context": ".",
+      "dockerfile": "infra/docker/predictor.Dockerfile",
+      "paths": [
+        "infra/docker/predictor.Dockerfile",
+        "src/ml/predictor/pyproject.toml",
+        "src/ml/predictor/uv.lock",
+        "src/ml/predictor/payment_risk_predictor"
+      ]
     }
   ]
 }

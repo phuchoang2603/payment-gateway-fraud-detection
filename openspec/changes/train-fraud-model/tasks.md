@@ -1,0 +1,61 @@
+## 0. Start gate
+
+- [x] 0.1 Platform Kubeflow request sent and handed off at talos-proxmox `e01aba9`: Model Registry, KServe from the registry, Katib, Trainer, GPU runtime `xgboost-gpu-distributed`, 2 × g6.xlarge. Recorded in design.md.
+- [x] 0.2 Consult the Feast threads and the platform. Recorded in design.md:
+  - Feast plan (approved 2026-11-01): request features from the on-demand view `request_features`; `fraud_feast.training.entity_rows`; stream visibility at write time + 1µs, so the entity timestamp is plain `started_at`; local-mode Spark for training and materialization; replay `[2026-07-29, 2026-10-29)`; simulation-truth labels; no gaps.
+  - Platform: the Dashboard lists `ml` (`8321dec`); the Spark operator watching `ml` (`ae12236`) is no longer needed.
+- [x] 0.3 The user approved this plan. Verify with `openspec validate train-fraud-model --strict`.
+- [x] 0.4 Check current APIs with Context7 or released sources, and record any deviation in design.md:
+  - the Trainer 2.3 `TrainJob` overrides with `numNodes: 1`;
+  - Feast 0.67 Spark offline store in local mode, and the `fraud_feast.training` API as merged in PR #111;
+  - the Katib 0.19 `Push` collector with a DRA-claim trial Job;
+  - the `model-registry` Python client;
+  - KFP Kubernetes-native `Pipeline`/`PipelineVersion`;
+  - KServe 0.21 custom predictor containers in Serverless mode, the route through `knative-local-gateway`, and that NaN rows are treated as missing;
+  - Iceberg `MERGE ... NOT MATCHED BY SOURCE`;
+  - PyIceberg position deletes;
+  - a CUDA 12, Java, Spark 4.1.3 and Iceberg 1.12 jars, `fraud_feast[spark]`, XGBoost and PyIceberg set that installs together;
+  - whether Feast's on-demand views can read a joined view's row timestamp (needed for the days-since-latest-daily-row candidate), and the request field carrying the scoring time.
+
+## 1. `risk_model`
+
+- [x] 1.1 Create `src/ml`, a uv project on Python 3.12 with pinned dependencies. Write `dataset.py` (design decision 2), `data.py`, `split.py`, `train.py`, `worker.py`, `evaluate.py`, `registry.py` (decision 3), `steps.py`, and `serve_client.py` (decision 6). Verify with `uv lock`, `ruff` and `ruff format --check`.
+- [x] 1.1a Write the fenced snapshot IDs and the feature service to the KFP run and the registry version. Verify with `ruff`.
+- [x] 1.1b Send the derived request-feature candidates (design decision 6a) to the Feast implementation thread through the user, for the `request_features` view and Go Fraud's request. Its answer on the row-timestamp candidate is pending; the candidates and the dropped one are in design.md.
+- [ ] 1.2 Add the tests of design decision 9, using the Feast change's test repository for `dataset`, and wire `src/ml` into the existing Python test job. Verify in CI.
+
+## 2. Images
+
+- [ ] 2.1 Add `infra/docker/ml.Dockerfile` (CUDA 12 runtime, Java, Spark with the Iceberg and AWS jars, `fraud_feast[spark]`, the pinned stack, non-root, JupyterLab, the notebook). Update `service-images.json` (`ml` rebuild paths include `src/data-pipeline/feast`) and the app-of-apps tags. Verify that the CI image builds pass.
+- [ ] 2.2 Add `src/ml/predictor` (the KServe custom predictor, with `hypothesis` tests), `infra/docker/predictor.Dockerfile`, the `predictor` entry in `service-images.json` and the chart's `ServingRuntime`. Verify in CI.
+
+## 3. Pipelines and notebook
+
+- [x] 3.1 Add `src/ml/pipelines/payment-risk-training.py` and `payment-risk-rollout.py` (design decision 4), plus a `scripts/` compile helper into `infra/charts/ml-training/files/`. Verify that compilation succeeds locally.
+- [x] 3.2 Add `src/ml/notebooks/payment_risk_exploration.ipynb` (decision 7), committed without outputs. Verify that it imports only `risk_model` and the standard libraries.
+
+## 4. Chart `ml-training` (prod only)
+
+- [x] 4.1 Create `infra/charts/ml-training` (design decision 8) and its app-of-apps entry, prod only. Verify with `helm lint` and `helm template` (dev renders nothing).
+- [x] 4.2 Remove stale text claiming an app-owned Profile or registry (`docs/deployment/infra.md`, `docs/payment-gateway/architecture.md`). Verify with `git grep -n -i 'fraud-ml-prod'`.
+
+## 5. Docs
+
+- [x] 5.1 Update `docs/ml/training.md` (data through Feast, labels and windows, pipeline, single-GPU training, Katib, registry), `docs/ml/serving.md` (custom predictor, named JSON features, deploy and rollback), and the roadmap tables in `docs/Home.md` (drift and retraining, and Go Fraud scoring, as planned). Verify that the links resolve.
+
+## 6. Local checks and hand-off
+
+- [ ] 6.1 Run local non-test checks only: `ruff`, treefmt, `helm lint` and `helm template`, KFP compilation, `openspec validate train-fraud-model --strict`, and `git diff --check`. Commit locally on `feat/train-fraud-model`.
+- [ ] 6.2 Push and open the PR only with the user's agreement. Push with `git push origin HEAD:refs/heads/<branch>`, and confirm with `git ls-remote origin <branch>`. Report every CI check honestly.
+
+## 7. Prod runs and evidence (after the Feast deploy and replay, each with the user's approval)
+
+- [ ] 7.1 Sync and verify read-only: `ml-training` is healthy, the secrets are Ready, the PipelineVersions are listed, and the Notebook is stopped.
+- [ ] 7.2 Explore a training-set build in the Notebook. Record counts, the fraud rate, null shares, provenance and the dataset step's wall time. Run the derived-feature ablation on validation, fix the final `request_features` list with the Feast thread, and record the PR-AUC per candidate.
+- [ ] 7.3 Run `payment-risk-training` with `tune=true`. Record the KFP graph, the Katib trials, the single-GPU TrainJob (GPU, versions, wall time, exit 0), the test metrics against the baseline, the registry version (`production`, with the snapshot IDs of the daily, stream and label tables, and the feature service), and the InferenceService.
+- [ ] 7.4 Call the model with a JSON request directly, including null features, run a `payment-risk-rollout` rollback, then run a second training run. Record the incremental training-set snapshot summary.
+- [ ] 7.5 Write the evidence into `docs/ml/training.md` and `docs/ml/serving.md` as figures, screenshots and mermaid diagrams. Results that miss expectations are recorded as observed.
+
+## 8. Archive
+
+- [ ] 8.1 After the evidence is recorded, archive the change. Verify with `openspec validate --strict --all`.

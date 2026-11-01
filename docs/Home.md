@@ -47,7 +47,7 @@ The system has three layers on one shared Kubernetes platform: the payment gatew
 | Live simulator | Python; current-time gateway traffic and labels | None | Deployed, disabled |
 | Data pipelines (DP1, `dp-pipeline`) | Spark on the Spark Operator: Bronze, then Silver, Gold features and ClickHouse marts; checks and lineage in OpenMetadata | Iceberg tables, ClickHouse marts, run reports | Running on prod (v19 backfill) |
 | Flink streaming features, Feast writer and server | Python; window features to Redis and `gold.feat_stream_*`, stream history replay, materialization | Checkpoints, Feast Redis, stream tables | Deployed in dev (shadow); enabled in prod |
-| Training, KServe, drift | Kubeflow, KServe | Models | Planned |
+| Training and model serving | Kubeflow Pipelines, Katib, Trainer, Model Registry, a KServe custom predictor ([training](ml/training.md), [serving](ml/serving.md)) | Training-set versions, registered models | In progress: implemented, prod runs pending; drift planned |
 | LLM and agent platform | vLLM on KServe, agentgateway, kagent agents on Agent Substrate, RAG pipeline and knowledge API ([LLM agents](llm/agents.md)) | Feast pgvector and Iceberg knowledge chunks, Langfuse | Deployed in dev; further agents planned |
 
 ### Deployment view
@@ -142,9 +142,10 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 |---|---|---|---|
 | Feature store | Streaming features to online and offline stores, incremental materialization, TTL | [Feature store](ml/feature-store.md) | In progress: implemented, prod runs pending |
 | Generator | Data drift and a label table joinable with features | [Offline data](data/offline.md) | Labels done; drift planned |
-| Model | Notebook baseline from the offline store, training pipeline, distributed training | [Training](ml/training.md) | Planned |
-| Versioning | Model registry and incremental data versions | [Training](ml/training.md) | Planned |
-| Serving | Feature-retrieval API, KServe inference, rolling update, autoscaling, A/B traffic split | [Serving](ml/serving.md) | Planned |
+| Model | Notebook baseline from the offline store, training pipeline, single-GPU training | [Training](ml/training.md) | In progress: implemented, prod runs pending |
+| Versioning | Model registry and incremental data versions | [Training](ml/training.md) | In progress: implemented, prod runs pending |
+| Serving | KServe inference from the registry, rollback | [Serving](ml/serving.md) | In progress: implemented, prod runs pending |
+| Scoring | Go Fraud calling the model, autoscaling, A/B traffic split | [Serving](ml/serving.md) | Planned |
 | Drift | Periodic drift comparison and retraining trigger | [Training](ml/training.md) | Planned |
 
 ### LLM and agent platform

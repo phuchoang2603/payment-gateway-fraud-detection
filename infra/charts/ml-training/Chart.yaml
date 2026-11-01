@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ml-training
+description: Consumer resources for training and serving payment_risk_v1 in the platform ml namespace
+type: application
+version: 0.1.0

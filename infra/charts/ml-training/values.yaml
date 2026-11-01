@@ -1,0 +1,46 @@
+global:
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/predictor: dev
+enabled: false
+namespace: ml
+image:
+  repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml
+predictor:
+  repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/predictor
+config:
+  AWS_REGION: us-east-1
+  S3_ENDPOINT: https://minio.home.phuchoang.sbs
+  S3_PATH_STYLE: 'true'
+  ICEBERG_REST_URI: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
+  ICEBERG_WAREHOUSE: lakehouse
+  ICEBERG_CLIENT_ID: platform
+  ICEBERG_OAUTH2_URI: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
+  FEAST_REGISTRY: s3://platform-dev/feast/payment-gateway/registry.pb
+  FEAST_STREAM_EPOCHS: history-v18,live-v18
+  MODEL_REGISTRY_URL: http://model-registry-service.ml.svc.cluster.local:8080
+  RUN_ROOT: s3://platform-dev/runs/payment-gateway/ml
+storage:
+  store: gateway-doppler
+  data:
+    AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+iceberg:
+  store: doppler
+  data:
+    ICEBERG_CLIENT_SECRET: ICEBERG_CLIENT_SECRET
+serving:
+  resources:
+    requests: {cpu: 500m, memory: 1Gi}
+    limits: {memory: 2Gi}
+  predictor:
+    minReplicas: 1
+    nodeSelector:
+      karpenter.sh/nodepool: aws-cpu-burst
+      karpenter.sh/capacity-type: spot
+notebook:
+  storageClass: gp3
+  storageSize: 20Gi
+  resources:
+    requests: {cpu: '1', memory: 4Gi}
+    limits: {memory: 8Gi}
