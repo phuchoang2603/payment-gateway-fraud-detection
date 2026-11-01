@@ -30,7 +30,7 @@ This change assigns one engine to each feature definition so training and servin
 - **Stream history by Kappa replay.** An on-demand `stream-history` workflow, run month by month:
   1. it seeds isolated topics from Bronze;
   2. it replays them through the live Flink job in logical-clock mode under epoch `history-v19`;
-  3. the history writer atomically deletes and replaces each table’s unit in one PyIceberg transaction, reading from offset zero to committed EOF.
+  3. the history writer deletes each table’s unit in a short commit, then commits each batch separately with conflict retries, reading from offset zero to committed EOF. Training waits for the completed replay and its gates.
 
   It takes explicit start and end days, and rerunning a range replaces the same rows.
 - **Materialization.** A `feast-materialize` Argo workflow runs on its own daily schedule after `dp-daily`, and on demand after a `dp-backfill`:

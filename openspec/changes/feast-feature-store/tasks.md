@@ -33,11 +33,11 @@
 - [x] 2.2 Add `fraud_feast/repo.py` (decisions 2–4: entities, the four stored views and pure Python request_features with explicit schemas, the stream views' epoch-filtered queries, TTLs and tags, and `payment_risk_v1`) and `fraud_feast/apply.py` (creates the two stream tables, then applies). Verify in CI with:
   - a test that `repo.py`'s fields equal each definition file's feature list per entity;
   - one local-warehouse test that applies the repository and runs `get_historical_features(payment_risk_v1).to_arrow()` with `full_feature_names=True` and `label_attempt` rows. It covers the daily row on day D, a row whose `created` is later than `t`, TTL expiry to null, a snapshot written at exactly `started_at` invisible at `started_at` while a daily row anchored at that instant is returned, values read across a history and a live epoch with an unconfigured epoch ignored, and null method values for a null payment method.
-- [x] 2.3 Add `fraud_feast/stream_writer.py` (decision 5): live online and buffered offline writes, online-only `--from`/`--until` replay, and the feature writer's history mode (atomic delete-and-append per unit, no history offsets, lead-in dropped). Replace `tests/test_writer.py` with `test_stream_writer.py` on the existing Redis container and a local warehouse, covering:
+- [x] 2.3 Add `fraud_feast/stream_writer.py` (decision 5): live online and buffered offline writes, online-only `--from`/`--until` replay, and the feature writer's history mode (short range delete and per-batch commits, no history offsets, lead-in dropped). Replace `tests/test_writer.py` with `test_stream_writer.py` on the existing Redis container and a local warehouse, covering:
   - All modes map `event_timestamp = online_write_at + 1µs` in one shared row mapper, with a unit test of the mapping.
   - an older revision not replacing a newer online value;
   - offline resume from the table property's offsets after a crash before the Kafka commit;
-  - atomic history month replacement repeated with normal appends, preserving other months and live epochs;
+  - history month replacement after partial failure repeated with normal appends, preserving other months and live epochs;
   - an invalid record stopping the job without a commit.
 
   Verify in CI.
@@ -64,7 +64,7 @@
 - [x] 3.4 `infra/charts/data-pipelines`:
   - `feast-materialize` (local Spark Argo container with Feast virtualenv and large spill emptyDir, then verify and publish; optional `since`; end always now; mutex `dp-writer`) and the suspended `feast-materialize-daily` CronWorkflow at 06:47 UTC;
   - on-demand `feature-writer-replay` (feature writer only, `from`, `until`; writer replay mutex; publish);
-  - on-demand `stream-history` (`start`, `end`; mutex `stream-history`): per month, recreate the epoch topics, seed, a logical-clock FlinkDeployment, feature writer in atomic history mode, the gate, and an exit handler that deletes the deployment and topics and publishes; RBAC for FlinkDeployments in `data`; TaskManagers on the spot pool;
+  - on-demand `stream-history` (`start`, `end`; mutex `stream-history`): per month, recreate the epoch topics, seed, a logical-clock FlinkDeployment, feature writer in history mode with short retried commits, the gate, and an exit handler that deletes the deployment and topics and publishes; RBAC for FlinkDeployments in `data`; TaskManagers on the spot pool;
   - the Redis-password ExternalSecret;
   - `features.enabled`: on in dev, off in prod.
 
@@ -177,7 +177,13 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 ## 12. Review fixes
 
 - [x] 12.1 Merge feature infrastructure into data-pipelines under features.enabled (dev on, prod off), deduplicate secrets/helpers, restore unchanged values comments. Dev can be recreated; no legacy migration or resource-adoption work.
-- [x] 12.2 Make history atomic per table and unit, remove prepare and history watermarks/resume, add Argo retry and drain bounded reads to committed partition EOF.
+- [x] 12.2 Replace history using a short delete per table and per-batch commits; remove prepare and history watermarks/resume, add Argo retry from the range delete and drain bounded reads to committed partition EOF. A month is partially visible; training waits for the completed replay and its gates.
 - [x] 12.3 Persist live offsets as transactional table properties, retry commit conflicts against refreshed offsets, retain nightly snapshot maintenance and cover expiry recovery.
 - [x] 12.4 Push null coverage with an always-set epoch excluded from model inputs, null-guard account ages, restore scoped Flink Deployment access and move imports.
 - [x] 12.5 Run affected unit tests, lint, dev/prod Helm rendering and strict OpenSpec validation; push the explicit branch refspec, keep the draft and report CI. All 17 affected tests, Ruff, formatting, dev/prod Helm lint/template and strict OpenSpec validation (24 items) pass. Context7 is unavailable; APIs verified against installed Feast 0.67.0, PyIceberg 0.10.0 and confluent-kafka 2.12.0 source. No cluster actions.
+
+## 13. Concurrent history writes
+
+- [x] 13.1 Share one refresh/retry/backoff helper between live and history writes. Delete a history unit’s epoch/range in a short commit per table and append each batch in its own commit, without history offsets/properties or a final commit.
+- [x] 13.2 Cover concurrent live writes between batches, actual delete/append commit conflicts and rerunning a partially failed unit without duplicates. Document partial visibility, the counts gate and no training during replay.
+- [x] 13.3 Run affected tests, lint and strict OpenSpec validation; push the explicit branch refspec, keep the draft and report CI. All 14 affected writer/history tests, Ruff, formatting and strict OpenSpec validation (24 items) pass; CI status is reported with the pushed head.

@@ -149,6 +149,19 @@ def watermarks(table, epoch):
     }
 
 
+def commit_with_retry(table, write):
+    for attempt in range(4):
+        table.refresh()
+        try:
+            with table.transaction() as transaction:
+                write(transaction)
+            return
+        except CommitFailedException:
+            if attempt == 3:
+                raise
+            time.sleep(0.1 * 2**attempt)
+
+
 class IcebergWriter:
     def __init__(self, tables, epoch):
         self.tables = tables
@@ -160,8 +173,8 @@ class IcebergWriter:
 
     def append(self, rows, offsets):
         for scope, table in self.tables.items():
-            for attempt in range(4):
-                table.refresh()
+
+            def append_batch(transaction):
                 prior = watermarks(table, self.epoch)
                 selected = [
                     row
@@ -170,43 +183,32 @@ class IcebergWriter:
                 ]
                 ends = {**prior, **{p: max(offsets[p], prior.get(p, 0)) for p in offsets}}
                 if ends == prior:
-                    break
-                try:
-                    with table.transaction() as transaction:
-                        data = pa.Table.from_pylist(
-                            selected, schema=stream_schema(scope).as_arrow()
-                        )
-                        transaction.append(data)
-                        transaction.set_properties(
-                            {f"kafka.offsets.{self.epoch}": json.dumps(ends, sort_keys=True)}
-                        )
-                    break
-                except CommitFailedException:
-                    if attempt == 3:
-                        raise
-                    time.sleep(0.1 * 2**attempt)
+                    return
+                transaction.append(
+                    pa.Table.from_pylist(selected, schema=stream_schema(scope).as_arrow())
+                )
+                transaction.set_properties(
+                    {f"kafka.offsets.{self.epoch}": json.dumps(ends, sort_keys=True)}
+                )
+
+            commit_with_retry(table, append_batch)
 
 
 class HistoryWriter:
     def __init__(self, tables, epoch, first, last):
-        self.transactions = {scope: table.transaction() for scope, table in tables.items()}
+        self.tables = tables
         predicate = And(
             EqualTo("epoch", epoch),
             And(GreaterThanOrEqual("event_timestamp", first), LessThan("event_timestamp", last)),
         )
-        for transaction in self.transactions.values():
-            transaction.delete(predicate)
+        for table in tables.values():
+            commit_with_retry(table, lambda transaction: transaction.delete(predicate))
 
     def append(self, rows):
-        for scope, transaction in self.transactions.items():
+        for scope, table in self.tables.items():
             if rows[scope]:
-                transaction.append(
-                    pa.Table.from_pylist(rows[scope], schema=stream_schema(scope).as_arrow())
-                )
-
-    def commit(self):
-        for transaction in self.transactions.values():
-            transaction.commit_transaction()
+                data = pa.Table.from_pylist(rows[scope], schema=stream_schema(scope).as_arrow())
+                commit_with_retry(table, lambda transaction: transaction.append(data))
 
 
 class StreamWriter:
@@ -430,7 +432,6 @@ def main():
                 asynchronous=False,
             )
         if history:
-            offline.commit()
             history.report(written)
         elif os.environ.get("RUN_REPORT"):
             write_json(
