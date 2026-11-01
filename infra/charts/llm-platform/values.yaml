@@ -44,11 +44,12 @@ models:
     # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
     stopped: false
     # FP8 KV cache: 15% more output tokens/s at 16 concurrent requests and 65% more KV room than bf16 (benchmark, dev
-    # 2026-10-31). 0.78 leaves room on the shared GPU for the decision model; an 8192-token context still fits in its
-    # KV cache and covers an agent turn with its prompt, history and retrieved passages.
+    # 2026-10-31). 0.76 leaves room on the shared GPU for the decision model (vLLM needs its whole 0.10 free at start,
+    # whichever server starts first); an 8192-token context still fits in the KV cache and covers an agent turn with its
+    # prompt, history and retrieved passages.
     args:
       - --max-model-len=8192
-      - --gpu-memory-utilization=0.78
+      - --gpu-memory-utilization=0.76
       - --kv-cache-dtype=fp8
       - --reasoning-parser=qwen3
       - --default-chat-template-kwargs={"enable_thinking":false}
