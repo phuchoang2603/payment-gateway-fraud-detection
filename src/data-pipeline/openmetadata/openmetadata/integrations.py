@@ -66,7 +66,7 @@ def main():
             from openmetadata.publish import ensure_pipeline, publish_lineage
 
             sdk = client()
-            for name in ("fraud-streaming", "feature-writer-online", "feature-writer-offline"):
+            for name in ("fraud-streaming", "feature-writer"):
                 reference = ensure_pipeline(sdk, name)
                 publish_lineage(sdk, name, reference, os.environ["DATASET_VERSION"])
     return 0

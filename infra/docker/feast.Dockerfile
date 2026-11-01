@@ -9,6 +9,8 @@ FROM python:3.12.15-slim-bookworm
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY src/data-pipeline/feast/fraud_feast ./fraud_feast
+COPY contracts/features/fraud-snapshot-v2.yaml /contracts/features/
+ENV FEATURE_DEFINITION=/contracts/features/fraud-snapshot-v2.yaml
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HOME=/tmp
 USER 65532:65532
 ENTRYPOINT ["python", "-m", "fraud_feast.runtime"]

@@ -92,7 +92,7 @@ container:
   value: {{ .Values.marts.retentionDays | int64 | toString | quote }}
 {{- end -}}
 
-{{- define "data-pipelines.env" -}}
+{{- define "data-pipelines.lakeEnv" -}}
 {{ include "data-pipelines.storageEnv" . }}
 - name: ICEBERG_REST_URI
   value: {{ .Values.catalog.icebergRestUri | quote }}
@@ -107,6 +107,10 @@ container:
     secretKeyRef:
       name: {{ .Values.catalog.icebergSecret.name }}
       key: ICEBERG_CLIENT_SECRET
+{{- end -}}
+
+{{- define "data-pipelines.env" -}}
+{{ include "data-pipelines.lakeEnv" . }}
 - name: OPENMETADATA_URL
   value: {{ .Values.catalog.openmetadataUrl | quote }}
 - name: OPENMETADATA_TOKEN

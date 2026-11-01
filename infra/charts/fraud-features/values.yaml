@@ -54,7 +54,7 @@ redis:
     secretKey: password
     remoteKey: GATEWAY_FEAST_REDIS_PASSWORD
   clients:
-  - feast-writer
+  - feature-writer
   - feast-server
   - data-pipelines
 streaming:

@@ -1,18 +1,19 @@
 import copy
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from features.reference_v2 import compute
-from fraud_streaming.history import Audit, encode
+
+from fraud_streaming.history import encode
 from fraud_streaming.model import DAY, Entity, Packet
 from fraud_streaming.replay import OffsetBarrier
 from fraud_streaming.wire import decode
 
 FIXTURES = json.loads(
     (
-        Path(__file__).resolve().parents[5] / "contracts/features/fraud-snapshot-v2.examples.json"
+        Path(__file__).resolve().parents[4] / "contracts/features/fraud-snapshot-v2.examples.json"
     ).read_text()
 )
 
@@ -42,7 +43,7 @@ def test_bronze_round_trip_normalizes_envelope_and_preserves_attempt():
         encode(invalid)
 
 
-def test_clock_overtaking_replay_matches_reference_and_audits_duplicates():
+def test_clock_overtaking_replay_matches_reference():
     row = bronze()
     raw = encode(row)
     fact, now = decode(raw)
@@ -89,21 +90,3 @@ def test_clock_overtaking_replay_matches_reference_and_audits_duplicates():
             "distinct_devices_24h",
         )
     }
-    audit = Audit()
-    audit.observe(raw)
-    audit.observe(raw)
-    assert audit.counts["duplicates"] == 1
-    assert audit.counts["accepted"] == 1
-
-
-def test_audit_24_hour_lateness_boundary():
-    for delta, late in ((-1, 0), (1, 1)):
-        row = bronze()
-        recorded = row["recorded_at"]
-        row["attempt_started"]["signals"]["attempted_at"] = (
-            recorded - timedelta(days=1, microseconds=delta)
-        ).isoformat()
-        audit = Audit()
-        audit.observe(encode(row))
-        assert audit.counts["too_late"] == late
-        assert audit.counts["accepted"] == 1 - late

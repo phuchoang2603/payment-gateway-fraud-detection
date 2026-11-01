@@ -61,7 +61,7 @@ spec:
             valueFrom: {path: /tmp/more}
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.streaming "global" .Values.global) | quote }}
-        command: [/app/history/.venv/bin/python, -m, fraud_streaming.history]
+        command: [/app/history-venv/bin/python, -m, fraud_streaming.history]
         args: [months, --start, {{ "{{inputs.parameters.start}}" | quote }}, --end, {{ "{{workflow.parameters.end}}" | quote }}]
     - name: unit
       inputs:
@@ -220,7 +220,7 @@ spec:
       container:
         {{- if has $mode (list "topics" "seed" "delete-topics") }}
         image: {{ include "data-pipelines.image" (dict "image" $.Values.images.streaming "global" $.Values.global) | quote }}
-        command: [/app/history/.venv/bin/python, -m, fraud_streaming.history]
+        command: [/app/history-venv/bin/python, -m, fraud_streaming.history]
         {{- if eq $mode "seed" }}
         args: [seed, --start, {{ "{{inputs.parameters.start}}" | quote }}, --end, {{ "{{inputs.parameters.end}}" | quote }}]
         {{- else if eq $mode "delete-topics" }}
@@ -232,7 +232,7 @@ spec:
         image: {{ include "data-pipelines.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
         {{- if eq $mode "writer" }}
         command: [python, -m, fraud_feast.stream_writer]
-        args: [--store, offline, --history-start, {{ "{{inputs.parameters.start}}" | quote }}, --history-end, {{ "{{inputs.parameters.end}}" | quote }}]
+        args: [--history, --history-start, {{ "{{inputs.parameters.start}}" | quote }}, --history-end, {{ "{{inputs.parameters.end}}" | quote }}]
         {{- else }}
         command: [python, -m, fraud_feast.history]
         {{- if eq $mode "prepare" }}
@@ -243,26 +243,43 @@ spec:
         {{- end }}
         {{- end }}
         env:
-          - name: RUN_ID
-            value: {{ "{{workflow.name}}" | quote }}
           - name: FEATURE_EPOCH
             value: {{ $.Values.featureStore.historyEpoch | quote }}
+          {{- if eq $mode "writer" }}
           - name: FEATURE_UPDATE_TOPIC
             value: {{ printf "fraud.feature-updates.v2.%s" $.Values.featureStore.historyEpoch | quote }}
-          - name: DATASET_VERSION
-            value: {{ $.Values.bronze.datasetVersion | quote }}
-          - name: HISTORY_REPLICATION_FACTOR
-            value: {{ $.Values.featureStore.replicationFactor | quote }}
+          - name: FEATURE_KAFKA_BROKERS
+            value: {{ $.Values.bronze.kafka.bootstrapServers | quote }}
+          - name: FEAST_STREAM_EPOCHS
+            value: {{ $.Values.featureStore.historyEpoch | quote }}
           - name: HISTORY_FLINK_URL
             value: {{ "http://{{workflow.name}}-history-rest:8081" | quote }}
-          {{- if has $mode (list "seed" "writer" "gate" "prepare") }}
+          {{- end }}
+          {{- if has $mode (list "topics" "seed" "delete-topics") }}
+          - name: KAFKA_BROKERS
+            value: {{ $.Values.bronze.kafka.bootstrapServers | quote }}
+          {{- end }}
+          {{- if eq $mode "topics" }}
+          - name: HISTORY_REPLICATION_FACTOR
+            value: {{ $.Values.featureStore.replicationFactor | quote }}
+          {{- end }}
+          {{- if eq $mode "seed" }}
+          - name: DATASET_VERSION
+            value: {{ $.Values.bronze.datasetVersion | quote }}
+          {{- end }}
+          {{- if has $mode (list "seed" "writer") }}
           - name: HISTORY_SEED_REPORT
             value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}-seed.json" $.Values.featureStore.reportRoot | quote }}
+          {{- end }}
+          {{- if has $mode (list "writer" "gate") }}
           - name: RUN_REPORT
             value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}.json" $.Values.featureStore.reportRoot | quote }}
           {{- end }}
-          {{- include "data-pipelines.env" $ | nindent 10 }}
-          {{- include "data-pipelines.feastEnv" $ | nindent 10 }}
+          {{- if has $mode (list "seed" "writer" "prepare") }}
+          {{- include "data-pipelines.lakeEnv" $ | nindent 10 }}
+          {{- else if eq $mode "gate" }}
+          {{- include "data-pipelines.storageEnv" $ | nindent 10 }}
+          {{- end }}
         resources:
           requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 10Gi}
           limits: {memory: 4Gi, ephemeral-storage: 30Gi}

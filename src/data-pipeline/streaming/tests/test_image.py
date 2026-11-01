@@ -76,6 +76,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                 "ls-files",
                 "-z",
                 "infra/docker/streaming.Dockerfile",
+                "contracts/features/fraud-snapshot-v2.yaml",
                 "src/data-pipeline/streaming",
             ],
             cwd=root,

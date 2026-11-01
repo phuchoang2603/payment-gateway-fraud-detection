@@ -26,15 +26,11 @@ This change assigns one engine to each feature definition so training and servin
   - **TTLs** follow the longest window plus delay: 31 days 12 hours for the daily views, 24 hours 5 minutes for the stream views. The documentation records the reasons.
   - **Registry:** persistent, in object storage, written by a deploy-time `feast apply`.
 - **One feature service, `payment_risk_v1`.** It covers the four stored views and the pure Python request_features on-demand view. Training requests it through `get_historical_features`, with `gold.label_attempt`'s simulation-truth rows as the entity dataframe at plain `started_at`, and so does Go Fraud. Stream rows become visible one microsecond after they are written, so a snapshot that counts the scored attempt is never returned. Training retrieval runs Feast's Spark offline store in local mode, in one Kubeflow Pipelines step.
-- **Stream writers.** One `stream_writer` module runs as two Deployments; each commits its Kafka offsets only after its write:
-  - **Online writer** (`--store online`) pushes journal snapshots to Redis through `FeatureStore.push`;
-  - **Offline writer** (`--store offline`) appends them to the stream tables with PyIceberg, with the Kafka offsets in the Iceberg commit.
-
-  Only the online writer replays an explicit offset or time range. The offline writer has one exactly-once append path.
+- **One stream writer.** The `feature-writer` Deployment and consumer group run `stream_writer`: each live batch pushes online first, then buffered rows append to Iceberg every five minutes or 100,000 rows with their Kafka offsets. Restarts resume from Iceberg offsets. `--history` writes offline only; `--from`/`--until` replays online only.
 - **Stream history by Kappa replay.** An on-demand `stream-history` workflow, run month by month:
   1. it seeds isolated topics from Bronze;
   2. it replays them through the live Flink job in logical-clock mode under epoch `history-v19`;
-  3. the workflow deletes the month's history rows, then the offline writer appends through its normal path.
+  3. the workflow deletes the month's history rows, then the feature writer appends through its normal path.
 
   It takes explicit start and end days, and rerunning a range replaces the same rows.
 - **Materialization.** A `feast-materialize` Argo workflow runs on its own daily schedule after `dp-daily`, and on demand after a `dp-backfill`:
@@ -43,21 +39,22 @@ This change assigns one engine to each feature definition so training and servin
 
   An optional since day starts a backfill reload, always ending now. Deleted entities retain old online values until TTL.
 - **Idempotent runs.** History deletes and rebuilds its month; online replay keeps newest snapshots; materialization writes latest rows through now.
-- **Arrow.** Arrow transfer is enabled wherever data crosses into Python: the Spark offline store's Arrow setting, `to_arrow()` retrieval, and offline writer's Arrow appends.
+- **Arrow.** Arrow transfer is enabled wherever data crosses into Python: the Spark offline store's Arrow setting, `to_arrow()` retrieval, and feature writer's Arrow appends.
 - **Go Fraud (BREAKING for the evidence contract).**
   - It makes one `get-online-features` call for `payment_risk_v1`, with natural keys and raw request fields, transformed by Feast.
   - It applies the same TTL rule as training, at the scoring time.
   - It stays shadow-only, and rules remain authoritative.
+  - Its server decision clock controls scored_at, TTL and future checks, independently of client attempted_at.
   - Its evidence moves from `features.v1` into a fraud-owned `fraud.v1` message, with the old field number reserved.
 - **Prod enablement.** Prod enables the following, with dev staying the PR smoke environment:
   - Flink (new epoch `live-v19`);
   - the live simulator on the v19 manifest at 1 payment every 30 seconds, in bounded evidence runs;
   - Redis sized for v19 (about 6 GiB);
-  - the stream writers, the feature server, `feast-materialize` and `stream-history`;
+  - the stream writer, the feature server, `feast-materialize` and `stream-history`;
   - Go Fraud retrieval in shadow mode.
 - **Governance (roadmap step 8).**
   - **Flink:** OpenMetadata's native Flink connector catalogues the streaming job, with SDK lineage as the fallback for the PyFlink Kafka edges.
-  - **New jobs:** the stream writers, the stream history and materialization publish lineage and status.
+  - **New jobs:** the stream writer, the stream history and materialization publish lineage and status.
 - **Removed:**
   - the synchronous submission guard, its dedicated Redis deployment and credentials, counter-based observations and evidence fields;
   - `fraud-snapshot-v1` and the `features.v1` protobuf package, with its Python and Go bindings;
@@ -71,7 +68,7 @@ This change assigns one engine to each feature definition so training and servin
 
 ### New Capabilities
 
-- `feature-store`: covers the Feast project and its registry; the natural-key entities; the daily and stream views with their TTLs; the single feature service; point-in-time offline retrieval with Arrow; the stream writers and their replay; the stream history replay; materialization with overlap and an online check; and online serving.
+- `feature-store`: covers the Feast project and its registry; the natural-key entities; the daily and stream views with their TTLs; the single feature service; point-in-time offline retrieval with Arrow; the stream writer and its replay; the stream history replay; materialization with overlap and an online check; and online serving.
 
 ### Removed Capabilities
 
@@ -79,7 +76,7 @@ This change assigns one engine to each feature definition so training and servin
 
 ### Modified Capabilities
 
-- `streaming-fraud-features`: removes the journal-only output requirement, because the stream writers now consume the journal.
+- `streaming-fraud-features`: removes the journal-only output requirement, because the stream writer now consumes the journal.
 - `payment-contracts`: removes synchronous submission observations from the risk dependency contract.
 - `fraud-decision`: removes synchronous submission observations; historical-feature retrieval becomes enabled shadow-only through `payment_risk_v1`, with per-view statuses and the shared TTL rule.
 - `fraud-feature-contracts`: adds serving parity, and requires short-window history to come from the streaming job itself. It is ADDED only while DP3 is unarchived; retiring v1 waits for DP3's archive.
@@ -90,7 +87,7 @@ This change assigns one engine to each feature definition so training and servin
 ## Impact
 
 - **Code:**
-  - `src/data-pipeline/feast`: rewritten on Python 3.12 with `feast[redis]==0.67.0`, `pyiceberg` and `confluent-kafka`, plus a `spark` extra. It holds the repository, apply, stream writers, materialize, online verification and server.
+  - `src/data-pipeline/feast`: rewritten on Python 3.12 with `feast[redis]==0.67.0`, `pyiceberg` and `confluent-kafka`, plus a `spark` extra. It holds the repository, apply, stream writer, materialize, online verification and server.
   - `src/data-pipeline/streaming`: the history seed, which encodes Bronze events into the replay topics.
   - `src/data-pipeline/features`: the v1 reference is removed.
   - `src/data-pipeline/openmetadata`: the Flink connector, lineage and pipelines.
@@ -100,7 +97,7 @@ This change assigns one engine to each feature definition so training and servin
   - `contracts/features/v1` and `fraud-snapshot-v1.*` are removed;
   - `fraud-snapshot-v2.examples.json` gains lateness-boundary cases.
 - **Infra:**
-  - `infra/charts/fraud-features`: the stream writers, the server, the PostSync apply, Redis sizing and prod enablement, Flink `live-v19`;
+  - `infra/charts/fraud-features`: the stream writer, the server, the PostSync apply, Redis sizing and prod enablement, Flink `live-v19`;
   - `infra/charts/data-pipelines`: the `feast-materialize`, `feature-writer-replay` and `stream-history` templates, the materialization CronWorkflow, RBAC for the history FlinkDeployment, and the Flink connector;
   - `infra/charts/kafka`: ACLs for the history topics;
   - `infra/charts/live-traffic`: prod values;

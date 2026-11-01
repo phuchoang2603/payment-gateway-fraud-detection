@@ -53,7 +53,7 @@ def request_features(inputs):
             for at, created in zip(scored, inputs["merchant_account_created_at"])
         ],
         "ip_shipping_country_mismatch": [
-            None if ip is None else ip != shipping
+            None if ip is None or shipping is None else ip != shipping
             for ip, shipping in zip(inputs["ip_country"], inputs["shipping_country"])
         ],
         "item_count": inputs["item_count"],

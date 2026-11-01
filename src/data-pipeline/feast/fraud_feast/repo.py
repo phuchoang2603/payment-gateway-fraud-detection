@@ -41,7 +41,6 @@ DAILY_FIELDS = {
     }.items()
 }
 TABLES = {scope: f"gold.feat_stream_{scope}" for scope in KEYS}
-TABLES["payment_method"] = "gold.feat_stream_payment_method"
 DAILY_TABLES = {scope: f"gold.feat_{scope}_daily" for scope in KEYS}
 
 
@@ -70,7 +69,9 @@ def definitions():
             options = (
                 {"table": f"lake.{DAILY_TABLES[scope]}"}
                 if kind == "daily"
-                else {"query": f"SELECT * FROM lake.{TABLES[scope]} WHERE epoch IN ({selected})"}
+                else {
+                    "query": f"SELECT integration_id, {KEYS[scope]}, event_timestamp, created, {', '.join(fields)} FROM lake.{TABLES[scope]} WHERE epoch IN ({selected})"
+                }
             )
             source = SparkSource(
                 name=f"{scope}_{kind}_batch",

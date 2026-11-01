@@ -6,7 +6,7 @@ ENV UV_PYTHON_INSTALL_DIR=/opt/python UV_PYTHON_BIN_DIR=/usr/local/bin UV_LINK_M
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc libc6-dev ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && uv python install 3.11.16 3.12.15
+    && uv python install 3.11.16
 WORKDIR /app
 COPY src/data-pipeline/streaming/pyproject.toml src/data-pipeline/streaming/uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project --no-install-package apache-flink-libraries \
@@ -16,18 +16,18 @@ RUN uv sync --locked --no-dev --no-install-project --no-install-package apache-f
        https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/5.0.0-2.2/flink-sql-connector-kafka-5.0.0-2.2.jar \
     && echo '5605c691d11a501382c383fecba37a7a552467da5ab7ba904ef5d6f3d62c5616  /opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar' | sha256sum -c -
 
-WORKDIR /app/history
-COPY src/data-pipeline/streaming/history/pyproject.toml src/data-pipeline/streaming/history/uv.lock ./
-RUN uv sync --locked --no-dev --no-install-project
+RUN UV_PROJECT_ENVIRONMENT=/app/history-venv uv sync --locked --no-default-groups --group history --no-install-project
 
 FROM flink:2.2.1-java17
 COPY --from=build /opt/python /opt/python
 COPY --from=build /app/.venv /app/.venv
-COPY --from=build /app/history/.venv /app/history/.venv
+COPY --from=build /app/history-venv /app/history-venv
 COPY --from=build /opt/flink/plugins/s3-fs-presto /opt/flink/plugins/s3-fs-presto
 COPY --from=build /opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar /opt/flink/lib/
 WORKDIR /app
 COPY src/data-pipeline/streaming/fraud_streaming ./fraud_streaming
+COPY contracts/features/fraud-snapshot-v2.yaml /contracts/features/
+ENV FEATURE_DEFINITION=/contracts/features/fraud-snapshot-v2.yaml
 ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH=/app PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 USER flink
 WORKDIR /opt/flink

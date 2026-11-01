@@ -1,6 +1,6 @@
 # urn:datacontract:fraud:gold-feat-stream-customer
 ## Info
-*Flink snapshot journal persisted by Feast offline writer.*
+*Flink snapshot journal persisted by Feast feature writer.*
 - **name:** Gold customer stream features
 - **version:** 1.0.0
 - **status:** active
@@ -11,7 +11,7 @@
 Natural-key point-in-time retrieval over configured epochs; unknown coverage remains null.
 
 ### Purpose
-Flink snapshot journal persisted by Feast offline writer.
+Flink snapshot journal persisted by Feast feature writer.
 
 ### Limitations
 Synthetic data only. Event time is one microsecond after the online write time; created breaks ties.

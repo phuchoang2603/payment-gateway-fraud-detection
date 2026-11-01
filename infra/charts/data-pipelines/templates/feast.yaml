@@ -113,11 +113,11 @@ spec:
     - name: replay
       synchronization:
         mutexes:
-          - name: feature-writer-online
+          - name: feature-writer
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.feast "global" .Values.global) | quote }}
         command: [python, -m, fraud_feast.stream_writer]
-        args: [--store, online, --from, {{ "{{workflow.parameters.from}}" | quote }}, --until, {{ "{{workflow.parameters.until}}" | quote }}]
+        args: [--from, {{ "{{workflow.parameters.from}}" | quote }}, --until, {{ "{{workflow.parameters.until}}" | quote }}]
         env:
           - name: FEATURE_EPOCH
             value: {{ .Values.featureStore.epoch | quote }}
@@ -129,5 +129,5 @@ spec:
             value: {{ printf "%s/replay/{{workflow.name}}.json" .Values.featureStore.reportRoot | quote }}
           {{- include "data-pipelines.env" . | nindent 10 }}
           {{- include "data-pipelines.feastEnv" . | nindent 10 }}
-    {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "feature-writer-online" "dataset" .Values.bronze.datasetVersion "report" (printf "%s/replay/{{workflow.name}}.json" .Values.featureStore.reportRoot)) | nindent 4 }}
+    {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "feature-writer" "dataset" .Values.bronze.datasetVersion "report" (printf "%s/replay/{{workflow.name}}.json" .Values.featureStore.reportRoot)) | nindent 4 }}
 {{- end }}

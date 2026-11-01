@@ -2,8 +2,8 @@
 
 - [x] 0.1 Rebase `plan/feast-store` onto `main` at `bb8dc67`, with DP3 run by `dp-pipeline`, `dp-daily` and `dp-backfill` under the `dp-writer` mutex. Update the artifacts for one engine per feature (user decision 2026-10-31):
   - Spark DP3 owns the daily windows; materialize with lookback plus one day of overlap, use the `dp-writer` mutex, schedule materialization after `dp-daily`, and set the daily TTL delay to 12 hours;
-  - Flink owns the short windows: live through online and offline writers, and history through the `stream-history` Kappa replay into `gold.feat_stream_*` (decision 8);
-  - the training entity timestamp is plain `started_at`; stream rows map `event_timestamp = online_write_at + 1µs` in both writers; simulation-truth labels; training retrieval runs Feast's Spark offline store in local mode in one KFP step.
+  - Flink owns the short windows: live through the feature writer, and history through the `stream-history` Kappa replay into `gold.feat_stream_*` (decision 8);
+  - the training entity timestamp is plain `started_at`; stream rows map `event_timestamp = online_write_at + 1µs` in the writer; simulation-truth labels; training retrieval runs Feast's Spark offline store in local mode in one KFP step.
 
   Verify with `openspec validate feast-feature-store --strict`.
 - [x] 0.2 Rebase `feat/feast-feature-store` onto `origin/main` at `371d2ca`. Confirm that DP3 no longer computes `gold.feat_attempt_rt` or Spark short windows. The user authorized code implementation and a draft PR on 2026-10-31. `dp3-features-and-marts` remains unarchived, so its v1 retirement requirements stay pending. Validate this change with `openspec validate feast-feature-store --strict`.
@@ -33,8 +33,8 @@
 - [x] 2.2 Add `fraud_feast/repo.py` (decisions 2–4: entities, the four stored views and pure Python request_features with explicit schemas, the stream views' epoch-filtered queries, TTLs and tags, and `payment_risk_v1`) and `fraud_feast/apply.py` (creates the two stream tables, then applies). Verify in CI with:
   - a test that `repo.py`'s fields equal each definition file's feature list per entity;
   - one local-warehouse test that applies the repository and runs `get_historical_features(payment_risk_v1).to_arrow()` with `full_feature_names=True` and `label_attempt` rows. It covers the daily row on day D, a row whose `created` is later than `t`, TTL expiry to null, a snapshot written at exactly `started_at` invisible at `started_at` while a daily row anchored at that instant is returned, values read across a history and a live epoch with an unconfigured epoch ignored, and null method values for a null payment method.
-- [x] 2.3 Add `fraud_feast/stream_writer.py` (decision 5): `--store online|offline`, the continuous modes, online-only `--from`/`--until` replay, and the offline writer's history mode (delete month before normal append, lead-in dropped). Replace `tests/test_writer.py` with `test_stream_writer.py` on the existing Redis container and a local warehouse, covering:
-  - Both modes map `event_timestamp = online_write_at + 1µs` in one shared row mapper, with a unit test of the mapping.
+- [x] 2.3 Add `fraud_feast/stream_writer.py` (decision 5): live online and buffered offline writes, online-only `--from`/`--until` replay, and the feature writer's history mode (delete month before normal append, lead-in dropped). Replace `tests/test_writer.py` with `test_stream_writer.py` on the existing Redis container and a local warehouse, covering:
+  - All modes map `event_timestamp = online_write_at + 1µs` in one shared row mapper, with a unit test of the mapping.
   - an older revision not replacing a newer online value;
   - offline resume from the commit's offsets after a crash before the Kafka commit;
   - history month preparation repeated with normal appends, preserving other months and live epochs;
@@ -43,7 +43,7 @@
   Verify in CI.
 - [x] 2.4 Replace materialization with overlap (decision 6): per-view registry end minus lookback plus one day, first-run TTL, optional since day, end always now, skip_dedup and default local engine. Remove snapshot pinning, state, refresh sets, tombstones and fallback. verify_online samples newest keys only. CI covers rewritten equal anchors, the documented deleted-entity TTL gap, explicit since through now, repeated writes and missing online samples.
 
-- [x] 2.5 Add `fraud_streaming/history.py` (decision 8): reads a Bronze range plus one day of lead-in in source order, encodes each event with the `wire.py` descriptors, writes the history input and clock topics, pauses while the replay's lag exceeds a bound, and reports duplicate and too-late counts without gating on them; history gates on zero decode rejects and consumed seeded input offsets. Verify in CI with a round-trip test (Bronze row → encoded bytes → `wire.decode`) and a small logical-clock replay whose snapshots match `features/reference_v2.py`.
+- [x] 2.5 Add `fraud_streaming/history.py` (decision 8): reads a Bronze range plus one day of lead-in in source order, encodes each event with the `wire.py` descriptors, writes the history input and clock topics, pauses while the replay's lag exceeds a bound, and reports Flink's duplicate and too-late counts without gating on them; history gates on zero decode rejects and consumed seeded input offsets. Verify in CI with a round-trip test (Bronze row → encoded bytes → `wire.decode`) and a small logical-clock replay whose snapshots match `features/reference_v2.py`.
 
 - [x] 2.6 Add request_context and request_features to payment_risk_v1; one pure Python implementation for historical Arrow and online dict transforms. Add training.entity_rows for valid Silver attempts and available simulation-truth labels joined to request context. CI covers truth false without chargebacks, unavailable labels, invalid lifecycle, cohort bounds, nullable request fields, and historical/server parity. The server adds projected output aliases around transform_dict to fix Feast 0.67.0's full-name filtering bug, which the first CI parity run exposed.
 
@@ -51,7 +51,7 @@
 
 - [x] 3.1 `data-platform-spark.Dockerfile`: add the Feast virtualenv with the `spark` extra, and add `src/data-pipeline/feast` to its rebuild paths. `feast.Dockerfile`: Python 3.12 slim with the stream writer, verification and server entrypoints. Verify that the CI image builds pass.
 - [x] 3.2 `infra/charts/fraud-features`:
-  - the `feature-writer-online` and `feature-writer-offline` Deployments, and the feature server;
+  - the `feature-writer` Deployment, and the feature server;
   - the PostSync apply Job;
   - the object-storage and Iceberg ExternalSecrets;
   - Redis client labels and sizing values;
@@ -63,14 +63,14 @@
 - [x] 3.3 `infra/charts/live-traffic`: enable the simulator in prod on the v19 manifest and digest, at 1 payment every 30 seconds. Verify with CI helm template. The manifest was read from S3 with user authorization; its digest is pinned and the seven-day prod run is enabled.
 - [x] 3.4 `infra/charts/data-pipelines`:
   - `feast-materialize` (local Spark Argo container with Feast virtualenv and large spill emptyDir, then verify and publish; optional `since`; end always now; mutex `dp-writer`) and the suspended `feast-materialize-daily` CronWorkflow at 06:47 UTC;
-  - on-demand `feature-writer-replay` (online writer only, `from`, `until`; online mutex; publish);
-  - on-demand `stream-history` (`start`, `end`; mutex `stream-history`): per month, delete history rows, recreate the epoch topics, seed, a logical-clock FlinkDeployment, offline writer in history mode, the gate, and an exit handler that deletes the deployment and topics and publishes; RBAC for FlinkDeployments in `data`; TaskManagers on the spot pool;
+  - on-demand `feature-writer-replay` (feature writer only, `from`, `until`; writer replay mutex; publish);
+  - on-demand `stream-history` (`start`, `end`; mutex `stream-history`): per month, delete history rows, recreate the epoch topics, seed, a logical-clock FlinkDeployment, feature writer in history mode, the gate, and an exit handler that deletes the deployment and topics and publishes; RBAC for FlinkDeployments in `data`; TaskManagers on the spot pool;
   - the Redis-password ExternalSecret;
   - `featureStore.enabled` in both environments.
 
   Verify with CI helm lint and template.
 - [x] 3.5 `infra/charts/payment-gateway`: Fraud `FRAUD_FEAST_URL`, `FRAUD_FEATURE_SERVICE=payment_risk_v1` and the two TTLs, in both environments. Remove the old feature variables. Verify with CI helm template.
-- [x] 3.6 `infra/charts/kafka`: follow the existing network access pattern for `data-pipelines`, `fraud-streaming` and the two Feast push Deployments, including prod `live-v19` journal and reject topics. Verify with CI helm template. Current main has unauthenticated Kafka listeners and no authorizer. On 2026-10-31 the user chose the existing access pattern; authenticated topic ACLs are optional future work, not a prerequisite (decision 11).
+- [x] 3.6 `infra/charts/kafka`: follow the existing network access pattern for `data-pipelines`, `fraud-streaming` and the feature-writer Deployment, including prod `live-v19` journal and reject topics. Verify with CI helm template. Current main has unauthenticated Kafka listeners and no authorizer. On 2026-10-31 the user chose the existing access pattern; authenticated topic ACLs are optional future work, not a prerequisite (decision 11).
 
 ## 4. Go Fraud
 
@@ -80,18 +80,18 @@
 
 - [x] 5.1 `catalog.connectors`: add the `flink` pipeline connector, and the journal and reject patterns to the Kafka topic filter. Verify with CI helm template and the integrations test.
 - [x] 5.2 `openmetadata.lineage`:
-  - add the `feature-writer-online`, `feature-writer-offline`, `feast-materialize` and `stream-history` pipelines and their edges, plus the streaming SDK fallback edges;
+  - add the `feature-writer`, `feast-materialize` and `stream-history` pipelines and their edges, plus the streaming SDK fallback edges;
   - record materialization windows, since and sample counts, each replay's range, and each history unit's range, counts and gate.
 
   Extend the existing lineage and publish tests in CI.
 
-- [x] 5.3 Use payment_risk_v1, stream_writer --store, feature-writer-online/offline (Deployments, consumer groups and catalog pipelines), feature-writer-replay and verify_online with the verify workflow stage. Remove external project references from active artifacts; keep archived changes and openspec/config.yaml unchanged. Update existing CI coverage to use the names without aliases.
+- [x] 5.3 Use payment_risk_v1, stream_writer, feature-writer (Deployment, consumer group and catalog pipeline), feature-writer-replay and verify_online with the verify workflow stage. Remove external project references from active artifacts; keep archived changes and openspec/config.yaml unchanged. Update existing CI coverage to use the names without aliases.
 
 ## 6. Docs
 
 - [ ] 6.1 Update the existing pages only:
-  - `docs/ml/feature-store.md`: the flow diagram (one engine per feature), entities, views, the TTL table and reasons, `payment_risk_v1`, the `+ 1µs` visibility of stream rows, the parity exceptions, online and offline writers and their replay, the Kappa stream history and why it replaced a batch implementation, materialization with overlap and since, and Arrow;
-  - `docs/data/online.md`: the stream writers and prod `live-v19`, replacing the "disabled until" sentences;
+  - `docs/ml/feature-store.md`: the flow diagram (one engine per feature), entities, views, the TTL table and reasons, `payment_risk_v1`, the `+ 1µs` visibility of stream rows, the parity exceptions, the feature writer and its replay, the Kappa stream history and why it replaced a batch implementation, materialization with overlap and since, and Arrow;
+  - `docs/data/online.md`: the stream writer and prod `live-v19`, replacing the "disabled until" sentences;
   - `docs/data/orchestration-governance.md`: `feast-materialize`, `feature-writer-replay`, `stream-history`, their range parameters, and the Flink connector;
   - `docs/data/offline.md`: the stream tables and their epochs;
   - `docs/overview/roadmap.md`: steps 2–8.
@@ -108,7 +108,7 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 ## 8. Runs and evidence (cluster)
 
 - [ ] 8.1 Dev smoke, after the PR deploys:
-  - confirm the apply Job and online and offline writers on `live-v18`;
+  - confirm the apply Job and the feature writer on `live-v18`;
   - run a `dp-backfill`, then `feast-materialize`;
   - run `dp-pipeline` without a range and `feast-materialize` again;
   - run `feast-materialize` twice with an explicit since day;
@@ -121,7 +121,7 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
   - confirm the apply Job;
   - after the v19 `dp-backfill`, run `feast-materialize` with `since=<backfill start>`;
   - run `stream-history` with `start=2026-07-29`, `end=2026-10-29` (exclusive), month by month, setting parallelism from the first month's measured rate; the workflow adds its own one-day lead-in and the served model's training waits for this range;
-  - start Flink `live-v19` and online and offline writers;
+  - start Flink `live-v19` and the feature writer;
   - unsuspend `dp-daily` and `feast-materialize-daily`, run the simulator for the evidence window (7 days by default), and sample Fraud evidence;
   - run a sample `get_historical_features(payment_risk_v1)` over a v19 cohort;
   - hand the training thread the history epoch, its range and the Gold snapshots, so it trains the served `payment_risk_v1` through `get_historical_features`.
@@ -134,10 +134,10 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
     - `feast-materialize-daily` after `dp-daily`;
     - the online check's figures (sampled and checked);
     - a Spark UI screenshot of the materialize job.
-  - **Stream writers, OFFLINE and ONLINE:**
+  - **Stream writer, OFFLINE and ONLINE:**
     - both Deployments running in Argo CD;
     - Redis key counts per view and a sample `get-online-features` response for one entity;
-    - `gold.feat_stream_*` row counts per epoch, and offline writer's latest `kafka.offsets` commit.
+    - `gold.feat_stream_*` row counts per epoch, and feature writer's latest `kafka.offsets` commit.
   - **Stream history:**
     - the Argo graph of `stream-history` across months;
     - the Flink UI of one replay month (job graph, throughput, checkpoints);
@@ -145,7 +145,7 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
   - **Live Flink `live-v19`:** the job graph and checkpoint history in the Flink UI, and the Flink pipeline in OpenMetadata from the connector.
   - **TTL:** the TTL table with its reasons, and one expired-view case from Fraud evidence.
   - **Lineage (Data Governance):** OpenMetadata screenshots of:
-    - the journal → `feature-writer-offline` → `gold.feat_stream_*`;
+    - the journal → `feature-writer` → `gold.feat_stream_*`;
     - Bronze `payment_events` → `stream-history` → `gold.feat_stream_*`;
     - `gold.feat_*_daily` → `feast-materialize`;
     - the streaming job from `payments.events.v1`.
@@ -165,3 +165,11 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 - [x] 10.2 Remove the dedicated submission Redis, credentials and guard-only network configuration in both environments. Preserve Payments and Feast Redis. Record the Doppler cleanup after merge.
 - [x] 10.3 Add removal deltas for every submission-registration requirement and modify Fraud and Payments dependency requirements. Synchronize the affected main requirements so active specifications describe the removed behavior consistently.
 - [x] 10.4 Run the requested non-test checks, push with the explicit same-name refspec, keep the PR draft and report CI. Fraud and Payments build and pass golangci-lint; all-chart/all-values Helm lint/template, formatting, strict OpenSpec validation and the active-reference scan pass. Fraud-scoped Buf lint passes. Repository-wide Buf lint fails on existing Payments, Processor and Vault RPC naming/reuse violations. No local tests or cluster actions. CI results are reported on the PR.
+
+## 11. Review fixes and simplification
+
+- [x] 11.1 Consolidate live consumption into one feature-writer process, Deployment, consumer group and catalog pipeline. Push online before buffered Iceberg commits; resume from Iceberg offsets; retain offline-only --history and online-only bounded replay. Cover buffering, flush boundaries and partial commits in CI.
+- [x] 11.2 Use server scoring time for Feast requests, TTL/future checks and EvaluatedAt; cover a store-and-forward attempt. Make country mismatch null when either input country is null and extend historical/server parity coverage.
+- [x] 11.3 Use public store.push only, skip all-null online rows, select explicit stream-source columns and read definition hashes from the contract file at import.
+- [x] 11.4 Remove the separate seed project and lockfile, consolidate dependency groups in streaming, remove duplicate seed auditing, and share writer buffering with history. Retain DuckDB for the out-of-core sort and offset barriers for cross-topic ordering. Sweep dropped options and update affected artifacts.
+- [x] 11.5 Run non-test checks, push the explicit branch refspec, retain the draft and report CI. Ruff, formatting/treefmt, Fraud build/golangci-lint, all-chart/all-values Helm lint/template, contract lint/generated references, streaming lock consistency, strict OpenSpec validation (24 items) and diff checks pass. CI runs the tests and image builds; no local tests or cluster actions.

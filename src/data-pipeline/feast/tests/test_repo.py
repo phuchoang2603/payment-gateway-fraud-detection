@@ -102,8 +102,8 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
         amount_minor=1200,
         customer_account_created_at=day - timedelta(days=10),
         merchant_account_created_at=day - timedelta(days=20),
-        shipping_country="US",
-        ip_country=["CA", None, "US", "US", "US", "US"],
+        shipping_country=["US", "US", None, None, "US", "US"],
+        ip_country=["CA", None, "US", None, "US", "US"],
         item_count=2,
         has_device=False,
     )
@@ -157,7 +157,7 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
     from fraud_feast.server import get_app
 
     with TestClient(get_app(feature_store)) as client:
-        for index in (0, 1):
+        for index in (0, 1, 2, 3):
             example = labels.iloc[index]
             entities = {
                 key: [example[key]]
@@ -189,3 +189,6 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
     assert result.loc["history", "request_features__merchant_account_age_days"] == 20
     assert result.loc["history", "request_features__ip_shipping_country_mismatch"]
     assert pd.isna(result.loc["live", "request_features__ip_shipping_country_mismatch"])
+
+    for attempt in ("live", "expired", "no-method"):
+        assert pd.isna(result.loc[attempt, "request_features__ip_shipping_country_mismatch"])

@@ -8,7 +8,7 @@ from test_stream_writer import DAY, row
 from fraud_feast import history
 from fraud_feast.apply import stream_schema
 from fraud_feast.repo import KEYS, TABLES
-from fraud_feast.stream_writer import OfflineWriter, watermarks
+from fraud_feast.stream_writer import IcebergWriter, watermarks
 
 
 def test_month_prepare_replaces_only_its_epoch_and_resets_journal_progress(lake, monkeypatch):
@@ -28,7 +28,7 @@ def test_month_prepare_replaces_only_its_epoch_and_resets_journal_progress(lake,
         )
     for _ in range(2):
         history.prepare("2025-09-01", "2025-10-01")
-        writer = OfflineWriter({s: lake.load_table(n) for s, n in TABLES.items()}, "history-ci")
+        writer = IcebergWriter({s: lake.load_table(n) for s, n in TABLES.items()}, "history-ci")
         assert writer.resume([0]) == {0: 0}
         writer.append({s: [row(s, epoch="history-ci")] for s in KEYS}, {0: 1})
         for table in writer.tables.values():

@@ -14,7 +14,7 @@ Materialization SHALL run as an Argo workflow, `feast-materialize`, with two sta
 - **THEN** it waits for DP3 to finish
 
 ### Requirement: Push replay workflow
-A bounded replay of online online writer SHALL run as an on-demand Argo workflow, `feature-writer-replay`, with from and until journal range parameters and an exit-handler publication. Replays SHALL be serialized by a mutex. It SHALL NOT be scheduled.
+An online-only bounded replay of the feature writer SHALL run as an on-demand Argo workflow, `feature-writer-replay`, with from and until journal range parameters and an exit-handler publication. Replays SHALL be serialized by a mutex. It SHALL NOT be scheduled.
 
 #### Scenario: Two replays submitted together
 

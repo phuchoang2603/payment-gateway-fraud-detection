@@ -6,7 +6,7 @@ version: 1.0.0
 status: active
 domain: fraud-detection
 description:
-  purpose: Flink snapshot journal persisted by Feast offline writer.
+  purpose: Flink snapshot journal persisted by Feast feature writer.
   usage: Natural-key point-in-time retrieval over configured epochs; unknown coverage
     remains null.
   limitations: Synthetic data only. Event time is one microsecond after the online write

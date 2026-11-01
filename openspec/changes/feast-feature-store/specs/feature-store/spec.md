@@ -5,7 +5,7 @@ Serve the fraud features from one Feast project. It covers the online store for 
 ## ADDED Requirements
 
 ### Requirement: Persistent feature registry
-The feature store SHALL have one Feast project, with a registry that persists in object storage across restarts. A deploy-time apply step SHALL first create any missing stream feature tables, then write the registry from the repository definitions. The stream writers and the feature server SHALL only read the registry. Materialization SHALL record its intervals in the same registry.
+The feature store SHALL have one Feast project, with a registry that persists in object storage across restarts. A deploy-time apply step SHALL first create any missing stream feature tables, then write the registry from the repository definitions. The stream writer and the feature server SHALL only read the registry. Materialization SHALL record its intervals in the same registry.
 
 #### Scenario: Server restart after materialization
 
@@ -79,31 +79,28 @@ The offline store SHALL read stored features from Gold Iceberg through Spark SQL
 - **WHEN** a simulation-truth label's `label_available_at` is after the cutoff
 - **THEN** that attempt has no entity row
 
-### Requirement: Streaming feature writers
-Two continuously running jobs SHALL consume the v2 feature journal of the configured epoch with read-committed isolation, each with its own consumer group:
+### Requirement: Streaming feature writer
+One continuously running feature-writer Deployment and consumer group SHALL consume the configured v2 journal with read-committed isolation. Each batch SHALL first push non-all-null rows with store.push to PushMode.ONLINE, keyed by natural keys. The shared mapper SHALL set event_timestamp to online_write_at plus one microsecond and created to the Kafka record timestamp. The definition hash SHALL be read from the contract file at import.
 
-- **Online job:** pushes each snapshot to the stream views' online store, keyed by natural keys, with its online write time plus one microsecond as its event time.
-- **Offline job:** appends each snapshot to the stream feature tables, with the same event time, the record's commit time as `created`, and its epoch, revision and Kafka partition and offset.
+Rows SHALL be buffered until offline_interval (default five minutes) or offline_rows (default 100,000), then appended once per Iceberg table with the exclusive Kafka offsets in the same snapshot commit. Graceful shutdown SHALL flush. Recovery SHALL resume from the minimum Iceberg offsets, skipping each table's already committed records. Kafka commits SHALL follow both table commits and serve only lag visibility. Invalid records SHALL stop consumption without committing. Redis SHALL retain newer values on redelivery; all-null rows SHALL be skipped.
 
-Each job SHALL commit Kafka offsets only after its write is accepted. The offline job SHALL record its offsets in the same table commit as its rows and resume from them, so a restart neither repeats nor skips rows. An older or repeated revision SHALL NOT replace a newer online value. A record that fails v2 identity validation SHALL stop the job without committing.
+#### Scenario: Crash between online push and offline commit
 
-#### Scenario: Offline job crashes after appending
+- **WHEN** a batch is pushed online and a crash interrupts its Iceberg commits
+- **THEN** restart re-pushes from the Iceberg offsets without replacing newer online values or duplicating committed table rows
 
-- **WHEN** the offline job appends a batch and stops before committing to Kafka, then restarts
-- **THEN** it resumes after the appended offsets, and each snapshot appears once in the tables
+#### Scenario: Idle writer flushes buffered rows
 
-#### Scenario: Redelivered older revision
-
-- **WHEN** the online job receives an older revision of a snapshot it already pushed
-- **THEN** the online store keeps the newer values
+- **WHEN** traffic stops before the row-count threshold and five minutes elapse
+- **THEN** the buffered rows and their offsets commit to Iceberg
 
 ### Requirement: Online push replay over an explicit range
-Only online online writer SHALL accept a bounded journal replay with from/until offsets per partition or timestamps. Replay SHALL override the consumer watermark without committing it, never move a key backwards, and fail when its range is no longer retained. The offline writer SHALL use only its normal exactly-once append path.
+The writer SHALL accept from/until offsets per partition or timestamps as online-only bounded replay. Replay SHALL NOT append Iceberg rows or commit Kafka offsets, SHALL never move a key backwards and SHALL fail for an unretained range. History SHALL use --history with the same buffered Iceberg append path and no online store.
 
 #### Scenario: Rebuild after an online store loss
 
 - **WHEN** the online store is emptied and a replay covers the retained journal
-- **THEN** every retained key holds its newest snapshot and a second replay changes nothing
+- **THEN** every retained non-all-null key holds its newest snapshot and a second replay changes nothing
 
 ### Requirement: Stream history by replay through the streaming job
 Short-window history SHALL be produced only by the streaming job itself, replaying recorded payment events in logical-clock mode under a history epoch distinct from every live epoch. No other implementation of the short windows SHALL feed training.
@@ -111,7 +108,7 @@ Short-window history SHALL be produced only by the streaming job itself, replayi
 - **Input:** the replay SHALL read events from Bronze, encoded exactly as the live topic carries them, into isolated topics. Kafka SHALL never hold more than a bounded slice of the range.
 - **Ranges:** the replay SHALL take explicit start and end days, run in month-sized units in order, and stop at the first failed unit. Each unit SHALL start from empty state with one day of lead-in, so a unit's rows equal those of a replay over the whole history.
 - **Ordering:** input and clock topics SHALL each have one partition. Clock controls SHALL carry an ordered sequence and exclusive input-offset barriers. Checkpointed buffering SHALL release the named input before advancing the clock; an offset-zero bootstrap SHALL precede input. Missing, regressing or oversized barriers SHALL fail the replay.
-- **Writes:** each unit SHALL first DELETE its history-epoch rows, then use the offline writer's normal append path, dropping lead-in rows. Rerunning a month SHALL rebuild the same rows without duplicates; a failed month may be partial and SHALL be rerun before training.
+- **Writes:** each unit SHALL first DELETE its history-epoch rows, then use the feature writer's normal append path, dropping lead-in rows. Rerunning a month SHALL rebuild the same rows without duplicates; a failed month may be partial and SHALL be rerun before training.
 - **Gate:** a unit SHALL require zero decode rejects and consumed input offsets reaching every seeded record's end, including the final clock control. Other rejects SHALL be reported without gating. No attempt-to-snapshot membership check SHALL be required.
 - **Cleanup:** a unit's streaming deployment and topics SHALL be removed after it, whether it succeeds or fails.
 
@@ -159,7 +156,7 @@ A feature server SHALL serve `get-online-features` for the feature services, in-
 - **THEN** the replay buffers that control and produces the same lateness decisions and expiration snapshots as input-first delivery
 
 ### Requirement: Shared request feature transformation
-The project SHALL define request_context as a RequestSource with scored_at, amount_minor, customer_account_created_at, merchant_account_created_at, shipping_country, nullable ip_country, item_count and has_device. A pure Python on-demand request_features view SHALL output amount_minor, customer_account_age_days, merchant_account_age_days, ip_shipping_country_mismatch, item_count and has_device. Ages SHALL be elapsed whole days; mismatch SHALL be null for absent IP country. Item count SHALL count checkout line items and has_device SHALL reflect fingerprint presence. payment_risk_v1 SHALL include this view. Go SHALL send raw request values and SHALL NOT compute model request features. Rules SHALL retain their own logic.
+The project SHALL define request_context as a RequestSource with scored_at, amount_minor, customer_account_created_at, merchant_account_created_at, nullable shipping_country and ip_country, item_count and has_device. A pure Python on-demand request_features view SHALL output amount_minor, customer_account_age_days, merchant_account_age_days, ip_shipping_country_mismatch, item_count and has_device. Ages SHALL be elapsed whole days; mismatch SHALL be null when either country is absent. Item count SHALL count checkout line items and has_device SHALL reflect fingerprint presence. payment_risk_v1 SHALL include this view. Go SHALL send raw request values and SHALL NOT compute model request features. Rules SHALL retain their own logic.
 
 #### Scenario: Same request online and offline
 

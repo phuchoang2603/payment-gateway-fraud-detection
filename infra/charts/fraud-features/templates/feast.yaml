@@ -1,5 +1,5 @@
 {{- if .Values.feast.enabled }}
-{{- range $mode, $name := dict "online" "feature-writer-online" "offline" "feature-writer-offline" "serve" "feast-server" }}
+{{- range $mode, $name := dict "write" "feature-writer" "serve" "feast-server" }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -25,7 +25,6 @@ spec:
       labels:
         app.kubernetes.io/name: {{ $name }}
         feast-client: "true"
-        kafka-client: feast-writer
     spec:
       serviceAccountName: {{ $name }}
       automountServiceAccountToken: false
@@ -43,7 +42,6 @@ spec:
           imagePullPolicy: {{ $.Values.images.feast.pullPolicy }}
           {{- if ne $mode "serve" }}
           command: [python, -m, fraud_feast.stream_writer]
-          args: [--store, {{ $mode }}]
           {{- end }}
           securityContext:
             allowPrivilegeEscalation: false

@@ -65,8 +65,7 @@ PIPELINES = {
     "dp3-features": "Gold features, dimension and labels from pinned Silver",
     "dp3-marts": "ClickHouse marts from Silver",
     "fraud-streaming": "Flink short-window snapshots and rejected events",
-    "feature-writer-online": "Natural-key stream features in Redis",
-    "feature-writer-offline": "Stream journal in Iceberg",
+    "feature-writer": "Stream features in Redis and Iceberg",
     "feast-materialize": "Daily features in Redis with overlap",
     "stream-history": "Deterministic Bronze replay into stream history",
 }
@@ -106,13 +105,13 @@ def edges(dataset_version: str) -> list[Edge]:
     epoch = f"live-{dataset_version}"
     journal = topic(f"fraud.feature-updates.v2.{epoch}")
     streaming = Node("pipeline", pipeline_fqn("fraud-streaming"))
-    online = Node("pipeline", pipeline_fqn("feature-writer-online"))
+    writer = Node("pipeline", pipeline_fqn("feature-writer"))
     materialize = Node("pipeline", pipeline_fqn("feast-materialize"))
     feature_edges = [
         Edge(topic(PAYMENTS_TOPIC), streaming, "fraud-streaming"),
         Edge(streaming, journal, "fraud-streaming"),
         Edge(streaming, topic(f"fraud.feature-rejects.v1.{epoch}"), "fraud-streaming"),
-        Edge(journal, online, "feature-writer-online"),
+        Edge(journal, writer, "feature-writer"),
         Edge(GOLD_FEAT_CUSTOMER, materialize, "feast-materialize"),
         Edge(GOLD_FEAT_METHOD, materialize, "feast-materialize"),
     ]
@@ -120,7 +119,7 @@ def edges(dataset_version: str) -> list[Edge]:
         target = table(f"gold.feat_stream_{scope}")
         feature_edges.extend(
             [
-                Edge(journal, target, "feature-writer-offline"),
+                Edge(writer, target, "feature-writer"),
                 Edge(BRONZE_EVENTS, target, "stream-history"),
             ]
         )

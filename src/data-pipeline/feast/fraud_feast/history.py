@@ -6,13 +6,14 @@ import urllib.request
 from collections import Counter
 from datetime import UTC, date, datetime
 
-from confluent_kafka import Consumer, TopicPartition
+from confluent_kafka import ConsumerGroupTopicPartitions, TopicPartition
+from confluent_kafka.admin import AdminClient
 from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan
 
 from fraud_feast.apply import ensure_tables
 from fraud_feast.lake import catalog, read_json, write_json
-from fraud_feast.repo import KEYS, TABLES
-from fraud_feast.stream_writer import OfflineWriter, decode, properties
+from fraud_feast.repo import TABLES
+from fraud_feast.stream_writer import properties
 
 
 def rest(path):
@@ -20,13 +21,30 @@ def rest(path):
         return json.load(response)
 
 
-def consumed(consumer, seed):
+def consumed(admin, seed):
     epoch = os.environ["FEATURE_EPOCH"]
-    offsets = consumer.committed(
-        [TopicPartition(f"payments.events.{epoch}", 0), TopicPartition(f"fraud.clock.{epoch}", 0)],
-        timeout=30,
+    group = f"fraud-features-{epoch}"
+    offsets = (
+        admin.list_consumer_group_offsets(
+            [
+                ConsumerGroupTopicPartitions(
+                    group,
+                    [
+                        TopicPartition(f"payments.events.{epoch}", 0),
+                        TopicPartition(f"fraud.clock.{epoch}", 0),
+                    ],
+                )
+            ],
+            request_timeout=30,
+        )[group]
+        .result()
+        .topic_partitions
     )
-    result = {"input": offsets[0].offset, "clock": offsets[1].offset}
+    by_topic = {item.topic: item.offset for item in offsets}
+    result = {
+        "input": by_topic[f"payments.events.{epoch}"],
+        "clock": by_topic[f"fraud.clock.{epoch}"],
+    }
     return (
         result
         if result["input"] >= seed["input_end"] and result["clock"] >= seed["clock_end"]
@@ -101,77 +119,52 @@ def prepare(start, end):
                 pass
 
 
-def run(start, end):
-    first, last = bounds(start, end)
-    epoch = os.environ["FEATURE_EPOCH"]
-    lake = catalog()
-    writer = OfflineWriter({scope: lake.load_table(name) for scope, name in TABLES.items()}, epoch)
-    topic = os.environ["FEATURE_UPDATE_TOPIC"]
-    consumer = Consumer(
-        {
-            "bootstrap.servers": os.environ["FEATURE_KAFKA_BROKERS"],
-            "group.id": f"fraud-features-{epoch}",
-            "enable.auto.commit": False,
-            "enable.auto.offset.store": False,
-            "isolation.level": "read_committed",
-            "auto.offset.reset": "error",
-            "allow.auto.create.topics": False,
-        }
-    )
-    start_offset = writer.resume([0])[0]
-    consumer.assign([TopicPartition(topic, 0, start_offset)])
-    rows_written = Counter()
-    seed = progress = checkpoint = ends = None
-    position = start_offset
-    last_check = 0
-    deadline = time.monotonic() + int(os.environ.get("HISTORY_TIMEOUT_SECONDS", "259200"))
-    try:
-        while ends is None or position < ends:
-            if time.monotonic() > deadline:
-                raise TimeoutError("history unit did not finish before its deadline")
-            messages = consumer.consume(num_messages=1000, timeout=1)
-            rows = {scope: [] for scope in KEYS}
-            for message in messages:
-                if message.error():
-                    raise RuntimeError("history journal consumer failed")
-                scope, row, _ = decode(message, epoch)
-                if first <= row["event_timestamp"] < last:
-                    rows[scope].append(row)
-                position = message.offset() + 1
-            if messages:
-                writer.append(rows, {0: position})
-                consumer.commit(offsets=[TopicPartition(topic, 0, position)], asynchronous=False)
-                for scope, values in rows.items():
-                    rows_written[scope] += len(values)
-            if ends is None and time.monotonic() - last_check >= 5:
-                seed = read_json(os.environ["HISTORY_SEED_REPORT"])
-                if seed and seed.get("failed"):
-                    raise RuntimeError("history seed failed")
-                if seed and seed.get("done"):
-                    progress = consumed(consumer, seed)
-                    if progress:
-                        job, latest = checkpoints()
-                        if checkpoint is None:
-                            checkpoint = latest
-                        elif latest >= checkpoint + 2:
-                            ends = consumer.get_watermark_offsets(
-                                TopicPartition(topic, 0), timeout=30
-                            )[1]
-                last_check = time.monotonic()
+class HistoryReplay:
+    def __init__(self, start, end):
+        self.first, self.last = bounds(start, end)
+        self.admin = AdminClient({"bootstrap.servers": os.environ["FEATURE_KAFKA_BROKERS"]})
+        self.start, self.end = start, end
+        self.seed = self.progress = self.checkpoint = None
+        self.last_check = 0
+        self.deadline = time.monotonic() + int(os.environ.get("HISTORY_TIMEOUT_SECONDS", "259200"))
+
+    def ends(self, consumer):
+        if time.monotonic() > self.deadline:
+            raise TimeoutError("history unit did not finish before its deadline")
+        if time.monotonic() - self.last_check < 5:
+            return None
+        self.last_check = time.monotonic()
+        self.seed = read_json(os.environ["HISTORY_SEED_REPORT"])
+        if self.seed and self.seed.get("failed"):
+            raise RuntimeError("history seed failed")
+        if self.seed and self.seed.get("done"):
+            self.progress = consumed(self.admin, self.seed)
+            if self.progress:
+                _, latest = checkpoints()
+                if self.checkpoint is None:
+                    self.checkpoint = latest
+                elif latest >= self.checkpoint + 2:
+                    topic = os.environ["FEATURE_UPDATE_TOPIC"]
+                    return {
+                        0: consumer.get_watermark_offsets(TopicPartition(topic, 0), timeout=30)[1]
+                    }
+        return None
+
+    def report(self, rows):
         job, _ = checkpoints()
-        report = {
-            "start": start,
-            "end": end,
-            "epoch": epoch,
-            "seed": seed,
-            "counts": counters(job),
-            "rows": dict(rows_written),
-            "consumed": progress,
-            "gate": False,
-        }
-        write_json(os.environ["RUN_REPORT"], report)
-    finally:
-        consumer.close()
+        write_json(
+            os.environ["RUN_REPORT"],
+            {
+                "start": self.start,
+                "end": self.end,
+                "epoch": os.environ["FEATURE_EPOCH"],
+                "seed": self.seed,
+                "counts": counters(job),
+                "rows": rows,
+                "consumed": self.progress,
+                "gate": False,
+            },
+        )
 
 
 def validate_gate(report):

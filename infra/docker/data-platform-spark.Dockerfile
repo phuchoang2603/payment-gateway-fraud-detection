@@ -44,6 +44,8 @@ COPY --from=build /opt/data-pipeline/batch/.venv /opt/data-pipeline/batch/.venv
 COPY --from=build /opt/data-pipeline/batch/payments.pb /opt/data-pipeline/batch/payments.pb
 COPY --from=jars /jars/ /opt/spark/jars/
 COPY contracts/data-products /contracts/data-products
+COPY contracts/features/fraud-snapshot-v2.yaml /contracts/features/
+ENV FEATURE_DEFINITION=/contracts/features/fraud-snapshot-v2.yaml
 ENV PATH="/opt/data-pipeline/batch/.venv/bin:$PATH" \
     PYSPARK_PYTHON="/opt/data-pipeline/batch/.venv/bin/python" \
     DATA_PRODUCTS_ROOT="/contracts/data-products" \

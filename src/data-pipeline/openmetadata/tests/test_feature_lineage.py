@@ -8,16 +8,20 @@ from openmetadata import integrations, lineage, publish
 ROOT = Path(__file__).resolve().parents[4]
 
 
-def test_feature_lineage_has_pipeline_only_online_targets_and_history_tables():
+def test_feature_lineage_traces_writer_and_history_tables():
     edges = lineage.edges("v19")
     selected = [
         edge
         for edge in edges
-        if edge.pipeline.startswith("feature-writer-") or edge.pipeline in ("feast-materialize", "stream-history")
+        if edge.pipeline == "feature-writer" or edge.pipeline in ("feast-materialize", "stream-history")
     ]
     assert len(selected) == 7
-    online = [edge for edge in selected if edge.pipeline in ("feature-writer-online", "feast-materialize")]
-    assert all(edge.target.kind == "pipeline" for edge in online)
+    writer = lineage.Node("pipeline", lineage.pipeline_fqn("feature-writer"))
+    writes = [edge for edge in selected if edge.pipeline == "feature-writer" and edge.target.kind == "table"]
+    assert {edge.source for edge in writes} == {writer}
+    assert {edge.target for edge in writes} == {
+        lineage.table(f"gold.feat_stream_{scope}") for scope in ("customer", "payment_method")
+    }
     history = [edge for edge in selected if edge.pipeline == "stream-history"]
     assert {edge.source for edge in history} == {lineage.BRONZE_EVENTS}
     assert {edge.target for edge in history} == {
@@ -33,7 +37,7 @@ def test_feature_lineage_has_pipeline_only_online_targets_and_history_tables():
 def test_replay_history_and_materialization_reports_keep_governance_parameters(tmp_path):
     for report in (
         {"start": "2025-09-01", "end": "2025-10-01", "sampled": 12, "since": "2025-09-01", "checked": True},
-        {"store": "online", "from": {"0": 1}, "until": {"0": 10}, "rows": 9},
+        {"mode": "replay", "from": {"0": 1}, "until": {"0": 10}, "rows": 9},
         {
             "start": "2025-09-01",
             "end": "2025-10-01",

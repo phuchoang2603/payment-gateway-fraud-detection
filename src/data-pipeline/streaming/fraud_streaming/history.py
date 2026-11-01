@@ -2,22 +2,15 @@ import argparse
 import json
 import os
 import time
-from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import boto3
-import duckdb
-from botocore.config import Config
 from confluent_kafka import ConsumerGroupTopicPartitions, Producer, TopicPartition
 from confluent_kafka.admin import AdminClient, NewTopic
 from google.protobuf.json_format import ParseDict
-from pyiceberg.catalog import load_catalog
-from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan
 
-from fraud_streaming.model import DAY, DEDUP_RETENTION, dedup_content, dedup_status
-from fraud_streaming.wire import PaymentEvent, decode
+from fraud_streaming.wire import PaymentEvent
 
 
 def encode(row):
@@ -42,49 +35,9 @@ def encode(row):
     return ParseDict(document, PaymentEvent()).SerializeToString(deterministic=True)
 
 
-class Audit:
-    def __init__(self):
-        self.events = {}
-        self.attempts = {}
-        self.expiry = []
-        self.counts = Counter(events=0, attempts=0, duplicates=0, too_late=0)
-        self.now = 0
-
-    def observe(self, raw):
-        import heapq
-
-        fact, recorded = decode(raw)
-        if recorded < self.now:
-            raise ValueError("Bronze replay source order regressed")
-        self.now = recorded
-        self.counts["events"] += 1
-        while self.expiry and self.expiry[0][0] <= self.now:
-            _, scope, key = heapq.heappop(self.expiry)
-            (self.events if scope == "event" else self.attempts).pop(key, None)
-        if fact is None:
-            return
-        self.counts["attempts"] += 1
-        if fact.started_at < self.now - DAY:
-            self.counts["too_late"] += 1
-            return
-        for scope, seen, key in (
-            ("event", self.events, fact.event_id),
-            ("attempt", self.attempts, fact.identity),
-        ):
-            content = dedup_content(scope, fact)
-            status = dedup_status(seen.get(key), content)
-            if status == "conflict":
-                self.counts["conflicts"] += 1
-                return
-            if status == "duplicate":
-                self.counts["duplicates"] += 1
-                return
-            seen[key] = content
-            heapq.heappush(self.expiry, (fact.started_at + DEDUP_RETENTION, scope, key))
-        self.counts["accepted"] += 1
-
-
 def lake():
+    from pyiceberg.catalog import load_catalog
+
     return load_catalog(
         "lake",
         type="rest",
@@ -117,6 +70,9 @@ def write_report(report):
     location = urlsplit(os.environ["HISTORY_SEED_REPORT"])
     body = json.dumps(report, sort_keys=True).encode()
     if location.scheme == "s3":
+        import boto3
+        from botocore.config import Config
+
         client = boto3.client(
             "s3",
             endpoint_url=os.environ["S3_ENDPOINT"],
@@ -154,6 +110,9 @@ def wait_for_lag(admin, epoch, produced, bound, timeout=600):
 
 
 def seed(start, end):
+    import duckdb
+    from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan
+
     first, last = date.fromisoformat(start), date.fromisoformat(end)
     if first >= last:
         raise ValueError("history start must precede end")
@@ -185,7 +144,6 @@ def seed(start, end):
             "queue.buffering.max.messages": 20000,
         }
     )
-    audit = Audit()
     offset, sequence = 0, 0
     failures = []
 
@@ -221,7 +179,6 @@ def seed(start, end):
         for batch in reader:
             for row in batch.to_pylist():
                 raw = encode(row)
-                audit.observe(raw)
                 producer.produce(
                     input_topic,
                     partition=0,
@@ -231,7 +188,7 @@ def seed(start, end):
                     on_delivery=delivered,
                 )
                 offset += 1
-            clock(audit.now)
+            clock(int(row["recorded_at"].replace(tzinfo=UTC).timestamp() * 1_000_000))
             wait_for_lag(admin, epoch, offset, 1000)
         clock(int((until + timedelta(days=1, milliseconds=1)).timestamp() * 1_000_000))
         report = {
@@ -239,7 +196,7 @@ def seed(start, end):
             "end": end,
             "epoch": epoch,
             "snapshot": snapshot,
-            "counts": dict(audit.counts),
+            "events": offset,
             "input_end": offset,
             "clock_end": sequence,
             "events_per_second": offset / max(time.monotonic() - began, 1),
