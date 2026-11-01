@@ -28,8 +28,9 @@ spec:
       grafana/result_overflow_mode: break
       grafana/max_threads: 2
       grafana/constraints/readonly/const: ""
-      # The Grafana ClickHouse plugin sends its query timeout (60 s by default) as max_execution_time on every query.
-      grafana/constraints/max_execution_time/max: 60
+      # clickhouse-go, under the Grafana plugin, sends max_execution_time = time left to the request deadline + 5 s;
+      # the plugin's query timeout is 60 s, so up to 65.
+      grafana/constraints/max_execution_time/max: 65
       grafana/constraints/max_memory_usage/max: 1073741824
       grafana/constraints/max_result_rows/max: 100000
       marts/allow_database_iceberg: 1

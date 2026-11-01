@@ -31,7 +31,13 @@ check_go() (
   mkdir -p "$reports"
   cd "$1"
   export GOWORK=off
-  golangci-lint run ./...
+  # A module that pins golangci-lint as a Go tool builds it against its own x/tools, which can read newer
+  # toolchains' export data than the release binary.
+  if go tool -n golangci-lint > /dev/null 2>&1; then
+    go tool golangci-lint run ./...
+  else
+    golangci-lint run ./...
+  fi
   go test -p 1 -race -count=1 -coverprofile "$reports/coverage.out" ./...
   go tool cover -func "$reports/coverage.out" | tee "$reports/coverage.txt"
   go tool cover -html "$reports/coverage.out" -o "$reports/coverage.html"

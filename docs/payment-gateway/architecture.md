@@ -7,7 +7,7 @@ The gateway and its fraud decisioning path. The [verification evidence](../../op
 - [Payment flows](flows.md): identity, checkout and payment-authority contracts, with the checkout and recovery sequence.
 - [Service conventions](conventions.md): code layout, dependency direction and per-service ownership rules.
 - [Docker images](docker.md): image builds for every service.
-- [Platform architecture](../overview/architecture.md): deployable units, ownership boundaries and the full deployment diagram.
+- [Platform architecture](../Home.md#architecture): deployable units, ownership boundaries and the full deployment diagram.
 
 ## Gateway design
 
@@ -47,7 +47,7 @@ The first working slice is hosted checkout → rules-based fraud decision → si
 
 Later gateway work adds authorization/capture and refunds; database sharding follows measured load. Feature serving and model inference arrive through the [ML serving](../ml/serving.md) path.
 
-The domain is in the [proposal](../overview/proposal.md); status is in the [roadmap](../overview/roadmap.md).
+The domain is in the [proposal](../Home.md#domain); status is in the [roadmap](../Home.md#roadmap).
 
 ## Feature-contract boundary
 

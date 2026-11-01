@@ -1,2 +1,15 @@
 environment: dev
 namePrefix: payment-gateway-dev
+# The LLM slice needs only ClickHouse, the lakehouse catalog and the LLM applications on dev. The streaming,
+# Spark, Kafka and gateway applications are off for its evidence runs, which share dev-server1 with the GPU.
+applications:
+  kafka:
+    enabled: false
+  payment-gateway:
+    enabled: false
+  live-traffic:
+    enabled: false
+  fraud-features:
+    enabled: false
+  data-pipelines:
+    enabled: false

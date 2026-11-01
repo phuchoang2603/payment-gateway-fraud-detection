@@ -19,7 +19,7 @@ from batch.bronze.ingest import EVENTS as BRONZE_EVENTS
 from batch.bronze.ingest import LABELS as BRONZE_LABELS
 from batch.bronze.schema import EVENT_COLUMNS, LABEL_COLUMNS
 from batch.days import DAY, between, day_range, midnight
-from batch.lakehouse import create_table, overwrite, read_at, ref_snapshot, write_ref
+from batch.lakehouse import CODE_PROPERTY, code_version, create_table, overwrite, read_at, ref_snapshot, write_ref
 from batch.metrics import phase
 from batch.spark import ICEBERG_CATALOG, session
 from batch.store import Store
@@ -310,6 +310,7 @@ def run(spark, run_id: str, start_day, end_day) -> dict:
         **{prop: str(snapshots[table] or "") for table, prop in BRONZE_PROPERTIES.items()},
         RUN_PROPERTY: run_id,
         RANGE_PROPERTY: f"{start_day}/{end_day}",
+        CODE_PROPERTY: code_version(),
     }
     phases, written = {}, {}
     in_days = (F.col(PAYMENT_DAY) >= F.lit(start_day)) & (F.col(PAYMENT_DAY) <= F.lit(end_day))

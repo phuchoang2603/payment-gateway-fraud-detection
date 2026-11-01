@@ -34,6 +34,19 @@ Keys are integration-scoped customer and payment-method identities. Request feat
 
 Labels, scenario and oracle fields, and anything that happens after the attempt (decision, outcome, payment status) are never features.
 
+## Build order
+
+Steps 2–8 are implemented; prod runs are pending.
+
+1. **DP3 offline features.** A daily Spark job over Silver writes `feat_customer_daily` and `feat_payment_method_daily` with `event_timestamp` and `created`, for the 7- and 30-day windows.
+2. **Offline store.** Feast's Spark offline store reads the `feat_` tables through `SparkSource(table=…)` on the Iceberg catalog. Training builds its dataset with `get_historical_features(payment_risk_v1)` from `label_attempt`.
+3. **Streaming features to offline.** The `feature-writer` appends journal snapshots to `gold.feat_stream_*` with PyIceberg, keeping the Kafka offsets in the same commit. History comes from a Kappa replay of Bronze through the same Flink job.
+4. **Streaming features to online.** The same process pushes each batch to Redis with Feast's `push` before buffering its Iceberg append.
+5. **Materialization.** `feast-materialize` loads the daily views into Redis after DP3 and checks a sample against the offline rows.
+6. **TTL and feature services.** 31 days 12 hours for daily views and 24 hours 5 minutes for stream views, with reasons on the [TTL](#ttl-and-freshness) section; one `payment_risk_v1` service for training and Go Fraud.
+7. **Natural keys.** Views key on integration plus customer or payment-method IDs, and Go Fraud requests the new service.
+8. **Governance.** OpenMetadata's Flink connector records the live job, with SDK lineage as the fallback; the writer, history and materialization publish lineage and run status.
+
 ## Online and offline paths
 
 - **Online:** the Flink journal feeds one `feature-writer` that pushes Redis before buffering its Iceberg appends. `payment_risk_v1` exposes customer and payment-method daily and stream views under natural keys, plus request_features from raw fields in the same request. Go rules retain their own logic.

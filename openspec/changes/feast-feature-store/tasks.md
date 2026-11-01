@@ -93,7 +93,7 @@
   - `docs/data/online.md`: the stream writer and prod `live-v19`, replacing the "disabled until" sentences;
   - `docs/data/orchestration-governance.md`: `feast-materialize`, `stream-history`, their range parameters, and the Flink connector;
   - `docs/data/offline.md`: the stream tables and their epochs;
-  - `docs/overview/roadmap.md`: steps 2–8.
+  - `docs/ml/feature-store.md#build-order` (moved from the roadmap in the new layout) and the `Home.md` roadmap row: steps 2–8.
 
   Verify that the links resolve.
 

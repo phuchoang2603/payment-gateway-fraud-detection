@@ -7,6 +7,7 @@ Two Talos Kubernetes clusters run the same application charts. They are provisio
 | Infrastructure | Proxmox VMs: one control plane and two workers | AWS `us-east-1`, single availability zone |
 | Baseline nodes | `dev-server1` (control plane), `dev-server2`, `dev-server3` | One On-Demand `m6a.xlarge` control plane and one On-Demand `m6a.xlarge` worker |
 | Elastic capacity | None | Karpenter `aws-cpu-burst` Spot pool, up to 12 nodes / 48 vCPU / 192 GiB, large and xlarge instances, consolidated after 5 minutes |
+| GPU | One RTX 5060 Ti (16 GiB) on `dev-server1`, shared by the chat and embedding servers through one DRA claim | Karpenter `aws-gpu-training` Spot pool restricted to `g6.xlarge` (one L4); the LLM platform is disabled in prod until it is launched |
 | Volumes | `local-path` | Encrypted gp3 EBS |
 | Object storage | MinIO `platform-dev` | Private versioned S3 |
 

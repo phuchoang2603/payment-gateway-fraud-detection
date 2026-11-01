@@ -131,7 +131,7 @@ marts:
   user: marts
   # The clickhouse chart's ExternalSecret for the marts user in the same namespace.
   passwordSecret: clickhouse-marts
-  retentionDays: 180
+  retentionDays: 90
   resources:
     requests:
       cpu: 100m

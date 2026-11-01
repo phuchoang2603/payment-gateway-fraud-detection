@@ -1,0 +1,159 @@
+{{- $root := . }}
+{{- $rag := include "rag-pipeline.image" (dict "image" .Values.images.pipeline "global" .Values.global) }}
+{{- $metadata := include "rag-pipeline.image" (dict "image" .Values.images.metadata "global" .Values.global) }}
+{{- $pending := "{{tasks.publish-corpus.outputs.parameters.skip}} == false" }}
+{{- $version := "{{tasks.publish-corpus.outputs.parameters.version}}" }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: rag-knowledge
+  namespace: {{ .Values.pipelineNamespace }}
+spec:
+  serviceAccountName: rag-pipeline
+  entrypoint: knowledge
+  onExit: publish
+  activeDeadlineSeconds: {{ .Values.workflow.activeDeadlineSeconds }}
+  synchronization:
+    mutexes:
+      - name: rag-knowledge-writer
+  podMetadata:
+    labels:
+      app.kubernetes.io/part-of: rag-pipeline
+      app.kubernetes.io/component: workflow
+      # The pipeline namespace is not enrolled in the mesh; the gateway and pgvector admit this workflow by identity.
+      istio.io/dataplane-mode: ambient
+  securityContext:
+    {{- include "rag-pipeline.podSecurity" . | nindent 4 }}
+  # The executor's own containers need the restricted settings too; the namespace enforces them.
+  podSpecPatch: |
+    initContainers:
+      - name: init
+        securityContext:
+          {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
+    containers:
+      - name: wait
+        securityContext:
+          {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
+  templates:
+    - name: knowledge
+      dag:
+        tasks:
+          - name: publish-corpus
+            template: step
+            arguments:
+              parameters: [{name: step, value: publish}, {name: version, value: ""}]
+          {{- $previous := "publish-corpus" }}
+          {{- range $step := list "chunk" "embed" "validate" "write" "verify" }}
+          - name: {{ $step }}
+            depends: {{ $previous }}
+            when: {{ $pending | quote }}
+            template: step
+            arguments:
+              parameters: [{name: step, value: {{ $step }}}, {name: version, value: {{ $version | quote }}}]
+          {{- $previous = $step }}
+          {{- end }}
+          - name: checks
+            depends: verify
+            template: checks
+    - name: step
+      inputs:
+        parameters:
+          - name: step
+          - name: version
+      retryStrategy:
+        limit: 2
+        retryPolicy: OnError
+      outputs:
+        parameters:
+          - name: version
+            globalName: knowledge-version
+            # Every step sets the global; steps after publish write no file and pass their input through.
+            valueFrom: {path: /tmp/outputs/version, default: "{{ "{{inputs.parameters.version}}" }}"}
+          - name: skip
+            valueFrom: {path: /tmp/outputs/skip, default: "false"}
+      container:
+        image: {{ $rag | quote }}
+        args: ["{{ "{{inputs.parameters.step}}" }}"]
+        env:
+          - name: KNOWLEDGE_VERSION
+            value: "{{ "{{inputs.parameters.version}}" }}"
+          - name: KNOWLEDGE_ROOT
+            value: s3://{{ .Values.storage.bucket }}/datasets/payment-gateway/knowledge
+          - name: RUN_ROOT
+            value: s3://{{ .Values.storage.bucket }}/runs/payment-gateway/knowledge/{{ "{{workflow.name}}" }}
+          - name: EMBEDDING_REVISION
+            value: {{ .Values.embedding.revision }}
+          {{- include "rag-pipeline.storageEnv" . | nindent 10 }}
+          {{- include "rag-pipeline.gatewayEnv" (dict "root" . "secret" "rag-gateway") | nindent 10 }}
+          {{- include "rag-pipeline.dbEnv" (dict "root" . "secret" "rag-db-writer") | nindent 10 }}
+        securityContext:
+          {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
+        resources:
+          {{- toYaml .Values.workflow.resources | nindent 10 }}
+    - name: checks
+      retryStrategy:
+        limit: 2
+        retryPolicy: OnError
+      container:
+        image: {{ $metadata | quote }}
+        command: [python, -m, openmetadata_jobs.checks]
+        env:
+          - name: CHECK_PRODUCT
+            value: knowledge-base
+          - name: METADATA_CONNECTORS_FILE
+            value: /etc/metadata/connectors.json
+          {{- include "rag-pipeline.metadataEnv" . | nindent 10 }}
+        envFrom:
+          - secretRef:
+              name: rag-clickhouse
+        # The OpenMetadata ingestion image keeps its Python packages in the airflow user's home.
+        securityContext:
+          runAsUser: 50000
+          {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
+        resources:
+          requests: {cpu: 100m, memory: 512Mi}
+          limits: {memory: 2Gi}
+        volumeMounts:
+          - name: metadata-connectors
+            mountPath: /etc/metadata
+            readOnly: true
+      volumes:
+        - name: metadata-connectors
+          configMap:
+            name: rag-metadata-connectors
+    # The version output defaults to empty, so a run that failed before publishing the corpus records status only.
+    - name: publish
+      retryStrategy:
+        limit: 2
+        retryPolicy: OnError
+      container:
+        image: {{ $rag | quote }}
+        args: [catalog]
+        env:
+          - name: KNOWLEDGE_VERSION
+            value: "{{ "{{workflow.outputs.parameters.knowledge-version}}" }}"
+          - name: WORKFLOW_STATUS
+            value: "{{ "{{workflow.status}}" }}"
+          - name: RUN_ID
+            value: "{{ "{{workflow.name}}" }}"
+          {{- include "rag-pipeline.metadataEnv" . | nindent 10 }}
+        securityContext:
+          {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
+        resources:
+          requests: {cpu: 50m, memory: 128Mi}
+          limits: {memory: 512Mi}
+---
+# One run per rag-pipeline image: a changed corpus or pipeline code yields a new image tag, hence a new Workflow.
+# It is an ordinary resource in the last wave, not a sync hook, so a failed run never blocks or retries the sync;
+# its result is in Argo Workflows and in the OpenMetadata run status. Argo CD prunes the superseded run; the current one
+# has no TTL, because self-heal would recreate a deleted run and execute it again.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: rag-knowledge-{{ index .Values.global.imageTags .Values.images.pipeline.repository | sha256sum | trunc 10 }}
+  namespace: {{ .Values.pipelineNamespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  workflowTemplateRef:
+    name: rag-knowledge

@@ -86,33 +86,29 @@ The data-pipelines application SHALL own the OpenMetadata connector configuratio
 ### Requirement: One pipeline workflow for Silver, Gold and the marts
 Silver, Gold and the marts SHALL run as one Argo workflow template, `dp-pipeline`, over a `start` and `end` UTC day range, using write-audit-publish like DP1. Its stages SHALL be:
 
-1. **Ingest:** Spark writes the Silver tables for the range to the run's audit branch.
-2. **Validate and publish Silver:** the Silver contract tests run against the branch heads, and only after they pass is Silver's `main` fast-forwarded.
-3. **Ingest:** Spark writes the gold tables for the range from published Silver to the branch.
-4. **Ingest:** a ClickHouse stage builds the range's mart days into staging tables.
-5. **Validate:** the Gold and marts contract tests run against the branch heads and the staging tables.
-6. **Publish:** only after every test succeeds, Gold's `main` is fast-forwarded and the staged mart partitions replace the live ones.
-7. **Profile:** the published marts are profiled.
+1. **Silver:** Spark writes the Silver tables for the range to the run's audit branch; the Silver contract tests run against the branch heads; only after they pass is Silver's `main` fast-forwarded.
+2. **Gold, after Silver is published:** Spark writes the gold tables for the range from published Silver to the branch; the Gold contract tests run against the branch heads; only after they pass is Gold's `main` fast-forwarded.
+3. **Marts, after Silver is published and alongside Gold:** a ClickHouse stage builds the range's mart days from published Silver into staging tables; the mart contract tests run against staging; only after they pass are the staged partitions published and the marts profiled.
 
-No reader of `main` or the live marts SHALL see a run's output before its checks pass. An exit handler SHALL publish the run outcome on success and failure. Every stage SHALL retry only on execution errors, never on failed checks.
+The Gold and mart branches SHALL NOT depend on each other. The mart build and the Gold and mart checks SHALL hold one ClickHouse mutex, so they never run on the server at the same time. No reader of `main` or the live marts SHALL see a run's output before its checks pass. An exit handler SHALL publish the run outcome on success and failure. Every stage SHALL retry only on execution errors, never on failed checks.
 
 #### Scenario: Inspect a pipeline run
 
 - **WHEN** a user opens a `dp-pipeline` run
-- **THEN** they see the Silver, Gold and marts ingest stages, the validate stage after them, the range and Bronze and Silver snapshot IDs the run read, and the publication outcome
+- **THEN** they see the Silver stages, then the Gold and mart branches side by side, with the range and the publication outcome
 
 #### Scenario: Mart build fails
 
-- **WHEN** the marts stage fails
-- **THEN** validation does not run, the workflow fails, publication records the failure, and the live marts keep their previous days
+- **WHEN** the mart build fails
+- **THEN** the mart checks do not run, the live marts keep their previous days, Gold still publishes if its checks pass, and the workflow fails
 
 #### Scenario: Gold check fails
 
 - **WHEN** a gold contract rule fails on the audit branch
-- **THEN** Gold `main` and the live marts are unchanged, the range's audited Silver stays published, the branch remains for diagnosis, and the workflow fails
+- **THEN** Gold `main` is unchanged, the branch remains for diagnosis, the marts still publish if their checks pass, and the workflow fails
 
 ### Requirement: Pipeline writer serialization
-The `pipeline` template SHALL hold one writer mutex, so the daily run, manual runs and every backfill month serialize wherever the template is referenced. Gold's Spark and the marts stage SHALL read the Silver snapshots the run itself wrote. A backfill SHALL run its months in date order, one at a time, because `dim_customer` continues each range from the versions stored before it.
+The `pipeline` template SHALL hold one writer mutex, so the daily run, manual runs and every backfill month serialize wherever the template is referenced. Gold's Spark and the marts stage SHALL read published Silver: the snapshots the run itself published, or `main` when its Silver stage was skipped. A backfill SHALL run its months in date order, one at a time, because `dim_customer` continues each range from the versions stored before it.
 
 #### Scenario: Daily run during a backfill
 
@@ -126,6 +122,19 @@ The warehouse indexing benchmark SHALL be a separate on-demand workflow template
 
 - **WHEN** the benchmark is submitted while `dp-pipeline` runs
 - **THEN** it waits for the pipeline run to finish
+
+### Requirement: Skip unchanged stages
+Every Silver and Gold commit SHALL record its day range, its input snapshot IDs and the code version that wrote it, and `marts.build_info` SHALL record the marts' range, Silver snapshot IDs and code version. Before each of Silver, Gold and the marts, a plan step SHALL compare the head of `main` (or the live `build_info`) with the range, the current input snapshots and the current code version; when every table matches, the stage's build, checks and publish SHALL be skipped. Output without a recorded code version SHALL never match, and a run without an explicit range SHALL never skip Silver or Gold.
+
+#### Scenario: Re-run after the marts failed
+
+- **WHEN** a range is re-run with the same image after its Silver and Gold were published and its mart build failed
+- **THEN** Silver and Gold are skipped and only the marts are built, checked and published
+
+#### Scenario: New code
+
+- **WHEN** a range is re-run after a new batch image is released
+- **THEN** no stage is skipped
 
 ## REMOVED Requirements
 

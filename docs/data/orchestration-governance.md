@@ -10,7 +10,7 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 |---|---|---|
 | `generate-historical` | Shards in parallel → publish | Done; v18 and v19 published |
 | `dp1-bronze` (historical or Kafka source) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Done on prod v19; Kafka runs inside `dp-daily` |
-| `dp-pipeline` (`start`/`end` days) | Spark Silver to an audit branch → Silver checks → publish Silver → Spark Gold to the branch → ClickHouse marts into staging → Gold and marts checks → publish Gold → publish marts → profile marts → OpenMetadata publish | Running on prod v19; see [the run](offline.md#prod-v19-run) |
+| `dp-pipeline` (`start`/`end` days) | Plan → Spark Silver to an audit branch → Silver checks → publish Silver, then side by side: Spark Gold to the branch → Gold checks → publish Gold, and ClickHouse marts into staging → mart checks → publish marts → profile; each plan step skips a stage whose output on main is unchanged; OpenMetadata publish on exit | Running on prod v19; see [the run](offline.md#prod-v19-run) |
 | `dp-daily`, `dp-backfill` | Kafka into Bronze, then `dp-pipeline` for yesterday and two lookback days (suspended cron); `dp-pipeline` month by month in order, stopping at the first failed month | `dp-backfill` running; `dp-daily` suspended |
 | `maintain-lakehouse` | Task `nightly` (suspended cron) or `zorder` over one month | Implemented |
 | `feast-materialize` (`since` day, `stream-recovery`) | `feast apply` registry → materialize the daily views from each view's last end minus lookback (or `since`) through now → `verify_online` compares 200 newest keys with the offline rows; `stream-recovery` instead rebuilds the stream views from the last 24 hours 5 minutes | `feast-materialize-daily` cron, suspended |
@@ -67,7 +67,7 @@ Pipelines publish lineage (historical source and Kafka topics → Bronze → Sil
 
 ### Grafana dashboards
 
-Three dashboards (payments overview, merchant drill-down, fraud outcomes) live in [`infra/charts/data-pipelines/dashboards`](../../infra/charts/data-pipelines/dashboards) and ship as ConfigMaps labelled `grafana_dashboard: "1"` for the platform Grafana sidecar. They query only `marts.*` through the datasource UID `clickhouse-marts` as the read-only `grafana` user. They are not catalogued in OpenMetadata. The platform repository must provide:
+Three dashboards (payments overview, merchant drill-down, fraud outcomes) live in [`infra/charts/data-pipelines/dashboards`](../../infra/charts/data-pipelines/dashboards) and ship as ConfigMaps labelled `grafana_dashboard: "1"` for the platform Grafana sidecar. They query only `marts.*` through the datasource UID `clickhouse-marts` as the read-only `grafana` user. They are not catalogued in OpenMetadata. The platform provides:
 
 1. the `grafana-clickhouse-datasource@4.23.3` plugin in the VictoriaMetrics stack's Grafana;
 2. a datasource named `ClickHouse marts` with UID `clickhouse-marts`: host `clickhouse.data.svc.cluster.local`, port 9000, native protocol, no TLS, user `grafana`, default database `marts`;
@@ -76,7 +76,17 @@ Three dashboards (payments overview, merchant drill-down, fraud outcomes) live i
 5. dashboard sidecar coverage of namespace `data`, with `folderAnnotation: grafana_folder`;
 6. if a NetworkPolicy restricts `data`, a rule allowing `observability/grafana` to reach `data/clickhouse` on TCP 9000.
 
-Status on prod (2026-11-01): the ConfigMaps exist in `data`, but the sidecar watches only `observability` and `llm` and the datasource is not provisioned; both are requested from the platform. The marts and their checks do not depend on Grafana.
+On prod the `grafana` user's profile allows `max_execution_time` up to 65 seconds, because clickhouse-go under the plugin sends the time left to its 60-second request deadline plus 5 seconds; a lower cap rejects every query. The historical policy is rule-based and records no risk score, so the fraud dashboard tables risk decisions against simulation truth instead of a score histogram. The screenshots cover May 2026, the first backfilled month inside the 180-day window the marts kept then; the window is now 90 days, so the live dashboards start at 2026-08-04.
+
+![Payments overview: daily attempts, approval and risk-decline rate, amounts, top merchants and a 56.4% hot-merchant share](images/grafana-payments-overview.png)
+
+![Merchant drill-down for the hot merchant: daily attempts with the approval rate on its own axis, outcome mix and recent attempts](images/grafana-merchant-drilldown.png)
+
+![Fraud outcomes: truth fraud caught against missed, chargeback rate (complete and provisional), risk decision against truth and the scenario breakdown](images/grafana-fraud-outcomes.png)
+
+### RAG knowledge workflow and AI assets
+
+The RAG pipeline's `rag-knowledge` workflow also runs in `data`, from the [`rag-pipeline` chart](../../infra/charts/rag-pipeline). It is governed the same way: the knowledge-base contract's checks run through the shared checks image, and its exit handler publishes the run status and the lineage from the corpus container to `knowledge.chunks`. See [RAG](../llm/rag.md#governance).
 
 ## Schema registry
 

@@ -28,6 +28,8 @@ from batch.gold.windows import (
     window_states,
 )
 from batch.lakehouse import (
+    CODE_PROPERTY,
+    code_version,
     create_table,
     overwrite,
     pinned_writer,
@@ -477,6 +479,7 @@ def run(spark, run_id: str, start_day: date, end_day: date) -> dict:
         LOGIC_PROPERTY: LOGIC_VERSION,
         HISTORY_PROPERTY: start.isoformat(),
         RANGE_PROPERTY: f"{start_day}/{end_day}",
+        CODE_PROPERTY: code_version(),
     }
     tables = {}
     # The daily views read the range plus one longest window, pruned to their columns, once.

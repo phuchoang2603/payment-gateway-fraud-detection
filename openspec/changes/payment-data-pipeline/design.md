@@ -1,6 +1,6 @@
 ## Context
 
-This change merges `rebuild-generation-to-silver` and `dp3-features-and-marts` into one data pipeline, and records the implementation as it runs on prod v19 (`main` at `4762447`, 2026-11-01).
+This change merges `rebuild-generation-to-silver` and `dp3-features-and-marts` into one data pipeline, and records the implementation as it runs on prod v19 (2026-11-01).
 
 - **Platform:** Spark 4.1.3 on the Apache Spark Operator; Iceberg 1.12 through the Polaris REST catalog; ClickHouse 26.10 reads Iceberg through a DataLakeCatalog database and holds the native marts; OpenMetadata 2.0.6 is the catalog; Argo Workflows runs every batch stage.
 - **Prod capacity:** an on-demand `aws-workers` pool of three `m6a.xlarge` nodes (step pods, Spark drivers, databases), and a spot `aws-cpu-burst` pool of up to 12 nodes, 48 vCPU and 192 GiB (Spark executors and generator shards). The ClickHouse server has about 3.4 GiB of memory and a 30 GiB volume shared with Langfuse.
@@ -314,9 +314,9 @@ One row per (attempt key, `label_source`), taken from `silver.labels` where `lin
 ```sql
 CREATE TABLE marts.fact_payment_attempt (
   integration_id LowCardinality(String),
-  payment_id String, attempt_id String,
-  merchant_id String, customer_id String, payment_method_fingerprint String,
-  payment_method_type LowCardinality(String), device_fingerprint Nullable(String),
+  payment_id String CODEC(ZSTD(3)), attempt_id String CODEC(ZSTD(3)),
+  merchant_id String, customer_id String CODEC(ZSTD(3)), payment_method_fingerprint String CODEC(ZSTD(3)),
+  payment_method_type LowCardinality(String), device_fingerprint Nullable(String) CODEC(ZSTD(3)),
   amount_minor Int64, currency LowCardinality(String),
   started_at DateTime64(6, 'UTC'),
   attempted_at Nullable(DateTime64(6, 'UTC')),
@@ -352,6 +352,8 @@ ORDER BY (integration_id, day, merchant_id)
 TTL day + INTERVAL {retention_days} DAY DELETE;
 ```
 
+**Codecs.** The UUID and SHA-256 hex columns are random, so the default LZ4 barely compresses them: they took 6.8 of the fact's 6.4 GiB uncompressed (about 240 bytes a row over May–June 2026). ZSTD's entropy stage stores them near their information content: on a 2M-row sample, 18.5 bytes instead of 35.5 for a UUID string (16 for the native `UUID` type) and 32.2 instead of 63.4 for a fingerprint (32 for `FixedString(32)`), so the columns keep their string types and their consumers, at about half the fact's size. With the 90-day window the live fact is about 6 GiB, leaving the shared 30 GiB volume room for a build's staging copies.
+
 **Fixed queries and the structure that serves each one:**
 
 | Query | Used by | Served by |
@@ -368,53 +370,55 @@ TTL day + INTERVAL {retention_days} DAY DELETE;
 - **Time first, as ClickHouse recommends.** Key columns go in ascending cardinality and by how often queries filter on them. Almost every dashboard and tool query has a time range. A day has 365 values in v19 and a merchant has 20,000, so the key is `(integration_id, toDate(started_at), merchant_id, started_at)`.
   - The key uses the expression `toDate(started_at)` rather than a separate date column. ClickHouse analyses monotonic functions, so a plain `started_at >= … AND started_at < …` filter, which is what Grafana's `$__timeFilter(started_at)` produces, prunes through the primary key with no rewriting.
   - Inside each day, rows are ordered by merchant and then by time. One merchant's range is a contiguous slice per day, and "latest attempts" reads stay ordered.
-  - Daily partitions line up with the day-granular TTL (decision 7), so expiry drops whole partitions instead of rewriting parts. That gives about 180 partitions at the 180-day retention, within ClickHouse's guidance of keeping the partition count in the hundreds to low thousands. Each partition holds about 0.5M rows in prod and about 9k in dev. `fact_merchant_day` is small, so it keeps monthly partitions and row-level TTL.
+  - Daily partitions line up with the day-granular TTL (decision 7), so expiry drops whole partitions instead of rewriting parts. That gives about 90 partitions at the 90-day retention, within ClickHouse's guidance of keeping the partition count in the hundreds to low thousands. Each partition holds about 0.5M rows in prod and about 9k in dev. `fact_merchant_day` is small, so it keeps monthly partitions and row-level TTL.
 - **Integration first.** `integration_id` has one value today, but it leads the key so per-integration queries stay correct.
 - **Hot merchant.** One merchant takes about 56% of rows, so Q1 on the hot merchant still reads about half of each day. The evidence reports Q1 for both the hot merchant and a median merchant, so the skew is visible instead of hidden.
 - **Key choice considered:** `(merchant_id, day)` first. It is slightly faster for one merchant over a long range, but every network-wide time query would scan whole partitions. A time-first key serves both.
 - **Granularity.** Bloom filters use `GRANULARITY 4`, one index block per 4 × 8192 rows, to balance index size against skipping. Customer IDs are near-unique per granule block, which is why a bloom filter is chosen over a set index.
 - **Projections.** A customer-ordered projection would beat the bloom filter on Q2 but double storage. Prod's 30 Gi PVC is shared with Langfuse, so projections are not used. Revisit them if the evidence shows a weak bloom result.
 
-### 13. Mart build: one day at a time, staging, partition replace
+### 13. Mart build: staged attempts and labels joined in hash buckets
 
-`batch/gold/marts.py` runs as a container on the Spark image and talks to ClickHouse over HTTP as user `marts`.
+`batch/gold/marts.py` runs as a container on the Spark image and talks to ClickHouse over HTTP as user `marts`. It reads published Silver only, at the snapshots the `plan-gold` step resolves, so it needs nothing from Gold.
 
 1. Drop `marts.*__staging` tables left by a failed run, then create empty staging tables from the DDL.
-2. Compute the window from the wall clock, matching the tables' `TTL`: `window_start = today − 179 days`. `window_end` is the run's last day, and `build_info`'s window end never moves backwards.
-3. Choose the rebuilt days inside the window: the run's days, the start days of attempts that gained a label in the range, and the days whose 21-day chargeback window completes in the range.
-4. Aggregate the linked labels once into `attempt_labels__staging`: the earliest simulation truth and scenario, and the earliest chargeback, per attempt. Only labels available from the first rebuilt day to 45 days after the last are read.
-5. Insert `fact_payment_attempt__staging` one day at a time: that day's lifecycle-valid attempts, pinned with `SETTINGS iceberg_snapshot_id`, `RIGHT JOIN` the label summary with `join_algorithm = 'hash'`. The right side of a hash join is its build side, so the in-memory table is one day of attempts (about 0.5M rows in v19), not the label summary or a month. One May 2026 day measured 515,302 rows, 1.10 GiB peak and 66 seconds, inside the `marts` profile's 2 GiB.
-6. Regroup the months containing the rebuilt days into `fact_merchant_day__staging` from the live fact and the staged days, write `build_info__staging`, and reconcile the staged row count with the lifecycle-valid Silver count on the rebuilt days.
-7. The checks stage audits the staging tables (`{object}` resolves to `marts.<table>__staging`), and its results attach to the live entities.
-8. `publish-marts`, after `publish-gold`, replaces each rebuilt day and month with `ALTER TABLE … REPLACE PARTITION … FROM` staging, drops days older than the window, exchanges `build_info` and drops the staging tables.
+2. Compute the window from the wall clock, matching the tables' `TTL`: `window_start = today − 89 days`. `window_end` is the run's last day, and `build_info`'s window end never moves backwards.
+3. Rebuild the run's days and the 45-day label lookback before them, inside the window. A label available in the range belongs to an attempt started at most 45 days earlier, and the days whose 21-day chargeback window completes in the range fall inside the lookback, so this is a superset of every day the range can change; rebuilding an unchanged day rewrites the same rows.
+4. Aggregate the linked labels available from the first rebuilt day to 45 days after the last into `attempt_labels__staging`, the earliest simulation truth and scenario and the earliest chargeback per attempt, reading only the eight columns aggregated, in 8 passes of `cityHash64(payment_id)`. One pass of June 2026's window measured 822 MiB and 18 s.
+5. Stage the rebuilt days' lifecycle-valid attempts once into `attempts__staging`, a streaming read of their Iceberg partitions.
+6. Both staging tables are ordered by `(cityHash64(payment_id) % 64, attempt key)`. Insert `fact_payment_attempt__staging` in 64 buckets: one bucket of labels `RIGHT JOIN` the same bucket of attempts with `join_algorithm = 'hash'`, the attempts as the build side. Each insert reads one sixty-fourth of each table through the primary key, so the label summary is read once in total; the former per-day inserts read all of it for every rebuilt day (8.4 s each, 13.5M rows, 26 days for May).
+7. Regroup the months containing the rebuilt days into `fact_merchant_day__staging` from the live fact and the staged days, write `build_info__staging` with the run's range and code version, and reconcile the staged row count with the lifecycle-valid Silver count on the rebuilt days.
+8. `check-marts` audits the staging tables (`{object}` resolves to `marts.<table>__staging`), and its results attach to the live entities.
+9. `publish-marts` replaces each rebuilt day and month with `ALTER TABLE … REPLACE PARTITION … FROM` staging, drops days older than the window, exchanges `build_info` and drops the staging tables.
 
-A crash between partition replaces is the only partly published state; the step retries on error, and re-running the range rebuilds and audits the same days. Until the live simulator feeds new days, the wall-clock `TTL` empties the marts about 180 days after v19's last day (2026-10-28).
+A crash between partition replaces is the only partly published state; the step retries on error, and re-running the range rebuilds and audits the same days. Until the live simulator feeds new days, the wall-clock `TTL` empties the marts about 90 days after v19's last day (2026-10-28).
 
-*Alternative:* one monthly insert joined with `full_sorting_merge`. Replaced on 2026-11-01: May 2026, the first backfill month inside the window, exceeded the 2 GiB limit in `MergeJoinTransform`.
+*Alternatives:* one monthly insert joined with `full_sorting_merge`, replaced when May 2026 exceeded the 2 GiB limit in `MergeJoinTransform`; then one insert per day with the day's attempts as the hash build side, replaced because every day rescanned the whole label summary.
 
-### 14. One pipeline workflow, write-audit-publish per layer
+### 14. One pipeline workflow: Gold and the marts side by side, unchanged stages skipped
 
 ```text
 dp-pipeline (WorkflowTemplate; the pipeline template holds mutex dp-writer; onExit: publish)
-├── silver          SparkApplication batch/silver/curate.py → audit-<workflow> branch
-├── check-silver    openmetadata.checks: silver-payments on the branch heads
-├── publish-silver  openmetadata.wap: fast-forward Silver main
-├── gold            SparkApplication batch/gold/features.py → the same branch
-├── marts           batch/gold/marts.py build → marts.*__staging
-├── check-gold      openmetadata.checks: gold-features on the branch, payment-marts on staging
-├── publish-gold    openmetadata.wap: fast-forward Gold main
-├── publish-marts   batch/gold/marts.py publish: replace the rebuilt partitions
-└── profile         OpenMetadata profiler on the published marts
+├── plan-silver       openmetadata.plan: skip Silver?
+├── silver            SparkApplication batch/silver/curate.py → audit-<workflow> branch
+├── check-silver      openmetadata.checks: silver-payments on the branch heads
+├── publish-silver    openmetadata.wap: fast-forward Silver main
+├── plan-gold         openmetadata.plan: skip Gold?, and the published Silver snapshots
+├── gold ─ check-gold ─ publish-gold                    (gold-features)
+└── plan-marts ─ marts ─ check-marts ─ publish-marts ─ profile   (payment-marts)
 dp-daily    (CronWorkflow, suspended): dp1-bronze from Kafka, then the pipeline for yesterday and 2 lookback days
 dp-backfill (WorkflowTemplate): the pipeline once per month of [start, end], parallelism 1, failFast
 dp1-bronze  (WorkflowTemplate, mutex dp1-bronze-writer): spark → checks → publish-tables → publish
 ```
 
-- **Per layer.** Silver is audited and published before Gold reads it, so a Silver problem stops the run before any Gold work. A Gold failure leaves the range's new Silver on `main` with its previous Gold; re-running the range rebuilds Gold. Gold is published before the marts.
+- **Per layer.** Silver is audited and published before Gold and the marts read it, so a Silver problem stops the run before any downstream work.
+- **Gold and the marts in parallel.** Both read published Silver and nothing of each other, so the Gold Spark job overlaps the ClickHouse mart build. The mart build, `check-gold` and `check-marts` share the `dp-clickhouse` mutex, so the 3.4 GiB server runs one of them at a time. A failure in one branch does not stop the other from publishing; the run fails, and re-running the range rebuilds only what failed (next point).
+- **Skip unchanged stages.** Every Silver and Gold commit records its range (`dp2.range`, `dp3.range`), its input snapshots and its code version (`dp.code_version`, the batch image), and `build_info` records the marts' range, Silver snapshots and code version. `plan-silver`, `plan-gold` and `plan-marts` compare the head of main with what the run would read; when every table matches, the stage's build, check and publish are skipped (`when` on the plan's decision). A re-run after a later stage failed therefore resumes there. A new image always rebuilds, a commit without a code version never matches, and daily runs never match because their inputs move.
 - **Publish.** `openmetadata.wap` fast-forwards each table's `main` to its branch head in one catalog transaction, only when `main` is still the branch's base.
 - **One mutex, on the template.** The daily run, manual runs, backfill months and maintenance serialize wherever the template is referenced.
 - **Names.** A Spark application is named after its step pod, unique per step, loop item and retry, so a backfill's months never collide.
 - **Retries.** Spark steps retry on any failure (prod: limit 10) for spot loss; containers retry on error; checks never retry a failed rule. A retried Spark step creates a new SparkApplication; a failed attempt's application that still holds a driver must be deleted before the retry's driver starts, because both would write the same branch.
+- **Ranges.** A single run can cover more than a month, but three months of Silver overflowed the executors' 24 GiB of local disk in its shuffle (June–August 2026), so backfills stay monthly.
 - **Lifecycle.** A platform admission policy (`dp1-workflow-lifecycle`) rejects deleting or terminating active workflows in `data`; runs are stopped with `shutdown: Stop`.
 - **Placement and sizing (prod).** Step pods and Spark drivers run on the on-demand `aws-workers` pool, because a spot reclaim of a driver restarts the whole application; executors run on spot `aws-cpu-burst`. Silver uses the `large` profile (11 executors × 3 cores, 9g + 3g, 4g + 1.5g driver). Gold uses the `gold` profile: 11 × 3 cores at 7g heap + 5g overhead, and a 2g + 1.5g driver. Gold runs no Python, but its executors were OOMKilled at 9g + 3g while tasks peaked at 331 MB of execution memory, so the same 12 GiB pod holds a smaller heap and more native memory. Every executor sets `MALLOC_ARENA_MAX=2`. Spark keeps graceful decommission, failure exclusion and a 200-failure, 30-minute executor failure budget.
 
@@ -428,12 +432,16 @@ Evidence is the v19 backfill itself: each technique below was adopted after a me
 | Payment-day partitions + ordered writes | Time filters scanned whole tables | Gold and the marts prune to the run's days |
 | Local fanout writes for day-laid input | The hash shuffle cost 202 GB of shuffle write on DP1 historical (Spark UI) | Silver and historical Bronze write without the shuffle |
 | Narrow dedup on `event_id` within the range | A full-history broadcast of 20M duplicated keys exceeded the driver | One shuffle per month |
-| Change-point feature rows | One row per entity per day is about 1.1B rows a year per table | 177M customer and 185M card rows through April |
+| Change-point feature rows | One row per entity per day is about 1.1B rows a year per table | 292M customer and 304M card rows through August |
 | XOR sweep for familiar devices | Joining every attempt to its customer's intervals was OOMKilled even range-scoped | One ordered window pass |
 | `persist(MEMORY_AND_DISK)`, not `localCheckpoint` | Spot reclaims lost checkpointed blocks | Recomputed from lineage instead |
 | Range-scoped checks (`additional_table_filters`) | Whole-table checks grew every month; a `SELECT *` subquery scope ran ClickHouse out of memory | check-silver + check-gold: Nov 5 + 7, Jan 11 + 21, Mar 18 + 28 min unscoped; Apr 3 + 9 min scoped |
 | Spill-safe ClickHouse settings | Hash joins in full-history checks exceeded the server | external sort and group-by, `full_sorting_merge` |
-| Per-day hash join with a small build side | The monthly sort-merge mart insert exceeded 2 GiB in May | 1.10 GiB, 66 s per day |
+| Label summary in hash passes of its own columns | June's single group-by over every label column exceeded 2 GiB | 822 MiB, 18 s a pass |
+| Fact joined in 64 hash buckets of staged attempts and labels | The monthly sort-merge insert exceeded 2 GiB in May; the per-day joins after it rescanned all labels for every day (22 s a day in June) | 16.5 s a day in August |
+| ZSTD on ID and fingerprint columns, 90-day window | About 240 bytes a row under LZ4; a 180-day window and its staging copies did not fit the 30 GiB volume | 147 bytes a row |
+| Gold and the marts side by side | The mart build waited for Gold though it reads only Silver | 44 minutes a month in July and August |
+| Skip stages already on `main` | A re-run after a later failure rebuilt every layer (22 minutes of Silver and Gold for June) | A re-run resumes at the failed stage |
 | Heap → overhead shift, `MALLOC_ARENA_MAX` | Gold executors OOMKilled in native memory | 7g + 5g pods |
 | Branch reset before a multi-commit rewrite | A retry would rebuild `dim_customer` without its history | `restage` in `replace_customers` |
 
@@ -502,7 +510,7 @@ profiles:
   grafana/result_overflow_mode: break
   grafana/max_threads: 2
   grafana/constraints/readonly/const: ""
-  grafana/constraints/max_execution_time/max: 60  # the plugin sends its 60 s query timeout
+  grafana/constraints/max_execution_time/max: 65  # clickhouse-go sends the 60 s plugin timeout + 5 s
   grafana/constraints/max_memory_usage/max: 1073741824
   grafana/constraints/max_result_rows/max: 100000
   marts/allow_database_iceberg: 1
@@ -559,7 +567,7 @@ The `lakehouse` application deploys the Polaris REST catalog that Spark, ClickHo
 |---|---|---|
 | Payments overview | daily attempts, approval rate, risk-decline rate, attempted and succeeded amounts; top 10 merchants by attempts; hot-merchant share (its attempts / all attempts) | `fact_merchant_day` |
 | Merchant drill-down | `$merchant` variable (top 200 merchants by attempts); daily KPIs; outcome mix; recent attempts table | `fact_merchant_day`, and `fact_payment_attempt` filtered by the primary key |
-| Fraud outcomes | truth fraud caught (risk declined) against missed (succeeded); chargeback rate, shaded where `chargeback_window_complete` is false; risk-score histogram; scenario breakdown (synthetic oracle, labelled as such) | `fact_payment_attempt`, `fact_merchant_day` |
+| Fraud outcomes | truth fraud caught (risk declined) against missed (succeeded); chargeback rate, shaded where `chargeback_window_complete` is false; risk decision against truth (the historical policy records no risk score); scenario breakdown (synthetic oracle, labelled as such) | `fact_payment_attempt`, `fact_merchant_day` |
 
 **Platform requests (the platform repository makes these, not this change):**
 
@@ -594,7 +602,7 @@ These requests block only the dashboard evidence.
 
 ## Migration Plan
 
-Done on prod: a clean cluster, `dp1-bronze` for v19, then `dp-backfill` from 2025-10-29. Silver is published through 2026-05-31 and Gold through 2026-04-30; `dp-backfill-drbzt` continues from 2026-05-01 to 2026-10-28.
+Done on prod: a clean cluster, `dp1-bronze` for v19, then `dp-backfill` from 2025-10-29. Silver, Gold and the marts are published through 2026-08-31; `dp-backfill-8h7gq` continues to 2026-10-28.
 
 **Rollback:** revert on `main`, then drop the `silver` and `gold` namespaces and the `marts` database in the affected environment. Bronze and the source datasets are untouched.
 

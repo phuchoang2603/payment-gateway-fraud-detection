@@ -10,7 +10,7 @@ ClickHouse SHALL hold two native MergeTree tables in the `marts` database.
 - **`marts.fact_payment_attempt`:** one row per lifecycle-valid Silver attempt, with the attempt, customer and payment-method keys, the merchant, the amount and currency, start and client attempt times, the risk decision, the outcome and payment status, the earliest available simulation-truth label and scenario, and the earliest available chargeback time.
 - **`marts.fact_merchant_day`:** one row per integration, merchant and UTC start day. It holds attempt, decided, succeeded, risk-declined and processor-declined counts, amounts, distinct customers, chargeback and truth-fraud counts, and their rates. Each rate uses the documented denominator and is null when the denominator is zero.
 
-The marts SHALL keep a rolling retention window of the configured number of days, 180, measured from the current date. Expiry SHALL be enforced by a table `TTL` that drops whole expired days. Each build SHALL insert only attempts inside that window. A one-row `marts.build_info` table SHALL record each build's window start and end, the days it rebuilt, the Silver snapshot IDs, and the build time.
+The marts SHALL keep a rolling retention window of the configured number of days, 90, measured from the current date. Expiry SHALL be enforced by a table `TTL` that drops whole expired days. Each build SHALL insert only attempts inside that window. A one-row `marts.build_info` table SHALL record each build's window start and end, the days it rebuilt, the Silver snapshot IDs, and the build time.
 
 The marts SHALL be built by ClickHouse from the `lakehouse` database with `INSERT … SELECT`. No Spark job and no export SHALL write them. Column names SHALL be stable and documented, so the dashboards and the later analytics tool can depend on them.
 
@@ -22,7 +22,7 @@ The marts SHALL be built by ClickHouse from the `lakehouse` database with `INSER
 #### Scenario: Retention window
 
 - **WHEN** a build runs on day T over Silver that holds 365 days
-- **THEN** the marts hold only attempts with start days from T − 179 onward, and `build_info` records that window
+- **THEN** the marts hold only attempts with start days from T − 89 onward, and `build_info` records that window
 
 #### Scenario: Day ages out between builds
 
@@ -35,7 +35,7 @@ The marts SHALL be built by ClickHouse from the `lakehouse` database with `INSER
 - **THEN** its approval rate for that day is null, not zero
 
 ### Requirement: Staged, idempotent mart builds
-Each run SHALL build its mart days into `__staging` tables, run every mart contract rule against the staging tables, and only after all of them pass replace each rebuilt live partition atomically with `REPLACE PARTITION`. Readers SHALL see each day either before or after a run, never partly built. A failed build or failed check SHALL leave the live tables unchanged. Rebuilding from the same Silver snapshot SHALL produce equal content. Staging tables left by a failed build SHALL be dropped before the next build starts. Each day of `fact_payment_attempt` SHALL be inserted separately, joining that day's attempts to the label summary with the attempts as the hash join's build side, so a build's peak memory follows one day rather than one month or the window.
+Each run SHALL build its mart days into `__staging` tables, run every mart contract rule against the staging tables, and only after all of them pass replace each rebuilt live partition atomically with `REPLACE PARTITION`. Readers SHALL see each day either before or after a run, never partly built. A failed build or failed check SHALL leave the live tables unchanged. Rebuilding from the same Silver snapshot SHALL produce equal content. Staging tables left by a failed build SHALL be dropped before the next build starts. The fact SHALL be built by staging the rebuilt days' attempts and the per-attempt label summary once, each ordered by a payment-hash bucket, and joining one bucket of each at a time with the attempts as the hash join's build side, so each label is read once per build and a query's memory follows one bucket.
 
 #### Scenario: Build fails midway
 
@@ -48,11 +48,11 @@ Each run SHALL build its mart days into `__staging` tables, run every mart contr
 - **THEN** both marts have equal content after each run
 
 ### Requirement: Day-range mart builds
-The mart stage SHALL rebuild, within the retention window, the start days of the DP3 run: its range, the label days it reported, and the days whose 21-day chargeback window completes in the range. It SHALL rebuild the months containing them for `fact_merchant_day`, audit those staging partitions, and then replace each live partition atomically. The live marts SHALL then equal a build over every day of the window on the same Silver.
+The mart stage SHALL read published Silver only, and SHALL rebuild, within the retention window, the run's days and the 45-day label lookback before them, which covers every attempt a label available in the range can belong to and every day whose 21-day chargeback window completes in the range. It SHALL rebuild the months containing them for `fact_merchant_day`, audit those staging partitions, and then replace each live partition atomically. The live marts SHALL then equal a build over every day of the window on the same Silver.
 
 #### Scenario: Late chargeback
 
-- **WHEN** a chargeback arrives for an attempt started 20 days ago and DP3 runs the arrival day
+- **WHEN** a chargeback arrives for an attempt started 20 days ago and the pipeline runs the arrival day
 - **THEN** that start day of `fact_payment_attempt`, and its month of `fact_merchant_day`, are rebuilt and replaced
 
 ### Requirement: Query-driven sort keys and skip indexes

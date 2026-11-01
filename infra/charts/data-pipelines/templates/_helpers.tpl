@@ -183,6 +183,43 @@ retryStrategy:
 {{- include "data-pipelines.env" .root | nindent 6 }}
 {{- end -}}
 
+{{- /* The batch image that writes Silver, Gold and the marts; a stage whose output on main came from the same range and
+inputs by this image is skipped. */}}
+{{- define "data-pipelines.codeVersion" -}}
+{{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) }}
+{{- end -}}
+{{- define "data-pipelines.plan" -}}
+- name: {{ .name }}
+  retryStrategy:
+    limit: 2
+    retryPolicy: OnError
+  inputs:
+    parameters:
+      - name: start
+      - name: end
+  outputs:
+    parameters:
+      - name: decision
+        valueFrom:
+          path: /tmp/plan/decision
+      - name: silver-snapshots
+        valueFrom:
+          path: /tmp/plan/silver_snapshots
+          default: "{}"
+  container:
+    image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.openmetadata "global" .root.Values.global) | quote }}
+    command: [python, -m, openmetadata.plan]
+    env:
+      - name: PLAN_LAYER
+        value: {{ .layer | quote }}
+      - name: DP_START
+        value: {{ "{{inputs.parameters.start}}" | quote }}
+      - name: DP_END
+        value: {{ "{{inputs.parameters.end}}" | quote }}
+      - name: DP_CODE_VERSION
+        value: {{ include "data-pipelines.codeVersion" .root | quote }}
+{{- include "data-pipelines.env" .root | nindent 6 }}
+{{- end -}}
 {{- define "data-pipelines.wapBranch" -}}
 audit-{{ "{{workflow.name}}" }}
 {{- end -}}
@@ -205,6 +242,11 @@ audit-{{ "{{workflow.name}}" }}
 
 {{- define "data-pipelines.checks" -}}
 - name: {{ .name | default "checks" }}
+{{- with .mutex }}
+  synchronization:
+    mutexes:
+      - name: {{ . }}
+{{- end }}
   retryStrategy:
     limit: 2
     retryPolicy: OnError
@@ -236,9 +278,28 @@ audit-{{ "{{workflow.name}}" }}
 
 {{- define "data-pipelines.marts-step" -}}
 - name: {{ .name }}
+{{- with .mutex }}
+  synchronization:
+    mutexes:
+      - name: {{ . }}
+{{- end }}
   retryStrategy:
     limit: 2
     retryPolicy: OnError
+  {{- if .ranged }}
+  inputs:
+    parameters:
+      - name: start
+      - name: end
+      - name: silver-snapshots
+  {{- end }}
+  {{- if .decision }}
+  outputs:
+    parameters:
+      - name: decision
+        valueFrom:
+          path: /tmp/marts
+  {{- end }}
   container:
     image: {{ include "data-pipelines.image" (dict "image" .root.Values.images.spark "global" .root.Values.global) | quote }}
     command: {{ .command | toJson }}
@@ -247,6 +308,18 @@ audit-{{ "{{workflow.name}}" }}
         value: {{ "{{workflow.name}}" | quote }}
       - name: RUN_REPORT_ROOT
         value: {{ .reportRoot | quote }}
+      {{- if .ranged }}
+      - name: DP_START
+        value: {{ "{{inputs.parameters.start}}" | quote }}
+      - name: DP_END
+        value: {{ "{{inputs.parameters.end}}" | quote }}
+      - name: DP_LOOKBACK_DAYS
+        value: {{ .root.Values.pipeline.lookbackDays | toString | quote }}
+      - name: SILVER_SNAPSHOTS
+        value: {{ "{{inputs.parameters.silver-snapshots}}" | quote }}
+      - name: DP_CODE_VERSION
+        value: {{ include "data-pipelines.codeVersion" .root | quote }}
+      {{- end }}
 {{- include "data-pipelines.martsEnv" .root | nindent 6 }}
     resources:
       {{- toYaml .root.Values.marts.resources | nindent 6 }}

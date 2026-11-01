@@ -1,7 +1,7 @@
 {{- if .Values.pipeline.enabled }}
 {{- $sizing := index .Values.spark.profiles .Values.pipeline.profile }}
 {{- $report := printf "%s/%s/gold.json" .Values.pipeline.reportRoot "{{workflow.name}}" }}
-{{- $range := list (dict "name" "DP_START" "value" "{{inputs.parameters.start}}") (dict "name" "DP_END" "value" "{{inputs.parameters.end}}") (dict "name" "DP_LOOKBACK_DAYS" "value" (toString .Values.pipeline.lookbackDays)) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.pipeline.reportRoot) }}
+{{- $range := list (dict "name" "DP_START" "value" "{{inputs.parameters.start}}") (dict "name" "DP_END" "value" "{{inputs.parameters.end}}") (dict "name" "DP_LOOKBACK_DAYS" "value" (toString .Values.pipeline.lookbackDays)) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.pipeline.reportRoot) (dict "name" "DP_CODE_VERSION" "value" (include "data-pipelines.codeVersion" .)) }}
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -47,25 +47,41 @@ spec:
           - name: end
       dag:
         tasks:
-          - name: silver
-            template: silver
+          # A stage is skipped when every table it writes already holds, at the head of main, this range's output from
+          # the same inputs by the same code (openmetadata.plan, batch.gold.marts plan): a re-run resumes where it failed.
+          - name: plan-silver
+            template: plan-silver
             arguments:
               parameters:
                 - name: start
                   value: "{{ "{{inputs.parameters.start}}" }}"
                 - name: end
                   value: "{{ "{{inputs.parameters.end}}" }}"
-          # Write-audit-publish per layer: Silver is audited and published before Gold reads it, so Gold and the
-          # marts build on, and are checked against, published Silver. A Gold failure leaves the range's new Silver
-          # on main and its previous Gold; re-running the range rebuilds Gold.
+          - name: silver
+            template: silver
+            depends: plan-silver
+            when: "{{ "{{tasks.plan-silver.outputs.parameters.decision}}" }} == run"
+            arguments:
+              parameters:
+                - name: start
+                  value: "{{ "{{inputs.parameters.start}}" }}"
+                - name: end
+                  value: "{{ "{{inputs.parameters.end}}" }}"
+          # Write-audit-publish per layer: Silver is audited and published before Gold and the marts read it.
           - name: check-silver
             template: check-silver
             depends: silver
+            when: "{{ "{{tasks.plan-silver.outputs.parameters.decision}}" }} == run"
           - name: publish-silver
             template: publish-silver
             depends: check-silver
-          - name: gold
-            template: gold
+            when: "{{ "{{tasks.plan-silver.outputs.parameters.decision}}" }} == run"
+          # Gold and the marts both read published Silver and nothing of each other, so they run side by side: the Gold
+          # Spark job overlaps the ClickHouse mart build. The mart build and the two checks share the dp-clickhouse mutex,
+          # so the small ClickHouse server runs one of them at a time. A failure in one branch leaves the other's output
+          # publishable, and the run fails.
+          - name: plan-gold
+            template: plan-gold
             depends: publish-silver
             arguments:
               parameters:
@@ -73,21 +89,59 @@ spec:
                   value: "{{ "{{inputs.parameters.start}}" }}"
                 - name: end
                   value: "{{ "{{inputs.parameters.end}}" }}"
-          - name: marts
-            template: marts
-            depends: gold
+          - name: gold
+            template: gold
+            depends: plan-gold
+            when: "{{ "{{tasks.plan-gold.outputs.parameters.decision}}" }} == run"
+            arguments:
+              parameters:
+                - name: start
+                  value: "{{ "{{inputs.parameters.start}}" }}"
+                - name: end
+                  value: "{{ "{{inputs.parameters.end}}" }}"
           - name: check-gold
             template: check-gold
-            depends: marts
+            depends: gold
+            when: "{{ "{{tasks.plan-gold.outputs.parameters.decision}}" }} == run"
           - name: publish-gold
             template: publish-gold
             depends: check-gold
+            when: "{{ "{{tasks.plan-gold.outputs.parameters.decision}}" }} == run"
+          - name: plan-marts
+            template: plan-marts
+            depends: plan-gold
+            arguments:
+              parameters:
+                - name: start
+                  value: "{{ "{{inputs.parameters.start}}" }}"
+                - name: end
+                  value: "{{ "{{inputs.parameters.end}}" }}"
+                - name: silver-snapshots
+                  value: "{{ "{{tasks.plan-gold.outputs.parameters.silver-snapshots}}" }}"
+          - name: marts
+            template: marts
+            depends: plan-marts
+            when: "{{ "{{tasks.plan-marts.outputs.parameters.decision}}" }} == run"
+            arguments:
+              parameters:
+                - name: start
+                  value: "{{ "{{inputs.parameters.start}}" }}"
+                - name: end
+                  value: "{{ "{{inputs.parameters.end}}" }}"
+                - name: silver-snapshots
+                  value: "{{ "{{tasks.plan-gold.outputs.parameters.silver-snapshots}}" }}"
+          - name: check-marts
+            template: check-marts
+            depends: marts
+            when: "{{ "{{tasks.plan-marts.outputs.parameters.decision}}" }} == run"
           - name: publish-marts
             template: publish-marts
-            depends: publish-gold
+            depends: check-marts
+            when: "{{ "{{tasks.plan-marts.outputs.parameters.decision}}" }} == run"
           - name: profile
             template: profile
             depends: publish-marts
+            when: "{{ "{{tasks.plan-marts.outputs.parameters.decision}}" }} == run"
     - name: silver
       inputs:
         parameters:
@@ -114,9 +168,13 @@ spec:
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
         manifest: |
           {{- include "data-pipelines.spark-application" (dict "root" $ "wap" true "main" "gold/features" "product" "gold-features" "stage" "gold" "sizing" $sizing "extraEnv" $range) | nindent 10 }}
-{{- include "data-pipelines.marts-step" (dict "root" $ "name" "marts" "command" (list "python" "-m" "batch.gold.marts" "build") "reportRoot" .Values.pipeline.reportRoot) | nindent 4 }}
+{{- include "data-pipelines.plan" (dict "root" $ "name" "plan-silver" "layer" "silver") | nindent 4 }}
+{{- include "data-pipelines.plan" (dict "root" $ "name" "plan-gold" "layer" "gold") | nindent 4 }}
+{{- include "data-pipelines.marts-step" (dict "root" $ "name" "plan-marts" "command" (list "python" "-m" "batch.gold.marts" "plan") "reportRoot" .Values.pipeline.reportRoot "ranged" true "decision" true) | nindent 4 }}
+{{- include "data-pipelines.marts-step" (dict "root" $ "name" "marts" "command" (list "python" "-m" "batch.gold.marts" "build") "reportRoot" .Values.pipeline.reportRoot "ranged" true "mutex" "dp-clickhouse") | nindent 4 }}
 {{- include "data-pipelines.checks" (dict "root" $ "name" "check-silver" "product" "silver-payments") | nindent 4 }}
-{{- include "data-pipelines.checks" (dict "root" $ "name" "check-gold" "product" "gold-features,payment-marts") | nindent 4 }}
+{{- include "data-pipelines.checks" (dict "root" $ "name" "check-gold" "product" "gold-features" "mutex" "dp-clickhouse") | nindent 4 }}
+{{- include "data-pipelines.checks" (dict "root" $ "name" "check-marts" "product" "payment-marts" "mutex" "dp-clickhouse") | nindent 4 }}
 {{- include "data-pipelines.publish-tables" (dict "root" $ "name" "publish-silver" "product" "silver-payments") | nindent 4 }}
 {{- include "data-pipelines.publish-tables" (dict "root" $ "name" "publish-gold" "product" "gold-features") | nindent 4 }}
 {{- include "data-pipelines.marts-step" (dict "root" $ "name" "publish-marts" "command" (list "python" "-m" "batch.gold.marts" "publish") "reportRoot" .Values.pipeline.reportRoot) | nindent 4 }}

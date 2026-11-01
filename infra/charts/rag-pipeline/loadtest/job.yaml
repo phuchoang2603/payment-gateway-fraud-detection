@@ -1,0 +1,54 @@
+# On-demand Locust load test of the knowledge Web API, applied with kubectl outside the application:
+#   kubectl -n llm create configmap knowledge-loadtest \
+#     --from-file=src/llm/rag_serving/loadtest/locustfile.py --from-file=chunk-ids.txt
+#   kubectl -n llm apply -f infra/charts/rag-pipeline/loadtest/job.yaml
+# It calls rag-api directly as the llm-benchmark identity, which rag-api's mesh rule admits, so the result is the API's
+# own throughput and latency rather than the gateway's per-client rate limit. The HTML report is printed between
+# markers at the end of the log.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: knowledge-loadtest
+  namespace: llm
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: llm-benchmark
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: locust
+          image: locustio/locust:2.46.7
+          command: [sh, -c]
+          args:
+            - |
+              locust -f /loadtest/locustfile.py --headless --host http://rag-api.llm.svc.cluster.local:8080 \
+                --users 60 --spawn-rate 10 --run-time 5m --html /tmp/report.html --only-summary
+              echo ===LOCUST-HTML===; cat /tmp/report.html; echo; echo ===END===
+          env:
+            - {name: HOME, value: /tmp}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: "1", memory: 512Mi}
+            limits: {memory: 1Gi}
+          volumeMounts:
+            - {name: loadtest, mountPath: /loadtest}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: loadtest
+          configMap:
+            name: knowledge-loadtest
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,109 @@
+{{- $chat := .Values.models.chat }}
+{{- $embedding := .Values.models.embedding }}
+{{- $decision := .Values.models.decision }}
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: llm-gpu
+spec:
+  devices:
+    requests:
+      - name: gpu
+        exactly:
+          deviceClassName: {{ .Values.gpu.deviceClassName }}
+          allocationMode: ExactCount
+          count: 1
+{{- range $role, $model := dict "chat" $chat "embedding" $embedding "decision" $decision }}
+{{- $uri := printf "hf://%s:%s" $model.repo $model.revision }}
+---
+# KServe keeps the model on the GPU nodes' local disk. Its admission links an LLMInferenceService whose URI matches a
+# cache to the cached copy, so the cache exists first.
+apiVersion: serving.kserve.io/v1alpha1
+kind: LocalModelNamespaceCache
+metadata:
+  name: {{ $model.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  sourceModelUri: {{ $uri }}
+  modelSize: {{ $model.cacheSize }}
+  nodeGroups: [{{ $.Values.gpu.localModelNodeGroup }}]
+---
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: {{ $model.name }}
+  annotations:
+    # Changes with the cache, so the service is re-admitted and linked to it.
+    llm.fraud-detection.dev/model-cache: {{ $uri | sha256sum | trunc 12 }}
+    {{- if $model.stopped }}
+    serving.kserve.io/stop: "true"
+    {{- end }}
+spec:
+  model:
+    name: {{ $model.name }}
+    # Served from the local cache; without one, KServe's storage initializer downloads the revision into /mnt/models.
+    uri: {{ $uri }}
+  replicas: {{ $model.replicas }}
+  # The servers hold fixed fractions of the one GPU, so a surge pod would oversubscribe it: replace in place.
+  rolloutStrategy:
+    maxSurge: 0
+    maxUnavailable: 1
+  {{- if eq $role "chat" }}
+  router:
+    gateway:
+      refs:
+        - name: {{ $.Values.gateway.name }}
+          namespace: {{ $.Release.Namespace }}
+    route:
+      http:
+        refs:
+          - name: llm
+    scheduler: {}
+  {{- end }}
+  template:
+    {{- include "llm-platform.gpuPlacement" $ | nindent 4 }}
+    securityContext:
+      {{- include "llm-platform.podSecurity" $.Values.vllm | nindent 6 }}
+    resourceClaims:
+      - name: gpu
+        resourceClaimName: llm-gpu
+    containers:
+      - name: main
+        image: {{ $model.image | default $.Values.vllm.image }}
+        command:
+          - vllm
+          - serve
+          - /mnt/models
+          - --served-model-name={{ $model.name }}
+          - --port=8000
+          - --load-format=instanttensor
+        args:
+          {{- toYaml $model.args | nindent 10 }}
+        env:
+          - name: USER
+            value: vllm
+          # InstantTensor sizes its pinned host staging (chunk size x I/O depth) from the container's memory limit by
+          # default and OOM-killed the servers on dev; the weights are on local disk, so a shallow queue loads them as fast.
+          - name: INSTANTTENSOR_IO_DEPTH
+            value: {{ $.Values.vllm.instantTensorIODepth | quote }}
+          {{- with $model.instantTensorBufferSize }}
+          - name: INSTANTTENSOR_BUFFER_SIZE
+            value: {{ . | quote }}
+          {{- end }}
+        # Loading the weights, torch.compile and CUDA-graph capture outlast the preset's 10-minute startup window
+        # on the dev GPU; a restart repeats all of it, so the window is wider.
+        startupProbe:
+          httpGet: {path: /health, port: 8000}
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: {{ $.Values.vllm.startupFailureThreshold }}
+        resources:
+          {{- toYaml $model.resources | nindent 10 }}
+          claims:
+            - name: gpu
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: {{ $.Values.vllm.uid }}
+          {{- include "llm-platform.containerSecurity" $ | nindent 10 }}
+{{- end }}

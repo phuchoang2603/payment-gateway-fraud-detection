@@ -1,6 +1,6 @@
-"""DP3 marts: ClickHouse rebuilds the start days of a DP3 run from the lakehouse into staging tables, the checks audit
-staging, and publish replaces those days' partitions in the live tables. A rebuilt day depends only on Silver, so a
-re-run changes nothing and a backfill is a longer range.
+"""DP3 marts: ClickHouse rebuilds a run's start days, and the label lookback before them, from published Silver into
+staging tables; the checks audit staging, and publish replaces those days' partitions in the live tables. A rebuilt day
+depends only on Silver, so a re-run changes nothing, a backfill is a longer range, and the marts need nothing from Gold.
 """
 
 import base64
@@ -14,6 +14,7 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from batch.days import day_range
 from batch.store import Store
 
 DATABASE = "marts"
@@ -21,6 +22,7 @@ FACT = "fact_payment_attempt"
 MERCHANT_DAY = "fact_merchant_day"
 BUILD_INFO = "build_info"
 LABELS = "attempt_labels"
+ATTEMPTS = "attempts"
 LIVE = (FACT, MERCHANT_DAY, BUILD_INFO)
 STAGING = "__staging"
 SILVER_ATTEMPTS = "lakehouse.`silver.attempts`"
@@ -30,6 +32,15 @@ CHARGEBACK = "LABEL_SOURCE_CHARGEBACK"
 CHARGEBACK_DAYS = 21
 # Labels become available up to this many days after their attempt (silver.curate.LABEL_LOOKBACK).
 LABEL_LOOKBACK_DAYS = 45
+# The label summary and the staged attempts are ordered by a payment-hash bucket, so each fact insert joins one bucket of
+# each: labels are read once in total rather than once per rebuilt day, and the hash table holds one bucket of attempts.
+BUCKETS = 64
+BUCKET = f"cityHash64(payment_id) % {BUCKETS}"
+# The label summary is grouped per attempt in this many passes, so one pass holds a share of the window's groups.
+LABEL_PASSES = 8
+LABEL_COLUMNS = (
+    "integration_id, payment_id, attempt_id, source, is_fraud, scenario, label_available_at, observation_id"
+)
 DDL = Path(__file__).with_name("sql") / "marts"
 # The settings that let full-history joins finish on the 4 GiB prod server: disk-backed sort-merge joins and
 # aggregation instead of in-memory hash tables.
@@ -149,28 +160,61 @@ def window(retention_days: int, today: date) -> date:
 
 
 def drop_staging(client: ClickHouse) -> None:
-    for table in (*LIVE, LABELS):
+    for table in (*LIVE, LABELS, ATTEMPTS):
         client.execute(f"DROP TABLE IF EXISTS {name(table, staging=True)}")
 
 
-def rebuilt_days(gold_report: dict, start: date, last: date) -> list[date]:
-    """The run's days, plus the days whose chargeback window completes within it, inside [start, last]."""
-    first, end = date.fromisoformat(gold_report["start"]), date.fromisoformat(gold_report["end"])
-    maturing = [first + timedelta(days=n - CHARGEBACK_DAYS + 1) for n in range((end - first).days + 1)]
-    days = {*map(date.fromisoformat, gold_report["days"]), *maturing}
-    return sorted(day for day in days if start <= day <= last)
+def rebuilt_days(first: date, end: date, start: date, last: date) -> list[date]:
+    """The run's days and the label lookback before them, inside [start, last]: a label available in the range belongs
+    to an attempt started at most the lookback earlier, and the days whose chargeback window completes in the range
+    fall inside it too."""
+    lower, upper = max(start, first - timedelta(days=LABEL_LOOKBACK_DAYS)), min(end, last)
+    return [lower + timedelta(days=n) for n in range((upper - lower).days + 1)]
 
 
-def build(client: ClickHouse, gold_report: dict, run_id: str, retention_days: int, today: date) -> dict:
-    snapshots = gold_report["silver_snapshots"]
+def run_range(first: date, end: date) -> str:
+    return f"{first}/{end}"
+
+
+def unchanged(client: ClickHouse, first: date, end: date, snapshots: dict, code: str) -> bool:
+    """Whether the live marts were last built for this range from these Silver snapshots by this code."""
+    if not code:
+        return False
+    try:
+        info = client.rows(
+            f"SELECT run_range, code_version, silver_attempts_snapshot_id, silver_labels_snapshot_id, "
+            f"silver_payment_events_snapshot_id FROM {name(BUILD_INFO)}"
+        )
+    except RuntimeError:
+        return False
+    # ClickHouse returns Int64 quoted or bare depending on output_format_json_quote_64bit_integers.
+    return len(info) == 1 and {key: str(value) for key, value in info[0].items()} == {
+        "run_range": run_range(first, end),
+        "code_version": code,
+        "silver_attempts_snapshot_id": str(snapshots["silver.attempts"]),
+        "silver_labels_snapshot_id": str(snapshots["silver.labels"]),
+        "silver_payment_events_snapshot_id": str(snapshots["silver.payment_events"]),
+    }
+
+
+def build(
+    client: ClickHouse,
+    run_id: str,
+    first: date,
+    end: date,
+    snapshots: dict,
+    code: str,
+    retention_days: int,
+    today: date,
+) -> dict:
     attempts_snapshot = snapshots["silver.attempts"]
     labels_snapshot = snapshots["silver.labels"]
-    complete_before = date.fromisoformat(gold_report["end"]) + timedelta(days=1)
+    complete_before = end + timedelta(days=1)
     started = time.perf_counter()
     drop_staging(client)
     for table in LIVE:
         client.execute(ddl(table, staging=False, retention_days=retention_days))
-    for table in (*LIVE, LABELS):
+    for table in (*LIVE, LABELS, ATTEMPTS):
         client.execute(ddl(table, staging=True, retention_days=retention_days))
 
     start = window(retention_days, today)
@@ -180,7 +224,7 @@ def build(client: ClickHouse, gold_report: dict, run_id: str, retention_days: in
     )
     if last:
         last = str(min(date.fromisoformat(last), complete_before - timedelta(days=1)))
-    days = rebuilt_days(gold_report, start, date.fromisoformat(last)) if last else []
+    days = rebuilt_days(first, end, start, date.fromisoformat(last)) if last else []
     months = months_of(days)
     # build_info describes the live marts after publish, which keep the newer days of earlier runs; an empty window
     # ends the day before it starts.
@@ -198,34 +242,43 @@ def build(client: ClickHouse, gold_report: dict, run_id: str, retention_days: in
             f"linkage = 'linked' AND label_available_at >= toDate('{days[0]}') "
             f"AND label_available_at < toDate('{days[-1] + timedelta(days=LABEL_LOOKBACK_DAYS + 1)}')"
         )
-        client.execute(
-            f"""INSERT INTO {name(LABELS, staging=True)}
-SELECT integration_id, payment_id, attempt_id,
+        for part in range(LABEL_PASSES):
+            where = f"{label_window} AND cityHash64(payment_id) % {LABEL_PASSES} = {part}"
+            client.execute(
+                f"""INSERT INTO {name(LABELS, staging=True)}
+SELECT {BUCKET}, integration_id, payment_id, attempt_id,
   argMinIf(is_fraud, (label_available_at, observation_id), source = '{TRUTH}'),
   argMinIf(scenario, (label_available_at, observation_id), source = '{TRUTH}'),
   minIf(label_available_at, source = '{CHARGEBACK}')
-FROM {pinned(SILVER_LABELS, labels_snapshot, "*", label_window)}
+FROM {pinned(SILVER_LABELS, labels_snapshot, LABEL_COLUMNS, where)}
   AS l
 GROUP BY integration_id, payment_id, attempt_id""",
-            SPILL,
-            "labels",
-        )
-    # One day at a time, with the day's attempts as the hash join's build side: a month of attempts in a sort-merge
-    # join exceeded the marts profile's 2 GiB on the first month inside the window.
-    for day in days:
-        where = (
-            f"lifecycle_valid AND started_at >= toDate('{day}') AND started_at < toDate('{day + timedelta(days=1)}')"
+                SPILL,
+                f"labels-{part}",
+            )
+        columns = ", ".join(FACT_COLUMNS)
+        rebuilt = (
+            f"lifecycle_valid AND started_at >= toDate('{days[0]}') "
+            f"AND started_at < toDate('{days[-1] + timedelta(days=1)}')"
         )
         client.execute(
-            f"""INSERT INTO {name(FACT, staging=True)}
+            f"INSERT INTO {name(ATTEMPTS, staging=True)} SELECT {BUCKET}, {columns} "
+            f"FROM {pinned(SILVER_ATTEMPTS, attempts_snapshot, columns, rebuilt)} AS a",
+            SPILL,
+            "attempts",
+        )
+        # The attempts are the right side, which ClickHouse builds the hash table from: one bucket of them.
+        for bucket in range(BUCKETS):
+            client.execute(
+                f"""INSERT INTO {name(FACT, staging=True)}
 SELECT {", ".join(f"a.{column}" for column in FACT_COLUMNS)},
   l.truth_is_fraud, l.truth_scenario, l.chargeback_available_at
-FROM {name(LABELS, staging=True)} AS l
-RIGHT JOIN {pinned(SILVER_ATTEMPTS, attempts_snapshot, ", ".join(FACT_COLUMNS), where)} AS a
+FROM (SELECT * FROM {name(LABELS, staging=True)} WHERE bucket = {bucket}) AS l
+RIGHT JOIN (SELECT * FROM {name(ATTEMPTS, staging=True)} WHERE bucket = {bucket}) AS a
   USING (integration_id, payment_id, attempt_id)""",
-            {**SPILL, "join_algorithm": "hash", "join_use_nulls": "1"},
-            f"fact-{day}",
-        )
+                {**SPILL, "join_algorithm": "hash", "join_use_nulls": "1"},
+                f"fact-{bucket}",
+            )
 
     if months:
         # A merchant-day partition is a month, so the live days of the touched months are regrouped with the staged ones.
@@ -265,10 +318,11 @@ FROM (
         )
     client.execute(
         f"""INSERT INTO {name(BUILD_INFO, staging=True)} VALUES (
-'{run_id}', toDate('{start}'), toDate('{window_end}'), [{day_list(days)}], toDate('{complete_before}'),
+'{run_id}', '{run_range(first, end)}', '{code}', toDate('{start}'), toDate('{window_end}'), [{day_list(days)}], toDate('{complete_before}'),
 {int(attempts_snapshot)}, {int(labels_snapshot)}, {int(snapshots["silver.payment_events"])}, now64(6))"""
     )
-    client.execute(f"DROP TABLE IF EXISTS {name(LABELS, staging=True)}")
+    for table in (LABELS, ATTEMPTS):
+        client.execute(f"DROP TABLE IF EXISTS {name(table, staging=True)}")
 
     staged = int(client.value(f"SELECT count() FROM {name(FACT, staging=True)}"))
     expected = 0
@@ -360,15 +414,24 @@ def replace_partitions(client: ClickHouse, table: str, partitions: list[str], ex
 
 def main():
     command = sys.argv[1] if len(sys.argv) > 1 else ""
-    if command not in ("build", "publish"):
-        raise SystemExit("usage: python -m batch.marts build|publish")
+    if command not in ("plan", "build", "publish"):
+        raise SystemExit("usage: python -m batch.marts plan|build|publish")
     run_id = os.environ["RUN_ID"]
-    retention_days = int(os.environ.get("MARTS_RETENTION_DAYS", "180"))
+    retention_days = int(os.environ.get("MARTS_RETENTION_DAYS", "90"))
     today = datetime.now(timezone.utc).date()
+    first, end = day_range(os.environ, today)
+    code = os.environ.get("DP_CODE_VERSION", "")
     client = connect()
+    if command == "plan":
+        snapshots = json.loads(os.environ["SILVER_SNAPSHOTS"])
+        decision = "skip" if unchanged(client, first, end, snapshots, code) else "run"
+        Path(os.environ.get("PLAN_OUTPUT", "/tmp/marts")).write_text(decision)
+        print(f"marts {run_range(first, end)}: {decision}")
+        return 0
     store = Store(os.environ["RUN_REPORT_ROOT"])
     if command == "build":
-        report = build(client, store.read_json(f"{run_id}/gold.json"), run_id, retention_days, today)
+        snapshots = json.loads(os.environ["SILVER_SNAPSHOTS"])
+        report = build(client, run_id, first, end, snapshots, code, retention_days, today)
     else:
         report = publish(client, retention_days, today)
     store.write_json(f"{run_id}/marts-{command}.json", report)

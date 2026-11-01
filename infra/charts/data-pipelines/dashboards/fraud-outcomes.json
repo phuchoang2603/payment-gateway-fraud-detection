@@ -9,7 +9,7 @@
   "editable": false,
   "schemaVersion": 39,
   "time": {
-    "from": "now-180d",
+    "from": "now-90d",
     "to": "now"
   },
   "refresh": "",
@@ -92,8 +92,8 @@
     },
     {
       "id": 3,
-      "type": "barchart",
-      "title": "Risk-score histogram",
+      "type": "table",
+      "title": "Risk decision against truth",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse-marts"
@@ -114,14 +114,15 @@
           "editorType": "sql",
           "queryType": "table",
           "format": 1,
-          "rawSql": "SELECT toString(floor(risk_score * 20) / 20) AS score, count() AS attempts\nFROM marts.fact_payment_attempt WHERE $__timeFilter(started_at) AND risk_score IS NOT NULL\nGROUP BY score ORDER BY score"
+          "rawSql": "SELECT risk_outcome,\n  countIf(truth_is_fraud) AS fraud,\n  countIf(NOT truth_is_fraud) AS legitimate,\n  round(countIf(truth_is_fraud) / count(), 4) AS fraud_share\nFROM marts.fact_payment_attempt\nWHERE $__timeFilter(started_at) AND truth_is_fraud IS NOT NULL\nGROUP BY risk_outcome ORDER BY risk_outcome"
         }
       ],
       "fieldConfig": {
         "defaults": {},
         "overrides": []
       },
-      "options": {}
+      "options": {},
+      "description": "Simulation-truth labelled attempts by risk outcome. The historical policy is rule-based and records no risk score."
     },
     {
       "id": 4,
