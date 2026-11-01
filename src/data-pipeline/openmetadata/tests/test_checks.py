@@ -54,11 +54,12 @@ def test_a_range_scope_audits_only_the_rows_its_run_could_write(found):
 
     sql = checks.rendered(found[("silver.attempts", "silver_unique_attempt")], 9, scopes=scopes)
 
-    assert (
-        "WHERE payment_day BETWEEN toDate('2026-02-01') AND toDate('2026-02-28') SETTINGS iceberg_snapshot_id = 9)"
-        in sql
+    assert "FROM lakehouse.`silver.attempts`" in sql
+    assert sql.endswith(
+        "SETTINGS iceberg_snapshot_id = 9, additional_table_filters = {'lakehouse.silver.attempts': "
+        "'payment_day BETWEEN toDate(\\'2026-02-01\\') AND toDate(\\'2026-02-28\\')'}, "
+        f"{checks.SPILL_SETTINGS}"
     )
-    assert sql.endswith(f"SETTINGS {checks.SPILL_SETTINGS}")
 
 
 def test_a_commit_without_a_range_audits_the_whole_table():

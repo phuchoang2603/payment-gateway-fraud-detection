@@ -98,7 +98,7 @@ Each DP2 run SHALL persist a report with its Bronze snapshot IDs, input rows per
 - **THEN** input rows equal distinct events plus identical duplicates plus the rows of conflicting payments
 
 ### Requirement: Silver contract checks
-After each commit, the Silver tables SHALL pass contract-derived ClickHouse SQL checks executed by native OpenMetadata tests: unique keys, zero lifecycle-invalid attempts, zero label violations, non-negative amounts, truth labels with a scenario, chargebacks without one, and availability at or after occurrence. A failed check SHALL fail the run.
+After each commit, the Silver tables SHALL pass contract-derived ClickHouse SQL checks executed by native OpenMetadata tests: unique keys, zero lifecycle-invalid attempts, zero label violations, non-negative amounts, truth labels with a scenario, chargebacks without one, and availability at or after occurrence. Each rule SHALL read only the payment days, or label availability days, that the audited commit records as its range, so check cost follows the run's range rather than the table's history. A failed check SHALL fail the run.
 
 #### Scenario: Linkage violation reaches checks
 
@@ -111,11 +111,11 @@ After each commit, the Silver tables SHALL pass contract-derived ClickHouse SQL 
 - **THEN** the Silver rejection check fails
 
 ### Requirement: Lakehouse storage layout and maintenance
-Bronze and Silver Iceberg tables SHALL be partitioned as the design declares and created with hash distribution and a 256 MB target file size. The `maintain-lakehouse` workflow SHALL compact each table with a bin-pack rewrite, except `silver.attempts`, which SHALL use a sort rewrite by `zorder(customer_id,payment_method_fingerprint)`. It SHALL rewrite each table's manifests and expire snapshots older than seven days while keeping the last ten. Maintenance SHALL NOT change row content, and SHALL NOT change Kafka progress, which lives in the Bronze rows. The report SHALL give each table's files and bytes before and after from its `files` metadata table. It SHALL also give, for one customer's 30-day window on `silver.attempts` before and after the rewrite, and for partitioned Bronze a one-day filter against no filter, the files and bytes planned by each Iceberg scan and the planning time. These are plan-only measurements and copy no data.
+Bronze and Silver Iceberg tables SHALL be partitioned as the design declares and created with hash distribution and a 256 MB target file size; writes whose input is already laid out by day partition SHALL write locally with the fanout writer. Silver events and attempts SHALL be written in `occurred_at` and `started_at` order within each file. A nightly `maintain-lakehouse` task SHALL expire snapshots older than seven days while keeping the last ten, drop `audit-*` branches older than seven days, and bin-pack only the Bronze files ingested in the last three days. An on-demand task SHALL Z-order one month of `silver.attempts` by `customer_id` and `payment_method_fingerprint`. Maintenance SHALL hold both writer mutexes, SHALL NOT change row content, and SHALL NOT change Kafka progress, which lives in the Bronze rows. Its report SHALL give each table's files and bytes before and after and the branches it dropped.
 
 #### Scenario: Compaction between Kafka runs
 
-- **WHEN** a Bronze table is rewritten by a bin-pack compaction between two Kafka-mode runs
+- **WHEN** recent Bronze files are compacted between two Kafka-mode runs
 - **THEN** the second run starts from the same offsets the first run ended at and replays no record
 
 #### Scenario: Snapshot expiry
@@ -123,20 +123,16 @@ Bronze and Silver Iceberg tables SHALL be partitioned as the design declares and
 - **WHEN** maintenance expires snapshots
 - **THEN** the last ten snapshots remain, every snapshot not older than seven days remains, and the table content is unchanged
 
-#### Scenario: Probe before and after the rewrite
+#### Scenario: Stale audit branch
 
-- **WHEN** maintenance rewrites `silver.attempts`
-- **THEN** the report holds the planned files and bytes for the customer window before and after the rewrite, and the table content is unchanged
+- **WHEN** a failed run's audit branch is older than seven days
+- **THEN** nightly maintenance drops it, so its files can expire
 
 ### Requirement: Skewed merchant join benchmark
-The repository SHALL provide an on-demand Spark benchmark that runs one skewed merchant aggregation over a pinned Silver snapshot: attempts joined with per-merchant totals as a sort-merge join, grouped by merchant and day. It SHALL run three variants, each once: AQE skew join off, AQE skew join on, and salting into 16 buckets. Each variant's output SHALL be reduced to its row count and an order-independent checksum, and every variant SHALL equal the baseline on both before any duration is reported. The report SHALL give each variant's duration, its Spark job, stage and task IDs, and the hot merchant's share with its denominator. The benchmark SHALL NOT run in the pipeline workflows.
+The repository SHALL provide an on-demand Spark benchmark that runs one skewed merchant aggregation over a range of payment days (by default the 30 days ending yesterday) of a pinned `silver.attempts` snapshot: attempts joined with per-merchant totals as a sort-merge join, grouped by merchant and day. It SHALL run three variants over one cached read: AQE skew join off, AQE skew join on, and salting into 16 buckets. Each variant's output SHALL be reduced to its row count and an order-independent checksum, and every variant SHALL equal the baseline on both before any duration is reported. The report SHALL give each variant's duration, its Spark stage IDs, and the hot merchant's share with its denominator. The benchmark SHALL NOT run in the pipeline workflows, and the coursework optimization evidence SHALL NOT depend on running it.
 
 #### Scenario: Variant output differs
 
 - **WHEN** a variant's row count or checksum differs from the baseline
 - **THEN** the benchmark fails without reporting a duration for that variant
 
-#### Scenario: Report content
-
-- **WHEN** the benchmark completes
-- **THEN** the report lists each variant's duration, stage IDs and task count, and the hot merchant share with its denominator

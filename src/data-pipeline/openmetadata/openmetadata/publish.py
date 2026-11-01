@@ -160,13 +160,11 @@ def main() -> int:
     if names == ["stream-history"]:
         workflow_status = "Succeeded" if parameters and parameters.get("gate") else "Failed"
     summary = {}
-    references = {name: ensure_pipeline(sdk, name) for name in names}
     for name in names:
-        pipeline_ref = references[name]
+        pipeline_ref = ensure_pipeline(sdk, name)
         publish_status(sdk, name, workflow_status, run_id, parameters)
-        edges = 0
-        if workflow_status == "Succeeded":
-            edges = publish_lineage(sdk, name, pipeline_ref, dataset_version)
+        # Lineage is the pipeline's structure, not a run result: a backfill that stops at one month still wrote others.
+        edges = publish_lineage(sdk, name, pipeline_ref, dataset_version)
         summary[name] = {"status": status_for(workflow_status), "lineage_edges": edges}
     print(json.dumps(summary, sort_keys=True))
     return 0

@@ -2,17 +2,17 @@
 
 ### Requirement: Environment data-pipeline deployment
 
-Dev SHALL enable the historical generator, DP1 Bronze and DP2 Silver workflow templates and the on-demand benchmark template in `data`. Prod SHALL enable the data-pipeline application with only the historical generator template, using the full-scale configuration and the gateway object identity; Bronze, Silver, schedules and their credentials SHALL stay disabled in prod until explicitly enabled. All templates SHALL use externally supplied credentials, commit-tagged images and explicit resource budgets. Historical source selection SHALL default to v18 in dev. The scheduled Kafka-mode workflow SHALL remain suspended in both environments until explicitly enabled.
+Dev and prod SHALL enable the historical generator, DP1 Bronze, `dp-pipeline`, `dp-backfill`, `maintain-lakehouse` and the on-demand benchmark templates in `data`, with the suspended `dp-daily` and nightly maintenance schedules. All templates SHALL use externally supplied credentials, commit-tagged images and explicit resource budgets. Historical source selection SHALL default to v18 in dev and v19 in prod. In prod, workflow step pods and Spark drivers SHALL run on the on-demand `aws-workers` pool and Spark executors on the spot `aws-cpu-burst` pool. The schedules SHALL remain suspended in both environments until explicitly enabled.
 
 #### Scenario: Fresh environment rollout
 
-- **WHEN** either environment is reconciled before v18 is generated
-- **THEN** workflow templates are available without running any pipeline or enabling the schedule
+- **WHEN** either environment is reconciled before its dataset is generated
+- **THEN** workflow templates are available without running any pipeline or enabling a schedule
 
-#### Scenario: Prod generator only
+#### Scenario: Prod driver placement
 
-- **WHEN** prod is reconciled
-- **THEN** only the historical generator template is rendered in `data`, and no pipeline runs until it is submitted
+- **WHEN** prod renders a Spark application
+- **THEN** its driver selects the `aws-workers` node pool and its executors the spot burst pool
 
 ### Requirement: Recurring DP1 schedule ownership
 The application deployment SHALL own the scheduled Kafka-mode workflow and a Kafka client identity scoped to read `payments.events.v1` and `fraud.labels.v1`. Argo CD SHALL reconcile declared deployment resources; Argo Workflows SHALL execute finite runs. Ingestion progress SHALL live only in Bronze commits, so a deployment or schedule change SHALL NOT reset it.

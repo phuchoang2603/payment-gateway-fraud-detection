@@ -1,6 +1,6 @@
 ## Why
 
-DP3 (`dp3-features-and-marts`, rebuilt as one day-range `dp-pipeline` in #109 and #110) produces the daily `gold.feat_` tables and `gold.label_attempt` in Iceberg. Flink produces `fraud-snapshot-v2` short-window snapshots on the feature journal topic. Nothing connects either of them to a feature store:
+DP3 (`payment-data-pipeline`, one day-range `dp-pipeline`) produces the daily `gold.feat_` tables and `gold.label_attempt` in Iceberg. Flink produces `fraud-snapshot-v2` short-window snapshots on the feature journal topic. Nothing connects either of them to a feature store:
 
 - the only Feast code is an online-only writer for the retired `fraud-snapshot-v1`, with a synthetic epoch-scoped key and a throwaway `/tmp` registry;
 - nothing materializes DP3 features into Redis;

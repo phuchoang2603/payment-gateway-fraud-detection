@@ -2,7 +2,7 @@
 
 See proposal.md for the motivation. The current state that shapes the design:
 
-- **DP3 on `main`** (`dp3-features-and-marts`, with the pipeline rewrite of #109 and #110 and per-layer publishing, at `bb8dc67`). Spark computes the daily features. The tables are Iceberg tables in the Polaris REST catalog `lake`, namespace `gold`, partitioned by `days(event_timestamp)`:
+- **DP3 on `main`** (`payment-data-pipeline`, the one day-range `dp-pipeline` with per-layer publishing). Spark computes the daily features. The tables are Iceberg tables in the Polaris REST catalog `lake`, namespace `gold`, partitioned by `days(event_timestamp)`:
   - **`gold.feat_customer_daily`** is keyed by (`integration_id`, `customer_id`), and **`gold.feat_payment_method_daily`** by (`integration_id`, `payment_method_fingerprint`). Their columns follow `contracts/features/fraud-history-batch-v1.yaml`:
     - `event_timestamp` is a UTC-midnight anchor `s`, with windows `[s − w, s)` for `w` of 7 and 30 days.
     - Rows are written only at change points, so the latest row at or before `t` is the value at `t`. An entity's last row is all zeros.

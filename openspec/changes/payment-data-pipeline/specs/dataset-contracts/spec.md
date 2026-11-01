@@ -1,5 +1,6 @@
 ## MODIFIED Requirements
 
+
 ### Requirement: Data product folder
 
 Each data product SHALL live in its own folder under `contracts/data-products/<product>/` containing `product.odps.yaml` and one `*.odcs.yaml` per output port. Every output port SHALL reference exactly one contract in the same folder by ID and version. Product and contract versions SHALL be independent of dataset versions. The `historical-payments`, `bronze-payments` and `silver-payments` products SHALL start at version 1.0.0 with no archived version copies or separate physical-schema files.
@@ -28,6 +29,7 @@ Historical Parquet and Kafka-decoded payment events SHALL expose the same typed 
 - **THEN** their business columns have identical types after ingestion
 
 ## ADDED Requirements
+
 
 ### Requirement: Contract quality rules
 Bronze and Silver contracts SHALL declare executable quality rules as scalar violation-count ClickHouse SQL with a zero threshold and stable rule IDs. Bronze rules SHALL cover raw schema validity only. Silver rules SHALL cover business validity: unique keys, lifecycle validity, label linkage and availability, amounts and label-source semantics. Historical source contracts SHALL describe schema and meanings without a separate executable rule suite.
@@ -74,7 +76,32 @@ The `silver-payments` folder SHALL contain one ODPS descriptor and ODCS contract
 - **WHEN** product descriptors and contracts are linted
 - **THEN** all four Silver ports resolve to contracts in their folder and reference the Bronze contracts as inputs
 
+### Requirement: Gold data products
+`contracts/data-products/gold-features` SHALL describe the Iceberg gold tables. `contracts/data-products/payment-marts` SHALL describe the ClickHouse marts. Each SHALL have an ODPS descriptor, with Silver input ports and one output port per table, and one v1 ODCS contract per table. Each contract SHALL carry:
+
+- the schema, keys and partitioning;
+- point-in-time join semantics;
+- the rate denominators;
+- the `created` and `event_timestamp` meanings;
+- executable ClickHouse-dialect quality rules, each a scalar violation count that must be zero.
+
+Generated references SHALL be regenerated under `docs/data/products/`.
+
+#### Scenario: Lint the gold contracts
+
+- **WHEN** CI lints the data products
+- **THEN** both gold products and their contracts pass the pinned native linters, and their generated references match
+
+### Requirement: Contract-scoped check objects
+Each ODCS contract's ClickHouse server SHALL name the database its rules run in: `lakehouse` for Iceberg tables and `marts` for native marts. The `{object}` placeholder in a rule SHALL resolve to that database and the contract's physical table name. The catalog test SHALL attach to that table's canonical entity. A rule MAY reference other tables only through fully qualified names.
+
+#### Scenario: Mart rule placement
+
+- **WHEN** a `payment-marts` rule is prepared as a native test
+- **THEN** its SQL reads `marts.fact_payment_attempt` and the test attaches to that mart's catalog entity, not to a `lakehouse` table
+
 ## REMOVED Requirements
+
 
 ### Requirement: Declared data quality
 **Reason**: Rewritten for the rebuilt pipeline; its scenarios describe replaced behavior.

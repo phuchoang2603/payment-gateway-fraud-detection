@@ -9,20 +9,22 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 | Workflow | Stages | Status |
 |---|---|---|
 | `generate-historical` | Shards in parallel → publish | Done; v18 and v19 published |
-| `dp1-bronze` (historical or Kafka source) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Implemented; Kafka runs inside `dp-daily` |
-| `dp-pipeline` (`start`/`end` days) | Spark Silver to an audit branch → Silver checks → publish Silver → Spark Gold to the branch → ClickHouse marts into staging → Gold and marts checks → publish Gold → publish marts → profile marts → OpenMetadata publish | Implemented |
-| `dp-daily`, `dp-backfill` | Kafka into Bronze, then `dp-pipeline` for yesterday and two lookback days (suspended cron); `dp-pipeline` month by month in order | Implemented |
-| `warehouse-benchmark` | Single on-demand stage | Implemented; prod v19 evidence pending |
-| `maintain-lakehouse`, `dp2-benchmark` (skewed join) | Single on-demand stage | Implemented; prod v19 evidence pending |
+| `dp1-bronze` (historical or Kafka source) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Done on prod v19; Kafka runs inside `dp-daily` |
+| `dp-pipeline` (`start`/`end` days) | Spark Silver to an audit branch → Silver checks → publish Silver → Spark Gold to the branch → ClickHouse marts into staging → Gold and marts checks → publish Gold → publish marts → profile marts → OpenMetadata publish | Running on prod v19; see [the run](offline.md#prod-v19-run) |
+| `dp-daily`, `dp-backfill` | Kafka into Bronze, then `dp-pipeline` for yesterday and two lookback days (suspended cron); `dp-pipeline` month by month in order, stopping at the first failed month | `dp-backfill` running; `dp-daily` suspended |
+| `maintain-lakehouse` | Task `nightly` (suspended cron) or `zorder` over one month | Implemented |
+| `warehouse-benchmark`, `dp2-benchmark` (skewed join) | Single on-demand stage | Tools only; the evidence comes from the backfill |
 
-Every writer publishes its audit branch to `main` only after all native tests pass. Failed runs retain their branches; the exit handler records pipeline status in OpenMetadata. Bronze holds `dp1-bronze-writer`; the `dp-pipeline` template holds `dp-writer`, so the daily run and each backfill month serialize. Checks retry execution errors, not failed data rules.
+Every writer publishes its audit branch to `main` only after all native tests pass. Failed runs keep their branches until nightly maintenance drops branches older than seven days; the exit handler records pipeline status in OpenMetadata. Bronze holds `dp1-bronze-writer`; the `dp-pipeline` template holds `dp-writer`, so the daily run, each backfill month and maintenance serialize. Checks retry execution errors, not failed data rules. A platform admission policy rejects deleting or terminating an active workflow in `data`; stop runs with `shutdown: Stop`.
 
 ### Spark sizing and placement
 
 | Workload | Prod placement and sizing |
 |---|---|
-| Large Spark jobs | Spot `aws-cpu-burst`: 11 executors × 3 cores = 33 executor cores; each 9 GiB heap + 3 GiB overhead, 24 GiB ephemeral storage |
-| Driver | Existing on-demand workers; 1 core (500m request), 4 GiB heap + 1.5 GiB overhead |
+| Silver and Bronze (`large`) | Spot `aws-cpu-burst`: 11 executors × 3 cores = 33 executor cores; each 9 GiB heap + 3 GiB overhead, 24 GiB ephemeral storage |
+| Gold (`gold`) | Same executors at 7 GiB heap + 5 GiB overhead: Gold runs no Python, but its native memory outgrew 3 GiB in May 2026 |
+| Drivers | On-demand `aws-workers` (three m6a.xlarge since 2026-11-01); 500m request, 4 GiB + 1.5 GiB for `large`, 2 GiB + 1.5 GiB for `gold` |
+| Every executor | `MALLOC_ARENA_MAX=2`, graceful decommission, failure exclusion, 10 Argo retries |
 | Shuffle | 1,024 partitions, AQE coalescing with 128 MB advisory size; large v19 shuffles require more than 3–4× core count |
 | Kafka mode | One 3-core executor, three shuffle partitions matching the topics |
 | Argo steps / SQL checks | Steps on on-demand workers; SQL executes on shared ClickHouse |
@@ -45,19 +47,21 @@ Each contract has a generated reference under [`products/<product>/`](products).
 
 Historical source contracts describe schema and meaning only. Bronze, Silver, gold and marts contracts carry executable ClickHouse SQL quality rules, each returning a violation count that must be zero, which the checks stage runs as native OpenMetadata test cases. Each rule's table comes from its contract's server database: lakehouse rules run against the audited Iceberg snapshot, and marts rules against the build's `__staging` tables while their results attach to the live tables.
 
-### Full-data validation at v19 scale
+### Range-scoped validation
 
-The checks stage pins each rule to its table's audit snapshot and evaluates the full relevant table contents, including after incremental curation. Incremental SQL validation is not implemented. The checks pod submits SQL to the shared ClickHouse server; moving that pod onto Spark's spot nodes would not distribute SQL execution or increase server memory.
+Each rule is pinned to its table's audited snapshot and audits only the rows the run could write. The checks read the range the audited commit records (`dp2.range` for Silver, `dp3.range` for Gold) and pass it to ClickHouse as `additional_table_filters = {'lakehouse.<schema.table>': '<filter>'}`: `payment_day` for Silver events and attempts, `partition_day` for rejected events, the availability day for labels, and the anchor or validity day for Gold. The key must not be quoted with backticks, or ClickHouse silently filters nothing. Other audited tables a rule references are pinned to their own audited snapshots, and every rule runs with external sort, external group-by and `full_sorting_merge`. Saved test definitions are not reused; the processor upserts the current contract rules.
 
-Saved test definitions are excluded from execution; the processor upserts the current contract rules. This fixes stale snapshot SQL, but full-data checks still need to fit ClickHouse's limits. The amount/context join passed independently; the incremental rerun's event-uniqueness query aborted at the server memory limit. See [measured settings and limits](storage.md#full-load-check-optimization-on-v19).
+The effect on the backfill: unscoped, check-silver and check-gold grew from 5 and 7 minutes (November) to 18 and 28 (March) as months were published; scoped, April took 3 and 9. A first attempt at scoping wrapped each table in a `SELECT * … WHERE` subquery, which made ClickHouse materialize it and ran out of memory on `silver_attempt_amount_context`; the setting keeps the rule's own plan.
 
-Successful Argo graphs, per-table native results, pipeline statuses and historical source → DP1 → Bronze → DP2 → Silver lineage screenshots remain in the [verification checklist](../../openspec/changes/rebuild-generation-to-silver/tasks.md).
+![OpenMetadata data quality: 58 tests, all passing](images/openmetadata-data-quality.png)
 
 ## Catalog
 
 The `data-pipelines` application owns the shared catalog connections. A PostSync register job creates the OpenMetadata services on each deploy. Every checks run ingests the ClickHouse `lakehouse` and `marts` schemas, without staging tables, and Kafka topics are ingested by the on-demand `metadata-discovery` template. Each connector declares its ExternalSecret alongside its connection. Discovery samples no rows; only DP3's `profile` stage profiles, and only the published marts.
 
-Pipelines publish lineage (historical source and Kafka topics → Bronze → Silver → gold tables and marts), their execution status, with the Silver snapshots a DP3 run read as its execution parameters, on success and failure through the workflow exit handler, and native test results. The Kafka CronWorkflow's exit handler records only the Bronze pipeline: its Silver step runs through `templateRef`, which does not run the Silver template's exit handler. A run succeeds only when every expected test reports Success. Pending: prod lineage and validation screenshots for DP1–DP3.
+Pipelines publish lineage (historical source and Kafka topics → Bronze → Silver → gold tables and marts), their execution status, with the Silver snapshots a DP3 run read as its execution parameters, and native test results. The exit handler publishes lineage on success and failure: the edges are the pipeline's structure, and a backfill that stops at a later month has already published earlier ones. `dp-daily`'s exit handler publishes Bronze and the pipeline together, because the pipeline runs through `templateRef` without its own exit handler. A run succeeds only when every expected test reports Success.
+
+![OpenMetadata lineage: historical-payments-v19 → bronze.payment_events → silver.attempts → gold tables and fact_payment_attempt → fact_merchant_day](images/openmetadata-lineage.png)
 
 ### Grafana dashboards
 
@@ -70,7 +74,7 @@ Three dashboards (payments overview, merchant drill-down, fraud outcomes) live i
 5. dashboard sidecar coverage of namespace `data`, with `folderAnnotation: grafana_folder`;
 6. if a NetworkPolicy restricts `data`, a rule allowing `observability/grafana` to reach `data/clickhouse` on TCP 9000.
 
-Until then the dashboards load without a datasource; DP3 is unaffected.
+Status on prod (2026-11-01): the ConfigMaps exist in `data`, but the sidecar watches only `observability` and `llm` and the datasource is not provisioned; both are requested from the platform. The marts and their checks do not depend on Grafana.
 
 ## Schema registry
 

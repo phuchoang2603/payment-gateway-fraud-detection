@@ -28,6 +28,8 @@ SILVER_LABELS = "lakehouse.`silver.labels`"
 TRUTH = "LABEL_SOURCE_SIMULATION_TRUTH"
 CHARGEBACK = "LABEL_SOURCE_CHARGEBACK"
 CHARGEBACK_DAYS = 21
+# Labels become available up to this many days after their attempt (silver.curate.LABEL_LOOKBACK).
+LABEL_LOOKBACK_DAYS = 45
 DDL = Path(__file__).with_name("sql") / "marts"
 # The settings that let full-history joins finish on the 4 GiB prod server: disk-backed sort-merge joins and
 # aggregation instead of in-memory hash tables.
@@ -190,35 +192,39 @@ def build(client: ClickHouse, gold_report: dict, run_id: str, retention_days: in
     )
 
     if days:
+        # Only labels that can belong to the rebuilt days' attempts: available from the first day until the label
+        # lookback after the last.
+        label_window = (
+            f"linkage = 'linked' AND label_available_at >= toDate('{days[0]}') "
+            f"AND label_available_at < toDate('{days[-1] + timedelta(days=LABEL_LOOKBACK_DAYS + 1)}')"
+        )
         client.execute(
             f"""INSERT INTO {name(LABELS, staging=True)}
 SELECT integration_id, payment_id, attempt_id,
   argMinIf(is_fraud, (label_available_at, observation_id), source = '{TRUTH}'),
   argMinIf(scenario, (label_available_at, observation_id), source = '{TRUTH}'),
   minIf(label_available_at, source = '{CHARGEBACK}')
-FROM {pinned(SILVER_LABELS, labels_snapshot, "*", f"linkage = 'linked' AND label_available_at >= toDate('{days[0]}')")}
+FROM {pinned(SILVER_LABELS, labels_snapshot, "*", label_window)}
   AS l
 GROUP BY integration_id, payment_id, attempt_id""",
             SPILL,
             "labels",
         )
-    by_month = {}
+    # One day at a time, with the day's attempts as the hash join's build side: a month of attempts in a sort-merge
+    # join exceeded the marts profile's 2 GiB on the first month inside the window.
     for day in days:
-        by_month.setdefault(day.strftime("%Y%m"), []).append(day)
-    for month, month_days in sorted(by_month.items()):
-        first, after = month_days[0], month_days[-1] + timedelta(days=1)
         where = (
-            f"lifecycle_valid AND started_at >= toDate('{first}') AND started_at < toDate('{after}') "
-            f"AND toDate(started_at) IN ({day_list(month_days)})"
+            f"lifecycle_valid AND started_at >= toDate('{day}') AND started_at < toDate('{day + timedelta(days=1)}')"
         )
         client.execute(
             f"""INSERT INTO {name(FACT, staging=True)}
 SELECT {", ".join(f"a.{column}" for column in FACT_COLUMNS)},
   l.truth_is_fraud, l.truth_scenario, l.chargeback_available_at
-FROM {pinned(SILVER_ATTEMPTS, attempts_snapshot, ", ".join(FACT_COLUMNS), where)} AS a
-LEFT JOIN {name(LABELS, staging=True)} AS l USING (integration_id, payment_id, attempt_id)""",
-            {**SPILL, "join_use_nulls": "1"},
-            f"fact-{month}",
+FROM {name(LABELS, staging=True)} AS l
+RIGHT JOIN {pinned(SILVER_ATTEMPTS, attempts_snapshot, ", ".join(FACT_COLUMNS), where)} AS a
+  USING (integration_id, payment_id, attempt_id)""",
+            {**SPILL, "join_algorithm": "hash", "join_use_nulls": "1"},
+            f"fact-{day}",
         )
 
     if months:

@@ -22,11 +22,12 @@ Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT
 
 Tables are Iceberg, registered in the Polaris REST catalog that the `lakehouse` chart deploys. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
 
-The implementation merged in [PR #102](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/102). Prod v19 Bronze and Silver are published; complete Silver validation and maintenance measurements remain open.
+Prod v19 holds Bronze in full, Silver from 2025-10-29 to 2026-05-31 and Gold to 2026-04-30, with the backfill continuing; see [the run](offline.md#prod-v19-run).
 
 | Technique | Applied to | Why |
 |---|---|---|
-| Partitioning | Bronze by `_source` and `days(occurred_at)` (labels by `days(label_available_at)`); Silver by day | One-day and one-month reads touch only their partitions |
+| Partitioning | Bronze by `_source` and `days(occurred_at)` (labels by `days(label_available_at)`); Silver by `payment_day` (labels by availability day); Gold by day of `event_timestamp`, `dim_customer` by month | One-day and one-month reads touch only their partitions |
+| Write order | Silver events by `occurred_at` and attempts by `started_at` within each file (`WRITE LOCALLY ORDERED BY`) | File min/max statistics prune time filters inside a day, for Spark and ClickHouse alike |
 | Write distribution | `write.distribution-mode=hash` and a target file size on every table, except the historical Bronze and Silver event writes, which use `distribution-mode=none` with the fanout writer | Without it, each Spark task writes one small file per partition it touches. Historical files hold one purchase day each and Silver reads Bronze files back, so those tasks already touch only a few day partitions; at v19 the hash shuffle cost about 217 GB of executor disk for no extra clustering |
 | Compaction | Bronze, the files of the last 3 days of Kafka appends | Kafka runs append small files; `rewrite_data_files` with `binpack` and an `_ingested_at` filter merges only those. Silver and Gold need none: every run rewrites whole day partitions at the 256 MB target |
 | Z-order | `silver.attempts` by `customer_id` and `payment_method_fingerprint`, one month at a time, on demand (`maintain-lakehouse task=zorder start end`) | Feature queries filter one customer or card over a window; clustering lets file statistics skip files. The report compares one customer's planned files and bytes for that month before and after |
@@ -40,31 +41,15 @@ Kafka offsets are derived from the Bronze rows themselves, not from snapshot met
 
 ClickHouse reads the Iceberg tables directly through the `lakehouse` DataLakeCatalog database configured by `lakehouse`; queries need no copy of the lake. It runs the contract-derived SQL checks for Bronze and Silver.
 
-### Full-load check optimization on v19
+### Running SQL inside ClickHouse's limits
 
-The full-history amount/context rule joins `attempt_started` to `payment_created`. Hash-join attempts exceeded ClickHouse's limits. The deployed checks use external aggregation (800 MB threshold), external sort (400 MB), `join_algorithm='full_sorting_merge'`, `max_threads=2` and `max_block_size=16384`, with each run's audit snapshot pinned.
+The prod server has about 3.4 GiB of memory, and the `marts` profile caps a query at 2 GiB. Two patterns keep the checks and the mart builds inside that:
 
-`EXPLAIN indexes = 1` showed a sort-merge join on `(integration_id, payment_id)`, explicit column reads and `payload_case` filtering through `PREWHERE`.
+- **Spill instead of hash.** Every contract rule runs with external aggregation (800 MB threshold), external sort (400 MB), `join_algorithm = 'full_sorting_merge'`, `max_threads = 2` and `max_block_size = 16384`. On v19, a full-history amount/context join finished this way in 18m48s at 1.77 GiB peak, writing 17.8 GiB of sort spill, after hash joins exceeded the server.
+- **Read only the run's range.** Rules are scoped to the audited commit's range with `additional_table_filters` (see [range-scoped validation](orchestration-governance.md#range-scoped-validation)), so their cost follows one month instead of the whole table.
+- **A small hash build side.** The mart fact is inserted one day at a time: that day's attempts `RIGHT JOIN` the per-attempt label summary with `join_algorithm = 'hash'`. ClickHouse builds the hash table from the right side, so memory holds one day of attempts. The monthly `full_sorting_merge` insert exceeded 2 GiB in `MergeJoinTransform` for May 2026; one May day takes 515,302 rows, 1.10 GiB peak and 66 seconds.
 
-| Independent diagnostic | Result |
-|---|---|
-| Query / snapshot | `silver-full-join-merge-v19` / `8514390407709950043` |
-| Amount/currency mismatches | 0 |
-| Duration | 1,128.528 s (18m48.5s) |
-| Rows / bytes read | 377,909,828 / 11,314,568,660 |
-| Peak query memory | 1.77 GiB |
-| Compressed external-sort bytes written | 17.77 GiB |
-
-[SQL, plan and metrics](evidence/clickhouse-v19-full-load-check.json) record this diagnostic on the existing 4 GiB container and 30 GiB volume. It establishes one rule completed, not a speedup or a successful Silver workflow. `silver_unique_event` still exceeded the 3.4 GiB server memory limit in `dp2-silver-q6xgs`; aggregation needs further tuning or a bounded exact strategy.
-
-| Technique | Applicability |
-|---|---|
-| Iceberg partition pruning, metadata cache and Parquet pushdown | Already enabled; date pruning helps bounded queries, not all-history checks |
-| Explicit columns and `PREWHERE` | Present in the measured join plan |
-| Local filesystem cache | No configured cache; no benefit claimed |
-| Approximate uniqueness | Unsuitable for an exact duplicate gate |
-| MergeTree keys and materialized aggregates | Relevant to native Gold tables; not indexes on Iceberg files |
-| Smaller Parquet row groups | Unmeasured; keep existing layout until a controlled comparison |
+`EXPLAIN indexes = 1` on the checks shows the sort-merge join on `(integration_id, payment_id)`, explicit column reads and `payload_case` filtering through `PREWHERE`. Approximate uniqueness is unsuitable for an exact duplicate gate, and no local filesystem cache is configured.
 
 ### Warehouse indexing
 
@@ -82,4 +67,4 @@ Time comes first because almost every dashboard and tool query has a time range;
 
 Retention is a wall-clock `TTL` of 180 days with `ttl_only_drop_parts`, matching the rolling window each build inserts; `marts.build_info` records the window, the rebuilt days and the Silver snapshots. Builds join with external sort-merge and spill, the settings the v19 checks needed above.
 
-**Evidence method.** The on-demand `warehouse-benchmark` workflow runs Q0–Q4 against raw Iceberg through `lakehouse` (A), an unsorted MergeTree copy with no skip indexes (B), the indexed mart (C) and the mart with `use_skip_indexes = 0` (C′). For each it records `EXPLAIN indexes = 1`, one cold run after cache drops, the median of five warm runs, and read rows, bytes, selected marks and peak memory from `system.query_log`. Every variant must return the indexed mart's rows. Results pending: the prod v19 report.
+**Evidence.** `EXPLAIN indexes = 1` and `system.query_log` (read rows, bytes, selected marks) for Q0–Q4 on the published prod marts, recorded with `build_info`'s window, once the backfill has filled the window (May to October 2026). The on-demand `warehouse-benchmark` can additionally compare raw Iceberg, an unsorted copy and the indexed mart, but the evidence does not depend on it.

@@ -33,8 +33,8 @@ from batch.lakehouse import (
     pinned_writer,
     read_at,
     ref_snapshot,
+    restage,
     snapshot_info,
-    stage,
     write_ref,
 )
 from batch.metrics import phase
@@ -411,7 +411,8 @@ def replace_customers(spark, events, attempts, floor, cutoff, pins) -> tuple[dic
     """
     template = dim_customer(profiles(events.limit(0), attempts.limit(0)))
     create_table(spark, DIM_CUSTOMER, template, PARTITIONS[DIM_CUSTOMER]())
-    stage(spark, DIM_CUSTOMER)
+    # The DELETE and append below are two commits; a retry after a failure between them must not read the first.
+    restage(spark, DIM_CUSTOMER)
     # Pinned before the DELETE below, so recomputing a lost block never reads the rows this run removed.
     stored = read_at(spark, DIM_CUSTOMER, ref_snapshot(spark, DIM_CUSTOMER, write_ref()))
     in_range = started_between(attempts, floor, cutoff).where(F.col("customer_id").isNotNull())
