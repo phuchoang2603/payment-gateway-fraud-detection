@@ -34,6 +34,11 @@ Prod v19 holds Bronze in full, and Silver and Gold from 2025-10-29 to 2026-10-28
 | Z-order | `silver.attempts` by `customer_id` and `payment_method_fingerprint`, one month at a time, on demand (`maintain-lakehouse task=zorder start end`) | Feature queries filter one customer or card over a window; clustering lets file statistics skip files. The report compares one customer's planned files and bytes for that month before and after |
 | Maintenance | All tables, nightly | `expire_snapshots` (older than 7 days, last 10 kept) and dropping `audit-*` branches older than 7 days, which would otherwise pin their files; no full-table rewrites, so its cost does not grow with history |
 
+**Evidence (prod v19, `maintain-lakehouse-zorder-8z67x`, 2026-11-01).**
+
+- **Partitioning prunes:** one Bronze day (2025-10-29) plans 4 of 2,904 files and 282 MB of 113.7 GB.
+- **Z-order does not prune at this layout:** September 2026 of `silver.attempts` was rewritten with `zorder(customer_id, payment_method_fingerprint)` in 70 seconds, and the month's busiest customer still plans all 30 files (2.50 GB before, 2.52 GB after). Each day partition is one file under the 256 MB target, so the customer appears in every file and file statistics cannot skip any; clustering only helps once a partition spans several files, or through Parquet row-group statistics, which planning does not count. Silver therefore keeps its time order and is not Z-ordered on a schedule.
+
 Kafka offsets are derived from the Bronze rows themselves, not from snapshot metadata, so compaction and snapshot expiry never lose ingestion progress.
 
 `maintain-lakehouse` (task `nightly`) runs from a suspended daily 03:43 UTC CronWorkflow and holds `dp-writer` and `dp1-bronze-writer`, so it never commits alongside a pipeline run. It reports before/after files and bytes per table and the branches it dropped; task `zorder` is the on-demand storage evidence.

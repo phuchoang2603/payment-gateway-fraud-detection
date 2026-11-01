@@ -133,6 +133,8 @@ What changed between the rows, and why, is in [optimization techniques](#optimiz
 
 ![After: April with range-scoped checks, then May's first marts build](images/argo-backfill-scoped-checks.png)
 
+![September and October 2026 in one backfill: September's Silver, its checks and publish are skipped as already on main, and in both months Gold and the marts run side by side after Silver](images/argo-backfill-parallel-skip.png)
+
 Published row counts (Iceberg `main`, 2025-10-29 to 2026-10-28):
 
 | Table | Rows |
