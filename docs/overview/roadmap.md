@@ -54,7 +54,7 @@ Feast is built as one change after Bronze and Silver merge. Until then the strea
 | Prompt management | Prompts managed and versioned in Langfuse (seeded from Git); agents read them at each model call | [Observability](../llm/observability.md#prompts) | Done on dev |
 | A/B tests | Prompt A/B tests per agent in Langfuse, compared per version; LLM-version tests on prod | [Observability](../llm/observability.md#ab-tests) | Prompt tests done on dev; LLM versions planned for prod |
 | Agent tracing | Agent traces from kagent to Langfuse, linked to prompt versions; LLM, gateway and API metrics in VictoriaMetrics with a Grafana dashboard | [Observability](../llm/observability.md) | Done on dev |
-| Decision model | Self-hosted laya on the shared GPU screening requests at the gateway | [Agent gateway](../llm/gateway.md#security-and-policy) | Done on dev |
+| Decision model | Self-hosted d3-edge on vLLM on the shared GPU screening requests at the gateway | [Agent gateway](../llm/gateway.md#security-and-policy) | Done on dev |
 | GPU scheduling | Kueue queueing for GPU training and serving workloads | [Agents](../llm/agents.md) | Planned |
 | Model loading | GPUDirect Storage for model weights on supported GPUs and local NVMe | [Agents](../llm/agents.md) | Planned |
 

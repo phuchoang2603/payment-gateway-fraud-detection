@@ -276,7 +276,7 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
   - `rag_pipeline` (`fraud_rag_pipeline`): the corpus, the workflow steps and the OpenMetadata client, built into image `rag-pipeline`;
   - `rag_serving` (`fraud_rag_serving`): the Web API and the MCP server in one process, built into image `rag-serving`.
 
-  The fourth member, `decision`, is the laya service (decision 16).
+  The fourth member, `decision`, is the screening adapter (decision 16).
 
   Separate images keep the serving image small (no PyIceberg, no corpus) and let each change release on its own. Python because Feast and PyIceberg are Python. There is no Spark, since a few hundred rows do not need a cluster.
 - Chart: `infra/charts/rag-pipeline`, application `rag-pipeline`, enabled where `llm-platform` is: dev now, prod only with the LLM platform.
@@ -370,14 +370,16 @@ The RAG part turns a small corpus about how the gateway behaves into embedded ch
 - The gateway routes `/mcp/knowledge` to the service's `/mcp` (decision 2), with its own policy: the agents' key, and tool-call metrics for the agent telemetry rows. Mesh policy admits only the gateway to the service.
 - It is published to agentregistry as an `MCPServer`. `evidence-agent` gains the tools (kagent `RemoteMCPServer` → gateway), which bumps it to 0.2.0.
 
-### 16. laya decision service: request screening on the shared GPU
+### 16. Decision model: request screening on the shared GPU
 
-The gateway's request screening is classification, not generation, so they run on laya instead of the chat model: `convaiinnovations/laya`, a non-autoregressive decision model (ModernBERT-large, 421M parameters, Apache-2.0) that answers typed questions (`choice`, `score`, `noul`) about a text with calibrated probabilities in one forward pass. It runs on the environment's one GPU next to the model servers, and prompts stay in the cluster; the hosted Jev API is not used, because it would send analyst prompts to a third party.
+The gateway's request screening is classification, not generation, so it runs on a decision model instead of the chat model: `vllm-sr/d3-edge` (Decision 3.0 edge, 0.59B, a Qwen3.5 backbone with an answer-code readout, Apache-2.0), which answers typed questions (`choice`, `score`, `noul`) about a state with calibrated probabilities in one forward pass. It runs on the environment's one GPU next to the model servers, and prompts stay in the cluster; the hosted Jev API is not used, because it would send analyst prompts to a third party.
 
-- **Service:** `src/llm/decision` (a member of the `src/llm` workspace), image `decision`: FastAPI with the `laya` library (0.4.7, CUDA 13.0 torch), a Deployment `decision` in `llm` on the shared GPU claim `llm-gpu`. laya keeps fp32 weights and autocasts the forward pass, so the service loads it on the CPU and moves it to the GPU in fp16, about 0.85 GiB; the chat server's share drops from 0.80 to 0.78 with an 8192-token context to make room (user decision, 2026-10-31: on CPU a screen took 0.8 to 3.8 s on a shared node). Its English checkpoint (pinned revision, only the four files it loads) is uploaded with the other weights by the model-upload Job and copied from the bucket by an init container from the same image; readiness waits for the model to load.
-- **No routing tool:** a `route_question` MCP tool that asked laya which sub-agent should answer was built and then removed (user decision, 2026-10-30): the coordinator's model already picks the sub-agent from the descriptions kagent gives it, so the tool duplicated that choice.
+- **Server:** a third `LLMInferenceService`, `d3-edge`, on the shared claim `llm-gpu` with 0.10 of the GPU's memory, a 2048-token context and text only (`--language-model-only`, no vision tower). vLLM serves decision models on `/v1/systemone`, but release 0.32 does so only for other models; d3 support landed on main on 2026-10-14, so this one server runs a nightly image pinned by digest (`nightly-2b009fc6`). vLLM's streamer loader does not load d3's readout head, a second weights file, so the server downloads the pinned revision from Hugging Face at start instead of streaming from the bucket (user decision, 2026-10-31: serve screening with vLLM like the other models, with no CPU path and no separate model runtime).
+- **Service:** `src/llm/decision` (a member of the `src/llm` workspace), image `decision`: a FastAPI adapter from agentgateway's webhook to `/v1/systemone`, a small CPU-only Deployment `decision` in `llm`. Mesh policy admits only the adapter and the metrics agent to the d3 server.
+- **Replaced:** laya (`convaiinnovations/laya`, ModernBERT-large) through its own Python library. It ran first on CPU (0.8 to 3.8 s per screen on a shared node), then on the GPU, but the library builds fp32 weights on the CPU and only autocasts, and vLLM cannot serve it.
+- **No routing tool:** a `route_question` MCP tool that asked the decision model which sub-agent should answer was built and then removed (user decision, 2026-10-30): the coordinator's model already picks the sub-agent from the descriptions kagent gives it, so the tool duplicated that choice.
 - **Screening:** an agentgateway prompt-guard `webhook` on the LLM route, after the PII regex, calls `POST /request` with the request's messages. The service screens the latest user message with one three-option question, so it costs one forward pass: "action" (approve, block, override or change a risk decision, retry or refund, change a rule, promote a model), "jailbreak" (ignore or reveal its rules) or "ok", and rejects with 403 and a read-only refusal when "action" or "jailbreak" reaches 0.5. Agents re-send the same user turn on every model call, so results are cached per prompt. The guard fails open: agents hold no tools that change anything, so screening is an early, explainable refusal rather than the control that keeps them read-only, and an outage of the decision service should not stop every agent.
-- **Metrics:** screening decisions and forward-pass latency, scraped like the other services.
+- **Metrics:** screening decisions and the decision model's call latency, scraped like the other services, and the d3 server's vLLM metrics.
 
 ### 17. Coordinator, sub-agents and the A2A gateway
 
@@ -390,7 +392,7 @@ The gateway's request screening is classification, not generation, so they run o
 
 - **Prompt A/B tests** are part of each agent's Langfuse prompt (decision 11). Every agent's seed has a variant at a 50/50 share. A test is ended by editing the production version's config in Langfuse and a variant adopted by moving the `production` label. The earlier design, a variant agent with a second model config behind the same A2A route as a weighted gateway backend, was removed with the A2A delegation and the named model configs.
 - **LLM versions:** two chat backends on the LLM route with a new version taking a share, but each environment's one GPU holds one 8B chat model at 0.80 of its memory, so a second version cannot run beside the first on dev. It is left for prod (user decision, 2026-10-30), where it runs when prod's GPU capacity is launched; nothing is simulated on dev.
-- **Dashboard:** `files/dashboards/llm-agents.json`, shipped as a ConfigMap that the platform's Grafana sidecar loads: A2A calls and failures per entry agent, MCP tool calls and failures per tool, screening decisions, laya latency, tokens, time to first token and generation latency.
+- **Dashboard:** `files/dashboards/llm-agents.json`, shipped as a ConfigMap that the platform's Grafana sidecar loads: A2A calls and failures per entry agent, MCP tool calls and failures per tool, screening decisions, decision model latency, tokens, time to first token and generation latency.
 
 ### 13. Platform changes (talos-proxmox, separate approval)
 
@@ -425,7 +427,7 @@ The platform upgraded the clusters to Talos 1.14.5 / Kubernetes 1.37.2 for kagen
 - [RAG reuses #102's Polaris, ClickHouse and checks image while staying out of the data-pipeline code] → the workflow runs in `data` with chart-owned secrets, connector and contract, and publishes lineage itself; no platform, lakehouse or data-pipelines change is needed.
 - [The customer-features endpoint needs customer features online] → it lands with or after the DP3 slice; the chunk endpoints do not wait for it.
 - [Hand-written synthetic documents could drift from the code or be mistaken for real policy] → each is labelled synthetic in its text, and CI tests keep the codes and thresholds equal to the code.
-- [laya's base checkpoints are over-confident and near chance zero-shot on some typed-decision tasks (model card)] → it answers one three-option question, the screen fails open, and the evidence records its decisions on real prompts.
+- [The decision model's zero-shot answers on this question are unmeasured, and its server is a nightly build] → it answers one three-option question, the screen fails open, the image is pinned by digest, and the evidence records its decisions on real prompts. The server moves to a vLLM release once one serves d3.
 - [The A/B split depends on Substrate projecting the actor's name] → without the file the plugin falls back to the session id, which puts every conversation on one side; the evidence checks both sides are reached.
 - [Benchmark variants need the GPU] → the `LLMInferenceService` is stopped for the duration of a run, and dev agents are unavailable then.
 
@@ -456,5 +458,5 @@ Resolved with the user on 2026-10-29:
 Resolved with the user on 2026-10-30 and 2026-10-31:
 - kagent 1.0.0-rc1 and Substrate 1.0.0-rc1 on Talos 1.14.5 / Kubernetes 1.37.2, discarding the old runtime's data.
 - Langfuse is the source of prompts and A/B tests; the agent runtime is kagent's Go runtime with a Langfuse plugin.
-- No laya routing tool, no OpenMetadata AI catalog, no gateway A/B split.
+- No decision routing tool, no OpenMetadata AI catalog, no gateway A/B split.
 - The coordinator is the only deployed agent, with its specialists as sub-agents.

@@ -105,7 +105,7 @@
   Provision `LLM_GATEWAY_RAG_INGEST_API_KEY`, `LLM_GATEWAY_RAG_API_KEY`, `RAG_DB_WRITER_PASSWORD` and `RAG_DB_READER_PASSWORD` in Doppler `dev` and `prd`.
 - [ ] 5b.10 Add the customer-features endpoint once the DP3 slice has customer features online in Feast, and admit `rag-api` to that feature server.
 
-## 5c. Risk agent, coordinator, laya, A2A and A/B (design.md decisions 16 to 18)
+## 5c. Risk agent, coordinator, decision model, A2A and A/B (design.md decisions 16 to 18)
 
 - [x] 5c.1 Add the `decision` service (`src/llm/decision`, image `decision`): laya 0.4.7 on CPU, `route_question` MCP tool, `POST /request` screening webhook with a per-prompt cache, weight fetch from the bucket, metrics, and CI tests with coverage above 90%. Add the laya English checkpoint (pinned revision, four files) to the model upload. Verify with `ruff`, `uv lock` and `helm template`.
 - [x] 5c.2 Add the screening webhook to the LLM route after the PII regex (`Reject`, fail-open), and the `decision` MCP server at `/mcp/decision`.
@@ -117,6 +117,8 @@
 - [x] 5c.8 Verify on dev. Recorded on dev 2026-10-30: decision service Ready; two questions pass and refund, override and jailbreak prompts get 403 (screening about 0.8 s after moving to one question on 4 threads, from about 6 s); `route_question` picked the right agent for 4 of 4 questions, 401 without a key; A2A card and message through `/a2a/<agent>`, 401 without a key; risk-agent answers without tools; the coordinator routes and delegates to evidence-agent and risk-agent through the gateway (after the egress proxy rewrote the card's legacy url, which had sent delegations straight to the controller); 12 A2A messages split across both A/B arms (gateway backends 64/67 POSTs, Langfuse 7/5 answers by agent span); dashboard queries return data; registry, Langfuse prompts and OpenMetadata list the new agents. Kagent UI and Grafana screenshots wait on a browser session.
 - [x] 5c.9 Document the agents, screening, A2A and A/B tests on the LLM pages with the evidence, and mark the roadmap rows. Done after section 5d, with the evidence recorded on dev 2026-10-31 (agents.md, gateway.md, observability.md, roadmap).
 - [ ] 5c.10 A/B test of LLM versions on prod (design.md decision 18), with section 9.
+- [x] 5c.11 Replace laya with `vllm-sr/d3-edge` served by a pinned vLLM nightly as a third `LLMInferenceService` (0.10 of the GPU, text only, weights from Hugging Face at a pinned revision); reduce `decision` to a CPU-only adapter to `/v1/systemone`; remove laya, torch, the weight fetch and the laya upload. Verify with `ruff`, `uv lock`, `helm template` and `openspec validate`.
+- [ ] 5c.12 Verify on dev: `d3-edge` and `decision` Ready; two questions pass and refund, override and jailbreak prompts get 403; screening latency and GPU memory recorded on the gateway page.
 
 ## 5d. kagent 1.0, Langfuse-managed prompts and sub-agents (design.md decisions 8, 11, 17 and 18; user decisions 2026-10-30 and 2026-10-31)
 

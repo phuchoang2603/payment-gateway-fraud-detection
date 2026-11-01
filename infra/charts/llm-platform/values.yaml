@@ -43,8 +43,8 @@ models:
     # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
     stopped: false
     # FP8 KV cache: 15% more output tokens/s at 16 concurrent requests and 65% more KV room than bf16 (benchmark, dev
-    # 2026-10-31). 0.78 leaves room on the shared GPU for laya; an 8192-token context still fits in its KV cache and
-    # covers an agent turn with its prompt, history and retrieved passages.
+    # 2026-10-31). 0.78 leaves room on the shared GPU for the decision model; an 8192-token context still fits in its
+    # KV cache and covers an agent turn with its prompt, history and retrieved passages.
     args:
       - --max-model-len=8192
       - --gpu-memory-utilization=0.78
@@ -70,31 +70,41 @@ models:
     resources:
       requests: {cpu: 250m, memory: 2Gi}
       limits: {memory: 4Gi}
+  # Decision 3.0 edge (0.59B, Qwen3.5 backbone with an answer readout) answers typed questions in one forward pass
+  # through vLLM's /v1/systemone; the gateway's screening webhook asks it whether a prompt asks an agent to act or to
+  # break its rules. vLLM 0.32 serves /v1/systemone only for other decision models, so this server runs a pinned
+  # nightly. Text only: the vision tower is not loaded.
+  decision:
+    name: d3-edge
+    repo: vllm-sr/d3-edge
+    revision: c454ee39b862248d70abd7f84195d2f54ffe6d43
+    image: vllm/vllm-openai:nightly-2b009fc6d1493a9a1ad19f4d0c7230b7e6b7e63a@sha256:1b7aee4c157c2c8f48aaf34de137d1eebfb2eea8445549789188c2280883f8d7
+    replicas: 1
+    args:
+      - --language-model-only
+      - --max-model-len=2048
+      - --gpu-memory-utilization=0.10
+    resources:
+      requests: {cpu: 250m, memory: 2Gi}
+      limits: {memory: 4Gi}
   # Uploaded with the served models so the benchmark can compare weights.
   extraUploads:
     - repo: Qwen/Qwen3-8B-AWQ
       revision: 4da05a8edb55c6046cce958586c33b61da07bb79
 
-# laya, a non-autoregressive decision model (ModernBERT-large, 421M), answers typed questions in one forward pass on
-# the shared GPU, in fp16 (about 0.85 GiB of weights). The gateway's screening webhook asks it whether a prompt asks an agent to act or to break its rules. Only the
-# English checkpoint is uploaded.
+# The gateway's screening webhook, an adapter that asks the decision model (models.decision).
 decision:
   name: decision
   image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/decision
   uid: 65532
-  model:
-    repo: convaiinnovations/laya
-    revision: 7b928d828b7b0e022f929d9bd2e44165aa270148
-    files: [rl_agent_config.json, model.safetensors, "encoder/*", "tokenizer/*"]
   # Probability of "action" or "jailbreak" at or above which the gateway rejects a prompt.
   screenThreshold: "0.5"
   # Agents hold no tools that change anything, so screening is an early refusal rather than the only control; a
   # decision service outage lets prompts through instead of stopping every agent.
   failureMode: FailOpen
   resources:
-    requests: {cpu: 500m, memory: 2Gi}
-    # laya loads in fp32 on the CPU before it moves to the GPU in fp16.
-    limits: {memory: 4Gi}
+    requests: {cpu: 50m, memory: 96Mi}
+    limits: {memory: 256Mi}
 
 gateway:
   name: agentgateway

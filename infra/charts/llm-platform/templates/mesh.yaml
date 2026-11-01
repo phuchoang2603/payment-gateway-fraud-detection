@@ -1,6 +1,7 @@
 {{- $ns := .Release.Namespace }}
 {{- $chat := .Values.models.chat.name }}
 {{- $embedding := .Values.models.embedding.name }}
+{{- $decision := .Values.models.decision.name }}
 {{- $gateway := include "llm-platform.principal" (dict "namespace" $ns "name" .Values.gateway.name) }}
 {{- $benchmark := include "llm-platform.principal" (dict "namespace" $ns "name" "llm-benchmark") }}
 {{- $epp := include "llm-platform.principal" (dict "namespace" $ns "name" (printf "%s-epp-sa" $chat)) }}
@@ -34,6 +35,23 @@ spec:
     - from:
         - source:
             principals: [{{ $gateway | quote }}, {{ $benchmark | quote }}, {{ $metrics | quote }}]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ $decision }}-workload
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $decision }}
+      app.kubernetes.io/component: llminferenceservice-workload
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - {{ include "llm-platform.principal" (dict "namespace" $ns "name" .Values.decision.name) | quote }}
+              - {{ $metrics | quote }}
 ---
 # The scheduler's metrics port stays open to any source; ext-proc stays gateway-only.
 apiVersion: security.istio.io/v1

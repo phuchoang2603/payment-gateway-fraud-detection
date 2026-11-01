@@ -1,7 +1,8 @@
 {{- $chat := .Values.models.chat }}
 {{- $embedding := .Values.models.embedding }}
+{{- $decision := .Values.models.decision }}
 {{- $store := .Values.modelStore }}
-{{- $uploads := concat (list (pick $chat "repo" "revision") (pick $embedding "repo" "revision")) .Values.models.extraUploads (list .Values.decision.model) }}
+{{- $uploads := concat (list (pick $chat "repo" "revision") (pick $embedding "repo" "revision")) .Values.models.extraUploads }}
 apiVersion: resource.k8s.io/v1
 kind: ResourceClaim
 metadata:
@@ -37,7 +38,7 @@ spec:
             - |
               pip install --quiet --no-cache-dir --target /work/lib $PACKAGES
               PYTHONPATH=/work/lib exec python3 - <<'EOF'
-              import fnmatch, json, os
+              import json, os
               import boto3
               from botocore.exceptions import ClientError
               from huggingface_hub import HfApi, hf_hub_download
@@ -45,11 +46,9 @@ spec:
               s3 = boto3.client("s3")
               bucket, prefix = os.environ["BUCKET"], os.environ["PREFIX"]
               for model in json.loads(os.environ["MODELS"]):
-                  repo, revision, files = model["repo"], model["revision"], model.get("files")
+                  repo, revision = model["repo"], model["revision"]
                   for item in HfApi().list_repo_tree(repo, revision=revision, recursive=True):
                       if not hasattr(item, "size"):
-                          continue
-                      if files and not any(fnmatch.fnmatch(item.path, pattern) for pattern in files):
                           continue
                       key = f"{prefix}/{repo}/{revision}/{item.path}"
                       try:
@@ -88,7 +87,9 @@ spec:
       volumes:
         - name: work
           emptyDir: {}
-{{- range $role, $model := dict "chat" $chat "embedding" $embedding }}
+{{- range $role, $model := dict "chat" $chat "embedding" $embedding "decision" $decision }}
+{{- $streamed := ne $role "decision" }}
+{{- $uri := ternary (include "llm-platform.modelURI" (dict "store" $store "model" $model)) (printf "hf://%s" $model.repo) $streamed }}
 ---
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceService
@@ -101,11 +102,11 @@ metadata:
 spec:
   model:
     name: {{ $model.name }}
-    uri: {{ include "llm-platform.modelURI" (dict "store" $store "model" $model) }}
+    uri: {{ $uri }}
   storageInitializer:
     enabled: false
   replicas: {{ $model.replicas }}
-  # Both servers hold fixed fractions of the one GPU, so a surge pod would oversubscribe it: replace in place.
+  # The servers hold fixed fractions of the one GPU, so a surge pod would oversubscribe it: replace in place.
   rolloutStrategy:
     maxSurge: 0
     maxUnavailable: 1
@@ -130,22 +131,32 @@ spec:
         resourceClaimName: llm-gpu
     containers:
       - name: main
-        image: {{ $.Values.vllm.image }}
-        # Replaces the preset's start script, which serves a local /mnt/models; weights stream from object storage.
+        image: {{ $model.image | default $.Values.vllm.image }}
+        # Replaces the preset's start script, which serves a local /mnt/models.
         command:
           - vllm
           - serve
-          - {{ include "llm-platform.modelURI" (dict "store" $store "model" $model) }}
-          - --served-model-name={{ $model.name }}
-          - --port=8000
+          {{- if $streamed }}
+          # Weights stream from object storage.
+          - {{ $uri }}
           - --load-format=runai_streamer
           - {{ printf "--model-loader-extra-config=%s" $.Values.vllm.loaderConfig | quote }}
+          {{- else }}
+          # vLLM's streamer loader skips d3's readout head (a second weights file), so its weights come from
+          # Hugging Face at the pinned revision.
+          - {{ $model.repo }}
+          - --revision={{ $model.revision }}
+          {{- end }}
+          - --served-model-name={{ $model.name }}
+          - --port=8000
         args:
           {{- toYaml $model.args | nindent 10 }}
         env:
           - name: USER
             value: vllm
+          {{- if $streamed }}
           {{- include "llm-platform.modelStoreEnv" $store | nindent 10 }}
+          {{- end }}
         # Streaming the weights, torch.compile and CUDA-graph capture outlast the preset's 10-minute startup window
         # on the dev GPU; a restart repeats all of it, so the window is wider.
         startupProbe:

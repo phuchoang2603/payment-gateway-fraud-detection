@@ -78,7 +78,7 @@ The gateway SHALL be the entry point for A2A calls to agents. Each entry agent S
 - **THEN** the coordinator answers and the call appears on its A2A route in the gateway's request metrics
 
 ### Requirement: Request screening with a self-hosted decision model
-The LLM route SHALL screen each request's latest user message with a webhook guard on the app's laya decision service, after PII masking. A message that asks an agent to act (approve, block, override or change a risk decision, retry or refund a payment, change a rule, promote or deploy a model) or tries to make it ignore its rules SHALL be rejected with 403 and a read-only refusal when laya's probability reaches the configured threshold. The guard SHALL fail open, because agents hold no tools that change anything and screening is an early refusal rather than the only control. Prompts SHALL NOT leave the cluster for screening.
+The LLM route SHALL screen each request's latest user message with a webhook guard on the app's decision service, which asks a self-hosted decision model, after PII masking. A message that asks an agent to act (approve, block, override or change a risk decision, retry or refund a payment, change a rule, promote or deploy a model) or tries to make it ignore its rules SHALL be rejected with 403 and a read-only refusal when the decision model's probability reaches the configured threshold. The guard SHALL fail open, because agents hold no tools that change anything and screening is an early refusal rather than the only control. Prompts SHALL NOT leave the cluster for screening.
 
 #### Scenario: Request to act
 - **WHEN** an analyst asks an agent to refund a payment

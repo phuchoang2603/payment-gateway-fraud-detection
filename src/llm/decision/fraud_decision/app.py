@@ -1,18 +1,17 @@
-import asyncio
 import hashlib
 import os
 from collections import OrderedDict
-from contextlib import asynccontextmanager
 
+import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from prometheus_client import Counter, Histogram, make_asgi_app
 from pydantic import BaseModel
 
 SCREENS = Counter("decision_screen_total", "Gateway screening decisions", ["action", "reason"])
-LATENCY = Histogram("decision_predict_seconds", "laya forward pass", ["kind"])
+LATENCY = Histogram("decision_predict_seconds", "Decision model call", ["kind"])
 
-# One question, so screening costs one forward pass of the encoder.
+# One question, so screening costs one forward pass of the decision model.
 SCREEN_QUESTIONS = {
     "request": {
         "type": "choice",
@@ -45,48 +44,19 @@ class GuardRequest(BaseModel):
 
 
 class Decider:
-    def __init__(self, model_dir: str, threshold: float, cache_size: int = 512):
-        self.model_dir = model_dir
+    def __init__(self, url: str, threshold: float, cache_size: int = 512, client: httpx.AsyncClient | None = None):
+        self.url = url.rstrip("/")
         self.threshold = threshold
-        self.agent = None
-        self.lock = asyncio.Lock()
+        self.client = client or httpx.AsyncClient(timeout=10)
         self.cache: OrderedDict[str, tuple[bool, str]] = OrderedDict()
         self.cache_size = cache_size
 
     @classmethod
     def from_env(cls) -> "Decider":
         return cls(
-            model_dir=os.environ.get("MODEL_DIR", "/models/laya"),
+            url=os.environ.get("DECISION_MODEL_URL", "http://localhost:8000"),
             threshold=float(os.environ.get("SCREEN_THRESHOLD", "0.5")),
         )
-
-    def load_agent(self):  # pragma: no cover
-        import laya
-        import torch
-
-        # laya builds fp32 weights (about 1.7 GB) and only autocasts the forward pass, and it silently falls back to
-        # the CPU when they do not fit the GPU. The shared GPU has room for them in fp16 only, so they are cast on
-        # the CPU and moved over, the way laya.Agent places itself.
-        agent = laya.load(self.model_dir, device="cpu")
-        agent.model.half().to("cuda").eval()
-        agent.device, agent.dtype, agent.amp_enabled = torch.device("cuda"), torch.float16, True
-        return agent
-
-    async def model(self):
-        if self.agent is None:
-            async with self.lock:
-                if self.agent is None:
-                    try:
-                        self.agent = await asyncio.to_thread(self.load_agent)
-                    except Exception as error:
-                        raise HTTPException(status_code=503, detail="decision model not loaded yet") from error
-        return self.agent
-
-    async def warm(self) -> None:
-        try:
-            await self.model()
-        except HTTPException:
-            pass
 
     # Agents re-send the same user turn on every model call of a conversation, so screening results are cached.
     async def screen(self, prompt: str) -> tuple[bool, str]:
@@ -94,10 +64,15 @@ class Decider:
         if key in self.cache:
             self.cache.move_to_end(key)
             return self.cache[key]
-        agent = await self.model()
         with LATENCY.labels("screen").time():
-            result = await asyncio.to_thread(agent.predict, {"prompt": prompt}, SCREEN_QUESTIONS)
-        probabilities = result["answers"]["request"]["probabilities"]
+            try:
+                response = await self.client.post(
+                    f"{self.url}/v1/systemone", json={"state": {"prompt": prompt}, "questions": SCREEN_QUESTIONS}
+                )
+                response.raise_for_status()
+            except httpx.HTTPError as error:
+                raise HTTPException(status_code=503, detail="decision model unavailable") from error
+        probabilities = response.json()["answers"]["request"]["probabilities"]
         reason = max(("action", "jailbreak"), key=probabilities.get)
         if probabilities[reason] < self.threshold:
             reason = "ok"
@@ -108,30 +83,12 @@ class Decider:
 
 
 decider = Decider.from_env()
-
-
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    warming = asyncio.create_task(decider.warm())
-    try:
-        yield
-    finally:
-        warming.cancel()
-
-
-app = FastAPI(title="laya screening service", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="decision screening service", version="0.3.0")
 
 
 @app.get("/healthz")
 async def healthz() -> dict:
     return {"status": "ok"}
-
-
-@app.get("/readyz")
-async def readyz() -> dict:
-    if decider.agent is None:
-        raise HTTPException(status_code=503, detail="decision model not loaded yet")
-    return {"status": "ready"}
 
 
 # agentgateway's prompt-guard webhook: POST /request with the request's messages, answered with a pass or reject

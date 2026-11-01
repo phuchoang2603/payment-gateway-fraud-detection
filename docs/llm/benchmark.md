@@ -77,6 +77,6 @@ The gateway adds API keys, limits, PII masking and laya screening ([gateway](gat
 | 2 | 73 / 1 004 | 95.0 / 71.2 | 20.7 / 20.7 | 0 / 0 |
 | 4 | 91 / 1 522 | 188.3 / 125.2 | 20.7 / 20.8 | 0 / 0 |
 
-Generation itself is unchanged; the gateway adds about one second before the first token, almost all of it the laya screen, then on CPU (a forward pass averaged 3.4 s over 83 screens that evening, cached per prompt), and screens queue at higher concurrency. laya has since moved to the GPU. Agents re-send the same user turn on every model call of a conversation, so only the first call of a turn pays it.
+Generation itself is unchanged; the gateway adds about one second before the first token, almost all of it the laya screen, then on CPU (a forward pass averaged 3.4 s over 83 screens that evening, cached per prompt), and screens queue at higher concurrency. Screening has since moved to the d3-edge decision model on vLLM ([gateway](gateway.md#security-and-policy)). Agents re-send the same user turn on every model call of a conversation, so only the first call of a turn pays it.
 
 The per-client limits stay as set (120 requests and 60 000 tokens per minute): one client at concurrency 2 of the analyst workload sends about 28 requests and 6 000 tokens a minute, and the server's measured capacity of about 4 requests/s on agent-shaped prompts is shared by all clients.

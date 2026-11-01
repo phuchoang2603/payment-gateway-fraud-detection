@@ -309,7 +309,7 @@
     },
     {
       "type": "row",
-      "title": "Screening (laya)",
+      "title": "Screening (d3-edge)",
       "id": 8,
       "collapsed": false,
       "gridPos": {
@@ -379,11 +379,11 @@
           "mode": "multi"
         }
       },
-      "description": "decision_screen_total is the laya webhook (pass, reject for action or jailbreak); the guard series include PII masking."
+      "description": "decision_screen_total is the screening webhook (pass, reject for action or jailbreak); the guard series include PII masking."
     },
     {
       "type": "timeseries",
-      "title": "laya forward pass p95",
+      "title": "Decision model call p95",
       "id": 11,
       "datasource": {
         "type": "prometheus",

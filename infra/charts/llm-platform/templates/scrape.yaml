@@ -22,7 +22,7 @@ spec:
   podMetricsEndpoints:
     - port: metrics
       path: /metrics
-{{- range $model := list .Values.models.chat .Values.models.embedding }}
+{{- range $model := list .Values.models.chat .Values.models.embedding .Values.models.decision }}
 ---
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMPodScrape

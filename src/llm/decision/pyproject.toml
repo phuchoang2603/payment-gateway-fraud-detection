@@ -1,13 +1,10 @@
 [project]
 name = "fraud-decision"
 version = "0.1.0"
-description = "laya decision service: the gateway's request screening webhook"
+description = "The gateway's request screening webhook, answered by the d3 decision model"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "laya==0.4.7",
-    "torch==2.14.1",
-    "transformers==5.20.0",
-    "boto3==1.43.114",
+    "httpx==0.28.1",
     "fastapi==0.162.0",
     "uvicorn==0.54.0",
     "prometheus-client==0.24.1",

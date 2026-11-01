@@ -13,14 +13,6 @@ package = false
 [tool.uv.workspace]
 members = ["common", "rag_pipeline", "rag_serving", "decision"]
 
-[tool.uv.sources]
-torch = { index = "pytorch-cu130" }
-
-[[tool.uv.index]]
-name = "pytorch-cu130"
-url = "https://download.pytorch.org/whl/cu130"
-explicit = true
-
 [tool.ruff]
 line-length = 119
 target-version = "py312"
