@@ -110,7 +110,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
             admin = AdminClient({"bootstrap.servers": brokers})
             for future in admin.create_topics(
                 [
-                    NewTopic(source, 3, 1),
+                    NewTopic(source, 1, 1),
                     NewTopic(clock, 1, 1),
                     NewTopic(output, 3, 1),
                     NewTopic(rejects_topic, 3, 1),
@@ -152,6 +152,7 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                 .with_env("FLINK_PROPERTIES", properties)
                 .with_env("KAFKA_BROKERS", "kafka:9092")
                 .with_env("SOURCE_TOPIC", source)
+                .with_env("SOURCE_PARTITIONS", "1")
                 .with_env("FEATURE_TOPIC", output)
                 .with_env("FEATURE_EPOCH", epoch)
                 .with_env("CLOCK_MODE", "logical")
