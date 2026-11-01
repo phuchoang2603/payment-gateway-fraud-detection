@@ -1,6 +1,8 @@
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from batch.gold import marts
 
@@ -178,6 +180,22 @@ def test_the_window_bounds_the_rebuilt_days():
     assert marts.rebuilt_days(date(2026, 10, 30), date(2026, 10, 31), date(2026, 10, 1), date(2026, 10, 30)) == [
         date(2026, 10, 1) + timedelta(days=n) for n in range(30)
     ]
+
+
+DATES = st.dates(date(2025, 1, 1), date(2027, 12, 31))
+
+
+@given(run=st.tuples(DATES, DATES).map(sorted), window=st.tuples(DATES, DATES).map(sorted))
+def test_the_rebuilt_days_are_the_run_and_its_lookback_clipped_to_the_window(run, window):
+    (first, end), (start, last) = run, window
+    days = marts.rebuilt_days(first, end, start, last)
+
+    expected = {
+        first - timedelta(days=marts.LABEL_LOOKBACK_DAYS) + timedelta(days=n)
+        for n in range((end - first).days + marts.LABEL_LOOKBACK_DAYS + 1)
+    }
+    assert set(days) == {day for day in expected if start <= day <= last}
+    assert days == sorted(set(days))
 
 
 def test_the_marts_are_unchanged_only_for_the_same_range_snapshots_and_code(client):

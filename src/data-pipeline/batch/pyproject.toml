@@ -14,6 +14,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "grpcio-tools==1.84.0",
+    "hypothesis>=6.100,<7",
     "pyspark==4.1.3",
     "pytest>=9,<10",
     "ruff>=0.14,<1",

@@ -1,7 +1,10 @@
 import copy
+import itertools
 from datetime import date, timedelta
 
 import pytest
+from hypothesis import example, given, settings
+from hypothesis import strategies as st
 from pyspark.sql import functions as F
 
 from batch.bronze import ingest as bronze
@@ -9,7 +12,7 @@ from batch.days import day_range
 from batch.gold import features as gold
 from batch.silver import curate as silver
 from tests.events import BASE, approved, created, label, started, succeeded
-from tests.lake import deliver
+from tests.lake import chunks, deliver
 
 SILVER_TABLES = (silver.PAYMENT_EVENTS, silver.ATTEMPTS, silver.LABELS, silver.REJECTED)
 DAY = 24 * 60
@@ -60,10 +63,6 @@ def tables(spark) -> dict:
     return {table: spark.table(table).drop("created").localCheckpoint() for table in gold.TABLES}
 
 
-def days(first: date, last: date):
-    return [first + timedelta(days=n) for n in range((last - first).days + 1)]
-
-
 def assert_same(left: dict, right: dict, step: str):
     for table in gold.TABLES:
         only_left = [row.asDict() for row in left[table].exceptAll(right[table]).collect()]
@@ -71,34 +70,35 @@ def assert_same(left: dict, right: dict, step: str):
         assert not only_left and not only_right, f"{step} {table}: {only_left} vs {only_right}"
 
 
-def test_daily_runs_build_the_same_gold_as_one_backfill(spark, lake):
+SPAN = 14
+OFFSETS = st.integers(0, SPAN)
+
+
+def test_any_split_of_a_range_and_any_rerun_build_the_same_gold_as_one_backfill(spark, lake):
     silver_history(spark, lake)
-    last = FIRST + timedelta(days=14)
+    last = FIRST + timedelta(days=SPAN)
     report = gold.run(spark, "backfill", FIRST, last)
     assert report["start"] == str(FIRST) and report["end"] == str(last)
     backfill = tables(spark)
     assert backfill[gold.FEAT_CUSTOMER].count() > 0
     assert backfill[gold.LABEL_ATTEMPT].count() == 1
+    runs = itertools.count()
 
-    for table in gold.TABLES:
-        spark.sql(f"DROP TABLE IF EXISTS {table}")
-    for day in days(FIRST, last):
-        gold.run(spark, f"daily-{day}", day, day)
+    # Each example is several Spark runs, so few examples; the explicit one is the daily schedule.
+    @settings(max_examples=3, deadline=None, database=None, derandomize=True)
+    @given(cuts=st.sets(st.integers(1, SPAN), max_size=4), rerun=st.tuples(OFFSETS, OFFSETS).map(sorted))
+    @example(cuts=set(range(1, SPAN + 1)), rerun=[3, 8])
+    def split(cuts, rerun):
+        for table in gold.TABLES:
+            spark.sql(f"DROP TABLE IF EXISTS {table}")
+        for start, end in chunks(FIRST, last, cuts):
+            gold.run(spark, f"chunk-{next(runs)}", start, end)
+        assert_same(backfill, tables(spark), f"split before {sorted(cuts)}")
 
-    assert_same(backfill, tables(spark), "daily")
+        gold.run(spark, f"rerun-{next(runs)}", FIRST + timedelta(days=rerun[0]), FIRST + timedelta(days=rerun[1]))
+        assert_same(backfill, tables(spark), f"rerun of {rerun}")
 
-
-def test_a_rerun_of_a_range_changes_nothing(spark, lake):
-    silver_history(spark, lake)
-    first = gold.run(spark, "gold-1", FIRST, FIRST + timedelta(days=14))
-    before = {table: info["snapshot_id"] for table, info in first["tables"].items()}
-    gold.run(spark, "gold-2", FIRST + timedelta(days=3), FIRST + timedelta(days=8))
-
-    for table, snapshot in before.items():
-        old = spark.read.option("versionAsOf", snapshot).table(table).drop("created")
-        new = spark.table(table).drop("created")
-        assert old.exceptAll(new).count() == 0, table
-        assert new.exceptAll(old).count() == 0, table
+    split()
 
 
 def test_a_late_label_rebuilds_the_label_rows_of_its_attempt_day(spark, lake):
