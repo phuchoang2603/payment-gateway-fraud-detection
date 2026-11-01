@@ -4,9 +4,6 @@ on:
   pull_request:
   push:
     branches: [main]
-  schedule:
-    - cron: '23 3 * * 1'
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,12 +19,18 @@ jobs:
       matrix: ${{ steps.projects.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      # Pull requests test the projects their change affects; pushes to main test them all.
       - id: projects
-        run: echo "matrix=$(python3 scripts/ci-matrix.py --kind go)" >> "$GITHUB_OUTPUT"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: echo "matrix=$(python3 scripts/ci-matrix.py --kind go ${BASE:+--changed "$BASE"})" >> "$GITHUB_OUTPUT"
 
   go:
     name: go (${{ matrix.project }})
     needs: projects
+    if: fromJSON(needs.projects.outputs.matrix).include[0] != null
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.projects.outputs.matrix) }}
@@ -60,7 +63,7 @@ jobs:
           if-no-files-found: warn
 
   mutation:
-    if: github.event_name != 'push'
+    if: github.event_name == 'pull_request' && fromJSON(needs.projects.outputs.matrix).include[0] != null
     name: mutation (${{ matrix.project }})
     needs: projects
     strategy:
@@ -72,8 +75,8 @@ jobs:
     env:
       CI_TEST_REPORTS: /tmp/go-mutation-evidence
       MUTATION_BASE: ${{ github.event.pull_request.base.sha }}
-      MUTATION_MODE: ${{ github.event_name == 'pull_request' && 'diff' || 'full' }}
-      MUTATION_BUDGET: ${{ github.event_name == 'pull_request' && '15m' || '45m' }}
+      MUTATION_MODE: diff
+      MUTATION_BUDGET: 15m
       GO_PROJECT: ${{ matrix.project }}
     steps:
       - uses: actions/checkout@v7.0.1

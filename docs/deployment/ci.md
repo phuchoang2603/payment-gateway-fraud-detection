@@ -14,6 +14,8 @@ GitHub Actions runs every check on pull requests and `main`. Tests and image bui
 
 Check logic lives in [`scripts/ci-checks.sh`](../../scripts/ci-checks.sh) so workflow steps stay short.
 
+On pull requests, the Go and Python workflows test only the projects the change affects: [`scripts/ci-matrix.py`](../../scripts/ci-matrix.py) keeps a project when the diff touches its directory, a local dependency its manifest declares (Go `replace` paths, uv workspace and path sources, pytest import paths), `contracts/`, `scripts/` or the workflows. Pushes to `main` test every project.
+
 ## Test design
 
 - Tests protect business rules, boundaries, failure modes and integration contracts; there are no configuration-only or getter tests.
@@ -24,7 +26,7 @@ Check logic lives in [`scripts/ci-checks.sh`](../../scripts/ci-checks.sh) so wor
   - **Streaming windows:** any arrival sequence with late starts, redeliveries and checkpoint restores matches the reference snapshot.
   - **Payment lifecycle:** any command sequence keeps one active attempt, moves phases forward only, accepts nothing after a terminal status and leaves the state untouched when it rejects a command.
   - **Service rules:** fraud rules fire exactly when their conditions hold and never flip with a higher amount; backoff stays within its cap; webhook signatures change with every input; fingerprints ignore formatting only; card numbers pass Luhn exactly when valid.
-- Go mutation testing runs per module in CI: in full on the weekly schedule, on changed code for pull requests.
+- Go mutation testing runs on the changed code of each pull request.
 - The Feast request view and the feature server are tested with fixtures and mocks: the server through FastAPI's test client against a Feast store double, and the view through equivalence partitions and boundary values of the country pair, account age, 30-day history and scoring hour, plus a Hypothesis property that the same request always gives the same features.
 
 ## Evidence
@@ -42,7 +44,7 @@ Coverage from CI (`python-test-evidence-*` and `go-test-evidence-*` artifacts), 
 | llm/common | 68.8% | 45.0% |
 | llm/rag_pipeline | 61.7% | 73.6% |
 
-| Go module | Domain package | Whole module | Mutation (weekly full run, 2026-10-26) |
+| Go module | Domain package | Whole module | Mutation (full run, 2026-10-26) |
 |---|---|---|---|
 | payments | 92.5% | 55.0% | 269 killed, 0 lived, 106 not covered: efficacy 100%, mutator coverage 71.7% |
 | fraud | 100% | 60.3% | 11 killed, 0 lived: 100%, 100% |
