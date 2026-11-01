@@ -312,6 +312,9 @@ spec:
     spark.sql.adaptive.coalescePartitions.enabled: "true"
     spark.sql.adaptive.advisoryPartitionSizeInBytes: {{ $sizing.advisoryPartitionSize | quote }}
     spark.io.compression.codec: zstd
+    {{- /* glibc gives each thread's native allocations their own arena, which grows a container's resident memory
+    past its overhead without the JVM noticing. */}}
+    spark.executorEnv.MALLOC_ARENA_MAX: "2"
     spark.decommission.enabled: "true"
     {{- /* A spot executor that is shutting down rejects tasks; without exclusion a task retries on it until its
     attempts run out, as the v19 Silver labels write did. */}}

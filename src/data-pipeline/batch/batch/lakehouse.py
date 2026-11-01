@@ -45,6 +45,20 @@ def stage(spark: SparkSession, table: str) -> None:
         spark.sql(f"ALTER TABLE {table} CREATE BRANCH IF NOT EXISTS `{branch}`")
 
 
+def restage(spark: SparkSession, table: str) -> None:
+    """stage(), with the branch reset to main: for a table a run rewrites in several commits, so a retried attempt
+    starts from published data rather than from a failed attempt's partial commits."""
+    stage(spark, table)
+    branch = os.environ.get(WAP_BRANCH_ENV)
+    main = ref_snapshot(spark, table)
+    if not branch:
+        return
+    if main is None:
+        spark.sql(f"ALTER TABLE {table} DROP BRANCH IF EXISTS `{branch}`")
+    else:
+        spark.sql(f"ALTER TABLE {table} CREATE OR REPLACE BRANCH `{branch}` AS OF VERSION {main}")
+
+
 def file_stats(spark: SparkSession, table: str):
     row = spark.sql(
         f"SELECT count(*) AS files, coalesce(sum(file_size_in_bytes), 0) AS bytes FROM {table}.files"
