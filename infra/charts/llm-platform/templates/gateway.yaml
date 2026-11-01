@@ -1,6 +1,7 @@
 {{- $gateway := .Values.gateway }}
 {{- $chat := .Values.models.chat }}
 {{- $embedding := .Values.models.embedding }}
+{{- $decision := .Values.models.decision }}
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayParameters
 metadata:
@@ -70,6 +71,68 @@ spec:
         formats:
           - type: Embeddings
             path: /v1/embeddings
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: {{ $decision.name }}
+spec:
+  ai:
+    provider:
+      custom:
+        model: {{ $decision.name }}
+        backendRef:
+          kind: Service
+          name: {{ $decision.name }}-kserve-workload-svc
+          port: 8000
+        formats:
+          - type: SystemOne
+            path: /v1/systemone
+---
+# The decision model has its own route, outside the LLM route's prompt guard, which itself calls this route.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: decision
+spec:
+  parentRefs:
+    - name: {{ $gateway.name }}
+      sectionName: http
+  rules:
+    - matches:
+        - path: {type: Exact, value: /v1/systemone}
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: {{ $decision.name }}
+      timeouts:
+        request: 30s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: decision
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: decision
+  traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      secretSelector:
+        matchLabels:
+          {{ $gateway.keyLabel }}: "true"
+    rateLimit:
+      local:
+        - requests: {{ $gateway.limits.requestsPerMinute }}
+          burst: {{ $gateway.limits.burst }}
+          unit: Minutes
+          key: apiKey.client
+  backend:
+    ai:
+      routes:
+        /v1/systemone: SystemOne
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

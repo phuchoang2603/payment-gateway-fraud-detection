@@ -49,9 +49,7 @@ spec:
   rules:
     - from:
         - source:
-            principals:
-              - {{ include "llm-platform.principal" (dict "namespace" $ns "name" .Values.decision.name) | quote }}
-              - {{ $metrics | quote }}
+            principals: [{{ $gateway | quote }}, {{ $metrics | quote }}]
 ---
 # The scheduler's metrics port stays open to any source; ext-proc stays gateway-only.
 apiVersion: security.istio.io/v1

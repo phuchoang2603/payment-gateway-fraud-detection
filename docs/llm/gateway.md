@@ -11,6 +11,7 @@ One agentgateway `Gateway` in `llm` is the only entry to the agents (A2A), the m
 |---|---|---|
 | `/a2a/<agent>` | kagent's A2A endpoint for an entry agent (today `coordinator`), `/agents/llm-agents/<agent>` on the kagent controller | analysts' clients, the benchmark |
 | `/v1/chat/completions`, `/v1/embeddings` | `qwen3-8b` InferencePool (through the endpoint picker), `qwen3-embedding` | agents, the RAG pipeline, `rag-api`, the benchmark |
+| `/v1/systemone` | `d3-edge` (agentgateway's `SystemOne` format), on its own route without the prompt guard | the `decision` screening adapter |
 | `/mcp/<server>` | MCP server `<server>` (today `knowledge` → `rag-api` `/mcp`) | agents, kagent's tool discovery |
 | `/<api>/v1/...` | REST API `<api>` (today `knowledge` → `rag-api` `/v1`) | API clients |
 
@@ -22,7 +23,7 @@ An MCP server or REST API is one entry under `gateway.mcpServers` or `gateway.ap
 |---|---|---|
 | API key per client | `apiKeyAuthentication: Strict` on every route; one key per client (`agents`, `benchmark`, `ragingest`, `ragapi`) from Doppler, labelled for the gateway's key store. A2A, model and REST routes take it as a bearer token, MCP routes as `x-api-key` | Every call is attributable to a client, and one client's key can be rotated without touching others |
 | Rate limit per client | 120 requests per minute with a burst of 20, keyed on `apiKey.client`, on the A2A, LLM, MCP and REST routes; a token budget of 60 000 tokens per minute on the LLM route | A runaway agent or script exhausts its own budget, not the GPU |
-| Request screening | A prompt-guard webhook on the LLM route asks the decision service, which asks the d3-edge decision model on vLLM (shared GPU, `/v1/systemone`), whether the latest user turn asks the agent to act or to break its rules; at 0.5 or more the gateway answers 403 with a read-only refusal. A decision-service outage lets prompts through | Agents are read-only; a request to approve, refund or override is refused before it reaches the model |
+| Request screening | A prompt-guard webhook on the LLM route asks the decision service, which asks the d3-edge decision model on vLLM (shared GPU) through the gateway's `/v1/systemone` route, whether the latest user turn asks the agent to act or to break its rules; at 0.5 or more the gateway answers 403 with a read-only refusal. A decision-service outage lets prompts through | Agents are read-only; a request to approve, refund or override is refused before it reaches the model |
 | PII masking | Built-in card, e-mail and phone recognisers plus a pattern for separated card numbers, on prompts and responses | Agents can be pasted payment data; the model never sees full card numbers, and answers cannot echo them |
 | Mesh authorization | Istio ambient `AuthorizationPolicy`: only the gateway (and the endpoint picker, benchmark and metrics agent where needed) may reach vLLM and `rag-api`; only listed identities may reach the gateway | A pod that skips the gateway is refused at the connection, before any key check |
 | Agent egress | Agents run in Substrate actors outside the mesh; their only way out is Substrate's egress gateway, which injects the agents' key and is admitted by its own identity | See [agents](agents.md#runtime) |

@@ -71,13 +71,16 @@ models:
       requests: {cpu: 250m, memory: 2Gi}
       limits: {memory: 4Gi}
   # Decision 3.0 edge (0.59B, Qwen3.5 backbone with an answer readout) answers typed questions in one forward pass
-  # through vLLM's /v1/systemone; the gateway's screening webhook asks it whether a prompt asks an agent to act or to
+  # through vLLM's /v1/systemone, behind the gateway's own route; the screening webhook asks it whether a prompt asks an agent to act or to
   # break its rules. vLLM 0.32 serves /v1/systemone only for other decision models, so this server runs a pinned
   # nightly. Text only: the vision tower is not loaded.
   decision:
     name: d3-edge
     repo: vllm-sr/d3-edge
     revision: c454ee39b862248d70abd7f84195d2f54ffe6d43
+    # The readout head ships as a second weights file that vLLM loads separately, which its streamer loader does not
+    # do; the upload writes it into the backbone's file under the name vLLM gives it, so the server streams one file.
+    merge: {file: readout.safetensors, into: model-00001-of-00001.safetensors, prefix: score.}
     image: vllm/vllm-openai:nightly-2b009fc6d1493a9a1ad19f4d0c7230b7e6b7e63a@sha256:1b7aee4c157c2c8f48aaf34de137d1eebfb2eea8445549789188c2280883f8d7
     replicas: 1
     args:
@@ -115,6 +118,7 @@ gateway:
     benchmark: LLM_GATEWAY_BENCHMARK_API_KEY
     ragingest: LLM_GATEWAY_RAG_INGEST_API_KEY
     ragapi: LLM_GATEWAY_RAG_API_KEY
+    decision: LLM_GATEWAY_DECISION_API_KEY
   # Each client's key Secret lands where its caller runs; the default is the release namespace.
   clientNamespaces:
     agents: llm-agents
@@ -130,8 +134,9 @@ gateway:
   externalClients:
     - cluster.local/ns/data/sa/rag-pipeline
     - cluster.local/ns/kagent/sa/kagent-controller
-  # ServiceAccounts in this namespace that call the gateway, besides the benchmark: the knowledge API.
-  namespaceClients: [rag-api]
+  # ServiceAccounts in this namespace that call the gateway, besides the benchmark: the knowledge API and the
+  # screening adapter.
+  namespaceClients: [rag-api, decision]
   # MCP servers behind /mcp/<name>. Each target is a Service in this namespace.
   mcpServers:
     knowledge:

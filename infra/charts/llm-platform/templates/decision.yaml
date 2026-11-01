@@ -30,8 +30,13 @@ spec:
           ports:
             - {name: http, containerPort: 8080}
           env:
-            - name: DECISION_MODEL_URL
-              value: {{ printf "http://%s-kserve-workload-svc.%s.svc:8000" .Values.models.decision.name .Release.Namespace }}
+            - name: GATEWAY_URL
+              value: {{ printf "http://%s.%s.svc.cluster.local" .Values.gateway.name .Release.Namespace }}
+            - name: GATEWAY_API_KEY
+              valueFrom:
+                secretKeyRef: {name: llm-gateway-decision, key: key}
+            - name: DECISION_MODEL
+              value: {{ .Values.models.decision.name }}
             - name: SCREEN_THRESHOLD
               value: {{ $decision.screenThreshold | quote }}
           readinessProbe:

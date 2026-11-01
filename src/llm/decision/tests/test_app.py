@@ -25,6 +25,7 @@ class FakeModel:
     def handle(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         self.requests.append((request.url.path, body))
+        self.headers = request.headers
         if self.status != 200:
             return httpx.Response(self.status)
         probabilities = self.probabilities(body["state"]["prompt"])
@@ -36,7 +37,9 @@ class FakeModel:
 @pytest.fixture
 def model(monkeypatch):
     fake = FakeModel()
-    client = httpx.AsyncClient(transport=httpx.MockTransport(fake.handle))
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(fake.handle), headers={"Authorization": "Bearer test-key"}
+    )
     monkeypatch.setattr(service.decider, "client", client)
     monkeypatch.setattr(service.decider, "cache", type(service.decider.cache)())
     return fake
@@ -62,7 +65,11 @@ def test_the_model_is_asked_the_screening_question(client, model):
     guard(client, ("user", "Why was this payment declined?"))
     path, body = model.requests[-1]
     assert path == "/v1/systemone"
-    assert body == {"state": {"prompt": "Why was this payment declined?"}, "questions": service.SCREEN_QUESTIONS}
+    assert body == {
+        "model": "d3-edge",
+        "state": {"prompt": "Why was this payment declined?"},
+        "questions": service.SCREEN_QUESTIONS,
+    }
 
 
 def test_a_request_to_act_is_rejected_with_the_read_only_refusal(client):
@@ -121,11 +128,19 @@ def test_health(client):
     assert client.get("/healthz").json() == {"status": "ok"}
 
 
+def test_the_gateway_key_is_sent(client, model):
+    guard(client, ("user", "Why was this payment declined?"))
+    assert model.headers["authorization"] == "Bearer test-key"
+
+
 def test_configuration_comes_from_the_environment(monkeypatch):
-    monkeypatch.setenv("DECISION_MODEL_URL", "http://d3:8000/")
+    monkeypatch.setenv("GATEWAY_URL", "http://gateway/")
+    monkeypatch.setenv("GATEWAY_API_KEY", "k")
+    monkeypatch.setenv("DECISION_MODEL", "d3")
     monkeypatch.setenv("SCREEN_THRESHOLD", "0.7")
     decider = service.Decider.from_env()
-    assert (decider.url, decider.threshold) == ("http://d3:8000", 0.7)
+    assert (decider.url, decider.model, decider.threshold) == ("http://gateway", "d3", 0.7)
+    assert decider.client.headers["authorization"] == "Bearer k"
 
 
 def test_metrics_count_decisions(client):

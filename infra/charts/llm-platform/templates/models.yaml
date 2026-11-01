@@ -2,7 +2,7 @@
 {{- $embedding := .Values.models.embedding }}
 {{- $decision := .Values.models.decision }}
 {{- $store := .Values.modelStore }}
-{{- $uploads := concat (list (pick $chat "repo" "revision") (pick $embedding "repo" "revision")) .Values.models.extraUploads }}
+{{- $uploads := concat (list (pick $chat "repo" "revision") (pick $embedding "repo" "revision") (pick $decision "repo" "revision" "merge")) .Values.models.extraUploads }}
 apiVersion: resource.k8s.io/v1
 kind: ResourceClaim
 metadata:
@@ -38,27 +38,76 @@ spec:
             - |
               pip install --quiet --no-cache-dir --target /work/lib $PACKAGES
               PYTHONPATH=/work/lib exec python3 - <<'EOF'
-              import json, os
+              import json, os, shutil, struct
               import boto3
               from botocore.exceptions import ClientError
               from huggingface_hub import HfApi, hf_hub_download
 
+              def read_header(f):
+                  return json.loads(f.read(struct.unpack("<Q", f.read(8))[0]))
+
+              def tensors(header):
+                  return {name: tensor for name, tensor in header.items() if name != "__metadata__"}
+
+              # Writes the merge file's tensors, renamed with the prefix, ahead of the target file's own, whose offsets
+              # shift by the inserted bytes.
+              def merge_weights(target, extra, prefix):
+                  with open(extra, "rb") as f:
+                      added, blob = read_header(f), f.read()
+                  with open(target, "rb") as src:
+                      header = read_header(src)
+                      for tensor in tensors(header).values():
+                          tensor["data_offsets"] = [offset + len(blob) for offset in tensor["data_offsets"]]
+                      header.update({prefix + name: tensor for name, tensor in tensors(added).items()})
+                      raw = json.dumps(header, separators=(",", ":")).encode()
+                      raw += b" " * (-len(raw) % 8)
+                      with open("/work/merged", "wb") as dst:
+                          dst.write(struct.pack("<Q", len(raw)) + raw + blob)
+                          shutil.copyfileobj(src, dst, 64 << 20)
+                  return "/work/merged"
+
+              def merge_index(target, extra, merge):
+                  with open(extra, "rb") as f:
+                      added = tensors(read_header(f))
+                  with open(target) as f:
+                      index = json.load(f)
+                  index["weight_map"].update(dict.fromkeys((merge["prefix"] + name for name in added), merge["into"]))
+                  if "total_size" in index.get("metadata", {}):
+                      index["metadata"]["total_size"] += sum(t["data_offsets"][1] - t["data_offsets"][0] for t in added.values())
+                  with open("/work/merged", "w") as f:
+                      json.dump(index, f)
+                  return "/work/merged"
+
               s3 = boto3.client("s3")
               bucket, prefix = os.environ["BUCKET"], os.environ["PREFIX"]
               for model in json.loads(os.environ["MODELS"]):
-                  repo, revision = model["repo"], model["revision"]
+                  repo, revision, merge = model["repo"], model["revision"], model.get("merge") or {}
+                  merged = {merge.get("into"), "model.safetensors.index.json"} if merge else set()
                   for item in HfApi().list_repo_tree(repo, revision=revision, recursive=True):
-                      if not hasattr(item, "size"):
+                      if not hasattr(item, "size") or item.path == merge.get("file"):
                           continue
                       key = f"{prefix}/{repo}/{revision}/{item.path}"
                       try:
-                          if s3.head_object(Bucket=bucket, Key=key)["ContentLength"] == item.size:
+                          head = s3.head_object(Bucket=bucket, Key=key)
+                          if item.path in merged:
+                              if head["Metadata"].get("merged") == merge["file"]:
+                                  continue
+                          elif head["ContentLength"] == item.size:
                               continue
                       except ClientError as error:
                           if error.response["Error"]["Code"] not in ("404", "NoSuchKey"):
                               raise
                       path = hf_hub_download(repo, item.path, revision=revision, cache_dir="/work/hf")
-                      s3.upload_file(path, bucket, key)
+                      if item.path in merged:
+                          source = hf_hub_download(repo, merge["file"], revision=revision, cache_dir="/work/hf")
+                          if item.path == merge["into"]:
+                              upload = merge_weights(path, source, merge["prefix"])
+                          else:
+                              upload = merge_index(path, source, merge)
+                          s3.upload_file(upload, bucket, key, ExtraArgs={"Metadata": {"merged": merge["file"]}})
+                          os.remove(upload)
+                      else:
+                          s3.upload_file(path, bucket, key)
                       os.remove(os.path.realpath(path))
                       print(f"uploaded s3://{bucket}/{key}", flush=True)
                   print(f"{repo}@{revision} complete", flush=True)
@@ -88,8 +137,7 @@ spec:
         - name: work
           emptyDir: {}
 {{- range $role, $model := dict "chat" $chat "embedding" $embedding "decision" $decision }}
-{{- $streamed := ne $role "decision" }}
-{{- $uri := ternary (include "llm-platform.modelURI" (dict "store" $store "model" $model)) (printf "hf://%s" $model.repo) $streamed }}
+{{- $uri := include "llm-platform.modelURI" (dict "store" $store "model" $model) }}
 ---
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceService
@@ -132,31 +180,21 @@ spec:
     containers:
       - name: main
         image: {{ $model.image | default $.Values.vllm.image }}
-        # Replaces the preset's start script, which serves a local /mnt/models.
+        # Replaces the preset's start script, which serves a local /mnt/models; weights stream from object storage.
         command:
           - vllm
           - serve
-          {{- if $streamed }}
-          # Weights stream from object storage.
           - {{ $uri }}
-          - --load-format=runai_streamer
-          - {{ printf "--model-loader-extra-config=%s" $.Values.vllm.loaderConfig | quote }}
-          {{- else }}
-          # vLLM's streamer loader skips d3's readout head (a second weights file), so its weights come from
-          # Hugging Face at the pinned revision.
-          - {{ $model.repo }}
-          - --revision={{ $model.revision }}
-          {{- end }}
           - --served-model-name={{ $model.name }}
           - --port=8000
+          - --load-format=runai_streamer
+          - {{ printf "--model-loader-extra-config=%s" $.Values.vllm.loaderConfig | quote }}
         args:
           {{- toYaml $model.args | nindent 10 }}
         env:
           - name: USER
             value: vllm
-          {{- if $streamed }}
           {{- include "llm-platform.modelStoreEnv" $store | nindent 10 }}
-          {{- end }}
         # Streaming the weights, torch.compile and CUDA-graph capture outlast the preset's 10-minute startup window
         # on the dev GPU; a restart repeats all of it, so the window is wider.
         startupProbe:

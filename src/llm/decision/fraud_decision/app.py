@@ -44,17 +44,20 @@ class GuardRequest(BaseModel):
 
 
 class Decider:
-    def __init__(self, url: str, threshold: float, cache_size: int = 512, client: httpx.AsyncClient | None = None):
+    def __init__(self, url: str, api_key: str, model: str, threshold: float, cache_size: int = 512):
         self.url = url.rstrip("/")
+        self.model = model
         self.threshold = threshold
-        self.client = client or httpx.AsyncClient(timeout=10)
+        self.client = httpx.AsyncClient(timeout=10, headers={"Authorization": f"Bearer {api_key}"})
         self.cache: OrderedDict[str, tuple[bool, str]] = OrderedDict()
         self.cache_size = cache_size
 
     @classmethod
     def from_env(cls) -> "Decider":
         return cls(
-            url=os.environ.get("DECISION_MODEL_URL", "http://localhost:8000"),
+            url=os.environ.get("GATEWAY_URL", "http://localhost:8080"),
+            api_key=os.environ.get("GATEWAY_API_KEY", ""),
+            model=os.environ.get("DECISION_MODEL", "d3-edge"),
             threshold=float(os.environ.get("SCREEN_THRESHOLD", "0.5")),
         )
 
@@ -67,7 +70,8 @@ class Decider:
         with LATENCY.labels("screen").time():
             try:
                 response = await self.client.post(
-                    f"{self.url}/v1/systemone", json={"state": {"prompt": prompt}, "questions": SCREEN_QUESTIONS}
+                    f"{self.url}/v1/systemone",
+                    json={"model": self.model, "state": {"prompt": prompt}, "questions": SCREEN_QUESTIONS},
                 )
                 response.raise_for_status()
             except httpx.HTTPError as error:
