@@ -7,7 +7,7 @@ What the platform records about the models, the gateway, the agents and the know
 | Metrics | vLLM, the endpoint picker, agentgateway, `rag-api` | VictoriaMetrics (scraped by the platform's vmagent) | Grafana Explore |
 | Agent traces | kagent's Go runtime (OpenTelemetry), linked to prompt versions by our plugin | Langfuse | Langfuse traces |
 | Prompts, versions and A/B tests | Langfuse, seeded once from Git | Langfuse | Langfuse prompts |
-| Agent, tool and screening metrics | agentgateway, `rag-api`, the decision service | VictoriaMetrics | Grafana "LLM agents" dashboard |
+| Agent, tool and screening metrics | agentgateway, `rag-api` | VictoriaMetrics | Grafana "LLM agents" dashboard |
 
 The gateway exports no traces; its view is covered by its metrics. There is no OpenTelemetry Collector: each source exports to one store natively.
 
@@ -49,7 +49,7 @@ The two MCP 500s are the cold-start timeout that loading the Feast store at star
 
 ## Grafana dashboard
 
-The "LLM agents" dashboard ([`files/dashboards/llm-agents.json`](../../infra/charts/llm-platform/files/dashboards/llm-agents.json)) shows A2A calls and failures per agent route, MCP tool calls by outcome, gateway screening decisions and the decision model's latency, and the model's tokens, time to first token and round-trip. Over the evidence runs on 2026-10-31 (16:15 to 17:00 UTC): 32 calls to `/a2a/coordinator`, 15 `search_knowledge` calls, all successful:
+The "LLM agents" dashboard ([`files/dashboards/llm-agents.json`](../../infra/charts/llm-platform/files/dashboards/llm-agents.json)) shows A2A calls and failures per agent route, MCP tool calls by outcome, screen route calls, guard checks and screen latency, and the model's tokens, time to first token and round-trip. Over the evidence runs on 2026-10-31 (16:15 to 17:00 UTC): 32 calls to `/a2a/coordinator`, 15 `search_knowledge` calls, all successful:
 
 ![Grafana LLM agents dashboard: A2A calls per agent, MCP tool calls by outcome, screening](images/observability-agents-dashboard.png)
 

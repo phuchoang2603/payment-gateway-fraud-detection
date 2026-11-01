@@ -8,7 +8,6 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "fraud-decision",
     "fraud-llm",
     "fraud-rag-common",
     "fraud-rag-pipeline",
@@ -386,39 +385,6 @@ wheels = [
 [package.optional-dependencies]
 postgres = [
     { name = "psycopg", extra = ["binary", "pool"] },
-]
-
-[[package]]
-name = "fraud-decision"
-version = "0.1.0"
-source = { virtual = "decision" }
-dependencies = [
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "prometheus-client" },
-    { name = "uvicorn" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", specifier = "==0.162.0" },
-    { name = "httpx", specifier = "==0.28.1" },
-    { name = "prometheus-client", specifier = "==0.24.1" },
-    { name = "uvicorn", specifier = "==0.54.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = "==9.2.0" },
-    { name = "pytest-cov", specifier = "==7.1.0" },
-    { name = "ruff", specifier = "==0.17.3" },
 ]
 
 [[package]]

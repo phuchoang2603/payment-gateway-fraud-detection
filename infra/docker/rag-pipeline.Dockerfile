@@ -6,7 +6,6 @@ COPY src/llm/pyproject.toml src/llm/uv.lock ./
 COPY src/llm/common ./common
 COPY src/llm/rag_pipeline/pyproject.toml ./rag_pipeline/pyproject.toml
 COPY src/llm/rag_serving/pyproject.toml ./rag_serving/pyproject.toml
-COPY src/llm/decision/pyproject.toml ./decision/pyproject.toml
 RUN uv sync --locked --no-dev --no-editable --package fraud-rag-pipeline
 
 FROM python:3.12.16-slim-bookworm

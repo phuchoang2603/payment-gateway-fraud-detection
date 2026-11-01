@@ -11,7 +11,7 @@ dev = ["pytest==9.2.0", "ruff==0.17.3"]
 package = false
 
 [tool.uv.workspace]
-members = ["common", "rag_pipeline", "rag_serving", "decision"]
+members = ["common", "rag_pipeline", "rag_serving"]
 
 [tool.ruff]
 line-length = 119

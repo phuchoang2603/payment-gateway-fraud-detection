@@ -83,6 +83,8 @@ spec:
     - from:
         - source:
             principals:
+              # The gateway calls its own screen route from the LLM route's prompt guard.
+              - {{ $gateway | quote }}
               - {{ $benchmark | quote }}
               {{- range .Values.gateway.namespaceClients }}
               - {{ include "llm-platform.principal" (dict "namespace" $ns "name" .) | quote }}

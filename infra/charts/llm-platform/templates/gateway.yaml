@@ -2,6 +2,7 @@
 {{- $chat := .Values.models.chat }}
 {{- $embedding := .Values.models.embedding }}
 {{- $decision := .Values.models.decision }}
+{{- $screening := $gateway.screening }}
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayParameters
 metadata:
@@ -89,7 +90,7 @@ spec:
           - type: SystemOne
             path: /v1/systemone
 ---
-# The decision model has its own route, outside the LLM route's prompt guard, which itself calls this route.
+# The decision model's routes stay outside the LLM route's prompt guard, which calls them.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -107,6 +108,59 @@ spec:
           name: {{ $decision.name }}
       timeouts:
         request: 30s
+---
+# The LLM route's screen: the prompt guard's webhook request becomes one /v1/systemone question about the latest user
+# turn, and the decision model's answer becomes the guard's pass or reject verdict.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: screen
+spec:
+  parentRefs:
+    - name: {{ $gateway.name }}
+      sectionName: http
+  rules:
+    - matches:
+        - path: {type: Exact, value: /screen}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path: {type: ReplaceFullPath, replaceFullPath: /v1/systemone}
+      backendRefs:
+        - name: {{ $decision.name }}-kserve-workload-svc
+          port: 8000
+      timeouts:
+        request: 10s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: screen
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: screen
+  traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      secretSelector:
+        matchLabels:
+          {{ $gateway.keyLabel }}: "true"
+    transformation:
+      request:
+        body: >-
+          json(request.body).body.messages.filter(m, m.role == "user").with(users, toJson({
+          "model": {{ $decision.name | toJson }},
+          "state": {"prompt": size(users) == 0 ? "" : users[size(users) - 1].content},
+          "questions": {"screen": {{ $screening.question | toJson }}}}))
+      response:
+        body: >-
+          json(response.body).answers.screen.probabilities.with(p, toJson(
+          p.action >= {{ $screening.threshold | float64 }} || p.jailbreak >= {{ $screening.threshold | float64 }}
+          ? {"action": {"body": {{ $screening.refusal | toJson }}, "status_code": 403,
+          "reason": p.action >= p.jailbreak ? "action" : "jailbreak"}}
+          : {"action": {"reason": "ok"}}))
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -199,14 +253,18 @@ spec:
               builtins: [CreditCard, Email, PhoneNumber]
               matches:
                 {{- toYaml $gateway.piiPatterns | nindent 16 }}
-          # Runs after masking, so the decision service never sees the masked values.
+          # Runs after masking, so the decision model never sees the masked values. The webhook calls the gateway's
+          # own screen route with the caller's key.
           - webhook:
               action: Reject
-              failureMode: {{ .Values.decision.failureMode }}
+              failureMode: {{ $gateway.screening.failureMode }}
               backendRef:
                 kind: Service
-                name: {{ .Values.decision.name }}
-                port: 8080
+                name: {{ $gateway.name }}
+                port: 80
+              headers:
+                ":path": '"/screen"'
+                authorization: 'request.headers["authorization"]'
         response:
           - regex:
               action: Mask

@@ -179,19 +179,6 @@
       ]
     },
     {
-      "service": "decision",
-      "image-suffix": "/decision",
-      "context": ".",
-      "dockerfile": "infra/docker/decision.Dockerfile",
-      "paths": [
-        "infra/docker/decision.Dockerfile",
-        "src/llm/pyproject.toml",
-        "src/llm/uv.lock",
-        "src/llm/common/pyproject.toml",
-        "src/llm/decision"
-      ]
-    },
-    {
       "service": "agent-runtime",
       "image-suffix": "/agent-runtime",
       "context": ".",
