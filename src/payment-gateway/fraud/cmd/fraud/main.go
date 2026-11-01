@@ -8,14 +8,12 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/adapters/feast"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/adapters/postgres"
-	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/adapters/velocity"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/application"
 
 	grpctransport "github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/transport/grpc"
@@ -65,7 +63,6 @@ func run() error {
 		{"FRAUD_ASSESSMENT_RETRY_HORIZON", 5 * time.Minute, &config.RetryHorizon},
 		{"FRAUD_ASSESSMENT_ERROR_BACKOFF", 250 * time.Millisecond, &config.ErrorBackoff},
 		{"FRAUD_FEAST_TIMEOUT", 100 * time.Millisecond, &config.HistoryTimeout},
-		{"FRAUD_GUARD_TIMEOUT", 100 * time.Millisecond, &config.GuardTimeout},
 	} {
 		*entry.target = entry.fallback
 		if value := os.Getenv(entry.name); value != "" {
@@ -90,31 +87,10 @@ func run() error {
 	}
 	defer pool.Close()
 	store := postgres.New(pool)
-	var guard application.VelocityReader
-	if address := os.Getenv("FRAUD_AUTH_REDIS_ADDR"); address != "" {
-		password := os.Getenv("FRAUD_AUTH_REDIS_PASSWORD")
-		if password == "" {
-			return errors.New("FRAUD_AUTH_REDIS_PASSWORD is required")
-		}
-		short, err := strconv.ParseInt(os.Getenv("FRAUD_VELOCITY_THRESHOLD_10S"), 10, 64)
-		if err != nil {
-			return errors.New("FRAUD_VELOCITY_THRESHOLD_10S must be a positive integer")
-		}
-		long, err := strconv.ParseInt(os.Getenv("FRAUD_VELOCITY_THRESHOLD_60S"), 10, 64)
-		if err != nil {
-			return errors.New("FRAUD_VELOCITY_THRESHOLD_60S must be a positive integer")
-		}
-		observer, err := velocity.New(velocity.Config{Address: address, Password: password, Epoch: os.Getenv("FRAUD_VELOCITY_EPOCH"), PolicyVersion: "velocity-observe-v1", RetryHorizon: config.RetryHorizon, Timeout: config.GuardTimeout, Threshold10s: short, Threshold60s: long})
-		if err != nil {
-			return err
-		}
-		defer func() { _ = observer.Close() }()
-		guard = observer
-	}
 	var history application.HistoryReader
 	if endpoint := os.Getenv("FRAUD_FEAST_URL"); endpoint != "" {
-		freshness := feast.Config{URL: endpoint, Epoch: os.Getenv("FRAUD_FEATURE_EPOCH"), DefinitionHash: os.Getenv("FRAUD_FEATURE_DEFINITION_SHA256"), Timeout: config.HistoryTimeout}
-		for name, target := range map[string]*time.Duration{"FRAUD_FEATURE_MAX_ANCHOR_AGE": &freshness.MaxAnchorAge, "FRAUD_FEATURE_MAX_PROGRESS_AGE": &freshness.MaxProgressAge} {
+		freshness := feast.Config{URL: endpoint, FeatureService: os.Getenv("FRAUD_FEATURE_SERVICE"), Timeout: config.HistoryTimeout}
+		for name, target := range map[string]*time.Duration{"FRAUD_FEATURE_TTL_DAILY": &freshness.DailyTTL, "FRAUD_FEATURE_TTL_STREAM": &freshness.StreamTTL} {
 			*target, err = time.ParseDuration(os.Getenv(name))
 			if err != nil {
 				return fmt.Errorf("%s must be a positive duration", name)
@@ -127,7 +103,7 @@ func run() error {
 		defer reader.Close()
 		history = reader
 	}
-	service, err := application.New(store, history, guard, config)
+	service, err := application.New(store, history, config)
 	if err != nil {
 		return err
 	}

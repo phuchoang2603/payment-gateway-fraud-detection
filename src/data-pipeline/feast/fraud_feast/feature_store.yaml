@@ -1,0 +1,35 @@
+project: payment_fraud
+provider: local
+entity_key_serialization_version: 3
+registry:
+  registry_type: file
+  registry_store_type: fraud_feast.registry.PrefixS3RegistryStore
+  path: ${FEAST_REGISTRY}
+  cache_ttl_seconds: 60
+online_store:
+  type: redis
+  connection_string: ${FEAST_REDIS_CONNECTION}
+  key_ttl_seconds: 2764800
+  skip_dedup: false
+offline_store:
+  type: spark
+  spark_conf:
+    spark.sql.session.timeZone: UTC
+    spark.sql.execution.arrow.pyspark.enabled: 'true'
+    spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+    spark.sql.catalog.lake: org.apache.iceberg.spark.SparkCatalog
+    spark.sql.catalog.lake.type: rest
+    spark.sql.catalog.lake.uri: ${ICEBERG_REST_URI}
+    spark.sql.catalog.lake.warehouse: ${ICEBERG_WAREHOUSE}
+    spark.sql.catalog.lake.rest.auth.type: oauth2
+    spark.sql.catalog.lake.credential: ${ICEBERG_CLIENT_ID}:${ICEBERG_CLIENT_SECRET}
+    spark.sql.catalog.lake.oauth2-server-uri: ${ICEBERG_OAUTH2_URI}
+    spark.sql.catalog.lake.scope: PRINCIPAL_ROLE:ALL
+    spark.sql.catalog.lake.io-impl: org.apache.iceberg.aws.s3.S3FileIO
+    spark.sql.catalog.lake.s3.endpoint: ${S3_ENDPOINT}
+    spark.sql.catalog.lake.s3.path-style-access: ${S3_PATH_STYLE}
+    spark.sql.catalog.lake.s3.access-key-id: ${AWS_ACCESS_KEY_ID}
+    spark.sql.catalog.lake.s3.secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+    spark.sql.catalog.lake.client.region: ${AWS_REGION}
+materialization:
+  pull_latest_features: true

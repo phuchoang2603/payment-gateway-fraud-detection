@@ -238,7 +238,7 @@ Keys are (`integration_id`, `customer_id`) and (`integration_id`, `payment_metho
 
 *Alternatives:*
 
-- One row per entity per active day, as the coursework example does. Rejected: values go stale after expiry, so point-in-time lookups would be wrong.
+- One row per entity per active day. Rejected: values go stale after expiry, so point-in-time lookups would be wrong.
 - One row per attempt at `t`. Rejected because of the training/serving skew above.
 
 ### 10. `dim_customer` SCD2 over the observed profile

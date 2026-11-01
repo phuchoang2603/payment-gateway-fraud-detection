@@ -1,0 +1,32 @@
+{{- if .Values.features.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: feast-apply
+  namespace: {{ .Values.namespace }}
+  annotations:
+    # Sync, before the Deployments roll out: the feature writer and server need the registry and stream tables.
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: data-pipelines
+        feast-client: "true"
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: apply
+          image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
+          command: [/opt/data-pipeline/feast/.venv/bin/python, -m, fraud_feast.apply]
+          env:
+            {{- include "data-pipelines.lakeEnv" . | nindent 12 }}
+            {{- include "data-pipelines.feastEnv" . | nindent 12 }}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {memory: 2Gi}
+{{- end }}

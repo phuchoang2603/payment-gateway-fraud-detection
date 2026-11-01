@@ -63,6 +63,7 @@ func (s *Server) Decide(ctx context.Context, req *fraudv1.DecideRequest) (*fraud
 	result, err := s.service.Decide(ctx, application.Request{
 		Identity: application.Identity{IntegrationID: req.IntegrationId, PaymentID: req.PaymentId, AttemptID: req.AttemptId},
 		Digest:   hex.EncodeToString(digest[:]), CustomerID: req.Customer.CustomerId, MethodFingerprint: req.Signals.PaymentMethod.Fingerprint, Input: input,
+		MerchantAccountCreatedAt: req.Snapshot.MerchantAccountCreatedAt.AsTime(), ItemCount: int64(len(req.Snapshot.Items)), HasDevice: req.Signals.DeviceFingerprint != nil,
 	})
 	if err != nil {
 		switch {

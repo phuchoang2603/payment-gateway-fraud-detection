@@ -2,13 +2,17 @@
 name = "fraud-streaming"
 version = "0.1.0"
 requires-python = ">=3.11,<3.12"
-dependencies = ["apache-flink==2.2.1", "protobuf==4.25.8", "confluent-kafka==2.12.0"]
+dependencies = ["protobuf==4.25.8", "confluent-kafka==2.12.0"]
 
 [dependency-groups]
 dev = ["hypothesis==6.170.14", "pytest==9.0.2", "ruff==0.14.14", "testcontainers[kafka]==4.15.0"]
+flink = ["apache-flink==2.2.1"]
+history = ["pyiceberg[pyarrow]>=0.10,<0.11", "boto3>=1.38,<2", "duckdb>=1.4,<2"]
 
 [tool.uv]
 package = false
+default-groups = ["dev", "flink"]
+conflicts = [[{group = "flink"}, {group = "history"}]]
 
 [[tool.uv.dependency-metadata]]
 name = "crcmod"

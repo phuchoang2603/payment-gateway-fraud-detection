@@ -23,4 +23,6 @@ catalog:
             awsConfig:
               endPointURL: https://minio.home.phuchoang.sbs
             bucketNames:
-              - platform-dev
+            - platform-dev
+features:
+  enabled: true

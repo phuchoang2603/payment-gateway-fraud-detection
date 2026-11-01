@@ -82,7 +82,8 @@ def test_every_lineage_edge_lands_on_a_contracted_table(found):
     contracted = {check.fqn for check in found.values()}
     targets = {edge.pipeline: [] for edge in lineage.edges("v19")}
     for edge in lineage.edges("v19"):
-        targets[edge.pipeline].append(edge.target.fqn)
+        if edge.target.kind == "table":
+            targets[edge.pipeline].append(edge.target.fqn)
 
     assert set(targets) <= set(lineage.PIPELINES)
     for pipeline, fqns in targets.items():

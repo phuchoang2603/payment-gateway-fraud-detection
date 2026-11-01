@@ -68,3 +68,31 @@ def test_historical_clock_expiration_keeps_device_until_last_occurrence():
             view["anchor"] = anchor.isoformat()
         counts.append(compute(**arguments)["values"]["customer_snapshot_distinct_devices_24h"])
     assert counts == [1, 1, 0]
+
+
+@pytest.mark.parametrize(
+    "example",
+    [case for case in EXAMPLES if case["name"].startswith("lateness_24h")],
+    ids=lambda case: case["name"],
+)
+def test_lateness_fixtures_in_streaming_model(example):
+    from google.protobuf.json_format import ParseDict
+
+    from fraud_streaming.model import DAY, Entity, Packet
+    from fraud_streaming.wire import PaymentEvent, decode
+
+    arguments = example_input(example)
+    document = arguments["events"][0]
+    document["aggregate_version"] = 1
+    raw = ParseDict(document, PaymentEvent()).SerializeToString(deterministic=True)
+    fact, recorded = decode(raw)
+    packet = Packet(fact, recorded, recorded - 2 * DAY, ())
+    assert packet.too_late == example["name"].endswith("plus_1us")
+    entity = Entity("customer", fact.integration, fact.customer, recorded - 2 * DAY)
+    if not packet.too_late:
+        entity.add(packet)
+    _, values = entity.advance(recorded)
+    assert (
+        values["attempt_count_24h"]
+        == example["expected"]["values"]["customer_snapshot_attempt_count_24h"]
+    )

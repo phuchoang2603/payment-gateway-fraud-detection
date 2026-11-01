@@ -1,0 +1,49 @@
+syntax = "proto3";
+package fraud.v1;
+
+option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/fraud/v1;fraudv1";
+import "google/protobuf/timestamp.proto";
+
+enum FeatureViewStatus {
+  FEATURE_VIEW_STATUS_UNSPECIFIED = 0;
+  FEATURE_VIEW_STATUS_AVAILABLE = 1;
+  FEATURE_VIEW_STATUS_MISSING = 2;
+  FEATURE_VIEW_STATUS_EXPIRED = 3;
+  FEATURE_VIEW_STATUS_FUTURE = 4;
+  FEATURE_VIEW_STATUS_TIMEOUT = 5;
+  FEATURE_VIEW_STATUS_ERROR = 6;
+  FEATURE_VIEW_STATUS_DISABLED = 7;
+}
+message FeatureValue {
+  oneof value {
+    int64 integer = 1;
+    double number = 2;
+    bool boolean = 3;
+  }
+}
+message FeatureViewEvidence {
+  string view = 1;
+  FeatureViewStatus status = 2;
+  google.protobuf.Timestamp event_timestamp = 3;
+  google.protobuf.Timestamp read_at = 4;
+  map<string, FeatureValue> values = 5;
+}
+message AssessmentEvidence {
+  uint32 schema_version = 1;
+  string assessment_id = 2;
+  string request_sha256 = 3;
+  string integration_id = 4;
+  string payment_id = 5;
+  string attempt_id = 6;
+  string policy_version = 7;
+  string feature_service = 8;
+  repeated FeatureViewEvidence views = 9;
+  reserved 10, 11, 12;
+  google.protobuf.Timestamp evaluated_at = 13;
+  int64 used_amount_minor = 14;
+  google.protobuf.Timestamp used_customer_created_at = 15;
+  google.protobuf.Timestamp used_attempted_at = 16;
+  string used_shipping_country = 17;
+  optional string used_ip_country = 18;
+  bool historical_features_shadow_only = 19;
+}

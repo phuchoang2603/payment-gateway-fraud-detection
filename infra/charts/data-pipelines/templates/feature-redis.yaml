@@ -1,0 +1,95 @@
+{{- if .Values.features.enabled }}
+{{- range $redis := list .Values.features.redis }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $redis.name }}-config
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ $redis.name }}
+data:
+  redis-additional.conf: |
+    maxmemory {{ $redis.maxmemory }}
+    maxmemory-policy noeviction
+    save ""
+    appendonly {{ $redis.appendonly | default "no" }}
+    appendfsync everysec
+---
+apiVersion: redis.redis.opstreelabs.in/v1beta2
+kind: Redis
+metadata:
+  name: {{ $redis.name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ $redis.name }}
+spec:
+  podSecurityContext:
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+  kubernetesConfig:
+    image: {{ printf "%s:%s" $redis.image.repository $redis.image.tag | quote }}
+    imagePullPolicy: {{ $redis.image.pullPolicy }}
+    redisSecret:
+      name: {{ $redis.password.secretName }}
+      key: {{ $redis.password.secretKey }}
+    resources:
+      {{- toYaml $redis.resources | nindent 6 }}
+  {{- with $redis.storageSize }}
+  storage:
+    keepAfterDelete: true
+    volumeClaimTemplate:
+      spec:
+        storageClassName: {{ $redis.storageClass | default "local-path" }}
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: {{ . }}
+  {{- end }}
+  redisConfig:
+    additionalRedisConfig: {{ $redis.name }}-config
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $redis.password.secretName }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: gateway-doppler
+  target:
+    name: {{ $redis.password.secretName }}
+    creationPolicy: Owner
+  data:
+    - secretKey: {{ $redis.password.secretKey }}
+      remoteRef:
+        key: {{ $redis.password.remoteKey }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $redis.name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ $redis.name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              feast-client: "true"
+        {{- range $redis.clients }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ . }}
+        {{- end }}
+      ports:
+        - port: 6379
+          protocol: TCP
+{{- end }}
+{{- end }}

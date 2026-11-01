@@ -3,6 +3,8 @@ global:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming: dev
 enabled: false
 namespace: data
 images:
@@ -12,6 +14,12 @@ images:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark
   openmetadata:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
+  feast:
+    pullPolicy: IfNotPresent
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast
+  streaming:
+    pullPolicy: IfNotPresent
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming
 generator:
   config: historical-dev.yaml
   shards: 1
@@ -21,11 +29,11 @@ generator:
   nodeSelector: {}
   resources:
     requests:
-      cpu: "2"
+      cpu: '2'
       memory: 4Gi
       ephemeral-storage: 20Gi
     limits:
-      cpu: "4"
+      cpu: '4'
       memory: 8Gi
       ephemeral-storage: 40Gi
 config:
@@ -63,9 +71,11 @@ spark:
         memory: 2g
         memoryOverhead: 512m
         ephemeralStorage: 5Gi
+      # Dev nodes keep about 1.5 CPU and 7 GiB free next to Flink, OpenMetadata and ClickHouse.
       executor:
         cores: 2
-        memory: 6g
+        requestCores: '1'
+        memory: 4g
         memoryOverhead: 1g
         ephemeralStorage: 10Gi
     large:
@@ -74,7 +84,7 @@ spark:
       advisoryPartitionSize: 128m
       driver:
         cores: 1
-        requestCores: "1"
+        requestCores: '1'
         memory: 4g
         memoryOverhead: 1g
         ephemeralStorage: 8Gi
@@ -108,7 +118,7 @@ maintenance:
   profile: dev
   reportRoot: s3://platform-dev/runs/payment-gateway/maintenance
   activeDeadlineSeconds: 7200
-  schedule: "43 3 * * *"
+  schedule: 43 3 * * *
 pipeline:
   enabled: false
   profile: dev
@@ -116,7 +126,7 @@ pipeline:
   activeDeadlineSeconds: 14400
   # dp-daily at 04:17 UTC, after the 03:43 maintenance; suspended. Without start and end a run covers yesterday and
   # the lookback days before it, which catches late outcomes.
-  schedule: "17 4 * * *"
+  schedule: 17 4 * * *
   lookbackDays: 2
 marts:
   clickhouseUrl: http://clickhouse.data.svc.cluster.local:8123
@@ -125,8 +135,11 @@ marts:
   passwordSecret: clickhouse-marts
   retentionDays: 90
   resources:
-    requests: {cpu: 100m, memory: 256Mi}
-    limits: {memory: 512Mi}
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
 warehouseBenchmark:
   enabled: false
   reportRoot: s3://platform-dev/runs/payment-gateway/warehouse-benchmark
@@ -210,6 +223,8 @@ catalog:
               includes:
               - ^payments\.events\.v1$
               - ^fraud\.labels\.v1$
+              - ^fraud\.feature-updates\.v2\..*$
+              - ^fraud\.feature-rejects\.v1\..*$
             generateSampleData: false
             markDeletedTopics: false
             overrideMetadata: false
@@ -243,9 +258,91 @@ catalog:
               endPointURL: https://minio.home.phuchoang.sbs
             bucketNames:
             - platform-dev
-
+    flink:
+      kind: pipeline
+      discover: true
+      source:
+        type: flink
+        serviceName: fraud-flink
+        serviceConnection:
+          config:
+            type: Flink
+            hostPort: http://fraud-streaming-live-v18-rest.data.svc.cluster.local:8081
+        sourceConfig:
+          config:
+            type: PipelineMetadata
 checks:
   connectorsConfigMap: metadata-connectors
   connectorSecret: metadata-clickhouse
   # Limit for each table's `metadata test` run; each contract rule is a ClickHouse scan over the lakehouse table.
   nativeTimeoutSeconds: 1500
+features:
+  enabled: false
+  driverMemory: 6g
+  spillSize: 100Gi
+  materializeResources:
+    requests: {cpu: "2", memory: 8Gi, ephemeral-storage: 100Gi}
+    limits: {memory: 12Gi, ephemeral-storage: 110Gi}
+  registry: s3://platform-dev/runs/payment-gateway/feast/registry.pb
+  reportRoot: s3://platform-dev/runs/payment-gateway/feast
+  epochs: history-v18,live-v18
+  epoch: live-v18
+  historyEpoch: history-v18
+  schedule: 47 6 * * *
+  checkpointRoot: s3://platform-dev/runs/payment-gateway/flink/history
+  replicationFactor: 1
+  historyStart: "2026-07-29"
+  # Each unit is one single-partition logical-clock Flink job, so units in parallel are the only way to scale a replay.
+  historyUnitDays: 7
+  historyParallelism: 2
+  historyEnd: "2026-10-29"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: '1'
+      memory: 1Gi
+  redis:
+    name: payment-gateway-feast-redis
+    image:
+      repository: quay.io/opstree/redis
+      tag: v7.2.16
+      pullPolicy: IfNotPresent
+    appendonly: 'yes'
+    storageSize: 2Gi
+    maxmemory: 512mb
+    resources:
+      requests:
+        cpu: 100m
+        memory: 768Mi
+      limits:
+        cpu: 500m
+        memory: 1536Mi
+    password:
+      secretName: payment-gateway-feast-redis
+      secretKey: password
+      remoteKey: GATEWAY_FEAST_REDIS_PASSWORD
+    clients:
+    - feature-writer
+    - feast-server
+    - data-pipelines
+  streaming:
+    sourceTopic: payments.events.v1
+    sourcePartitions: 3
+    maxEntityEntries: 50000
+    storageRoot: s3://platform-dev/runs/payment-gateway/flink
+    jobManager:
+      resources:
+        requests:
+          cpu: '1'
+          memory: 1536Mi
+        limits:
+          memory: 1536Mi
+    taskManager:
+      resources:
+        requests:
+          cpu: '1'
+          memory: 2Gi
+        limits:
+          memory: 2Gi

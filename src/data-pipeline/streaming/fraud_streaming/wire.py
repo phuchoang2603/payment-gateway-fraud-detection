@@ -1,4 +1,5 @@
 import hashlib
+import os
 from pathlib import Path
 
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
@@ -18,7 +19,12 @@ PaymentEvent = message_factory.GetMessageClass(
 SnapshotUpdate = message_factory.GetMessageClass(
     pool.FindMessageTypeByName("features.v2.SnapshotUpdate")
 )
-DEFINITION_HASH = "958f9b0fd7e50ba33a22526271ff2e62eafcf827c9f9e0bce1c35c4a016f85a3"
+DEFINITION_HASH = hashlib.sha256(
+    Path(
+        os.environ.get("FEATURE_DEFINITION")
+        or Path(__file__).resolve().parents[4] / "contracts/features/fraud-snapshot-v2.yaml"
+    ).read_bytes()
+).hexdigest()
 
 
 def decode(raw):

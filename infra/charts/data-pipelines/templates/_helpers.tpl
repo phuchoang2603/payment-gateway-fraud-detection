@@ -92,7 +92,7 @@ container:
   value: {{ .Values.marts.retentionDays | int64 | toString | quote }}
 {{- end -}}
 
-{{- define "data-pipelines.env" -}}
+{{- define "data-pipelines.lakeEnv" -}}
 {{ include "data-pipelines.storageEnv" . }}
 - name: ICEBERG_REST_URI
   value: {{ .Values.catalog.icebergRestUri | quote }}
@@ -107,6 +107,10 @@ container:
     secretKeyRef:
       name: {{ .Values.catalog.icebergSecret.name }}
       key: ICEBERG_CLIENT_SECRET
+{{- end -}}
+
+{{- define "data-pipelines.env" -}}
+{{ include "data-pipelines.lakeEnv" . }}
 - name: OPENMETADATA_URL
   value: {{ .Values.catalog.openmetadataUrl | quote }}
 - name: OPENMETADATA_TOKEN
@@ -383,6 +387,9 @@ spec:
     {{- end }}
     spark.executor.instances: {{ $sizing.executors | quote }}
     spark.executor.cores: {{ $sizing.executor.cores | quote }}
+    {{- with $sizing.executor.requestCores }}
+    spark.kubernetes.executor.request.cores: {{ . | quote }}
+    {{- end }}
     spark.executor.memory: {{ $sizing.executor.memory | quote }}
     spark.executor.memoryOverhead: {{ $sizing.executor.memoryOverhead | quote }}
     spark.sql.shuffle.partitions: {{ $sizing.shufflePartitions | quote }}
@@ -405,7 +412,7 @@ spec:
     spark.storage.decommission.enabled: "true"
     spark.storage.decommission.shuffleBlocks.enabled: "true"
     spark.storage.decommission.rddBlocks.enabled: "true"
-    spark.pyspark.python: /opt/data-pipeline/batch/.venv/bin/python
+    spark.pyspark.python: "/opt/data-pipeline/batch/.venv/bin/python"
     {{- with .root.Values.sparkEventLogDir }}
     spark.eventLog.enabled: "true"
     spark.eventLog.dir: {{ . | quote }}
@@ -467,4 +474,24 @@ spec:
                 ephemeral-storage: {{ $sizing.executor.ephemeralStorage | quote }}
             env:
               {{- include "data-pipelines.env" .root | nindent 14 }}
+{{- end -}}
+
+{{- define "data-pipelines.feastEnv" -}}
+- name: FEAST_S3_ENDPOINT_URL
+  value: {{ .Values.config.S3_ENDPOINT | quote }}
+- name: FEAST_REGISTRY
+  value: {{ .Values.features.registry | quote }}
+- name: FEAST_STREAM_EPOCHS
+  value: {{ .Values.features.epochs | quote }}
+- name: FEAST_REDIS_ADDR
+  value: {{ printf "%s:6379" .Values.features.redis.name | quote }}
+- name: FEAST_REDIS_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.features.redis.password.secretName }}
+      key: password
+- name: FEATURE_KAFKA_BROKERS
+  value: {{ .Values.bronze.kafka.bootstrapServers | quote }}
+- name: KAFKA_BROKERS
+  value: {{ .Values.bronze.kafka.bootstrapServers | quote }}
 {{- end -}}

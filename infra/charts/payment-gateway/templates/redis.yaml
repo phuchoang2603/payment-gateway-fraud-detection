@@ -1,4 +1,4 @@
-{{- range $redis := list .Values.redis .Values.authorizationRedis }}
+{{- $redis := .Values.redis }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -87,4 +87,3 @@ spec:
       ports:
         - port: 6379
           protocol: TCP
-{{- end }}

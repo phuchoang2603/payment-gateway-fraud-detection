@@ -71,17 +71,22 @@ def main():
     clock_topic = os.environ.get("CLOCK_TOPIC")
     if logical and (not clock_topic or epoch.startswith("live") or source == "payments.events.v1"):
         raise ValueError("logical replay requires isolated input, output epoch and clock topic")
-    if output != f"fraud.feature-updates.v2.{epoch}":
+    # A history unit runs as `<epoch>-<unit>` so concurrent units keep their own topics and transactions.
+    run = os.environ.get("STREAM_RUN", epoch)
+    if run != epoch and not (logical and run.startswith(epoch + "-")):
+        raise ValueError("stream run must be its epoch or a history unit of it")
+    if output != f"fraud.feature-updates.v2.{run}":
         raise ValueError("feature journal must be bound to its epoch")
-    rejects_topic = f"fraud.feature-rejects.v1.{epoch}"
+    rejects_topic = f"fraud.feature-rejects.v1.{run}"
     configuration = Configuration()
-    configuration.set_string("pipeline.name", f"fraud-features-{epoch}")
+    configuration.set_string("pipeline.name", f"fraud-features-{run}")
     configuration.set_string("python.execution-mode", "process")
     env = StreamExecutionEnvironment.get_execution_environment(configuration)
     env.set_parallelism(1)
     env.enable_checkpointing(10_000)
     table = StreamTableEnvironment.create(env)
     topics = ";".join([source, clock_topic] if logical else [source])
+    bounded = "'scan.bounded.mode' = 'latest-offset'," if logical else ""
     table.execute_sql(
         f"""CREATE TABLE payment_source (
             payload BYTES,
@@ -93,10 +98,11 @@ def main():
             'connector' = 'kafka',
             'topic' = {sql_literal(topics)},
             'properties.bootstrap.servers' = {sql_literal(brokers)},
-            'properties.group.id' = {sql_literal("fraud-features-" + epoch)},
+            'properties.group.id' = {sql_literal("fraud-features-" + run)},
             'properties.isolation.level' = 'read_committed',
             'properties.auto.offset.reset' = 'none',
             'scan.startup.mode' = {sql_literal("earliest-offset" if logical else "latest-offset")},
+            {bounded}
             'format' = 'raw'
         )"""
     )
@@ -132,7 +138,7 @@ def main():
             'value.fields-include' = 'EXCEPT_KEY',
             'sink.delivery-guarantee' = 'exactly-once',
             'properties.transaction.timeout.ms' = '900000',
-            'sink.transactional-id-prefix' = {sql_literal("fraud-features-" + epoch + "-")}
+            'sink.transactional-id-prefix' = {sql_literal("fraud-features-" + run + "-")}
         )"""
     )
     table.execute_sql(
@@ -150,7 +156,7 @@ def main():
             'value.fields-include' = 'EXCEPT_KEY',
             'sink.delivery-guarantee' = 'exactly-once',
             'properties.transaction.timeout.ms' = '900000',
-            'sink.transactional-id-prefix' = {sql_literal("fraud-rejects-" + epoch + "-")}
+            'sink.transactional-id-prefix' = {sql_literal("fraud-rejects-" + run + "-")}
         )"""
     )
     statements = table.create_statement_set()

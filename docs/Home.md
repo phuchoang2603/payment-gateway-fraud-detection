@@ -26,7 +26,7 @@ The system has three layers on one shared Kubernetes platform: the payment gatew
 
 ### AI problem
 
-**ML:** predict, at decision time, whether a payment attempt is fraudulent. One training row is one attempt with features computed strictly before its attempt time: request features (amount, account age, IP and shipping country mismatch) and history features per customer and per payment method (attempt counts over 5 minutes, 1 hour and 24 hours, distinct devices over 24 hours; planned 7- and 30-day windows from the offline store). The target is simulation truth, evaluated against chargebacks available before the training cutoff. See [feature store](ml/feature-store.md) and [training](ml/training.md).
+**ML:** predict, at decision time, whether a payment attempt is fraudulent. One training row is one attempt with features computed strictly before its attempt time: request features (amount, account age, IP and shipping country mismatch) and history features per customer and per payment method (attempt counts over 5 minutes, 1 hour and 24 hours, distinct devices over 24 hours; 7- and 30-day windows from the offline store). The target is simulation truth, evaluated against chargebacks available before the training cutoff. See [feature store](ml/feature-store.md) and [training](ml/training.md).
 
 **LLM/agent:** a read-only fraud investigation agent that answers analyst questions about a payment by retrieving recorded events, labels, features and model scores, and calling the fraud model as a tool. It never sits in the payment decision path. See [agents](llm/agents.md).
 
@@ -46,7 +46,7 @@ The system has three layers on one shared Kubernetes platform: the payment gatew
 | Historical generator | Python; per-day synthetic history to object storage | Immutable datasets v18 (dev), v19 (prod) | Deployed |
 | Live simulator | Python; current-time gateway traffic and labels | None | Deployed, disabled |
 | Data pipelines (DP1, `dp-pipeline`) | Spark on the Spark Operator: Bronze, then Silver, Gold features and ClickHouse marts; checks and lineage in OpenMetadata | Iceberg tables, ClickHouse marts, run reports | Running on prod (v19 backfill) |
-| Flink streaming features, Feast writer and server | Python; window features to the online store | Checkpoints, Feast Redis | Deployed in dev (shadow) |
+| Flink streaming features, Feast writer and server | Python; window features to Redis and `gold.feat_stream_*`, stream history replay, materialization | Checkpoints, Feast Redis, stream tables | Deployed in dev (shadow); enabled in prod |
 | Training, KServe, drift | Kubeflow, KServe | Models | Planned |
 | LLM and agent platform | vLLM on KServe, agentgateway, kagent agents on Agent Substrate, RAG pipeline and knowledge API ([LLM agents](llm/agents.md)) | Feast pgvector and Iceberg knowledge chunks, Langfuse | Deployed in dev; further agents planned |
 
@@ -140,7 +140,7 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 
 | Area | Capability | Page | Status |
 |---|---|---|---|
-| Feature store | Streaming features to online and offline stores, incremental materialization, TTL | [Feature store](ml/feature-store.md) | Planned: see the [build order](ml/feature-store.md#build-order) |
+| Feature store | Streaming features to online and offline stores, incremental materialization, TTL | [Feature store](ml/feature-store.md) | In progress: implemented, prod runs pending |
 | Generator | Data drift and a label table joinable with features | [Offline data](data/offline.md) | Labels done; drift planned |
 | Model | Notebook baseline from the offline store, training pipeline, distributed training | [Training](ml/training.md) | Planned |
 | Versioning | Model registry and incremental data versions | [Training](ml/training.md) | Planned |

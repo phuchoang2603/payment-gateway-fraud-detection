@@ -56,6 +56,8 @@ spec:
           image: {{ include "data-pipelines.image" (dict "image" .Values.images.openmetadata "global" .Values.global) | quote }}
           command: [python, -m, openmetadata.integrations]
           env:
+            - name: DATASET_VERSION
+              value: {{ $.Values.bronze.datasetVersion | quote }}
             - name: METADATA_STAGE
               value: register
             - name: METADATA_CONNECTORS_FILE
@@ -112,6 +114,8 @@ spec:
         image: {{ include "data-pipelines.image" (dict "image" $.Values.images.openmetadata "global" $.Values.global) | quote }}
         command: [python, -m, openmetadata.integrations]
         env:
+          - name: DATASET_VERSION
+            value: {{ $.Values.bronze.datasetVersion | quote }}
           - name: METADATA_STAGE
             value: "{{`{{workflow.parameters.stage}}`}}"
           - name: METADATA_CONNECTOR

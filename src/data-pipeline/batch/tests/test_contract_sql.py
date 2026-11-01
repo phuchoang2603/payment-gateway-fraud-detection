@@ -83,6 +83,16 @@ def test_every_lakehouse_and_mart_rule_analyzes_on_the_pinned_clickhouse(spark, 
     day = BASE.date()
     silver.run(spark, "contract-sql", day, day)
     gold.run(spark, "contract-sql", day, day)
+    stream_types = {"VARCHAR": T.StringType(), "TIMESTAMPTZ": T.TimestampType(), "BIGINT": T.LongType()}
+    for table in contract_tables("gold-features"):
+        if table["physicalName"] not in ("gold.feat_stream_customer", "gold.feat_stream_payment_method"):
+            continue
+        schema = T.StructType(
+            [T.StructField(prop["name"], stream_types[prop["physicalType"]]) for prop in table["properties"]]
+        )
+        spark.createDataFrame([], schema).writeTo(f"{ICEBERG_CATALOG}.{table['physicalName']}").using(
+            "iceberg"
+        ).createOrReplace()
     for database in (DATABASE, marts.DATABASE):
         assert run_sql(clickhouse, f"DROP DATABASE IF EXISTS {database} SYNC") is None
         assert run_sql(clickhouse, f"CREATE DATABASE {database}") is None

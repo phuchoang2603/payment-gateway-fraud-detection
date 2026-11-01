@@ -103,31 +103,38 @@ func TestConcurrentClaimsFencedRecoveryAndImmutableCompletion(t *testing.T) {
 }
 
 type history struct {
-	calls int
-	value int64
+	calls    int
+	value    int64
+	scoredAt time.Time
 }
 
-func (h *history) Read(context.Context, application.Request) (application.ViewObservation, application.ViewObservation) {
+func (h *history) Read(_ context.Context, request application.Request) application.FeatureObservation {
 	h.calls++
+	h.scoredAt = request.ScoredAt
 	value := h.value
-	return application.ViewObservation{Status: "available", Values: application.SnapshotValues{Count1h: &value}}, application.ViewObservation{Status: "timeout"}
+	return application.FeatureObservation{Service: "payment_risk_v1", Views: map[string]application.ViewObservation{"customer_daily": {Status: "available", Values: map[string]application.FeatureValue{"attempt_count_7d": {Integer: &value}}}, "payment_method_daily": {Status: "timeout"}}}
 }
 
 func TestAssessmentResponseLossReplaysOriginalEvidenceAndRejectsExpiredRecovery(t *testing.T) {
 	store, admin := testsupport.Database(t)
 	observed := &history{value: 1}
-	config := application.Config{Deadline: time.Second, Lease: 2 * time.Second, RetryHorizon: time.Hour, ErrorBackoff: time.Millisecond, HistoryTimeout: time.Second, GuardTimeout: time.Second}
-	first, err := application.New(store, observed, nil, config)
+	config := application.Config{Deadline: time.Second, Lease: 2 * time.Second, RetryHorizon: time.Hour, ErrorBackoff: time.Millisecond, HistoryTimeout: time.Second}
+	first, err := application.New(store, observed, config)
 	if err != nil {
 		t.Fatal(err)
 	}
 	input := request()
+	input.Input.AttemptedAt = time.Now().UTC().Add(-10 * time.Minute)
+	before := time.Now().UTC()
 	original, err := first.Decide(context.Background(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !observed.scoredAt.Equal(original.Evidence.EvaluatedAt) || observed.scoredAt.Before(before) || !observed.scoredAt.After(input.Input.AttemptedAt) {
+		t.Fatal("feature scoring time differs from server decision time")
+	}
 	observed.value = 99
-	replica, err := application.New(store, observed, nil, config)
+	replica, err := application.New(store, observed, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,48 +162,5 @@ func TestAssessmentResponseLossReplaysOriginalEvidenceAndRejectsExpiredRecovery(
 	}
 	if _, err = replica.Decide(context.Background(), pending); !errors.Is(err, application.ErrExpired) {
 		t.Fatalf("unsafe expired recovery: %v", err)
-	}
-}
-
-type timedOutHistory struct{ historyStarted, guardStarted chan struct{} }
-
-func (h timedOutHistory) Read(ctx context.Context, _ application.Request) (application.ViewObservation, application.ViewObservation) {
-	close(h.historyStarted)
-	select {
-	case <-h.guardStarted:
-	case <-ctx.Done():
-		return application.ViewObservation{Status: "error"}, application.ViewObservation{Status: "error"}
-	}
-	<-ctx.Done()
-	return application.ViewObservation{Status: "timeout"}, application.ViewObservation{Status: "timeout"}
-}
-
-type partialGuard struct{ historyStarted, guardStarted chan struct{} }
-
-func (g partialGuard) Register(ctx context.Context, _ application.Request, _ time.Time) (application.GuardObservation, application.GuardObservation) {
-	close(g.guardStarted)
-	select {
-	case <-g.historyStarted:
-	case <-ctx.Done():
-		return application.GuardObservation{Status: "timeout"}, application.GuardObservation{Status: "timeout"}
-	}
-	count := int64(100)
-	return application.GuardObservation{Status: "registered", Count10s: &count, ThresholdExceeded: true}, application.GuardObservation{Status: "error"}
-}
-
-func TestObservationFailuresAndThresholdsPreserveRulesAndDurableEvidence(t *testing.T) {
-	store, _ := testsupport.Database(t)
-	historyStarted, guardStarted := make(chan struct{}), make(chan struct{})
-	service, err := application.New(store, timedOutHistory{historyStarted, guardStarted}, partialGuard{historyStarted, guardStarted}, application.Config{Deadline: time.Second, Lease: 2 * time.Second, RetryHorizon: time.Hour, ErrorBackoff: time.Millisecond, HistoryTimeout: 20 * time.Millisecond, GuardTimeout: 20 * time.Millisecond})
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := service.Decide(context.Background(), request())
-	if err != nil {
-		t.Fatal(err)
-	}
-	evidence := result.Evidence
-	if evidence.Decision.Declined || evidence.Customer.Status != "timeout" || evidence.Method.Status != "timeout" || evidence.CustomerGuard.Status != "registered" || !evidence.CustomerGuard.ThresholdExceeded || evidence.MethodGuard.Status != "error" {
-		t.Fatalf("observation changed rules or lost partial evidence: %+v", evidence)
 	}
 }

@@ -12,11 +12,11 @@ generator:
     karpenter.sh/capacity-type: spot
   resources:
     requests:
-      cpu: "3"
+      cpu: '3'
       memory: 8Gi
       ephemeral-storage: 10Gi
     limits:
-      cpu: "3500m"
+      cpu: 3500m
       memory: 12Gi
       ephemeral-storage: 20Gi
 config:
@@ -113,7 +113,38 @@ catalog:
             awsConfig:
               endPointURL: https://s3.us-east-1.amazonaws.com
             bucketNames:
-              - platform-prod-142737101504-us-east-1
+            - platform-prod-142737101504-us-east-1
+    flink:
+      source:
+        serviceConnection:
+          config:
+            hostPort: http://fraud-streaming-live-v19-rest.data.svc.cluster.local:8081
 checks:
   # The v19 Bronze event suite took about 1490 s against the 1500 s default; Silver has more rules on similar volume.
   nativeTimeoutSeconds: 4800
+features:
+  enabled: true
+  registry: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/feast/registry.pb
+  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/feast
+  epochs: history-v19,live-v19
+  epoch: live-v19
+  historyEpoch: history-v19
+  checkpointRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/flink/history
+  replicationFactor: 1
+  historyStart: "2026-07-29"
+  historyEnd: "2026-10-29"
+  # Four weekly units fit the 64Gi broker volume and the spot pool; topics are deleted when each unit ends.
+  historyParallelism: 4
+  redis:
+    storageClass: gp3
+    storageSize: 10Gi
+    maxmemory: 6gb
+    resources:
+      requests:
+        cpu: 250m
+        memory: 7Gi
+      limits:
+        cpu: '1'
+        memory: 8Gi
+  streaming:
+    storageRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/flink

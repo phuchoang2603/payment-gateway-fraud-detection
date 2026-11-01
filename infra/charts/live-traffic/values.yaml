@@ -8,6 +8,7 @@ secretStore: gateway-doppler
 kafkaBrokers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092
 simulator:
   enabled: false
+  runAsJob: false
   resources:
     requests:
       cpu: 100m

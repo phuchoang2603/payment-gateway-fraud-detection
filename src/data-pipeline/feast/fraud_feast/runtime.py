@@ -1,72 +1,56 @@
 import json
 import os
-import signal
-import threading
+from pathlib import Path
+from string import Template
 
 import uvicorn
-from confluent_kafka import Consumer
+import yaml
 from feast import FeatureStore
-from feast.feature_server import get_app
 from feast.repo_config import RepoConfig
 
-from fraud_feast.schema import definitions
-from fraud_feast.writer import Writer, consume
+from fraud_feast.server import get_app
 
 
-def store():
+def redis_connection():
     password = os.environ["FEAST_REDIS_PASSWORD"]
     if not password:
         raise ValueError("FEAST_REDIS_PASSWORD must be set")
-    encoded = json.dumps(password).replace(",", r"\u002c")
-    config = RepoConfig(
-        project="fraud_snapshots",
-        provider="local",
-        registry={"path": "/tmp/feast-registry.db"},
-        online_store={
-            "type": "redis",
-            "connection_string": f"{os.environ['FEAST_REDIS_ADDR']},password={encoded},"
-            "socket_timeout=2,socket_connect_timeout=2",
-            "skip_dedup": False,
-        },
-        entity_key_serialization_version=3,
+    return (
+        f"{os.environ['FEAST_REDIS_ADDR']},"
+        f"password={json.dumps(password).replace(',', r'\u002c')},"
+        "socket_timeout=2,socket_connect_timeout=2"
     )
-    result = FeatureStore(config=config)
-    result.apply(definitions(), partial=True)
-    return result
+
+
+def config(*, online=False, redis=True):
+    values = yaml.safe_load(Path(__file__).with_name("feature_store.yaml").read_text())
+    if not redis:
+        values["online_store"] = None
+    connection = redis_connection() if redis else ""
+
+    def expand(value):
+        if isinstance(value, dict):
+            return {k: expand(v) for k, v in value.items()}
+        if isinstance(value, str):
+            return Template(value).substitute({**os.environ, "FEAST_REDIS_CONNECTION": connection})
+        return value
+
+    if online:
+        values["offline_store"] = {"type": "file"}
+    values = expand(values)
+    if not online:
+        values["offline_store"]["spark_conf"]["spark.master"] = os.environ.get(
+            "SPARK_MASTER", "local[*]"
+        )
+    return RepoConfig(**values)
+
+
+def store(*, online=False, redis=True):
+    return FeatureStore(config=config(online=online, redis=redis))
 
 
 def main():
-    feature_store = store()
-    uvicorn.run(get_app(feature_store), host="0.0.0.0", port=6566, access_log=False)
-
-
-def write():
-    feature_store = store()
-    stopped = threading.Event()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        signal.signal(sig, lambda *_: stopped.set())
-    consumer = Consumer(
-        {
-            "bootstrap.servers": os.environ["FEATURE_KAFKA_BROKERS"],
-            "group.id": os.environ["FEATURE_WRITER_GROUP"],
-            "enable.auto.commit": False,
-            "enable.auto.offset.store": False,
-            "auto.offset.reset": "earliest",
-            "isolation.level": "read_committed",
-            "max.poll.interval.ms": 600_000,
-            "allow.auto.create.topics": False,
-        }
-    )
-    consumer.subscribe([os.environ["FEATURE_UPDATE_TOPIC"]])
-    consume(
-        consumer,
-        Writer(
-            feature_store,
-            epoch=os.environ["FEATURE_EPOCH"],
-            definition_hash=os.environ["FEATURE_DEFINITION_SHA256"],
-        ),
-        stopped,
-    )
+    uvicorn.run(get_app(store(online=True)), host="0.0.0.0", port=6566, access_log=False)
 
 
 if __name__ == "__main__":

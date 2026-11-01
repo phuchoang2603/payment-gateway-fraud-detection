@@ -3,6 +3,10 @@ objectStorage:
   pathStyle: false
   bucket: platform-prod-142737101504-us-east-1
 simulator:
-  enabled: false
+  enabled: true
+  runAsJob: true
   config:
-    manifest: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v17/manifest.json
+    manifest: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19/manifest.json
+    manifest_sha256: 78ee54fe2a607ae0c128bc6765d89238f28d00270fca5ad48a8fed44fd0f8608
+    duration_seconds: 604800
+    payments_per_second: 0.03333333333333333

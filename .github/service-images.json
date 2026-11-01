@@ -89,7 +89,6 @@
       "paths": [
         "infra/docker/schema-register.Dockerfile",
         "contracts/payments/v1",
-        "contracts/features/v1",
         "scripts/schema_registry.py"
       ]
     },
@@ -124,7 +123,8 @@
         "infra/docker/data-platform-spark.Dockerfile",
         "src/data-pipeline/batch",
         "contracts/data-products",
-        "contracts/payments"
+        "contracts/payments",
+        "src/data-pipeline/feast"
       ]
     },
     {

@@ -141,7 +141,7 @@ The new attempt context SHALL use a fresh protobuf field number and an explicit 
 
 ### Requirement: Durable attempt ownership before risk evaluation
 
-Payments SHALL durably claim/start an attempt before invoking Fraud, record the resulting assessment before approved processor effects, and retain recoverable idempotency. The synchronous decision path SHALL NOT wait for Kafka publication or feature-stream processing. Observe-only velocity and shadow feature retrieval SHALL NOT change healthy rules-only outcomes or require a trained model. Operational errors SHALL remain distinct from declines. Durable assessment/evidence identity SHALL survive caller timeouts, while only Payments' committed risk event makes an assessment eligible for historical aggregates.
+Payments SHALL durably claim/start an attempt before invoking Fraud, record the resulting assessment before approved processor effects, and retain recoverable idempotency. The synchronous decision path SHALL NOT wait for Kafka publication or feature-stream processing. Shadow feature retrieval SHALL NOT change healthy rules-only outcomes or require a trained model. Operational errors SHALL remain distinct from declines. Durable assessment/evidence identity SHALL survive caller timeouts, while only Payments' committed risk event makes an assessment eligible for historical aggregates.
 
 #### Scenario: Kafka outage during an attempt
 

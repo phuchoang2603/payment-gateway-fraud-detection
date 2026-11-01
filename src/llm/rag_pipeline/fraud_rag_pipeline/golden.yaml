@@ -14,8 +14,8 @@ questions:
     doc_ids: [chargebacks, merchant-faq]
   - question: How do I investigate a geo-mismatch decline?
     doc_ids: [analyst-runbook]
-  - question: Is the velocity counter enforced or only observed?
-    doc_ids: [authorization-velocity, risk-policy]
+  - question: Do streaming features or a model score change the decision?
+    doc_ids: [risk-policy]
   - question: What does card testing look like?
     doc_ids: [fraud-patterns]
   - question: Why did my create-payment request return HTTP 409?

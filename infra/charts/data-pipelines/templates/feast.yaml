@@ -1,0 +1,80 @@
+{{- if .Values.features.enabled }}
+{{- $report := printf "%s/materialize/{{workflow.name}}.json" .Values.features.reportRoot }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: feast-materialize
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
+  entrypoint: run
+  onExit: publish
+  arguments:
+    parameters:
+      - {name: since, value: ""}
+      - {name: stream-recovery, value: "false"}
+  podMetadata:
+    labels:
+      app.kubernetes.io/name: data-pipelines
+  templates:
+    - name: run
+      synchronization:
+        mutexes:
+          - name: dp-writer
+      steps:
+        - - {name: materialize, template: materialize}
+        - - {name: verify, template: verify}
+    - name: materialize
+      container:
+        image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
+        command: [/opt/data-pipeline/feast/.venv/bin/python, -m, fraud_feast.materialize]
+        env:
+          - {name: SPARK_MASTER, value: "local[*]"}
+          - {name: PYSPARK_PYTHON, value: /opt/data-pipeline/feast/.venv/bin/python}
+          - {name: SPARK_LOCAL_DIRS, value: /tmp/spark}
+          - name: PYSPARK_SUBMIT_ARGS
+            value: {{ printf "--driver-memory %s pyspark-shell" .Values.features.driverMemory | quote }}
+          - name: DP_LOOKBACK_DAYS
+            value: {{ .Values.pipeline.lookbackDays | quote }}
+          - name: SINCE_DAY
+            value: {{ "{{workflow.parameters.since}}" | quote }}
+          - name: STREAM_RECOVERY
+            value: {{ "{{workflow.parameters.stream-recovery}}" | quote }}
+          - name: RUN_REPORT
+            value: {{ $report | quote }}
+          {{- include "data-pipelines.env" $ | nindent 10 }}
+          {{- include "data-pipelines.feastEnv" $ | nindent 10 }}
+        resources:
+          {{- toYaml .Values.features.materializeResources | nindent 10 }}
+        volumeMounts:
+          - {name: spill, mountPath: /tmp/spark}
+      volumes:
+        - name: spill
+          emptyDir:
+            sizeLimit: {{ .Values.features.spillSize }}
+    - name: verify
+      container:
+        image: {{ include "data-pipelines.image" (dict "image" .Values.images.feast "global" .Values.global) | quote }}
+        command: [python, -m, fraud_feast.verify_online]
+        env:
+          - name: RUN_REPORT
+            value: {{ $report | quote }}
+          {{- include "data-pipelines.env" $ | nindent 10 }}
+          {{- include "data-pipelines.feastEnv" $ | nindent 10 }}
+    {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "feast-materialize" "dataset" .Values.bronze.datasetVersion "report" $report) | nindent 4 }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: feast-materialize-daily
+  namespace: {{ .Values.namespace }}
+spec:
+  schedules: [{{ .Values.features.schedule | quote }}]
+  timezone: UTC
+  suspend: true
+  concurrencyPolicy: Forbid
+  workflowSpec:
+    workflowTemplateRef:
+      name: feast-materialize
+{{- end }}

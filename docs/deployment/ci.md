@@ -25,6 +25,7 @@ Check logic lives in [`scripts/ci-checks.sh`](../../scripts/ci-checks.sh) so wor
   - **Payment lifecycle:** any command sequence keeps one active attempt, moves phases forward only, accepts nothing after a terminal status and leaves the state untouched when it rejects a command.
   - **Service rules:** fraud rules fire exactly when their conditions hold and never flip with a higher amount; backoff stays within its cap; webhook signatures change with every input; fingerprints ignore formatting only; card numbers pass Luhn exactly when valid.
 - Go mutation testing runs per module in CI: in full on the weekly schedule, on changed code for pull requests.
+- The Feast request view and the feature server are tested with fixtures and mocks: the server through FastAPI's test client against a Feast store double, and the view through equivalence partitions and boundary values of the country pair, account age, 30-day history and scoring hour, plus a Hypothesis property that the same request always gives the same features.
 
 ## Evidence
 
@@ -35,7 +36,7 @@ Coverage from CI (`python-test-evidence-*` and `go-test-evidence-*` artifacts), 
 | data-pipeline/streaming | 89.0% | 84.1% |
 | data-pipeline/simulator | 87.1% | 78.4% |
 | data-pipeline/batch | 86.1% | 70.6% |
-| data-pipeline/feast | 63.5% | 68.6% |
+| data-pipeline/feast | 93.4% | 87.2% |
 | data-pipeline/openmetadata | 50.2% | 39.7% |
 | llm/rag_serving | 97.1% | 90.0% |
 | llm/common | 68.8% | 45.0% |

@@ -1,0 +1,82 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:fraud:gold-feat-stream-payment-method
+name: Gold payment method stream features
+version: 1.0.0
+status: active
+domain: fraud-detection
+description:
+  purpose: Flink snapshot journal persisted by Feast feature writer.
+  usage: Natural-key point-in-time retrieval over configured epochs; unknown coverage
+    remains null.
+  limitations: Synthetic data only. Event time is one microsecond after the online write
+    time; created breaks ties.
+team:
+  name: Fraud data platform
+  members:
+  - username: phuchoang2603
+    role: owner
+tags:
+- synthetic
+- gold
+- features
+customProperties:
+- property: sqlDialect
+  value: clickhouse
+- property: definition
+  value: contracts/features/fraud-snapshot-v2.yaml
+servers:
+- server: clickhouse
+  type: clickhouse
+  environment: dev
+  host: clickhouse.data.svc.cluster.local
+  port: 8123
+  database: lakehouse
+  description: Iceberg stream table read through the ClickHouse lakehouse database.
+schema:
+- name: feat_stream_payment_method
+  physicalName: gold.feat_stream_payment_method
+  logicalType: object
+  physicalType: table
+  description: One row per epoch and journal coordinate.
+  properties:
+  - name: integration_id
+    logicalType: string
+    physicalType: VARCHAR
+  - name: payment_method_fingerprint
+    logicalType: string
+    physicalType: VARCHAR
+  - name: event_timestamp
+    logicalType: timestamp
+    physicalType: TIMESTAMPTZ
+  - name: created
+    logicalType: timestamp
+    physicalType: TIMESTAMPTZ
+  - name: epoch
+    logicalType: string
+    physicalType: VARCHAR
+  - name: revision
+    logicalType: integer
+    physicalType: BIGINT
+  - name: _kafka_partition
+    logicalType: integer
+    physicalType: BIGINT
+  - name: _kafka_offset
+    logicalType: integer
+    physicalType: BIGINT
+  - name: method_snapshot_attempt_count_5m
+    logicalType: integer
+    physicalType: BIGINT
+  - name: method_snapshot_attempt_count_1h
+    logicalType: integer
+    physicalType: BIGINT
+  - name: method_snapshot_attempt_count_24h
+    logicalType: integer
+    physicalType: BIGINT
+  quality:
+  - id: gold_stream_unique_coordinate
+    type: sql
+    description: Each journal record is persisted once per epoch.
+    query: SELECT count(*) FROM (SELECT epoch, _kafka_partition, _kafka_offset FROM
+      {object} GROUP BY epoch, _kafka_partition, _kafka_offset HAVING count(*) > 1)
+    mustBe: 0

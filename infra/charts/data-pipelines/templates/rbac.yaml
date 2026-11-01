@@ -1,4 +1,4 @@
-{{- if or .Values.bronze.enabled .Values.pipeline.enabled .Values.analytics.enabled }}
+{{- if or .Values.bronze.enabled .Values.pipeline.enabled .Values.analytics.enabled .Values.features.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -20,6 +20,9 @@ rules:
   - apiGroups: [argoproj.io]
     resources: [workflowtaskresults]
     verbs: [create, patch]
+  - apiGroups: [flink.apache.org]
+    resources: [flinkdeployments]
+    verbs: [create, get, list, watch, patch, delete]
   - apiGroups: [spark.apache.org]
     resources: [sparkapplications]
     verbs: [create, get, list, watch, patch, delete]

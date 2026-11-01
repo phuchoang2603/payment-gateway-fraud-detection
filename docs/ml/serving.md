@@ -4,7 +4,7 @@ Go Fraud owns the decision. It validates the attempt, applies the versioned rule
 
 ## Today
 
-- Rules decide; shadow feature retrieval is disabled in every environment until the feature-store change, and authorization counters are observe-only.
+- Rules decide; Feast feature retrieval runs in shadow mode where the online store is enabled.
 - Payments records the decision before any processor effect; fraud errors fail closed.
 - No feature-read latency or freshness evidence exists for the v2 features yet, so no ML latency guarantee is claimed.
 

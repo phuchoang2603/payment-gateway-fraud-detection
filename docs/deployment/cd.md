@@ -34,17 +34,16 @@ flowchart LR
 
 | Chart | Namespace | Contents |
 |---|---|---|
-| `payment-gateway` | `payment-gateway` | The six Go services, their CNPG databases with separate owner and runtime roles, three Redis instances (idempotency, authorization observations, Feast), secrets, routing and policies |
+| `payment-gateway` | `payment-gateway` | The six Go services, their CNPG databases with separate owner and runtime roles, Payments idempotency Redis, secrets, routing and policies |
 | `kafka` | `payment-gateway` | Kafka, Debezium Connect, Karapace and topic declarations |
-| `fraud-features` | `data` | Flink job, Feast writer and server, Feast Redis |
 | `live-traffic` | `data` | Live simulator |
-| `data-pipelines` | `data` | Generator and pipeline WorkflowTemplates; OpenMetadata connections, the register job and on-demand discovery |
+| `data-pipelines` | `data` | Generator and pipeline WorkflowTemplates; Flink, Feast writer/server and Redis under `features.enabled`; OpenMetadata connections, the register job and on-demand discovery |
 | `clickhouse` | `data` | ClickHouse instance, its users from Doppler, Service and the `langfuse` setup Job |
 | `lakehouse` | `data` | Polaris REST catalog with its PostgreSQL store, signing keys and Iceberg storage secret; the `lakehouse` warehouse registration; ClickHouse `lakehouse` DataLakeCatalog |
 | `llm-platform` | `llm`, `llm-agents` | Chat and embedding model servers, agent gateway and its policy, the sandbox egress proxy, Langfuse with its Postgres and Redis; in `llm-agents` the global model config, MCP servers, sandboxed agents and their Substrate worker pool; a catalog Job per release that publishes agentregistry entries, prompts to Langfuse and AI assets to OpenMetadata; see [LLM agents](../llm/agents.md) |
 | `rag-pipeline` | `llm` | RAG knowledge workflow (corpus, chunks, embeddings through the gateway, Feast write, checks and lineage), its Feast pgvector Postgres, and the knowledge API that also serves the MCP tools, autoscaled by KEDA; see [RAG](../llm/rag.md) |
 
-The prod release enables every application except `live-traffic`, `fraud-features`, `llm-platform` and `rag-pipeline`: the gateway services with their databases, Redis and Kafka; `data-pipelines` with the generator, Bronze, Silver, analytics and maintenance workflows, with the OpenMetadata connections and register job; `clickhouse`; and `lakehouse`. Prod is not bootstrapped yet, so this describes its release configuration. Application pods are stateless; Postgres and the authorization and Feast Redis instances own the persistent volumes.
+The prod release enables every application except `live-traffic`, `llm-platform` and `rag-pipeline`; `data-pipelines.features.enabled` runs Flink, the feature writer, Redis and the Feast server. Enabled applications include the gateway services with their databases, Redis and Kafka; `data-pipelines` with the generator, Bronze, Silver, analytics, maintenance and feature workflows, with the OpenMetadata connections and register job; `clickhouse`; and `lakehouse`. Prod is not bootstrapped yet, so this describes its release configuration. Application pods are stateless; Postgres and the Payments and Feast Redis instances own the persistent volumes.
 
 ## Runtime configuration
 
@@ -55,8 +54,6 @@ Python services take settings from configuration files and environment variables
 | fraud | `GRPC_ADDR`, `SHUTDOWN_TIMEOUT` | `:8000`, `10s` | Internal gRPC listener and drain (max 60s) |
 | fraud | `FRAUD_DATABASE_URL`, `FRAUD_MIGRATE_DATABASE_URL` | required | Runtime and migration identities |
 | fraud | `FRAUD_ASSESSMENT_DEADLINE`, `FRAUD_ASSESSMENT_LEASE`, `FRAUD_ASSESSMENT_RETRY_HORIZON`, `FRAUD_ASSESSMENT_ERROR_BACKOFF` | `1s`, `2s`, `5m`, `250ms` | Fenced completion and bounded recovery |
-| fraud | `FRAUD_AUTH_REDIS_ADDR`, `FRAUD_AUTH_REDIS_PASSWORD`, `FRAUD_VELOCITY_EPOCH` | chart values | Authorization observation store and epoch |
-| fraud | `FRAUD_GUARD_TIMEOUT`, `FRAUD_VELOCITY_THRESHOLD_10S`, `FRAUD_VELOCITY_THRESHOLD_60S` | `100ms`, `10`, `30` | Observe-only thresholds (unmeasured) |
 | fraud | `FRAUD_FEAST_URL`, `FRAUD_FEATURE_EPOCH`, `FRAUD_FEATURE_DEFINITION_SHA256`, `FRAUD_FEATURE_MAX_ANCHOR_AGE`, `FRAUD_FEATURE_MAX_PROGRESS_AGE` | unset; feature retrieval is disabled until the feature-store change | Shadow feature retrieval |
 | payments | `PAYMENTS_DATABASE_URL`, `PAYMENTS_MIGRATE_DATABASE_URL` | required | Runtime and migration identities |
 | payments | `PAYMENTS_REDIS_ADDR`, `PAYMENTS_REDIS_PASSWORD`, `PAYMENTS_IDEMPOTENCY_TTL` | chart values, `24h` | Redis-first idempotency with a 50 ms deadline before database fallback |

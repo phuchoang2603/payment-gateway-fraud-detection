@@ -24,8 +24,12 @@ type (
 	Request  struct {
 		Identity
 		Digest                        string
+		ScoredAt                      time.Time
 		CustomerID, MethodFingerprint string
 		Input                         domain.Input
+		MerchantAccountCreatedAt      time.Time
+		ItemCount                     int64
+		HasDevice                     bool
 	}
 )
 
@@ -41,52 +45,31 @@ type Store interface {
 	Fail(context.Context, Claim, time.Duration) error
 	Ready(context.Context) error
 }
-type SnapshotValues struct {
-	Count1h, Count24h, AmountMinor24h, Devices7d *int64
-	LastAssessedAt                               *time.Time
-}
-type SourceProgress struct {
-	Topic                                 string
-	Partition                             int32
-	ConsumedOffset, ObservedHighWatermark int64
-	ObservedAt                            time.Time
-	HeartbeatAt                           *time.Time
-}
-
-type Snapshot struct {
-	ID, Epoch, Definition, DefinitionHash                       string
-	Revision                                                    uint64
-	Anchor, ComputedAt, PublishedAt, SourceAvailableAt, WriteAt time.Time
-	Coverage                                                    map[string]string
-	SourceProgress                                              []SourceProgress
-	Values                                                      SnapshotValues
+type FeatureValue struct {
+	Integer *int64
+	Number  *float64
+	Boolean *bool
 }
 type ViewObservation struct {
 	Status         string
+	EventTimestamp *time.Time
 	ReadAt         time.Time
-	AvailableAt    *time.Time
-	Observed       *Snapshot
-	Values         SnapshotValues
-	ElapsedSeconds *int64
+	Values         map[string]FeatureValue
 }
-type GuardObservation struct {
-	Status, Epoch, PolicyVersion string
-	RegisteredAt, ReadAt         *time.Time
-	Count10s, Count60s           *int64
-	ThresholdExceeded            bool
-	Threshold10s, Threshold60s   int64
+type FeatureObservation struct {
+	Service string
+	Views   map[string]ViewObservation
 }
 type Evidence struct {
 	SchemaVersion               int
 	AssessmentID, RequestDigest string
 	Identity
-	Decision                                  domain.Decision
-	CustomerID, MethodFingerprint             string
-	Input                                     domain.Input
-	Customer, Method                          ViewObservation
-	CustomerGuard, MethodGuard                GuardObservation
-	HistoricalShadowOnly, VelocityObserveOnly bool
-	EvaluatedAt                               time.Time
+	Decision                      domain.Decision
+	CustomerID, MethodFingerprint string
+	Input                         domain.Input
+	Features                      FeatureObservation
+	HistoricalShadowOnly          bool
+	EvaluatedAt                   time.Time
 }
 type Result struct {
 	Replayed     bool `json:"-"`
@@ -95,26 +78,22 @@ type Result struct {
 }
 type (
 	HistoryReader interface {
-		Read(context.Context, Request) (ViewObservation, ViewObservation)
+		Read(context.Context, Request) FeatureObservation
 	}
-	VelocityReader interface {
-		Register(context.Context, Request, time.Time) (GuardObservation, GuardObservation)
-	}
-	Config  struct{ Deadline, Lease, RetryHorizon, ErrorBackoff, HistoryTimeout, GuardTimeout time.Duration }
+	Config  struct{ Deadline, Lease, RetryHorizon, ErrorBackoff, HistoryTimeout time.Duration }
 	Service struct {
-		store    Store
-		history  HistoryReader
-		velocity VelocityReader
-		config   Config
-		now      func() time.Time
+		store   Store
+		history HistoryReader
+		config  Config
+		now     func() time.Time
 	}
 )
 
-func New(store Store, history HistoryReader, velocity VelocityReader, config Config) (*Service, error) {
-	if store == nil || config.Deadline <= 0 || config.Lease <= config.Deadline || config.RetryHorizon <= config.Lease || config.ErrorBackoff <= 0 || config.HistoryTimeout <= 0 || config.GuardTimeout <= 0 || config.HistoryTimeout > config.Deadline || config.GuardTimeout > config.Deadline {
+func New(store Store, history HistoryReader, config Config) (*Service, error) {
+	if store == nil || config.Deadline <= 0 || config.Lease <= config.Deadline || config.RetryHorizon <= config.Lease || config.ErrorBackoff <= 0 || config.HistoryTimeout <= 0 || config.HistoryTimeout > config.Deadline {
 		return nil, errors.New("invalid assessment persistence/deadline configuration")
 	}
-	return &Service{store: store, history: history, velocity: velocity, config: config, now: time.Now}, nil
+	return &Service{store: store, history: history, config: config, now: time.Now}, nil
 }
 
 func (s *Service) Decide(ctx context.Context, request Request) (Result, error) {
@@ -131,57 +110,43 @@ func (s *Service) Decide(ctx context.Context, request Request) (Result, error) {
 			return Result{}, err
 		}
 		digest := sha256.Sum256(encoded)
-		if result.Evidence.SchemaVersion != 1 || result.Evidence.AssessmentID != claim.ID || result.Evidence.RequestDigest != request.Digest || result.Evidence.Identity != request.Identity || result.EvidenceHash != hex.EncodeToString(digest[:]) {
+		if result.Evidence.SchemaVersion != 2 || result.Evidence.AssessmentID != claim.ID || result.Evidence.RequestDigest != request.Digest || result.Evidence.Identity != request.Identity || result.EvidenceHash != hex.EncodeToString(digest[:]) {
 			return Result{}, errors.New("incompatible or corrupted persisted assessment")
 		}
 		result.Replayed = true
 		return result, nil
 	}
+	request.ScoredAt = s.now().UTC()
 	result := Result{Evidence: Evidence{
-		SchemaVersion: 1, AssessmentID: claim.ID, RequestDigest: request.Digest, Identity: request.Identity,
-		CustomerID: request.CustomerID, MethodFingerprint: request.MethodFingerprint, Input: request.Input, HistoricalShadowOnly: true, VelocityObserveOnly: true,
-		Customer: ViewObservation{Status: "disabled"}, Method: ViewObservation{Status: "disabled"},
-		CustomerGuard: GuardObservation{Status: "disabled"}, MethodGuard: GuardObservation{Status: "disabled"},
+		SchemaVersion: 2, AssessmentID: claim.ID, RequestDigest: request.Digest, Identity: request.Identity,
+		CustomerID: request.CustomerID, MethodFingerprint: request.MethodFingerprint, Input: request.Input, HistoricalShadowOnly: true,
+		Features: FeatureObservation{Views: map[string]ViewObservation{
+			"customer_daily": {Status: "disabled"}, "payment_method_daily": {Status: "disabled"},
+			"customer_stream": {Status: "disabled"}, "payment_method_stream": {Status: "disabled"},
+			"request_features": {Status: "disabled"},
+		}},
 	}}
-	type historyResult struct{ customer, method ViewObservation }
-	type guardResult struct{ customer, method GuardObservation }
+	type historyResult struct{ features FeatureObservation }
 	history := make(chan historyResult, 1)
-	guard := make(chan guardResult, 1)
 	if s.history != nil {
 		go func() {
 			call, stop := context.WithTimeout(ctx, s.config.HistoryTimeout)
 			defer stop()
-			customer, method := s.history.Read(call, request)
-			history <- historyResult{customer, method}
+			features := s.history.Read(call, request)
+			history <- historyResult{features}
 		}()
 	} else {
-		history <- historyResult{result.Evidence.Customer, result.Evidence.Method}
+		history <- historyResult{result.Evidence.Features}
 	}
-	if s.velocity != nil {
-		go func() {
-			call, stop := context.WithTimeout(ctx, s.config.GuardTimeout)
-			defer stop()
-			customer, method := s.velocity.Register(call, request, claim.FirstClaimedAt)
-			guard <- guardResult{customer, method}
-		}()
-	} else {
-		guard <- guardResult{result.Evidence.CustomerGuard, result.Evidence.MethodGuard}
-	}
-	for history != nil || guard != nil {
-		select {
-		case observation := <-history:
-			result.Evidence.Customer, result.Evidence.Method = observation.customer, observation.method
-			history = nil
-		case observation := <-guard:
-			result.Evidence.CustomerGuard, result.Evidence.MethodGuard = observation.customer, observation.method
-			guard = nil
-		case <-ctx.Done():
-			s.fail(ctx, claim)
-			return Result{}, ctx.Err()
-		}
+	select {
+	case observation := <-history:
+		result.Evidence.Features = observation.features
+	case <-ctx.Done():
+		s.fail(ctx, claim)
+		return Result{}, ctx.Err()
 	}
 	result.Evidence.Decision = domain.Evaluate(request.Input)
-	result.Evidence.EvaluatedAt = s.now().UTC()
+	result.Evidence.EvaluatedAt = request.ScoredAt
 	encoded, err := json.Marshal(result.Evidence)
 	if err != nil {
 		s.fail(ctx, claim)

@@ -1,7 +1,7 @@
 """Lakehouse upkeep.
 
 `nightly` expires snapshots past the retention, drops audit branches that no run will publish (a branch pins every
-file it references), and compacts the Bronze files that recent Kafka runs appended. Silver and Gold need no
+file it references), and compacts the Bronze files that recent Kafka runs appended. Stream features compact recent event-time partitions. Silver and batch Gold need no
 compaction: every run rewrites whole day partitions at the target file size. Its cost does not grow with history.
 
 `zorder` is on-demand storage evidence: planned files and bytes for one customer's month of silver.attempts before and
@@ -31,7 +31,8 @@ RETAIN_SNAPSHOTS = 10
 COMPACT = timedelta(days=3)
 AUDIT_PREFIX = "audit-"
 BRONZE_TABLES = (bronze.EVENTS, bronze.LABELS, bronze.REJECTED)
-TABLES = [*BRONZE_TABLES, *silver.TABLES, *gold.TABLES]
+STREAM_TABLES = ("lake.gold.feat_stream_customer", "lake.gold.feat_stream_payment_method")
+TABLES = [*BRONZE_TABLES, *silver.TABLES, *gold.TABLES, *STREAM_TABLES]
 ZORDER = "zorder(customer_id,payment_method_fingerprint)"
 
 
@@ -40,9 +41,10 @@ def sql_time(value: datetime) -> str:
 
 
 def compact_call(table: str, since: datetime) -> str:
+    column = "event_timestamp" if table in STREAM_TABLES else "_ingested_at"
     return (
         f"CALL {ICEBERG_CATALOG}.system.rewrite_data_files(table => '{table}', strategy => 'binpack', "
-        f"where => \"_ingested_at >= TIMESTAMP '{sql_time(since)}'\", "
+        f"where => \"{column} >= TIMESTAMP '{sql_time(since)}'\", "
         f"options => map('target-file-size-bytes', '{TARGET_FILE_BYTES}'))"
     )
 
@@ -110,7 +112,7 @@ def nightly(spark: SparkSession, now: datetime) -> dict:
         if not spark.catalog.tableExists(table):
             continue
         entry = {"before": file_stats(spark, table)}
-        if table in BRONZE_TABLES:
+        if table in (*BRONZE_TABLES, *STREAM_TABLES):
             with phase(spark, report["phases"], f"compact {table}"):
                 spark.sql(compact_call(table, now - COMPACT)).collect()
         entry["dropped_branches"] = stale_branches(spark, table, cutoff)

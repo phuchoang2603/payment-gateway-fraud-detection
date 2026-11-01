@@ -1,6 +1,0 @@
-redis:
-  storageClass: gp3
-streaming:
-  storageEndpoint: https://s3.us-east-1.amazonaws.com
-  pathStyle: false
-  storageRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/flink
