@@ -254,12 +254,21 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                             await_result(poll)
 
                         first = send("one", anchor)
-                        receive(lambda values: len(values) == 2)
+                        receive(
+                            lambda values: (
+                                len(values) == 2
+                                and all(
+                                    value.values.attempt_count_1h == 1 for value in values.values()
+                                )
+                            )
+                        )
                         barrier(anchor + HOUR + 2_000_000)
                         assert producer.flush(10) == 0
                         receive(
                             lambda values: all(
-                                value.coverage.one_hour == 2 and value.values.attempt_count_1h == 0
+                                value.anchor.ToMicroseconds() >= anchor + HOUR + 1
+                                and value.coverage.one_hour == 2
+                                and value.values.attempt_count_1h == 0
                                 for value in values.values()
                             )
                         )
@@ -274,7 +283,10 @@ def test_image_kafka_journal_and_checkpoint_recovery():
                         second = send("two", anchor + HOUR + 3_000_000)
                         receive(
                             lambda values: all(
-                                value.values.attempt_count_1h == 1 for value in values.values()
+                                value.values.attempt_count_1h == 1
+                                and [p.consumed_offset for p in value.source_progress]
+                                == [input_end - 2]
+                                for value in values.values()
                             )
                         )
                         saved = {entity: value.snapshot_id for entity, value in latest.items()}
