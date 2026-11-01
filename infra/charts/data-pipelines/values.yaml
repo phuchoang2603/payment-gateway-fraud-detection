@@ -71,9 +71,11 @@ spark:
         memory: 2g
         memoryOverhead: 512m
         ephemeralStorage: 5Gi
+      # Dev nodes keep about 1.5 CPU and 7 GiB free next to Flink, OpenMetadata and ClickHouse.
       executor:
         cores: 2
-        memory: 6g
+        requestCores: '1'
+        memory: 4g
         memoryOverhead: 1g
         ephemeralStorage: 10Gi
     large:

@@ -382,6 +382,9 @@ spec:
     {{- end }}
     spark.executor.instances: {{ $sizing.executors | quote }}
     spark.executor.cores: {{ $sizing.executor.cores | quote }}
+    {{- with $sizing.executor.requestCores }}
+    spark.kubernetes.executor.request.cores: {{ . | quote }}
+    {{- end }}
     spark.executor.memory: {{ $sizing.executor.memory | quote }}
     spark.executor.memoryOverhead: {{ $sizing.executor.memoryOverhead | quote }}
     spark.sql.shuffle.partitions: {{ $sizing.shufflePartitions | quote }}
