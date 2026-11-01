@@ -26,6 +26,7 @@ vllm:
   uid: 1000
   # 180 x 10 s = 30 minutes to load, compile and capture CUDA graphs before the kubelet restarts the server.
   startupFailureThreshold: 180
+  instantTensorIODepth: 32
 
 models:
   chat:
@@ -37,7 +38,7 @@ models:
     cacheSize: 9Gi
     replicas: 1
     # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
-    stopped: false
+    stopped: true
     # 0.76 leaves room on the shared GPU for the decision model (vLLM needs its whole 0.10 free at start, whichever
     # server starts first). Only 8 of its 32 layers keep a KV cache (16 KiB a token in FP8), so a 32k context is cheap;
     # the other 24 keep about 50 MiB of fp32 state per sequence, which caps concurrent sequences at 32 (1.55 GiB).
@@ -83,6 +84,7 @@ models:
     repo: vllm-sr/d3-edge
     revision: c454ee39b862248d70abd7f84195d2f54ffe6d43
     cacheSize: 2Gi
+    stopped: true
     image: vllm/vllm-openai:nightly-2b009fc6d1493a9a1ad19f4d0c7230b7e6b7e63a@sha256:1b7aee4c157c2c8f48aaf34de137d1eebfb2eea8445549789188c2280883f8d7
     replicas: 1
     args:

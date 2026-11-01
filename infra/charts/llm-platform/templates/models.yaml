@@ -83,6 +83,10 @@ spec:
         env:
           - name: USER
             value: vllm
+          # InstantTensor sizes its pinned host staging (chunk size x I/O depth) from the container's memory limit by
+          # default and OOM-killed the servers on dev; the weights are on local disk, so a shallow queue loads them as fast.
+          - name: INSTANTTENSOR_IO_DEPTH
+            value: {{ $.Values.vllm.instantTensorIODepth | quote }}
         # Loading the weights, torch.compile and CUDA-graph capture outlast the preset's 10-minute startup window
         # on the dev GPU; a restart repeats all of it, so the window is wider.
         startupProbe:
