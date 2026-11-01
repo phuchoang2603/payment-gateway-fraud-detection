@@ -90,7 +90,9 @@ spec:
           - type: SystemOne
             path: /v1/systemone
 ---
-# The decision model's routes stay outside the LLM route's prompt guard, which calls them.
+# /v1/systemone stays outside the LLM route's prompt guard, which calls it. The guard's webhook sends the screen header;
+# its rule converts the webhook's messages into one question about the latest user turn and the decision model's
+# answer into the guard's pass or reject verdict. Other calls pass through unchanged.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -100,6 +102,16 @@ spec:
     - name: {{ $gateway.name }}
       sectionName: http
   rules:
+    - name: screen
+      matches:
+        - path: {type: Exact, value: /v1/systemone}
+          headers:
+            - {name: x-llm-screen, value: request}
+      backendRefs:
+        - name: {{ $decision.name }}-kserve-workload-svc
+          port: 8000
+      timeouts:
+        request: 10s
     - matches:
         - path: {type: Exact, value: /v1/systemone}
       backendRefs:
@@ -109,29 +121,6 @@ spec:
       timeouts:
         request: 30s
 ---
-# The LLM route's screen: the prompt guard's webhook request becomes one /v1/systemone question about the latest user
-# turn, and the decision model's answer becomes the guard's pass or reject verdict.
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: screen
-spec:
-  parentRefs:
-    - name: {{ $gateway.name }}
-      sectionName: http
-  rules:
-    - matches:
-        - path: {type: Exact, value: /screen}
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path: {type: ReplaceFullPath, replaceFullPath: /v1/systemone}
-      backendRefs:
-        - name: {{ $decision.name }}-kserve-workload-svc
-          port: 8000
-      timeouts:
-        request: 10s
----
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -140,7 +129,8 @@ spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
-      name: screen
+      name: decision
+      sectionName: screen
   traffic:
     apiKeyAuthentication:
       mode: Strict
@@ -254,7 +244,7 @@ spec:
               matches:
                 {{- toYaml $gateway.piiPatterns | nindent 16 }}
           # Runs after masking, so the decision model never sees the masked values. The webhook calls the gateway's
-          # own screen route with the caller's key.
+          # /v1/systemone route with the caller's key and the screen header.
           - webhook:
               action: Reject
               failureMode: {{ $gateway.screening.failureMode }}
@@ -263,7 +253,8 @@ spec:
                 name: {{ $gateway.name }}
                 port: 80
               headers:
-                ":path": '"/screen"'
+                ":path": '"/v1/systemone"'
+                x-llm-screen: '"request"'
                 authorization: 'request.headers["authorization"]'
         response:
           - regex:

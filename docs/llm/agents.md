@@ -30,7 +30,7 @@ flowchart LR
   end
   actor -->|/v1, injected key| gw
   actor -->|/mcp/knowledge, injected key| gw
-  gw -->|/screen| d3[d3-edge on vLLM]
+  gw -->|screen, /v1/systemone| d3[d3-edge on vLLM]
   gw --> vllm[qwen3-8b on vLLM]
   gw --> rag[rag-api]
   actor -->|prompts and traces, injected key| lf[Langfuse]
