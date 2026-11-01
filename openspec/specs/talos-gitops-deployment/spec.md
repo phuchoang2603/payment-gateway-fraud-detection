@@ -113,7 +113,7 @@ After all affected application images publish successfully, CI SHALL publish one
 
 ### Requirement: Single simulator workload
 
-Deployment SHALL provide one opt-in single-replica simulator workload running traffic, labels and optional late and duplicate injection from one image/configuration. It SHALL use the selected environment root without duplicate source-specific topology. Late and duplicate injection SHALL remain embedded in that workload.
+Deployment SHALL provide one opt-in single-replica simulator workload running traffic, labels and optional delivery faults from one image/configuration. It SHALL use the selected environment root without duplicate source-specific topology. Delivery faults SHALL remain embedded.
 
 #### Scenario: Render live workload
 
@@ -125,33 +125,19 @@ Deployment SHALL provide one opt-in single-replica simulator workload running tr
 - **WHEN** simulation is disabled
 - **THEN** the simulator workload is absent while existing gateway/Kafka services and completed data remain intact
 
-### Requirement: Shared topics and Python Parquet landing
-
-The Kafka application SHALL retain payments.events.v1 and declare payments.events.v1.faulty and fraud.labels.v1 with configured partitions/retention. S3-compatible archival SHALL run as a Python workload producing historical-compatible decoded Parquet with transport metadata, preserving the authoritative event publisher, CDC Connect worker and notifier. Protobuf payloads SHALL NOT require Avro conversion or a registry.
-
-#### Scenario: Render landing archiver
-
-- **WHEN** landing is enabled
-- **THEN** one Python archiver workload consumes selected payment topics and labels, with no S3 Connect plugin, Flink deployment or registry
-
-### Requirement: Runtime credentials and image delivery
-
-Application credentials SHALL come from the environment's gateway Doppler config through `gateway-doppler`. Object credentials SHALL come from gateway Doppler through `gateway-doppler`, scoped to `datasets/payment-gateway/`, `runs/payment-gateway/` and `lakehouse/` in the environment platform bucket. Kubeflow artifacts SHALL retain their separate platform identity. The simulator SHALL NOT access vault or database internals. The simulator and archiver SHALL use the same package/image with separate entry points.
-
-#### Scenario: Archiver permissions
-
-- **WHEN** the archiver is configured
-- **THEN** it receives gateway-owned object credentials and writes completed immutable batches below its configured dataset root
-- **AND** no bucket-name allowlist or fixed storage endpoint is required by application code
-
 ### Requirement: Environment data-pipeline deployment
 
-Dev SHALL enable DP1 workflow templates in `data`; prod SHALL keep the DP1 application disabled until explicitly enabled, with externally supplied credentials, commit-tagged images and explicit resource budgets. Fresh-start source selection SHALL use v17. Live simulation and recurring ingestion SHALL remain disabled until the new source and its actual manifest digest are validated. No historical objects or acceptance receipts SHALL be copied or relabelled as fresh acceptance.
+Dev and prod SHALL enable the historical generator, DP1 Bronze, `dp-pipeline`, `dp-backfill`, `maintain-lakehouse` and the on-demand benchmark templates in `data`, with the suspended `dp-daily` and nightly maintenance schedules. All templates SHALL use externally supplied credentials, commit-tagged images and explicit resource budgets. Historical source selection SHALL default to v18 in dev and v19 in prod. In prod, workflow step pods and Spark drivers SHALL run on the on-demand `aws-workers` pool and Spark executors on the spot `aws-cpu-burst` pool. The schedules SHALL remain suspended in both environments until explicitly enabled.
 
 #### Scenario: Fresh environment rollout
 
-- **WHEN** either environment is reconciled before data generation
-- **THEN** workflow templates are available without enabling simulation or scheduled ingestion
+- **WHEN** either environment is reconciled before its dataset is generated
+- **THEN** workflow templates are available without running any pipeline or enabling a schedule
+
+#### Scenario: Prod driver placement
+
+- **WHEN** prod renders a Spark application
+- **THEN** its driver selects the `aws-workers` node pool and its executors the spot burst pool
 
 ### Requirement: Data-platform ownership boundary
 Application deployment SHALL own DP1 workloads in the platform-owned data namespace. The shared platform SHALL own Argo, the native Workflow lifecycle admission policy and binding scoped to `data`, Apache Spark Operator and its CRDs, the Altinity ClickHouse operator 0.27.4 and its CRDs watching `data`, OpenMetadata and its PostgreSQL/OpenSearch backing services. The operator SHALL be reconciled in the platform repository through Argo CD. Application deployment SHALL own its SQL/contracts, native ingestion workflow configuration and the ClickHouse instance and users it queries, but not the operator. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
@@ -178,12 +164,12 @@ The platform SHALL install pinned Apache Spark Operator 1.0.0 with Helm chart 1.
 - **THEN** the `spark.apache.org/v1` API and controller become ready with access scoped to the data namespace, independently of DP1 workload rollout
 
 ### Requirement: Recurring DP1 schedule ownership
-The application deployment SHALL own explicitly configured DP1 CronWorkflows, persistent input-progress configuration and scoped landing-read permissions. Argo CD SHALL reconcile declared deployment resources; Argo Workflows SHALL execute finite batches. Shared Kafka/landing producers SHALL remain separately owned, and a deployment or schedule change SHALL NOT reset input progress or select incomplete inputs.
+The application deployment SHALL own the scheduled Kafka-mode workflow and a Kafka client identity scoped to read `payments.events.v1` and `fraud.labels.v1`. Argo CD SHALL reconcile declared deployment resources; Argo Workflows SHALL execute finite runs. Ingestion progress SHALL live only in Bronze commits, so a deployment or schedule change SHALL NOT reset it.
 
 #### Scenario: Change a batch schedule
 
-- **WHEN** the recurring schedule is reconciled with a different cadence
-- **THEN** completed input tracking and accepted evidence remain intact, with no accidental full replay or concurrent unguarded writers
+- **WHEN** the schedule is reconciled with a different cadence
+- **THEN** the next run continues from the offsets recorded in Bronze without replaying or skipping records
 
 ### Requirement: Shared analytical SQL service
 The data-pipelines application SHALL run one bounded persistent ClickHouse instance for SQL quality, analytics and Langfuse, reading the platform Polaris Iceberg REST catalog through a DataLakeCatalog database with OAuth2 and environment S3 access. Deployment SHALL NOT add Trino, a second analytical engine, a replacement catalog or a signing proxy for this path. Existing observability ClickHouse SHALL remain unaffected. Resource budgets SHALL be checked against node allocatable capacity before rollout; a single-node instance SHALL NOT claim HA. Removing the application SHALL NOT delete the lake data, the Polaris catalog or the operator.
@@ -210,7 +196,7 @@ The gateway repository SHALL own gateway Doppler credential references, Polaris 
 - **AND** gateway removal does not destroy shared server databases, PVCs or the platform bucket
 
 ### Requirement: Environment-configurable Python entrypoints
-Python services SHALL read runtime settings from configuration files and environment variables without command-line overrides. Historical and live simulation SHALL allow `SIMULATOR_CONFIG` to select a YAML file, with defaults suited to their dedicated entrypoints. Historical publication controls SHALL be part of YAML execution settings. Helm SHALL configure pipeline stages, metadata stages and connector selection through environment variables; Feast writer and archiver SHALL have dedicated entrypoints.
+Python services SHALL read runtime settings from configuration files and environment variables without command-line overrides. Historical and live simulation SHALL allow `SIMULATOR_CONFIG` to select a YAML file, with defaults suited to their dedicated entrypoints. Helm SHALL configure pipeline stages, metadata stages and connector selection through environment variables; the Feast writer SHALL have a dedicated entrypoint.
 
 #### Scenario: Select an environment configuration
 - **WHEN** a simulator is started with `SIMULATOR_CONFIG` selecting a valid environment YAML
@@ -233,3 +219,45 @@ The app-of-apps SHALL deploy chart `infra/charts/rag-pipeline` as application `r
 #### Scenario: Render both environments
 - **WHEN** the dev and prod roots are rendered
 - **THEN** dev contains the `rag-pipeline` Application and prod does not
+
+### Requirement: ClickHouse instance and users
+The data-pipelines application SHALL define one `ClickHouseInstallation` named `clickhouse` in `data`, with one shard and one replica, image `clickhouse/clickhouse-server:26.10.2.103`, and a `clickhouse` Service exposing HTTP 8123 and native 9000. The default profile SHALL set `allow_database_iceberg` to 1. Users `admin`, `langfuse` and `openmetadata` SHALL take their passwords from ExternalSecrets on ClusterSecretStore `doppler` (`CLICKHOUSE_ADMIN_PASSWORD`, `CLICKHOUSE_LANGFUSE_PASSWORD`, `CLICKHOUSE_OPENMETADATA_PASSWORD`). The chart SHALL NOT define the Altinity operator's management user, which the operator adds itself, and SHALL NOT override its profile or network settings. A setup Job SHALL create database `langfuse` after the instance accepts connections.
+
+#### Scenario: Render the instance
+
+- **WHEN** the clickhouse chart is rendered for any environment
+- **THEN** it contains one ClickHouseInstallation, the Service with both ports, one ExternalSecret per user, and no reference to the operator's management user or its password
+
+#### Scenario: OpenMetadata user limits
+
+- **WHEN** the `openmetadata` user connects
+- **THEN** its profile is readonly with `allow_database_iceberg` set, and its grants are limited to `lakehouse.*`, `system.tables` and `system.columns`
+
+### Requirement: Simulator credentials and image delivery
+
+Application credentials SHALL come from the environment's gateway Doppler config through `gateway-doppler`. Object credentials SHALL come from gateway Doppler through `gateway-doppler`, scoped to `datasets/payment-gateway/`, `runs/payment-gateway/` and `lakehouse/` in the environment platform bucket. Kubeflow artifacts SHALL retain their separate platform identity. The simulator SHALL NOT access vault or database internals. Historical generation and live simulation SHALL use the same package and image with separate entry points.
+
+#### Scenario: Generator permissions
+
+- **WHEN** historical generation runs against an environment
+- **THEN** it receives gateway-owned object credentials and writes below its configured dataset root
+- **AND** no bucket-name allowlist or fixed storage endpoint is required by application code
+
+### Requirement: Shared payment topics
+The Kafka application SHALL declare the payment event and fraud label topics with configured partitions and retention, preserving the authoritative event publisher, CDC Connect worker and notifier. Protobuf payloads SHALL NOT require Avro conversion or registry framing. Topic retention SHALL be documented as the maximum interval between Kafka-mode DP1 runs. No workload that copies payment topics to object storage SHALL be deployed.
+
+#### Scenario: Render Kafka topics
+
+- **WHEN** the Kafka application is rendered
+- **THEN** the payment event and label topics are declared with their retention, and no copy workload, S3 sink connector or registry framing is added
+
+### Requirement: Lakehouse catalog application
+The `lakehouse` application SHALL own the Polaris REST catalog in `data`, with its PostgreSQL store, signing keys, object-storage secret and network policy, the `lakehouse` warehouse registration and the ClickHouse `lakehouse` DataLakeCatalog database. Its wave orders its creation after the secret stores and before the data-pipeline application; Argo CD SHALL NOT be relied on to wait for an earlier wave's health, so its registration and database jobs retry until Polaris and ClickHouse answer. Its catalog endpoint `iceberg-catalog.data.svc.cluster.local:8181`, realm `PLATFORM` and client `platform` SHALL NOT change. Its registration and database jobs SHALL be idempotent and SHALL wait or retry until their dependency answers.
+
+#### Scenario: Sync order
+- **WHEN** the root application reconciles dev or prod
+- **THEN** the catalog secrets and the Polaris store exist before the Polaris Deployment starts, and the registration and database jobs retry until Polaris and ClickHouse are reachable
+
+#### Scenario: Catalog endpoint
+- **WHEN** a client connects to the catalog
+- **THEN** it uses `iceberg-catalog.data.svc.cluster.local:8181` with the existing realm and client

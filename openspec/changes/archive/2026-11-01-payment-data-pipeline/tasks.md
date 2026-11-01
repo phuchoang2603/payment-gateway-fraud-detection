@@ -49,4 +49,4 @@
 
 ## 8. Close
 
-- [ ] 8.1 Archive this change after 7.3, 7.4 and 7.6, syncing the delta specs into `openspec/specs/`; verify with `openspec validate --strict --all`.
+- [x] 8.1 Archive this change after 7.3, 7.4 and 7.6, syncing the delta specs into `openspec/specs/`; verify with `openspec validate --strict --all`.

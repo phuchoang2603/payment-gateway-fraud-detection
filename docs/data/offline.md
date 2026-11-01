@@ -4,7 +4,7 @@ The offline path turns a reproducible synthetic history into curated tables and 
 
 - Generator code: [`src/data-pipeline/simulator/simulator`](../../src/data-pipeline/simulator/simulator) (`world.py`, `lifecycle.py`, `historical.py`, `store.py`).
 - Pipeline code: [`src/data-pipeline/batch/batch`](../../src/data-pipeline/batch/batch) (Spark and ClickHouse jobs) and [`src/data-pipeline/openmetadata/openmetadata`](../../src/data-pipeline/openmetadata/openmetadata) (checks, publish, lineage).
-- Design: the [`payment-data-pipeline`](../../openspec/changes/payment-data-pipeline/design.md) change. Workflows, contracts and the catalog are on [orchestration and governance](orchestration-governance.md); table layout and the warehouse are on [storage](storage.md).
+- Design: the archived [`payment-data-pipeline`](../../openspec/changes/archive/2026-11-01-payment-data-pipeline/design.md) change; current requirements are in [`openspec/specs`](../../openspec/specs). Workflows, contracts and the catalog are on [orchestration and governance](orchestration-governance.md); table layout and the warehouse are on [storage](storage.md).
 
 ## Data problems and how they are solved
 

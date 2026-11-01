@@ -68,54 +68,12 @@ The runner SHALL publish simulation-truth labels after attempt responses using t
 
 ### Requirement: One shared current flow
 
-The platform SHALL use one current environment, codebase, common runtime configuration and reusable topic/landing/bronze flow. Historical and live synthetic truth SHALL be valid analytics/training inputs with source provenance. Actual-production isolation SHALL remain future scope. Historical exports and backfills SHALL remain another DP1 input mode.
+The platform SHALL use one current environment, codebase, common runtime configuration and reusable topic-to-Bronze flow. Live payment events and labels SHALL reach Bronze only through their Kafka topics, read by DP1 in Kafka mode into the same tables as historical data. Historical and live synthetic truth SHALL be valid analytics and training inputs with source provenance. Actual-production isolation SHALL remain future scope.
 
 #### Scenario: Historical and live inputs
 
-- **WHEN** DP1 ingests historical files and completed live landing objects
-- **THEN** both use the shared bronze ingestion architecture with identifiable origins, without duplicate source-specific deployments
-
-### Requirement: Immutable raw landing
-
-The Python archiver SHALL write decoded payment events and labels as historical-compatible Parquet under streaming/ relative to the configured S3 dataset root. It SHALL retain original payload/key bytes, ordered headers and Kafka positions in reserved transport metadata, preserve duplicate deliveries and leave completed objects unchanged across retries. Batch manifests and object paths SHALL identify a source epoch, with run logs pinning the reference manifest and generation/calibration identities. A source reset SHALL initialize fresh consumer progress from explicit frozen Kafka offsets after affected writers are stopped; it SHALL NOT reuse stale progress or purge shared Kafka assets.
-
-#### Scenario: Typed Parquet and exact replay
-
-- **WHEN** a supported record is archived
-- **THEN** Spark can read its historical-compatible business fields directly and original payload bytes and provenance remain recoverable without protobuf decoding in DP1
-
-#### Scenario: Retry after object publication
-
-- **WHEN** archival restarts after an object becomes visible to ingestion
-- **THEN** the selected object's content remains unchanged and source records remain recoverable, with replay duplicates reported honestly
-
-### Requirement: Completed-file batches and retry-safe DP1
-
-The later DP1 integration slice SHALL select an immutable set of completed objects with durable discovery and batch identity, including late files in older date folders. It SHALL preserve source origin, IDs, schema versions and event/label-availability times, use retry-safe Iceberg commits and validate/read back each batch. Event-date maxima SHALL NOT define completeness; cross-system exactly-once SHALL NOT be claimed.
-
-#### Scenario: Late file below an observed date maximum
-
-- **WHEN** a new completed object arrives in an older date folder
-- **THEN** durable discovery includes it in a subsequent batch rather than skipping it based on event date
-
-#### Scenario: Batch retry after commit interruption
-
-- **WHEN** a batch retries after its Iceberg commit or progress update was interrupted
-- **THEN** recovery uses the same input identity and verifies the committed result without an unsafe duplicate commit
-
-### Requirement: Contextual validation and generator diagnostics
-
-Bronze SHALL enforce integrity/conservation/schema/contract/identity-content/lifecycle-context/linkage/leakage checks while preserving deliveries. Context SHALL include prior history and label maturity, without treating incomplete live batches as complete histories. Generator distribution/cardinality bands SHALL be informational diagnostics; curation/dedup SHALL remain in silver.
-
-#### Scenario: Payment and labels span batches
-
-- **WHEN** a batch contains part of a lifecycle and labels arrive later
-- **THEN** validation consults prior history and maturity context rather than requiring a self-contained history or premature labels
-
-#### Scenario: Generator band outside expectations
-
-- **WHEN** a batch falls outside a generator distribution/cardinality band
-- **THEN** the band is reported diagnostically while enforced checks determine acceptance under DP1's implemented runtime policy
+- **WHEN** DP1 ingests a historical dataset and Kafka records
+- **THEN** both land in the same Bronze tables with identifiable origins, without an archive stage or source-specific deployments
 
 ### Requirement: Training truth without leakage
 
@@ -139,15 +97,6 @@ The new 90-day source SHALL support a bounded live exercise through gateway APIs
 
 - **WHEN** the exercise selects the 90-day source months after its history ends
 - **THEN** commands use current time without replaying history, filling the gap or requiring a maximum-gap exception
-
-### Requirement: Schema cutover without shared-data deletion
-
-New-contract landing SHALL use an explicit epoch and frozen start offsets where required to exclude incompatible retained records. Cutover SHALL quiesce affected owned writers before changing progress and SHALL retain old objects and shared Kafka assets. The new epoch SHALL NOT reuse stale checkpoints or select prior-shape batches as current-contract data.
-
-#### Scenario: Old records retained on the topic
-
-- **WHEN** the current-contract exercise starts while earlier-schema records remain retained
-- **THEN** explicit epoch/offset selection isolates the new exercise without deleting topic history or rewriting landed files
 
 ### Requirement: Store-and-forward attempts
 
