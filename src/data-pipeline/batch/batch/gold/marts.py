@@ -187,7 +187,8 @@ def unchanged(client: ClickHouse, first: date, end: date, snapshots: dict, code:
         )
     except RuntimeError:
         return False
-    return len(info) == 1 and info[0] == {
+    # ClickHouse returns Int64 quoted or bare depending on output_format_json_quote_64bit_integers.
+    return len(info) == 1 and {key: str(value) for key, value in info[0].items()} == {
         "run_range": run_range(first, end),
         "code_version": code,
         "silver_attempts_snapshot_id": str(snapshots["silver.attempts"]),
