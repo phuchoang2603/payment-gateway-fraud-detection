@@ -170,8 +170,9 @@ spec:
     - name: OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
       value: http/protobuf
     # Placeholders: Substrate's egress gateway replaces the Authorization header with the langfuse credential.
+    # Langfuse v4 writes spans that carry this header straight into its observations table.
     - name: OTEL_EXPORTER_OTLP_TRACES_HEADERS
-      value: Authorization=placeholder
+      value: Authorization=placeholder,x-langfuse-ingestion-version=4
     # Only traces have a destination; there is no OpenTelemetry Collector.
     - name: OTEL_LOGS_EXPORTER
       value: none

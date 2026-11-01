@@ -55,7 +55,7 @@ The "LLM agents" dashboard ([`files/dashboards/llm-agents.json`](../../infra/cha
 
 ## Langfuse
 
-Self-hosted Langfuse v3 (3.225.11) in `llm`, on the shared ClickHouse, behind the platform's Dex proxy ([`langfuse.yaml`](../../infra/charts/llm-platform/templates/langfuse.yaml)). It holds the agents' prompts and their A/B tests, and their traces.
+Self-hosted Langfuse v4 (4.72.0, chart 2.2.0) in `llm`, on the shared ClickHouse, behind the platform's Dex proxy ([`langfuse.yaml`](../../infra/charts/llm-platform/templates/langfuse.yaml)). It holds the agents' prompts and their A/B tests, and their traces.
 
 ### Traces
 

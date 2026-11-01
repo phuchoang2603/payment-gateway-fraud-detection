@@ -62,7 +62,7 @@ The repository SHALL deploy `coordinator` as the analysts' only entry agent, beh
 - **THEN** it transfers to `risk_agent`, which answers
 
 ### Requirement: Self-hosted Langfuse
-The application SHALL run self-hosted Langfuse v3 at a pinned chart and image, using the shared ClickHouse in `data` through its fixed Service contract, and app-owned Postgres and Redis instances. Its secrets SHALL come from Doppler through External Secrets. Public sign-up SHALL be disabled, and its UI SHALL be reachable only through the platform's authenticating proxy.
+The application SHALL run self-hosted Langfuse v4 at a pinned chart and image, using the shared ClickHouse in `data` through its fixed Service contract, and app-owned Postgres and Redis instances. Its secrets SHALL come from Doppler through External Secrets. Public sign-up SHALL be disabled, and its UI SHALL be reachable only through the platform's authenticating proxy.
 
 #### Scenario: First start
 - **WHEN** Langfuse starts against an empty ClickHouse `langfuse` database and Postgres
