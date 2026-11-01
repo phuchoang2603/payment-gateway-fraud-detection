@@ -2,7 +2,7 @@
 
 Status of each capability, grouped like the course rubric. **Done** means implemented and exercised with recorded results on the linked page; **in progress** means implementation is under review; **planned** means designed but not built. Course tools are replaced by platform equivalents where noted (Argo Workflows for Airflow, OpenMetadata for DataHub, Kubeflow Model Registry for MLflow, GitHub Actions for Jenkins).
 
-The active plan is the OpenSpec change [`rebuild-generation-to-silver`](../../openspec/changes/rebuild-generation-to-silver/proposal.md).
+The active plan is the OpenSpec change [`payment-data-pipeline`](../../openspec/changes/payment-data-pipeline/proposal.md).
 
 ## Data platform
 
@@ -11,13 +11,13 @@ The active plan is the OpenSpec change [`rebuild-generation-to-silver`](../../op
 | Engineering fundamentals | Multi-stage Docker images and size comparison | [Docker images](../payment-gateway/docker.md) | Images done; size comparison planned |
 | Offline generator | Skew, schema evolution, duplicates; ≥ 100 GB stored for Bronze ingestion | [Offline data](../data/offline.md) | Done (v19: 133.5 GB) |
 | Online generator | Late arrivals and streaming duplicates | [Online data](../data/online.md) | Done; see [evidence](../data/online.md#evidence) |
-| Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline data](../data/offline.md) | In progress |
+| Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline data](../data/offline.md) | Running on prod v19; optimizations recorded from the backfill |
 | Flink jobs | Baseline, late arrivals, duplicates, windows, dead-letter topic; output ends at the feature journal topic | [Online data](../data/online.md) | Done except a Flink UI metrics-panel capture; see [evidence](../data/online.md#evidence) |
-| Storage | Lakehouse compaction, partitioning, Z-order; ClickHouse warehouse indexing (`ORDER BY`, skip indexes) | [Storage](../data/storage.md) | In progress; marts and benchmark implemented, v19 evidence pending |
-| Orchestration | DP1 (raw → Bronze), DP2 (Bronze → Silver/Gold), DP3 (offline features), each with ingest and validate stages | [Orchestration and governance](../data/orchestration-governance.md) | DP1/DP2 in progress; DP3 implemented, runs pending |
-| Incremental curation | Silver and Gold take a day range and overwrite only those days, so the daily run and a backfill are the same job; CI checks daily runs against one backfill for both | [Offline data](../data/offline.md) | Implemented; prod backfill pending |
-| Governance | Lineage and validation for DP1–DP3 in the catalog | [Orchestration and governance](../data/orchestration-governance.md) | In progress |
-| Schemas | SCD2 dimensions, `feat_` tables with `event_timestamp`/`created`, naming conventions, relationships | [Offline data](../data/offline.md) | In progress; ER export pending |
+| Storage | Lakehouse compaction, partitioning, Z-order; ClickHouse warehouse indexing (`ORDER BY`, skip indexes) | [Storage](../data/storage.md) | Layout done on v19; mart `EXPLAIN` evidence waits for the backfilled window |
+| Orchestration | DP1 (raw → Bronze), then `dp-pipeline` (Silver, Gold, marts), each layer with ingest, validate and publish stages | [Orchestration and governance](../data/orchestration-governance.md) | DP1 done; backfill through April done, May onward running |
+| Incremental curation | Silver and Gold take a day range and overwrite only those days, so the daily run and a backfill are the same job; CI checks daily runs against one backfill for both | [Offline data](../data/offline.md) | Done; prod backfill month by month |
+| Governance | Lineage and validation for DP1–DP3 in the catalog | [Orchestration and governance](../data/orchestration-governance.md) | Done: source-to-marts lineage, 58 passing tests |
+| Schemas | SCD2 dimensions, `feat_` tables with `event_timestamp`/`created`, naming conventions, relationships | [Offline data](../data/offline.md) | Done |
 
 ## ML platform
 
@@ -62,10 +62,8 @@ Feast is built as one change after Bronze and Silver merge. Until then the strea
 
 ## Next steps
 
-- **Silver reads only validated Bronze.** Bronze checks set an Iceberg `validated` tag on the checked snapshot, and Silver reads that tag instead of the current snapshot. Today a standalone `dp2-silver` run can consume a Bronze snapshot that failed its checks; the Kafka cron is gated by step order.
-
 - **OpenMetadata contracts and products.** Import ODCS contracts when OpenMetadata's importer accepts ODCS v3 as written (blocked on 2.0.6), and publish data products then.
-- **Bronze and Silver evidence (prod v19).** Screenshots and recorded results are open tasks in `openspec/changes/rebuild-generation-to-silver/tasks.md`, section 12.
+- **Remaining prod v19 evidence.** The rest of the backfill, the schema-version count, the Grafana dashboards and the mart `EXPLAIN` plans are open tasks in `openspec/changes/payment-data-pipeline/tasks.md`, section 7.
 
 ## Limits
 

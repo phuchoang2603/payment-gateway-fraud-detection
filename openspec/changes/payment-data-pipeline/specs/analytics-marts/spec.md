@@ -34,13 +34,13 @@ The marts SHALL be built by ClickHouse from the `lakehouse` database with `INSER
 - **WHEN** a merchant has attempts on a day but none reached a decided outcome
 - **THEN** its approval rate for that day is null, not zero
 
-### Requirement: Atomic idempotent rebuild
-Each DP3 run SHALL rebuild both marts in full into staging tables, run every mart contract rule against the staging tables, and only after all of them pass atomically exchange the staging tables with the live tables. Readers SHALL see either the previous build or the new one, never a partial build. A failed build SHALL leave the live tables unchanged. Rebuilding from the same Silver snapshot SHALL produce equal content. Staging tables left by a failed build SHALL be dropped before the next build starts.
+### Requirement: Staged, idempotent mart builds
+Each run SHALL build its mart days into `__staging` tables, run every mart contract rule against the staging tables, and only after all of them pass replace each rebuilt live partition atomically with `REPLACE PARTITION`. Readers SHALL see each day either before or after a run, never partly built. A failed build or failed check SHALL leave the live tables unchanged. Rebuilding from the same Silver snapshot SHALL produce equal content. Staging tables left by a failed build SHALL be dropped before the next build starts. Each day of `fact_payment_attempt` SHALL be inserted separately, joining that day's attempts to the label summary with the attempts as the hash join's build side, so a build's peak memory follows one day rather than one month or the window.
 
 #### Scenario: Build fails midway
 
 - **WHEN** a mart insert fails after writing part of a staging table
-- **THEN** the live marts still hold the previous build and the stage fails
+- **THEN** the live marts still hold their previous days and the stage fails
 
 #### Scenario: Rerun
 
@@ -73,24 +73,12 @@ Each mart SHALL declare a partition key, an `ORDER BY` key and data-skipping ind
 - **THEN** the plan shows the customer bloom-filter index selecting fewer granules than the partition pruning alone
 
 ### Requirement: Warehouse indexing evidence
-An on-demand benchmark SHALL run each fixed query against the same data three ways: raw Iceberg through `lakehouse`, an unsorted MergeTree copy with no skip indexes, and the indexed mart. For each query and variant it SHALL report:
-
-- rows and bytes read, and selected versus total marks;
-- peak memory;
-- the cold duration after cache drops, and the median of five warm durations;
-- the `EXPLAIN indexes = 1` plan.
-
-It SHALL check that every variant of a query returns the same result, restricting the raw Iceberg variant to the marts' recorded window. It SHALL write its report to object storage and drop its scratch copies. It SHALL NOT run in the DP3 workflow.
+The indexing evidence SHALL be `EXPLAIN indexes = 1` plans and `system.query_log` read rows, bytes and selected marks for the fixed queries on the published prod marts, recorded with the `build_info` window they read. An on-demand `warehouse-benchmark` MAY additionally run each fixed query against raw Iceberg, an unsorted MergeTree copy and the indexed mart; when it runs, every variant of a query SHALL return the same result, it SHALL write its report to object storage, drop its scratch copies and never run in the pipeline workflow.
 
 #### Scenario: Variants disagree
 
-- **WHEN** one variant of a query returns a different result from the others
+- **WHEN** one benchmark variant of a query returns a different result from the others
 - **THEN** the benchmark fails and names the query and variant
-
-#### Scenario: Evidence report
-
-- **WHEN** the benchmark completes on the prod v19 marts
-- **THEN** its report holds the per-variant measurements for every fixed query, with the data snapshot it read
 
 ### Requirement: Least-privilege warehouse users
 ClickHouse SHALL define two new users, each with an externally managed password and a cluster-network restriction:

@@ -4,12 +4,12 @@ Produce governed DP3 gold tables in the Iceberg lakehouse. They are an SCD2 cust
 
 ## ADDED Requirements
 
-### Requirement: Recompute from pinned Silver snapshots
-DP3 SHALL read `silver.attempts`, `silver.payment_events` and `silver.labels` at snapshot IDs fixed when the run starts. It SHALL replace every gold table in full on each run, writing to the run's audit branch, and SHALL publish to `main` only after every gold check passes. Each gold commit SHALL record the published Silver snapshot IDs it was built from. Rerunning on the same Silver snapshots SHALL produce equal content in every column, `created` included. Lifecycle-invalid attempts and labels whose linkage is not `linked` SHALL NOT contribute to any gold table.
+### Requirement: Pinned Silver inputs
+DP3 SHALL read `silver.attempts`, `silver.payment_events` and `silver.labels` at snapshot IDs fixed when the run starts: the run's own audit branch heads when its Silver stage wrote them, otherwise main. It SHALL write to the run's audit branch and SHALL publish to `main` only after every gold check passes. Each gold commit SHALL record the Silver snapshot IDs it was built from. Rerunning on the same Silver snapshots SHALL produce equal content in every column, `created` included. Lifecycle-invalid attempts and labels whose linkage is not `linked` SHALL NOT contribute to any gold table.
 
 #### Scenario: Rerun on unchanged Silver
 
-- **WHEN** DP3 runs twice without a Silver change
+- **WHEN** DP3 runs a range twice without a Silver change
 - **THEN** every gold table has equal content after each run, and both commits name the same Silver snapshot IDs
 
 #### Scenario: Silver advances during a run
@@ -95,7 +95,7 @@ Consumers SHALL be able to join it to the feature tables on entity key and `even
 - **THEN** filtering `label_available_at <= cutoff` excludes that row, and the attempt has no chargeback label at that cutoff
 
 ### Requirement: Day-range runs
-DP3 SHALL take a `start` and `end` UTC day, and without them run yesterday and the `dp3.lookbackDays` days before it. A run SHALL be a pure function of the pinned Silver snapshots, plus, for `dim_customer`, the versions stored on either side of its range. It SHALL overwrite only:
+DP3 SHALL take a `start` and `end` UTC day, and without them run yesterday and the `pipeline.lookbackDays` days before it. A run SHALL be a pure function of the pinned Silver snapshots, plus, for `dim_customer`, the versions stored on either side of its range. It SHALL overwrite only:
 
 - the feature rows with anchors in the range;
 - the label rows of attempts started in the range or on a day whose attempts gained a linked label available in it;
@@ -114,9 +114,10 @@ It SHALL read only one longest window of history before the range. Every DP3 com
 - **THEN** the run rewrites the label rows of day D, including the chargeback row
 
 ### Requirement: Gold table layout
-Feature and label tables SHALL be partitioned by day of `event_timestamp`, and `dim_customer` by day of `valid_from_ts`. Every gold table SHALL be created with hash write distribution and the lakehouse target file size, and SHALL be covered by the `maintain-lakehouse` compaction and snapshot expiry.
+Feature and label tables SHALL be partitioned by day of `event_timestamp`, and `dim_customer` by month of `valid_from_ts`. Every gold table SHALL be created with hash write distribution and the lakehouse target file size. Gold needs no compaction, because every run rewrites whole partitions at the target size; nightly maintenance SHALL expire its snapshots and drop stale audit branches.
 
 #### Scenario: One-month feature read
 
 - **WHEN** a consumer reads one month of `feat_customer_daily`
 - **THEN** Iceberg plans only that month's partitions
+
