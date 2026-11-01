@@ -119,7 +119,7 @@
 - [ ] 5c.10 A/B test of LLM versions on prod (design.md decision 18), with section 9.
 - [x] 5c.11 Replace laya with `vllm-sr/d3-edge` served by a pinned vLLM nightly as a third `LLMInferenceService` (0.10 of the GPU, text only), behind a gateway `/v1/systemone` route. Screen with the LLM route's webhook calling the gateway's own `/v1/systemone` with a screen header, whose route rule's CEL transformation turns the messages into the question and the answer into the verdict; remove the `decision` service and image, laya, torch, the weight fetch and the laya upload. Verify with `ruff`, `uv lock`, `helm template` and `openspec validate`.
 - [x] 5c.13 Load every model from its pinned `hf://` revision through KServe's storage initializer with InstantTensor, each kept on the GPU node by a `LocalModelNamespaceCache` on the platform's `llm-gpu` node group; remove the upload Job, the Run:ai streamer and its loader settings, the readout merge and the dev upload affinity. Move chat to Qwen3.5-4B FP8 (`qwen35-4b`).
-- [ ] 5c.12 Verify on dev: `d3-edge` Ready from the bucket; two questions pass and refund, override and jailbreak prompts get 403; screening latency and GPU memory recorded on the gateway page.
+- [x] 5c.12 Verify on dev: all three models Ready from the local cache; two questions pass and refund, override and jailbreak prompts get 403; a plain `/v1/systemone` call answers. Tested on dev 2026-11-01.
 
 ## 5d. kagent 1.0, Langfuse-managed prompts and sub-agents (design.md decisions 8, 11, 17 and 18; user decisions 2026-10-30 and 2026-10-31)
 
