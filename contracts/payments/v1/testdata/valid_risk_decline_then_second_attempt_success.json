@@ -124,7 +124,7 @@
         "assessment": {
           "outcome": "RISK_OUTCOME_DECLINE",
           "reasonCodes": [
-            "VELOCITY"
+            "HIGH_AMOUNT"
           ],
           "policyVersion": "rules-v1"
         }
@@ -142,7 +142,7 @@
       "attemptDeclined": {
         "attemptId": "de5a0eb0-ce47-5d49-9c6f-3a433829ceb5",
         "source": "DECLINE_SOURCE_RISK",
-        "reason": "velocity"
+        "reason": "high_amount"
       }
     },
     {

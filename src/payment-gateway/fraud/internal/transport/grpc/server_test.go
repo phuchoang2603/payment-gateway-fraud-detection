@@ -75,7 +75,7 @@ func TestDeclineSucceedsAndCountsDecisionOnce(t *testing.T) {
 	reader := telemetry.Metrics(t)
 	provider, spans := telemetry.Traces(t)
 	store, _ := testsupport.Database(t)
-	assessor, err := application.New(store, nil, nil, application.Config{Deadline: time.Second, Lease: 2 * time.Second, RetryHorizon: time.Hour, ErrorBackoff: time.Millisecond, HistoryTimeout: time.Second, GuardTimeout: time.Second})
+	assessor, err := application.New(store, nil, application.Config{Deadline: time.Second, Lease: 2 * time.Second, RetryHorizon: time.Hour, ErrorBackoff: time.Millisecond, HistoryTimeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestDeclineSucceedsAndCountsDecisionOnce(t *testing.T) {
 		t.Fatal("Payments-to-fraud trace context was lost")
 	}
 	evidence := res.GetEvidence()
-	if evidence.GetSchemaVersion() != 2 || evidence.GetAssessmentId() != res.GetAssessment().GetAssessmentId() || evidence.GetAttemptId() != req.GetAttemptId() || !evidence.GetHistoricalFeaturesShadowOnly() || !evidence.GetCustomerGuard().GetObserveOnly() || evidence.GetUsedAmountMinor() != req.GetSnapshot().GetTotal().GetMinorUnits() {
+	if evidence.GetSchemaVersion() != 2 || evidence.GetAssessmentId() != res.GetAssessment().GetAssessmentId() || evidence.GetAttemptId() != req.GetAttemptId() || !evidence.GetHistoricalFeaturesShadowOnly() || evidence.GetUsedAmountMinor() != req.GetSnapshot().GetTotal().GetMinorUnits() {
 		t.Fatalf("incomplete wire evidence: %v", evidence)
 	}
 	a := res.Assessment

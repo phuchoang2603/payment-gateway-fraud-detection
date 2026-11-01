@@ -116,8 +116,8 @@ func (h *history) Read(context.Context, application.Request) application.Feature
 func TestAssessmentResponseLossReplaysOriginalEvidenceAndRejectsExpiredRecovery(t *testing.T) {
 	store, admin := testsupport.Database(t)
 	observed := &history{value: 1}
-	config := application.Config{Deadline: time.Second, Lease: 2 * time.Second, RetryHorizon: time.Hour, ErrorBackoff: time.Millisecond, HistoryTimeout: time.Second, GuardTimeout: time.Second}
-	first, err := application.New(store, observed, nil, config)
+	config := application.Config{Deadline: time.Second, Lease: 2 * time.Second, RetryHorizon: time.Hour, ErrorBackoff: time.Millisecond, HistoryTimeout: time.Second}
+	first, err := application.New(store, observed, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestAssessmentResponseLossReplaysOriginalEvidenceAndRejectsExpiredRecovery(
 		t.Fatal(err)
 	}
 	observed.value = 99
-	replica, err := application.New(store, observed, nil, config)
+	replica, err := application.New(store, observed, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,48 +155,5 @@ func TestAssessmentResponseLossReplaysOriginalEvidenceAndRejectsExpiredRecovery(
 	}
 	if _, err = replica.Decide(context.Background(), pending); !errors.Is(err, application.ErrExpired) {
 		t.Fatalf("unsafe expired recovery: %v", err)
-	}
-}
-
-type timedOutHistory struct{ historyStarted, guardStarted chan struct{} }
-
-func (h timedOutHistory) Read(ctx context.Context, _ application.Request) application.FeatureObservation {
-	close(h.historyStarted)
-	select {
-	case <-h.guardStarted:
-	case <-ctx.Done():
-		return application.FeatureObservation{Views: map[string]application.ViewObservation{"customer_daily": {Status: "error"}, "payment_method_daily": {Status: "error"}}}
-	}
-	<-ctx.Done()
-	return application.FeatureObservation{Views: map[string]application.ViewObservation{"customer_daily": {Status: "timeout"}, "payment_method_daily": {Status: "timeout"}}}
-}
-
-type partialGuard struct{ historyStarted, guardStarted chan struct{} }
-
-func (g partialGuard) Register(ctx context.Context, _ application.Request, _ time.Time) (application.GuardObservation, application.GuardObservation) {
-	close(g.guardStarted)
-	select {
-	case <-g.historyStarted:
-	case <-ctx.Done():
-		return application.GuardObservation{Status: "timeout"}, application.GuardObservation{Status: "timeout"}
-	}
-	count := int64(100)
-	return application.GuardObservation{Status: "registered", Count10s: &count, ThresholdExceeded: true}, application.GuardObservation{Status: "error"}
-}
-
-func TestObservationFailuresAndThresholdsPreserveRulesAndDurableEvidence(t *testing.T) {
-	store, _ := testsupport.Database(t)
-	historyStarted, guardStarted := make(chan struct{}), make(chan struct{})
-	service, err := application.New(store, timedOutHistory{historyStarted, guardStarted}, partialGuard{historyStarted, guardStarted}, application.Config{Deadline: time.Second, Lease: 2 * time.Second, RetryHorizon: time.Hour, ErrorBackoff: time.Millisecond, HistoryTimeout: 20 * time.Millisecond, GuardTimeout: 20 * time.Millisecond})
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := service.Decide(context.Background(), request())
-	if err != nil {
-		t.Fatal(err)
-	}
-	evidence := result.Evidence
-	if evidence.Decision.Declined || evidence.Features.Views["customer_daily"].Status != "timeout" || evidence.Features.Views["payment_method_daily"].Status != "timeout" || evidence.CustomerGuard.Status != "registered" || !evidence.CustomerGuard.ThresholdExceeded || evidence.MethodGuard.Status != "error" {
-		t.Fatalf("observation changed rules or lost partial evidence: %+v", evidence)
 	}
 }

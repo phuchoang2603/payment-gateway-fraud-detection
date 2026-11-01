@@ -219,7 +219,7 @@ func TestOTLPMetricsRecordFraudDecline(t *testing.T) {
 	processor, _ := testsupport.NewFakeProcessor(t)
 	instance := startApp(t, testConfig(db.AppURL, fraud.Addr, processor.Addr, closedAddr))
 	instance.waitStatus(t, "readiness", healthpb.HealthCheckResponse_SERVING)
-	fraud.SetAssessment(testsupport.Decline("VELOCITY"))
+	fraud.SetAssessment(testsupport.Decline("HIGH_AMOUNT"))
 	payment, err := instance.payments.CreatePayment(context.Background(), testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
 	if err != nil {
 		t.Fatal(err)

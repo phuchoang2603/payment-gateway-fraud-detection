@@ -4,11 +4,6 @@ package fraud.v1;
 option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/fraud/v1;fraudv1";
 import "google/protobuf/timestamp.proto";
 
-enum EntityView {
-  ENTITY_VIEW_UNSPECIFIED = 0;
-  ENTITY_VIEW_CUSTOMER = 1;
-  ENTITY_VIEW_METHOD = 2;
-}
 enum FeatureViewStatus {
   FEATURE_VIEW_STATUS_UNSPECIFIED = 0;
   FEATURE_VIEW_STATUS_AVAILABLE = 1;
@@ -33,30 +28,6 @@ message FeatureViewEvidence {
   google.protobuf.Timestamp read_at = 4;
   map<string, FeatureValue> values = 5;
 }
-enum GuardStatus {
-  GUARD_STATUS_UNSPECIFIED = 0;
-  GUARD_STATUS_REGISTERED = 1;
-  GUARD_STATUS_TIMEOUT = 2;
-  GUARD_STATUS_ERROR = 3;
-  GUARD_STATUS_COVERAGE_UNKNOWN = 4;
-  GUARD_STATUS_EXPIRED_RETRY = 5;
-  GUARD_STATUS_CONFLICT = 6;
-  GUARD_STATUS_DISABLED = 7;
-}
-message GuardEvidence {
-  EntityView view = 1;
-  GuardStatus status = 2;
-  string recovery_epoch = 3;
-  optional google.protobuf.Timestamp registered_at = 4;
-  optional google.protobuf.Timestamp read_at = 5;
-  optional int64 submission_count_10s = 6;
-  optional int64 submission_count_60s = 7;
-  bool threshold_exceeded = 8;
-  string policy_version = 9;
-  bool observe_only = 10;
-  int64 threshold_10s = 11;
-  int64 threshold_60s = 12;
-}
 message AssessmentEvidence {
   uint32 schema_version = 1;
   string assessment_id = 2;
@@ -67,9 +38,7 @@ message AssessmentEvidence {
   string policy_version = 7;
   string feature_service = 8;
   repeated FeatureViewEvidence views = 9;
-  reserved 10;
-  GuardEvidence customer_guard = 11;
-  GuardEvidence method_guard = 12;
+  reserved 10, 11, 12;
   google.protobuf.Timestamp evaluated_at = 13;
   int64 used_amount_minor = 14;
   google.protobuf.Timestamp used_customer_created_at = 15;

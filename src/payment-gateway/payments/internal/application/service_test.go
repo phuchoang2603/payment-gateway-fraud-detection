@@ -313,10 +313,10 @@ func TestAttemptIsRefusedWhileAnotherIsActiveOrThePaymentIsNotOpen(t *testing.T)
 
 func TestRiskDeclineEndsTheAttemptWithoutCallingTheProcessor(t *testing.T) {
 	stack := newStack(t, false)
-	stack.Fraud.SetAssessment(testsupport.Decline("VELOCITY"))
+	stack.Fraud.SetAssessment(testsupport.Decline("HIGH_AMOUNT"))
 	payment := mustCreate(t, stack, "key-1", "order-1")
 	result := mustStart(t, stack, payment, "attempt-1", "vault-token")
-	if result.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_DECLINED || result.GetDeclineReason() != "velocity" {
+	if result.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_DECLINED || result.GetDeclineReason() != "high_amount" {
 		t.Fatalf("result = %v", result)
 	}
 	wantKinds(t, kinds(t, stack, payment), "created", "started", "risk", "declined")
