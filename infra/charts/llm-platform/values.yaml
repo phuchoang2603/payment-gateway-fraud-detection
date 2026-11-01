@@ -345,10 +345,13 @@ langfuse:
       livenessProbe:
         initialDelaySeconds: 600
         failureThreshold: 6
+    # A fresh v4 worker sets up ClickHouse before it listens and was killed at the default 20 s liveness delay.
     worker:
       resources:
         requests: {cpu: 250m, memory: 512Mi}
         limits: {memory: 1Gi}
+      livenessProbe:
+        initialDelaySeconds: 600
   postgresql:
     deploy: false
     host: langfuse-postgres-rw
