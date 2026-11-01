@@ -5,7 +5,9 @@ metadata:
   name: feast-apply
   namespace: {{ .Values.namespace }}
   annotations:
-    argocd.argoproj.io/hook: PostSync
+    # Sync, before the Deployments roll out: the feature writer and server need the registry and stream tables.
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
 spec:
   backoffLimit: 2

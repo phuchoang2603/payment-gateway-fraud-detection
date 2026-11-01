@@ -3,6 +3,7 @@ provider: local
 entity_key_serialization_version: 3
 registry:
   registry_type: file
+  registry_store_type: fraud_feast.registry.PrefixS3RegistryStore
   path: ${FEAST_REGISTRY}
   cache_ttl_seconds: 60
 online_store:

@@ -52,7 +52,7 @@
 - [x] 3.1 `data-platform-spark.Dockerfile`: add the Feast virtualenv with the `spark` extra, and add `src/data-pipeline/feast` to its rebuild paths. `feast.Dockerfile`: Python 3.12 slim with the stream writer, verification and server entrypoints. Verify that the CI image builds pass.
 - [x] 3.2 `infra/charts/data-pipelines`:
   - the `feature-writer` Deployment, and the feature server;
-  - the PostSync apply Job;
+  - the Sync-hook apply Job, ahead of the writer and server;
   - the object-storage and Iceberg ExternalSecrets;
   - Redis client labels and sizing values;
   - the JobManager REST policy for metadata pods;

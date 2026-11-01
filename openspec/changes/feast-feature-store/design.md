@@ -65,7 +65,7 @@ See proposal.md for the motivation. The current state that shapes the design:
 | Module | What it runs | Runs as | Image |
 |---|---|---|---|
 | `repo.py` | Entities, sources, views and the service | Imported by the others | — |
-| `apply.py` | `feast apply` | Argo CD PostSync Job | `data-platform-spark` with the Feast virtualenv |
+| `apply.py` | `feast apply` and the stream tables | Argo CD Sync hook, before the writer and server roll out | `data-platform-spark` with the Feast virtualenv |
 | `materialize.py` | Decision 6 | Argo container step, local Spark | `data-platform-spark` with the Feast virtualenv |
 | `verify_online.py` | The online read-back check | Argo container step | `feast` |
 | `stream_writer.py` | Live online and offline writes, `--history` offline-only | One Deployment and the history WorkflowTemplate | `feast` |

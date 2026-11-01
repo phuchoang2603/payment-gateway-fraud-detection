@@ -25,3 +25,28 @@ def test_offline_store_needs_no_redis(monkeypatch):
     assert configuration.offline_store.type == "spark"
     with pytest.raises(KeyError):
         config()
+
+
+def test_registry_reads_the_object_without_head_bucket(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from botocore.exceptions import ClientError
+    from feast.protos.feast.core.Registry_pb2 import Registry as RegistryProto
+
+    from fraud_feast.registry import PrefixS3RegistryStore
+
+    store = PrefixS3RegistryStore.__new__(PrefixS3RegistryStore)
+    store._bucket, store._key = "bucket", "runs/feast/registry.pb"
+    store._uri = MagicMock()
+    store.s3_client = MagicMock()
+    expected = RegistryProto(version_id="v1")
+    store.s3_client.Object.return_value.get.return_value = {
+        "Body": MagicMock(read=lambda: expected.SerializeToString())
+    }
+    assert store.get_registry_proto() == expected
+    store.s3_client.meta.client.head_bucket.assert_not_called()
+    store.s3_client.Object.return_value.get.side_effect = ClientError(
+        {"Error": {"Code": "NoSuchKey"}}, "GetObject"
+    )
+    with pytest.raises(FileNotFoundError):
+        store.get_registry_proto()
