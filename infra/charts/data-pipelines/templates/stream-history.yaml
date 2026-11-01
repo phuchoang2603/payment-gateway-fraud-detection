@@ -9,7 +9,6 @@ spec:
   {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
   entrypoint: months
   activeDeadlineSeconds: 2678400
-  parallelism: {{ .Values.features.historyParallelism }}
   synchronization:
     mutexes:
       - name: stream-history
@@ -22,6 +21,8 @@ spec:
       app.kubernetes.io/name: data-pipelines
   templates:
     - name: months
+      # Caps concurrent units only; a workflow-level cap would also count each unit's own steps.
+      parallelism: {{ .Values.features.historyParallelism }}
       steps:
         - - name: plan
             template: plan

@@ -242,11 +242,10 @@ def main():
         admin = AdminClient({"bootstrap.servers": os.environ["KAFKA_BROKERS"]})
         existing = set(admin.list_topics(timeout=30).topics)
         names = topics(run_name())
-        futures = admin.delete_topics(
-            [name for name in names if name in existing], operation_timeout=30
-        )
-        for future in futures.values():
-            future.result()
+        stale = [name for name in names if name in existing]
+        if stale:
+            for future in admin.delete_topics(stale, operation_timeout=30).values():
+                future.result()
         if not args.delete:
             deadline = time.monotonic() + 120
             while existing.intersection(names):
