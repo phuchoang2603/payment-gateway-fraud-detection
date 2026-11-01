@@ -89,6 +89,9 @@ models:
       - --language-model-only
       - --max-model-len=2048
       - --gpu-memory-utilization=0.10
+      # Its linear-attention layers keep fp32 state per sequence; at vLLM's default sequence count that state alone
+      # (1.59 GiB) outgrew the share on dev. Screening sends a handful of requests at a time.
+      - --max-num-seqs=16
     # Its weights are about 1.2 GB, so the streamer needs a smaller CPU buffer than the default 2 GiB.
     loaderConfig: '{"concurrency":16,"memory_limit":536870912}'
     # The nightly's API server and engine processes hold about 3.6 GiB before the weights load; at 4Gi the server was
