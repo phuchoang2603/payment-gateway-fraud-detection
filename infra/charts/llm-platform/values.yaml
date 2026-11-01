@@ -37,24 +37,32 @@ vllm:
 
 models:
   chat:
-    name: qwen3-8b
-    repo: Qwen/Qwen3-8B-FP8
-    revision: 220b46e3b2180893580a4454f21f22d3ebb187d3
+    # Qwen3.5-4B in RedHatAI's FP8 (dynamic) build, which matches the bf16 model on MMLU-Pro, GSM8k, IFEval and GPQA
+    # (99.3 to 100.5%). Text only: the vision tower is not loaded.
+    name: qwen35-4b
+    repo: RedHatAI/Qwen3.5-4B-FP8-dynamic
+    revision: 397b7ba47a99b3221ebfc0cfc5a279118cb733ad
     replicas: 1
     # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
     stopped: false
-    # FP8 KV cache: 15% more output tokens/s at 16 concurrent requests and 65% more KV room than bf16 (benchmark, dev
-    # 2026-10-31). 0.76 leaves room on the shared GPU for the decision model (vLLM needs its whole 0.10 free at start,
-    # whichever server starts first); an 8192-token context still fits in the KV cache and covers an agent turn with its
-    # prompt, history and retrieved passages.
+    # 0.76 leaves room on the shared GPU for the decision model (vLLM needs its whole 0.10 free at start, whichever
+    # server starts first). Only 8 of its 32 layers keep a KV cache (16 KiB a token in FP8), so a 32k context is cheap;
+    # the other 24 keep about 50 MiB of fp32 state per sequence, which caps concurrent sequences at 32 (1.55 GiB).
     args:
-      - --max-model-len=8192
+      - --language-model-only
+      - --max-model-len=32768
       - --gpu-memory-utilization=0.76
       - --kv-cache-dtype=fp8
+      - --max-num-seqs=32
       - --reasoning-parser=qwen3
       - --default-chat-template-kwargs={"enable_thinking":false}
       - --enable-auto-tool-choice
-      - --tool-call-parser=hermes
+      - --tool-call-parser=qwen3_coder
+    # The model card's settings for non-thinking use.
+    sampling:
+      temperature: "0.7"
+      topP: "0.8"
+      presencePenalty: "1.5"
     resources:
       requests: {cpu: "1", memory: 8Gi}
       limits: {memory: 12Gi}

@@ -31,14 +31,14 @@ flowchart LR
   actor -->|/v1, injected key| gw
   actor -->|/mcp/knowledge, injected key| gw
   gw -->|screen, /v1/systemone| d3[d3-edge on vLLM]
-  gw --> vllm[qwen3-8b on vLLM]
+  gw --> vllm[qwen35-4b on vLLM]
   gw --> rag[rag-api]
   actor -->|prompts and traces, injected key| lf[Langfuse]
 ```
 
 ## Global model config
 
-One kagent `ModelConfig`, `default-model-config`, used by every agent: provider OpenAI, model `qwen3-8b`, the agents' gateway key, and the gateway's `/v1` route as base URL. Changing the model, the gateway or the key for all agents is one edit. Its sampling settings are the ones every agent uses; kagent's Go runtime takes them only from here, so A/B variants differ by prompt text.
+One kagent `ModelConfig`, `default-model-config`, used by every agent: provider OpenAI, model `qwen35-4b` with the model card's non-thinking sampling, the agents' gateway key, and the gateway's `/v1` route as base URL. Changing the model, the gateway or the key for all agents is one edit. Its sampling settings are the ones every agent uses; kagent's Go runtime takes them only from here, so A/B variants differ by prompt text.
 
 ![kagent model config: default-model-config in llm-agents, key from the Secret llm-gateway-agents, base URL http://agentgateway.llm.svc.cluster.local/v1](images/agents-modelconfig.png)
 

@@ -9,7 +9,8 @@ Self-hosted chat and embedding models for the agents and the RAG pipeline. Every
 
 | Model | Served name | Weights (pinned revision) | Runtime | Role |
 |---|---|---|---|---|
-| [Qwen3-8B-FP8](https://huggingface.co/Qwen/Qwen3-8B-FP8) | `qwen3-8b` | `220b46e3b2180893580a4454f21f22d3ebb187d3` | vLLM v0.32, FP8, max length 16 384, Hermes tool-call parser, thinking off | Agents' chat model with tool calling |
+| [Qwen3.5-4B FP8 (RedHatAI, dynamic)](https://huggingface.co/RedHatAI/Qwen3.5-4B-FP8-dynamic) | `qwen35-4b` | `397b7ba47a99b3221ebfc0cfc5a279118cb733ad` | vLLM v0.32, FP8, text only, max length 32 768, 32 concurrent sequences, `qwen3_coder` tool-call parser, thinking off; sampling 0.7 / top-p 0.8 / presence 1.5 | Agents' chat model with tool calling |
+| [d3-edge](https://huggingface.co/vllm-sr/d3-edge) | `d3-edge` | `c454ee39b862248d70abd7f84195d2f54ffe6d43` | vLLM nightly `2b009fc6` (`/v1/systemone`), text only, max length 2 048, 16 concurrent sequences | Gateway request screening |
 | [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) | `qwen3-embedding` | `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3` | vLLM pooling runner, 1024 dimensions, max length 2 048 | Knowledge-base and query embeddings |
 
 Both are KServe `LLMInferenceService`s. The chat model runs behind llm-d's endpoint picker (EPP) and an InferencePool, so a second replica would be added to the same pool rather than to a new route.

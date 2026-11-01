@@ -4,7 +4,7 @@ The LLM part of the coursework needs a self-hosted model behind a governed agent
 
 ## What Changes
 
-- Serve Qwen3-8B (FP8) for chat and Qwen3-Embedding-0.6B for embeddings on vLLM through KServe `LLMInferenceService`s. KServe runs llm-d's endpoint picker (EPP) and InferencePool for the chat model.
+- Serve Qwen3.5-4B (FP8) for chat and Qwen3-Embedding-0.6B for embeddings on vLLM through KServe `LLMInferenceService`s. KServe runs llm-d's endpoint picker (EPP) and InferencePool for the chat model.
   - Both share one GPU through a single DRA claim, each process with a fixed memory fraction: the RTX 5060 Ti on dev, and on prod the shared `aws-gpu-training` Spot pool, which the platform restricts to `g6.xlarge` (L4).
   - One chat replica serves every agent through vLLM's continuous batching. The benchmark measures its capacity, and a second GPU replica behind the same InferencePool is the scale-out path.
   - Model weights live once per environment in the platform bucket (`artifacts/models/`) and stream straight to the GPU with Run:ai Model Streamer. No serving node writes them to disk, which matters because the dev GPU node is also the control plane.

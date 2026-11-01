@@ -20,6 +20,9 @@ spec:
   apiKeySecretKey: key
   openAI:
     baseUrl: {{ $gatewayUrl }}/v1
+    {{- with .Values.models.chat.sampling }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 {{- range $name, $server := .Values.gateway.mcpServers }}
 ---
 apiVersion: api.kagent.dev/v1alpha3

@@ -1,14 +1,14 @@
 ## ADDED Requirements
 
 ### Requirement: Self-hosted chat model on vLLM
-The platform SHALL serve `Qwen/Qwen3-8B-FP8` at a pinned revision on a pinned vLLM image through a KServe `LLMInferenceService` in `llm`, under the served model name `qwen3-8b`. The model SHALL expose the OpenAI-compatible chat completions, completions and models APIs, with tool calling enabled and reasoning output off by default. The maximum context length SHALL be 16,384 tokens. No model-provider API key SHALL exist.
+The platform SHALL serve Qwen3.5-4B in FP8 (`RedHatAI/Qwen3.5-4B-FP8-dynamic`) at a pinned revision on a pinned vLLM image through a KServe `LLMInferenceService` in `llm`, under the served model name `qwen35-4b`. The model SHALL expose the OpenAI-compatible chat completions, completions and models APIs, with tool calling enabled and reasoning output off by default. The maximum context length SHALL be 32,768 tokens. No model-provider API key SHALL exist.
 
 #### Scenario: Chat completion through the platform
-- **WHEN** an authorized client sends a chat completion for model `qwen3-8b`
+- **WHEN** an authorized client sends a chat completion for model `qwen35-4b`
 - **THEN** a vLLM replica of the service answers with a completion and token usage
 
 #### Scenario: Unknown model name
-- **WHEN** a client requests a model other than `qwen3-8b` or `qwen3-embedding`
+- **WHEN** a client requests a model other than `qwen35-4b`, `qwen3-embedding` or `d3-edge`
 - **THEN** the request is rejected and no other model is loaded
 
 ### Requirement: Self-hosted embedding model
@@ -19,7 +19,7 @@ The platform SHALL serve `Qwen/Qwen3-Embedding-0.6B` at a pinned revision on the
 - **THEN** it receives one fixed-length vector per input
 
 ### Requirement: Shared GPU with fixed memory split
-The chat and embedding model servers SHALL share one GPU through a single DRA claim. Each SHALL be limited to a fixed fraction of GPU memory whose sum leaves headroom for the CUDA contexts. The chat model SHALL keep KV-cache room for at least two concurrent 16,384-token contexts. If FP8 weights cannot meet this, the chat model SHALL fall back to Qwen3-8B AWQ, and the fallback SHALL be recorded.
+The chat, embedding and decision model servers SHALL share one GPU through a single DRA claim. Each SHALL be limited to a fixed fraction of GPU memory whose sum leaves headroom for the CUDA contexts. The chat model SHALL keep KV-cache room for at least two concurrent 32,768-token contexts.
 
 #### Scenario: Both models loaded
 - **WHEN** both model servers are Ready on the dev GPU

@@ -10,7 +10,7 @@ One agentgateway `Gateway` in `llm` is the only entry to the agents (A2A), the m
 | Path | Backend | Used by |
 |---|---|---|
 | `/a2a/<agent>` | kagent's A2A endpoint for an entry agent (today `coordinator`), `/agents/llm-agents/<agent>` on the kagent controller | analysts' clients, the benchmark |
-| `/v1/chat/completions`, `/v1/embeddings` | `qwen3-8b` InferencePool (through the endpoint picker), `qwen3-embedding` | agents, the RAG pipeline, `rag-api`, the benchmark |
+| `/v1/chat/completions`, `/v1/embeddings` | `qwen35-4b` InferencePool (through the endpoint picker), `qwen3-embedding` | agents, the RAG pipeline, `rag-api`, the benchmark |
 | `/v1/systemone` | `d3-edge` (agentgateway's `SystemOne` format), on its own route without the prompt guard | clients with a key, and the LLM route's screen (requests with the `x-llm-screen` header) |
 | `/mcp/<server>` | MCP server `<server>` (today `knowledge` → `rag-api` `/mcp`) | agents, kagent's tool discovery |
 | `/<api>/v1/...` | REST API `<api>` (today `knowledge` → `rag-api` `/v1`) | API clients |

@@ -91,6 +91,8 @@ agentgateway applies one policy object per target, so every route gets exactly o
 
 ### 4. Models: Qwen3-8B FP8 and Qwen3-Embedding-0.6B on one GPU; prod on L4 only
 
+**Update (user decision, 2026-11-01):** the chat model is now Qwen3.5-4B in RedHatAI's FP8 build (`RedHatAI/Qwen3.5-4B-FP8-dynamic`, revision `397b7ba4`), served as `qwen35-4b`, text only, with a 32k context and 32 concurrent sequences. RedHatAI reports 99.3 to 100.5% of the bf16 model on MMLU-Pro, GSM8k, IFEval, Math 500, AIME and GPQA. Qwen3.6 does not fit: its smallest models are 27B dense and 35B-A3B, 31 and 37.5 GB in FP8 and 20 to 25 GB in community 4-bit builds. The benchmark below and in `docs/llm/benchmark.md` was measured on Qwen3-8B FP8.
+
 The chat model is `Qwen/Qwen3-8B-FP8` (revision `220b46e3`, 8.79 GiB of safetensors). The embedding model is `Qwen/Qwen3-Embedding-0.6B` (revision `97b0c614`, 1.11 GiB), served by vLLM's pooling runner as `qwen3-embedding`, which the RAG pipeline and its search tool will call. Both share the one GPU (decision 6).
 
 Memory budget on the dev card (15.93 GiB):

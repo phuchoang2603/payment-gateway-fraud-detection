@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Global model config
-A kagent `ModelConfig` named `default-model-config` in the agents' namespace SHALL reach the agent gateway's `/v1` route with the OpenAI provider, model `qwen3-8b` and the agents' gateway key. Every agent defined by this repository SHALL use it. No agent SHALL hold a model-server address or a model-provider key.
+A kagent `ModelConfig` named `default-model-config` in the agents' namespace SHALL reach the agent gateway's `/v1` route with the OpenAI provider, model `qwen35-4b` and the agents' gateway key. Every agent defined by this repository SHALL use it. No agent SHALL hold a model-server address or a model-provider key.
 
 #### Scenario: Change the model for all agents
 - **WHEN** the model name or gateway address changes
