@@ -285,8 +285,8 @@ No new Doppler keys. Requests:
 
 - **[Training/serving skew of the DP3 delay]** → Training sees the daily anchor at midnight, while serving gets it after `dp-daily` and materialization (about 07:00 UTC). The definition's `availability` block records this, and the TTL's 12 hours covers it.
 - **[The v19 replay takes days]** → Month-sized, restartable ranges, parallelism set from the first month's measured rate, and the first training replay limited to `[2026-07-29, 2026-10-29)`.
-- **[The seed encodes events differently from production]** → A CI round trip through `wire.decode`, and the per-month gate on decode rejects and consumed input offsets.
-- **[Kafka disk during the replay]** → Kafka must hold the entire seeded month and its output until unit cleanup; provision disk accordingly.
+- **[The seed encodes events differently from production]** → A CI round trip through `wire.decode`, and the per-month gate on decode rejects and the bounded job reaching FINISHED.
+- **[Kafka disk during the replay]** → Kafka must hold the entire seeded month and its output until unit cleanup. The history topics use zstd compression; prod Kafka storage (5Gi default) must be sized for one v19 month (about 85M input events plus the journal) before the prod replay.
 - **[Training/serving skew of Flink's processing delay]** → History has none; serving misses attempts Flink has not processed yet. The page states it, and the evidence samples it.
 - **[Flink's first 24 hours have unknown coverage]** → Serving reports those values as unknown, never zero. Training history uses the replay's one-day lead-in.
 - **[DP3 rewrites older anchors]** → Overlap covers daily lookback; backfills require an explicit since day.

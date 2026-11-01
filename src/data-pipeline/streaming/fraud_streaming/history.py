@@ -121,6 +121,7 @@ def seed(start, end):
             "enable.idempotence": True,
             "acks": "all",
             "queue.buffering.max.messages": 20000,
+            "compression.type": "zstd",
         }
     )
     offset, sequence = 0, 0
@@ -222,7 +223,12 @@ def main():
                     raise TimeoutError("history topics were not deleted")
                 time.sleep(1)
                 existing = set(admin.list_topics(timeout=30).topics)
-            configs = {"retention.ms": "-1", "retention.bytes": "-1", "cleanup.policy": "delete"}
+            configs = {
+                "retention.ms": "-1",
+                "retention.bytes": "-1",
+                "cleanup.policy": "delete",
+                "compression.type": "zstd",
+            }
             for name, future in admin.create_topics(
                 [
                     NewTopic(
