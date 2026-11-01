@@ -104,7 +104,7 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 ## 7. Local checks and handoff
 
 - [x] 7.1 Run local non-test checks only: `ruff` and `ruff format --check`, `golangci-lint`, treefmt, helm lint and template, `buf lint`, `openspec validate feast-feature-store --strict`, and `git diff --check`. Commit locally. These checks pass, as do the Fraud and Payments builds, dependency locks and Feast wheel build. Repository-wide Buf lint still reports the pre-existing Payments, Processor and Vault RPC naming/reuse violations; fraud-scoped Buf lint passes. Data-product lint and generated-reference checks pass.
-- [ ] 7.2 Push `feat/feast-feature-store` with an explicit same-name refspec and open a draft PR against `main`, as authorized by the user. Keep it draft: marking a trusted PR ready publishes `deploy/dev`. Report every CI check honestly.
+- [x] 7.2 Push `feat/feast-feature-store` with an explicit same-name refspec and open a draft PR against `main`, as authorized by the user. Keep it draft: marking a trusted PR ready publishes `deploy/dev`. Draft PR: https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/111. CI checks are pending; no local test suites were run. Report every CI check honestly.
 
 ## 8. Runs and evidence (cluster)
 
