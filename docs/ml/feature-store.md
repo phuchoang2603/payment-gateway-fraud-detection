@@ -10,7 +10,7 @@ Keys are integration-scoped customer and payment-method identities. Request feat
 
 | Group | Features | Computed by | Status |
 |---|---|---|---|
-| Request | amount, customer and merchant account ages, nullable IP/shipping mismatch, item count, device presence | Feast pure Python request_features on-demand view | Shared by training and serving |
+| Request | amount, customer and merchant account ages, nullable IP/shipping mismatch, item count, device presence, amount relative to the customer and payment-method 30-day averages, UTC hour of scoring | Feast pure Python request_features on-demand view | Shared by training and serving |
 | Short history | customer and method attempt counts over 5 minutes, 1 hour and 24 hours; distinct customer devices over 24 hours | Flink | Flink writes the v2 journal; the feature writer writes Redis and the offline stream tables |
 | Long history | 7- and 30-day attempt, amount, decided, declined and distinct counts and decline rates per customer and payment method, at daily anchors | DP3 Spark over Silver into `gold.feat_customer_daily` and `gold.feat_payment_method_daily` ([`fraud-history-batch-v1`](../../contracts/features/fraud-history-batch-v1.yaml)); Feast materialization | Implemented; cluster evidence pending |
 

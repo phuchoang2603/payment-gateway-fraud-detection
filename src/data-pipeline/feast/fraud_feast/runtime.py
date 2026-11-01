@@ -11,17 +11,22 @@ from feast.repo_config import RepoConfig
 from fraud_feast.server import get_app
 
 
-def config(*, online=False):
+def redis_connection():
     password = os.environ["FEAST_REDIS_PASSWORD"]
     if not password:
         raise ValueError("FEAST_REDIS_PASSWORD must be set")
-    connection = (
+    return (
         f"{os.environ['FEAST_REDIS_ADDR']},"
         f"password={json.dumps(password).replace(',', r'\u002c')},"
         "socket_timeout=2,socket_connect_timeout=2"
     )
-    text = Path(__file__).with_name("feature_store.yaml").read_text()
-    values = yaml.safe_load(text)
+
+
+def config(*, online=False, redis=True):
+    values = yaml.safe_load(Path(__file__).with_name("feature_store.yaml").read_text())
+    if not redis:
+        values["online_store"] = None
+    connection = redis_connection() if redis else ""
 
     def expand(value):
         if isinstance(value, dict):
@@ -40,8 +45,8 @@ def config(*, online=False):
     return RepoConfig(**values)
 
 
-def store(*, online=False):
-    return FeatureStore(config=config(online=online))
+def store(*, online=False, redis=True):
+    return FeatureStore(config=config(online=online, redis=redis))
 
 
 def main():

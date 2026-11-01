@@ -57,10 +57,13 @@ func TestStoreAndForwardUsesServerScoringTimeForRequestAndViewAvailability(t *te
 			for _, field := range fields {
 				reply.Metadata.FeatureNames = append(reply.Metadata.FeatureNames, view+"__"+field)
 				value := json.RawMessage("null")
-				if view == "request_features" && field != "ip_shipping_country_mismatch" {
+				if view == "request_features" {
 					value = json.RawMessage("1")
 					if field == "has_device" {
 						value = json.RawMessage("false")
+					}
+					if field == "ip_shipping_country_mismatch" {
+						value = json.RawMessage("null")
 					}
 				}
 				timestamp := now.Add(-time.Minute)
@@ -103,6 +106,10 @@ func TestStoreAndForwardUsesServerScoringTimeForRequestAndViewAvailability(t *te
 			t.Fatalf("%s status = %s, want %s", name, view.Status, want)
 		}
 	}
+	features := observation.Views["request_features"].Values
+	if features["customer_amount_to_30d_avg"].Number != nil || features["payment_method_amount_to_30d_avg"].Number == nil {
+		t.Fatalf("expired daily view must null its ratio only: %+v", features)
+	}
 }
 
 func TestRequestFeatureBooleansAndNullRetainScoringTime(t *testing.T) {
@@ -110,8 +117,11 @@ func TestRequestFeatureBooleansAndNullRetainScoringTime(t *testing.T) {
 	fields := map[string]featureResult{}
 	for _, name := range viewFields["request_features"] {
 		value := json.RawMessage("1")
-		if name == "ip_shipping_country_mismatch" {
+		if nullableRequestFeature(name) {
 			value = json.RawMessage("null")
+		}
+		if name == "customer_amount_to_30d_avg" {
+			value = json.RawMessage("2.5")
 		}
 		if name == "has_device" {
 			value = json.RawMessage("false")
@@ -119,7 +129,7 @@ func TestRequestFeatureBooleansAndNullRetainScoringTime(t *testing.T) {
 		fields["request_features__"+name] = featureResult{Values: []json.RawMessage{value}, Statuses: []string{"PRESENT"}, EventTimestamps: []time.Time{time.Unix(0, 0)}}
 	}
 	result := evaluate("request_features", viewFields["request_features"], fields, now, time.Hour)
-	if result.Status != "available" || !result.EventTimestamp.Equal(now) || result.Values["has_device"].Boolean == nil || *result.Values["has_device"].Boolean || result.Values["ip_shipping_country_mismatch"].Boolean != nil {
+	if result.Status != "available" || !result.EventTimestamp.Equal(now) || result.Values["has_device"].Boolean == nil || *result.Values["has_device"].Boolean || result.Values["ip_shipping_country_mismatch"].Boolean != nil || result.Values["customer_amount_to_30d_avg"].Number == nil || *result.Values["customer_amount_to_30d_avg"].Number != 2.5 || result.Values["payment_method_amount_to_30d_avg"].Number != nil {
 		t.Fatalf("request features lost null, false or scoring time: %+v", result)
 	}
 }

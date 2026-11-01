@@ -40,7 +40,11 @@ var viewFields = map[string][]string{
 	"payment_method_stream": {"method_snapshot_attempt_count_5m", "method_snapshot_attempt_count_1h", "method_snapshot_attempt_count_24h"},
 	"customer_daily":        dailyFields("customer"),
 	"payment_method_daily":  dailyFields("payment_method"),
-	"request_features":      {"amount_minor", "customer_account_age_days", "merchant_account_age_days", "ip_shipping_country_mismatch", "item_count", "has_device"},
+	"request_features":      {"amount_minor", "customer_account_age_days", "merchant_account_age_days", "ip_shipping_country_mismatch", "item_count", "has_device", "customer_amount_to_30d_avg", "payment_method_amount_to_30d_avg", "scored_hour_utc"},
+}
+
+func nullableRequestFeature(name string) bool {
+	return name == "ip_shipping_country_mismatch" || strings.HasSuffix(name, "_amount_to_30d_avg")
 }
 
 func dailyFields(scope string) []string {
@@ -139,6 +143,14 @@ func (c *Client) Read(ctx context.Context, request application.Request) (observa
 		}
 		observation.Views[name] = evaluate(name, names, fields, request.ScoredAt, ttl)
 	}
+	// Feast's online read ignores TTL, so a ratio built from an expired or missing daily row is unknown, as in training.
+	if features, exists := observation.Views["request_features"]; exists && features.Status == "available" {
+		for _, scope := range []string{"customer", "payment_method"} {
+			if observation.Views[scope+"_daily"].Status != "available" {
+				features.Values[scope+"_amount_to_30d_avg"] = application.FeatureValue{}
+			}
+		}
+	}
 	return observation
 }
 
@@ -182,6 +194,12 @@ func evaluate(view string, names []string, fields map[string]featureResult, scor
 					return result
 				}
 				value.Number = &number
+			} else if strings.HasSuffix(name, "_amount_to_30d_avg") {
+				var number float64
+				if json.Unmarshal(field.Values[0], &number) != nil || number < 0 {
+					return result
+				}
+				value.Number = &number
 			} else {
 				var number int64
 				if json.Unmarshal(field.Values[0], &number) != nil || number < 0 {
@@ -195,7 +213,7 @@ func evaluate(view string, names []string, fields map[string]featureResult, scor
 	result.EventTimestamp = &timestamp
 	if view == "request_features" {
 		for name, value := range values {
-			if name != "ip_shipping_country_mismatch" && value.Integer == nil && value.Boolean == nil {
+			if !nullableRequestFeature(name) && value.Integer == nil && value.Boolean == nil {
 				return result
 			}
 		}

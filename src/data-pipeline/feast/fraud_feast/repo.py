@@ -6,7 +6,7 @@ from feast import Entity, FeatureService, FeatureView, Field, PushSource, ValueT
 from feast.infra.offline_stores.contrib.spark_offline_store.spark_source import SparkSource
 from feast.types import Float64, Int64, String
 
-from fraud_feast.request import request_context, request_features
+from fraud_feast.request import request_context, request_features_view
 
 DAILY_TTL = timedelta(days=31, hours=12)
 STREAM_TTL = timedelta(hours=24, minutes=5)
@@ -100,6 +100,10 @@ def definitions():
                 )
             )
             model_views.append(views[-1][fields])
+    by_name = {view.name: view for view in views}
+    request_features = request_features_view(
+        by_name["customer_daily"], by_name["payment_method_daily"]
+    )
     return [
         integration,
         *entities.values(),
