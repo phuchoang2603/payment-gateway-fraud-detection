@@ -137,10 +137,13 @@ spec:
       local:
         - requests: {{ $screening.requestsPerMinute }}
           unit: Minutes
+    # After a hand-off, ADK passes the previous agent's turns to the next one as user messages that start with
+    # "For context:"; the screen judges the analyst's latest message, not those.
     transformation:
       request:
         body: >-
-          json(request.body).body.messages.filter(m, m.role == "user").with(users, toJson({
+          json(request.body).body.messages.filter(m, m.role == "user" && !m.content.startsWith("For context:"))
+          .with(users, toJson({
           "model": {{ $decision.name | toJson }},
           "state": {"prompt": size(users) == 0 ? "" : users[size(users) - 1].content},
           "questions": {"screen": {{ $screening.question | toJson }}}}))
