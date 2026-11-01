@@ -270,7 +270,7 @@ spec:
           {{- if eq $mode "seed" }}
           - name: DATASET_VERSION
             value: {{ $.Values.bronze.datasetVersion | quote }}
-          - {name: HISTORY_SORT_MEMORY, value: 3GB}
+          - {name: HISTORY_SORT_MEMORY, value: 6GB}
           {{- end }}
           {{- if has $mode (list "seed" "writer") }}
           - name: HISTORY_SEED_REPORT
@@ -286,8 +286,15 @@ spec:
           {{- include "data-pipelines.storageEnv" $ | nindent 10 }}
           {{- end }}
         resources:
+          {{- if eq $mode "seed" }}
+          # DuckDB sorts a week of Bronze under HISTORY_SORT_MEMORY and spills the rest to disk; the Arrow batches
+          # and the producer queue need the headroom above it.
+          requests: {cpu: "1", memory: 8Gi, ephemeral-storage: 40Gi}
+          limits: {memory: 10Gi, ephemeral-storage: 60Gi}
+          {{- else }}
           requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 10Gi}
           limits: {memory: 4Gi, ephemeral-storage: 30Gi}
+          {{- end }}
     {{- end }}
     - name: cleanup
       inputs:
