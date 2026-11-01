@@ -378,3 +378,7 @@ ingress:
     hostname: pay-gateway-dev.phuchoang.sbs
 features:
   enabled: false
+  url: http://feast-server.data.svc.cluster.local:6566
+  service: fraud_model_v1
+  ttlDaily: 756h
+  ttlStream: 24h5m

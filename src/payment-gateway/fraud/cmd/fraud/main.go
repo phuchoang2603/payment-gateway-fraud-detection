@@ -113,8 +113,8 @@ func run() error {
 	}
 	var history application.HistoryReader
 	if endpoint := os.Getenv("FRAUD_FEAST_URL"); endpoint != "" {
-		freshness := feast.Config{URL: endpoint, Epoch: os.Getenv("FRAUD_FEATURE_EPOCH"), DefinitionHash: os.Getenv("FRAUD_FEATURE_DEFINITION_SHA256"), Timeout: config.HistoryTimeout}
-		for name, target := range map[string]*time.Duration{"FRAUD_FEATURE_MAX_ANCHOR_AGE": &freshness.MaxAnchorAge, "FRAUD_FEATURE_MAX_PROGRESS_AGE": &freshness.MaxProgressAge} {
+		freshness := feast.Config{URL: endpoint, FeatureService: os.Getenv("FRAUD_FEATURE_SERVICE"), Timeout: config.HistoryTimeout}
+		for name, target := range map[string]*time.Duration{"FRAUD_FEATURE_TTL_DAILY": &freshness.DailyTTL, "FRAUD_FEATURE_TTL_STREAM": &freshness.StreamTTL} {
 			*target, err = time.ParseDuration(os.Getenv(name))
 			if err != nil {
 				return fmt.Errorf("%s must be a positive duration", name)

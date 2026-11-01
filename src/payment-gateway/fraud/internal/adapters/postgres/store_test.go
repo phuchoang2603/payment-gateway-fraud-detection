@@ -107,10 +107,10 @@ type history struct {
 	value int64
 }
 
-func (h *history) Read(context.Context, application.Request) (application.ViewObservation, application.ViewObservation) {
+func (h *history) Read(context.Context, application.Request) application.FeatureObservation {
 	h.calls++
 	value := h.value
-	return application.ViewObservation{Status: "available", Values: application.SnapshotValues{Count1h: &value}}, application.ViewObservation{Status: "timeout"}
+	return application.FeatureObservation{Service: "fraud_model_v1", Views: map[string]application.ViewObservation{"customer_daily": {Status: "available", Values: map[string]application.FeatureValue{"attempt_count_7d": {Integer: &value}}}, "payment_method_daily": {Status: "timeout"}}}
 }
 
 func TestAssessmentResponseLossReplaysOriginalEvidenceAndRejectsExpiredRecovery(t *testing.T) {
@@ -160,15 +160,15 @@ func TestAssessmentResponseLossReplaysOriginalEvidenceAndRejectsExpiredRecovery(
 
 type timedOutHistory struct{ historyStarted, guardStarted chan struct{} }
 
-func (h timedOutHistory) Read(ctx context.Context, _ application.Request) (application.ViewObservation, application.ViewObservation) {
+func (h timedOutHistory) Read(ctx context.Context, _ application.Request) application.FeatureObservation {
 	close(h.historyStarted)
 	select {
 	case <-h.guardStarted:
 	case <-ctx.Done():
-		return application.ViewObservation{Status: "error"}, application.ViewObservation{Status: "error"}
+		return application.FeatureObservation{Views: map[string]application.ViewObservation{"customer_daily": {Status: "error"}, "payment_method_daily": {Status: "error"}}}
 	}
 	<-ctx.Done()
-	return application.ViewObservation{Status: "timeout"}, application.ViewObservation{Status: "timeout"}
+	return application.FeatureObservation{Views: map[string]application.ViewObservation{"customer_daily": {Status: "timeout"}, "payment_method_daily": {Status: "timeout"}}}
 }
 
 type partialGuard struct{ historyStarted, guardStarted chan struct{} }
@@ -196,7 +196,7 @@ func TestObservationFailuresAndThresholdsPreserveRulesAndDurableEvidence(t *test
 		t.Fatal(err)
 	}
 	evidence := result.Evidence
-	if evidence.Decision.Declined || evidence.Customer.Status != "timeout" || evidence.Method.Status != "timeout" || evidence.CustomerGuard.Status != "registered" || !evidence.CustomerGuard.ThresholdExceeded || evidence.MethodGuard.Status != "error" {
+	if evidence.Decision.Declined || evidence.Features.Views["customer_daily"].Status != "timeout" || evidence.Features.Views["payment_method_daily"].Status != "timeout" || evidence.CustomerGuard.Status != "registered" || !evidence.CustomerGuard.ThresholdExceeded || evidence.MethodGuard.Status != "error" {
 		t.Fatalf("observation changed rules or lost partial evidence: %+v", evidence)
 	}
 }

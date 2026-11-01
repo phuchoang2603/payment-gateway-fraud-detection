@@ -41,33 +41,19 @@ type Store interface {
 	Fail(context.Context, Claim, time.Duration) error
 	Ready(context.Context) error
 }
-type SnapshotValues struct {
-	Count1h, Count24h, AmountMinor24h, Devices7d *int64
-	LastAssessedAt                               *time.Time
-}
-type SourceProgress struct {
-	Topic                                 string
-	Partition                             int32
-	ConsumedOffset, ObservedHighWatermark int64
-	ObservedAt                            time.Time
-	HeartbeatAt                           *time.Time
-}
-
-type Snapshot struct {
-	ID, Epoch, Definition, DefinitionHash                       string
-	Revision                                                    uint64
-	Anchor, ComputedAt, PublishedAt, SourceAvailableAt, WriteAt time.Time
-	Coverage                                                    map[string]string
-	SourceProgress                                              []SourceProgress
-	Values                                                      SnapshotValues
+type FeatureValue struct {
+	Integer *int64
+	Number  *float64
 }
 type ViewObservation struct {
 	Status         string
+	EventTimestamp *time.Time
 	ReadAt         time.Time
-	AvailableAt    *time.Time
-	Observed       *Snapshot
-	Values         SnapshotValues
-	ElapsedSeconds *int64
+	Values         map[string]FeatureValue
+}
+type FeatureObservation struct {
+	Service string
+	Views   map[string]ViewObservation
 }
 type GuardObservation struct {
 	Status, Epoch, PolicyVersion string
@@ -83,7 +69,7 @@ type Evidence struct {
 	Decision                                  domain.Decision
 	CustomerID, MethodFingerprint             string
 	Input                                     domain.Input
-	Customer, Method                          ViewObservation
+	Features                                  FeatureObservation
 	CustomerGuard, MethodGuard                GuardObservation
 	HistoricalShadowOnly, VelocityObserveOnly bool
 	EvaluatedAt                               time.Time
@@ -95,7 +81,7 @@ type Result struct {
 }
 type (
 	HistoryReader interface {
-		Read(context.Context, Request) (ViewObservation, ViewObservation)
+		Read(context.Context, Request) FeatureObservation
 	}
 	VelocityReader interface {
 		Register(context.Context, Request, time.Time) (GuardObservation, GuardObservation)
@@ -131,19 +117,22 @@ func (s *Service) Decide(ctx context.Context, request Request) (Result, error) {
 			return Result{}, err
 		}
 		digest := sha256.Sum256(encoded)
-		if result.Evidence.SchemaVersion != 1 || result.Evidence.AssessmentID != claim.ID || result.Evidence.RequestDigest != request.Digest || result.Evidence.Identity != request.Identity || result.EvidenceHash != hex.EncodeToString(digest[:]) {
+		if result.Evidence.SchemaVersion != 2 || result.Evidence.AssessmentID != claim.ID || result.Evidence.RequestDigest != request.Digest || result.Evidence.Identity != request.Identity || result.EvidenceHash != hex.EncodeToString(digest[:]) {
 			return Result{}, errors.New("incompatible or corrupted persisted assessment")
 		}
 		result.Replayed = true
 		return result, nil
 	}
 	result := Result{Evidence: Evidence{
-		SchemaVersion: 1, AssessmentID: claim.ID, RequestDigest: request.Digest, Identity: request.Identity,
+		SchemaVersion: 2, AssessmentID: claim.ID, RequestDigest: request.Digest, Identity: request.Identity,
 		CustomerID: request.CustomerID, MethodFingerprint: request.MethodFingerprint, Input: request.Input, HistoricalShadowOnly: true, VelocityObserveOnly: true,
-		Customer: ViewObservation{Status: "disabled"}, Method: ViewObservation{Status: "disabled"},
+		Features: FeatureObservation{Views: map[string]ViewObservation{
+			"customer_daily": {Status: "disabled"}, "payment_method_daily": {Status: "disabled"},
+			"customer_stream": {Status: "disabled"}, "payment_method_stream": {Status: "disabled"},
+		}},
 		CustomerGuard: GuardObservation{Status: "disabled"}, MethodGuard: GuardObservation{Status: "disabled"},
 	}}
-	type historyResult struct{ customer, method ViewObservation }
+	type historyResult struct{ features FeatureObservation }
 	type guardResult struct{ customer, method GuardObservation }
 	history := make(chan historyResult, 1)
 	guard := make(chan guardResult, 1)
@@ -151,11 +140,11 @@ func (s *Service) Decide(ctx context.Context, request Request) (Result, error) {
 		go func() {
 			call, stop := context.WithTimeout(ctx, s.config.HistoryTimeout)
 			defer stop()
-			customer, method := s.history.Read(call, request)
-			history <- historyResult{customer, method}
+			features := s.history.Read(call, request)
+			history <- historyResult{features}
 		}()
 	} else {
-		history <- historyResult{result.Evidence.Customer, result.Evidence.Method}
+		history <- historyResult{result.Evidence.Features}
 	}
 	if s.velocity != nil {
 		go func() {
@@ -170,7 +159,7 @@ func (s *Service) Decide(ctx context.Context, request Request) (Result, error) {
 	for history != nil || guard != nil {
 		select {
 		case observation := <-history:
-			result.Evidence.Customer, result.Evidence.Method = observation.customer, observation.method
+			result.Evidence.Features = observation.features
 			history = nil
 		case observation := <-guard:
 			result.Evidence.CustomerGuard, result.Evidence.MethodGuard = observation.customer, observation.method

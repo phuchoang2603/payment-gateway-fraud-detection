@@ -138,7 +138,7 @@ func TestDeclineSucceedsAndCountsDecisionOnce(t *testing.T) {
 		t.Fatal("Payments-to-fraud trace context was lost")
 	}
 	evidence := res.GetEvidence()
-	if evidence.GetSchemaVersion() != 1 || evidence.GetAssessmentId() != res.GetAssessment().GetAssessmentId() || evidence.GetAttemptId() != req.GetAttemptId() || !evidence.GetHistoricalFeaturesShadowOnly() || !evidence.GetCustomerGuard().GetObserveOnly() || evidence.GetUsedAmountMinor() != req.GetSnapshot().GetTotal().GetMinorUnits() {
+	if evidence.GetSchemaVersion() != 2 || evidence.GetAssessmentId() != res.GetAssessment().GetAssessmentId() || evidence.GetAttemptId() != req.GetAttemptId() || !evidence.GetHistoricalFeaturesShadowOnly() || !evidence.GetCustomerGuard().GetObserveOnly() || evidence.GetUsedAmountMinor() != req.GetSnapshot().GetTotal().GetMinorUnits() {
 		t.Fatalf("incomplete wire evidence: %v", evidence)
 	}
 	a := res.Assessment
