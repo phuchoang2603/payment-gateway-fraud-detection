@@ -17,12 +17,14 @@ The Go services share one Dockerfile so every service gets the same multi-stage 
 
 ## Image sizes
 
-Sizes of the `linux/amd64` images in the GitHub container registry: compressed is the sum of the layer blobs a node pulls, unpacked is what those layers expand to on disk.
+Local is `docker images` on the build host; compressed is the sum of the layer blobs a node pulls from the GitHub container registry, and unpacked is what those layers expand to on disk (`linux/amd64`).
 
 | Image | Before | After | Change |
 |---|---|---|---|
-| data-platform-spark | `1e090ee` (2026-10-22): one runtime stage installing the `pyspark` wheel with its bundled JARs, JARs fetched by a script at build time, pip kept. 2.02 GB compressed, 2.99 GB unpacked | `opt` (same day, same Spark 3.5): the multi-stage layout above. 1.06 GB compressed, 1.94 GB unpacked | −48% compressed, −35% unpacked |
-| data-platform-spark, current | | `main-eb98307` (2026-11-01): Spark 4.1.3 with Iceberg, Kafka and protobuf connectors. 1.35 GB compressed, 1.89 GB unpacked | Still −33% / −37% against the first build, with a newer Spark and more connectors |
+| data-platform-spark | `1e090ee` (2026-10-22): `uv sync` kept uv's download cache in the image, so its layer held 2.25 GB for about 1.5 GB of installed packages. 5.07 GB local, 2.02 GB compressed, 2.99 GB unpacked | `opt` (same day, same Dockerfile otherwise): `UV_NO_CACHE=1` and `UV_LINK_MODE=copy`. 3.06 GB local, 1.06 GB compressed, 1.94 GB unpacked | −40% local, −48% compressed |
+| data-platform-spark, current | | `main-eb98307` (2026-11-01): Spark 4.1.3 with Iceberg, Kafka and protobuf connectors, built in separate stages (checksummed JARs, `uv sync`), with only Spark's `bin`, `jars` and Python libraries copied from the official image and pip and `__pycache__` removed. 1.35 GB compressed, 1.89 GB unpacked | −33% compressed against `1e090ee`, with a newer Spark and more connectors |
 | streaming | `6cec4a9` (2026-10-27): `uv sync` also installed `apache-flink-libraries`, a second copy of the Flink JARs the base image already has. 1.22 GB compressed, 1.82 GB unpacked | `52219c0` (same day): `--no-install-package apache-flink-libraries`. 0.91 GB compressed, 1.49 GB unpacked | −25% compressed, −18% unpacked |
+
+The Spark image runs on the driver node and every executor node, so each saved gigabyte is pulled once per node per image version.
 
 The Go service images are a single static binary on distroless and the Python service images start from slim bases, so they had no larger first build to compare: live-simulator is 159 MB and feast 180 MB compressed.
