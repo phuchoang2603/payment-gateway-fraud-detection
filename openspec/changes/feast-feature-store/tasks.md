@@ -6,12 +6,12 @@
   - the training entity timestamp is `started_at − 1µs`.
 
   Verify with `openspec validate feast-feature-store --strict`.
-- [ ] 0.2 Confirm with the DP3 thread that `gold.feat_attempt_rt` and its Spark short-window path are removed or scheduled for removal. Wait for the user's go-ahead. If `dp3-features-and-marts` is archived by then, add REMOVED or MODIFIED `fraud-feature-contracts` requirements that retire `fraud-snapshot-v1`; otherwise record that they stay pending. Verify with `openspec validate --strict --all`.
+- [x] 0.2 Rebase `feat/feast-feature-store` onto `origin/main` at `371d2ca`. Confirm that DP3 no longer computes `gold.feat_attempt_rt` or Spark short windows. The user authorized code implementation and a draft PR on 2026-10-31. `dp3-features-and-marts` remains unarchived, so its v1 retirement requirements stay pending. Validate this change with `openspec validate feast-feature-store --strict`.
 - [ ] 0.3 Send the design's platform requests through the user: prod Redis capacity, the Flink operator and checkpoint path in prod, on-demand capacity for the materialize driver, `data` network paths, the Flink connector in ingestion, `feast/` bucket write, and spot capacity for the multi-day history FlinkDeployment in prod. Make no cluster changes. Verify that each answer is recorded in design.md.
 
 ## 1. Contracts and v1 cleanup
 
-- [ ] 1.1 Add `contracts/fraud/v1/evidence.proto` (decision 9). In `fraud.proto`, reserve `DecideResponse` field 3 and use field 4. Regenerate the Go bindings. Verify with `buf lint`, generation, and `go build ./...` for fraud and payments.
+- [x] 1.1 Add `contracts/fraud/v1/evidence.proto` (decision 9). In `fraud.proto`, reserve `DecideResponse` field 3 and use field 4. Regenerate the Go bindings. Verify with `buf lint`, generation, and `go build ./...` for fraud and payments. Local generation, both builds and fraud-scoped Buf lint pass; repository-wide Buf lint reports existing RPC naming violations in Payments, Processor and Vault.
 - [ ] 1.2 Delete:
   - `contracts/features/v1/`, `fraud-snapshot-v1.*`, and the Go and Python v1 bindings;
   - `src/data-pipeline/features/reference.py` and its v1-only tests;
@@ -77,7 +77,7 @@
 
 ## 4. Go Fraud
 
-- [ ] 4.1 Rewrite `internal/adapters/feast/client.go` (decision 9). Update the application observation types, `cmd/fraud/main.go` and `transport/grpc/evidence.go` to evidence schema version 2. Rework `client_test.go` to cover each status boundary once (TTL edge, future, missing at the Unix epoch, malformed), removing the v1 cases. Verify locally with `golangci-lint`, and run the tests in CI.
+- [x] 4.1 Rewrite `internal/adapters/feast/client.go` (decision 9). Update the application observation types, `cmd/fraud/main.go` and `transport/grpc/evidence.go` to evidence schema version 2. Rework `client_test.go` to cover each status boundary once (TTL edge, future, missing at the Unix epoch, malformed), removing the v1 cases. Verify locally with `golangci-lint`, and run the tests in CI.
 
 ## 5. Governance
 
@@ -102,7 +102,7 @@
 ## 7. Local checks and handoff
 
 - [ ] 7.1 Run local non-test checks only: `ruff` and `ruff format --check`, `golangci-lint`, treefmt, helm lint and template, `buf lint`, `openspec validate feast-feature-store --strict`, and `git diff --check`. Commit locally.
-- [ ] 7.2 Push and open the PR only with the user's agreement, since the trusted push publishes `deploy/dev`. Report every CI check honestly.
+- [ ] 7.2 Push `feat/feast-feature-store` with an explicit same-name refspec and open a draft PR against `main`, as authorized by the user. Keep it draft: marking a trusted PR ready publishes `deploy/dev`. Report every CI check honestly.
 
 ## 8. Runs and evidence (cluster)
 

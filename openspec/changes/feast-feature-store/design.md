@@ -315,7 +315,7 @@ No new Doppler keys. Requests:
 
 ## Migration Plan
 
-1. **Start gate.** DP3's pipeline is on `main` (`bb8dc67`), and this branch is rebased onto it. Validate with `--strict`, and wait for the user's go-ahead.
+1. **Start gate.** The implementation branch is rebased onto `origin/main` at `371d2ca`, which removes DP3's Spark short windows. The user authorized implementation and a draft PR. Validate with `--strict`.
 2. **Implement with local non-test checks, then push and open the PR.** The dev deploy is the v18 smoke run:
    - apply, then push job A on `live-v18`;
    - a `dp-backfill`, then `feast-materialize`;

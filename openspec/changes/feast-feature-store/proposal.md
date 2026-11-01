@@ -111,4 +111,4 @@ This change builds that in the shape of the coursework's Feast lecture and the `
   - spot capacity for the multi-day history FlinkDeployment.
 
   See design, Platform requests.
-- **Sequencing:** planning only, on `plan/feast-store`, rebased onto `main` at `bb8dc67`. Implementation starts on the user's go-ahead. The served model's training waits for the v19 stream history; exploration on daily features does not.
+- **Sequencing:** implementation on `feat/feast-feature-store`, rebased onto `origin/main` at `371d2ca`, with the user's go-ahead. The served model's training waits for the v19 stream history; exploration on daily features does not.
