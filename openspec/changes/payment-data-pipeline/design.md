@@ -559,7 +559,7 @@ The `lakehouse` application deploys the Polaris REST catalog that Spark, ClickHo
 |---|---|---|
 | Payments overview | daily attempts, approval rate, risk-decline rate, attempted and succeeded amounts; top 10 merchants by attempts; hot-merchant share (its attempts / all attempts) | `fact_merchant_day` |
 | Merchant drill-down | `$merchant` variable (top 200 merchants by attempts); daily KPIs; outcome mix; recent attempts table | `fact_merchant_day`, and `fact_payment_attempt` filtered by the primary key |
-| Fraud outcomes | truth fraud caught (risk declined) against missed (succeeded); chargeback rate, shaded where `chargeback_window_complete` is false; risk-score histogram; scenario breakdown (synthetic oracle, labelled as such) | `fact_payment_attempt`, `fact_merchant_day` |
+| Fraud outcomes | truth fraud caught (risk declined) against missed (succeeded); chargeback rate, shaded where `chargeback_window_complete` is false; risk decision against truth (the historical policy records no risk score); scenario breakdown (synthetic oracle, labelled as such) | `fact_payment_attempt`, `fact_merchant_day` |
 
 **Platform requests (the platform repository makes these, not this change):**
 
