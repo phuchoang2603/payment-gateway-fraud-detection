@@ -30,6 +30,11 @@ CHARGEBACK = "LABEL_SOURCE_CHARGEBACK"
 CHARGEBACK_DAYS = 21
 # Labels become available up to this many days after their attempt (silver.curate.LABEL_LOOKBACK).
 LABEL_LOOKBACK_DAYS = 45
+# The label summary is grouped per attempt; split by payment hash so one query holds a bucket's groups, not the window's.
+LABEL_BUCKETS = 8
+LABEL_COLUMNS = (
+    "integration_id, payment_id, attempt_id, source, is_fraud, scenario, label_available_at, observation_id"
+)
 DDL = Path(__file__).with_name("sql") / "marts"
 # The settings that let full-history joins finish on the 4 GiB prod server: disk-backed sort-merge joins and
 # aggregation instead of in-memory hash tables.
@@ -198,18 +203,20 @@ def build(client: ClickHouse, gold_report: dict, run_id: str, retention_days: in
             f"linkage = 'linked' AND label_available_at >= toDate('{days[0]}') "
             f"AND label_available_at < toDate('{days[-1] + timedelta(days=LABEL_LOOKBACK_DAYS + 1)}')"
         )
-        client.execute(
-            f"""INSERT INTO {name(LABELS, staging=True)}
+        for bucket in range(LABEL_BUCKETS):
+            where = f"{label_window} AND cityHash64(payment_id) % {LABEL_BUCKETS} = {bucket}"
+            client.execute(
+                f"""INSERT INTO {name(LABELS, staging=True)}
 SELECT integration_id, payment_id, attempt_id,
   argMinIf(is_fraud, (label_available_at, observation_id), source = '{TRUTH}'),
   argMinIf(scenario, (label_available_at, observation_id), source = '{TRUTH}'),
   minIf(label_available_at, source = '{CHARGEBACK}')
-FROM {pinned(SILVER_LABELS, labels_snapshot, "*", label_window)}
+FROM {pinned(SILVER_LABELS, labels_snapshot, LABEL_COLUMNS, where)}
   AS l
 GROUP BY integration_id, payment_id, attempt_id""",
-            SPILL,
-            "labels",
-        )
+                SPILL,
+                f"labels-{bucket}",
+            )
     # One day at a time, with the day's attempts as the hash join's build side: a month of attempts in a sort-merge
     # join exceeded the marts profile's 2 GiB on the first month inside the window.
     for day in days:
