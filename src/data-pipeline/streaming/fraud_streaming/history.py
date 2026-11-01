@@ -38,7 +38,7 @@ def encode(row):
 def lake():
     from pyiceberg.catalog import load_catalog
 
-    return load_catalog(
+    catalog = load_catalog(
         "lake",
         type="rest",
         uri=os.environ["ICEBERG_REST_URI"],
@@ -51,8 +51,14 @@ def lake():
             "s3.access-key-id": os.environ["AWS_ACCESS_KEY_ID"],
             "s3.secret-access-key": os.environ["AWS_SECRET_ACCESS_KEY"],
             "s3.region": os.environ.get("AWS_REGION", "us-east-1"),
+            "s3.force-virtual-addressing": "false"
+            if os.environ.get("S3_PATH_STYLE") == "true"
+            else "true",
         },
     )
+    # Polaris runs with STS disabled and rejects PyIceberg's default request for vended credentials.
+    catalog._session.headers.pop("X-Iceberg-Access-Delegation", None)
+    return catalog
 
 
 def topics(run):

@@ -9,7 +9,7 @@ from pyiceberg.catalog import load_catalog
 
 
 def catalog():
-    return load_catalog(
+    lake = load_catalog(
         "lake",
         type="rest",
         uri=os.environ["ICEBERG_REST_URI"],
@@ -27,6 +27,10 @@ def catalog():
             else "true",
         },
     )
+    # Polaris runs with STS disabled and rejects PyIceberg's default request for vended credentials; the writer
+    # brings its own storage credentials, so the request is dropped. PyIceberg has no public switch for it.
+    lake._session.headers.pop("X-Iceberg-Access-Delegation", None)
+    return lake
 
 
 def s3():
