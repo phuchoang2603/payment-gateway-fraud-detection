@@ -90,7 +90,7 @@ Silver, Gold and the marts SHALL run as one Argo workflow template, `dp-pipeline
 2. **Gold, after Silver is published:** Spark writes the gold tables for the range from published Silver to the branch; the Gold contract tests run against the branch heads; only after they pass is Gold's `main` fast-forwarded.
 3. **Marts, after Silver is published and alongside Gold:** a ClickHouse stage builds the range's mart days from published Silver into staging tables; the mart contract tests run against staging; only after they pass are the staged partitions published and the marts profiled.
 
-The Gold and mart branches SHALL NOT depend on each other. The mart build and the Gold and mart checks SHALL hold one ClickHouse mutex, so they never run on the server at the same time. No reader of `main` or the live marts SHALL see a run's output before its checks pass. An exit handler SHALL publish the run outcome on success and failure. Every stage SHALL retry only on execution errors, never on failed checks.
+The Gold and mart branches SHALL NOT depend on each other. The mart build, the Gold and mart checks and the mart profiling SHALL hold one ClickHouse mutex, so they never run on the server at the same time. No reader of `main` or the live marts SHALL see a run's output before its checks pass. An exit handler SHALL publish the run outcome on success and failure. Every stage SHALL retry only on execution errors, never on failed checks.
 
 #### Scenario: Inspect a pipeline run
 

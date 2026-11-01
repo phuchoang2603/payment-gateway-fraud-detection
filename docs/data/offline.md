@@ -59,7 +59,7 @@ flowchart LR
     plG --> plM[plan-marts] --> m[marts] --> cm[check-marts] --> pm[publish-marts] --> p[profile]
 ```
 
-Silver is audited and published before anything downstream reads it. Gold and the marts both read published Silver and nothing of each other, so they run side by side: the Gold Spark job overlaps the ClickHouse mart build, and the mart build and the two checks take turns on ClickHouse through one mutex. Each branch publishes when its own checks pass.
+Silver is audited and published before anything downstream reads it. Gold and the marts both read published Silver and nothing of each other, so they run side by side: the Gold Spark job overlaps the ClickHouse mart build, and the mart build, the two checks and the mart profile take turns on ClickHouse through one mutex. Each branch publishes when its own checks pass.
 
 Each plan step skips its stage when the head of `main` (or the live `build_info`, for the marts) already holds this range's output from the same input snapshots by the same batch image. Re-running a range after a later stage failed therefore resumes at that stage instead of rebuilding Silver and Gold.
 
