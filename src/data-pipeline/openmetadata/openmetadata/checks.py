@@ -148,16 +148,16 @@ def rendered(check, snapshot=None, staging=False, audited=None, scopes=None):
     sql = OTHER_TABLE.sub(lambda match: sql_table(f"{match[1]}{STAGING}" if marts else match[1], MARTS), sql)
     settings = SPILL_SETTINGS
     where = (scopes or {}).get(check.table) if check.database == LAKEHOUSE else None
-    pin = int(snapshot) if snapshot is not None and check.database == LAKEHOUSE else None
-    if where or (pin is not None and reads_another):
-        inner = f"SELECT * FROM {target}"
-        if where:
-            inner += f" WHERE {where}"
-        if pin is not None:
-            inner += f" SETTINGS iceberg_snapshot_id = {pin}"
-        target = f"({inner})"
-    elif pin is not None:
-        settings = f"iceberg_snapshot_id = {pin}, {SPILL_SETTINGS}"
+    if where:
+        # A table filter applies to every read of the table, a self-join's both sides included, and keeps column
+        # pruning and filter pushdown that a SELECT * subquery would lose. Its key is database.table, unquoted.
+        quoted = where.replace("\\", "\\\\").replace("'", "\\'")
+        settings = f"additional_table_filters = {{'{LAKEHOUSE}.{check.table}': '{quoted}'}}, {settings}"
+    if snapshot is not None and check.database == LAKEHOUSE:
+        if reads_another:
+            target = f"(SELECT * FROM {target} SETTINGS iceberg_snapshot_id = {int(snapshot)})"
+        else:
+            settings = f"iceberg_snapshot_id = {int(snapshot)}, {settings}"
     return f"{sql.replace('{object}', target)}\nSETTINGS {settings}"
 
 
