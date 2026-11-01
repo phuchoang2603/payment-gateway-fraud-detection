@@ -7,6 +7,8 @@ from random import Random
 import pytest
 from features.reference_v2 import definition_identity
 from features.reference_v2 import snapshot as reference_snapshot
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from fraud_streaming.model import (
     DAY,
@@ -18,6 +20,7 @@ from fraud_streaming.model import (
     Packet,
     Rejected,
     dedup_status,
+    entity_key,
     lateness_bucket,
 )
 from fraud_streaming.wire import PaymentEvent, SnapshotUpdate, decode, snapshot
@@ -147,50 +150,67 @@ def test_snapshot_identity_and_store_and_forward_revision():
     assert identity == hashlib.sha256(second.SerializeToString(deterministic=True)).hexdigest()
 
 
-@pytest.mark.parametrize("view", ["customer", "method"])
-def test_rolling_state_matches_reference_after_late_input_and_restore(view):
-    random = Random(42)
-    state = Entity(view, "integration", view, ANCHOR - 2 * DAY)
-    history = []
-    observed = {}
+def instant(microseconds):
+    return datetime(1970, 1, 1, tzinfo=UTC) + timedelta(microseconds=microseconds)
 
-    def instant(microseconds):
-        return datetime(1970, 1, 1, tzinfo=UTC) + timedelta(microseconds=microseconds)
 
-    def event(value):
-        return {
-            "integration_id": value.integration,
-            "payment_id": value.payment,
-            "attempt_started": {
-                "attempt_id": value.attempt,
-                "context": {"customer": {"customer_id": value.customer}},
-                "signals": {
-                    "attempted_at": instant(value.started_at),
-                    "payment_method": {"fingerprint": value.method},
-                    "device_fingerprint": value.device,
-                },
+def event(value):
+    return {
+        "integration_id": value.integration,
+        "payment_id": value.payment,
+        "attempt_started": {
+            "attempt_id": value.attempt,
+            "context": {"customer": {"customer_id": value.customer}},
+            "signals": {
+                "attempted_at": instant(value.started_at),
+                "payment_method": {"fingerprint": value.method},
+                "device_fingerprint": value.device,
             },
-        }
+        },
+    }
 
-    def compare(now):
-        result = state.advance(now)
+
+class Replay:
+    """Feeds attempt starts to one entity's rolling state and checks it against the reference."""
+
+    def __init__(self, view):
+        self.view = view
+        self.state = Entity(view, "integration", view, ANCHOR - 2 * DAY)
+        self.history = []
+        self.observed = {}
+
+    def add(self, value, now, deliveries=2):
+        for _ in range(deliveries):
+            self.state.add(packet(value, now=now))
+        self.history.append(event(value))
+
+    def restore(self):
+        self.state = pickle.loads(pickle.dumps(self.state))
+
+    def compare(self, now):
+        result = self.state.advance(now)
         if result is not None:
-            observed.clear()
-            observed.update(result[1])
+            self.observed.clear()
+            self.observed.update(result[1])
         expected = reference_snapshot(
             event(start("current", when=now)),
-            history,
-            scope=view,
+            self.history,
+            scope=self.view,
             anchor=instant(now),
             cutoff=instant(now),
             coverage={window: "complete" for window in ("5m", "1h", "24h")},
             status="available",
         )
-        assert observed == {
-            name.removeprefix(f"{view}_snapshot_"): value
+        assert self.observed == {
+            name.removeprefix(f"{self.view}_snapshot_"): value
             for name, value in expected["values"].items()
         }
 
+
+@pytest.mark.parametrize("view", ["customer", "method"])
+def test_rolling_state_matches_reference_after_late_input_and_restore(view):
+    random = Random(42)
+    replay = Replay(view)
     for index in range(128):
         now = ANCHOR + index * HOUR // 8
         value = start(
@@ -198,13 +218,58 @@ def test_rolling_state_matches_reference_after_late_input_and_restore(view):
             when=now - random.choice((0, 5 * MINUTE, HOUR, DAY, random.randrange(DAY))),
             device=random.choice((None, "one", "two")),
         )
-        state.add(packet(value, now=now))
-        state.add(packet(value, now=now))
-        history.append(event(value))
+        replay.add(value, now)
         if index == 64:
-            state = pickle.loads(pickle.dumps(state))
-        compare(now)
-    compare(now + DAY + 1)
+            replay.restore()
+        replay.compare(now)
+    replay.compare(now + DAY + 1)
+
+
+STEPS = st.lists(
+    st.tuples(
+        st.integers(0, 3 * HOUR),
+        st.one_of(st.sampled_from((0, 5 * MINUTE, HOUR, DAY)), st.integers(0, DAY)),
+        st.sampled_from((None, "one", "two")),
+        st.integers(1, 3),
+        st.booleans(),
+    ),
+    min_size=1,
+    max_size=40,
+)
+
+
+@pytest.mark.parametrize("view", ["customer", "method"])
+@settings(max_examples=60, deadline=None)
+@given(steps=STEPS)
+def test_rolling_state_matches_reference_for_any_arrivals_redeliveries_and_restores(view, steps):
+    replay = Replay(view)
+    now = ANCHOR
+    for index, (gap, lateness, device, deliveries, restore) in enumerate(steps):
+        now += gap
+        replay.add(start(str(index), when=now - lateness, device=device), now, deliveries)
+        if restore:
+            replay.restore()
+        replay.compare(now)
+    replay.compare(now + DAY + 1)
+
+
+@given(st.integers(0, 2 * DAY), st.integers(0, 2 * DAY))
+def test_lateness_buckets_are_ordered_and_only_beyond_the_horizon_is_too_late(earlier, later):
+    order = ["lt_1m", "1m_5m", "5m_15m", "15m_24h", "too_late"]
+    earlier, later = sorted((earlier, later))
+
+    assert order.index(lateness_bucket(earlier)) <= order.index(lateness_bucket(later))
+    assert (lateness_bucket(later) == "too_late") == (later > HORIZON)
+
+
+@given(st.lists(st.text(max_size=8), min_size=4, max_size=4), st.integers(1, 3))
+def test_entity_keys_differ_when_a_boundary_between_components_moves(components, cut):
+    if not components[cut - 1]:
+        return
+    moved = list(components)
+    moved[cut - 1], moved[cut] = components[cut - 1][:-1], components[cut - 1][-1] + components[cut]
+
+    assert entity_key(*components) != entity_key(*moved)
 
 
 def test_decode_uses_client_attempt_time_and_ignores_other_payloads():
