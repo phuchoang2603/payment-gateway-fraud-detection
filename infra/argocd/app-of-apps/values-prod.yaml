@@ -8,6 +8,6 @@ applications:
   data-pipelines:
     enabled: true
   llm-platform:
-    enabled: false
+    enabled: true
   rag-pipeline:
-    enabled: false
+    enabled: true

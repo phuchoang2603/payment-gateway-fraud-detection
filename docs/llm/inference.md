@@ -2,7 +2,7 @@
 
 Self-hosted chat, embedding and decision models for the agents, the RAG pipeline and the gateway's request screen, and how fast the chat model serves agent traffic. Every caller reaches them through the [agent gateway](gateway.md); nothing calls a model server directly.
 
-- Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform) (`models.yaml`, values `models`). Application `llm-platform` in namespace `llm`, enabled on dev and disabled on prod until the prod GPU pool is launched.
+- Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform) (`models.yaml`, values `models`). Application `llm-platform` in namespace `llm`, on dev and prod. On prod the three servers share one L4 (`g6.xlarge`) of the platform's GPU pool; its other node is left for training.
 - Platform prerequisites (KServe 0.21 `LLMInferenceService` presets, the GPU DRA driver, the `llm-gpu` node group for the local model cache, agentgateway) come from the platform repository.
 
 ## Models

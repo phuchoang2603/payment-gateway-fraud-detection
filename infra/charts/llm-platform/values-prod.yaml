@@ -6,15 +6,21 @@ gpu:
 
 storageClass: gp3
 
+# The three servers share one g6.xlarge (L4, 4 vCPU, 16 GiB), which leaves about 3.1 CPU and 12 GiB for pods; the
+# other GPU node of the pool stays free for training.
 models:
   chat:
     resources:
-      requests: {cpu: "2", memory: 9Gi}
-      limits: {memory: 12Gi}
+      requests: {cpu: 1500m, memory: 6Gi}
+      limits: {memory: 10Gi}
   embedding:
     resources:
       requests: {cpu: 500m, memory: 2Gi}
       limits: {memory: 4Gi}
+  decision:
+    resources:
+      requests: {cpu: 250m, memory: 2560Mi}
+      limits: {memory: 6Gi}
 
 agents:
   snapshotRoot: s3://platform-prod-142737101504-us-east-1/substrate/llm-agents/
