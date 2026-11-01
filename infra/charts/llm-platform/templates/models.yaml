@@ -87,6 +87,10 @@ spec:
           # default and OOM-killed the servers on dev; the weights are on local disk, so a shallow queue loads them as fast.
           - name: INSTANTTENSOR_IO_DEPTH
             value: {{ $.Values.vllm.instantTensorIODepth | quote }}
+          {{- with $model.instantTensorBufferSize }}
+          - name: INSTANTTENSOR_BUFFER_SIZE
+            value: {{ . | quote }}
+          {{- end }}
         # Loading the weights, torch.compile and CUDA-graph capture outlast the preset's 10-minute startup window
         # on the dev GPU; a restart repeats all of it, so the window is wider.
         startupProbe:
