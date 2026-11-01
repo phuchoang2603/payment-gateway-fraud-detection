@@ -125,7 +125,7 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 
 | Area | Capability | Page | Status |
 |---|---|---|---|
-| Engineering fundamentals | Multi-stage Docker images and size comparison | [Docker images](payment-gateway/docker.md) | Images done; size comparison planned |
+| Engineering fundamentals | Multi-stage Docker images and size comparison | [Docker images](deployment/docker.md) | Done; Spark image −48% and streaming −25% compressed |
 | Offline generator | Skew, schema evolution, duplicates; ≥ 100 GB stored for Bronze ingestion | [Offline data](data/offline.md) | Done (v19: 133.5 GB) |
 | Online generator | Late arrivals and streaming duplicates | [Online data](data/online.md) | Done; see [evidence](data/online.md#evidence) |
 | Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline data](data/offline.md) | Running on prod v19; optimizations recorded from the backfill |

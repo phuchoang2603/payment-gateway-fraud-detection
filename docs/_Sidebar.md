@@ -5,7 +5,6 @@
 - [Architecture](payment-gateway/architecture.md)
 - [Flows](payment-gateway/flows.md)
 - [Conventions](payment-gateway/conventions.md)
-- [Docker images](payment-gateway/docker.md)
 
 **Data**
 
@@ -34,6 +33,7 @@
 
 - [CI](deployment/ci.md)
 - [CD](deployment/cd.md)
+- [Docker images](deployment/docker.md)
 - [Infrastructure](deployment/infra.md)
 - [Security](deployment/security.md)
 - [Observability](deployment/observability.md)

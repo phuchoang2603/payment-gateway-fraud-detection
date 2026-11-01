@@ -6,7 +6,7 @@ The gateway and its fraud decisioning path. The [verification evidence](../../op
 
 - [Payment flows](flows.md): identity, checkout and payment-authority contracts, with the checkout and recovery sequence.
 - [Service conventions](conventions.md): code layout, dependency direction and per-service ownership rules.
-- [Docker images](docker.md): image builds for every service.
+- [Docker images](../deployment/docker.md): image builds for every service.
 - [Platform architecture](../Home.md#architecture): deployable units, ownership boundaries and the full deployment diagram.
 
 ## Gateway design
