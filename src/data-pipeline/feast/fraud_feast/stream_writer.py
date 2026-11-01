@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import json
 import os
+import random
 import signal
 import threading
 import time
@@ -115,17 +116,18 @@ def watermarks(table, epoch):
     }
 
 
-def commit_with_retry(table, write):
-    for attempt in range(4):
+def commit_with_retry(table, write, attempts=8):
+    for attempt in range(attempts):
         table.refresh()
         try:
             with table.transaction() as transaction:
                 write(transaction)
             return
         except CommitFailedException:
-            if attempt == 3:
+            if attempt == attempts - 1:
                 raise
-            time.sleep(0.1 * 2**attempt)
+            # Concurrent history units commit on the same tables; jitter keeps their retries apart.
+            time.sleep(min(0.1 * 2**attempt, 5) * (0.5 + random.random()))
 
 
 class IcebergWriter:
@@ -269,7 +271,7 @@ def main():
     consumer = Consumer(
         {
             "bootstrap.servers": os.environ["FEATURE_KAFKA_BROKERS"],
-            "group.id": f"feature-writer-{epoch}" if history else "feature-writer",
+            "group.id": f"feature-writer-{topic}" if history else "feature-writer",
             "enable.auto.commit": False,
             "auto.offset.reset": "error",
             "isolation.level": "read_committed",

@@ -12,11 +12,11 @@ def control(sequence, boundary, clock):
     return (json.dumps(value).encode(), "clock", 0, sequence, 0), value
 
 
-def test_clock_overtaking_and_checkpoint_restore_preserve_input_order():
-    inputs = [(b"a", "input", 0, 0, 0), (b"b", "input", 0, 1, 0)]
-    clocks = [control(0, 0, 100), control(1, 1, 200), control(2, 2, 300)]
-    expected = [clocks[0][0], inputs[0], clocks[1][0], inputs[1], clocks[2][0]]
-    for positions in combinations(range(5), 2):
+def test_bootstrap_and_final_controls_order_inputs_in_any_arrival_order():
+    inputs = [(b"a", "input", 0, 0, 0), (b"b", "input", 0, 1, 0), (b"c", "input", 0, 2, 0)]
+    clocks = [control(0, 0, 100), control(1, 3, 300)]
+    expected = [clocks[0][0], *inputs, clocks[1][0]]
+    for positions in combinations(range(5), 3):
         barrier = OffsetBarrier("input", "clock")
         output, source, controls = [], iter(inputs), iter(clocks)
         for index in range(5):
@@ -24,6 +24,16 @@ def test_clock_overtaking_and_checkpoint_restore_preserve_input_order():
             output.extend(barrier.accept(row, value))
             barrier = pickle.loads(pickle.dumps(barrier))
         assert output == expected
+        assert not barrier.records and not barrier.controls
+
+
+def test_late_intermediate_control_fails():
+    barrier = OffsetBarrier("input", "clock")
+    barrier.accept(*control(0, 0, 100))
+    for offset in range(2):
+        barrier.accept((b"x", "input", 0, offset, 0))
+    with pytest.raises(ValueError, match="after inputs"):
+        barrier.accept(*control(1, 1, 200))
 
 
 def test_barrier_refuses_offset_loss_regression_and_unbounded_buffer():

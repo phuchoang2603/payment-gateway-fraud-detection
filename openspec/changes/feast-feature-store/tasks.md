@@ -88,7 +88,7 @@
 
 ## 6. Docs
 
-- [ ] 6.1 Update the existing pages only:
+- [x] 6.1 Update the existing pages only:
   - `docs/ml/feature-store.md`: the flow diagram (one engine per feature), entities, views, the TTL table and reasons, `payment_risk_v1`, the `+ 1µs` visibility of stream rows, the parity exceptions, the feature writer and stream recovery, the Kappa stream history and why it replaced a batch implementation, materialization with overlap and since, and Arrow;
   - `docs/data/online.md`: the stream writer and prod `live-v19`, replacing the "disabled until" sentences;
   - `docs/data/orchestration-governance.md`: `feast-materialize`, `stream-history`, their range parameters, and the Flink connector;

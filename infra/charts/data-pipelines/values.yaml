@@ -290,6 +290,9 @@ features:
   checkpointRoot: s3://platform-dev/runs/payment-gateway/flink/history
   replicationFactor: 1
   historyStart: "2026-07-29"
+  # Each unit is one single-partition logical-clock Flink job, so units in parallel are the only way to scale a replay.
+  historyUnitDays: 7
+  historyParallelism: 2
   historyEnd: "2026-10-29"
   resources:
     requests:

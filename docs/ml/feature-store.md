@@ -2,7 +2,25 @@
 
 Feast holds the fraud features in two stores: an online store (Redis) for decision-time lookups by Go Fraud, and an offline store for point-in-time training data. The daily and streaming definitions govern both paths. Code: [`src/data-pipeline/feast`](../../src/data-pipeline/feast); definition: [`contracts/features`](../../contracts/features).
 
-The build order for the offline store, materialization, TTLs and feature services is in the [roadmap](../overview/roadmap.md#feature-store-build-order).
+Each feature has one engine: Spark computes the daily 7- and 30-day windows, and Flink computes the 5-minute, 1-hour and 24-hour windows for both live traffic and history.
+
+```mermaid
+flowchart LR
+    silver[("Silver")] -->|"DP3 Spark, daily"| daily[("gold.feat_*_daily")]
+    bronze[("Bronze payment_events")] -->|"stream-history seed"| replay["Kafka history topics"]
+    kafka["payments.events.v1"] --> live["Flink live-v19"]
+    replay --> hist["Flink history units"]
+    live --> journal["feature journal"]
+    hist --> hjournal["history journals"]
+    journal --> writer["feature-writer"]
+    hjournal --> hwriter["history writer"]
+    writer -->|"push, ONLINE"| redis[("Redis")]
+    writer -->|"PyIceberg append + offsets"| stream[("gold.feat_stream_*")]
+    hwriter -->|"PyIceberg append"| stream
+    daily -->|"feast-materialize"| redis
+    daily & stream -->|"Spark offline store"| train["get_historical_features(payment_risk_v1)"]
+    redis --> fraud["Go Fraud"]
+```
 
 ## Features
 
@@ -26,11 +44,30 @@ Labels, scenario and oracle fields, and anything that happens after the attempt 
 
 The training image installs `fraud_feast[spark]` and runs `python -m fraud_feast.spark_jars <spark-jars-directory>` during its build to use the same pinned, checksum-verified JARs as `data-platform-spark`. Set `SPARK_MASTER=local[*]` for retrieval in one Kubeflow Pipelines step, with local disk for Spark spill. Local Spark is also the default for materialization. No Feast SparkApplications are created.
 
-History seeds each unit before bounded Flink runs to FINISHED, then reads the journal from zero to committed EOF. It deletes each table’s epoch and month range in a short commit, then writes buffered rows without lead-in through the same writer and conflict retries as live mode. A month is partially visible while running or after failure; nothing trains until the entire replay passes its gates. A failed unit restarts from the range delete; live recovery instead uses Iceberg offset properties. The gate requires zero decode rejects, a completed seed and a FINISHED job; duplicates and too-late rejects are reported only. `fraud_feast.materialize --stream-recovery` rebuilds stream Redis from the last STREAM_TTL of batch rows.
+History splits the range into 7-day units and runs up to `historyParallelism` of them at once (4 in prod). Each unit runs as `history-v19-<YYYYMMDD>` with its own topics, Flink deployment, transactional IDs and consumer group, because one logical-clock job needs a single ordered input partition and cannot itself run in parallel. Each unit adds a one-day lead-in so its 24-hour windows and dedup horizon are complete, which makes units independent. The seed sorts the unit's Bronze rows with DuckDB, writes them with one bootstrap clock control before and one final control after, and the barrier releases inputs as soon as the bootstrap arrives. Bounded Flink then runs to FINISHED, and the writer reads the journal from zero to committed EOF. It deletes each table’s epoch and unit range in a short commit, then writes buffered rows without lead-in through the same writer and conflict retries as live mode. A unit is partially visible while running or after failure; nothing trains until the entire replay passes its gates. A failed unit restarts from the range delete; live recovery instead uses Iceberg offset properties. The gate requires zero decode rejects, a completed seed and a FINISHED job; duplicates and too-late rejects are reported only. `fraud_feast.materialize --stream-recovery` rebuilds stream Redis from the last STREAM_TTL of batch rows.
+
+**Why Kappa and not a batch implementation.** A second, Spark implementation of the short windows would have to be proved equal to Flink's and kept equal. Replaying history through the same Flink job means training and serving share one implementation, at the cost of replay time.
+
+## Entities, views and service
+
+| Object | Definition |
+|---|---|
+| Entities | `integration` (`integration_id`), `customer` (`customer_id`), `payment_method` (`payment_method_fingerprint`); Feast allows one join key per entity, so each view uses `integration` plus one natural key |
+| Daily views | `customer_daily`, `payment_method_daily`: `SparkSource(table="lake.gold.feat_*_daily")` |
+| Stream views | `customer_stream`, `payment_method_stream`: a `PushSource` for online writes over `lake.gold.feat_stream_*`, filtered to the configured epochs; each carries `epoch`, which is not a model input |
+| Request view | `request_features`, a pure Python on-demand view over the request and the two daily views' 30-day amount and count |
+| Service | `payment_risk_v1`: the daily and stream features and `request_features`, used by training and Go Fraud |
+
+Arrow is on for every transfer into Python: the Spark offline store sets `spark.sql.execution.arrow.pyspark.enabled`, training reads `get_historical_features(...).to_arrow()`, and the writer appends Arrow tables. Offline retrieval needs no Redis: `fraud_feast.runtime.store(redis=False)` builds the store without an online store.
 
 ## TTL and freshness
 
-Daily views use 31 days 12 hours; stream views use 24 hours 5 minutes. Each TTL covers its longest window plus pipeline delay. Feast applies TTLs offline, and Go Fraud applies the same TTLs at its server decision time, recorded as `EvaluatedAt`, with independent evidence for each view.
+| View | TTL | Reason |
+|---|---|---|
+| Daily | 31 days 12 hours | The longest window is 30 days and a non-zero state always has a row within it plus one anchor day. 12 hours covers `dp-daily` and the materialization after it. Only an all-zero dormant row expires. |
+| Stream | 24 hours 5 minutes | The longest window is 24 hours, and Flink emits a snapshot on every expiry, so a non-zero state always has a recent row. 5 minutes bounds the journal-to-Redis delay. |
+
+Feast applies TTLs offline, and Go Fraud applies the same TTLs at its server decision time, recorded as `EvaluatedAt`, with independent evidence for each view. Go also nulls a relative-amount feature when its daily view is not available, because Feast's online read would still compute it from an expired row.
 
 ## Train/serve consistency
 

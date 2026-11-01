@@ -13,7 +13,17 @@ metadata:
 rules:
   - apiGroups: [apps]
     resources: [deployments]
-    resourceNames: [fraud-streaming-{{ .Values.features.epoch }}, fraud-streaming-{{ .Values.features.historyEpoch }}]
+    # Flink reads its own Deployment for owner references; history units run as <history epoch>-<YYYYMMDD>.
+    resourceNames:
+      - fraud-streaming-{{ .Values.features.epoch }}
+      {{- $day := .Values.features.historyStart | toDate "2006-01-02" }}
+      {{- $last := .Values.features.historyEnd | toDate "2006-01-02" }}
+      {{- range until 400 }}
+      {{- if lt $day.Unix $last.Unix }}
+      - fraud-streaming-{{ $.Values.features.historyEpoch }}-{{ $day | date "20060102" }}
+      {{- $day = dateModify (printf "+%dh" (mul 24 $.Values.features.historyUnitDays)) $day }}
+      {{- end }}
+      {{- end }}
     verbs: [get]
   - apiGroups: [""]
     resources: [pods, services, configmaps]

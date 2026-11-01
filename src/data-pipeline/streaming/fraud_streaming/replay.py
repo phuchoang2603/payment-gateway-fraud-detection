@@ -49,11 +49,20 @@ class OffsetBarrier:
             raise ValueError("unexpected replay topic")
         if len(self.records) + len(self.controls) > self.max_buffer:
             raise ValueError("replay barrier buffer exceeded")
+        # Inputs wait only for the bootstrap control, and each control waits for the inputs before its
+        # boundary. A control that arrives after inputs it had to precede cannot be ordered and fails.
+        if self.controls and self.controls[-1][0] < self.released:
+            raise ValueError("replay control arrived after inputs past its boundary")
         ready = []
-        while self.controls and self.controls[0][0] <= self.received:
-            boundary, clock_row = self.controls.popleft()
-            while self.released < boundary:
+        while True:
+            if self.controls and self.controls[0][0] <= self.released:
+                ready.append(self.controls.popleft()[1])
+            elif (
+                self.records
+                and self.sequence
+                and (not self.controls or self.released < self.controls[0][0])
+            ):
                 ready.append(self.records.popleft())
                 self.released += 1
-            ready.append(clock_row)
-        return ready
+            else:
+                return ready

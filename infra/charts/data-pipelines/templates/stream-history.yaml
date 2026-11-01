@@ -8,8 +8,8 @@ spec:
   serviceAccountName: data-pipelines
   {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
   entrypoint: months
-  onExit: cleanup
   activeDeadlineSeconds: 2678400
+  parallelism: {{ .Values.features.historyParallelism }}
   synchronization:
     mutexes:
       - name: stream-history
@@ -22,80 +22,80 @@ spec:
       app.kubernetes.io/name: data-pipelines
   templates:
     - name: months
-      inputs:
-        parameters:
-          - {name: start, default: {{ "{{workflow.parameters.start}}" | quote }}}
       steps:
-        - - name: bounds
-            template: bounds
-            arguments:
-              parameters:
-                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+        - - name: plan
+            template: plan
         - - name: unit
             template: unit
             arguments:
               parameters:
-                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
-                - {name: end, value: {{ "{{steps.bounds.outputs.parameters.end}}" | quote }}}
+                - {name: start, value: {{ "{{item.start}}" | quote }}}
+                - {name: end, value: {{ "{{item.end}}" | quote }}}
+                - {name: run, value: {{ printf "%s-{{item.id}}" .Values.features.historyEpoch | quote }}}
+            withParam: {{ "{{steps.plan.outputs.parameters.units}}" | quote }}
             hooks:
               exit:
                 template: finish-unit
                 arguments:
                   parameters:
-                    - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
-        - - name: next
-            template: months
-            when: {{ "{{steps.bounds.outputs.parameters.more}} == true" | quote }}
-            arguments:
-              parameters:
-                - {name: start, value: {{ "{{steps.bounds.outputs.parameters.end}}" | quote }}}
-    - name: bounds
-      inputs:
-        parameters:
-          - {name: start}
+                    - {name: start, value: {{ "{{item.start}}" | quote }}}
+                    - {name: run, value: {{ printf "%s-{{item.id}}" .Values.features.historyEpoch | quote }}}
+    - name: plan
       outputs:
         parameters:
-          - name: end
-            valueFrom: {path: /tmp/unit-end}
-          - name: more
-            valueFrom: {path: /tmp/more}
+          - name: units
+            valueFrom: {path: /tmp/units}
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.streaming "global" .Values.global) | quote }}
         command: [/app/history-venv/bin/python, -m, fraud_streaming.history]
-        args: [months, --start, {{ "{{inputs.parameters.start}}" | quote }}, --end, {{ "{{workflow.parameters.end}}" | quote }}]
+        args: [units, --start, {{ "{{workflow.parameters.start}}" | quote }}, --end, {{ "{{workflow.parameters.end}}" | quote }}, --days, {{ .Values.features.historyUnitDays | quote }}]
+        env:
+          - {name: HISTORY_RANGE_START, value: {{ .Values.features.historyStart | quote }}}
+          - {name: HISTORY_RANGE_END, value: {{ .Values.features.historyEnd | quote }}}
     - name: unit
+      parallelism: 1
       inputs:
         parameters:
           - {name: start}
           - {name: end}
+          - {name: run}
       steps:
-        - - {name: topics, template: topics}
+        - - name: topics
+            template: topics
+            arguments:
+              parameters:
+                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
         - - name: seed
             template: seed
             arguments:
               parameters:
                 - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
                 - {name: end, value: {{ "{{inputs.parameters.end}}" | quote }}}
+                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
         - - name: flink
             template: flink
             arguments:
               parameters:
                 - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
         - - name: writer
             template: writer
             arguments:
               parameters:
                 - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
                 - {name: end, value: {{ "{{inputs.parameters.end}}" | quote }}}
+                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
         - - name: gate
             template: gate
             arguments:
               parameters:
                 - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
     - name: flink
       inputs:
         parameters:
           - {name: start}
+          - {name: run}
       resource:
         action: create
         setOwnerReference: true
@@ -105,7 +105,7 @@ spec:
           apiVersion: flink.apache.org/v1beta1
           kind: FlinkDeployment
           metadata:
-            name: fraud-streaming-{{ .Values.features.historyEpoch }}
+            name: fraud-streaming-{{ "{{inputs.parameters.run}}" }}
             namespace: {{ .Values.namespace }}
           spec:
             image: {{ include "data-pipelines.image" (dict "image" .Values.images.streaming "global" $.Values.global) | quote }}
@@ -147,9 +147,10 @@ spec:
               podTemplate:
                 spec:
                   {{- include "data-pipelines.placement" $ | nindent 18 }}
+              # The Python worker and the TaskManager JVM each need a core.
               resources:
-                requests: {cpu: "1", memory: 2Gi}
-                limits: {memory: 2Gi}
+                requests: {cpu: "2", memory: 3Gi}
+                limits: {memory: 3Gi}
             podTemplate:
               metadata:
                 labels:
@@ -181,15 +182,17 @@ spec:
                       - name: FEATURE_EPOCH
                         value: {{ .Values.features.historyEpoch | quote }}
                       - name: FEATURE_TOPIC
-                        value: {{ printf "fraud.feature-updates.v2.%s" .Values.features.historyEpoch | quote }}
+                        value: {{ "fraud.feature-updates.v2.{{inputs.parameters.run}}" | quote }}
                       - name: SOURCE_TOPIC
-                        value: {{ printf "payments.events.%s" .Values.features.historyEpoch | quote }}
+                        value: {{ "payments.events.{{inputs.parameters.run}}" | quote }}
                       - name: SOURCE_PARTITIONS
                         value: {{ "1" | quote }}
                       - name: CLOCK_MODE
                         value: logical
                       - name: CLOCK_TOPIC
-                        value: {{ printf "fraud.clock.%s" .Values.features.historyEpoch | quote }}
+                        value: {{ "fraud.clock.{{inputs.parameters.run}}" | quote }}
+                      - name: STREAM_RUN
+                        value: {{ "{{inputs.parameters.run}}" | quote }}
                       - name: MAX_ENTITY_ENTRIES
                         value: {{ "50000" | quote }}
                     securityContext:
@@ -211,14 +214,15 @@ spec:
         retryPolicy: Always
         backoff: {duration: 10s, factor: 2, maxDuration: 2m}
       {{- end }}
-      {{- if has $mode (list "seed" "writer" "gate") }}
       inputs:
         parameters:
+          - {name: run}
+          {{- if has $mode (list "seed" "writer" "gate") }}
           - {name: start}
-          {{- if ne $mode "gate" }}
+          {{- end }}
+          {{- if has $mode (list "seed" "writer") }}
           - {name: end}
           {{- end }}
-      {{- end }}
       container:
         {{- if has $mode (list "topics" "seed" "delete-topics") }}
         image: {{ include "data-pipelines.image" (dict "image" $.Values.images.streaming "global" $.Values.global) | quote }}
@@ -244,14 +248,16 @@ spec:
             value: {{ $.Values.features.historyEpoch | quote }}
           {{- if eq $mode "writer" }}
           - name: FEATURE_UPDATE_TOPIC
-            value: {{ printf "fraud.feature-updates.v2.%s" $.Values.features.historyEpoch | quote }}
+            value: {{ "fraud.feature-updates.v2.{{inputs.parameters.run}}" | quote }}
           - name: FEATURE_KAFKA_BROKERS
             value: {{ $.Values.bronze.kafka.bootstrapServers | quote }}
           - name: FEAST_STREAM_EPOCHS
             value: {{ $.Values.features.historyEpoch | quote }}
           - name: HISTORY_FLINK_URL
-            value: {{ printf "http://fraud-streaming-%s-rest:8081" $.Values.features.historyEpoch | quote }}
+            value: {{ "http://fraud-streaming-{{inputs.parameters.run}}-rest:8081" | quote }}
           {{- end }}
+          - name: STREAM_RUN
+            value: {{ "{{inputs.parameters.run}}" | quote }}
           {{- if has $mode (list "topics" "seed" "delete-topics") }}
           - name: KAFKA_BROKERS
             value: {{ $.Values.bronze.kafka.bootstrapServers | quote }}
@@ -263,6 +269,7 @@ spec:
           {{- if eq $mode "seed" }}
           - name: DATASET_VERSION
             value: {{ $.Values.bronze.datasetVersion | quote }}
+          - {name: HISTORY_SORT_MEMORY, value: 3GB}
           {{- end }}
           {{- if has $mode (list "seed" "writer") }}
           - name: HISTORY_SEED_REPORT
@@ -282,14 +289,26 @@ spec:
           limits: {memory: 4Gi, ephemeral-storage: 30Gi}
     {{- end }}
     - name: cleanup
+      inputs:
+        parameters:
+          - {name: run}
       steps:
         - - name: stop
             template: stop
+            arguments:
+              parameters:
+                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
             continueOn: {failed: true, error: true}
         - - name: delete-topics
             template: delete-topics
+            arguments:
+              parameters:
+                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
             continueOn: {failed: true, error: true}
     - name: stop
+      inputs:
+        parameters:
+          - {name: run}
       resource:
         action: delete
         flags: [--ignore-not-found=true, --wait=true]
@@ -297,15 +316,19 @@ spec:
           apiVersion: flink.apache.org/v1beta1
           kind: FlinkDeployment
           metadata:
-            name: fraud-streaming-{{ .Values.features.historyEpoch }}
+            name: fraud-streaming-{{ "{{inputs.parameters.run}}" }}
             namespace: {{ .Values.namespace }}
     - name: finish-unit
       inputs:
         parameters:
           - {name: start}
+          - {name: run}
       steps:
         - - name: cleanup
             template: cleanup
+            arguments:
+              parameters:
+                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
             continueOn: {failed: true, error: true}
         - - name: publish
             template: publish

@@ -55,15 +55,32 @@ def lake():
     )
 
 
-def topics(epoch):
-    if not epoch.startswith("history-"):
+def topics(run):
+    if not run.startswith("history-"):
         raise ValueError("history topics require a history epoch")
     return [
-        f"payments.events.{epoch}",
-        f"fraud.clock.{epoch}",
-        f"fraud.feature-updates.v2.{epoch}",
-        f"fraud.feature-rejects.v1.{epoch}",
+        f"payments.events.{run}",
+        f"fraud.clock.{run}",
+        f"fraud.feature-updates.v2.{run}",
+        f"fraud.feature-rejects.v1.{run}",
     ]
+
+
+def units(first, last, days):
+    if first >= last or days < 1:
+        raise ValueError("history needs a nonempty range and a positive unit length")
+    result = []
+    while first < last:
+        end = min(first + timedelta(days=days), last)
+        result.append(
+            {"start": first.isoformat(), "end": end.isoformat(), "id": first.strftime("%Y%m%d")}
+        )
+        first = end
+    return result
+
+
+def run_name():
+    return os.environ.get("STREAM_RUN") or os.environ["FEATURE_EPOCH"]
 
 
 def write_report(report):
@@ -97,7 +114,7 @@ def seed(start, end):
     if first >= last:
         raise ValueError("history start must precede end")
     epoch = os.environ["FEATURE_EPOCH"]
-    input_topic, clock_topic, *_ = topics(epoch)
+    input_topic, clock_topic, *_ = topics(run_name())
     bootstrap = datetime.combine(first - timedelta(days=1), datetime.min.time(), UTC)
     until = datetime.combine(last, datetime.min.time(), UTC)
     table = lake().load_table("bronze.payment_events")
@@ -108,19 +125,21 @@ def seed(start, end):
     )
     scan = table.scan(row_filter=predicate, snapshot_id=snapshot).to_arrow_batch_reader()
     db = duckdb.connect()
-    db.execute("SET memory_limit = '1GB'")
+    db.execute(f"SET memory_limit = '{os.environ.get('HISTORY_SORT_MEMORY', '1GB')}'")
     db.execute("SET temp_directory = '/tmp/history-sort'")
     db.register("bronze", scan)
     reader = db.sql(
         "SELECT * FROM bronze ORDER BY recorded_at, integration_id, payment_id, aggregate_version, event_id, _source_file, _kafka_offset"
-    ).to_arrow_reader(1000)
+    ).to_arrow_reader(10000)
     brokers = os.environ["KAFKA_BROKERS"]
     producer = Producer(
         {
             "bootstrap.servers": brokers,
             "enable.idempotence": True,
             "acks": "all",
-            "queue.buffering.max.messages": 20000,
+            "queue.buffering.max.messages": 500000,
+            "linger.ms": 50,
+            "batch.size": 1048576,
             "compression.type": "zstd",
         }
     )
@@ -158,17 +177,23 @@ def seed(start, end):
     try:
         for batch in reader:
             for row in batch.to_pylist():
-                raw = encode(row)
-                producer.produce(
-                    input_topic,
-                    partition=0,
-                    key=row["payment_id"].encode(),
-                    value=raw,
-                    timestamp=int(row["recorded_at"].replace(tzinfo=UTC).timestamp() * 1000),
-                    on_delivery=delivered,
-                )
+                record = {
+                    "partition": 0,
+                    "key": row["payment_id"].encode(),
+                    "value": encode(row),
+                    "timestamp": int(row["recorded_at"].replace(tzinfo=UTC).timestamp() * 1000),
+                    "on_delivery": delivered,
+                }
+                while True:
+                    try:
+                        producer.produce(input_topic, **record)
+                        break
+                    except BufferError:
+                        producer.poll(1)
                 offset += 1
-            clock(int(row["recorded_at"].replace(tzinfo=UTC).timestamp() * 1_000_000))
+            producer.poll(0)
+            if failures:
+                raise RuntimeError("history Kafka delivery failed")
         clock(int((until + timedelta(days=1, milliseconds=1)).timestamp() * 1_000_000))
         report = {
             "start": start,
@@ -188,10 +213,11 @@ def seed(start, end):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("seed", "topics", "months"))
+    parser.add_argument("mode", choices=("seed", "topics", "units"))
     parser.add_argument("--start", default=os.environ.get("START_DAY"))
     parser.add_argument("--end", default=os.environ.get("END_DAY"))
     parser.add_argument("--delete", action="store_true")
+    parser.add_argument("--days", type=int, default=int(os.environ.get("HISTORY_UNIT_DAYS", "7")))
     args = parser.parse_args()
     if args.mode == "seed":
         try:
@@ -207,10 +233,9 @@ def main():
             )
             raise
     elif args.mode == "topics":
-        epoch = os.environ["FEATURE_EPOCH"]
         admin = AdminClient({"bootstrap.servers": os.environ["KAFKA_BROKERS"]})
         existing = set(admin.list_topics(timeout=30).topics)
-        names = topics(epoch)
+        names = topics(run_name())
         futures = admin.delete_topics(
             [name for name in names if name in existing], operation_timeout=30
         )
@@ -242,12 +267,19 @@ def main():
             ).items():
                 future.result()
     else:
-        first, last = date.fromisoformat(args.start), date.fromisoformat(args.end)
-        if first >= last:
-            raise ValueError("history start must precede end")
-        end = min((first.replace(day=28) + timedelta(days=4)).replace(day=1), last)
-        Path("/tmp/unit-end").write_text(end.isoformat())
-        Path("/tmp/more").write_text("true" if end < last else "false")
+        planned = units(date.fromisoformat(args.start), date.fromisoformat(args.end), args.days)
+        # The Flink Role names each unit's Deployment from the chart's history range and unit length.
+        allowed = {
+            unit["id"]
+            for unit in units(
+                date.fromisoformat(os.environ["HISTORY_RANGE_START"]),
+                date.fromisoformat(os.environ["HISTORY_RANGE_END"]),
+                args.days,
+            )
+        }
+        if any(unit["id"] not in allowed for unit in planned):
+            raise ValueError("history units must align with the configured history range")
+        Path("/tmp/units").write_text(json.dumps(planned))
 
 
 if __name__ == "__main__":

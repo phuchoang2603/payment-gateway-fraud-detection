@@ -71,7 +71,7 @@ def test_history_short_commits_retry_conflicts_and_allow_live_writes_between_bat
     writer.write({scope: [row(scope, epoch="history-ci")] for scope in KEYS}, {0: 1})
     live_writer(lake).append({scope: [row(scope, offset=3)] for scope in KEYS}, {0: 4})
     writer.write({scope: [row(scope, offset=1, epoch="history-ci")] for scope in KEYS}, {0: 2})
-    assert delays == [0.1, 0.1]
+    assert len(delays) == 2 and all(0.05 <= delay <= 0.15 for delay in delays)
     for table in tables.values():
         table.refresh()
         assert month_rows(table) == [(0, 1), (1, 2)]
@@ -104,7 +104,7 @@ def test_history_failed_unit_rerun_replaces_partial_month_without_duplicates(lak
     monkeypatch.setattr(tables["payment_method"], "transaction", failed_commit)
     with pytest.raises(CommitFailedException, match="maintenance conflict"):
         writer.write(second, {0: 2})
-    assert len(attempts) == 4
+    assert len(attempts) == 8
     assert month_rows(lake.load_table(TABLES["customer"])) == [(0, 1), (1, 2)]
     assert month_rows(lake.load_table(TABLES["payment_method"])) == [(0, 1)]
 

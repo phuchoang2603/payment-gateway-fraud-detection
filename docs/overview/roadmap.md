@@ -23,7 +23,7 @@ The active plan is the OpenSpec change [`payment-data-pipeline`](../../openspec/
 
 | Area | Capability | Page | Status |
 |---|---|---|---|
-| Feature store | Streaming features to online and offline stores, incremental materialization, TTL | [Feature store](../ml/feature-store.md) | Planned: see [feature store build order](#feature-store-build-order) |
+| Feature store | Streaming features to online and offline stores, incremental materialization, TTL | [Feature store](../ml/feature-store.md) | Implemented; prod runs pending |
 | Generator | Data drift and a label table joinable with features | [Offline data](../data/offline.md) | Labels done; drift planned |
 | Model | Notebook baseline from the offline store, training pipeline, distributed training | [Training](../ml/training.md) | Planned |
 | Versioning | Model registry and incremental data versions | [Training](../ml/training.md) | Planned |
@@ -32,16 +32,16 @@ The active plan is the OpenSpec change [`payment-data-pipeline`](../../openspec/
 
 ## Feature store build order
 
-Feast is built as one change after Bronze and Silver merge. Until then the streaming job ends at the feature journal topic, and the existing online-only Feast writer and Go Fraud's shadow retrieval are disabled until the feature-store change.
+Steps 2–8 are implemented; prod runs are pending.
 
-1. **DP3 offline features.** A daily Spark job over Silver writes `feat_customer_*` and `feat_payment_method_*` Iceberg tables keyed by integration, customer or payment method, with `event_timestamp` and `created`. It computes the long 7- and 30-day windows that Flink does not keep.
-2. **Offline store.** Feast reads the `feat_` tables as its offline store, through a Spark source over the Iceberg catalog or a Parquet export, whichever Feast supports reliably. Training builds its dataset with `get_historical_features` against the label table, joining point-in-time on attempt time and label availability.
-3. **Streaming features to offline.** A Kafka batch reader, the same pattern as Bronze Kafka mode, appends the feature journal topic into an Iceberg `feat_stream_*` table that the offline store also reads.
-4. **Streaming features to online.** A Feast writer consumes the feature journal topic and pushes each update to Redis, committing offsets only after the write is accepted.
-5. **Materialization.** An Argo workflow runs `feast materialize-incremental` from the offline store into Redis after each DP3 run, so batch features reach the online store.
-6. **TTL and feature services.** Each feature view gets a TTL equal to its longest window plus the expected pipeline delay, with the reason recorded on the [feature store](../ml/feature-store.md) page. A versioned `FeatureService` (for example `payment_risk_v1`) names the features a model uses; training and Go Fraud both request it.
-7. **Natural keys.** Feature views key on integration-scoped customer and payment-method IDs instead of the current synthetic snapshot key, so offline joins with labels are direct. Go Fraud's feature client moves to the new views and feature service in the same change.
-8. **Governance.** OpenMetadata's native Flink pipeline connector, run from `data-pipelines` against the JobManager REST API, records the streaming job and its runs. If it does not resolve Kafka lineage for the PyFlink job, a deploy-time step publishes `payments.events.v1` → streaming job → feature journal and reject topics with the OpenMetadata SDK, as Bronze and Silver do. Feast has no OpenMetadata connector, so the governed assets are the `feat_` tables with DP3 lineage from Silver. Neither the Flink job nor Feast embeds the SDK, so a catalog outage cannot affect feature computation.
+1. **DP3 offline features.** A daily Spark job over Silver writes `feat_customer_daily` and `feat_payment_method_daily` with `event_timestamp` and `created`, for the 7- and 30-day windows.
+2. **Offline store.** Feast's Spark offline store reads the `feat_` tables through `SparkSource(table=…)` on the Iceberg catalog. Training builds its dataset with `get_historical_features(payment_risk_v1)` from `label_attempt`.
+3. **Streaming features to offline.** The `feature-writer` appends journal snapshots to `gold.feat_stream_*` with PyIceberg, keeping the Kafka offsets in the same commit. History comes from a Kappa replay of Bronze through the same Flink job.
+4. **Streaming features to online.** The same process pushes each batch to Redis with Feast's `push` before buffering its Iceberg append.
+5. **Materialization.** `feast-materialize` loads the daily views into Redis after DP3 and checks a sample against the offline rows.
+6. **TTL and feature services.** 31 days 12 hours for daily views and 24 hours 5 minutes for stream views, with reasons on the [feature store](../ml/feature-store.md#ttl-and-freshness) page; one `payment_risk_v1` service for training and Go Fraud.
+7. **Natural keys.** Views key on integration plus customer or payment-method IDs, and Go Fraud requests the new service.
+8. **Governance.** OpenMetadata's Flink connector records the live job, with SDK lineage as the fallback; the writer, history and materialization publish lineage and run status.
 
 ## LLM and agent platform
 

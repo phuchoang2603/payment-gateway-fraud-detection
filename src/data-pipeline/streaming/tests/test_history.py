@@ -90,3 +90,19 @@ def test_clock_overtaking_replay_matches_reference():
             "distinct_devices_24h",
         )
     }
+
+
+def test_units_split_the_range_into_week_runs():
+    from datetime import date
+
+    from fraud_streaming.history import units
+
+    result = units(date(2026, 7, 29), date(2026, 8, 15), 7)
+    assert [(unit["start"], unit["end"]) for unit in result] == [
+        ("2026-07-29", "2026-08-05"),
+        ("2026-08-05", "2026-08-12"),
+        ("2026-08-12", "2026-08-15"),
+    ]
+    assert [unit["id"] for unit in result] == ["20260729", "20260805", "20260812"]
+    with pytest.raises(ValueError):
+        units(date(2026, 8, 1), date(2026, 8, 1), 7)
