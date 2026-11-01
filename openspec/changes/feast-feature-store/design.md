@@ -7,7 +7,7 @@ See proposal.md for the motivation. The current state that shapes the design:
     - `event_timestamp` is a UTC-midnight anchor `s`, with windows `[s − w, s)` for `w` of 7 and 30 days.
     - Rows are written only at change points, so the latest row at or before `t` is the value at `t`. An entity's last row is all zeros.
     - Coverage nulls and an absent row both mean unknown.
-  - **`gold.feat_attempt_rt`** (Spark's per-attempt short windows) was removed from DP3's code at the user's request (`371d2ca`, 2026-10-31): Flink alone owns the short windows (decision 8). The table stays read-only for 2025-10-29 to 2026-01-31, for the training thread's pipeline dry run only. Feast never reads it, and models trained on it are never promoted as `fraud_model_v1`.
+  - **`gold.feat_attempt_rt`** (Spark's per-attempt short windows) was removed from DP3's code at the user's request (`371d2ca`, 2026-10-31): Flink alone owns the short windows (decision 8). Feast and training never read the retired table.
   - **`gold.label_attempt`** is keyed by (`integration_id`, `payment_id`, `attempt_id`, `label_source`). It also holds `customer_id`, `payment_method_fingerprint`, `label`, `label_available_at` and `occurred_at`. `event_timestamp` is the attempt's `started_at`, so every point-in-time join uses the scoring time. The two label sources are separate rows, and a missing chargeback is not a negative.
   - **`gold.dim_customer`:** SCD2 over the familiar-device set.
   - **`created`** on the daily tables is the commit time of the `silver.attempts` snapshot the writing run read. It is at or after `event_timestamp`, and it is only a tie-breaker.
@@ -43,7 +43,7 @@ See proposal.md for the motivation. The current state that shapes the design:
     - `feast_materialize` (`materialize-incremental`, then `check_online`), triggered after DP3;
     - one `fraud_model_v1` shared by training and the API;
     - a TTL table with reasons.
-- **The generator** has volume seasonality (month multipliers of 1.35 for November and December, 0.8–0.85 for January and February, plus weekday and hour patterns) but constant fraud scenario rates. Chargebacks arrive 7–21 days after the payment. Training therefore covers the full v19 year.
+- **The generator** has volume seasonality (month multipliers of 1.35 for November and December, 0.8–0.85 for January and February, plus weekday and hour patterns) but constant fraud scenario rates. Chargebacks arrive 7–21 days after the payment. The user-approved training window is 2026-07-01 through 2026-10-07, mature by the v19 cutoff of 2026-10-29.
 
 ## Goals / Non-Goals
 
@@ -83,6 +83,7 @@ See proposal.md for the motivation. The current state that shapes the design:
 
 - **History seed.** `fraud_streaming.history` (decision 8) lives with the Flink job, because it encodes events with the job's own `wire.py` descriptors. It runs on the streaming image.
 - **Packaging.** Python 3.12. The base dependencies are `feast[redis]==0.67.0`, `pyiceberg` and `confluent-kafka`. A `spark` extra (`feast[spark]`) goes only into the Spark image, so the `feast` image has no JVM.
+- **Training image extension.** The training change owns installing `fraud_ml` into `/opt/data-pipeline/feast/.venv` in `data-platform-spark`. Its Spark job in `ml` explicitly selects `/opt/data-pipeline/feast/.venv/bin/python` for the driver and executors; the image defaults to the separate batch environment.
 - **Registry.** `registry_type: file` at `s3://<bucket>/feast/payment-gateway/registry.pb`, with `cache_ttl_seconds: 60`. It uses the existing `OBJECT_GATEWAY_*` keys, plus `FEAST_S3_ENDPOINT_URL` in dev.
 - **`feature_store.yaml`**, rendered from environment variables:
   - `project: payment_fraud`, `provider: local`, `entity_key_serialization_version: 3`;
@@ -196,12 +197,12 @@ The stage pins the gold `main` snapshot of each daily table at its start, and fa
 
 ### 7. Training retrieval and Arrow
 
-- **Entity rows.** `lake.gold.label_attempt` filtered by `label_available_at <= cutoff` and one `label_source`, within a cohort window, as a Spark DataFrame, carrying both entities' keys. The entity timestamp is `started_at − 1µs`. A Flink snapshot at the scored attempt's own start can already count that attempt, so the join must see only what existed strictly before it, as Go's `future` status does online. For the daily views this changes nothing except for an attempt that starts exactly at midnight, which then reads the previous anchor; the page states this.
-- **Call.** `store.get_historical_features(entity_df=…, features=store.get_feature_service("fraud_model_v1")).to_arrow()`.
+- **Entity rows.** Simulation-truth rows of `lake.gold.label_attempt` within the cohort window, one per attempt, as a Spark DataFrame carrying both entities' keys. The training label is the presence of a chargeback row with `label = true` and `label_available_at <= cutoff`; simulation truth is retained separately. The entity column `event_timestamp` is `started_at − 1µs`. A Flink snapshot at the scored attempt's own start can already count that attempt, so the join must see only what existed strictly before it, as Go's `future` status does online. For the daily views this changes nothing except for an attempt that starts exactly at midnight, which then reads the previous anchor; the page states this.
+- **Call.** `store.get_historical_features(entity_df=entity_df, features=store.get_feature_service("fraud_model_v1"), full_feature_names=True).to_arrow()`. Columns are named `<view>__<feature>`; full names prevent collisions between the daily views' seven shared feature names.
 - **No `created` filter.** `filter_by_created_timestamp` stays off. `created` is a Silver commit time or a Kafka record time, at or after `event_timestamp` and usually later than the example's `t`, so the filter would drop valid rows. `created` only breaks ties.
-- **Early training.** Training can start before this change lands, on the daily features read directly from Gold with the same semantics: `label_attempt` rows, and the as-of daily join with the TTL and the `created` tie-break. Those are exploration models. The served `fraud_model_v1` trains through `get_historical_features(fraud_model_v1)` once the stream history exists.
-- **History.** The daily history is DP3's `dp-backfill` over v19 (2025-10-29 to 2026-10-28). The short-window history is the Flink replay of the same year (decision 8).
-- **Splits.** By time, with gaps of the 21-day chargeback delay, and the last 21 days left out as immature. The training change owns the exact windows.
+- **Training prerequisite.** Training reads only through `get_historical_features(fraud_model_v1)` after the Flink history exists. There is no interim Spark dry run. The training change owns single-GPU training through Kubeflow.
+- **History.** The daily history is DP3's `dp-backfill` over v19 (2025-10-29 to 2026-10-28). The first short-window replay for training uses `start=2026-07-01`, `end=2026-10-08` (exclusive), with the workflow adding its own one-day lead-in (decision 8). A full-year replay is not a training prerequisite; a longer replay uses different window parameters.
+- **Splits.** Train 2026-07-01..2026-08-11, validation 2026-09-02..2026-09-08, and test 2026-09-30..2026-10-07, with inclusive dates and 21-day gaps. These windows are mature by cutoff 2026-10-29; the training change owns them (user-approved 2026-11-01).
 - **Arrow** is on in the offline store's Spark configuration (decision 1). No performance comparison is planned.
 - **Cohort window.** The heavy step is the point-in-time join of the stream snapshots (several per attempt) and the daily tables with the labels, so training can pick a cohort window.
 - **Test.** One CI test on a local warehouse applies the repository and retrieves `fraud_model_v1`. It covers:
@@ -306,11 +307,11 @@ No new Doppler keys. Requests:
 ## Risks / Trade-offs
 
 - **[Training/serving skew of the DP3 delay]** → Training sees the daily anchor at midnight, while serving gets it after `dp-daily` and materialization (about 07:00 UTC). The definition's `availability` block records this, and the TTL's 12 hours covers it.
-- **[The v19 replay takes days]** → Month-sized, restartable ranges, parallelism set from the first month's measured rate, and exploration on the daily features meanwhile.
+- **[The v19 replay takes days]** → Month-sized, restartable ranges, parallelism set from the first month's measured rate, and the first training replay limited to `[2026-07-01, 2026-10-08)`.
 - **[The seed encodes events differently from production]** → A CI round trip through `wire.decode`, and the per-month gate on rejects and missing snapshots.
 - **[Kafka disk during the replay]** → The seed pauses on consumer lag, and the input topic has a `retention.bytes` cap.
 - **[Training/serving skew of Flink's processing delay]** → History has none; serving misses attempts Flink has not processed yet. The page states it, and the evidence samples it.
-- **[Flink's first 24 hours have unknown coverage]** → Serving reports those values as unknown, never zero. Training does not depend on Flink.
+- **[Flink's first 24 hours have unknown coverage]** → Serving reports those values as unknown, never zero. Training history uses the replay's one-day lead-in.
 - **[DP3's lookback rewrites older anchors]** → The rerun ranges come from `dp3.range` on each commit, refreshed the next run.
 - **[`feast-materialize-daily` starts before `dp-daily` publishes]** → It materializes what is on `main`; the next run catches up, within the TTL's delay.
 - **[A `dp-backfill` outlives the 7-day snapshot retention]** → The consumed snapshot expires, so the next default run does a full refresh. A range run over the backfilled days does the same work more narrowly.
@@ -335,7 +336,7 @@ No new Doppler keys. Requests:
 3. **After merge, in prod:**
    - the apply Job runs;
    - after the v19 `dp-backfill`, run `feast-materialize` (a full refresh);
-   - run `stream-history` over v19, month by month; the served model's training waits for it;
+   - run `stream-history` with `start=2026-07-01`, `end=2026-10-08`, month by month; the served model's training waits for this range;
    - start Flink `live-v19` and push job A;
    - run the simulator at 1 payment every 30 s for the evidence window, with `dp-daily` and `feast-materialize-daily` unsuspended, and sample Fraud evidence;
    - run a sample `get_historical_features(fraud_model_v1)` over a v19 cohort.

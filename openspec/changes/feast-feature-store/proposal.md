@@ -15,7 +15,7 @@ The final-coursework feature-store rows ask for:
 - a TTL for each feature table, with its reason;
 - an offline store that a training notebook reads through Feast, joined with the label table.
 
-This change builds that in the shape of the coursework's Feast lecture and the `card-fraud-platform` example, with one engine per feature. Spark owns the daily windows. Flink owns the short windows, both live and for history, which comes from a Kappa replay of the v19 year through the same job. No feature has two implementations that could drift apart. The model trains on the full year, because the generator's volume is seasonal, and it runs in prod, where DP3 runs.
+This change builds that in the shape of the coursework's Feast lecture and the `card-fraud-platform` example, with one engine per feature. Spark owns the daily windows. Flink owns the short windows, both live and for history, which comes from a range-addressable Kappa replay through the same job. No feature has two implementations that could drift apart. The first training replay uses `start=2026-07-01`, `end=2026-10-08` (exclusive), mature by the v19 cutoff of 2026-10-29, and runs in prod, where DP3 runs.
 
 ## What Changes
 
@@ -111,4 +111,4 @@ This change builds that in the shape of the coursework's Feast lecture and the `
   - spot capacity for the multi-day history FlinkDeployment.
 
   See design, Platform requests.
-- **Sequencing:** implementation on `feat/feast-feature-store`, rebased onto `origin/main` at `371d2ca`, with the user's go-ahead. The served model's training waits for the v19 stream history; exploration on daily features does not.
+- **Sequencing:** implementation on `feat/feast-feature-store`, rebased onto `origin/main` at `371d2ca`, with the user's go-ahead. Training reads only through Feast after the stream history for `[2026-07-01, 2026-10-08)` exists; there is no interim Spark dry run.

@@ -30,7 +30,7 @@
   Verify that `uv lock`, `ruff` and `ruff format --check` pass locally.
 - [x] 2.2 Add `fraud_feast/repo.py` (decisions 2–4: entities, the four views with explicit schemas, the stream views' epoch-filtered queries, TTLs and tags, and `fraud_model_v1`) and `fraud_feast/apply.py` (creates the two stream tables, then applies). Verify in CI with:
   - a test that `repo.py`'s fields equal each definition file's feature list per entity;
-  - one local-warehouse test that applies the repository and runs `get_historical_features(fraud_model_v1).to_arrow()` with `label_attempt` rows. It covers the daily row on day D, a row whose `created` is later than `t`, TTL expiry to null, a snapshot at exactly `started_at` excluded by the `− 1µs` timestamp, values read across a history and a live epoch with an unconfigured epoch ignored, and null method values for a null payment method.
+  - one local-warehouse test that applies the repository and runs `get_historical_features(fraud_model_v1).to_arrow()` with `full_feature_names=True` and `label_attempt` rows. It covers the daily row on day D, a row whose `created` is later than `t`, TTL expiry to null, a snapshot at exactly `started_at` excluded by the `− 1µs` timestamp, values read across a history and a live epoch with an unconfigured epoch ignored, and null method values for a null payment method.
 - [x] 2.3 Add `fraud_feast/push_job.py` (decision 5): `--to online|offline`, the continuous modes, the `--from`/`--until` replay, and B's history mode (per-day overwrite of the history epoch, lead-in dropped). Replace `tests/test_writer.py` with `test_push_job.py` on the existing Redis container and a local warehouse, covering:
   - an older revision not replacing a newer online value;
   - offline resume from the commit's offsets after a crash before the Kafka commit;
@@ -104,7 +104,7 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 ## 7. Local checks and handoff
 
 - [x] 7.1 Run local non-test checks only: `ruff` and `ruff format --check`, `golangci-lint`, treefmt, helm lint and template, `buf lint`, `openspec validate feast-feature-store --strict`, and `git diff --check`. Commit locally. These checks pass, as do the Fraud and Payments builds, dependency locks and Feast wheel build. Repository-wide Buf lint still reports the pre-existing Payments, Processor and Vault RPC naming/reuse violations; fraud-scoped Buf lint passes. Data-product lint and generated-reference checks pass.
-- [x] 7.2 Push `feat/feast-feature-store` with an explicit same-name refspec and open a draft PR against `main`, as authorized by the user. Keep it draft: marking a trusted PR ready publishes `deploy/dev`. Draft PR: https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/111. CI checks are pending; no local test suites were run. Report every CI check honestly.
+- [x] 7.2 Push `feat/feast-feature-store` with an explicit same-name refspec and open a draft PR against `main`, as authorized by the user. Keep it draft: marking a trusted PR ready publishes `deploy/dev`. Draft PR: https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/111. CI results are reported by the PR; no local test suites were run. Report every CI check honestly.
 
 ## 8. Runs and evidence (cluster)
 
@@ -121,7 +121,7 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 - [ ] 8.2 Prod, after merge:
   - confirm the apply Job;
   - after the v19 `dp-backfill`, run `feast-materialize` (a full refresh);
-  - run `stream-history` over v19 month by month, setting parallelism from the first month's measured rate; the served model's training waits for it;
+  - run `stream-history` with `start=2026-07-01`, `end=2026-10-08` (exclusive), month by month, setting parallelism from the first month's measured rate; the workflow adds its own one-day lead-in and the served model's training waits for this range;
   - start Flink `live-v19` and push jobs A and B;
   - unsuspend `dp-daily` and `feast-materialize-daily`, run the simulator for the evidence window (7 days by default), and sample Fraud evidence;
   - run a sample `get_historical_features(fraud_model_v1)` over a v19 cohort;

@@ -57,7 +57,7 @@ One versioned feature service, `fraud_model_v1`, SHALL name exactly the model in
 - **THEN** `fraud_model_v2` is added, and `fraud_model_v1` keeps its feature list
 
 ### Requirement: Point-in-time offline retrieval
-The offline store SHALL read only the gold Iceberg tables, through the distributed engine on the Iceberg catalog, never by loading a whole table into one process. For each entity row at time `t`, retrieval SHALL return the latest row of each requested view with `event_timestamp <= t` within its TTL. Ties SHALL resolve to the greatest `created`. Rows SHALL NOT be excluded because `created` is later than `t`. The label table, filtered by `label_available_at <= cutoff` and one label source, SHALL be usable directly as the entity rows, with `t` one microsecond before the attempt's start, so no stream snapshot that counts the scored attempt is returned. Retrieval into Python SHALL use Arrow columnar transfer.
+The offline store SHALL read only the gold Iceberg tables, through the distributed engine on the Iceberg catalog, never by loading a whole table into one process. For each entity row at time `t`, retrieval SHALL return the latest row of each requested view with `event_timestamp <= t` within its TTL. Ties SHALL resolve to the greatest `created`. Rows SHALL NOT be excluded because `created` is later than `t`. Simulation-truth rows of the label table SHALL be usable as the entity rows, one per attempt, with `event_timestamp` one microsecond before the attempt's start, so no stream snapshot that counts the scored attempt is returned. A positive training label SHALL require a chargeback row with `label = true` and `label_available_at <= cutoff`. Training retrieval SHALL request `fraud_model_v1` with `full_feature_names=True`, producing `<view>__<feature>` columns without collisions between views. Retrieval into Python SHALL use Arrow columnar transfer.
 
 #### Scenario: Daily row on the scored attempt's day
 
@@ -77,7 +77,7 @@ The offline store SHALL read only the gold Iceberg tables, through the distribut
 #### Scenario: Label not yet available
 
 - **WHEN** a chargeback's `label_available_at` is after the cutoff
-- **THEN** that attempt has no chargeback row among the entity rows
+- **THEN** that attempt's simulation-truth entity row remains included, but that chargeback does not make its training label positive
 
 ### Requirement: Streaming push jobs
 Two continuously running jobs SHALL consume the v2 feature journal of the configured epoch with read-committed isolation, each with its own consumer group:
