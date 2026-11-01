@@ -29,9 +29,6 @@ applications:
   live-traffic:
     destinationNamespace: payment-gateway
     path: infra/charts/live-traffic
-  fraud-features:
-    destinationNamespace: data
-    path: infra/charts/fraud-features
   data-pipelines:
     destinationNamespace: data
     path: infra/charts/data-pipelines

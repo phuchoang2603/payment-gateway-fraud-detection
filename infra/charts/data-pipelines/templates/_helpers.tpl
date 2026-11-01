@@ -396,15 +396,15 @@ spec:
 - name: FEAST_S3_ENDPOINT_URL
   value: {{ .Values.config.S3_ENDPOINT | quote }}
 - name: FEAST_REGISTRY
-  value: {{ .Values.featureStore.registry | quote }}
+  value: {{ .Values.features.registry | quote }}
 - name: FEAST_STREAM_EPOCHS
-  value: {{ .Values.featureStore.epochs | quote }}
+  value: {{ .Values.features.epochs | quote }}
 - name: FEAST_REDIS_ADDR
-  value: {{ .Values.featureStore.redisAddress | quote }}
+  value: {{ printf "%s:6379" .Values.features.redis.name | quote }}
 - name: FEAST_REDIS_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.featureStore.redisSecret }}
+      name: {{ .Values.features.redis.password.secretName }}
       key: password
 - name: FEATURE_KAFKA_BROKERS
   value: {{ .Values.bronze.kafka.bootstrapServers | quote }}

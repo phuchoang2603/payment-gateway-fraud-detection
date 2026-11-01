@@ -15,8 +15,10 @@ images:
   openmetadata:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata
   feast:
+    pullPolicy: IfNotPresent
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast
   streaming:
+    pullPolicy: IfNotPresent
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming
 generator:
   config: historical-dev.yaml
@@ -45,14 +47,19 @@ storage:
     data:
       AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
       AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+# Node selector for pipeline workflow pods (resource steps, checks, publication); empty schedules them anywhere.
 workflowNodeSelector: {}
 spark:
   nodeSelector: {}
+  # Driver placement when it differs from the executors'; empty uses nodeSelector.
   driverNodeSelector: {}
   tolerations: []
   retry:
     limit: 2
     policy: OnError
+  # Executor sizes for the aws-cpu-burst spot node (aws-cpu root volume 40Gi, allocatable about 3.5 vCPU and 14 GiB).
+  # Each profile names the executor count and shuffle partitions; `dev` fits one dev node and `large` fills the prod
+  # pool: 11 executors of 3 cores, one per node, with the 12th node left for the driver.
   profiles:
     dev:
       executors: 1
@@ -93,6 +100,8 @@ bronze:
   activeDeadlineSeconds: 7200
   kafka:
     bootstrapServers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092
+    # Must match the topic partition count of payments.events.v1 and fraud.labels.v1 in infra/charts/kafka/values.yaml.
+    # The Spark Kafka source makes one task per partition, so executor cores and shuffle partitions follow this value.
     partitions: 3
     executorMemory: 6g
     executorMemoryOverhead: 1g
@@ -113,11 +122,14 @@ pipeline:
   profile: dev
   reportRoot: s3://platform-dev/runs/payment-gateway/pipeline
   activeDeadlineSeconds: 14400
+  # dp-daily at 04:17 UTC, after the 03:43 maintenance; suspended. Without start and end a run covers yesterday and
+  # the lookback days before it, which catches late outcomes.
   schedule: 17 4 * * *
   lookbackDays: 2
 marts:
   clickhouseUrl: http://clickhouse.data.svc.cluster.local:8123
   user: marts
+  # The clickhouse chart's ExternalSecret for the marts user in the same namespace.
   passwordSecret: clickhouse-marts
   retentionDays: 180
   resources:
@@ -260,8 +272,9 @@ catalog:
 checks:
   connectorsConfigMap: metadata-connectors
   connectorSecret: metadata-clickhouse
+  # Limit for each table's `metadata test` run; each contract rule is a ClickHouse scan over the lakehouse table.
   nativeTimeoutSeconds: 1500
-featureStore:
+features:
   enabled: false
   driverMemory: 6g
   spillSize: 100Gi
@@ -273,10 +286,58 @@ featureStore:
   epochs: history-v18,live-v18
   epoch: live-v18
   historyEpoch: history-v18
-  redisAddress: payment-gateway-feast-redis:6379
-  redisSecret: payment-gateway-feast-redis
   schedule: 47 6 * * *
   checkpointRoot: s3://platform-dev/runs/payment-gateway/flink/history
   replicationFactor: 1
   historyStart: "2026-07-29"
   historyEnd: "2026-10-29"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: '1'
+      memory: 1Gi
+  redis:
+    name: payment-gateway-feast-redis
+    image:
+      repository: quay.io/opstree/redis
+      tag: v7.2.16
+      pullPolicy: IfNotPresent
+    appendonly: 'yes'
+    storageSize: 2Gi
+    maxmemory: 512mb
+    resources:
+      requests:
+        cpu: 100m
+        memory: 768Mi
+      limits:
+        cpu: 500m
+        memory: 1536Mi
+    password:
+      secretName: payment-gateway-feast-redis
+      secretKey: password
+      remoteKey: GATEWAY_FEAST_REDIS_PASSWORD
+    clients:
+    - feature-writer
+    - feast-server
+    - data-pipelines
+  streaming:
+    sourceTopic: payments.events.v1
+    sourcePartitions: 3
+    maxEntityEntries: 50000
+    storageRoot: s3://platform-dev/runs/payment-gateway/flink
+    jobManager:
+      resources:
+        requests:
+          cpu: '1'
+          memory: 1536Mi
+        limits:
+          memory: 1536Mi
+    taskManager:
+      resources:
+        requests:
+          cpu: '1'
+          memory: 2Gi
+        limits:
+          memory: 2Gi

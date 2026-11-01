@@ -1,39 +1,19 @@
-{{- if .Values.streaming.enabled }}
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: {{ .Values.streaming.storageSecretName }}
-  namespace: {{ .Release.Namespace }}
-spec:
-  refreshInterval: {{ .Values.externalSecrets.refreshInterval }}
-  secretStoreRef:
-    kind: {{ .Values.externalSecrets.secretStoreRef.kind }}
-    name: {{ .Values.streaming.storageStore }}
-  target:
-    name: {{ .Values.streaming.storageSecretName }}
-    creationPolicy: Owner
-  data:
-    - secretKey: AWS_ACCESS_KEY_ID
-      remoteRef:
-        key: OBJECT_GATEWAY_ACCESS_KEY_ID
-    - secretKey: AWS_SECRET_ACCESS_KEY
-      remoteRef:
-        key: OBJECT_GATEWAY_SECRET_ACCESS_KEY
----
+{{- if .Values.features.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: fraud-streaming
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ .Values.namespace }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: fraud-streaming
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ .Values.namespace }}
 rules:
   - apiGroups: [apps]
     resources: [deployments]
+    resourceNames: [fraud-streaming-{{ .Values.features.epoch }}, fraud-streaming-{{ .Values.features.historyEpoch }}]
     verbs: [get]
   - apiGroups: [""]
     resources: [pods, services, configmaps]
@@ -43,11 +23,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: fraud-streaming
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ .Values.namespace }}
 subjects:
   - kind: ServiceAccount
     name: fraud-streaming
-    namespace: {{ .Release.Namespace }}
+    namespace: {{ .Values.namespace }}
 roleRef:
   kind: Role
   name: fraud-streaming
@@ -56,10 +36,10 @@ roleRef:
 apiVersion: flink.apache.org/v1beta1
 kind: FlinkDeployment
 metadata:
-  name: fraud-streaming-{{ .Values.epoch }}
-  namespace: {{ .Release.Namespace }}
+  name: fraud-streaming-{{ .Values.features.epoch }}
+  namespace: {{ .Values.namespace }}
 spec:
-  image: {{ include "fraud-features.image" (dict "image" .Values.images.streaming "global" $.Values.global) | quote }}
+  image: {{ include "data-pipelines.image" (dict "image" .Values.images.streaming "global" $.Values.global) | quote }}
   imagePullPolicy: {{ .Values.images.streaming.pullPolicy }}
   flinkVersion: v2_2
   serviceAccount: fraud-streaming
@@ -73,27 +53,27 @@ spec:
     python.client.executable: /app/.venv/bin/python
     execution.checkpointing.interval: 10s
     execution.checkpointing.storage: filesystem
-    execution.checkpointing.dir: {{ printf "%s/checkpoints/%s" .Values.streaming.storageRoot .Values.epoch | quote }}
-    execution.checkpointing.savepoint-dir: {{ printf "%s/savepoints/%s" .Values.streaming.storageRoot .Values.epoch | quote }}
+    execution.checkpointing.dir: {{ printf "%s/checkpoints/%s" .Values.features.streaming.storageRoot .Values.features.epoch | quote }}
+    execution.checkpointing.savepoint-dir: {{ printf "%s/savepoints/%s" .Values.features.streaming.storageRoot .Values.features.epoch | quote }}
     execution.checkpointing.timeout: 2min
     execution.checkpointing.num-retained: '3'
     execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
     high-availability.type: kubernetes
     high-availability.kubernetes.leader-election.lease-duration: 60s
     high-availability.kubernetes.leader-election.renew-deadline: 45s
-    high-availability.storageDir: {{ printf "%s/checkpoints/ha/%s" .Values.streaming.storageRoot .Values.epoch | quote }}
-    s3.endpoint: {{ .Values.streaming.storageEndpoint | quote }}
-    s3.path.style.access: {{ .Values.streaming.pathStyle | toString | quote }}
-    s3.region: {{ .Values.streaming.region | quote }}
+    high-availability.storageDir: {{ printf "%s/checkpoints/ha/%s" .Values.features.streaming.storageRoot .Values.features.epoch | quote }}
+    s3.endpoint: {{ .Values.config.S3_ENDPOINT | quote }}
+    s3.path.style.access: {{ .Values.config.S3_PATH_STYLE | toString | quote }}
+    s3.region: {{ .Values.config.AWS_REGION | quote }}
     restart-strategy.type: exponential-delay
     resourcemanager.taskmanager-registration.timeout: 10min
     slot.request.timeout: 15min
   jobManager:
     resources:
-      {{- toYaml .Values.streaming.jobManager.resources | nindent 6 }}
+      {{- toYaml .Values.features.streaming.jobManager.resources | nindent 6 }}
   taskManager:
     resources:
-      {{- toYaml .Values.streaming.taskManager.resources | nindent 6 }}
+      {{- toYaml .Values.features.streaming.taskManager.resources | nindent 6 }}
   podTemplate:
     metadata:
       labels:
@@ -113,25 +93,25 @@ spec:
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.streaming.storageSecretName }}
+                  name: {{ .Values.storage.externalSecret.name }}
                   key: AWS_ACCESS_KEY_ID
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.streaming.storageSecretName }}
+                  name: {{ .Values.storage.externalSecret.name }}
                   key: AWS_SECRET_ACCESS_KEY
             - name: KAFKA_BROKERS
-              value: {{ .Values.kafkaBrokers | quote }}
+              value: {{ .Values.bronze.kafka.bootstrapServers | quote }}
             - name: FEATURE_EPOCH
-              value: {{ .Values.epoch | quote }}
+              value: {{ .Values.features.epoch | quote }}
             - name: FEATURE_TOPIC
-              value: {{ .Values.topic | quote }}
+              value: {{ (printf "fraud.feature-updates.v2.%s" $.Values.features.epoch) | quote }}
             - name: SOURCE_TOPIC
-              value: {{ .Values.streaming.sourceTopic | quote }}
+              value: {{ .Values.features.streaming.sourceTopic | quote }}
             - name: SOURCE_PARTITIONS
-              value: {{ .Values.streaming.sourcePartitions | quote }}
+              value: {{ .Values.features.streaming.sourcePartitions | quote }}
             - name: MAX_ENTITY_ENTRIES
-              value: {{ .Values.streaming.maxEntityEntries | quote }}
+              value: {{ .Values.features.streaming.maxEntityEntries | quote }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -148,7 +128,7 @@ apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
   name: fraud-streaming
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ .Values.namespace }}
 spec:
   endpointSelector:
     matchLabels:

@@ -19,15 +19,14 @@ GitOps deploys the same application charts to dev and prod. CI publishes a compl
 
 | Chart | Namespace | Contents |
 |---|---|---|
-| `payment-gateway` | `payment-gateway` | The six Go services, their CNPG databases with separate owner and runtime roles, three Redis instances (idempotency, authorization observations, Feast), secrets, routing and policies |
+| `payment-gateway` | `payment-gateway` | The six Go services, their CNPG databases with separate owner and runtime roles, Payments idempotency Redis, secrets, routing and policies |
 | `kafka` | `payment-gateway` | Kafka, Debezium Connect, Karapace and topic declarations |
-| `fraud-features` | `data` | Flink job, Feast writer and server, Feast Redis |
 | `live-traffic` | `data` | Live simulator |
-| `data-pipelines` | `data` | Generator and pipeline WorkflowTemplates; OpenMetadata connections, the register job and on-demand discovery |
+| `data-pipelines` | `data` | Generator and pipeline WorkflowTemplates; Flink, Feast writer/server and Redis under `features.enabled`; OpenMetadata connections, the register job and on-demand discovery |
 | `clickhouse` | `data` | ClickHouse instance, its users from Doppler, Service and the `langfuse` setup Job |
 | `lakehouse` | `data` | Polaris REST catalog with its PostgreSQL store, signing keys and Iceberg storage secret; the `lakehouse` warehouse registration; ClickHouse `lakehouse` DataLakeCatalog |
 
-The prod release enables every application except `live-traffic` and `fraud-features`: the gateway services with their databases, Redis and Kafka; `data-pipelines` with the generator, Bronze, Silver, analytics and maintenance workflows, with the OpenMetadata connections and register job; `clickhouse`; and `lakehouse`. Prod is not bootstrapped yet, so this describes its release configuration. Application pods are stateless; Postgres and the authorization and Feast Redis instances own the persistent volumes.
+The prod release enables every application except `live-traffic`; `data-pipelines.features.enabled` keeps Flink and Feast off in prod. Enabled applications include the gateway services with their databases, Redis and Kafka; `data-pipelines` with the generator, Bronze, Silver, analytics and maintenance workflows, with the OpenMetadata connections and register job; `clickhouse`; and `lakehouse`. Prod is not bootstrapped yet, so this describes its release configuration. Application pods are stateless; Postgres and the Payments and Feast Redis instances own the persistent volumes.
 
 ## Runtime configuration
 

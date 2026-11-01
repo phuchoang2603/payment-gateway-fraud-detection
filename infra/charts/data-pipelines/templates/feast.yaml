@@ -1,22 +1,5 @@
-{{- if .Values.featureStore.enabled }}
-{{- $report := printf "%s/materialize/{{workflow.name}}.json" .Values.featureStore.reportRoot }}
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: {{ .Values.featureStore.redisSecret }}
-  namespace: {{ .Values.namespace }}
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: gateway-doppler
-  target:
-    name: {{ .Values.featureStore.redisSecret }}
-  data:
-    - secretKey: password
-      remoteRef:
-        key: GATEWAY_FEAST_REDIS_PASSWORD
----
+{{- if .Values.features.enabled }}
+{{- $report := printf "%s/materialize/{{workflow.name}}.json" .Values.features.reportRoot }}
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -50,7 +33,7 @@ spec:
           - {name: PYSPARK_PYTHON, value: /opt/data-pipeline/feast/.venv/bin/python}
           - {name: SPARK_LOCAL_DIRS, value: /tmp/spark}
           - name: PYSPARK_SUBMIT_ARGS
-            value: {{ printf "--driver-memory %s pyspark-shell" .Values.featureStore.driverMemory | quote }}
+            value: {{ printf "--driver-memory %s pyspark-shell" .Values.features.driverMemory | quote }}
           - name: DP_LOOKBACK_DAYS
             value: {{ .Values.pipeline.lookbackDays | quote }}
           - name: SINCE_DAY
@@ -60,13 +43,13 @@ spec:
           {{- include "data-pipelines.env" $ | nindent 10 }}
           {{- include "data-pipelines.feastEnv" $ | nindent 10 }}
         resources:
-          {{- toYaml .Values.featureStore.materializeResources | nindent 10 }}
+          {{- toYaml .Values.features.materializeResources | nindent 10 }}
         volumeMounts:
           - {name: spill, mountPath: /tmp/spark}
       volumes:
         - name: spill
           emptyDir:
-            sizeLimit: {{ .Values.featureStore.spillSize }}
+            sizeLimit: {{ .Values.features.spillSize }}
     - name: verify
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.feast "global" .Values.global) | quote }}
@@ -84,7 +67,7 @@ metadata:
   name: feast-materialize-daily
   namespace: {{ .Values.namespace }}
 spec:
-  schedules: [{{ .Values.featureStore.schedule | quote }}]
+  schedules: [{{ .Values.features.schedule | quote }}]
   timezone: UTC
   suspend: true
   concurrencyPolicy: Forbid
@@ -120,14 +103,14 @@ spec:
         args: [--from, {{ "{{workflow.parameters.from}}" | quote }}, --until, {{ "{{workflow.parameters.until}}" | quote }}]
         env:
           - name: FEATURE_EPOCH
-            value: {{ .Values.featureStore.epoch | quote }}
+            value: {{ .Values.features.epoch | quote }}
           - name: FEATURE_UPDATE_TOPIC
-            value: {{ printf "fraud.feature-updates.v2.%s" .Values.featureStore.epoch | quote }}
+            value: {{ printf "fraud.feature-updates.v2.%s" .Values.features.epoch | quote }}
           - name: RUN_ID
             value: {{ "{{workflow.name}}" | quote }}
           - name: RUN_REPORT
-            value: {{ printf "%s/replay/{{workflow.name}}.json" .Values.featureStore.reportRoot | quote }}
+            value: {{ printf "%s/replay/{{workflow.name}}.json" .Values.features.reportRoot | quote }}
           {{- include "data-pipelines.env" . | nindent 10 }}
           {{- include "data-pipelines.feastEnv" . | nindent 10 }}
-    {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "feature-writer" "dataset" .Values.bronze.datasetVersion "report" (printf "%s/replay/{{workflow.name}}.json" .Values.featureStore.reportRoot)) | nindent 4 }}
+    {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "feature-writer" "dataset" .Values.bronze.datasetVersion "report" (printf "%s/replay/{{workflow.name}}.json" .Values.features.reportRoot)) | nindent 4 }}
 {{- end }}

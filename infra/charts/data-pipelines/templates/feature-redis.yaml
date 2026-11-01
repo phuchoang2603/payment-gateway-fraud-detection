@@ -1,11 +1,11 @@
-{{- if .Values.feast.enabled }}
-{{- range $redis := list .Values.redis }}
+{{- if .Values.features.enabled }}
+{{- range $redis := list .Values.features.redis }}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ $redis.name }}-config
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ $.Values.namespace }}
   labels:
     app.kubernetes.io/name: {{ $redis.name }}
 data:
@@ -20,7 +20,7 @@ apiVersion: redis.redis.opstreelabs.in/v1beta2
 kind: Redis
 metadata:
   name: {{ $redis.name }}
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ $.Values.namespace }}
   labels:
     app.kubernetes.io/name: {{ $redis.name }}
 spec:
@@ -53,12 +53,12 @@ apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: {{ $redis.password.secretName }}
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ $.Values.namespace }}
 spec:
-  refreshInterval: {{ $.Values.externalSecrets.refreshInterval }}
+  refreshInterval: 1h
   secretStoreRef:
-    kind: {{ $.Values.externalSecrets.secretStoreRef.kind }}
-    name: {{ $.Values.externalSecrets.secretStoreRef.name }}
+    kind: ClusterSecretStore
+    name: gateway-doppler
   target:
     name: {{ $redis.password.secretName }}
     creationPolicy: Owner
@@ -71,7 +71,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ $redis.name }}
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ $.Values.namespace }}
 spec:
   podSelector:
     matchLabels:

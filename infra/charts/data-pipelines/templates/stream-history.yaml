@@ -1,4 +1,4 @@
-{{- if .Values.featureStore.enabled }}
+{{- if .Values.features.enabled }}
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -15,8 +15,8 @@ spec:
       - name: stream-history
   arguments:
     parameters:
-      - {name: start, value: {{ .Values.featureStore.historyStart | quote }}}
-      - {name: end, value: {{ .Values.featureStore.historyEnd | quote }}}
+      - {name: start, value: {{ .Values.features.historyStart | quote }}}
+      - {name: end, value: {{ .Values.features.historyEnd | quote }}}
   podMetadata:
     labels:
       app.kubernetes.io/name: data-pipelines
@@ -69,12 +69,6 @@ spec:
           - {name: start}
           - {name: end}
       steps:
-        - - name: prepare
-            template: prepare
-            arguments:
-              parameters:
-                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
-                - {name: end, value: {{ "{{inputs.parameters.end}}" | quote }}}
         - - {name: topics, template: topics}
         - - name: flink
             template: flink
@@ -110,7 +104,7 @@ spec:
           apiVersion: flink.apache.org/v1beta1
           kind: FlinkDeployment
           metadata:
-            name: {{ "{{workflow.name}}-history" }}
+            name: fraud-streaming-{{ .Values.features.historyEpoch }}
             namespace: {{ .Values.namespace }}
           spec:
             image: {{ include "data-pipelines.image" (dict "image" .Values.images.streaming "global" $.Values.global) | quote }}
@@ -128,15 +122,15 @@ spec:
               execution.checkpointing.interval: 10s
               execution.checkpointing.storage: filesystem
               execution.checkpointing.mode: EXACTLY_ONCE
-              execution.checkpointing.dir: {{ printf "%s/checkpoints/%s" .Values.featureStore.checkpointRoot "{{workflow.name}}/{{inputs.parameters.start}}" | quote }}
-              execution.checkpointing.savepoint-dir: {{ printf "%s/savepoints/%s" .Values.featureStore.checkpointRoot "{{workflow.name}}/{{inputs.parameters.start}}" | quote }}
+              execution.checkpointing.dir: {{ printf "%s/checkpoints/%s" .Values.features.checkpointRoot "{{workflow.name}}/{{inputs.parameters.start}}" | quote }}
+              execution.checkpointing.savepoint-dir: {{ printf "%s/savepoints/%s" .Values.features.checkpointRoot "{{workflow.name}}/{{inputs.parameters.start}}" | quote }}
               execution.checkpointing.timeout: 2min
               execution.checkpointing.num-retained: '3'
               execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
               high-availability.type: kubernetes
               high-availability.kubernetes.leader-election.lease-duration: 60s
               high-availability.kubernetes.leader-election.renew-deadline: 45s
-              high-availability.storageDir: {{ printf "%s/checkpoints/ha/%s" .Values.featureStore.checkpointRoot "{{workflow.name}}/{{inputs.parameters.start}}" | quote }}
+              high-availability.storageDir: {{ printf "%s/checkpoints/ha/%s" .Values.features.checkpointRoot "{{workflow.name}}/{{inputs.parameters.start}}" | quote }}
               s3.endpoint: {{ .Values.config.S3_ENDPOINT | quote }}
               s3.path.style.access: {{ .Values.config.S3_PATH_STYLE | toString | quote }}
               s3.region: {{ .Values.config.AWS_REGION | quote }}
@@ -183,17 +177,17 @@ spec:
                       - name: KAFKA_BROKERS
                         value: {{ .Values.bronze.kafka.bootstrapServers | quote }}
                       - name: FEATURE_EPOCH
-                        value: {{ .Values.featureStore.historyEpoch | quote }}
+                        value: {{ .Values.features.historyEpoch | quote }}
                       - name: FEATURE_TOPIC
-                        value: {{ printf "fraud.feature-updates.v2.%s" .Values.featureStore.historyEpoch | quote }}
+                        value: {{ printf "fraud.feature-updates.v2.%s" .Values.features.historyEpoch | quote }}
                       - name: SOURCE_TOPIC
-                        value: {{ printf "payments.events.%s" .Values.featureStore.historyEpoch | quote }}
+                        value: {{ printf "payments.events.%s" .Values.features.historyEpoch | quote }}
                       - name: SOURCE_PARTITIONS
                         value: {{ "1" | quote }}
                       - name: CLOCK_MODE
                         value: logical
                       - name: CLOCK_TOPIC
-                        value: {{ printf "fraud.clock.%s" .Values.featureStore.historyEpoch | quote }}
+                        value: {{ printf "fraud.clock.%s" .Values.features.historyEpoch | quote }}
                       - name: MAX_ENTITY_ENTRIES
                         value: {{ "50000" | quote }}
                     securityContext:
@@ -207,9 +201,15 @@ spec:
               parallelism: 1
               upgradeMode: stateless
               state: running
-    {{- range $mode := list "topics" "seed" "writer" "gate" "prepare" "delete-topics" }}
+    {{- range $mode := list "topics" "seed" "writer" "gate" "delete-topics" }}
     - name: {{ $mode }}
-      {{- if has $mode (list "seed" "writer" "gate" "prepare") }}
+      {{- if eq $mode "writer" }}
+      retryStrategy:
+        limit: 3
+        retryPolicy: Always
+        backoff: {duration: 10s, factor: 2, maxDuration: 2m}
+      {{- end }}
+      {{- if has $mode (list "seed" "writer" "gate") }}
       inputs:
         parameters:
           - {name: start}
@@ -235,25 +235,20 @@ spec:
         args: [--history, --history-start, {{ "{{inputs.parameters.start}}" | quote }}, --history-end, {{ "{{inputs.parameters.end}}" | quote }}]
         {{- else }}
         command: [python, -m, fraud_feast.history]
-        {{- if eq $mode "prepare" }}
-        args: [prepare, --start, {{ "{{inputs.parameters.start}}" | quote }}, --end, {{ "{{inputs.parameters.end}}" | quote }}]
-        {{- else }}
-        args: [gate]
-        {{- end }}
         {{- end }}
         {{- end }}
         env:
           - name: FEATURE_EPOCH
-            value: {{ $.Values.featureStore.historyEpoch | quote }}
+            value: {{ $.Values.features.historyEpoch | quote }}
           {{- if eq $mode "writer" }}
           - name: FEATURE_UPDATE_TOPIC
-            value: {{ printf "fraud.feature-updates.v2.%s" $.Values.featureStore.historyEpoch | quote }}
+            value: {{ printf "fraud.feature-updates.v2.%s" $.Values.features.historyEpoch | quote }}
           - name: FEATURE_KAFKA_BROKERS
             value: {{ $.Values.bronze.kafka.bootstrapServers | quote }}
           - name: FEAST_STREAM_EPOCHS
-            value: {{ $.Values.featureStore.historyEpoch | quote }}
+            value: {{ $.Values.features.historyEpoch | quote }}
           - name: HISTORY_FLINK_URL
-            value: {{ "http://{{workflow.name}}-history-rest:8081" | quote }}
+            value: {{ printf "http://fraud-streaming-%s-rest:8081" $.Values.features.historyEpoch | quote }}
           {{- end }}
           {{- if has $mode (list "topics" "seed" "delete-topics") }}
           - name: KAFKA_BROKERS
@@ -261,7 +256,7 @@ spec:
           {{- end }}
           {{- if eq $mode "topics" }}
           - name: HISTORY_REPLICATION_FACTOR
-            value: {{ $.Values.featureStore.replicationFactor | quote }}
+            value: {{ $.Values.features.replicationFactor | quote }}
           {{- end }}
           {{- if eq $mode "seed" }}
           - name: DATASET_VERSION
@@ -269,13 +264,13 @@ spec:
           {{- end }}
           {{- if has $mode (list "seed" "writer") }}
           - name: HISTORY_SEED_REPORT
-            value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}-seed.json" $.Values.featureStore.reportRoot | quote }}
+            value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}-seed.json" $.Values.features.reportRoot | quote }}
           {{- end }}
           {{- if has $mode (list "writer" "gate") }}
           - name: RUN_REPORT
-            value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}.json" $.Values.featureStore.reportRoot | quote }}
+            value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}.json" $.Values.features.reportRoot | quote }}
           {{- end }}
-          {{- if has $mode (list "seed" "writer" "prepare") }}
+          {{- if has $mode (list "seed" "writer") }}
           {{- include "data-pipelines.lakeEnv" $ | nindent 10 }}
           {{- else if eq $mode "gate" }}
           {{- include "data-pipelines.storageEnv" $ | nindent 10 }}
@@ -300,7 +295,7 @@ spec:
           apiVersion: flink.apache.org/v1beta1
           kind: FlinkDeployment
           metadata:
-            name: {{ "{{workflow.name}}-history" }}
+            name: fraud-streaming-{{ .Values.features.historyEpoch }}
             namespace: {{ .Values.namespace }}
     - name: finish-unit
       inputs:
@@ -331,6 +326,6 @@ spec:
           - name: DATASET_VERSION
             value: {{ .Values.bronze.datasetVersion | quote }}
           - name: RUN_REPORT
-            value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}.json" .Values.featureStore.reportRoot | quote }}
+            value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}.json" .Values.features.reportRoot | quote }}
           {{- include "data-pipelines.env" . | nindent 10 }}
 {{- end }}

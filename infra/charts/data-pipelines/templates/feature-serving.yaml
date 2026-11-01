@@ -1,18 +1,18 @@
-{{- if .Values.feast.enabled }}
+{{- if .Values.features.enabled }}
 {{- range $mode, $name := dict "write" "feature-writer" "serve" "feast-server" }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $name }}
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ $.Values.namespace }}
 automountServiceAccountToken: false
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ $name }}
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ $.Values.namespace }}
 spec:
   replicas: 1
   strategy:
@@ -38,7 +38,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: {{ $name }}
-          image: {{ include "fraud-features.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
+          image: {{ include "data-pipelines.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
           imagePullPolicy: {{ $.Values.images.feast.pullPolicy }}
           {{- if ne $mode "serve" }}
           command: [python, -m, fraud_feast.stream_writer]
@@ -49,14 +49,13 @@ spec:
             capabilities:
               drop: [ALL]
           env:
-            {{- include "fraud-features.feastEnv" $ | nindent 12 }}
+            {{- include "data-pipelines.lakeEnv" $ | nindent 12 }}
+            {{- include "data-pipelines.feastEnv" $ | nindent 12 }}
           {{- if ne $mode "serve" }}
-            - name: FEATURE_KAFKA_BROKERS
-              value: {{ $.Values.kafkaBrokers | quote }}
             - name: FEATURE_UPDATE_TOPIC
-              value: {{ $.Values.topic | quote }}
+              value: {{ (printf "fraud.feature-updates.v2.%s" $.Values.features.epoch) | quote }}
             - name: FEATURE_EPOCH
-              value: {{ $.Values.epoch | quote }}
+              value: {{ $.Values.features.epoch | quote }}
           {{- end }}
           {{- if eq $mode "serve" }}
           ports:
@@ -74,7 +73,7 @@ spec:
             - name: runtime
               mountPath: /tmp
           resources:
-            {{- toYaml $.Values.feast.resources | nindent 12 }}
+            {{- toYaml $.Values.features.resources | nindent 12 }}
       volumes:
         - name: runtime
           emptyDir:
@@ -85,7 +84,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ $name }}
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ $.Values.namespace }}
 spec:
   podSelector:
     matchLabels:
@@ -110,7 +109,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app: {{ $.Values.redis.name }}
+              app: {{ $.Values.features.redis.name }}
       ports:
         - port: 6379
           protocol: TCP
@@ -150,7 +149,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: feast-server
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ .Values.namespace }}
 spec:
   type: ClusterIP
   selector:
