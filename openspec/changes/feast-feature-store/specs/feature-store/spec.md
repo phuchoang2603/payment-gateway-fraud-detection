@@ -120,6 +120,7 @@ Short-window history SHALL be produced only by the streaming job itself, replayi
 
 - **Input:** the replay SHALL read events from Bronze, encoded exactly as the live topic carries them, into isolated topics. Kafka SHALL never hold more than a bounded slice of the range.
 - **Ranges:** the replay SHALL take explicit start and end days, run in month-sized units in order, and stop at the first failed unit. Each unit SHALL start from empty state with one day of lead-in, so a unit's rows equal those of a replay over the whole history.
+- **Ordering:** input and clock topics SHALL each have one partition. Clock controls SHALL carry an ordered sequence and exclusive input-offset barriers. Checkpointed buffering SHALL release the named input before advancing the clock; an offset-zero bootstrap SHALL precede input. Missing, regressing or oversized barriers SHALL fail the replay.
 - **Writes:** each unit SHALL atomically replace the history epoch's rows of its days, so rerunning a range leaves the same rows with no duplicates.
 - **Gate:** a unit SHALL fail on any decode rejection. Its other rejects SHALL match the duplicates and too-late events in its input, and every attempt with a customer or payment method SHALL appear in a snapshot.
 - **Cleanup:** a unit's streaming deployment and topics SHALL be removed after it, whether it succeeds or fails.
@@ -173,3 +174,8 @@ A feature server SHALL serve `get-online-features` for the feature services, in-
 
 - **WHEN** Go Fraud requests `fraud_model_v1` for one (integration, customer, payment method)
 - **THEN** one response carries the daily and stream values and their event timestamps for both entities
+
+#### Scenario: Clock overtakes input
+
+- **WHEN** the clock topic delivers a control before the input offsets it names, including across a checkpoint restore
+- **THEN** the replay buffers that control and produces the same lateness decisions and expiration snapshots as input-first delivery

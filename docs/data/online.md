@@ -1,9 +1,9 @@
 # Online data
 
-The online path is live gateway traffic. The live simulator drives the gateway's public APIs at current time, Payments writes authoritative events that reach Kafka through outbox CDC, and a PyFlink job turns them into v2 window features on the feature journal topic `fraud.feature-updates.v2.<epoch>`, with per-record rejects on `fraud.feature-rejects.v1.<epoch>`. The streaming path ends at those two topics: Feast and Go Fraud's feature retrieval are disabled until the [feature-store change](../overview/roadmap.md#feature-store-build-order). Bronze also ingests the same topics in Kafka mode; see [offline data](offline.md).
+The online path is live gateway traffic. The live simulator drives the gateway's public APIs at current time, Payments writes authoritative events that reach Kafka through outbox CDC, and a PyFlink job turns them into v2 window features on the feature journal topic `fraud.feature-updates.v2.<epoch>`, with per-record rejects on `fraud.feature-rejects.v1.<epoch>`. The journal feeds the online and offline Feast push jobs, and Go Fraud reads `fraud_model_v1` in shadow mode; deployment evidence is pending. Bronze also ingests the same topics in Kafka mode; see [offline data](offline.md).
 
 - Simulator code: [`src/data-pipeline/simulator/simulator/live`](../../src/data-pipeline/simulator/simulator/live). Streaming code: [`src/data-pipeline/streaming`](../../src/data-pipeline/streaming); deployment: [`infra/charts/fraud-features`](../../infra/charts/fraud-features).
-- Status: the live simulator is disabled in both environments; the Flink job runs in dev and is disabled in prod. Dev simulator values point at the v18 historical manifest and its SHA-256. The Flink job implements feature contract v2 under epoch `live-v18`.
+- Status: the live simulator is disabled in dev and enabled for a seven-day v19 run in prod at one payment every 30 seconds; the charts enable Flink and Feast in both environments; cluster verification is pending. Dev simulator values point at the v18 historical manifest and its SHA-256. The Flink job implements feature contract v2 under `live-v18` in dev and `live-v19` in prod.
 
 ## Data problems and how they are solved
 

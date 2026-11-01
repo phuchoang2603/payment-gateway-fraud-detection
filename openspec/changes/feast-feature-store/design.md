@@ -221,8 +221,10 @@ The stage pins the gold `main` snapshot of each daily table at its start, and fa
 1. **Topics.** It recreates the epoch's topics: `payments.events.history-v19`, `fraud.clock.history-v19`, `fraud.feature-updates.v2.history-v19` and `fraud.feature-rejects.v1.history-v19`. The input topic has a `retention.bytes` cap.
 2. **Seed.** `fraud_streaming.history` reads the month from Bronze `payment_events`, plus one day of lead-in, in source order. It encodes each event as the `payments.v1` envelope with the descriptors Flink decodes (`wire.py`), and writes the input and clock topics.
    - It pauses while the replay's consumer lag exceeds a bound, so Kafka never holds more than a slice of the month.
-   - A CI round-trip test proves that a Bronze row, encoded, decodes to the same event in `wire.decode`.
-3. **Replay.** A FlinkDeployment of the live job's image runs in logical-clock mode with epoch `history-v19`, from empty state. One day of lead-in fills every 24-hour window and the dedup horizon, so months are independent.
+   - A CI round-trip test proves that a Bronze row, encoded, decodes to the same event in `wire.decode`. The streaming image has a separate Python 3.12 seed environment because Flink 2.2.1 requires PyArrow below 17 and PyIceberg 0.10 requires PyArrow 17 or newer.
+3. **Replay ordering (approved 2026-10-31).** History input and clock topics each have one partition. Each clock control carries a sequence and exclusive input-offset barrier. The source buffers both streams in checkpointed state, releases input only through the next barrier, then advances the clock. An initial offset-zero barrier fixes the bootstrap instant. The seed bounds outstanding batches by checkpointed consumer lag. Missing, regressing or oversized barriers fail the replay. This extends the existing Flink logical-clock protocol so clock-topic delivery cannot overtake input or change lateness and expiry results.
+
+   **Replay.** A FlinkDeployment of the live job's image runs in logical-clock mode with epoch `history-v19`, from empty state. One day of lead-in fills every 24-hour window and the dedup horizon, so months are independent.
 4. **Offline write.** Push job B runs in history mode on the epoch's journal. For each finished day, it overwrites `epoch = 'history-v19' AND day(event_timestamp) = d` in one PyIceberg commit, and drops lead-in rows. A rerun of any range replaces the same days, with no duplicates.
 5. **Gate.** The month fails on any decode rejection. Its other rejects (duplicates, too-late attempts) must match the counts the seed observed in Bronze, and every seeded attempt with a customer or payment method must appear in a snapshot. The counts go to the run report and to the pipeline status.
 6. **Cleanup.** An exit handler deletes the FlinkDeployment and the epoch's topics, on success and failure.
@@ -252,6 +254,8 @@ The stage pins the gold `main` snapshot of each daily table at its start, and fa
 
 ### 10. Environments: dev and prod
 
+The published v19 manifest was read from its recorded S3 URI on 2026-10-31; its SHA-256 is `78ee54fe2a607ae0c128bc6765d89238f28d00270fca5ad48a8fed44fd0f8608` (722,999 bytes, last modified 2026-10-29T09:13:16Z).
+
 | | dev | prod |
 |---|---|---|
 | Flink epoch | `live-v18` | `live-v19` (new) |
@@ -259,9 +263,13 @@ The stage pins the gold `main` snapshot of each daily table at its start, and fa
 | Redis | existing, 512 MB | about 6 GiB `maxmemory` on gp3: about 3M customer and 3M payment-method hashes for the daily views, plus the live stream keys |
 | Push job A, server, `feast-materialize`, Go retrieval (shadow) | on | on |
 
+The prod simulator uses a Job with no retry, so completing the seven-day duration does not trigger a Deployment restart and begin another evidence run.
+
 The prod enablement modifies the `talos-gitops-deployment` environment requirement, which no unarchived change touches. Dev stays the PR smoke environment, and the evidence comes from prod, as for DP3.
 
 ### 11. Governance (roadmap step 8)
+
+Kafka access follows the existing unauthenticated-listener and network-policy pattern, as the user confirmed on 2026-10-31. Both Feast push Deployments and `data-pipelines` are admitted from `data`. Authenticated per-client topic ACLs are optional future work and are not a prerequisite for this change.
 
 - **Flink connector.** `catalog.connectors.flink` (`kind: pipeline`, `type: Flink`, JobManager REST on port 8081) runs in `metadata-discovery`. The `fraud-features` network policy admits the metadata job's pods.
 - **Fallback.** If the connector does not resolve the PyFlink Kafka lineage, `openmetadata.lineage` publishes `payments.events.v1` → `fraud-streaming` → the journal and reject topics.

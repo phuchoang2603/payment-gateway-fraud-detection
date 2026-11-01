@@ -12,26 +12,26 @@
 ## 1. Contracts and v1 cleanup
 
 - [x] 1.1 Add `contracts/fraud/v1/evidence.proto` (decision 9). In `fraud.proto`, reserve `DecideResponse` field 3 and use field 4. Regenerate the Go bindings. Verify with `buf lint`, generation, and `go build ./...` for fraud and payments. Local generation, both builds and fraud-scoped Buf lint pass; repository-wide Buf lint reports existing RPC naming violations in Payments, Processor and Vault.
-- [ ] 1.2 Delete:
+- [x] 1.2 Delete:
   - `contracts/features/v1/`, `fraud-snapshot-v1.*`, and the Go and Python v1 bindings;
   - `src/data-pipeline/features/reference.py` and its v1-only tests;
   - the v1 paths in `schema-register.Dockerfile` and `service-images.json`.
 
-  Verify that `git grep -e features/v1 -e fraud-snapshot-v1 -e featuresv1` matches only archived changes, and that the v2 conformance tests still run in CI.
-- [ ] 1.3 Add v2 conformance cases to `fraud-snapshot-v2.examples.json`: attempts just inside and just past the 24-hour lateness horizon. The definition hash covers only `fraud-snapshot-v2.yaml`'s bytes, so the identity and the live epoch stay valid; confirm this before editing. Verify that the Flink conformance test passes the new cases in CI.
+  Verify that no executable v1 code remains. The remaining text references are planning cleanup lists and the main spec's conditional retirement clause, retained until archival. The v2 conformance tests remain in CI.
+- [x] 1.3 Add v2 conformance cases to `fraud-snapshot-v2.examples.json`: attempts just inside and just past the 24-hour lateness horizon. The definition hash covers only `fraud-snapshot-v2.yaml`'s bytes, so the identity and the live epoch stay valid; confirm this before editing. Verify that the Flink conformance test passes the new cases in CI.
 
 ## 2. Feast project
 
-- [ ] 2.1 Rework `src/data-pipeline/feast`:
+- [x] 2.1 Rework `src/data-pipeline/feast`:
   - Python 3.12, `feast[redis]==0.67.0`, `pyiceberg`, `confluent-kafka`, and a `spark` extra;
   - `feature_store.yaml` per decision 1: the Polaris catalog and Arrow in `spark_conf`, `spark.engine`, `pull_latest_features`, Redis `key_ttl_seconds`, and the configured stream epochs;
   - delete the v1 modules and tests.
 
   Verify that `uv lock`, `ruff` and `ruff format --check` pass locally.
-- [ ] 2.2 Add `fraud_feast/repo.py` (decisions 2–4: entities, the four views with explicit schemas, the stream views' epoch-filtered queries, TTLs and tags, and `fraud_model_v1`) and `fraud_feast/apply.py` (creates the two stream tables, then applies). Verify in CI with:
+- [x] 2.2 Add `fraud_feast/repo.py` (decisions 2–4: entities, the four views with explicit schemas, the stream views' epoch-filtered queries, TTLs and tags, and `fraud_model_v1`) and `fraud_feast/apply.py` (creates the two stream tables, then applies). Verify in CI with:
   - a test that `repo.py`'s fields equal each definition file's feature list per entity;
   - one local-warehouse test that applies the repository and runs `get_historical_features(fraud_model_v1).to_arrow()` with `label_attempt` rows. It covers the daily row on day D, a row whose `created` is later than `t`, TTL expiry to null, a snapshot at exactly `started_at` excluded by the `− 1µs` timestamp, values read across a history and a live epoch with an unconfigured epoch ignored, and null method values for a null payment method.
-- [ ] 2.3 Add `fraud_feast/push_job.py` (decision 5): `--to online|offline`, the continuous modes, the `--from`/`--until` replay, and B's history mode (per-day overwrite of the history epoch, lead-in dropped). Replace `tests/test_writer.py` with `test_push_job.py` on the existing Redis container and a local warehouse, covering:
+- [x] 2.3 Add `fraud_feast/push_job.py` (decision 5): `--to online|offline`, the continuous modes, the `--from`/`--until` replay, and B's history mode (per-day overwrite of the history epoch, lead-in dropped). Replace `tests/test_writer.py` with `test_push_job.py` on the existing Redis container and a local warehouse, covering:
   - an older revision not replacing a newer online value;
   - offline resume from the commit's offsets after a crash before the Kafka commit;
   - an offline replay run twice over a committed range, leaving one row per record and the watermark unchanged;
@@ -40,7 +40,7 @@
   - an invalid record stopping the job without a commit.
 
   Verify in CI.
-- [ ] 2.4 Add `fraud_feast/materialize.py` (decision 6: snapshot pinning, `materialize_incremental`, rerun ranges from `dp3.range`, both-snapshot entity sets with null rows for removed entities, the `skip_dedup` override, the explicit range, the full-refresh fallback and the state file) and `fraud_feast/check_online.py`. Verify in CI with local-warehouse and Redis tests:
+- [x] 2.4 Add `fraud_feast/materialize.py` (decision 6: snapshot pinning, `materialize_incremental`, rerun ranges from `dp3.range`, both-snapshot entity sets with null rows for removed entities, the `skip_dedup` override, the explicit range, the full-refresh fallback and the state file) and `fraud_feast/check_online.py`. Verify in CI with local-warehouse and Redis tests:
   - a lookback day rewritten by a second gold commit reaches Redis;
   - a deleted entity reads back as unknown;
   - a range over old anchors leaves newer online rows, the registry interval and the state unchanged;
@@ -48,12 +48,12 @@
   - a missing state triggers the full refresh;
   - a missing online entity fails the check and leaves the state unchanged.
 
-- [ ] 2.5 Add `fraud_streaming/history.py` (decision 8): reads a Bronze range plus one day of lead-in in source order, encodes each event with the `wire.py` descriptors, writes the history input and clock topics, pauses while the replay's lag exceeds a bound, and reports the duplicate and too-late counts the gate compares. Verify in CI with a round-trip test (Bronze row → encoded bytes → `wire.decode`) and a small logical-clock replay whose snapshots match `features/reference_v2.py`.
+- [x] 2.5 Add `fraud_streaming/history.py` (decision 8): reads a Bronze range plus one day of lead-in in source order, encodes each event with the `wire.py` descriptors, writes the history input and clock topics, pauses while the replay's lag exceeds a bound, and reports the duplicate and too-late counts the gate compares. Verify in CI with a round-trip test (Bronze row → encoded bytes → `wire.decode`) and a small logical-clock replay whose snapshots match `features/reference_v2.py`.
 
 ## 3. Images and charts
 
-- [ ] 3.1 `data-platform-spark.Dockerfile`: add the Feast virtualenv with the `spark` extra, and add `src/data-pipeline/feast` to its rebuild paths. `feast.Dockerfile`: Python 3.12 slim with the push job, check and server entrypoints. Verify that the CI image builds pass.
-- [ ] 3.2 `infra/charts/fraud-features`:
+- [x] 3.1 `data-platform-spark.Dockerfile`: add the Feast virtualenv with the `spark` extra, and add `src/data-pipeline/feast` to its rebuild paths. `feast.Dockerfile`: Python 3.12 slim with the push job, check and server entrypoints. Verify that the CI image builds pass.
+- [x] 3.2 `infra/charts/fraud-features`:
   - the `feast-push-online` and `feast-push-offline` Deployments, and the feature server;
   - the PostSync apply Job;
   - the object-storage and Iceberg ExternalSecrets;
@@ -63,8 +63,8 @@
   - prod values: `feast.enabled`, `streaming.enabled`, the epoch and topic `live-v19`, Redis about 6 GiB on gp3.
 
   Verify with CI helm lint and template for every values file.
-- [ ] 3.3 `infra/charts/live-traffic`: enable the simulator in prod on the v19 manifest and digest, at 1 payment every 30 seconds. Verify with CI helm template.
-- [ ] 3.4 `infra/charts/data-pipelines`:
+- [x] 3.3 `infra/charts/live-traffic`: enable the simulator in prod on the v19 manifest and digest, at 1 payment every 30 seconds. Verify with CI helm template. The manifest was read from S3 with user authorization; its digest is pinned and the seven-day prod run is enabled.
+- [x] 3.4 `infra/charts/data-pipelines`:
   - `feast-materialize` (SparkApplication, then check, then publish; optional `start` and `end`; mutex `dp-writer`; the shared Spark helper and placement) and the suspended `feast-materialize-daily` CronWorkflow at 06:47 UTC;
   - on-demand `feast-push-replay` (`to`, `from`, `until`; a mutex per store; publish);
   - on-demand `stream-history` (`start`, `end`; mutex `stream-history`): per month, recreate the epoch topics, seed, a logical-clock FlinkDeployment, push job B in history mode, the gate, and an exit handler that deletes the deployment and topics and publishes; RBAC for FlinkDeployments in `data`; TaskManagers on the spot pool;
@@ -72,8 +72,8 @@
   - `featureStore.enabled` in both environments.
 
   Verify with CI helm lint and template.
-- [ ] 3.5 `infra/charts/payment-gateway`: Fraud `FRAUD_FEAST_URL`, `FRAUD_FEATURE_SERVICE=fraud_model_v1` and the two TTLs, in both environments. Remove the old feature variables. Verify with CI helm template.
-- [ ] 3.6 `infra/charts/kafka`: ACLs that let `data-pipelines` create, write and delete the `history-*` input, clock, journal and reject topics, and that let `fraud-streaming` read the history input topics and `feast-writer` read the journals. Verify with CI helm template.
+- [x] 3.5 `infra/charts/payment-gateway`: Fraud `FRAUD_FEAST_URL`, `FRAUD_FEATURE_SERVICE=fraud_model_v1` and the two TTLs, in both environments. Remove the old feature variables. Verify with CI helm template.
+- [x] 3.6 `infra/charts/kafka`: follow the existing network access pattern for `data-pipelines`, `fraud-streaming` and the two Feast push Deployments, including prod `live-v19` journal and reject topics. Verify with CI helm template. Current main has unauthenticated Kafka listeners and no authorizer. On 2026-10-31 the user chose the existing access pattern; authenticated topic ACLs are optional future work, not a prerequisite (decision 11).
 
 ## 4. Go Fraud
 
@@ -81,8 +81,8 @@
 
 ## 5. Governance
 
-- [ ] 5.1 `catalog.connectors`: add the `flink` pipeline connector, and the journal and reject patterns to the Kafka topic filter. Verify with CI helm template and the integrations test.
-- [ ] 5.2 `openmetadata.lineage`:
+- [x] 5.1 `catalog.connectors`: add the `flink` pipeline connector, and the journal and reject patterns to the Kafka topic filter. Verify with CI helm template and the integrations test.
+- [x] 5.2 `openmetadata.lineage`:
   - add the `feast-push-online`, `feast-push-offline`, `feast-materialize` and `stream-history` pipelines and their edges, plus the streaming SDK fallback edges;
   - record the materialization window or range and refresh count, each replay's range, and each history unit's range, counts and gate.
 
@@ -99,9 +99,11 @@
 
   Verify that the links resolve.
 
+Implementation checkboxes record code and CI coverage written; test outcomes are reported by the draft PR. No local test suites were run.
+
 ## 7. Local checks and handoff
 
-- [ ] 7.1 Run local non-test checks only: `ruff` and `ruff format --check`, `golangci-lint`, treefmt, helm lint and template, `buf lint`, `openspec validate feast-feature-store --strict`, and `git diff --check`. Commit locally.
+- [x] 7.1 Run local non-test checks only: `ruff` and `ruff format --check`, `golangci-lint`, treefmt, helm lint and template, `buf lint`, `openspec validate feast-feature-store --strict`, and `git diff --check`. Commit locally. These checks pass, as do the Fraud and Payments builds, dependency locks and Feast wheel build. Repository-wide Buf lint still reports the pre-existing Payments, Processor and Vault RPC naming/reuse violations; fraud-scoped Buf lint passes. Data-product lint and generated-reference checks pass.
 - [ ] 7.2 Push `feat/feast-feature-store` with an explicit same-name refspec and open a draft PR against `main`, as authorized by the user. Keep it draft: marking a trusted PR ready publishes `deploy/dev`. Report every CI check honestly.
 
 ## 8. Runs and evidence (cluster)
