@@ -1,37 +1,20 @@
 # Payment Gateway and Real-Time Fraud Detection
 
-A payment gateway for a refurbished-electronics marketplace, with a real-time fraud decision on every payment attempt. Its events and a synthetic history feed a lakehouse, a feature store and a fraud model, and read-only analyst agents explain declines and risk decisions on top. Synthetic cards only. [Home](docs/Home.md) covers the domain, the data problems, the AI problem, the architecture and the roadmap.
+A payment gateway for a refurbished-electronics marketplace, with a real-time fraud decision on every payment attempt. Its events and a synthetic history feed a lakehouse, a feature store and a fraud model, and read-only analyst agents explain declines and risk decisions on top. Synthetic cards only. The [project wiki](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki) covers the domain, the data problems, the AI problem, the architecture and the roadmap.
 
 - [Overview](#overview)
 - [Ecommerce payment gateway integration](#ecommerce-payment-gateway-integration)
 - [Data pipeline and ML](#data-pipeline-and-ml)
 - [LLM and agents](#llm-and-agents)
 - [Deployment and security](#deployment-and-security)
+- [Repository structure](#repository-structure)
 - [Getting started](#getting-started)
 
 ## Overview
 
-```mermaid
-flowchart LR
-    M["Marketplace"] --> E["Edge / hosted checkout"]
-    E --> P["Payments"]
-    P --> F["Fraud"]
-    P --> X["Processor simulator"]
-    P -.->|"outbox CDC"| K[("Kafka")]
-    K -.-> N["Notifier"] -.->|"webhooks"| M
-    G["Historical generator"] --> S3[("Object storage")]
-    S3 --> B["Bronze / Silver (Spark)"]
-    K -.-> B
-    B --> L[("Iceberg lakehouse")]
-    K -.-> FL["Flink window features"] -.-> FS[("Feast")]
-    F -->|"feature lookup"| FS
-    L --> T["Training (Kubeflow)"] --> KS["KServe"]
-    F -.->|"planned"| KS
-    AG["Analyst agents"] -->|"features, score"| FS
-    AG --> KS
-```
+_Diagram to come._
 
-Docs: [domain](docs/Home.md#domain) · [architecture](docs/Home.md#architecture) · [roadmap](docs/Home.md#roadmap)
+Docs: [domain](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki#domain) · [architecture](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki#architecture) · [roadmap](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki#roadmap)
 
 ## Ecommerce payment gateway integration
 
@@ -39,7 +22,7 @@ The [refurbished marketplace](https://github.com/phuchoang2603/refurbished-marke
 
 _Diagram to come._
 
-Docs: [architecture](docs/payment-gateway/architecture.md) · [flows](docs/payment-gateway/flows.md) · [conventions](docs/payment-gateway/conventions.md) · [Docker images](docs/payment-gateway/docker.md)
+Docs: [architecture](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/architecture) · [flows](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/flows) · [conventions](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/conventions) · [Docker images](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/docker)
 
 ## Data pipeline and ML
 
@@ -47,7 +30,7 @@ Payment events and the synthetic history become Bronze and Silver Iceberg tables
 
 _Diagram to come._
 
-Docs: [offline data](docs/data/offline.md) · [online data](docs/data/online.md) · [storage](docs/data/storage.md) · [orchestration and governance](docs/data/orchestration-governance.md) · [feature store](docs/ml/feature-store.md) · [training](docs/ml/training.md) · [serving](docs/ml/serving.md) · [background](docs/ml/background.md)
+Docs: [offline data](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/offline) · [online data](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/online) · [storage](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/storage) · [orchestration and governance](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/orchestration-governance) · [feature store](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/feature-store) · [training](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/training) · [serving](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/serving) · [background](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/background)
 
 ## LLM and agents
 
@@ -55,7 +38,7 @@ A coordinator agent hands each analyst question to the evidence agent (knowledge
 
 ![LLM and agents: clients, agentgateway, kagent agents on Agent Substrate, inference on KServe, MCP tools and ML inference, data pipelines and operations](docs/llm/images/llm-architecture.png)
 
-Docs: [agents](docs/llm/agents.md) · [inference](docs/llm/inference.md) · [benchmark](docs/llm/benchmark.md) · [agent gateway](docs/llm/gateway.md) · [RAG](docs/llm/rag.md) · [observability](docs/llm/observability.md) · diagram source [`llm-architecture.excalidraw`](docs/llm/images/llm-architecture.excalidraw)
+Docs: [agents](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/agents) · [inference](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/inference) · [benchmark](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/benchmark) · [agent gateway](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/gateway) · [RAG](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/rag) · [observability](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/llm-observability) · diagram source [`llm-architecture.excalidraw`](docs/llm/images/llm-architecture.excalidraw)
 
 ## Deployment and security
 
@@ -63,7 +46,20 @@ The platform (Talos clusters on Proxmox for dev and AWS for prod, Karpenter, obj
 
 _Diagram to come._
 
-Docs: [CI](docs/deployment/ci.md) · [CD](docs/deployment/cd.md) · [infrastructure](docs/deployment/infra.md) · [security](docs/deployment/security.md) · [observability](docs/deployment/observability.md)
+Docs: [CI](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/ci) · [CD](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/cd) · [infrastructure](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/infra) · [security](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/security) · [observability](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/deployment-observability)
+
+## Repository structure
+
+| Path | Contents |
+|---|---|
+| `src/payment-gateway/` | Go services: Edge, Payments, Fraud, Notifier and the vault and processor simulators, with their shared module |
+| `src/data-pipeline/` | Python: historical and live simulators, `batch` (Spark and ClickHouse jobs for Bronze, Silver, Gold, marts, maintenance), `openmetadata` (checks, publish, lineage, plan), `streaming` (Flink), `feast` and `features` |
+| `src/llm/` | Agent runtime, RAG pipeline and RAG serving (knowledge API and MCP tools) |
+| `contracts/` | Wire formats (`payments`, `fraud`, `vault`, `processor`), data products as ODPS and ODCS contracts, feature definitions and synthetic fixtures |
+| `infra/charts/` | Helm charts per application; `infra/argocd/` the Argo CD roots and release file; `infra/docker/` the Dockerfiles |
+| `openspec/` | Specifications and planned or archived changes |
+| `docs/` | The documentation, published to the [project wiki](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki) |
+| `scripts/` | CI checks, code generation, release planning and wiki publishing |
 
 ## Getting started
 
