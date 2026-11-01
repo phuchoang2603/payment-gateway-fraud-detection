@@ -83,6 +83,9 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261005182115-fad411399dd8 // indirect
 )
 
-require github.com/phuchoang2603/payment-gateway-fraud-detection/shared v0.0.0
+require (
+	github.com/phuchoang2603/payment-gateway-fraud-detection/shared v0.0.0
+	pgregory.net/rapid v1.2.0
+)
 
 replace github.com/phuchoang2603/payment-gateway-fraud-detection/shared => ../shared
