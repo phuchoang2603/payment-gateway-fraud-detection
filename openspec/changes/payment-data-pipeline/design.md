@@ -502,7 +502,7 @@ profiles:
   grafana/result_overflow_mode: break
   grafana/max_threads: 2
   grafana/constraints/readonly/const: ""
-  grafana/constraints/max_execution_time/max: 30
+  grafana/constraints/max_execution_time/max: 60  # the plugin sends its 60 s query timeout
   grafana/constraints/max_memory_usage/max: 1073741824
   grafana/constraints/max_result_rows/max: 100000
   marts/allow_database_iceberg: 1
