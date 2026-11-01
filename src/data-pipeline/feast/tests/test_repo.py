@@ -160,7 +160,7 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
         for index in (0, 1, 2, 3):
             example = labels.iloc[index]
             entities = {
-                key: [example[key]]
+                key: ["" if pd.isna(example[key]) else example[key]]
                 for key in ("integration_id", "customer_id", "payment_method_fingerprint")
             }
             for key in REQUEST_FIELDS:
