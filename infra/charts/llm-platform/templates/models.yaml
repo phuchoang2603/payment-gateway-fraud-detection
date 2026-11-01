@@ -28,6 +28,10 @@ spec:
     spec:
       restartPolicy: OnFailure
       automountServiceAccountToken: false
+      {{- with $store.uploadAffinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         {{- include "llm-platform.podSecurity" (dict "uid" 65532) | nindent 8 }}
       containers:

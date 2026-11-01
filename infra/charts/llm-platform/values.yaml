@@ -25,6 +25,8 @@ modelStore:
     secretkey: OBJECT_ARTIFACTS_SECRET_ACCESS_KEY
   uploadImage: python:3.13-slim-bookworm
   uploadPackages: huggingface-hub==2.2.0 boto3==1.43.114
+  # Placement of the upload Job, for environments where not every node reaches the bucket.
+  uploadAffinity: {}
 
 vllm:
   image: vllm/vllm-openai:v0.32.0
