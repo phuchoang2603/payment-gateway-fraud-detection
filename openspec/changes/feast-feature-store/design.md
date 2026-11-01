@@ -74,7 +74,7 @@ See proposal.md for the motivation. The current state that shapes the design:
 - **History seed.** `fraud_streaming.history` (decision 8) lives with the Flink job, because it encodes events with the job's own `wire.py` descriptors. It runs on the streaming image.
 - **Packaging.** Python 3.12. The base dependencies are `feast[redis]==0.67.0`, `pyiceberg` and `confluent-kafka`. A `spark` extra (`feast[spark]`) goes only into the Spark image and the training image, so the `feast` image has no JVM. `fraud_feast` is an installable package, and `spark.master` comes from the environment: `local[*]` by default for materialization and training retrieval (decision 7).
 - **Training image.** The training change owns its image and `fraud_ml`, installing `fraud_feast[spark]` for local Spark retrieval. `fraud_feast/spark_jars.json` holds the shared Spark 4.1.3 and Iceberg 1.12.0 JAR pins and checksums; both image builds use `python -m fraud_feast.spark_jars <spark-jars-directory>`. `SPARK_MASTER=local[*]` selects local retrieval. When unset, Feast uses `local[*]`. Materialization uses `/opt/data-pipeline/feast/.venv/bin/python` in a single Argo container with a large spill `emptyDir`. No Feast SparkApplications are created.
-- **Registry.** `registry_type: file` at `s3://<bucket>/feast/payment-gateway/registry.pb`, with `cache_ttl_seconds: 60`. It uses the existing `OBJECT_GATEWAY_*` keys, plus `FEAST_S3_ENDPOINT_URL` in dev.
+- **Registry.** `registry_type: file` at `s3://<bucket>/runs/payment-gateway/feast/registry.pb`, inside the prefixes the `OBJECT_GATEWAY_*` keys already write,, with `cache_ttl_seconds: 60`. It uses the existing `OBJECT_GATEWAY_*` keys, plus `FEAST_S3_ENDPOINT_URL` in dev.
 - **`feature_store.yaml`**, rendered from environment variables:
   - `project: payment_fraud`, `provider: local`, `entity_key_serialization_version: 3`;
   - `online_store`: Redis with `key_ttl_seconds: 2764800` (32 days). Hashes not rewritten for longer than the longest TTL drop out, which bounds prod memory.
@@ -271,22 +271,23 @@ Kafka access follows the existing unauthenticated-listener and network-policy pa
 
 After merge, the user/platform owner can delete the Doppler key `GATEWAY_AUTHORIZATION_REDIS_PASSWORD`; no deployment consumes it.
 
-No new Doppler keys. Requests:
+No new Doppler keys. Each request was checked against `talos-proxmox` and the live prod cluster on 2026-11-01; none needs a platform change:
 
-1. **Prod Redis capacity:** about 6 GiB `maxmemory` (a request near 7 GiB) and a gp3 volume of about 10 Gi in `data`.
-2. **Flink in prod:** the platform's Flink operator reconciles in the prod cluster, with a checkpoint path in the prod bucket for `live-v19`.
-3. **Network:** pods in `data` (materialization, the stream writer, verification and the server) reach Redis on port 6379, if a platform policy restricts `data`.
-4. **Flink connector:** the OpenMetadata 2.0.6 ingestion image ships it. If not, the SDK fallback alone covers lineage.
-5. **Bucket access:** the `OBJECT_GATEWAY_*` keys can write `feast/` in both buckets.
-6. **Flink history runs:** the Flink operator in prod also reconciles the short-lived `history-v19` FlinkDeployment in `data`, with room on the spot pool for its TaskManagers for the days the v19 replay takes.
-7. **Training retrieval access:** pods in `ml` reach Polaris (`iceberg-catalog.data:8181`) and object storage, with read-only lakehouse credentials.
+1. **Prod Redis capacity:** about 6 GiB `maxmemory` (a request near 7 GiB) and a 10 Gi gp3 volume in `data`. The `aws-cpu-burst` pool allows 48 vCPU / 192 GiB, and gp3 allows volume expansion.
+2. **Flink in prod:** `flink-kubernetes-operator` 1.16.1 runs in `operators` and watches `data`. Checkpoints go under `runs/payment-gateway/flink`, which the gateway keys already write.
+3. **Network:** `data` has no default-deny policy, so pods there reach Redis on 6379.
+4. **Flink connector:** the OpenMetadata ingestion image is this repository's (`openmetadata/ingestion:2.0.6`); the SDK fallback covers lineage if the connector is missing.
+5. **Bucket access:** the registry lives under `runs/payment-gateway/feast/`, which the foundation-owned prod policy and the dev MinIO policy already grant, so no `feast/` prefix is needed.
+6. **Flink history runs:** the operator reconciles any FlinkDeployment in `data`; `aws-cpu-burst` has room for the history TaskManagers.
+7. **Training retrieval access:** `iceberg-catalog-private` already admits `ml` on 8181. Object credentials for `ml` belong to the training change.
+8. **Kafka disk:** prod Kafka is one broker with a 5Gi gp3 volume; this repository's `kafka` chart raises it to 64Gi for one seeded month plus its journal, and the history topics use replication factor 1 to match the single broker.
 
 ## Risks / Trade-offs
 
 - **[Training/serving skew of the DP3 delay]** → Training sees the daily anchor at midnight, while serving gets it after `dp-daily` and materialization (about 07:00 UTC). The definition's `availability` block records this, and the TTL's 12 hours covers it.
 - **[The v19 replay takes days]** → Month-sized, restartable ranges, parallelism set from the first month's measured rate, and the first training replay limited to `[2026-07-29, 2026-10-29)`.
 - **[The seed encodes events differently from production]** → A CI round trip through `wire.decode`, and the per-month gate on decode rejects and the bounded job reaching FINISHED.
-- **[Kafka disk during the replay]** → Kafka must hold the entire seeded month and its output until unit cleanup. The history topics use zstd compression; prod Kafka storage (5Gi default) must be sized for one v19 month (about 85M input events plus the journal) before the prod replay.
+- **[Kafka disk during the replay]** → Kafka must hold the entire seeded month and its output until unit cleanup. The history topics use zstd compression; prod Kafka storage is 64Gi for one v19 month (about 85M input events plus the journal); the first dev month measures the real size.
 - **[Training/serving skew of Flink's processing delay]** → History has none; serving misses attempts Flink has not processed yet. The page states it, and the evidence samples it.
 - **[Flink's first 24 hours have unknown coverage]** → Serving reports those values as unknown, never zero. Training history uses the replay's one-day lead-in.
 - **[DP3 rewrites older anchors]** → Overlap covers daily lookback; backfills require an explicit since day.

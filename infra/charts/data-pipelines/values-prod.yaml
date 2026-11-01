@@ -124,13 +124,13 @@ checks:
   nativeTimeoutSeconds: 4800
 features:
   enabled: false
-  registry: s3://platform-prod-142737101504-us-east-1/feast/payment-gateway/registry.pb
+  registry: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/feast/registry.pb
   reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/feast
   epochs: history-v19,live-v19
   epoch: live-v19
   historyEpoch: history-v19
   checkpointRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/flink/history
-  replicationFactor: 3
+  replicationFactor: 1
   historyStart: "2026-07-29"
   historyEnd: "2026-10-29"
   redis:

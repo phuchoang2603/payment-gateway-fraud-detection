@@ -98,17 +98,10 @@ This change assigns one engine to each feature definition so training and servin
   - `fraud-snapshot-v2.examples.json` gains lateness-boundary cases.
 - **Infra:**
   - `infra/charts/data-pipelines`: Flink, Redis, the stream writer, server and apply hook under `features.enabled` (dev on, prod off until provisioned); the `feast-materialize` and `stream-history` templates, the materialization CronWorkflow, RBAC for the history FlinkDeployment, and the Flink connector;
-  - `infra/charts/kafka`: ACLs for the history topics;
+  - `infra/charts/kafka`: ACLs for the history topics and 64Gi prod broker storage;
   - `infra/charts/live-traffic`: prod values;
   - `infra/charts/payment-gateway`: Fraud feature configuration and removal of the dedicated submission Redis;
   - the `data-platform-spark` image gains a Feast virtualenv.
-- **Platform requests:** no new Doppler keys. The requests are:
-  - prod Redis capacity;
-  - the Flink operator and checkpoint path in prod;
-  - `data` network paths;
-  - the Flink connector in OpenMetadata ingestion;
-  - bucket write access for `feast/`;
-  - spot capacity for the multi-day history FlinkDeployment.
-
+- **Platform requests:** none. Each was checked against `talos-proxmox` and prod; the only change is prod Kafka disk, which this repository's `kafka` chart owns.
   See design, Platform requests.
 - **Sequencing:** implementation on `feat/feast-feature-store`, rebased onto `origin/main` at `371d2ca`, with the user's go-ahead. Training reads only through Feast after the stream history for `[2026-07-29, 2026-10-29)` exists; there is no interim Spark dry run.

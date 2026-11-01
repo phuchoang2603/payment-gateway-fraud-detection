@@ -1,6 +1,8 @@
 kafka:
   storage:
     storageClass: gp3
+    # A seeded stream-history month (about 85M v19 events) and its journal stay until unit cleanup.
+    size: 64Gi
 
 entities:
   fraudFeatures:
