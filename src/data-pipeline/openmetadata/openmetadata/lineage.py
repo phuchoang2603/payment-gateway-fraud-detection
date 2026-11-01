@@ -64,6 +64,11 @@ PIPELINES = {
     "maintain-lakehouse": "Lakehouse compaction, layout and snapshot expiry",
     "dp3-features": "Gold features, dimension and labels from pinned Silver",
     "dp3-marts": "ClickHouse marts from Silver",
+    "fraud-streaming": "Flink short-window snapshots and rejected events",
+    "feast-push-online": "Natural-key stream features in Redis",
+    "feast-push-offline": "Stream journal in Iceberg",
+    "feast-materialize": "Pinned daily features in Redis",
+    "stream-history": "Deterministic Bronze replay into stream history",
 }
 DP3 = ("dp3-features", "dp3-marts")
 
@@ -98,4 +103,25 @@ def edges(dataset_version: str) -> list[Edge]:
         Edge(SILVER_LABELS, MART_FACT, "dp3-marts"),
         Edge(MART_FACT, MART_MERCHANT_DAY, "dp3-marts"),
     ]
-    return historical_edges + kafka_edges + silver_edges + gold_edges
+    epoch = f"live-{dataset_version}"
+    journal = topic(f"fraud.feature-updates.v2.{epoch}")
+    streaming = Node("pipeline", pipeline_fqn("fraud-streaming"))
+    online = Node("pipeline", pipeline_fqn("feast-push-online"))
+    materialize = Node("pipeline", pipeline_fqn("feast-materialize"))
+    feature_edges = [
+        Edge(topic(PAYMENTS_TOPIC), streaming, "fraud-streaming"),
+        Edge(streaming, journal, "fraud-streaming"),
+        Edge(streaming, topic(f"fraud.feature-rejects.v1.{epoch}"), "fraud-streaming"),
+        Edge(journal, online, "feast-push-online"),
+        Edge(GOLD_FEAT_CUSTOMER, materialize, "feast-materialize"),
+        Edge(GOLD_FEAT_METHOD, materialize, "feast-materialize"),
+    ]
+    for scope in ("customer", "payment_method"):
+        target = table(f"gold.feat_stream_{scope}")
+        feature_edges.extend(
+            [
+                Edge(journal, target, "feast-push-offline"),
+                Edge(BRONZE_EVENTS, target, "stream-history"),
+            ]
+        )
+    return historical_edges + kafka_edges + silver_edges + gold_edges + feature_edges

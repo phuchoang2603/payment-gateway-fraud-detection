@@ -6,7 +6,6 @@ from urllib.parse import urlsplit
 
 from openmetadata.catalog import client
 from openmetadata.lineage import (
-    DP3,
     HISTORICAL_PREFIX,
     PIPELINES,
     SERVICE,
@@ -25,10 +24,11 @@ def status_for(argo_status: str) -> str:
 
 def entity_class(kind: str):
     from metadata.generated.schema.entity.data.container import Container
+    from metadata.generated.schema.entity.data.pipeline import Pipeline
     from metadata.generated.schema.entity.data.table import Table
     from metadata.generated.schema.entity.data.topic import Topic
 
-    return {"table": Table, "topic": Topic, "container": Container}[kind]
+    return {"table": Table, "topic": Topic, "container": Container, "pipeline": Pipeline}[kind]
 
 
 def ensure_pipeline(sdk, name: str):
@@ -54,7 +54,7 @@ def publish_status(sdk, name: str, argo_status: str, run_id: str, parameters=Non
 
 
 def run_parameters(uri: str):
-    """The day range and Silver snapshots of a DP3 run, from its report; None when the run wrote no report."""
+    """Published run parameters from a pipeline report, when present."""
     if not uri:
         return None
     parsed = urlsplit(uri)
@@ -72,20 +72,38 @@ def run_parameters(uri: str):
         try:
             body = client.get_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))["Body"].read()
         except client.exceptions.NoSuchKey:
-            print(f"no DP3 report at {uri}")
+            print(f"no run report at {uri}")
             return None
     else:
         path = Path(uri)
         if not path.exists():
-            print(f"no DP3 report at {uri}")
+            print(f"no run report at {uri}")
             return None
         body = path.read_bytes()
     report = json.loads(body)
-    return {
-        "start": report.get("start"),
-        "end": report.get("end"),
-        "silver_snapshots": report.get("silver_snapshots"),
-    }
+    fields = (
+        "start",
+        "end",
+        "silver_snapshots",
+        "now",
+        "pins",
+        "refreshed",
+        "full_refresh",
+        "windows",
+        "sampled",
+        "checked",
+        "default",
+        "to",
+        "from",
+        "until",
+        "rows",
+        "epoch",
+        "seed",
+        "counts",
+        "observed",
+        "gate",
+    )
+    return {key: report.get(key) for key in fields if key in report or key in ("start", "end", "silver_snapshots")}
 
 
 def ensure_dataset(sdk, version: str) -> None:
@@ -143,10 +161,13 @@ def main() -> int:
     run_id = os.environ["RUN_ID"]
     sdk = client()
     parameters = run_parameters(os.environ.get("RUN_REPORT", ""))
+    if names == ["stream-history"]:
+        workflow_status = "Succeeded" if parameters and parameters.get("gate") else "Failed"
     summary = {}
+    references = {name: ensure_pipeline(sdk, name) for name in names}
     for name in names:
-        pipeline_ref = ensure_pipeline(sdk, name)
-        publish_status(sdk, name, workflow_status, run_id, parameters if name in DP3 else None)
+        pipeline_ref = references[name]
+        publish_status(sdk, name, workflow_status, run_id, parameters)
         edges = 0
         if workflow_status == "Succeeded":
             edges = publish_lineage(sdk, name, pipeline_ref, dataset_version)
