@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Serve the chat, embedding and decision models in-cluster on a shared GPU.
+
+## Requirements
 
 ### Requirement: Self-hosted chat model on vLLM
 The platform SHALL serve Qwen3.5-4B in FP8 (`RedHatAI/Qwen3.5-4B-FP8-dynamic`) at a pinned revision on a pinned vLLM image through a KServe `LLMInferenceService` in `llm`, under the served model name `qwen35-4b`. The model SHALL expose the OpenAI-compatible chat completions, completions and models APIs, with tool calling enabled and reasoning output off by default. The maximum context length SHALL be 32,768 tokens. No model-provider API key SHALL exist.
@@ -21,8 +25,8 @@ The platform SHALL serve `Qwen/Qwen3-Embedding-0.6B` at a pinned revision on the
 ### Requirement: Shared GPU with fixed memory split
 The chat, embedding and decision model servers SHALL share one GPU through a single DRA claim. Each SHALL be limited to a fixed fraction of GPU memory whose sum leaves headroom for the CUDA contexts. The chat model SHALL keep KV-cache room for at least two concurrent 32,768-token contexts.
 
-#### Scenario: Both models loaded
-- **WHEN** both model servers are Ready on the dev GPU
+#### Scenario: All model servers loaded
+- **WHEN** every model server is Ready on the dev GPU
 - **THEN** each serves requests concurrently and neither fails with out-of-memory under the benchmark load
 
 ### Requirement: Endpoint picking through an InferencePool
@@ -43,12 +47,12 @@ The model servers SHALL obtain their GPU through a chart-owned ResourceClaim req
 - **WHEN** another workload holds the environment's only GPU
 - **THEN** the model server pod stays pending without disturbing the claim holder
 
-### Requirement: Model weights in object storage
-Model weights SHALL be copied once per environment, at their pinned revisions, into the platform bucket under `artifacts/models/` by an idempotent upload job. Model servers SHALL stream weights from there directly into GPU memory without writing them to the node's disk, using the platform's existing artifacts identity.
+### Requirement: Model weights in the local model cache
+Each model SHALL be named by its pinned Hugging Face revision and kept on the GPU nodes' local disk by a KServe local model cache in the app's namespace, on the platform's GPU node group. Model servers SHALL load the cached files with InstantTensor and SHALL NOT download weights at start once the cache holds them.
 
 #### Scenario: Pod restart
 - **WHEN** the model server pod is deleted
-- **THEN** its replacement streams the same pinned weights from object storage and the node's disk usage does not grow by the model size
+- **THEN** its replacement loads the same pinned weights from the node's cache without a new download
 
 ### Requirement: One chat replica serves all agents
 A single chat model replica SHALL serve every agent's calls concurrently through continuous batching, in dev and prod. Its measured concurrency capacity SHALL set the gateway's rate limits. Adding capacity SHALL be done by adding replicas on additional GPUs behind the same InferencePool, without changing agents or their model config.

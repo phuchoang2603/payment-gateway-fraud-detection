@@ -88,6 +88,6 @@ The LLM route SHALL screen each request's latest user message with a webhook gua
 - **WHEN** an analyst asks why a payment was declined
 - **THEN** the request passes the screen and reaches the model
 
-#### Scenario: Decision service down
+#### Scenario: Decision model down
 - **WHEN** the decision model is unavailable
 - **THEN** requests pass without screening and PII masking still applies
