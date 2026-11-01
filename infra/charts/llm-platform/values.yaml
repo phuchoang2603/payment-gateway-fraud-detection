@@ -89,9 +89,10 @@ models:
       - --language-model-only
       - --max-model-len=2048
       - --gpu-memory-utilization=0.10
+    # Streaming (a 2 GiB CPU buffer) and vLLM's start-up outgrow 4Gi; the server was OOM-killed there on dev.
     resources:
       requests: {cpu: 250m, memory: 2Gi}
-      limits: {memory: 4Gi}
+      limits: {memory: 8Gi}
   # Uploaded with the served models so the benchmark can compare weights.
   extraUploads:
     - repo: Qwen/Qwen3-8B-AWQ
