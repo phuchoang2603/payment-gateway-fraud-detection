@@ -275,5 +275,5 @@ featureStore:
   schedule: 47 6 * * *
   checkpointRoot: s3://platform-dev/runs/payment-gateway/flink/history
   replicationFactor: 1
-  historyStart: "2026-07-31"
+  historyStart: "2026-07-29"
   historyEnd: "2026-10-29"

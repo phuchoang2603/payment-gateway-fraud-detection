@@ -33,12 +33,17 @@ def lake(tmp_path):
 def spark(tmp_path_factory):
     from pyspark.sql import SparkSession
 
+    from fraud_feast.spark_jars import manifest
+
     warehouse = tmp_path_factory.mktemp("spark-warehouse")
     os.environ["PYSPARK_PYTHON"] = os.sys.executable
     session = (
         SparkSession.builder.master("local[2]")
         .appName("feast-ci")
-        .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.12.0")
+        .config(
+            "spark.jars.packages",
+            f"org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:{manifest()['versions']['iceberg']}",
+        )
         .config("spark.sql.catalog.lake", "org.apache.iceberg.spark.SparkCatalog")
         .config("spark.sql.catalog.lake.type", "hadoop")
         .config("spark.sql.catalog.lake.warehouse", str(warehouse))

@@ -43,7 +43,7 @@ See proposal.md for the motivation. The current state that shapes the design:
     - `feast_materialize` (`materialize-incremental`, then `check_online`), triggered after DP3;
     - one `fraud_model_v1` shared by training and the API;
     - a TTL table with reasons.
-- **The generator** has volume seasonality (month multipliers of 1.35 for November and December, 0.8–0.85 for January and February, plus weekday and hour patterns) but constant fraud scenario rates. Chargebacks arrive 7–21 days after the payment. The user-approved training window is 2026-07-01 through 2026-10-07, mature by the v19 cutoff of 2026-10-29.
+- **The generator** has volume seasonality (month multipliers of 1.35 for November and December, 0.8–0.85 for January and February, plus weekday and hour patterns) but constant fraud scenario rates. Training uses simulation truth over 2026-07-29 through 2026-10-28, without chargeback maturity gaps.
 
 ## Goals / Non-Goals
 
@@ -83,7 +83,7 @@ See proposal.md for the motivation. The current state that shapes the design:
 
 - **History seed.** `fraud_streaming.history` (decision 8) lives with the Flink job, because it encodes events with the job's own `wire.py` descriptors. It runs on the streaming image.
 - **Packaging.** Python 3.12. The base dependencies are `feast[redis]==0.67.0`, `pyiceberg` and `confluent-kafka`. A `spark` extra (`feast[spark]`) goes only into the Spark image and the training image, so the `feast` image has no JVM. `fraud_feast` is an installable package, and `spark.master` comes from the environment: the SparkApplication by default, `local[*]` for training retrieval (decision 7).
-- **Training image extension.** The training change owns installing `fraud_ml` into `/opt/data-pipeline/feast/.venv` in `data-platform-spark`. Its Spark job in `ml` explicitly selects `/opt/data-pipeline/feast/.venv/bin/python` for the driver and executors; the image defaults to the separate batch environment.
+- **Training image.** The training change owns its image and `fraud_ml`, installing `fraud_feast[spark]` for local Spark retrieval. `fraud_feast/spark_jars.json` holds the shared Spark 4.1.3 and Iceberg 1.12.0 JAR pins and checksums; both image builds use `python -m fraud_feast.spark_jars <spark-jars-directory>`. `SPARK_MASTER=local[*]` selects local retrieval. When unset, Feast leaves the master to the SparkApplication; the operator's Feast jobs use `/opt/data-pipeline/feast/.venv/bin/python` for the driver and executors.
 - **Registry.** `registry_type: file` at `s3://<bucket>/feast/payment-gateway/registry.pb`, with `cache_ttl_seconds: 60`. It uses the existing `OBJECT_GATEWAY_*` keys, plus `FEAST_S3_ENDPOINT_URL` in dev.
 - **`feature_store.yaml`**, rendered from environment variables:
   - `project: payment_fraud`, `provider: local`, `entity_key_serialization_version: 3`;
@@ -218,7 +218,7 @@ The stage pins the gold `main` snapshot of each daily table at its start, and fa
 
 **Why one engine.** A second, batch implementation of the short windows would need replay and consistency checks to prove it agrees with Flink. That is the classic Lambda drift risk (Jay Kreps, "Questioning the Lambda Architecture"). Replaying history through the same job, as the coursework example's Kappa backfill does, gives training exactly the logic serving uses. The cost is replay time, which runs in month-sized, restartable ranges.
 
-**`stream-history`** is an on-demand WorkflowTemplate with `start` and `end` days, defaulting to the v19 range. It processes one month at a time, in order, under mutex `stream-history`, and stops at the first failed month. For each month:
+**`stream-history`** is an on-demand WorkflowTemplate with `start` and `end` days, defaulting to `[2026-07-29, 2026-10-29)`. It processes one month at a time, in order, under mutex `stream-history`, and stops at the first failed month. For each month:
 
 1. **Topics.** It recreates the epoch's topics: `payments.events.history-v19`, `fraud.clock.history-v19`, `fraud.feature-updates.v2.history-v19` and `fraud.feature-rejects.v1.history-v19`. The input topic has a `retention.bytes` cap.
 2. **Seed.** `fraud_streaming.history` reads the month from Bronze `payment_events`, plus one day of lead-in, in source order. It encodes each event as the `payments.v1` envelope with the descriptors Flink decodes (`wire.py`), and writes the input and clock topics.

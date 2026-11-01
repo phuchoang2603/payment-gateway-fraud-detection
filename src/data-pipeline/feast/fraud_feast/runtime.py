@@ -34,6 +34,8 @@ def config(*, online=False):
         values.pop("batch_engine")
     values = expand(values)
     if not online:
+        if os.environ.get("SPARK_MASTER"):
+            values["offline_store"]["spark_conf"]["spark.master"] = os.environ["SPARK_MASTER"]
         values["batch_engine"]["spark_conf"] = values["offline_store"]["spark_conf"]
     return RepoConfig(**values)
 

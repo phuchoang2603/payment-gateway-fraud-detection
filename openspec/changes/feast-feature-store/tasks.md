@@ -24,6 +24,7 @@
 
 - [x] 2.1 Rework `src/data-pipeline/feast`:
   - `fraud_feast` installable with the `spark` extra, and `spark.master` taken from the environment (default: the SparkApplication; `local[*]` for training retrieval).
+  - shared JAR pins and checksums in `fraud_feast/spark_jars.json`, with `python -m fraud_feast.spark_jars` usable by both image builds; CI covers download integrity and matching Spark versions.
   - Python 3.12, `feast[redis]==0.67.0`, `pyiceberg`, `confluent-kafka`, and a `spark` extra;
   - `feature_store.yaml` per decision 1: the Polaris catalog and Arrow in `spark_conf`, `spark.engine`, `pull_latest_features`, Redis `key_ttl_seconds`, and the configured stream epochs;
   - delete the v1 modules and tests.

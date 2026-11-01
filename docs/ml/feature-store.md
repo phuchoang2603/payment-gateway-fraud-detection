@@ -19,8 +19,12 @@ Labels, scenario and oracle fields, and anything that happens after the attempt 
 ## Online and offline paths
 
 - **Online:** the Flink journal feeds `feast-push-online` for Redis and `feast-push-offline` for Iceberg. `fraud_model_v1` exposes customer and payment-method daily and stream views under natural keys.
-- **Offline:** DP3 computes the long windows from Silver at daily UTC-midnight anchors, not at each attempt time: serving receives them from the daily batch, so a training row uses `started_at − 1µs` and takes the latest anchor at or before that timestamp. The remaining skew is the DP3 delay after midnight. Long windows are batch-only; Flink keeps only the short windows, with no HybridSource bootstrap.
+- **Offline:** a training row uses plain `started_at` and takes the latest daily anchor at or before that timestamp, including an anchor at exactly that instant. Both push jobs map stream rows to `event_timestamp = online_write_at + 1µs`, so a snapshot written at the scored attempt's start is invisible then. The remaining skew is the DP3 delay after midnight. Long windows are batch-only; Flink keeps only the short windows, with no HybridSource bootstrap.
 - **Materialization:** `feast-materialize` pins the daily tables, loads incremental rows and refreshes entities affected by DP3 reruns, including deletion tombstones. Its online check must pass before consumption state advances.
+
+Training uses `label_attempt` rows with `label_source = LABEL_SOURCE_SIMULATION_TRUTH` and `label_available_at <= cutoff`, and their `label` as its target. Retrieval requests `fraud_model_v1` with `full_feature_names=True`. Time-ordered splits need no label-maturity gaps. The initial history replay uses `start=2026-07-29`, `end=2026-10-29` (exclusive); the workflow adds the one-day lead-in.
+
+The training image installs `fraud_feast[spark]` and runs `python -m fraud_feast.spark_jars <spark-jars-directory>` during its build to use the same pinned, checksum-verified JARs as `data-platform-spark`. Set `SPARK_MASTER=local[*]` for retrieval in one Kubeflow Pipelines step, with local disk for Spark spill. Without that variable, Feast leaves the master to the SparkApplication.
 
 ## TTL and freshness
 
