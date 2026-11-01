@@ -352,7 +352,7 @@ ORDER BY (integration_id, day, merchant_id)
 TTL day + INTERVAL {retention_days} DAY DELETE;
 ```
 
-**Codecs.** The UUID and SHA-256 hex columns are random, so the default LZ4 barely compresses them: they took 6.8 of the fact's 6.4 GiB uncompressed (about 240 bytes a row over May–June 2026). ZSTD's entropy stage stores them near their information content: on a 2M-row sample, 18.5 bytes instead of 35.5 for a UUID string (16 for the native `UUID` type) and 32.2 instead of 63.4 for a fingerprint (32 for `FixedString(32)`), so the columns keep their string types and their consumers, at about half the fact's size. With the 90-day window the live fact is about 6 GiB, leaving the shared 30 GiB volume room for a build's staging copies.
+**Codecs.** The UUID and SHA-256 hex columns are random, so the default LZ4 barely compresses them: they took 6.8 of the fact's 6.4 GiB uncompressed (about 240 bytes a row over May–June 2026). ZSTD's entropy stage stores them near their information content: on a 2M-row sample, 18.5 bytes instead of 35.5 for a UUID string (16 for the native `UUID` type) and 32.2 instead of 63.4 for a fingerprint (32 for `FixedString(32)`), so the columns keep their string types and their consumers, at about half the fact's size. With the 90-day window the live fact is about 6 GiB, leaving the shared 30 GiB volume room for a build's staging copies. A build still writes and merges about 13 GiB of staging parts within minutes; with ClickHouse's default 480 s `old_parts_lifetime` the merged-away parts filled the volume in September 2026's build, so the server keeps them 60 s.
 
 **Fixed queries and the structure that serves each one:**
 

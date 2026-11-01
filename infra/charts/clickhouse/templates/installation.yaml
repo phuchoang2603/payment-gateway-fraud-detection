@@ -84,6 +84,9 @@ spec:
       timezone: UTC
       max_server_memory_usage_to_ram_ratio: 0.85
       mark_cache_size: 536870912
+      # Merged-away parts are kept this long before deletion (default 480 s). A mart build writes and merges about
+      # 13 GiB of staging parts within minutes, and their leftovers filled the 30 GiB volume in September 2026.
+      merge_tree/old_parts_lifetime: 60
   templates:
     podTemplates:
       - name: clickhouse
