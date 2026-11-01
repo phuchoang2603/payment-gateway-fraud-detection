@@ -54,6 +54,9 @@ kind: ExternalSecret
 metadata:
   name: {{ $redis.password.secretName }}
   namespace: {{ $.Values.namespace }}
+  annotations:
+    # Before the feast-apply hook at wave -1, which reads this Secret as env.
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   refreshInterval: 1h
   secretStoreRef:
