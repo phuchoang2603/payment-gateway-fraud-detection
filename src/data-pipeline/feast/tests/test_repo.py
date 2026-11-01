@@ -152,9 +152,9 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
     )
 
     from fastapi.testclient import TestClient
-    from feast.feature_server import get_app
 
     from fraud_feast.request import REQUEST_FEATURES, REQUEST_FIELDS
+    from fraud_feast.server import get_app
 
     with TestClient(get_app(feature_store)) as client:
         for index in (0, 1):

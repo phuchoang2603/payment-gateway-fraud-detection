@@ -5,8 +5,9 @@ from pathlib import Path
 import uvicorn
 import yaml
 from feast import FeatureStore
-from feast.feature_server import get_app
 from feast.repo_config import RepoConfig
+
+from fraud_feast.server import get_app
 
 
 def config(*, online=False):

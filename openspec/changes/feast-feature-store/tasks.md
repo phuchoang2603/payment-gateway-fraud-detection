@@ -45,7 +45,7 @@
 
 - [x] 2.5 Add `fraud_streaming/history.py` (decision 8): reads a Bronze range plus one day of lead-in in source order, encodes each event with the `wire.py` descriptors, writes the history input and clock topics, pauses while the replay's lag exceeds a bound, and reports duplicate and too-late counts without gating on them; history gates on zero decode rejects and consumed seeded input offsets. Verify in CI with a round-trip test (Bronze row → encoded bytes → `wire.decode`) and a small logical-clock replay whose snapshots match `features/reference_v2.py`.
 
-- [x] 2.6 Add request_context and request_features to fraud_model_v1; one pure Python implementation for historical Arrow and online dict transforms. Add training.entity_rows for valid Silver attempts and available simulation-truth labels joined to request context. CI covers truth false without chargebacks, unavailable labels, invalid lifecycle, cohort bounds, nullable request fields, and historical/server parity.
+- [x] 2.6 Add request_context and request_features to fraud_model_v1; one pure Python implementation for historical Arrow and online dict transforms. Add training.entity_rows for valid Silver attempts and available simulation-truth labels joined to request context. CI covers truth false without chargebacks, unavailable labels, invalid lifecycle, cohort bounds, nullable request fields, and historical/server parity. The server adds projected output aliases around transform_dict to fix Feast 0.67.0's full-name filtering bug, which the first CI parity run exposed.
 
 ## 3. Images and charts
 
