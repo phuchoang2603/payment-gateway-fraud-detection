@@ -48,6 +48,24 @@ def test_a_rule_reading_another_audited_table_pins_it_to_its_own_snapshot(found)
     assert "(SELECT * FROM lakehouse.`gold.label_attempt` SETTINGS iceberg_snapshot_id = 7) AS l" in sql
 
 
+def test_a_range_scope_audits_only_the_rows_its_run_could_write(found):
+    metadata = {"snapshots": [{"snapshot-id": 9, "summary": {"dp2.range": "2026-02-01/2026-02-28"}}]}
+    scopes = checks.scopes_for(FakeCatalog({"silver.attempts": metadata}), {"silver.attempts": 9})
+
+    sql = checks.rendered(found[("silver.attempts", "silver_unique_attempt")], 9, scopes=scopes)
+
+    assert (
+        "WHERE payment_day BETWEEN toDate('2026-02-01') AND toDate('2026-02-28') SETTINGS iceberg_snapshot_id = 9)"
+        in sql
+    )
+    assert sql.endswith(f"SETTINGS {checks.SPILL_SETTINGS}")
+
+
+def test_a_commit_without_a_range_audits_the_whole_table():
+    metadata = {"snapshots": [{"snapshot-id": 9, "summary": {}}]}
+    assert checks.scopes_for(FakeCatalog({"silver.attempts": metadata}), {"silver.attempts": 9}) == {}
+
+
 def test_mart_rules_audit_staging_but_report_on_the_live_table(found):
     rule = found[("fact_merchant_day", "marts_merchant_day_sums")]
 

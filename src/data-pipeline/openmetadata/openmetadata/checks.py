@@ -1,6 +1,7 @@
 import os
 import re
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 
 import yaml
@@ -15,6 +16,63 @@ PAGE = 100
 STAGING = "__staging"
 OTHER_TABLE = re.compile(r"\{table:([A-Za-z0-9_.]+)\}")
 LAKEHOUSE_TABLE = re.compile(rf"{LAKEHOUSE}\.`([A-Za-z0-9_]+\.[A-Za-z0-9_]+)`")
+# A Silver or Gold run records its day range on its commits; its rules then audit only the rows that run could have
+# written, so check time follows the range, not the history. Bronze and the marts audit as before.
+RANGE_PROPERTIES = ("dp2.range", "dp3.range")
+LABEL_LOOKBACK_DAYS = 45
+
+
+def instant(day: date) -> str:
+    return f"toDateTime64('{day} 00:00:00', 6, 'UTC')"
+
+
+def day_scope(column: str, start: date, end: date) -> str:
+    return f"{column} BETWEEN toDate('{start}') AND toDate('{end}')"
+
+
+SCOPES = {
+    "silver.payment_events": lambda start, end: day_scope("payment_day", start, end),
+    "silver.attempts": lambda start, end: day_scope("payment_day", start, end),
+    "silver.rejected_events": lambda start, end: day_scope("partition_day", start, end),
+    "silver.labels": lambda start, end: (
+        f"label_available_at >= {instant(start)} AND label_available_at < {instant(end + timedelta(days=1))}"
+    ),
+    "gold.feat_customer_daily": lambda start, end: (
+        f"event_timestamp > {instant(start)} AND event_timestamp <= {instant(end + timedelta(days=1))}"
+    ),
+    "gold.feat_payment_method_daily": lambda start, end: (
+        f"event_timestamp > {instant(start)} AND event_timestamp <= {instant(end + timedelta(days=1))}"
+    ),
+    # A run also rewrites the label rows of earlier attempt days whose labels became available in its range.
+    "gold.label_attempt": lambda start, end: (
+        f"event_timestamp >= {instant(start - timedelta(days=LABEL_LOOKBACK_DAYS))} "
+        f"AND event_timestamp < {instant(end + timedelta(days=1))}"
+    ),
+    # Every version still open at the range start: each customer's chain through its current version.
+    "gold.dim_customer": lambda start, end: f"(valid_to_ts IS NULL OR valid_to_ts >= {instant(start)})",
+}
+
+
+def snapshot_range(metadata, snapshot):
+    """The day range a Silver or Gold run recorded on its commit, or None."""
+    for entry in metadata.get("snapshots", []):
+        if entry.get("snapshot-id") == snapshot:
+            summary = entry.get("summary") or {}
+            for prop in RANGE_PROPERTIES:
+                if summary.get(prop):
+                    first, last = summary[prop].split("/")
+                    return date.fromisoformat(first), date.fromisoformat(last)
+    return None
+
+
+def scopes_for(catalog, snapshots):
+    """Each audited table's row filter from the range its audited commit recorded."""
+    found = {}
+    for table, snapshot in snapshots.items():
+        recorded = snapshot_range(catalog.metadata(table), snapshot) if table in SCOPES else None
+        if recorded:
+            found[table] = SCOPES[table](*recorded)
+    return found
 
 
 @dataclass(frozen=True)
@@ -67,7 +125,7 @@ SPILL_SETTINGS = (
 )
 
 
-def rendered(check, snapshot=None, staging=False, audited=None):
+def rendered(check, snapshot=None, staging=False, audited=None, scopes=None):
     """The rule's SQL against the audited data: an Iceberg table at its audited snapshot, or a mart's staging table.
 
     A query-level iceberg_snapshot_id applies to every Iceberg table the query reads, so a rule that also reads
@@ -75,6 +133,7 @@ def rendered(check, snapshot=None, staging=False, audited=None):
     snapshot when this run audits it too: a pipeline run writes Silver and Gold on one unpublished branch.
     """
     sql = check.query.rstrip().rstrip(";")
+    reads_another = f"{LAKEHOUSE}." in sql
     audited = audited or {}
     sql = LAKEHOUSE_TABLE.sub(
         lambda match: (
@@ -88,15 +147,21 @@ def rendered(check, snapshot=None, staging=False, audited=None):
     target = sql_table(f"{check.table}{STAGING}" if marts else check.table, check.database)
     sql = OTHER_TABLE.sub(lambda match: sql_table(f"{match[1]}{STAGING}" if marts else match[1], MARTS), sql)
     settings = SPILL_SETTINGS
-    if snapshot is not None and check.database == LAKEHOUSE:
-        if f"{LAKEHOUSE}." in sql:
-            target = f"(SELECT * FROM {target} SETTINGS iceberg_snapshot_id = {int(snapshot)})"
-        else:
-            settings = f"iceberg_snapshot_id = {int(snapshot)}, {SPILL_SETTINGS}"
+    where = (scopes or {}).get(check.table) if check.database == LAKEHOUSE else None
+    pin = int(snapshot) if snapshot is not None and check.database == LAKEHOUSE else None
+    if where or (pin is not None and reads_another):
+        inner = f"SELECT * FROM {target}"
+        if where:
+            inner += f" WHERE {where}"
+        if pin is not None:
+            inner += f" SETTINGS iceberg_snapshot_id = {pin}"
+        target = f"({inner})"
+    elif pin is not None:
+        settings = f"iceberg_snapshot_id = {pin}, {SPILL_SETTINGS}"
     return f"{sql.replace('{object}', target)}\nSETTINGS {settings}"
 
 
-def test_workflow(fqn, cases, snapshot=None, staging=False, audited=None):
+def test_workflow(fqn, cases, snapshot=None, staging=False, audited=None, scopes=None):
     return {
         "source": {
             "type": "testsuite",
@@ -119,7 +184,7 @@ def test_workflow(fqn, cases, snapshot=None, staging=False, audited=None):
                         "description": case.description,
                         "testDefinitionName": "tableCustomSQLQuery",
                         "parameterValues": [
-                            {"name": "sqlExpression", "value": rendered(case, snapshot, staging, audited)},
+                            {"name": "sqlExpression", "value": rendered(case, snapshot, staging, audited, scopes)},
                             {"name": "strategy", "value": "COUNT"},
                             {"name": "operator", "value": "=="},
                             {"name": "threshold", "value": "0"},
@@ -160,16 +225,20 @@ def main():
     found = checks(products=products())
     branch = os.environ.get("WAP_BRANCH")
     iceberg = sorted({check.table for check in found if check.database == LAKEHOUSE})
-    snapshots = audited_snapshots(Catalog(), iceberg, branch) if branch and iceberg else {}
+    catalog = Catalog() if branch and iceberg else None
+    snapshots = audited_snapshots(catalog, iceberg, branch) if catalog else {}
+    scopes = scopes_for(catalog, snapshots) if catalog else {}
     for table, snapshot in snapshots.items():
         print(f"auditing {table} at snapshot {snapshot} ({branch} head, or main if this run did not write it)")
+        if table in scopes:
+            print(f"  only rows {scopes[table]}")
     if branch and any(check.database == MARTS for check in found):
         print(f"auditing the marts in their {STAGING} tables")
     native("ingest", workflow(SERVICE))
     tables = sorted({(check.database, check.table) for check in found})
     for database, table in tables:
         cases = [check for check in found if (check.database, check.table) == (database, table)]
-        native("test", test_workflow(cases[0].fqn, cases, snapshots.get(table), bool(branch), snapshots))
+        native("test", test_workflow(cases[0].fqn, cases, snapshots.get(table), bool(branch), snapshots, scopes))
     failures = []
     for database, table in tables:
         cases = [check for check in found if (check.database, check.table) == (database, table)]
