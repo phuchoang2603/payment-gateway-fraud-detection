@@ -158,3 +158,10 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 ## 9. Archive
 
 - [ ] 9.1 After the evidence is recorded, archive the change. Verify with `openspec validate --strict --all`.
+
+## 10. Remove synchronous submission registration
+
+- [x] 10.1 Remove the guard adapter, application wiring, guard-specific tests, evidence messages and fields; reserve removed protobuf field numbers and regenerate bindings. Keep durable assessment ownership and shadow Feast retrieval.
+- [x] 10.2 Remove the dedicated submission Redis, credentials and guard-only network configuration in both environments. Preserve Payments and Feast Redis. Record the Doppler cleanup after merge.
+- [x] 10.3 Add removal deltas for every submission-registration requirement and modify Fraud and Payments dependency requirements. Synchronize the affected main requirements so active specifications describe the removed behavior consistently.
+- [x] 10.4 Run the requested non-test checks, push with the explicit same-name refspec, keep the PR draft and report CI. Fraud and Payments build and pass golangci-lint; all-chart/all-values Helm lint/template, formatting, strict OpenSpec validation and the active-reference scan pass. Fraud-scoped Buf lint passes. Repository-wide Buf lint fails on existing Payments, Processor and Vault RPC naming/reuse violations. No local tests or cluster actions. CI results are reported on the PR.

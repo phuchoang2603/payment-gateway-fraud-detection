@@ -214,6 +214,9 @@ An optional `since` day overrides the start after a backfill; the end is always 
 
 ### 9. Go Fraud feature client
 
+The synchronous submission guard is removed, including registration, thresholds, evidence and its dedicated Redis instance. The 5-minute Flink stream window covers bursts at the cost of seconds-level detection; feature retrieval remains shadow-only. Payments' own Redis and Feast's online Redis remain separate and unchanged. Assessment evidence reserves fields 11 and 12 after removing the submission observations.
+
+
 The single online request sends the eight request-context fields in the same `entities` map as the natural keys. Go computes no model request features; rules retain their own logic. Evidence includes request_features and nullable booleans. Feast's ODFV response timestamps are epoch timestamps, so Go records request_features as available at scored_at. Stored views retain the existing TTL, future, missing and failure statuses.
 
 
@@ -225,7 +228,7 @@ The single online request sends the eight request-context fields in the same `en
   - **timeout** and **error** (including a malformed response);
   - **available:** otherwise.
 - **Configuration.** `FRAUD_FEATURE_SERVICE`, `FRAUD_FEATURE_TTL_DAILY` and `FRAUD_FEATURE_TTL_STREAM` replace the epoch, definition-hash, anchor-age and progress-age settings. The policy stays `rules-v1`, shadow-only, and the evidence schema version becomes 2.
-- **Evidence contract.** `contracts/fraud/v1/evidence.proto` defines a fraud-owned `AssessmentEvidence`: the feature service, a `FeatureViewEvidence` per view, and the moved `GuardEvidence`.
+- **Evidence contract.** `contracts/fraud/v1/evidence.proto` defines a fraud-owned `AssessmentEvidence`: the feature service, a `FeatureViewEvidence` per view, with no synchronous submission-counter messages or fields.
   - `DecideResponse` reserves field 3 and uses field 4.
   - Payments needs only regenerated bindings.
   - A v1-schema assessment replayed within the minutes-long retry horizon after the deploy fails the replay check; the deploy happens while live traffic is off.
@@ -270,6 +273,8 @@ Kafka access follows the existing unauthenticated-listener and network-policy pa
 - **Docs:** the stale text on the feature-store page.
 
 ### Platform requests
+
+After merge, the user/platform owner can delete the Doppler key `GATEWAY_AUTHORIZATION_REDIS_PASSWORD`; no deployment consumes it.
 
 No new Doppler keys. Requests:
 

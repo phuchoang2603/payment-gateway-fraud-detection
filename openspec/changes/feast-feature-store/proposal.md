@@ -59,6 +59,7 @@ This change assigns one engine to each feature definition so training and servin
   - **Flink:** OpenMetadata's native Flink connector catalogues the streaming job, with SDK lineage as the fallback for the PyFlink Kafka edges.
   - **New jobs:** the stream writers, the stream history and materialization publish lineage and status.
 - **Removed:**
+  - the synchronous submission guard, its dedicated Redis deployment and credentials, counter-based observations and evidence fields;
   - `fraud-snapshot-v1` and the `features.v1` protobuf package, with its Python and Go bindings;
   - the v1 reference calculation and the v1 Feast writer;
   - the synthetic `snapshot_key`;
@@ -72,10 +73,15 @@ This change assigns one engine to each feature definition so training and servin
 
 - `feature-store`: covers the Feast project and its registry; the natural-key entities; the daily and stream views with their TTLs; the single feature service; point-in-time offline retrieval with Arrow; the stream writers and their replay; the stream history replay; materialization with overlap and an online check; and online serving.
 
+### Removed Capabilities
+
+- Synchronous submission registration: removes the authorization guard capability (see the REMOVED delta); Flink's 5-minute stream window covers bursts with seconds-level delay.
+
 ### Modified Capabilities
 
 - `streaming-fraud-features`: removes the journal-only output requirement, because the stream writers now consume the journal.
-- `fraud-decision`: historical-feature retrieval becomes enabled shadow-only through `payment_risk_v1`, with per-view statuses and the shared TTL rule.
+- `payment-contracts`: removes synchronous submission observations from the risk dependency contract.
+- `fraud-decision`: removes synchronous submission observations; historical-feature retrieval becomes enabled shadow-only through `payment_risk_v1`, with per-view statuses and the shared TTL rule.
 - `fraud-feature-contracts`: adds serving parity, and requires short-window history to come from the streaming job itself. It is ADDED only while DP3 is unarchived; retiring v1 waits for DP3's archive.
 - `data-pipeline-orchestration`: adds the `feast-materialize`, `feature-writer-replay` and `stream-history` workflows (ADDED only).
 - `data-catalog-governance`: adds the streaming-job catalogue and lineage, plus the stream-writer, stream-history and materialization lineage and status (ADDED only).
@@ -98,7 +104,7 @@ This change assigns one engine to each feature definition so training and servin
   - `infra/charts/data-pipelines`: the `feast-materialize`, `feature-writer-replay` and `stream-history` templates, the materialization CronWorkflow, RBAC for the history FlinkDeployment, and the Flink connector;
   - `infra/charts/kafka`: ACLs for the history topics;
   - `infra/charts/live-traffic`: prod values;
-  - `infra/charts/payment-gateway`: Fraud feature configuration;
+  - `infra/charts/payment-gateway`: Fraud feature configuration and removal of the dedicated submission Redis;
   - the `data-platform-spark` image gains a Feast virtualenv.
 - **Platform requests:** no new Doppler keys. The requests are:
   - prod Redis capacity;
