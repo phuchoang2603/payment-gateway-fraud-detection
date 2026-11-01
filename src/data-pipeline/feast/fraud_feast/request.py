@@ -45,11 +45,11 @@ def request_features(inputs):
     return {
         "amount_minor": inputs["amount_minor"],
         "customer_account_age_days": [
-            (at - instant(created)).days
+            None if created is None else (at - instant(created)).days
             for at, created in zip(scored, inputs["customer_account_created_at"])
         ],
         "merchant_account_age_days": [
-            (at - instant(created)).days
+            None if created is None else (at - instant(created)).days
             for at, created in zip(scored, inputs["merchant_account_created_at"])
         ],
         "ip_shipping_country_mismatch": [

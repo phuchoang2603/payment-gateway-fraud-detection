@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
-from feast import FeatureView
+from feast import FeatureService, FeatureView
 from pyspark.sql import functions as F
 
 from fraud_feast.repo import DAILY_FIELDS, DAILY_TABLES, KEYS, STREAM_FIELDS, TABLES, definitions
@@ -30,6 +30,15 @@ def test_fields_equal_contracts(monkeypatch):
     views = {item.name: item for item in definitions() if isinstance(item, FeatureView)}
     assert set(views) == {f"{scope}_{kind}" for scope in KEYS for kind in ("daily", "stream")}
     assert all(view.online for view in views.values())
+    assert all(
+        "epoch" in {field.name for field in views[f"{scope}_stream"].schema} for scope in KEYS
+    )
+    service = next(item for item in definitions() if isinstance(item, FeatureService))
+    assert all(
+        field.name != "epoch"
+        for projection in service.feature_view_projections
+        for field in projection.features
+    )
 
 
 def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(spark, feature_store):
@@ -100,8 +109,16 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
     labels = labels.assign(
         scored_at=labels["event_timestamp"],
         amount_minor=1200,
-        customer_account_created_at=day - timedelta(days=10),
-        merchant_account_created_at=day - timedelta(days=20),
+        customer_account_created_at=[
+            day - timedelta(days=10),
+            None,
+            *[day - timedelta(days=10)] * 4,
+        ],
+        merchant_account_created_at=[
+            *[day - timedelta(days=20)] * 3,
+            None,
+            *[day - timedelta(days=20)] * 2,
+        ],
         shipping_country=["US", "US", None, None, "US", "US"],
         ip_country=["CA", None, "US", None, "US", "US"],
         item_count=2,
@@ -165,7 +182,9 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
             }
             for key in REQUEST_FIELDS:
                 value = example[key]
-                if hasattr(value, "isoformat"):
+                if pd.isna(value):
+                    value = None
+                elif hasattr(value, "isoformat"):
                     value = value.isoformat()
                 elif hasattr(value, "item"):
                     value = value.item()
@@ -192,3 +211,6 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
 
     for attempt in ("live", "expired", "no-method"):
         assert pd.isna(result.loc[attempt, "request_features__ip_shipping_country_mismatch"])
+
+    assert pd.isna(result.loc["live", "request_features__customer_account_age_days"])
+    assert pd.isna(result.loc["no-method", "request_features__merchant_account_age_days"])

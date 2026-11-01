@@ -1,19 +1,15 @@
-import argparse
 import json
 import os
 import time
 import urllib.request
 from collections import Counter
 from datetime import UTC, date, datetime
+from urllib.parse import urlencode
 
 from confluent_kafka import ConsumerGroupTopicPartitions, TopicPartition
 from confluent_kafka.admin import AdminClient
-from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan
 
-from fraud_feast.apply import ensure_tables
-from fraud_feast.lake import catalog, read_json, write_json
-from fraud_feast.repo import TABLES
-from fraud_feast.stream_writer import properties
+from fraud_feast.lake import read_json, write_json
 
 
 def rest(path):
@@ -71,8 +67,6 @@ def counters(job):
             if item["id"].endswith(("duplicates_dropped", "too_late", "rejected"))
         ]
         if names:
-            from urllib.parse import urlencode
-
             for metric in rest(prefix + "?" + urlencode({"get": ",".join(names), "agg": "sum"})):
                 name = metric["id"]
                 count = int(float(metric.get("sum", 0)))
@@ -100,25 +94,6 @@ def bounds(start, end):
     return first, last
 
 
-def prepare(start, end):
-    first, last = bounds(start, end)
-    epoch = os.environ["FEATURE_EPOCH"]
-    lake = catalog()
-    ensure_tables(lake)
-    predicate = And(
-        EqualTo("epoch", epoch),
-        And(GreaterThanOrEqual("event_timestamp", first), LessThan("event_timestamp", last)),
-    )
-    for name in TABLES.values():
-        table = lake.load_table(name)
-        with table.transaction() as transaction:
-            transaction.delete(predicate)
-            with transaction.update_snapshot(
-                snapshot_properties=properties(epoch, {0: 0})
-            ).fast_append():
-                pass
-
-
 class HistoryReplay:
     def __init__(self, start, end):
         self.first, self.last = bounds(start, end)
@@ -128,11 +103,11 @@ class HistoryReplay:
         self.last_check = 0
         self.deadline = time.monotonic() + int(os.environ.get("HISTORY_TIMEOUT_SECONDS", "259200"))
 
-    def ends(self, consumer):
+    def ends(self):
         if time.monotonic() > self.deadline:
             raise TimeoutError("history unit did not finish before its deadline")
         if time.monotonic() - self.last_check < 5:
-            return None
+            return False
         self.last_check = time.monotonic()
         self.seed = read_json(os.environ["HISTORY_SEED_REPORT"])
         if self.seed and self.seed.get("failed"):
@@ -144,11 +119,8 @@ class HistoryReplay:
                 if self.checkpoint is None:
                     self.checkpoint = latest
                 elif latest >= self.checkpoint + 2:
-                    topic = os.environ["FEATURE_UPDATE_TOPIC"]
-                    return {
-                        0: consumer.get_watermark_offsets(TopicPartition(topic, 0), timeout=30)[1]
-                    }
-        return None
+                    return True
+        return False
 
     def report(self, rows):
         job, _ = checkpoints()
@@ -180,21 +152,11 @@ def validate_gate(report):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("prepare", "gate"))
-    parser.add_argument("--start")
-    parser.add_argument("--end")
-    args = parser.parse_args()
-    if args.action == "prepare":
-        if not args.start or not args.end:
-            parser.error("prepare requires start and end")
-        prepare(args.start, args.end)
-    else:
-        uri = os.environ["RUN_REPORT"]
-        report = read_json(uri)
-        validate_gate(report)
-        report["gate"] = True
-        write_json(uri, report)
+    uri = os.environ["RUN_REPORT"]
+    report = read_json(uri)
+    validate_gate(report)
+    report["gate"] = True
+    write_json(uri, report)
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ Labels, scenario and oracle fields, and anything that happens after the attempt 
 
 The training image installs `fraud_feast[spark]` and runs `python -m fraud_feast.spark_jars <spark-jars-directory>` during its build to use the same pinned, checksum-verified JARs as `data-platform-spark`. Set `SPARK_MASTER=local[*]` for retrieval in one Kubeflow Pipelines step, with local disk for Spark spill. Local Spark is also the default for materialization. No Feast SparkApplications are created.
 
-History deletes each month's history-epoch rows before the feature writer appends normally, dropping lead-in rows. A failed month must be rerun before training. The gate requires zero decode rejects and consumption of all seeded offsets; duplicates and too-late rejects are reported only. `feature-writer-replay` rebuilds Redis only with `from`/`until`.
+History replaces each table’s month in one transaction: delete its epoch and range, append bounded batches without lead-in rows, then commit. Failed writes retry from offset zero to committed partition EOF; live recovery instead uses offsets in table properties that survive snapshot expiry. The gate requires zero decode rejects and consumption of all seeded offsets; duplicates and too-late rejects are reported only. `feature-writer-replay` rebuilds Redis only with `from`/`until`.
 
 ## TTL and freshness
 

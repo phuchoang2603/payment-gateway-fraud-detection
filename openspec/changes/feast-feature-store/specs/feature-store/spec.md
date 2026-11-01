@@ -80,9 +80,9 @@ The offline store SHALL read stored features from Gold Iceberg through Spark SQL
 - **THEN** that attempt has no entity row
 
 ### Requirement: Streaming feature writer
-One continuously running feature-writer Deployment and consumer group SHALL consume the configured v2 journal with read-committed isolation. Each batch SHALL first push non-all-null rows with store.push to PushMode.ONLINE, keyed by natural keys. The shared mapper SHALL set event_timestamp to online_write_at plus one microsecond and created to the Kafka record timestamp. The definition hash SHALL be read from the contract file at import.
+One continuously running feature-writer Deployment and consumer group SHALL consume the configured v2 journal with read-committed isolation. Each batch SHALL first push every row with store.push to PushMode.ONLINE, keyed by natural keys. The shared mapper SHALL set event_timestamp to online_write_at plus one microsecond and created to the Kafka record timestamp. The definition hash SHALL be read from the contract file at import.
 
-Rows SHALL be buffered until offline_interval (default five minutes) or offline_rows (default 100,000), then appended once per Iceberg table with the exclusive Kafka offsets in the same snapshot commit. Graceful shutdown SHALL flush. Recovery SHALL resume from the minimum Iceberg offsets, skipping each table's already committed records. Kafka commits SHALL follow both table commits and serve only lag visibility. Invalid records SHALL stop consumption without committing. Redis SHALL retain newer values on redelivery; all-null rows SHALL be skipped.
+Rows SHALL be buffered until offline_interval (default five minutes) or offline_rows (default 100,000), then appended once per Iceberg table with the exclusive Kafka offsets in the table property kafka.offsets.<epoch> in the same transaction. Graceful shutdown SHALL flush. Recovery SHALL resume from the minimum Iceberg offsets, skipping each table's already committed records. Kafka commits SHALL follow both table commits and serve only lag visibility. Invalid records SHALL stop consumption without committing. On CommitFailedException the writer SHALL refresh, recompute against persisted offsets and retry up to four attempts. Offset properties SHALL survive snapshot expiration. Redis SHALL retain newer values on redelivery; each stream view SHALL include the always-set epoch field, outside payment_risk_v1’s model inputs, so unknown coverage replaces old-epoch counts.
 
 #### Scenario: Crash between online push and offline commit
 
@@ -95,12 +95,12 @@ Rows SHALL be buffered until offline_interval (default five minutes) or offline_
 - **THEN** the buffered rows and their offsets commit to Iceberg
 
 ### Requirement: Online push replay over an explicit range
-The writer SHALL accept from/until offsets per partition or timestamps as online-only bounded replay. Replay SHALL NOT append Iceberg rows or commit Kafka offsets, SHALL never move a key backwards and SHALL fail for an unretained range. History SHALL use --history with the same buffered Iceberg append path and no online store.
+The writer SHALL accept from/until offsets per partition or timestamps as online-only bounded replay. Replay SHALL NOT append Iceberg rows or commit Kafka offsets, SHALL never move a key backwards and SHALL fail for an unretained range. Bounded reads SHALL end at the requested offset or read-committed partition EOF, whichever comes first, without treating a high watermark beyond the last stable offset as missing data. History SHALL use --history without an online store, offset properties or resume. Each table’s unit SHALL be one transaction: delete its epoch and range, append bounded batches, then commit once. Argo SHALL retry failures from offset zero.
 
 #### Scenario: Rebuild after an online store loss
 
 - **WHEN** the online store is emptied and a replay covers the retained journal
-- **THEN** every retained non-all-null key holds its newest snapshot and a second replay changes nothing
+- **THEN** every retained key holds its newest snapshot and a second replay changes nothing
 
 ### Requirement: Stream history by replay through the streaming job
 Short-window history SHALL be produced only by the streaming job itself, replaying recorded payment events in logical-clock mode under a history epoch distinct from every live epoch. No other implementation of the short windows SHALL feed training.
@@ -108,7 +108,7 @@ Short-window history SHALL be produced only by the streaming job itself, replayi
 - **Input:** the replay SHALL read events from Bronze, encoded exactly as the live topic carries them, into isolated topics. Kafka SHALL never hold more than a bounded slice of the range.
 - **Ranges:** the replay SHALL take explicit start and end days, run in month-sized units in order, and stop at the first failed unit. Each unit SHALL start from empty state with one day of lead-in, so a unit's rows equal those of a replay over the whole history.
 - **Ordering:** input and clock topics SHALL each have one partition. Clock controls SHALL carry an ordered sequence and exclusive input-offset barriers. Checkpointed buffering SHALL release the named input before advancing the clock; an offset-zero bootstrap SHALL precede input. Missing, regressing or oversized barriers SHALL fail the replay.
-- **Writes:** each unit SHALL first DELETE its history-epoch rows, then use the feature writer's normal append path, dropping lead-in rows. Rerunning a month SHALL rebuild the same rows without duplicates; a failed month may be partial and SHALL be rerun before training.
+- **Writes:** each table and unit SHALL use one transaction deleting its history-epoch rows in [start, end), appending bounded batches without lead-in rows, and committing once. Reads SHALL start at offset zero and finish at committed partition EOF after the seeded input and final clock are processed. Rerunning a month SHALL replace the same range without duplicates; failed units SHALL retry through Argo. No history offset watermark or prepare step SHALL exist.
 - **Gate:** a unit SHALL require zero decode rejects and consumed input offsets reaching every seeded record's end, including the final clock control. Other rejects SHALL be reported without gating. No attempt-to-snapshot membership check SHALL be required.
 - **Cleanup:** a unit's streaming deployment and topics SHALL be removed after it, whether it succeeds or fails.
 
@@ -156,7 +156,7 @@ A feature server SHALL serve `get-online-features` for the feature services, in-
 - **THEN** the replay buffers that control and produces the same lateness decisions and expiration snapshots as input-first delivery
 
 ### Requirement: Shared request feature transformation
-The project SHALL define request_context as a RequestSource with scored_at, amount_minor, customer_account_created_at, merchant_account_created_at, nullable shipping_country and ip_country, item_count and has_device. A pure Python on-demand request_features view SHALL output amount_minor, customer_account_age_days, merchant_account_age_days, ip_shipping_country_mismatch, item_count and has_device. Ages SHALL be elapsed whole days; mismatch SHALL be null when either country is absent. Item count SHALL count checkout line items and has_device SHALL reflect fingerprint presence. payment_risk_v1 SHALL include this view. Go SHALL send raw request values and SHALL NOT compute model request features. Rules SHALL retain their own logic.
+The project SHALL define request_context as a RequestSource with scored_at, amount_minor, customer_account_created_at, merchant_account_created_at, nullable shipping_country and ip_country, item_count and has_device. A pure Python on-demand request_features view SHALL output amount_minor, customer_account_age_days, merchant_account_age_days, ip_shipping_country_mismatch, item_count and has_device. Ages SHALL be elapsed whole days, or null when account creation is absent; mismatch SHALL be null when either country is absent. Item count SHALL count checkout line items and has_device SHALL reflect fingerprint presence. payment_risk_v1 SHALL include this view. Go SHALL send raw request values and SHALL NOT compute model request features. Rules SHALL retain their own logic.
 
 #### Scenario: Same request online and offline
 

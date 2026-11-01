@@ -12,6 +12,8 @@ import pandas as pd
 import pyarrow as pa
 from confluent_kafka import Consumer, KafkaError, TopicPartition
 from feast.data_source import PushMode
+from pyiceberg.exceptions import CommitFailedException
+from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan
 
 from fraud_feast.apply import stream_schema
 from fraud_feast.contracts.features.v2.features_pb2 import SnapshotUpdate
@@ -137,22 +139,14 @@ def frame(rows, fields):
 
 def write_online(feature_store, view, rows, fields):
     if rows:
-        data = frame(rows, fields)
-        present = data.loc[~data[fields].isna().all(axis=1)]
-        if not present.empty:
-            feature_store.push(f"{view}_push", present, to=PushMode.ONLINE)
+        feature_store.push(f"{view}_push", frame(rows, fields), to=PushMode.ONLINE)
 
 
 def watermarks(table, epoch):
-    for snapshot in reversed(table.metadata.snapshots):
-        summary = snapshot.summary
-        if summary and summary.get("kafka.epoch") == epoch and summary.get("kafka.offsets"):
-            return {int(k): int(v) for k, v in json.loads(summary["kafka.offsets"]).items()}
-    return {}
-
-
-def properties(epoch, offsets):
-    return {"kafka.epoch": epoch, "kafka.offsets": json.dumps(offsets, sort_keys=True)}
+    return {
+        int(k): int(v)
+        for k, v in json.loads(table.properties.get(f"kafka.offsets.{epoch}", "{}")).items()
+    }
 
 
 class IcebergWriter:
@@ -161,30 +155,58 @@ class IcebergWriter:
         self.epoch = epoch
 
     def resume(self, partitions):
-        marks = [watermarks(table, self.epoch) for table in self.tables.values()]
+        marks = [watermarks(table.refresh(), self.epoch) for table in self.tables.values()]
         return {p: min(mark.get(p, 0) for mark in marks) for p in partitions}
 
     def append(self, rows, offsets):
         for scope, table in self.tables.items():
-            table.refresh()
-            prior = watermarks(table, self.epoch)
-            selected = [
-                row
-                for row in rows[scope]
-                if row["_kafka_offset"] >= prior.get(row["_kafka_partition"], 0)
-            ]
-            ends = {p: max(offsets[p], prior.get(p, 0)) for p in offsets}
-            if ends == prior:
-                continue
-            data = pa.Table.from_pylist(selected, schema=stream_schema(scope).as_arrow())
-            with table.transaction() as transaction:
-                if selected:
-                    transaction.append(data, snapshot_properties=properties(self.epoch, ends))
-                else:
-                    with transaction.update_snapshot(
-                        snapshot_properties=properties(self.epoch, ends)
-                    ).fast_append():
-                        pass
+            for attempt in range(4):
+                table.refresh()
+                prior = watermarks(table, self.epoch)
+                selected = [
+                    row
+                    for row in rows[scope]
+                    if row["_kafka_offset"] >= prior.get(row["_kafka_partition"], 0)
+                ]
+                ends = {**prior, **{p: max(offsets[p], prior.get(p, 0)) for p in offsets}}
+                if ends == prior:
+                    break
+                try:
+                    with table.transaction() as transaction:
+                        data = pa.Table.from_pylist(
+                            selected, schema=stream_schema(scope).as_arrow()
+                        )
+                        transaction.append(data)
+                        transaction.set_properties(
+                            {f"kafka.offsets.{self.epoch}": json.dumps(ends, sort_keys=True)}
+                        )
+                    break
+                except CommitFailedException:
+                    if attempt == 3:
+                        raise
+                    time.sleep(0.1 * 2**attempt)
+
+
+class HistoryWriter:
+    def __init__(self, tables, epoch, first, last):
+        self.transactions = {scope: table.transaction() for scope, table in tables.items()}
+        predicate = And(
+            EqualTo("epoch", epoch),
+            And(GreaterThanOrEqual("event_timestamp", first), LessThan("event_timestamp", last)),
+        )
+        for transaction in self.transactions.values():
+            transaction.delete(predicate)
+
+    def append(self, rows):
+        for scope, transaction in self.transactions.items():
+            if rows[scope]:
+                transaction.append(
+                    pa.Table.from_pylist(rows[scope], schema=stream_schema(scope).as_arrow())
+                )
+
+    def commit(self):
+        for transaction in self.transactions.values():
+            transaction.commit_transaction()
 
 
 class StreamWriter:
@@ -260,37 +282,50 @@ def retained(consumer, topic, starts, ends=None):
 def batches(consumer, topic, starts, ends, stopped, batch_size=1000, history=None):
     consumer.assign([TopicPartition(topic, p, start) for p, start in starts.items()])
     positions = dict(starts)
+    finished = set()
+    eof = set()
+    draining = False
     pending = []
     touched = time.monotonic()
-    while not stopped.is_set() and (ends is None or any(positions[p] < ends[p] for p in positions)):
+    while not stopped.is_set() and len(finished) < len(starts):
+        if history is not None and not draining and history.ends():
+            draining = True
+            eof.clear()
+            for partition, offset in positions.items():
+                consumer.seek(TopicPartition(topic, partition, offset))
+        if draining:
+            finished.update(eof)
+        if ends is not None:
+            finished.update(p for p in starts if positions[p] >= ends[p])
+        if len(finished) == len(starts):
+            break
         message = consumer.poll(1)
         if message is not None:
+            partition = message.partition()
             if message.error():
                 if message.error().code() != KafkaError._PARTITION_EOF:
                     raise RuntimeError("journal consumer failed")
-                partition = message.partition()
                 positions[partition] = max(positions[partition], message.offset())
-                if ends and positions[partition] < ends[partition]:
-                    raise ValueError("journal ended before requested offset")
-            elif ends is None or message.offset() < ends[message.partition()]:
-                pending.append(message)
-                positions[message.partition()] = message.offset() + 1
+                eof.add(partition)
+                if ends is not None:
+                    finished.add(partition)
+                    consumer.pause([TopicPartition(topic, partition)])
             else:
-                positions[message.partition()] = ends[message.partition()]
-                consumer.pause([TopicPartition(topic, message.partition())])
-        if (
-            len(pending) >= batch_size
-            or time.monotonic() - touched >= 5
-            or (ends and all(positions[p] >= ends[p] for p in positions))
-        ):
+                eof.discard(partition)
+                if ends is None or message.offset() < ends[partition]:
+                    pending.append(message)
+                    positions[partition] = message.offset() + 1
+                else:
+                    positions[partition] = ends[partition]
+                    finished.add(partition)
+                    consumer.pause([TopicPartition(topic, partition)])
+        if len(pending) >= batch_size or time.monotonic() - touched >= 5:
             yield pending, dict(positions)
             pending = []
             touched = time.monotonic()
-        if history is not None and ends is None:
-            ends = history.ends(consumer)
     if pending:
         yield pending, dict(positions)
-    if stopped.is_set() and ends is not None:
+    if stopped.is_set() and (ends is not None or history is not None):
         raise RuntimeError("bounded replay interrupted")
 
 
@@ -347,18 +382,27 @@ def main():
         offline = None
         if not replay:
             lake = catalog()
-            offline = IcebergWriter(
-                {scope: lake.load_table(name) for scope, name in TABLES.items()}, epoch
+            tables = {scope: lake.load_table(name) for scope, name in TABLES.items()}
+            offline = (
+                HistoryWriter(tables, epoch, history.first, history.last)
+                if history
+                else IcebergWriter(tables, epoch)
             )
-        writer = StreamWriter(
-            offline,
-            None if history else store(online=True),
-            offline_interval=args.offline_interval,
-            offline_rows=args.offline_rows,
+        writer = (
+            None
+            if history
+            else StreamWriter(
+                offline,
+                store(online=True),
+                offline_interval=args.offline_interval,
+                offline_rows=args.offline_rows,
+            )
         )
         if replay:
             starts = resolve_range(consumer, topic, args.start, partitions)
             ends = resolve_range(consumer, topic, args.until, partitions)
+        elif history:
+            starts, ends = dict.fromkeys(partitions, 0), None
         else:
             starts, ends = offline.resume(partitions), None
         retained(consumer, topic, starts, ends)
@@ -370,7 +414,9 @@ def main():
                 scope, row, _ = decode(message, epoch)
                 if history is None or history.first <= row["event_timestamp"] < history.last:
                     rows[scope].append(row)
-            if writer.write(rows, offsets):
+            if history:
+                offline.append(rows)
+            elif writer.write(rows, offsets):
                 consumer.commit(
                     offsets=[TopicPartition(topic, p, offset) for p, offset in offsets.items()],
                     asynchronous=False,
@@ -378,12 +424,13 @@ def main():
             written += sum(map(len, rows.values()))
         if stopped.is_set() and history:
             raise RuntimeError("history replay interrupted")
-        if writer.flush():
+        if writer is not None and writer.flush():
             consumer.commit(
                 offsets=[TopicPartition(topic, p, offset) for p, offset in offsets.items()],
                 asynchronous=False,
             )
         if history:
+            offline.commit()
             history.report(written)
         elif os.environ.get("RUN_REPORT"):
             write_json(

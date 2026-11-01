@@ -8,12 +8,10 @@ from test_stream_writer import DAY, row
 from fraud_feast import history
 from fraud_feast.apply import stream_schema
 from fraud_feast.repo import KEYS, TABLES
-from fraud_feast.stream_writer import IcebergWriter, watermarks
+from fraud_feast.stream_writer import HistoryWriter, watermarks
 
 
-def test_month_prepare_replaces_only_its_epoch_and_resets_journal_progress(lake, monkeypatch):
-    monkeypatch.setattr(history, "catalog", lambda: lake)
-    monkeypatch.setenv("FEATURE_EPOCH", "history-ci")
+def test_history_replaces_only_its_unit_atomically_and_retries_from_zero(lake):
     for scope, name in TABLES.items():
         table = lake.load_table(name)
         table.append(
@@ -27,13 +25,22 @@ def test_month_prepare_replaces_only_its_epoch_and_resets_journal_progress(lake,
             )
         )
     for _ in range(2):
-        history.prepare("2025-09-01", "2025-10-01")
-        writer = IcebergWriter({s: lake.load_table(n) for s, n in TABLES.items()}, "history-ci")
-        assert writer.resume([0]) == {0: 0}
-        writer.append({s: [row(s, epoch="history-ci")] for s in KEYS}, {0: 1})
-        for table in writer.tables.values():
-            assert table.scan().to_arrow().num_rows == 3
-            assert watermarks(table, "history-ci") == {0: 1}
+        tables = {scope: lake.load_table(name) for scope, name in TABLES.items()}
+        before = {scope: table.scan().to_arrow() for scope, table in tables.items()}
+        writer = HistoryWriter(tables, "history-ci", DAY, DAY + timedelta(days=30))
+        writer.append({scope: [row(scope, value=2, epoch="history-ci")] for scope in KEYS})
+        writer.append(
+            {scope: [row(scope, offset=1, value=3, epoch="history-ci")] for scope in KEYS}
+        )
+        for scope, name in TABLES.items():
+            assert lake.load_table(name).scan().to_arrow().equals(before[scope])
+        writer.commit()
+        for scope, table in tables.items():
+            assert table.scan().to_arrow().num_rows == 4
+            assert watermarks(table, "history-ci") == {}
+    abandoned = HistoryWriter(tables, "history-ci", DAY, DAY + timedelta(days=30))
+    abandoned.append({scope: [row(scope, epoch="history-ci")] for scope in KEYS})
+    assert all(lake.load_table(name).scan().to_arrow().num_rows == 4 for name in TABLES.values())
 
 
 def test_gate_requires_decode_success_and_all_input_not_reject_count_equality():

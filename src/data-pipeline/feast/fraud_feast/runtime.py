@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from string import Template
 
 import uvicorn
 import yaml
@@ -21,7 +22,6 @@ def config(*, online=False):
     )
     text = Path(__file__).with_name("feature_store.yaml").read_text()
     values = yaml.safe_load(text)
-    from string import Template
 
     def expand(value):
         if isinstance(value, dict):

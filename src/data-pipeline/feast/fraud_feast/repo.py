@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from feast import Entity, FeatureService, FeatureView, Field, PushSource, ValueType
 from feast.infra.offline_stores.contrib.spark_offline_store.spark_source import SparkSource
-from feast.types import Float64, Int64
+from feast.types import Float64, Int64, String
 
 from fraud_feast.request import request_context, request_features
 
@@ -60,6 +60,7 @@ def definitions():
         for scope, key in KEYS.items()
     }
     views = []
+    model_views = []
     selected = ",".join(f"'{value}'" for value in epochs())
     for scope in KEYS:
         for kind, fields, ttl, definition in (
@@ -70,7 +71,7 @@ def definitions():
                 {"table": f"lake.{DAILY_TABLES[scope]}"}
                 if kind == "daily"
                 else {
-                    "query": f"SELECT integration_id, {KEYS[scope]}, event_timestamp, created, {', '.join(fields)} FROM lake.{TABLES[scope]} WHERE epoch IN ({selected})"
+                    "query": f"SELECT integration_id, {KEYS[scope]}, event_timestamp, created, epoch, {', '.join(fields)} FROM lake.{TABLES[scope]} WHERE epoch IN ({selected})"
                 }
             )
             source = SparkSource(
@@ -91,17 +92,22 @@ def definitions():
                             name=name, dtype=Float64 if name.startswith("decline_rate_") else Int64
                         )
                         for name in fields
-                    ],
+                    ]
+                    + ([Field(name="epoch", dtype=String)] if kind == "stream" else []),
                     source=source,
                     online=True,
                     tags={"definition": definition},
                 )
             )
+            model_views.append(views[-1][fields])
     return [
         integration,
         *entities.values(),
         *views,
         request_context,
         request_features,
-        FeatureService(name="payment_risk_v1", features=[*views, request_features]),
+        FeatureService(
+            name="payment_risk_v1",
+            features=[*model_views, request_features],
+        ),
     ]

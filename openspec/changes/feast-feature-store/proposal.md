@@ -26,11 +26,11 @@ This change assigns one engine to each feature definition so training and servin
   - **TTLs** follow the longest window plus delay: 31 days 12 hours for the daily views, 24 hours 5 minutes for the stream views. The documentation records the reasons.
   - **Registry:** persistent, in object storage, written by a deploy-time `feast apply`.
 - **One feature service, `payment_risk_v1`.** It covers the four stored views and the pure Python request_features on-demand view. Training requests it through `get_historical_features`, with `gold.label_attempt`'s simulation-truth rows as the entity dataframe at plain `started_at`, and so does Go Fraud. Stream rows become visible one microsecond after they are written, so a snapshot that counts the scored attempt is never returned. Training retrieval runs Feast's Spark offline store in local mode, in one Kubeflow Pipelines step.
-- **One stream writer.** The `feature-writer` Deployment and consumer group run `stream_writer`: each live batch pushes online first, then buffered rows append to Iceberg every five minutes or 100,000 rows with their Kafka offsets. Restarts resume from Iceberg offsets. `--history` writes offline only; `--from`/`--until` replays online only.
+- **One stream writer.** The `feature-writer` Deployment and consumer group run `stream_writer`: each live batch pushes online first, then buffered rows append to Iceberg every five minutes or 100,000 rows with their Kafka offsets. Restarts resume from transactional Iceberg table properties that survive snapshot expiry. `--history` writes offline only; `--from`/`--until` replays online only.
 - **Stream history by Kappa replay.** An on-demand `stream-history` workflow, run month by month:
   1. it seeds isolated topics from Bronze;
   2. it replays them through the live Flink job in logical-clock mode under epoch `history-v19`;
-  3. the workflow deletes the month's history rows, then the feature writer appends through its normal path.
+  3. the history writer atomically deletes and replaces each table’s unit in one PyIceberg transaction, reading from offset zero to committed EOF.
 
   It takes explicit start and end days, and rerunning a range replaces the same rows.
 - **Materialization.** A `feast-materialize` Argo workflow runs on its own daily schedule after `dp-daily`, and on demand after a `dp-backfill`:
@@ -82,7 +82,7 @@ This change assigns one engine to each feature definition so training and servin
 - `fraud-feature-contracts`: adds serving parity, and requires short-window history to come from the streaming job itself. It is ADDED only while DP3 is unarchived; retiring v1 waits for DP3's archive.
 - `data-pipeline-orchestration`: adds the `feast-materialize`, `feature-writer-replay` and `stream-history` workflows (ADDED only).
 - `data-catalog-governance`: adds the streaming-job catalogue and lineage, plus the stream-writer, stream-history and materialization lineage and status (ADDED only).
-- `talos-gitops-deployment`: prod enables Flink, the live simulator, the feature store and Fraud retrieval in shadow mode.
+- `talos-gitops-deployment`: data-pipelines owns feature infrastructure behind one flag, enabled in dev and disabled in prod until provisioning.
 
 ## Impact
 
@@ -97,8 +97,7 @@ This change assigns one engine to each feature definition so training and servin
   - `contracts/features/v1` and `fraud-snapshot-v1.*` are removed;
   - `fraud-snapshot-v2.examples.json` gains lateness-boundary cases.
 - **Infra:**
-  - `infra/charts/fraud-features`: the stream writer, the server, the PostSync apply, Redis sizing and prod enablement, Flink `live-v19`;
-  - `infra/charts/data-pipelines`: the `feast-materialize`, `feature-writer-replay` and `stream-history` templates, the materialization CronWorkflow, RBAC for the history FlinkDeployment, and the Flink connector;
+  - `infra/charts/data-pipelines`: Flink, Redis, the stream writer, server and apply hook under `features.enabled` (dev on, prod off until provisioned); the `feast-materialize`, `feature-writer-replay` and `stream-history` templates, the materialization CronWorkflow, RBAC for the history FlinkDeployment, and the Flink connector;
   - `infra/charts/kafka`: ACLs for the history topics;
   - `infra/charts/live-traffic`: prod values;
   - `infra/charts/payment-gateway`: Fraud feature configuration and removal of the dedicated submission Redis;

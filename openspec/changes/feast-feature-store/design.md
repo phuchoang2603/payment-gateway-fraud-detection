@@ -25,7 +25,7 @@ See proposal.md for the motivation. The current state that shapes the design:
   - Logical-clock mode (`CLOCK_MODE=logical`, `CLOCK_TOPIC`) replays recorded events deterministically. The job refuses it unless the input topic is isolated, the epoch is not a live epoch and a clock topic is set.
   - It reads raw `payments.v1` protobuf envelopes and decodes them with `wire.py`. Bronze `payment_events` holds the same events as decoded columns.
   - Flink runs today only in dev, with epoch `live-v18`. Prod disables live traffic, Flink, Feast and Fraud retrieval by spec (`talos-gitops-deployment`).
-- **Today's Feast code:** a v1 writer and server with a synthetic `snapshot_key`, a `/tmp` registry and `ttl=0`. It is disabled everywhere. Redis (`payment-gateway-feast-redis`, password key `GATEWAY_FEAST_REDIS_PASSWORD`, 512 MB) is defined in `fraud-features`.
+- **Today's Feast code:** a v1 writer and server with a synthetic `snapshot_key`, a `/tmp` registry and `ttl=0`. It is disabled everywhere. Redis (`payment-gateway-feast-redis`, password key `GATEWAY_FEAST_REDIS_PASSWORD`, 512 MB) is defined in `data-pipelines`.
 - **Go Fraud** makes two v1 reads keyed by `snapshot_key`. It is disabled and shadow-only. Its evidence is a `features.v1` message inside `fraud.v1.DecideResponse`; Payments reads only the assessment ID and the evidence digest.
 - **Feast 0.67.0,** checked against the published package source (Context7's quota was exhausted):
   - `SparkSource(table=…)` and `SparkSource(query=…)` read through the active Spark catalogs. `IcebergSource` loads a whole table into the driver, so it is not used.
@@ -53,7 +53,6 @@ See proposal.md for the motivation. The current state that shapes the design:
 - **A batch implementation of the short windows.** No Spark job computes `fraud-snapshot-v2`.
 - **Seeding the live job's state from history.** Live Flink starts empty, and its windows report unknown coverage until they are covered.
 - **Benchmarks** beyond the rubric, including Arrow performance comparisons.
-- **Request features** (amount, account age, IP mismatch). Go Fraud and the training change compute them.
 - **`gold.dim_customer` as a view.** Its `valid_from_ts` equals the scored attempt's own start, so a `<= t` lookup would leak it.
 - **Feast lineage in OpenMetadata.** Feast has no connector.
 
@@ -102,16 +101,16 @@ Feast 0.67 allows one join key per entity, so every view lists `integration` plu
 | `payment_method_stream` | the same pattern, over `lake.gold.feat_stream_payment_method` | integration, payment_method | `method_snapshot_attempt_count_5m`, `_1h`, `_24h` |
 
 - **Stream tables.** `gold.feat_stream_customer` and `gold.feat_stream_payment_method` hold every Flink snapshot: the natural keys, `event_timestamp` (the snapshot's `online_write_at + 1µs`), `created`, the values, `epoch`, `revision`, `_kafka_partition` and `_kafka_offset`. They are partitioned by `day(event_timestamp)`, created by `apply.py` with PyIceberg, written only by feature writer, and covered by `maintain-lakehouse`.
-- **Epochs.** History rows carry `history-v19`, and live rows `live-v19`. The view query selects the configured epochs (`feast.streamEpochs`), so an old epoch drops out by configuration, not by deleting rows. History ends before live starts (decision 8), so the epochs never overlap in time.
+- **Epochs.** History rows carry `history-v19`, and live rows `live-v19`. The view query selects the configured epochs (`features.epochs`), so an old epoch drops out by configuration, not by deleting rows. History ends before live starts (decision 8), so the epochs never overlap in time.
 - **Exact as-of values.** Flink emits a snapshot on every change, including expiries, so the latest snapshot at or before any `t` is exact at `t`, offline and online alike.
 - **Schemas.** The schemas are explicit and match the definition files and the ODCS contracts, so `apply` infers nothing. A CI test compares `repo.py`'s fields with each definition's feature list.
 - **Tags.** Every view is online and tagged with its definition ID: `fraud-history-batch-v1` for the daily views, `fraud-snapshot-v2` for the stream views.
 
 ### Request features
 
-`request_context = RequestSource(...)` carries `scored_at`, `amount_minor`, `customer_account_created_at`, `merchant_account_created_at`, `shipping_country`, nullable `shipping_country` and `ip_country`, `item_count` and `has_device`. Timestamps use Feast UnixTimestamp, counts use Int64, countries String and device presence Bool.
+`request_context = RequestSource(...)` carries `scored_at`, `amount_minor`, `customer_account_created_at`, `merchant_account_created_at`, nullable `shipping_country` and `ip_country`, `item_count` and `has_device`. Timestamps use Feast UnixTimestamp, counts use Int64, countries String and device presence Bool.
 
-`request_features` is a pure Python `on_demand_feature_view(mode="python", sources=[request_context])`. It returns amount_minor, customer_account_age_days, merchant_account_age_days, ip_shipping_country_mismatch, item_count and has_device. Ages are elapsed whole days at scored_at. Country mismatch is null when either country is null. Item count is the number of checkout line items, and has_device is fingerprint presence. The slim Feast image needs no Spark to transform requests. Feast applies the same implementation through transform_arrow offline and transform_dict online. Feast 0.67.0 has a Python-mode online naming bug: full-name filtering drops unprefixed transformed outputs. The server installs a focused transform_dict shim that also exposes each declared output under its projected full name before Feast filters the response. It preserves short names and leaves transform_arrow unchanged; no feature calculations are duplicated. The HTTP parity test exercises this serving entrypoint. A CI test compares historical retrieval with the HTTP feature server for identical inputs, including nullable IP.
+`request_features` is a pure Python `on_demand_feature_view(mode="python", sources=[request_context])`. It returns amount_minor, customer_account_age_days, merchant_account_age_days, ip_shipping_country_mismatch, item_count and has_device. Ages are elapsed whole days at scored_at, or null when the account creation timestamp is absent. Country mismatch is null when either country is null. Item count is the number of checkout line items, and has_device is fingerprint presence. The slim Feast image needs no Spark to transform requests. Feast applies the same implementation through transform_arrow offline and transform_dict online. Feast 0.67.0 has a Python-mode online naming bug: full-name filtering drops unprefixed transformed outputs. The server installs a focused transform_dict shim that also exposes each declared output under its projected full name before Feast filters the response. It preserves short names and leaves transform_arrow unchanged; no feature calculations are duplicated. The HTTP parity test exercises this serving entrypoint. A CI test compares historical retrieval with the HTTP feature server for identical inputs, including nullable IP.
 
 ### 3. TTLs
 
@@ -145,12 +144,12 @@ payment_risk_v1 = FeatureService(name="payment_risk_v1",
 `fraud_feast.stream_writer` runs as one `feature-writer` Deployment with consumer group `feature-writer`, read-committed isolation and manual commits.
 
 1. **Decode and map.** Validate the v2 identity against the SHA-256 read from the contract definition file at import. One shared mapper sets natural keys, `event_timestamp = online_write_at + 1µs`, Kafka timestamp as `created`, values, epoch, revision and Kafka coordinates. Invalid records stop consumption without committing.
-2. **Push online.** Each batch calls `store.push("<view>_push", df, to=PushMode.ONLINE)` before any offline commit. All-null rows are skipped: they carry no value, and a new live epoch has no older online value to clear. Redis ignores repeated or older timestamps.
-3. **Append offline.** Buffer rows until `offline_interval` (default 300 seconds) or `offline_rows` (default 100,000), then append once per Iceberg table with exclusive Kafka offsets in its snapshot summary; graceful shutdown flushes the buffer. PyIceberg's public append API is used because Feast's SparkSource query/table write path does not implement offline push.
+2. **Push online.** Each batch calls `store.push("<view>_push", df, to=PushMode.ONLINE)` before any offline commit. Every stream view also includes the always-set snapshot `epoch`, excluded from the model service, so public push writes null coverage over any previous epoch’s counts. Redis ignores repeated or older timestamps.
+3. **Append offline.** Buffer rows until `offline_interval` (default 300 seconds) or `offline_rows` (default 100,000), then append once per Iceberg table with exclusive Kafka offsets in the table property `kafka.offsets.<epoch>` set in the same transaction; graceful shutdown flushes the buffer. Table properties survive snapshot expiry, so stream tables remain in nightly maintenance. On `CommitFailedException`, refresh the table, filter the batch against its refreshed offsets and retry up to four attempts. PyIceberg's public append API is used because Feast's SparkSource query/table write path does not implement offline push.
 4. **Restart.** Resume from the minimum of the two tables' Iceberg offsets, filtering out each table's already committed rows. A crash between online push and offline commit only re-pushes those rows. Kafka offsets are committed after both table writes for lag visibility, never used for recovery.
-5. **Modes.** Live writes online and offline. `--history --history-start <day> --history-end <day>` uses the same buffering and append path without opening an online store, skips lead-in rows and rows outside the unit, and resumes from Iceberg offsets. `--from`/`--until` is online-only bounded replay over retained offsets or UTC timestamps, without Kafka commits or Iceberg writes.
+5. **Modes.** Live writes online and offline. `--history --history-start <day> --history-end <day>` opens one PyIceberg transaction per table for the unit, deletes only its epoch and time range, appends bounded batches into that transaction and commits once at the end. It reads temporary topics from offset zero, skips lead-in and out-of-range rows, and never stores or resumes history offsets. Failed units retry from zero through Argo. Data files are written during append; rows do not accumulate in memory. `--from`/`--until` is online-only bounded replay over retained offsets or UTC timestamps, without Kafka commits or Iceberg writes.
 
-CI covers push-before-commit, timed and row-count flushing, partial-table commit recovery, older and repeated Redis writes, all-null skipping and fail-before-commit on malformed journal records. History deletes the month before running the writer normally, so failed units are rerun before training.
+CI covers push-before-commit, timed and row-count flushing, partial-table commit recovery, older and repeated Redis writes, new-epoch null coverage replacement and fail-before-commit on malformed journal records. History replaces each table’s month atomically and retries failed units from offset zero.
 
 ### 6. Materialization: `feast-materialize`
 
@@ -189,14 +188,14 @@ An optional `since` day overrides the start after a backfill; the end is always 
 
 **`stream-history`** is an on-demand WorkflowTemplate with `start` and `end` days, defaulting to `[2026-07-29, 2026-10-29)`. It processes one month at a time, in order, under mutex `stream-history`, and stops at the first failed month. For each month:
 
-1. **Prepare and topics.** Before starting the month, DELETE its history-epoch rows from both stream tables and reset the recreated journal's offset progress. Then it recreates the epoch's topics: `payments.events.history-v19`, `fraud.clock.history-v19`, `fraud.feature-updates.v2.history-v19` and `fraud.feature-rejects.v1.history-v19`. The input topic has a `retention.bytes` cap.
+1. **Topics.** Recreate the epoch's topics: `payments.events.history-v19`, `fraud.clock.history-v19`, `fraud.feature-updates.v2.history-v19` and `fraud.feature-rejects.v1.history-v19`. The input topic has a `retention.bytes` cap.
 2. **Seed.** `fraud_streaming.history` reads the month from Bronze `payment_events`, plus one day of lead-in, in source order. It encodes each event as the `payments.v1` envelope with the descriptors Flink decodes (`wire.py`), and writes the input and clock topics.
    - It pauses while the replay's consumer lag exceeds a bound, so Kafka never holds more than a slice of the month.
    - A CI round-trip test proves that a Bronze row, encoded, decodes to the same event in `wire.decode`. The seed uses the streaming project's history dependency group.
 3. **Replay ordering (approved 2026-10-31).** History input and clock topics each have one partition. Each clock control carries a sequence and exclusive input-offset barrier. The source buffers both streams in checkpointed state, releases input only through the next barrier, then advances the clock. An initial offset-zero barrier fixes the bootstrap instant. The seed bounds outstanding batches by checkpointed consumer lag. Missing, regressing or oversized barriers fail the replay. This extends the existing Flink logical-clock protocol because Kafka orders records only within a topic partition; without the offset barrier, a clock can overtake input and change lateness and expiry results.
 
-   **Replay.** A FlinkDeployment of the live job's image runs in logical-clock mode with epoch `history-v19`, from empty state. One day of lead-in fills every 24-hour window and the dedup horizon, so months are independent.
-4. **Offline write.** The feature writer uses its normal append path on the history journal, skipping lead-in rows (`event_timestamp < start`) and rows at or after the exclusive end. Its Iceberg commit offsets make restarts exactly-once. Rerunning a month deletes then rebuilds its rows; a failed month may be partial and must be rerun before training.
+   **Replay.** The mutex-serialized `fraud-streaming-<history epoch>` FlinkDeployment uses the live job’s image in logical-clock mode with epoch `history-v19`, from empty state. Flink’s shared Role permits get only on the named live and history Deployments. One day of lead-in fills every 24-hour window and the dedup horizon, so months are independent.
+4. **Offline write.** The history writer opens one transaction per table, deletes the unit’s history-epoch rows, appends each bounded batch and commits once at the end. It skips lead-in rows (`event_timestamp < start`) and rows at or after the exclusive end. Reads start at zero and drain to read-committed partition EOF after Flink consumes the seed and completes two further checkpoints. No high watermark determines the end: an open transaction can put it beyond the last stable offset. Bounded online replay likewise ends at the requested offset or partition EOF, whichever comes first. A failed table transaction leaves its previous rows visible; Argo retries the unit idempotently, including after a partial two-table commit.
 5. **Gate.** Require zero decode rejects and checkpointed input offsets at every seeded record's end (and the final clock control consumed). Duplicates and too-late rejects are reported, not gated. Snapshots carry no attempt IDs, so an attempts-in-snapshots gate is impossible. Counts and consumed offsets go to the run report and pipeline status.
 6. **Cleanup.** An exit handler deletes the FlinkDeployment and the epoch's topics, on success and failure.
 
@@ -239,17 +238,17 @@ The published v19 manifest was read from its recorded S3 URI on 2026-10-31; its 
 | Flink epoch | `live-v18` | `live-v19` (new) |
 | Live simulator | v18 manifest | v19 manifest, 1 payment every 30 s, bounded evidence runs (7 days by default) |
 | Redis | existing, 512 MB | about 6 GiB `maxmemory` on gp3: about 3M customer and 3M payment-method hashes for the daily views, plus the live stream keys |
-| feature writer, server, `feast-materialize`, Go retrieval (shadow) | on | on |
+| Flink, Redis, feature writer, server and Feast workflows (`features.enabled`) | on | off until platform provisioning |
 
 The prod simulator uses a Job with no retry, so completing the seven-day duration does not trigger a Deployment restart and begin another evidence run.
 
-The prod enablement modifies the `talos-gitops-deployment` environment requirement, which no unarchived change touches. Dev stays the PR smoke environment, and the evidence comes from prod, as for DP3.
+Prod feature infrastructure stays disabled under the single `data-pipelines.features.enabled` flag until platform provisioning. Its eventual enablement modifies the `talos-gitops-deployment` environment requirement, which no unarchived change touches. Dev stays the PR smoke environment, and the evidence comes from prod, as for DP3.
 
 ### 11. Governance (roadmap step 8)
 
 Kafka access follows the existing unauthenticated-listener and network-policy pattern, as the user confirmed on 2026-10-31. The feature-writer Deployment and `data-pipelines` are admitted from `data`. Authenticated per-client topic ACLs are optional future work and are not a prerequisite for this change.
 
-- **Flink connector.** `catalog.connectors.flink` (`kind: pipeline`, `type: Flink`, JobManager REST on port 8081) runs in `metadata-discovery`. The `fraud-features` network policy admits the metadata job's pods.
+- **Flink connector.** `catalog.connectors.flink` (`kind: pipeline`, `type: Flink`, JobManager REST on port 8081) runs in `metadata-discovery`. The `fraud-streaming` network policy admits the metadata job's pods.
 - **Fallback.** If the connector does not resolve the PyFlink Kafka lineage, `openmetadata.lineage` publishes `payments.events.v1` → `fraud-streaming` → the journal and reject topics.
 - **Kafka connector.** Its topic filter adds the journal and reject topic patterns.
 - **New pipelines:**
@@ -302,7 +301,7 @@ No new Doppler keys. Requests:
 ## Migration Plan
 
 1. **Start gate.** The implementation branch is rebased onto `origin/main` at `371d2ca`, which removes DP3's Spark short windows. The user authorized implementation and a draft PR. Validate with `--strict`.
-2. **Implement with local non-test checks, then push and open the PR.** The dev deploy is the v18 smoke run:
+2. **Implement, validate, then push the draft PR.** Before data-pipelines syncs in dev, delete the old `fraud-features` Argo CD Application without cascade, orphaning its resources so Redis and the FlinkDeployment are adopted without recreation. The dev deploy is the v18 smoke run:
    - apply, then feature writer on `live-v18`;
    - a `dp-backfill`, then `feast-materialize`;
    - a `dp-pipeline` run without a range (yesterday plus the lookback) and `feast-materialize` again, refreshing the lookback days;
@@ -310,7 +309,7 @@ No new Doppler keys. Requests:
    - a push replay over a range, run twice;
    - `stream-history` over one v18 month, then rerun over one of its days, with equal row counts;
    - a Fraud read.
-3. **After merge, in prod:**
+3. **After merge and platform provisioning, enable `data-pipelines.features.enabled` in prod:**
    - the apply Job runs;
    - after the v19 `dp-backfill`, run `feast-materialize` with `since=<backfill start>`;
    - run `stream-history` with `start=2026-07-29`, `end=2026-10-29`, month by month; the served model's training waits for this range;

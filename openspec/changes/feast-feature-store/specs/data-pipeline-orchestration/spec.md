@@ -22,7 +22,7 @@ An online-only bounded replay of the feature writer SHALL run as an on-demand Ar
 - **THEN** the second waits for the first to finish
 
 ### Requirement: Stream history workflow
-The stream history SHALL run as an on-demand Argo workflow, `stream-history`, with optional start and end days. For each month in order, it SHALL delete that month's history-epoch rows, seed the isolated topics, replay through a run-scoped streaming deployment, and write the offline rows. An exit handler SHALL delete the deployment and topics, and SHALL publish each unit's outcome on success and on failure. Runs SHALL be serialized by their own mutex. It SHALL NOT be scheduled.
+The stream history SHALL run as an on-demand Argo workflow, `stream-history`, with optional start and end days. For each month in order, it SHALL seed isolated topics, replay through a run-scoped streaming deployment, and atomically replace each table’s history-epoch unit in one transaction. The history writer SHALL retry failed units from offset zero through committed partition EOF, without a prepare step or offset resume. An exit handler SHALL delete the deployment and topics, and SHALL publish each unit's outcome on success and on failure. Runs SHALL be serialized by their own mutex. It SHALL NOT be scheduled.
 
 #### Scenario: Replay stage fails
 

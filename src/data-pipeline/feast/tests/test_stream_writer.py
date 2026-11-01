@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
+import pyarrow as pa
 import pytest
 
 from fraud_feast.contracts.features.v2.features_pb2 import SnapshotUpdate
@@ -9,6 +10,7 @@ from fraud_feast.stream_writer import (
     DEFINITION_HASH,
     IcebergWriter,
     StreamWriter,
+    batches,
     decode,
     write_online,
 )
@@ -120,17 +122,15 @@ def test_empty_view_advances_watermark_and_invalid_record_has_no_commit(lake):
     job = writer(lake)
     job.append({"customer": [row("customer")], "payment_method": []}, {0: 1})
     assert job.resume([0]) == {0: 1}
-    before = {scope: table.current_snapshot().snapshot_id for scope, table in job.tables.items()}
+    before = {scope: table.metadata_location for scope, table in job.tables.items()}
     message = SimpleNamespace(value=lambda: b"", key=lambda: b"bad")
     with pytest.raises(ValueError, match="payload"):
         scope, value, _ = decode(message, "live-ci")
         job.append({scope: [value]}, {0: 2})
-    assert before == {
-        scope: table.current_snapshot().snapshot_id for scope, table in job.tables.items()
-    }
+    assert before == {scope: table.metadata_location for scope, table in job.tables.items()}
 
 
-def test_older_online_revision_does_not_replace_newer_and_all_null_is_skipped(feature_store):
+def test_older_online_revision_is_ignored_and_new_epoch_clears_old_values(feature_store):
     scope = "customer"
     write_online(
         feature_store,
@@ -146,11 +146,11 @@ def test_older_online_revision_does_not_replace_newer_and_all_null_is_skipped(fe
     write_online(
         feature_store,
         "customer_stream",
-        [row(scope, at=DAY + timedelta(minutes=2), value=None)],
+        [row(scope, at=DAY + timedelta(minutes=2), value=None, epoch="live-next")],
         STREAM_FIELDS[scope],
     )
     result = feature_store.get_online_features(features=features, entity_rows=entities).to_dict()
-    assert result[STREAM_FIELDS[scope][0]] == [2]
+    assert result[STREAM_FIELDS[scope][0]] == [None]
 
 
 def test_invalid_journal_stops_continuous_job_before_kafka_commit(lake, monkeypatch):
@@ -181,3 +181,96 @@ def test_invalid_journal_stops_continuous_job_before_kafka_commit(lake, monkeypa
     consumer.commit.assert_not_called()
     consumer.close.assert_called_once()
     assert all(lake.load_table(name).current_snapshot() is None for name in TABLES.values())
+
+
+def test_live_resume_survives_expiring_offset_snapshot(lake):
+    job = writer(lake)
+    job.append({scope: [row(scope)] for scope in KEYS}, {0: 1})
+    table = job.tables["customer"]
+    snapshot_id = table.current_snapshot().snapshot_id
+    table.append(
+        pa.Table.from_pylist([row("customer", offset=1)], schema=table.schema().as_arrow())
+    )
+    table.maintenance.expire_snapshots().by_id(snapshot_id).commit()
+    assert all(snapshot.snapshot_id != snapshot_id for snapshot in table.snapshots())
+    assert writer(lake).resume([0]) == {0: 1}
+
+
+def test_live_conflict_refreshes_offsets_and_deduplicates(lake, monkeypatch):
+    from pyiceberg.exceptions import CommitFailedException
+    from pyiceberg.table import Transaction
+
+    job = writer(lake)
+    commit = Transaction.commit_transaction
+    conflicted = [False]
+
+    def competing_commit(transaction):
+        if not conflicted[0]:
+            conflicted[0] = True
+            competitor = writer(lake)
+            competitor.append({scope: [row(scope)] for scope in KEYS}, {0: 1})
+            raise CommitFailedException("concurrent append")
+        return commit(transaction)
+
+    monkeypatch.setattr(Transaction, "commit_transaction", competing_commit)
+    job.append({scope: [row(scope), row(scope, 1)] for scope in KEYS}, {0: 2})
+    assert job.resume([0]) == {0: 2}
+    assert all(table.scan().to_arrow().num_rows == 2 for table in job.tables.values())
+
+
+@pytest.mark.parametrize("history_mode", [False, True])
+def test_bounded_reads_stop_at_stable_partition_eof(history_mode):
+    import threading
+    from unittest.mock import Mock
+
+    from confluent_kafka import KafkaError
+
+    consumer = Mock()
+    record = Mock()
+    record.error.return_value = None
+    record.partition.return_value = 0
+    record.offset.return_value = 0
+    eof = Mock()
+    eof.error.return_value.code.return_value = KafkaError._PARTITION_EOF
+    eof.partition.return_value = 0
+    eof.offset.return_value = 2
+    consumer.poll.side_effect = [record, eof]
+    history = Mock() if history_mode else None
+    if history:
+        history.ends.return_value = True
+    result = list(
+        batches(
+            consumer,
+            "journal",
+            {0: 0},
+            None if history else {0: 20},
+            threading.Event(),
+            history=history,
+        )
+    )
+    assert [message for batch, _ in result for message in batch] == [record]
+    assert result[-1][1] == {0: 2}
+    consumer.get_watermark_offsets.assert_not_called()
+
+
+def test_history_discards_early_eof_and_drains_again_after_flink_finishes():
+    import threading
+    from unittest.mock import Mock
+
+    from confluent_kafka import KafkaError
+
+    consumer, history = Mock(), Mock()
+    history.ends.side_effect = [False, False, True]
+    early, record, final = Mock(), Mock(), Mock()
+    for message in (early, final):
+        message.error.return_value.code.return_value = KafkaError._PARTITION_EOF
+        message.partition.return_value = 0
+    early.offset.return_value = 0
+    final.offset.return_value = 2
+    record.error.return_value = None
+    record.partition.return_value = 0
+    record.offset.return_value = 0
+    consumer.poll.side_effect = [early, record, final]
+    result = list(batches(consumer, "journal", {0: 0}, None, threading.Event(), history=history))
+    assert result == [([record], {0: 2})]
+    assert consumer.seek.call_args.args[0].offset == 1
