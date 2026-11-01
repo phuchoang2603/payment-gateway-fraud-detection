@@ -29,7 +29,7 @@
       "strokeColor": "#495057",
       "strokeStyle": "dashed",
       "strokeWidth": 1,
-      "updated": 1793529114249,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 171983095
     },
@@ -65,7 +65,7 @@
       "strokeWidth": 2,
       "text": "Clients",
       "textAlign": "left",
-      "updated": 1793529114249,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 534631964,
       "verticalAlign": "top"
@@ -96,7 +96,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "dashed",
       "strokeWidth": 1,
-      "updated": 1793529114250,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 1640639324
     },
@@ -123,16 +123,16 @@
       "link": null,
       "locked": false,
       "opacity": 100,
-      "originalText": "llm · agentgateway",
+      "originalText": "agentgateway",
       "roughness": 1,
       "roundness": null,
       "seed": 1319774755,
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "text": "llm · agentgateway",
+      "text": "agentgateway",
       "textAlign": "left",
-      "updated": 1793529114250,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 1418555673,
       "verticalAlign": "top"
@@ -163,7 +163,7 @@
       "strokeColor": "#e67700",
       "strokeStyle": "dashed",
       "strokeWidth": 1,
-      "updated": 1793529114250,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 2103898750
     },
@@ -190,16 +190,16 @@
       "link": null,
       "locked": false,
       "opacity": 100,
-      "originalText": "llm-agents · kagent on Agent Substrate",
+      "originalText": "kagent agents on Agent Substrate",
       "roughness": 1,
       "roundness": null,
       "seed": 364740037,
       "strokeColor": "#e67700",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "text": "llm-agents · kagent on Agent Substrate",
+      "text": "kagent agents on Agent Substrate",
       "textAlign": "left",
-      "updated": 1793529114250,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 785120567,
       "verticalAlign": "top"
@@ -230,7 +230,7 @@
       "strokeColor": "#2f9e44",
       "strokeStyle": "dashed",
       "strokeWidth": 1,
-      "updated": 1793529114250,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 2073009922
     },
@@ -257,16 +257,16 @@
       "link": null,
       "locked": false,
       "opacity": 100,
-      "originalText": "llm · KServe + llm-d · GPU (DRA)",
+      "originalText": "Inference · KServe + llm-d · GPU (DRA)",
       "roughness": 1,
       "roundness": null,
       "seed": 1677254265,
       "strokeColor": "#2f9e44",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "text": "llm · KServe + llm-d · GPU (DRA)",
+      "text": "Inference · KServe + llm-d · GPU (DRA)",
       "textAlign": "left",
-      "updated": 1793529114250,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 1628835035,
       "verticalAlign": "top"
@@ -297,7 +297,7 @@
       "strokeColor": "#e8590c",
       "strokeStyle": "dashed",
       "strokeWidth": 1,
-      "updated": 1793529114250,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 786960885
     },
@@ -324,16 +324,16 @@
       "link": null,
       "locked": false,
       "opacity": 100,
-      "originalText": "llm · MCP tools and ML inference",
+      "originalText": "MCP tools and ML inference",
       "roughness": 1,
       "roundness": null,
       "seed": 2080936144,
       "strokeColor": "#e8590c",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "text": "llm · MCP tools and ML inference",
+      "text": "MCP tools and ML inference",
       "textAlign": "left",
-      "updated": 1793529114250,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 552023994,
       "verticalAlign": "top"
@@ -364,7 +364,7 @@
       "strokeColor": "#6741d9",
       "strokeStyle": "dashed",
       "strokeWidth": 1,
-      "updated": 1793529114251,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 67191404
     },
@@ -391,16 +391,16 @@
       "link": null,
       "locked": false,
       "opacity": 100,
-      "originalText": "data · pipelines and stores",
+      "originalText": "Data pipelines and stores",
       "roughness": 1,
       "roundness": null,
       "seed": 1496683539,
       "strokeColor": "#6741d9",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "text": "data · pipelines and stores",
+      "text": "Data pipelines and stores",
       "textAlign": "left",
-      "updated": 1793529114251,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 335044335,
       "verticalAlign": "top"
@@ -431,7 +431,7 @@
       "strokeColor": "#9c36b5",
       "strokeStyle": "dashed",
       "strokeWidth": 1,
-      "updated": 1793529114251,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 1728182558
     },
@@ -467,7 +467,7 @@
       "strokeWidth": 2,
       "text": "Operations",
       "textAlign": "left",
-      "updated": 1793529114251,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 1353838435,
       "verticalAlign": "top"
@@ -498,7 +498,7 @@
       "strokeColor": "#495057",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114251,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 1036117199
     },
@@ -534,7 +534,7 @@
       "strokeWidth": 2,
       "text": "Fraud analyst\nA2A client",
       "textAlign": "left",
-      "updated": 1793529114251,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 411139522,
       "verticalAlign": "top"
@@ -565,7 +565,7 @@
       "strokeColor": "#495057",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114251,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 1743425477
     },
@@ -601,7 +601,7 @@
       "strokeWidth": 2,
       "text": "kagent UI\nbehind Dex login",
       "textAlign": "left",
-      "updated": 1793529114252,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 1364901800,
       "verticalAlign": "top"
@@ -632,7 +632,7 @@
       "strokeColor": "#9c36b5",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114252,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 103694284
     },
@@ -668,7 +668,7 @@
       "strokeWidth": 2,
       "text": "GitHub Actions\nArgo CD sync",
       "textAlign": "left",
-      "updated": 1793529114252,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 1978302633,
       "verticalAlign": "top"
@@ -699,7 +699,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114252,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 147798892
     },
@@ -735,7 +735,7 @@
       "strokeWidth": 2,
       "text": "A2A /a2a/coordinator\nkey · rate limit · JWT",
       "textAlign": "left",
-      "updated": 1793529114252,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 656244719,
       "verticalAlign": "top"
@@ -766,7 +766,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114252,
+      "updated": 1793529421834,
       "version": 1,
       "versionNonce": 1320697425
     },
@@ -802,7 +802,7 @@
       "strokeWidth": 2,
       "text": "LLM /v1 chat, embeddings\nkey · rate · token limits\nPII masking · d3 screen",
       "textAlign": "left",
-      "updated": 1793529114252,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 1172118184,
       "verticalAlign": "top"
@@ -833,7 +833,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114252,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 1257588750
     },
@@ -869,7 +869,7 @@
       "strokeWidth": 2,
       "text": "MCP /mcp/knowledge, /mcp/risk\nkey · rate limit",
       "textAlign": "left",
-      "updated": 1793529114253,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 1087849,
       "verticalAlign": "top"
@@ -900,7 +900,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114253,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 121410634
     },
@@ -936,7 +936,7 @@
       "strokeWidth": 2,
       "text": "REST /knowledge/v1\nkey · rate limit",
       "textAlign": "left",
-      "updated": 1793529114253,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 2074811469,
       "verticalAlign": "top"
@@ -967,7 +967,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114253,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 1849769241
     },
@@ -1003,7 +1003,7 @@
       "strokeWidth": 2,
       "text": "/v1/systemone\nscreen rule (Jev)",
       "textAlign": "left",
-      "updated": 1793529114253,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 326271548,
       "verticalAlign": "top"
@@ -1040,7 +1040,7 @@
       "strokeWidth": 2,
       "text": "Istio ambient mesh: only listed\nidentities reach the gateway\nand the model servers",
       "textAlign": "left",
-      "updated": 1793529114254,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 293531838,
       "verticalAlign": "top"
@@ -1071,7 +1071,7 @@
       "strokeColor": "#e67700",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114254,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 1012033206
     },
@@ -1107,7 +1107,7 @@
       "strokeWidth": 2,
       "text": "coordinator\nentry agent",
       "textAlign": "left",
-      "updated": 1793529114254,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 602389089,
       "verticalAlign": "top"
@@ -1138,7 +1138,7 @@
       "strokeColor": "#e67700",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114254,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 351021334
     },
@@ -1174,7 +1174,7 @@
       "strokeWidth": 2,
       "text": "evidence-agent\nknowledge tools",
       "textAlign": "left",
-      "updated": 1793529114254,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 2017893547,
       "verticalAlign": "top"
@@ -1205,7 +1205,7 @@
       "strokeColor": "#e67700",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114254,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 1587853008
     },
@@ -1241,7 +1241,7 @@
       "strokeWidth": 2,
       "text": "risk-agent\nfeatures · fraud\nscore · knowledge",
       "textAlign": "left",
-      "updated": 1793529114254,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 73113739,
       "verticalAlign": "top"
@@ -1278,7 +1278,7 @@
       "strokeWidth": 2,
       "text": "gVisor sandboxes · WorkerPool scaled\nby KEDA · warm start from snapshots\nglobal ModelConfig via the gateway",
       "textAlign": "left",
-      "updated": 1793529114254,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 917550646,
       "verticalAlign": "top"
@@ -1309,7 +1309,7 @@
       "strokeColor": "#2f9e44",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114255,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 106088610
     },
@@ -1345,7 +1345,7 @@
       "strokeWidth": 2,
       "text": "llm-d EPP\nInferencePool",
       "textAlign": "left",
-      "updated": 1793529114255,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 1072390935,
       "verticalAlign": "top"
@@ -1376,7 +1376,7 @@
       "strokeColor": "#2f9e44",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114255,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 1466976403
     },
@@ -1412,7 +1412,7 @@
       "strokeWidth": 2,
       "text": "qwen35-4b\nQwen3.5-4B FP8",
       "textAlign": "left",
-      "updated": 1793529114255,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 1135472984,
       "verticalAlign": "top"
@@ -1443,7 +1443,7 @@
       "strokeColor": "#2f9e44",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114255,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 817209497
     },
@@ -1479,7 +1479,7 @@
       "strokeWidth": 2,
       "text": "qwen3-embedding\nvLLM pooling",
       "textAlign": "left",
-      "updated": 1793529114255,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 328880572,
       "verticalAlign": "top"
@@ -1510,7 +1510,7 @@
       "strokeColor": "#2f9e44",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114256,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 53976866
     },
@@ -1546,7 +1546,7 @@
       "strokeWidth": 2,
       "text": "d3-edge\ndecision model",
       "textAlign": "left",
-      "updated": 1793529114256,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 889216405,
       "verticalAlign": "top"
@@ -1583,7 +1583,7 @@
       "strokeWidth": 2,
       "text": "vLLM · pinned hf:// revisions in the KServe\nlocal model cache · loaded with InstantTensor",
       "textAlign": "left",
-      "updated": 1793529114256,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 1195131576,
       "verticalAlign": "top"
@@ -1614,7 +1614,7 @@
       "strokeColor": "#e8590c",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114256,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 1834416837
     },
@@ -1650,7 +1650,7 @@
       "strokeWidth": 2,
       "text": "rag-api · FastAPI + MCP\nsearch / read knowledge",
       "textAlign": "left",
-      "updated": 1793529114256,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 198222504,
       "verticalAlign": "top"
@@ -1681,7 +1681,7 @@
       "strokeColor": "#e8590c",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114256,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 723604398
     },
@@ -1717,7 +1717,7 @@
       "strokeWidth": 2,
       "text": "risk tools · FastAPI + MCP\nonline features · score",
       "textAlign": "left",
-      "updated": 1793529114256,
+      "updated": 1793529421835,
       "version": 1,
       "versionNonce": 126088073,
       "verticalAlign": "top"
@@ -1748,7 +1748,7 @@
       "strokeColor": "#e8590c",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114256,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 765379961
     },
@@ -1784,7 +1784,7 @@
       "strokeWidth": 2,
       "text": "KServe\nfraud model",
       "textAlign": "left",
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 469811424,
       "verticalAlign": "top"
@@ -1815,7 +1815,7 @@
       "strokeColor": "#e8590c",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 1667684066
     },
@@ -1851,7 +1851,7 @@
       "strokeWidth": 2,
       "text": "Feast online\npgvector",
       "textAlign": "left",
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 368065495,
       "verticalAlign": "top"
@@ -1882,7 +1882,7 @@
       "strokeColor": "#6741d9",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 828615648
     },
@@ -1918,7 +1918,7 @@
       "strokeWidth": 2,
       "text": "RAG pipeline · Argo Workflow\nchunk → embed → write",
       "textAlign": "left",
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 949304993,
       "verticalAlign": "top"
@@ -1949,7 +1949,7 @@
       "strokeColor": "#6741d9",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 1684403492
     },
@@ -1985,7 +1985,7 @@
       "strokeWidth": 2,
       "text": "Iceberg\nlakehouse",
       "textAlign": "left",
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 2072342255,
       "verticalAlign": "top"
@@ -2016,7 +2016,7 @@
       "strokeColor": "#6741d9",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 1735300327
     },
@@ -2052,7 +2052,7 @@
       "strokeWidth": 2,
       "text": "OpenMetadata\nlineage · checks",
       "textAlign": "left",
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 838836588,
       "verticalAlign": "top"
@@ -2083,7 +2083,7 @@
       "strokeColor": "#6741d9",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 1206206683
     },
@@ -2119,7 +2119,7 @@
       "strokeWidth": 2,
       "text": "feature pipelines\nFlink windows · Spark daily",
       "textAlign": "left",
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 1134408894,
       "verticalAlign": "top"
@@ -2150,7 +2150,7 @@
       "strokeColor": "#9c36b5",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 349081348
     },
@@ -2186,7 +2186,7 @@
       "strokeWidth": 2,
       "text": "Langfuse v4\nprompts · A/B\ntraces",
       "textAlign": "left",
-      "updated": 1793529114257,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 1667068405,
       "verticalAlign": "top"
@@ -2217,7 +2217,7 @@
       "strokeColor": "#9c36b5",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114258,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 185194838
     },
@@ -2253,7 +2253,7 @@
       "strokeWidth": 2,
       "text": "agentregistry\nagents · MCP",
       "textAlign": "left",
-      "updated": 1793529114258,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 435330177,
       "verticalAlign": "top"
@@ -2284,7 +2284,7 @@
       "strokeColor": "#9c36b5",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114258,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 1790222144
     },
@@ -2320,7 +2320,7 @@
       "strokeWidth": 2,
       "text": "VictoriaMetrics\nGrafana",
       "textAlign": "left",
-      "updated": 1793529114258,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 929386881,
       "verticalAlign": "top"
@@ -2351,7 +2351,7 @@
       "strokeColor": "#9c36b5",
       "strokeStyle": "solid",
       "strokeWidth": 1,
-      "updated": 1793529114258,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 1535070748
     },
@@ -2387,7 +2387,7 @@
       "strokeWidth": 2,
       "text": "catalog Job\nper release",
       "textAlign": "left",
-      "updated": 1793529114258,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 769262269,
       "verticalAlign": "top"
@@ -2430,7 +2430,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114258,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 1671805349
     },
@@ -2466,7 +2466,7 @@
       "strokeWidth": 2,
       "text": "(1) ask",
       "textAlign": "left",
-      "updated": 1793529114258,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 895611492,
       "verticalAlign": "top"
@@ -2525,7 +2525,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114258,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 2006945165
     },
@@ -2561,7 +2561,7 @@
       "strokeWidth": 2,
       "text": "(1) chat",
       "textAlign": "left",
-      "updated": 1793529114258,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 1097342540,
       "verticalAlign": "top"
@@ -2604,7 +2604,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114258,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 1674243794
     },
@@ -2640,7 +2640,7 @@
       "strokeWidth": 2,
       "text": "(2) message",
       "textAlign": "left",
-      "updated": 1793529114259,
+      "updated": 1793529421836,
       "version": 1,
       "versionNonce": 2061187919,
       "verticalAlign": "top"
@@ -2691,7 +2691,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 981537486
     },
@@ -2727,7 +2727,7 @@
       "strokeWidth": 2,
       "text": "(3) transfer",
       "textAlign": "left",
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 1591750671,
       "verticalAlign": "top"
@@ -2778,7 +2778,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 2037016923
     },
@@ -2814,7 +2814,7 @@
       "strokeWidth": 2,
       "text": "(3)",
       "textAlign": "left",
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 775903882,
       "verticalAlign": "top"
@@ -2865,7 +2865,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 981903124
     },
@@ -2901,7 +2901,7 @@
       "strokeWidth": 2,
       "text": "(4) tools",
       "textAlign": "left",
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 423711481,
       "verticalAlign": "top"
@@ -2960,7 +2960,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 473411615
     },
@@ -2996,7 +2996,7 @@
       "strokeWidth": 2,
       "text": "(5) /mcp/*",
       "textAlign": "left",
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 2021553242,
       "verticalAlign": "top"
@@ -3043,7 +3043,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 92933111
     },
@@ -3085,7 +3085,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 475452179
     },
@@ -3121,7 +3121,7 @@
       "strokeWidth": 2,
       "text": "(6)",
       "textAlign": "left",
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 1572418816,
       "verticalAlign": "top"
@@ -3164,7 +3164,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114259,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 1879454884
     },
@@ -3214,7 +3214,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114260,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 1115743533
     },
@@ -3264,7 +3264,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114260,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 1480650378
     },
@@ -3300,7 +3300,7 @@
       "strokeWidth": 2,
       "text": "(7) /v1",
       "textAlign": "left",
-      "updated": 1793529114260,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 1691869611,
       "verticalAlign": "top"
@@ -3343,7 +3343,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114260,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 1135154323
     },
@@ -3379,7 +3379,7 @@
       "strokeWidth": 2,
       "text": "(8) screen",
       "textAlign": "left",
-      "updated": 1793529114260,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 1074171678,
       "verticalAlign": "top"
@@ -3438,7 +3438,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114260,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 1293040526
     },
@@ -3474,7 +3474,7 @@
       "strokeWidth": 2,
       "text": "(9) d3",
       "textAlign": "left",
-      "updated": 1793529114260,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 165346331,
       "verticalAlign": "top"
@@ -3517,7 +3517,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114260,
+      "updated": 1793529421837,
       "version": 1,
       "versionNonce": 70405497
     },
@@ -3553,7 +3553,7 @@
       "strokeWidth": 2,
       "text": "(10) chat",
       "textAlign": "left",
-      "updated": 1793529114260,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 205799590,
       "verticalAlign": "top"
@@ -3596,7 +3596,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114260,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 1483324895
     },
@@ -3638,7 +3638,7 @@
       "strokeColor": "#e8590c",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114260,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 1793434297
     },
@@ -3674,7 +3674,7 @@
       "strokeWidth": 2,
       "text": "(1) offline",
       "textAlign": "left",
-      "updated": 1793529114260,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 783638116,
       "verticalAlign": "top"
@@ -3717,7 +3717,7 @@
       "strokeColor": "#e8590c",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114260,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 1377979848
     },
@@ -3753,7 +3753,7 @@
       "strokeWidth": 2,
       "text": "(2) lineage",
       "textAlign": "left",
-      "updated": 1793529114260,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 588155499,
       "verticalAlign": "top"
@@ -3796,7 +3796,7 @@
       "strokeColor": "#e8590c",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114261,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 286345169
     },
@@ -3832,7 +3832,7 @@
       "strokeWidth": 2,
       "text": "(3) online",
       "textAlign": "left",
-      "updated": 1793529114261,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 1749899232,
       "verticalAlign": "top"
@@ -3883,7 +3883,7 @@
       "strokeColor": "#e8590c",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114261,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 632454418
     },
@@ -3925,7 +3925,7 @@
       "strokeColor": "#9c36b5",
       "strokeStyle": "dashed",
       "strokeWidth": 2,
-      "updated": 1793529114261,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 1763504379
     },
@@ -3961,7 +3961,7 @@
       "strokeWidth": 2,
       "text": "(1) release",
       "textAlign": "left",
-      "updated": 1793529114261,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 269959334,
       "verticalAlign": "top"
@@ -4004,7 +4004,7 @@
       "strokeColor": "#9c36b5",
       "strokeStyle": "dashed",
       "strokeWidth": 2,
-      "updated": 1793529114261,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 642195512
     },
@@ -4040,7 +4040,7 @@
       "strokeWidth": 2,
       "text": "(2) publish",
       "textAlign": "left",
-      "updated": 1793529114261,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 346304579,
       "verticalAlign": "top"
@@ -4091,7 +4091,7 @@
       "strokeColor": "#9c36b5",
       "strokeStyle": "dashed",
       "strokeWidth": 2,
-      "updated": 1793529114261,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 1986240577
     },
@@ -4127,7 +4127,7 @@
       "strokeWidth": 2,
       "text": "(2)",
       "textAlign": "left",
-      "updated": 1793529114261,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 2078438828,
       "verticalAlign": "top"
@@ -4186,7 +4186,7 @@
       "strokeColor": "#9c36b5",
       "strokeStyle": "dashed",
       "strokeWidth": 2,
-      "updated": 1793529114261,
+      "updated": 1793529421838,
       "version": 1,
       "versionNonce": 1648537988
     },
@@ -4222,7 +4222,7 @@
       "strokeWidth": 2,
       "text": "(3) prompts, traces",
       "textAlign": "left",
-      "updated": 1793529114261,
+      "updated": 1793529421839,
       "version": 1,
       "versionNonce": 1245363689,
       "verticalAlign": "top"
@@ -4259,7 +4259,7 @@
       "strokeWidth": 2,
       "text": "Flows",
       "textAlign": "left",
-      "updated": 1793529114261,
+      "updated": 1793529421839,
       "version": 1,
       "versionNonce": 835506697,
       "verticalAlign": "top"
@@ -4302,7 +4302,7 @@
       "strokeColor": "#1971c2",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114261,
+      "updated": 1793529421839,
       "version": 1,
       "versionNonce": 1327576605
     },
@@ -4338,7 +4338,7 @@
       "strokeWidth": 2,
       "text": "serving: ask → answer",
       "textAlign": "left",
-      "updated": 1793529114262,
+      "updated": 1793529421839,
       "version": 1,
       "versionNonce": 1384953012,
       "verticalAlign": "top"
@@ -4381,7 +4381,7 @@
       "strokeColor": "#e8590c",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529114262,
+      "updated": 1793529421839,
       "version": 1,
       "versionNonce": 1836068118
     },
@@ -4417,7 +4417,7 @@
       "strokeWidth": 2,
       "text": "ingestion: RAG and features",
       "textAlign": "left",
-      "updated": 1793529114262,
+      "updated": 1793529421839,
       "version": 1,
       "versionNonce": 1560100033,
       "verticalAlign": "top"
@@ -4460,7 +4460,7 @@
       "strokeColor": "#9c36b5",
       "strokeStyle": "dashed",
       "strokeWidth": 2,
-      "updated": 1793529114262,
+      "updated": 1793529421839,
       "version": 1,
       "versionNonce": 1574389253
     },
@@ -4496,7 +4496,7 @@
       "strokeWidth": 2,
       "text": "operations",
       "textAlign": "left",
-      "updated": 1793529114262,
+      "updated": 1793529421839,
       "version": 1,
       "versionNonce": 1045282152,
       "verticalAlign": "top"
@@ -4531,7 +4531,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116956,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 1765422236
     },
@@ -4565,7 +4565,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116956,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 48515260
     },
@@ -4599,7 +4599,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116956,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 121524584
     },
@@ -4633,7 +4633,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116956,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 196118047
     },
@@ -4667,7 +4667,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116956,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 1518595434
     },
@@ -4701,7 +4701,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116956,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 634842550
     },
@@ -4735,7 +4735,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 1075867343
     },
@@ -4769,7 +4769,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 222927405
     },
@@ -4803,7 +4803,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 1457515594
     },
@@ -4837,7 +4837,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 1727034612
     },
@@ -4871,7 +4871,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 413333580
     },
@@ -4905,7 +4905,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 1554175416
     },
@@ -4939,7 +4939,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 350516514
     },
@@ -4973,7 +4973,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 1925181757
     },
@@ -5007,7 +5007,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 517132473
     },
@@ -5041,7 +5041,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 167341984
     },
@@ -5075,7 +5075,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 1203731759
     },
@@ -5109,7 +5109,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 29758506
     },
@@ -5143,7 +5143,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 614587555
     },
@@ -5177,7 +5177,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424537,
       "version": 1,
       "versionNonce": 1876887778
     },
@@ -5211,7 +5211,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424538,
       "version": 1,
       "versionNonce": 1210901494
     },
@@ -5245,7 +5245,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116957,
+      "updated": 1793529424538,
       "version": 1,
       "versionNonce": 1704314210
     },
@@ -5279,7 +5279,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116958,
+      "updated": 1793529424538,
       "version": 1,
       "versionNonce": 893692615
     },
@@ -5313,7 +5313,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116958,
+      "updated": 1793529424538,
       "version": 1,
       "versionNonce": 1745219205
     },
@@ -5347,7 +5347,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116958,
+      "updated": 1793529424538,
       "version": 1,
       "versionNonce": 1221490432
     },
@@ -5381,7 +5381,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116958,
+      "updated": 1793529424538,
       "version": 1,
       "versionNonce": 113245970
     },
@@ -5415,7 +5415,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116958,
+      "updated": 1793529424538,
       "version": 1,
       "versionNonce": 1912243798
     },
@@ -5449,7 +5449,7 @@
       "strokeColor": "transparent",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "updated": 1793529116958,
+      "updated": 1793529424538,
       "version": 1,
       "versionNonce": 2127037146
     }
@@ -5463,7 +5463,7 @@
       "id": "icon-6f3aef30b546ca34b52b",
       "dataURL": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2LjAiIGhlaWdodD0iMjU2LjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJjdXJyZW50Q29sb3IiIGQ9Ik0yMSAxMWMwIDUuNTUtMy44NCAxMC43NC05IDEyYy01LjE2LTEuMjYtOS02LjQ1LTktMTJWNWw5LTRsOSA0em0tOSAxMGMzLjc1LTEgNy01LjQ2IDctOS43OFY2LjNsLTctMy4xMkw1IDYuM3Y0LjkyQzUgMTUuNTQgOC4yNSAyMCAxMiAyMW0yLjgtMTBWOS41QzE0LjggOC4xIDEzLjQgNyAxMiA3UzkuMiA4LjEgOS4yIDkuNVYxMWMtLjYgMC0xLjIuNi0xLjIgMS4ydjMuNWMwIC43LjYgMS4zIDEuMiAxLjNoNS41Yy43IDAgMS4zLS42IDEuMy0xLjJ2LTMuNWMwLS43LS42LTEuMy0xLjItMS4zbS0xLjMgMGgtM1Y5LjVjMC0uOC43LTEuMyAxLjUtMS4zczEuNS41IDEuNSAxLjN6Ii8+PC9zdmc+",
       "mimeType": "image/svg+xml",
-      "created": 1793529116951
+      "created": 1793529424530
     },
     "icon-ce3f3f44e6d81fa1cb6a": {
       "id": "icon-ce3f3f44e6d81fa1cb6a",
