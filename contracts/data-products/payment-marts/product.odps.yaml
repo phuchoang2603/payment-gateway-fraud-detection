@@ -9,7 +9,7 @@ type: consumer-aligned
 description:
   purpose: Native ClickHouse MergeTree marts of payment attempts and merchant days for dashboards and analytical queries, built from Silver inside a rolling retention window.
   usage: Filter on started_at or day; the sort keys put time first. Read marts.build_info for the window a build covers before treating missing days as zero.
-  limitations: Synthetic data only. The marts keep a rolling 180-day window by table TTL, so they shrink while no new data arrives. Truth and scenario columns are a synthetic oracle.
+  limitations: Synthetic data only. The marts keep a rolling 90-day window by table TTL, so they shrink while no new data arrives. Truth and scenario columns are a synthetic oracle.
 team:
   name: Fraud data platform
   members:

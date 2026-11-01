@@ -1,5 +1,7 @@
 CREATE TABLE {if_not_exists}{table} (
   run_id String,
+  run_range String,
+  code_version String,
   window_start Date,
   window_end Date,
   rebuilt_days Array(Date),

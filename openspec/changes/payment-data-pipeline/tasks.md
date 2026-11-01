@@ -23,7 +23,7 @@
 
 ## 5. Marts
 
-- [x] 5.1 Mart DDL with time-first keys, bloom, minmax and set indexes, and a 180-day `TTL`.
+- [x] 5.1 Mart DDL with time-first keys, bloom, minmax and set indexes, and a 90-day `TTL`.
 - [x] 5.2 Staged builds of the run's days, `REPLACE PARTITION` publish, `build_info`.
 - [x] 5.3 Insert the fact one day at a time with the day's attempts as the hash join's build side, and bound the label summary to the labels the rebuilt days can have.
 
@@ -34,6 +34,9 @@
 - [x] 6.3 Publish lineage on every run, not only on success.
 - [x] 6.4 Lean maintenance: nightly expiry, stale-branch drop and recent Bronze compaction; on-demand Z-order.
 - [x] 6.5 Gold executors at 7g + 5g and `MALLOC_ARENA_MAX=2` on every executor.
+- [x] 6.6 Run Gold and the marts side by side after publish-silver, with one ClickHouse mutex for the mart build and the checks; the marts read published Silver only.
+- [x] 6.7 Skip a stage whose output on main (or the live `build_info`) already holds the range from the same inputs and code (`openmetadata.plan`, `marts plan`, `dp.code_version`).
+- [x] 6.8 Build the mart fact from staged attempts and labels joined in 64 payment-hash buckets.
 
 ## 7. Prod evidence
 

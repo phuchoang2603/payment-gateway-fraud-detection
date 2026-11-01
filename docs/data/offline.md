@@ -47,17 +47,21 @@ flowchart LR
     kafka["Kafka topics"] -->|"dp1-bronze: offsets read from the rows"| bronze
     bronze[("Bronze<br/>days(occurred_at)")] -->|"silver: Bronze days D-1..D+1"| silver
     silver[("Silver<br/>payment_day")] -->|"gold: one longest window before D"| gold[("Gold features,<br/>labels, dim_customer")]
-    silver -->|"marts: one day at a time"| marts[("ClickHouse marts<br/>180 days")]
+    silver -->|"marts: one day at a time"| marts[("ClickHouse marts<br/>90 days")]
     gold --> feast["Feast / training"]
     marts --> grafana["Grafana"]
 ```
 
 ```mermaid
 flowchart LR
-    s[silver] --> cs[check-silver] --> ps[publish-silver] --> g[gold] --> m[marts] --> cg[check-gold] --> pg[publish-gold] --> pm[publish-marts] --> p[profile]
+    plS[plan-silver] --> s[silver] --> cs[check-silver] --> ps[publish-silver] --> plG[plan-gold]
+    plG --> g[gold] --> cg[check-gold] --> pg[publish-gold]
+    plG --> plM[plan-marts] --> m[marts] --> cm[check-marts] --> pm[publish-marts] --> p[profile]
 ```
 
-Silver is audited and published before Gold reads it. Gold and the marts are audited together and published only if every Gold and mart rule passes; a Gold failure leaves the range's new Silver published with its previous Gold, and re-running the range rebuilds Gold.
+Silver is audited and published before anything downstream reads it. Gold and the marts both read published Silver and nothing of each other, so they run side by side: the Gold Spark job overlaps the ClickHouse mart build, and the mart build and the two checks take turns on ClickHouse through one mutex. Each branch publishes when its own checks pass.
+
+Each plan step skips its stage when the head of `main` (or the live `build_info`, for the marts) already holds this range's output from the same input snapshots by the same batch image. Re-running a range after a later stage failed therefore resumes at that stage instead of rebuilding Silver and Gold.
 
 ### DP1: raw → Bronze
 
@@ -94,7 +98,7 @@ The `gold` stage is the Spark batch layer of a Lambda design; Flink is the speed
 
 ### Marts
 
-ClickHouse builds `marts.fact_payment_attempt` and `marts.fact_merchant_day` from the published Silver over a rolling 180-day window. A run rebuilds its days, the start days of attempts that gained a label in its range, and the days whose 21-day chargeback window completes in it, one day at a time into staging tables. The checks audit staging, and publish replaces those days' partitions. See [storage](storage.md#warehouse-indexing).
+ClickHouse builds `marts.fact_payment_attempt` and `marts.fact_merchant_day` from the published Silver over a rolling 90-day window. A run rebuilds its days and the 45-day label lookback before them, which covers the attempts its labels can belong to and the days whose 21-day chargeback window completes in it. It stages those days' attempts and their label summary once, joins them in 64 payment-hash buckets into staging tables, the checks audit staging, and publish replaces those days' partitions. See [storage](storage.md#warehouse-indexing).
 
 ## Prod v19 run
 

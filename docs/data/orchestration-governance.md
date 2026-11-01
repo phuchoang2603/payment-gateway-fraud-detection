@@ -10,7 +10,7 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 |---|---|---|
 | `generate-historical` | Shards in parallel → publish | Done; v18 and v19 published |
 | `dp1-bronze` (historical or Kafka source) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Done on prod v19; Kafka runs inside `dp-daily` |
-| `dp-pipeline` (`start`/`end` days) | Spark Silver to an audit branch → Silver checks → publish Silver → Spark Gold to the branch → ClickHouse marts into staging → Gold and marts checks → publish Gold → publish marts → profile marts → OpenMetadata publish | Running on prod v19; see [the run](offline.md#prod-v19-run) |
+| `dp-pipeline` (`start`/`end` days) | Plan → Spark Silver to an audit branch → Silver checks → publish Silver, then side by side: Spark Gold to the branch → Gold checks → publish Gold, and ClickHouse marts into staging → mart checks → publish marts → profile; each plan step skips a stage whose output on main is unchanged; OpenMetadata publish on exit | Running on prod v19; see [the run](offline.md#prod-v19-run) |
 | `dp-daily`, `dp-backfill` | Kafka into Bronze, then `dp-pipeline` for yesterday and two lookback days (suspended cron); `dp-pipeline` month by month in order, stopping at the first failed month | `dp-backfill` running; `dp-daily` suspended |
 | `maintain-lakehouse` | Task `nightly` (suspended cron) or `zorder` over one month | Implemented |
 | `warehouse-benchmark`, `dp2-benchmark` (skewed join) | Single on-demand stage | Tools only; the evidence comes from the backfill |

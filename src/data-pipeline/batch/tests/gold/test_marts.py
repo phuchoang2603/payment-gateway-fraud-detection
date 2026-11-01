@@ -57,20 +57,18 @@ def label(client, payment, day, source=marts.TRUTH, fraud=True, observation="o")
     )
 
 
-def report(first=None, last=None):
-    """A DP3 report over [first, last], every day of the retention window by default."""
+SNAPSHOTS = {"silver.attempts": 11, "silver.labels": 12, "silver.payment_events": 13}
+
+
+def build(client, first=None, last=None, code="code-1"):
+    """A build over [first, last], every day of the retention window by default."""
     first = first or TODAY - timedelta(days=RETENTION + 30)
     last = last or TODAY - timedelta(days=1)
-    return {
-        "start": str(first),
-        "end": str(last),
-        "days": [str(first + timedelta(days=n)) for n in range((last - first).days + 1)],
-        "silver_snapshots": {"silver.attempts": 11, "silver.labels": 12, "silver.payment_events": 13},
-    }
+    return marts.build(client, "run", first, last, SNAPSHOTS, code, RETENTION, TODAY)
 
 
-def rebuild(client, gold_report=None):
-    built = marts.build(client, gold_report or report(), "run", RETENTION, TODAY)
+def rebuild(client, first=None, last=None, code="code-1"):
+    built = build(client, first, last, code)
     marts.publish(client, RETENTION, TODAY)
     return built
 
@@ -133,7 +131,7 @@ def test_a_failed_build_leaves_the_live_marts_unchanged(client):
     attempt(client, "p-2", TODAY - timedelta(days=1))
 
     with pytest.raises(RuntimeError):
-        marts.build(client, report(), "run", RETENTION, TODAY)
+        build(client)
 
     assert content(client, marts.FACT) == before
 
@@ -147,7 +145,7 @@ def test_the_build_drops_leftover_staging(client):
         "FROM marts.fact_payment_attempt"
     )
 
-    built = marts.build(client, report(), "run", RETENTION, TODAY)
+    built = build(client)
 
     assert built["staged_attempts"] == 1
     assert client.value("SELECT count() FROM marts.fact_payment_attempt__staging WHERE payment_id = 'stale'") == 0
@@ -161,16 +159,37 @@ def test_a_range_rebuild_equals_a_full_rebuild(client):
     attempt(client, "p-3", changed, merchant="m-2")
     label(client, "p-1", changed, source=marts.CHARGEBACK)
 
-    rebuild(client, report(changed, changed))
+    rebuild(client, changed, changed)
     ranged = {table: content(client, table) for table in (marts.FACT, marts.MERCHANT_DAY)}
     rebuild(client)
 
     assert {table: content(client, table) for table in (marts.FACT, marts.MERCHANT_DAY)} == ranged
 
 
-def test_a_range_also_rebuilds_the_days_whose_chargeback_window_completes_in_it():
-    days = marts.rebuilt_days(report(date(2026, 10, 30), date(2026, 10, 30)), date(2026, 1, 1), date(2026, 10, 30))
-    assert days == [date(2026, 10, 10), date(2026, 10, 30)]
+def test_a_range_rebuilds_its_days_and_the_label_lookback_before_them():
+    days = marts.rebuilt_days(date(2026, 10, 30), date(2026, 10, 30), date(2026, 1, 1), date(2026, 10, 30))
+
+    assert days[0] == date(2026, 9, 15) and days[-1] == date(2026, 10, 30)
+    assert len(days) == marts.LABEL_LOOKBACK_DAYS + 1
+    assert date(2026, 10, 10) in days
+
+
+def test_the_window_bounds_the_rebuilt_days():
+    assert marts.rebuilt_days(date(2026, 10, 30), date(2026, 10, 31), date(2026, 10, 1), date(2026, 10, 30)) == [
+        date(2026, 10, 1) + timedelta(days=n) for n in range(30)
+    ]
+
+
+def test_the_marts_are_unchanged_only_for_the_same_range_snapshots_and_code(client):
+    first, last = TODAY - timedelta(days=5), TODAY - timedelta(days=1)
+    attempt(client, "p-1", TODAY - timedelta(days=2))
+    rebuild(client, first, last, code="code-1")
+
+    assert marts.unchanged(client, first, last, SNAPSHOTS, "code-1")
+    assert not marts.unchanged(client, first, last, SNAPSHOTS, "code-2")
+    assert not marts.unchanged(client, first, last, {**SNAPSHOTS, "silver.labels": 99}, "code-1")
+    assert not marts.unchanged(client, first - timedelta(days=1), last, SNAPSHOTS, "code-1")
+    assert not marts.unchanged(client, first, last, SNAPSHOTS, "")
 
 
 def window_of(client):
@@ -180,13 +199,13 @@ def window_of(client):
 def test_a_range_older_than_the_window_keeps_the_live_window_end(client):
     old = TODAY - timedelta(days=RETENTION + 40)
     attempt(client, "old", old)
-    rebuild(client, report(old, old))
+    rebuild(client, old, old)
     empty = window_of(client)
     assert empty["end"] == str(date.fromisoformat(empty["start"]) - timedelta(days=1))
 
     attempt(client, "new", TODAY - timedelta(days=3))
     rebuild(client)
-    rebuild(client, report(old, old))
+    rebuild(client, old, old)
 
     assert window_of(client)["end"] == str(TODAY - timedelta(days=3))
     assert [row["payment_id"] for row in content(client, marts.FACT)] == ["new"]

@@ -9,7 +9,7 @@
   "editable": false,
   "schemaVersion": 39,
   "time": {
-    "from": "now-180d",
+    "from": "now-90d",
     "to": "now"
   },
   "refresh": "",
