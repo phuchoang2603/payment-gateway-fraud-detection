@@ -112,7 +112,8 @@ spec:
           port: 8000
       timeouts:
         request: 10s
-    - matches:
+    - name: systemone
+      matches:
         - path: {type: Exact, value: /v1/systemone}
       backendRefs:
         - group: agentgateway.dev
@@ -132,11 +133,10 @@ spec:
       name: decision
       sectionName: screen
   traffic:
-    apiKeyAuthentication:
-      mode: Strict
-      secretSelector:
-        matchLabels:
-          {{ $gateway.keyLabel }}: "true"
+    rateLimit:
+      local:
+        - requests: {{ $screening.requestsPerMinute }}
+          unit: Minutes
     transformation:
       request:
         body: >-
@@ -161,6 +161,7 @@ spec:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
       name: decision
+      sectionName: systemone
   traffic:
     apiKeyAuthentication:
       mode: Strict
@@ -244,7 +245,7 @@ spec:
               matches:
                 {{- toYaml $gateway.piiPatterns | nindent 16 }}
           # Runs after masking, so the decision model never sees the masked values. The webhook calls the gateway's
-          # /v1/systemone route with the caller's key and the screen header.
+          # /v1/systemone route with the screen header.
           - webhook:
               action: Reject
               failureMode: {{ $gateway.screening.failureMode }}
@@ -255,7 +256,6 @@ spec:
               headers:
                 ":path": '"/v1/systemone"'
                 x-llm-screen: '"request"'
-                authorization: 'request.headers["authorization"]'
         response:
           - regex:
               action: Mask
