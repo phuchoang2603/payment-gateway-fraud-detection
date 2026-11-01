@@ -5,6 +5,7 @@ An ecommerce payment gateway with real-time fraud decisioning. A refurbished-ele
 ## Table of contents
 
 - [System overview](#system-overview)
+- [LLM and agent platform](#llm-and-agent-platform)
 - [Repository structure](#repository-structure)
 - [Documentation](#documentation)
 - [Getting started](#getting-started)
@@ -31,6 +32,14 @@ flowchart LR
 
 Everything runs on two Talos Kubernetes clusters (Proxmox dev, AWS prod), deployed by Argo CD from release branches. The full deployment view is in [architecture](docs/overview/architecture.md).
 
+## LLM and agent platform
+
+Read-only analyst agents explain declines, risk decisions and payment behaviour. A coordinator hands each question to the evidence agent (knowledge base, cited passages) or the risk agent (online features, the fraud model's score and the knowledge base). Every model, tool and agent call goes through agentgateway, which adds client keys, rate and token limits, PII masking and a request screen by the d3-edge decision model. The models run on vLLM through KServe and llm-d on one shared GPU, and Langfuse holds the agents' prompts, A/B tests and traces. The risk agent's feature and scoring tools arrive with the feature-store work.
+
+![LLM and agent platform: clients, agentgateway, kagent agents on Agent Substrate, KServe model servers, MCP tools and ML inference, data pipelines and operations](docs/llm/images/llm-architecture.png)
+
+The diagram's source is [`llm-architecture.excalidraw`](docs/llm/images/llm-architecture.excalidraw); the pages under [docs/llm](docs/llm) cover each part.
+
 ## Repository structure
 
 ```text
@@ -50,6 +59,7 @@ Everything runs on two Talos Kubernetes clusters (Proxmox dev, AWS prod), deploy
 ├── scripts/                  # CI checks, code generation, release planning
 ├── src/
 │   ├── payment-gateway/      # Go services: edge, payments, fraud, notifier, vault and processor simulators, shared module
+│   ├── llm/                  # RAG pipeline, knowledge API and MCP server, agent runtime
 │   └── data-pipeline/
 │       ├── simulator/        # Historical generator and live simulator
 │       ├── streaming/        # Flink feature job
