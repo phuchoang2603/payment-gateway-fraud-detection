@@ -121,10 +121,11 @@ Bronze v19, then `dp-backfill` from 2025-10-29 on the prod cluster (11 spot exec
 What the table shows:
 
 - **Spark stays flat.** Silver and Gold read only their range, so they take 9–19 minutes a month whatever the history before them.
-- **Whole-table checks grew; range-scoped ones do not.** From November to March the checks audited whole tables and grew with every published month (March: 18 + 28 minutes). From April each rule reads only the audited commit's range: 3–4 and 9–15 minutes.
-- **The mart window.** Until May the backfilled days were older than the mart window and built nothing. June rebuilt 56 days one day at a time, rescanning the whole label summary for each (20.5 minutes, about 22 s a day). From July the window is 90 days (from 2026-08-04 on 2026-11-01), so July builds nothing, and August's 28 days were joined in 64 hash buckets (7.7 minutes, about 16.5 s a day) while Gold ran.
-- **Gold and the marts side by side.** July and August took 44 minutes: Silver, its checks, Gold and its checks, with the mart build hidden behind Gold.
-- **Failures cost one month.** A month's failure stopped the backfill and the next run resumed at that month; after a later stage failed, a re-run now skips the stages whose output is already on `main` (see [pipeline](#pipeline)). Silver over three months at once overflowed the executors' 24 GiB of local disk, so the backfill stays monthly.
+- **Whole-table checks grew; [range-scoped](orchestration-governance.md#range-scoped-validation) ones do not.** November to March audited whole tables and grew with every published month; from April each rule reads only the audited commit's range.
+- **The mart window.** Until May the backfilled days were older than the mart window and built nothing. June rebuilt 56 days one day at a time; from July the window is 90 days (from 2026-08-04 on 2026-11-01), so July builds nothing and August builds 28 days in buckets while Gold runs.
+- **Failures cost one month.** A month's failure stops the backfill and the next run resumes at that month. Silver over three months at once overflowed the executors' 24 GiB of local disk, so the backfill stays monthly.
+
+What changed between the rows, and why, is in [optimization techniques](#optimization-techniques).
 
 ![Before: whole-table checks grow month by month (November to January)](images/argo-backfill-unscoped-checks.png)
 

@@ -48,7 +48,19 @@ The prod server has about 3.4 GiB of memory, and the `marts` profile caps a quer
 
 - **Spill instead of hash.** Every contract rule runs with external aggregation (800 MB threshold), external sort (400 MB), `join_algorithm = 'full_sorting_merge'`, `max_threads = 2` and `max_block_size = 16384`. On v19, a full-history amount/context join finished this way in 18m48s at 1.77 GiB peak, writing 17.8 GiB of sort spill, after hash joins exceeded the server.
 - **Read only the run's range.** Rules are scoped to the audited commit's range with `additional_table_filters` (see [range-scoped validation](orchestration-governance.md#range-scoped-validation)), so their cost follows one month instead of the whole table.
-- **A small hash build side, read once.** The rebuilt days' attempts and their label summary are staged in MergeTree tables ordered by a payment-hash bucket, and the fact is inserted one bucket at a time: one bucket of labels `RIGHT JOIN` the same bucket of attempts with `join_algorithm = 'hash'`. ClickHouse builds the hash table from the right side, so memory holds one bucket of attempts, and the primary key limits each insert to its bucket of both tables. The monthly `full_sorting_merge` insert exceeded 2 GiB in `MergeJoinTransform` for May 2026; the per-day inserts that replaced it stayed inside memory but rescanned all 13M labels for every day (8.4 s a day). The label summary itself is built in 8 hash passes reading only its eight columns: one June pass used 822 MiB.
+- **A small hash build side, read once.** The rebuilt days' attempts and their label summary are staged in MergeTree tables ordered by a payment-hash bucket, and the fact is inserted one bucket at a time: one bucket of labels `RIGHT JOIN` the same bucket of attempts with `join_algorithm = 'hash'`. ClickHouse builds the hash table from the right side, so memory holds one bucket of attempts, and the primary key limits each insert to its bucket of both tables. The label summary itself is built in 8 hash passes, each reading only its eight columns. The failures that led here are in [optimization techniques](offline.md#optimization-techniques).
+
+```mermaid
+flowchart LR
+    sa[("silver.attempts<br/>pinned snapshot")] -->|"rebuilt days"| at["attempts__staging<br/>ORDER BY bucket"]
+    sl[("silver.labels<br/>pinned snapshot")] -->|"8 hash passes"| ls["attempt_labels__staging<br/>ORDER BY bucket"]
+    at --> j{{"64 inserts:<br/>labels RIGHT JOIN attempts<br/>one bucket each"}}
+    ls --> j
+    j --> fs["fact_payment_attempt__staging"] --> ms["fact_merchant_day__staging"]
+    fs --> ck["check-marts"]
+    ms --> ck
+    ck -->|"REPLACE PARTITION"| live[("live marts<br/>90-day TTL")]
+```
 
 `EXPLAIN indexes = 1` on the checks shows the sort-merge join on `(integration_id, payment_id)`, explicit column reads and `payload_case` filtering through `PREWHERE`. Approximate uniqueness is unsuitable for an exact duplicate gate, and no local filesystem cache is configured.
 
