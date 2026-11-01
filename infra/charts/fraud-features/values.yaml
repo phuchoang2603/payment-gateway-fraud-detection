@@ -3,12 +3,16 @@ global:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark: dev
 images:
   feast:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast
     pullPolicy: IfNotPresent
   streaming:
     repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming
+    pullPolicy: IfNotPresent
+  spark:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark
     pullPolicy: IfNotPresent
 externalSecrets:
   refreshInterval: 1h
@@ -27,6 +31,8 @@ feast:
     limits:
       cpu: '1'
       memory: 1Gi
+  registry: s3://platform-dev/feast/payment-gateway/registry.pb
+  epochs: history-v18,live-v18
 redis:
   name: payment-gateway-feast-redis
   image:
@@ -50,6 +56,7 @@ redis:
   clients:
   - feast-writer
   - feast-server
+  - data-pipelines
 streaming:
   enabled: true
   sourceTopic: payments.events.v1
@@ -75,3 +82,16 @@ streaming:
   pathStyle: true
   region: us-east-1
   storageStore: gateway-doppler
+storage:
+  secretName: feast-storage
+  store: gateway-doppler
+  endpoint: https://minio.home.phuchoang.sbs
+  pathStyle: 'true'
+  region: us-east-1
+catalog:
+  uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
+  warehouse: lakehouse
+  clientId: platform
+  oauth2Uri: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
+  secretName: feast-iceberg
+  store: doppler

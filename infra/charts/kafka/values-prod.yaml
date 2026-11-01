@@ -1,3 +1,14 @@
 kafka:
   storage:
     storageClass: gp3
+
+entities:
+  fraudFeatures:
+    topics:
+      - name: fraud.feature-updates.v2.live-v19
+        valueSchema: features/v2/features.proto
+        partitions: 3
+        retention: 1209600000
+      - name: fraud.feature-rejects.v1.live-v19
+        partitions: 3
+        retention: 604800000

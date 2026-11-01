@@ -80,6 +80,9 @@ spec:
     - Ingress
   ingress:
     - from:
+        - podSelector:
+            matchLabels:
+              feast-client: "true"
         {{- range $redis.clients }}
         - podSelector:
             matchLabels:

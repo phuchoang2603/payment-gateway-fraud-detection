@@ -26,6 +26,11 @@ RUN uv sync --locked --no-dev --no-editable \
 COPY contracts/payments /opt/contracts/payments
 RUN uv run --no-project --with grpcio-tools==1.84.0 python -c "import pathlib, sys; import grpc_tools; from grpc_tools import protoc; include = pathlib.Path(grpc_tools.__file__).parent / '_proto'; sys.exit(protoc.main(['protoc', '-I/opt/contracts', f'-I{include}', '--include_imports', '--descriptor_set_out=/opt/data-pipeline/batch/payments.pb', 'payments/v1/events.proto', 'payments/v1/labels.proto']))"
 
+WORKDIR /opt/data-pipeline/feast
+COPY src/data-pipeline/feast/pyproject.toml src/data-pipeline/feast/uv.lock ./
+COPY src/data-pipeline/feast/fraud_feast ./fraud_feast
+RUN uv sync --locked --no-dev --extra spark --no-editable
+
 FROM python:3.12.15-slim-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jre-headless procps tini && \
     rm -rf /var/lib/apt/lists/* && \
@@ -42,6 +47,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYSPARK_PYTHON="/usr/local/bin/python" \
     PYTHONPATH="/opt/spark/python/lib/pyspark.zip:/opt/spark/python/lib/py4j-0.10.9.9-src.zip"
 RUN groupadd --gid 185 spark && useradd --uid 185 --gid 185 --home-dir /opt/spark spark
+COPY --from=build /opt/data-pipeline/feast /opt/data-pipeline/feast
 COPY --from=build /opt/data-pipeline/batch/.venv /opt/data-pipeline/batch/.venv
 COPY --from=build /opt/data-pipeline/batch/payments.pb /opt/data-pipeline/batch/payments.pb
 COPY --from=jars /jars/ /opt/spark/jars/

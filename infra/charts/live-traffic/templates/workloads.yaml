@@ -6,17 +6,22 @@ metadata:
   name: live-simulator
 automountServiceAccountToken: false
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: {{ if .Values.simulator.runAsJob }}batch/v1{{ else }}apps/v1{{ end }}
+kind: {{ if .Values.simulator.runAsJob }}Job{{ else }}Deployment{{ end }}
 metadata:
-  name: live-simulator
+  name: live-simulator{{ if .Values.simulator.runAsJob }}-{{ omit .Values "global" | toJson | sha256sum | trunc 10 }}{{ end }}
 spec:
+  {{- if .Values.simulator.runAsJob }}
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ add (int64 .Values.simulator.config.duration_seconds) 120 }}
+  {{- else }}
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: live-simulator
+  {{- end }}
   template:
     metadata:
       labels:
@@ -25,6 +30,9 @@ spec:
       annotations:
         checksum/config: {{ omit .Values "global" | toJson | sha256sum }}
     spec:
+      {{- if .Values.simulator.runAsJob }}
+      restartPolicy: Never
+      {{- end }}
       serviceAccountName: live-simulator
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60

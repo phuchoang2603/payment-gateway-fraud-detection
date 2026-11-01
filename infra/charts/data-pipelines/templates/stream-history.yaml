@@ -1,0 +1,310 @@
+{{- if .Values.featureStore.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: stream-history
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: data-pipelines
+  {{- include "data-pipelines.workflowPlacement" $ | nindent 2 }}
+  entrypoint: months
+  onExit: cleanup
+  activeDeadlineSeconds: 2678400
+  synchronization:
+    mutexes:
+      - name: stream-history
+  arguments:
+    parameters:
+      - {name: start, value: {{ .Values.featureStore.historyStart | quote }}}
+      - {name: end, value: {{ .Values.featureStore.historyEnd | quote }}}
+  podMetadata:
+    labels:
+      app.kubernetes.io/name: data-pipelines
+  templates:
+    - name: months
+      inputs:
+        parameters:
+          - {name: start, default: {{ "{{workflow.parameters.start}}" | quote }}}
+      steps:
+        - - name: bounds
+            template: bounds
+            arguments:
+              parameters:
+                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+        - - name: unit
+            template: unit
+            arguments:
+              parameters:
+                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+                - {name: end, value: {{ "{{steps.bounds.outputs.parameters.end}}" | quote }}}
+            hooks:
+              exit:
+                template: finish-unit
+                arguments:
+                  parameters:
+                    - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+        - - name: next
+            template: months
+            when: {{ "{{steps.bounds.outputs.parameters.more}} == true" | quote }}
+            arguments:
+              parameters:
+                - {name: start, value: {{ "{{steps.bounds.outputs.parameters.end}}" | quote }}}
+    - name: bounds
+      inputs:
+        parameters:
+          - {name: start}
+      outputs:
+        parameters:
+          - name: end
+            valueFrom: {path: /tmp/unit-end}
+          - name: more
+            valueFrom: {path: /tmp/more}
+      container:
+        image: {{ include "data-pipelines.image" (dict "image" .Values.images.streaming "global" .Values.global) | quote }}
+        command: [/app/history/.venv/bin/python, -m, fraud_streaming.history]
+        args: [months, --start, {{ "{{inputs.parameters.start}}" | quote }}, --end, {{ "{{workflow.parameters.end}}" | quote }}]
+    - name: unit
+      inputs:
+        parameters:
+          - {name: start}
+          - {name: end}
+      steps:
+        - - {name: topics, template: topics}
+        - - name: flink
+            template: flink
+            arguments:
+              parameters:
+                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+        - - name: seed
+            template: seed
+            arguments:
+              parameters:
+                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+                - {name: end, value: {{ "{{inputs.parameters.end}}" | quote }}}
+          - name: writer
+            template: writer
+            arguments:
+              parameters:
+                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+                - {name: end, value: {{ "{{inputs.parameters.end}}" | quote }}}
+        - - name: gate
+            template: gate
+            arguments:
+              parameters:
+                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+    - name: flink
+      inputs:
+        parameters:
+          - {name: start}
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.jobStatus.state == RUNNING
+        manifest: |
+          apiVersion: flink.apache.org/v1beta1
+          kind: FlinkDeployment
+          metadata:
+            name: {{ "{{workflow.name}}-history" }}
+            namespace: {{ .Values.namespace }}
+          spec:
+            image: {{ include "data-pipelines.image" (dict "image" .Values.images.streaming "global" $.Values.global) | quote }}
+            imagePullPolicy: IfNotPresent
+            flinkVersion: v2_2
+            serviceAccount: fraud-streaming
+            flinkConfiguration:
+              taskmanager.numberOfTaskSlots: '1'
+              taskmanager.rpc.port: '6122'
+              taskmanager.data.port: '6121'
+              blob.server.port: '6124'
+              metrics.internal.query-service.port: '6125'
+              python.executable: /app/.venv/bin/python
+              python.client.executable: /app/.venv/bin/python
+              execution.checkpointing.interval: 10s
+              execution.checkpointing.storage: filesystem
+              execution.checkpointing.mode: EXACTLY_ONCE
+              execution.checkpointing.dir: {{ printf "%s/checkpoints/%s" .Values.featureStore.checkpointRoot "{{workflow.name}}/{{inputs.parameters.start}}" | quote }}
+              execution.checkpointing.savepoint-dir: {{ printf "%s/savepoints/%s" .Values.featureStore.checkpointRoot "{{workflow.name}}/{{inputs.parameters.start}}" | quote }}
+              execution.checkpointing.timeout: 2min
+              execution.checkpointing.num-retained: '3'
+              execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+              high-availability.type: kubernetes
+              high-availability.kubernetes.leader-election.lease-duration: 60s
+              high-availability.kubernetes.leader-election.renew-deadline: 45s
+              high-availability.storageDir: {{ printf "%s/checkpoints/ha/%s" .Values.featureStore.checkpointRoot "{{workflow.name}}/{{inputs.parameters.start}}" | quote }}
+              s3.endpoint: {{ .Values.config.S3_ENDPOINT | quote }}
+              s3.path.style.access: {{ .Values.config.S3_PATH_STYLE | toString | quote }}
+              s3.region: {{ .Values.config.AWS_REGION | quote }}
+              restart-strategy.type: exponential-delay
+              resourcemanager.taskmanager-registration.timeout: 10min
+              slot.request.timeout: 15min
+            jobManager:
+              resources:
+                requests: {cpu: "1", memory: 1536Mi}
+                limits: {memory: 1536Mi}
+            taskManager:
+              podTemplate:
+                spec:
+                  {{- include "data-pipelines.placement" $ | nindent 18 }}
+              resources:
+                requests: {cpu: "1", memory: 2Gi}
+                limits: {memory: 2Gi}
+            podTemplate:
+              metadata:
+                labels:
+                  app.kubernetes.io/name: fraud-streaming
+                  istio.io/dataplane-mode: none
+              spec:
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 9999
+                  runAsGroup: 9999
+                  fsGroup: 9999
+                  seccompProfile:
+                    type: RuntimeDefault
+                containers:
+                  - name: flink-main-container
+                    env:
+                      - name: AWS_ACCESS_KEY_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ .Values.storage.externalSecret.name }}
+                            key: AWS_ACCESS_KEY_ID
+                      - name: AWS_SECRET_ACCESS_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ .Values.storage.externalSecret.name }}
+                            key: AWS_SECRET_ACCESS_KEY
+                      - name: KAFKA_BROKERS
+                        value: {{ .Values.bronze.kafka.bootstrapServers | quote }}
+                      - name: FEATURE_EPOCH
+                        value: {{ .Values.featureStore.historyEpoch | quote }}
+                      - name: FEATURE_TOPIC
+                        value: {{ printf "fraud.feature-updates.v2.%s" .Values.featureStore.historyEpoch | quote }}
+                      - name: SOURCE_TOPIC
+                        value: {{ printf "payments.events.%s" .Values.featureStore.historyEpoch | quote }}
+                      - name: SOURCE_PARTITIONS
+                        value: {{ "1" | quote }}
+                      - name: CLOCK_MODE
+                        value: logical
+                      - name: CLOCK_TOPIC
+                        value: {{ printf "fraud.clock.%s" .Values.featureStore.historyEpoch | quote }}
+                      - name: MAX_ENTITY_ENTRIES
+                        value: {{ "50000" | quote }}
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                        drop: [ALL]
+            job:
+              jarURI: local:///opt/flink/opt/flink-python-2.2.1.jar
+              entryClass: org.apache.flink.client.python.PythonDriver
+              args: [-pym, fraud_streaming.job]
+              parallelism: 1
+              upgradeMode: stateless
+              state: running
+    {{- range $mode := list "topics" "seed" "writer" "gate" "purge" "delete-topics" }}
+    - name: {{ $mode }}
+      {{- if has $mode (list "seed" "writer" "gate") }}
+      inputs:
+        parameters:
+          - {name: start}
+          {{- if ne $mode "gate" }}
+          - {name: end}
+          {{- end }}
+      {{- end }}
+      container:
+        {{- if has $mode (list "topics" "seed" "delete-topics") }}
+        image: {{ include "data-pipelines.image" (dict "image" $.Values.images.streaming "global" $.Values.global) | quote }}
+        command: [/app/history/.venv/bin/python, -m, fraud_streaming.history]
+        {{- if eq $mode "seed" }}
+        args: [seed, --start, {{ "{{inputs.parameters.start}}" | quote }}, --end, {{ "{{inputs.parameters.end}}" | quote }}]
+        {{- else if eq $mode "delete-topics" }}
+        args: [topics, --delete]
+        {{- else }}
+        args: [topics]
+        {{- end }}
+        {{- else }}
+        image: {{ include "data-pipelines.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
+        {{- if eq $mode "writer" }}
+        command: [python, -m, fraud_feast.push_job]
+        args: [--to, offline, --history-start, {{ "{{inputs.parameters.start}}" | quote }}, --history-end, {{ "{{inputs.parameters.end}}" | quote }}]
+        {{- else }}
+        command: [python, -m, fraud_feast.history]
+        args: {{ if eq $mode "purge" }}[--cleanup]{{ else }}[]{{ end }}
+        {{- end }}
+        {{- end }}
+        env:
+          - name: RUN_ID
+            value: {{ "{{workflow.name}}" | quote }}
+          - name: FEATURE_EPOCH
+            value: {{ $.Values.featureStore.historyEpoch | quote }}
+          - name: FEATURE_UPDATE_TOPIC
+            value: {{ printf "fraud.feature-updates.v2.%s" $.Values.featureStore.historyEpoch | quote }}
+          - name: DATASET_VERSION
+            value: {{ $.Values.bronze.datasetVersion | quote }}
+          - name: HISTORY_REPLICATION_FACTOR
+            value: {{ $.Values.featureStore.replicationFactor | quote }}
+          - name: HISTORY_FLINK_URL
+            value: {{ "http://{{workflow.name}}-history-rest:8081" | quote }}
+          {{- if has $mode (list "seed" "writer" "gate") }}
+          - name: HISTORY_SEED_REPORT
+            value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}-seed.json" $.Values.featureStore.reportRoot | quote }}
+          - name: RUN_REPORT
+            value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}.json" $.Values.featureStore.reportRoot | quote }}
+          {{- end }}
+          {{- include "data-pipelines.env" $ | nindent 10 }}
+          {{- include "data-pipelines.feastEnv" $ | nindent 10 }}
+        resources:
+          requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 10Gi}
+          limits: {memory: 4Gi, ephemeral-storage: 30Gi}
+    {{- end }}
+    - name: cleanup
+      steps:
+        - - name: stop
+            template: stop
+            continueOn: {failed: true, error: true}
+        - - name: delete-topics
+            template: delete-topics
+            continueOn: {failed: true, error: true}
+        - - {name: purge, template: purge}
+    - name: stop
+      resource:
+        action: delete
+        flags: [--ignore-not-found=true, --wait=true]
+        manifest: |
+          apiVersion: flink.apache.org/v1beta1
+          kind: FlinkDeployment
+          metadata:
+            name: {{ "{{workflow.name}}-history" }}
+            namespace: {{ .Values.namespace }}
+    - name: finish-unit
+      inputs:
+        parameters:
+          - {name: start}
+      steps:
+        - - name: cleanup
+            template: cleanup
+            continueOn: {failed: true, error: true}
+        - - name: publish
+            template: publish
+            arguments:
+              parameters:
+                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+    - name: publish
+      inputs:
+        parameters:
+          - {name: start}
+      container:
+        image: {{ include "data-pipelines.image" (dict "image" .Values.images.openmetadata "global" .Values.global) | quote }}
+        command: [python, -m, openmetadata.publish]
+        env:
+          - {name: PIPELINES, value: stream-history}
+          - name: WORKFLOW_STATUS
+            value: {{ "{{workflow.status}}" | quote }}
+          - name: RUN_ID
+            value: {{ "{{workflow.name}}-{{inputs.parameters.start}}" | quote }}
+          - name: DATASET_VERSION
+            value: {{ .Values.bronze.datasetVersion | quote }}
+          - name: RUN_REPORT
+            value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}.json" .Values.featureStore.reportRoot | quote }}
+          {{- include "data-pipelines.env" . | nindent 10 }}
+{{- end }}

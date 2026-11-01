@@ -34,7 +34,6 @@ metadata:
 rules:
   - apiGroups: [apps]
     resources: [deployments]
-    resourceNames: [fraud-streaming-{{ .Values.epoch }}]
     verbs: [get]
   - apiGroups: [""]
     resources: [pods, services, configmaps]
@@ -170,6 +169,12 @@ spec:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: operators
             app.kubernetes.io/name: flink-kubernetes-operator
+      toPorts:
+        - ports: [{port: '8081', protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: data
+            app.kubernetes.io/name: data-pipelines
       toPorts:
         - ports: [{port: '8081', protocol: TCP}]
   egress:

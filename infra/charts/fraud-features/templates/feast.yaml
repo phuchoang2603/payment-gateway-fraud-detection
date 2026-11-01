@@ -1,5 +1,5 @@
 {{- if .Values.feast.enabled }}
-{{- range $mode, $name := dict "write" "feast-writer" "serve" "feast-server" }}
+{{- range $mode, $name := dict "online" "feast-push-online" "offline" "feast-push-offline" "serve" "feast-server" }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -24,6 +24,8 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: {{ $name }}
+        feast-client: "true"
+        kafka-client: feast-writer
     spec:
       serviceAccountName: {{ $name }}
       automountServiceAccountToken: false
@@ -39,8 +41,9 @@ spec:
         - name: {{ $name }}
           image: {{ include "fraud-features.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
           imagePullPolicy: {{ $.Values.images.feast.pullPolicy }}
-          {{- if eq $mode "write" }}
-          command: [python, -m, fraud_feast.writer_runtime]
+          {{- if ne $mode "serve" }}
+          command: [python, -m, fraud_feast.push_job]
+          args: [--to, {{ $mode }}]
           {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
@@ -48,25 +51,15 @@ spec:
             capabilities:
               drop: [ALL]
           env:
-            - name: FEAST_REDIS_ADDR
-              value: {{ printf "%s:6379" $.Values.redis.name | quote }}
-            - name: FEAST_REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $.Values.redis.password.secretName }}
-                  key: {{ $.Values.redis.password.secretKey }}
-            {{- if eq $mode "write" }}
+            {{- include "fraud-features.feastEnv" $ | nindent 12 }}
+          {{- if ne $mode "serve" }}
             - name: FEATURE_KAFKA_BROKERS
               value: {{ $.Values.kafkaBrokers | quote }}
-            - name: FEATURE_WRITER_GROUP
-              value: {{ $.Values.feast.writerGroup | quote }}
             - name: FEATURE_UPDATE_TOPIC
               value: {{ $.Values.topic | quote }}
             - name: FEATURE_EPOCH
               value: {{ $.Values.epoch | quote }}
-            - name: FEATURE_DEFINITION_SHA256
-              value: {{ $.Values.definitionHash | quote }}
-            {{- end }}
+          {{- end }}
           {{- if eq $mode "serve" }}
           ports:
             - name: http
@@ -88,7 +81,7 @@ spec:
         - name: runtime
           emptyDir:
             medium: Memory
-            sizeLimit: 16Mi
+            sizeLimit: 256Mi
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -130,7 +123,18 @@ spec:
       ports:
         - {port: 53, protocol: UDP}
         - {port: 53, protocol: TCP}
-    {{- if eq $mode "write" }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: polaris
+      ports:
+        - {port: 8181, protocol: TCP}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - {port: 443, protocol: TCP}
+    {{- if ne $mode "serve" }}
     - to:
         - namespaceSelector:
             matchLabels:

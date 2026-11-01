@@ -1,6 +1,25 @@
 redis:
   storageClass: gp3
+  storageSize: 10Gi
+  maxmemory: 6gb
+  resources:
+    requests:
+      cpu: 250m
+      memory: 7Gi
+    limits:
+      cpu: '1'
+      memory: 8Gi
 streaming:
   storageEndpoint: https://s3.us-east-1.amazonaws.com
   pathStyle: false
   storageRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/flink
+  enabled: true
+epoch: live-v19
+topic: fraud.feature-updates.v2.live-v19
+feast:
+  enabled: true
+  registry: s3://platform-prod-142737101504-us-east-1/feast/payment-gateway/registry.pb
+  epochs: history-v19,live-v19
+storage:
+  endpoint: https://s3.us-east-1.amazonaws.com
+  pathStyle: 'false'
