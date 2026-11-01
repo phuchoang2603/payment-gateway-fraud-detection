@@ -40,6 +40,7 @@ var viewFields = map[string][]string{
 	"payment_method_stream": {"method_snapshot_attempt_count_5m", "method_snapshot_attempt_count_1h", "method_snapshot_attempt_count_24h"},
 	"customer_daily":        dailyFields("customer"),
 	"payment_method_daily":  dailyFields("payment_method"),
+	"request_features":      {"amount_minor", "customer_account_age_days", "merchant_account_age_days", "ip_shipping_country_mismatch", "item_count", "has_device"},
 }
 
 func dailyFields(scope string) []string {
@@ -86,10 +87,15 @@ func (c *Client) Read(ctx context.Context, request application.Request) (observa
 	ctx, cancel := context.WithTimeout(ctx, c.config.Timeout)
 	defer cancel()
 	body, err := json.Marshal(struct {
-		FeatureService   string              `json:"feature_service"`
-		Entities         map[string][]string `json:"entities"`
-		FullFeatureNames bool                `json:"full_feature_names"`
-	}{c.config.FeatureService, map[string][]string{"integration_id": {request.IntegrationID}, "customer_id": {request.CustomerID}, "payment_method_fingerprint": {request.MethodFingerprint}}, true})
+		FeatureService   string           `json:"feature_service"`
+		Entities         map[string][]any `json:"entities"`
+		FullFeatureNames bool             `json:"full_feature_names"`
+	}{c.config.FeatureService, map[string][]any{
+		"integration_id": {request.IntegrationID}, "customer_id": {request.CustomerID}, "payment_method_fingerprint": {request.MethodFingerprint},
+		"scored_at": {request.Input.AttemptedAt.Format(time.RFC3339Nano)}, "amount_minor": {request.Input.AmountMinor},
+		"customer_account_created_at": {request.Input.CustomerCreatedAt.Format(time.RFC3339Nano)}, "merchant_account_created_at": {request.MerchantAccountCreatedAt.Format(time.RFC3339Nano)},
+		"shipping_country": {request.Input.ShippingCountry}, "ip_country": {request.Input.IPCountry}, "item_count": {request.ItemCount}, "has_device": {request.HasDevice},
+	}, true})
 	if err != nil {
 		return observation
 	}
@@ -164,7 +170,13 @@ func evaluate(view string, names []string, fields map[string]featureResult, scor
 		value := application.FeatureValue{}
 		if !isNull {
 			allNull = false
-			if strings.HasPrefix(name, "decline_rate_") {
+			if name == "ip_shipping_country_mismatch" || name == "has_device" {
+				var boolean bool
+				if json.Unmarshal(field.Values[0], &boolean) != nil {
+					return result
+				}
+				value.Boolean = &boolean
+			} else if strings.HasPrefix(name, "decline_rate_") {
 				var number float64
 				if json.Unmarshal(field.Values[0], &number) != nil || number < 0 || number > 1 {
 					return result
@@ -181,6 +193,17 @@ func evaluate(view string, names []string, fields map[string]featureResult, scor
 		values[name] = value
 	}
 	result.EventTimestamp = &timestamp
+	if view == "request_features" {
+		for name, value := range values {
+			if name != "ip_shipping_country_mismatch" && value.Integer == nil && value.Boolean == nil {
+				return result
+			}
+		}
+		result.Status = "available"
+		result.EventTimestamp = &scoredAt
+		result.Values = values
+		return result
+	}
 	switch {
 	case allNull && timestamp.Equal(time.Unix(0, 0)):
 		result.Status = "missing"

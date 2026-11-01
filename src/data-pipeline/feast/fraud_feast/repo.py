@@ -6,6 +6,8 @@ from feast import Entity, FeatureService, FeatureView, Field, PushSource, ValueT
 from feast.infra.offline_stores.contrib.spark_offline_store.spark_source import SparkSource
 from feast.types import Float64, Int64
 
+from fraud_feast.request import request_context, request_features
+
 DAILY_TTL = timedelta(days=31, hours=12)
 STREAM_TTL = timedelta(hours=24, minutes=5)
 KEYS = {"customer": "customer_id", "payment_method": "payment_method_fingerprint"}
@@ -98,5 +100,7 @@ def definitions():
         integration,
         *entities.values(),
         *views,
-        FeatureService(name="fraud_model_v1", features=views),
+        request_context,
+        request_features,
+        FeatureService(name="fraud_model_v1", features=[*views, request_features]),
     ]

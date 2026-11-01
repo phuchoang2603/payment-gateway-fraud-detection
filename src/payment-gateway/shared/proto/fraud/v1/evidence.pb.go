@@ -205,6 +205,7 @@ type FeatureValue struct {
 	//
 	//	*FeatureValue_Integer
 	//	*FeatureValue_Number
+	//	*FeatureValue_Boolean
 	Value         isFeatureValue_Value `protobuf_oneof:"value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -265,6 +266,15 @@ func (x *FeatureValue) GetNumber() float64 {
 	return 0
 }
 
+func (x *FeatureValue) GetBoolean() bool {
+	if x != nil {
+		if x, ok := x.Value.(*FeatureValue_Boolean); ok {
+			return x.Boolean
+		}
+	}
+	return false
+}
+
 type isFeatureValue_Value interface {
 	isFeatureValue_Value()
 }
@@ -277,9 +287,15 @@ type FeatureValue_Number struct {
 	Number float64 `protobuf:"fixed64,2,opt,name=number,proto3,oneof"`
 }
 
+type FeatureValue_Boolean struct {
+	Boolean bool `protobuf:"varint,3,opt,name=boolean,proto3,oneof"`
+}
+
 func (*FeatureValue_Integer) isFeatureValue_Value() {}
 
 func (*FeatureValue_Number) isFeatureValue_Value() {}
+
+func (*FeatureValue_Boolean) isFeatureValue_Value() {}
 
 type FeatureViewEvidence struct {
 	state          protoimpl.MessageState   `protogen:"open.v1"`
@@ -673,10 +689,11 @@ var File_fraud_v1_evidence_proto protoreflect.FileDescriptor
 
 const file_fraud_v1_evidence_proto_rawDesc = "" +
 	"\n" +
-	"\x17fraud/v1/evidence.proto\x12\bfraud.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"M\n" +
+	"\x17fraud/v1/evidence.proto\x12\bfraud.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"i\n" +
 	"\fFeatureValue\x12\x1a\n" +
 	"\ainteger\x18\x01 \x01(\x03H\x00R\ainteger\x12\x18\n" +
-	"\x06number\x18\x02 \x01(\x01H\x00R\x06numberB\a\n" +
+	"\x06number\x18\x02 \x01(\x01H\x00R\x06number\x12\x1a\n" +
+	"\aboolean\x18\x03 \x01(\bH\x00R\abooleanB\a\n" +
 	"\x05value\"\xee\x02\n" +
 	"\x13FeatureViewEvidence\x12\x12\n" +
 	"\x04view\x18\x01 \x01(\tR\x04view\x123\n" +
@@ -809,6 +826,7 @@ func file_fraud_v1_evidence_proto_init() {
 	file_fraud_v1_evidence_proto_msgTypes[0].OneofWrappers = []any{
 		(*FeatureValue_Integer)(nil),
 		(*FeatureValue_Number)(nil),
+		(*FeatureValue_Boolean)(nil),
 	}
 	file_fraud_v1_evidence_proto_msgTypes[2].OneofWrappers = []any{}
 	file_fraud_v1_evidence_proto_msgTypes[3].OneofWrappers = []any{}

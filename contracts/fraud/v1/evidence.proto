@@ -23,6 +23,7 @@ message FeatureValue {
   oneof value {
     int64 integer = 1;
     double number = 2;
+    bool boolean = 3;
   }
 }
 message FeatureViewEvidence {

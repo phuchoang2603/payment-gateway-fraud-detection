@@ -97,6 +97,16 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
             "label": [True, False, False, True, False, True],
         }
     )
+    labels = labels.assign(
+        scored_at=labels["event_timestamp"],
+        amount_minor=1200,
+        customer_account_created_at=day - timedelta(days=10),
+        merchant_account_created_at=day - timedelta(days=20),
+        shipping_country="US",
+        ip_country=["CA", None, "US", "US", "US", "US"],
+        item_count=2,
+        has_device=False,
+    )
     cutoff = day + timedelta(days=40)
     source = labels.assign(
         label_source="LABEL_SOURCE_SIMULATION_TRUTH", label_available_at=labels["event_timestamp"]
@@ -140,3 +150,42 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
     assert pd.isna(
         result.loc["no-method", "payment_method_stream__method_snapshot_attempt_count_5m"]
     )
+
+    from fastapi.testclient import TestClient
+    from feast.feature_server import get_app
+
+    from fraud_feast.request import REQUEST_FEATURES, REQUEST_FIELDS
+
+    with TestClient(get_app(feature_store)) as client:
+        for index in (0, 1):
+            example = labels.iloc[index]
+            entities = {
+                key: [example[key]]
+                for key in ("integration_id", "customer_id", "payment_method_fingerprint")
+            }
+            for key in REQUEST_FIELDS:
+                value = example[key]
+                if hasattr(value, "isoformat"):
+                    value = value.isoformat()
+                elif hasattr(value, "item"):
+                    value = value.item()
+                entities[key] = [value]
+            response = client.post(
+                "/get-online-features",
+                json={
+                    "feature_service": "fraud_model_v1",
+                    "entities": entities,
+                    "full_feature_names": True,
+                },
+            )
+            assert response.status_code == 200, response.text
+            body = response.json()
+            actual = dict(zip(body["metadata"]["feature_names"], body["results"]))
+            for field in REQUEST_FEATURES:
+                name = f"request_features__{field}"
+                expected = result.loc[example["label_attempt"], name]
+                assert actual[name]["values"][0] == (None if pd.isna(expected) else expected)
+    assert result.loc["history", "request_features__customer_account_age_days"] == 10
+    assert result.loc["history", "request_features__merchant_account_age_days"] == 20
+    assert result.loc["history", "request_features__ip_shipping_country_mismatch"]
+    assert pd.isna(result.loc["live", "request_features__ip_shipping_country_mismatch"])

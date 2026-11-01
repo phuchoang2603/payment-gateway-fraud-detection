@@ -33,6 +33,9 @@ func viewProto(name string, value application.ViewObservation) *fraudv1.FeatureV
 		if quantity.Number != nil {
 			feature.Value = &fraudv1.FeatureValue_Number{Number: *quantity.Number}
 		}
+		if quantity.Boolean != nil {
+			feature.Value = &fraudv1.FeatureValue_Boolean{Boolean: *quantity.Boolean}
+		}
 		result.Values[field] = feature
 	}
 	return result
@@ -53,7 +56,7 @@ func evidenceProto(value application.Evidence) *fraudv1.AssessmentEvidence {
 		CustomerGuard:  guardProto(fraudv1.EntityView_ENTITY_VIEW_CUSTOMER, value.CustomerGuard), MethodGuard: guardProto(fraudv1.EntityView_ENTITY_VIEW_METHOD, value.MethodGuard), EvaluatedAt: timestamppb.New(value.EvaluatedAt),
 		UsedAmountMinor: value.Input.AmountMinor, UsedCustomerCreatedAt: timestamppb.New(value.Input.CustomerCreatedAt), UsedAttemptedAt: timestamppb.New(value.Input.AttemptedAt), UsedShippingCountry: value.Input.ShippingCountry, UsedIpCountry: value.Input.IPCountry, HistoricalFeaturesShadowOnly: value.HistoricalShadowOnly,
 	}
-	for _, name := range []string{"customer_daily", "payment_method_daily", "customer_stream", "payment_method_stream"} {
+	for _, name := range []string{"customer_daily", "payment_method_daily", "customer_stream", "payment_method_stream", "request_features"} {
 		if view, exists := value.Features.Views[name]; exists {
 			result.Views = append(result.Views, viewProto(name, view))
 		}

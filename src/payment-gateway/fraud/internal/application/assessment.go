@@ -26,6 +26,9 @@ type (
 		Digest                        string
 		CustomerID, MethodFingerprint string
 		Input                         domain.Input
+		MerchantAccountCreatedAt      time.Time
+		ItemCount                     int64
+		HasDevice                     bool
 	}
 )
 
@@ -44,6 +47,7 @@ type Store interface {
 type FeatureValue struct {
 	Integer *int64
 	Number  *float64
+	Boolean *bool
 }
 type ViewObservation struct {
 	Status         string
@@ -129,6 +133,7 @@ func (s *Service) Decide(ctx context.Context, request Request) (Result, error) {
 		Features: FeatureObservation{Views: map[string]ViewObservation{
 			"customer_daily": {Status: "disabled"}, "payment_method_daily": {Status: "disabled"},
 			"customer_stream": {Status: "disabled"}, "payment_method_stream": {Status: "disabled"},
+			"request_features": {Status: "disabled"},
 		}},
 		CustomerGuard: GuardObservation{Status: "disabled"}, MethodGuard: GuardObservation{Status: "disabled"},
 	}}

@@ -45,18 +45,29 @@ func TestOneNaturalKeyServiceRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		var request struct {
-			FeatureService   string              `json:"feature_service"`
-			Entities         map[string][]string `json:"entities"`
-			FullFeatureNames bool                `json:"full_feature_names"`
+			FeatureService   string           `json:"feature_service"`
+			Entities         map[string][]any `json:"entities"`
+			FullFeatureNames bool             `json:"full_feature_names"`
 		}
-		if json.NewDecoder(r.Body).Decode(&request) != nil || request.FeatureService != "fraud_model_v1" || !request.FullFeatureNames || request.Entities["integration_id"][0] != "integration" || len(request.Entities) != 3 {
+		if json.NewDecoder(r.Body).Decode(&request) != nil || request.FeatureService != "fraud_model_v1" || !request.FullFeatureNames || request.Entities["integration_id"][0] != "integration" || len(request.Entities) != 11 || request.Entities["has_device"][0] != false || request.Entities["ip_country"][0] != nil || request.Entities["amount_minor"][0] != float64(500) || request.Entities["item_count"][0] != float64(2) || request.Entities["scored_at"][0] != now.Format(time.RFC3339Nano) || request.Entities["merchant_account_created_at"][0] != now.Add(-24*time.Hour).Format(time.RFC3339Nano) {
 			t.Error("invalid feature service request")
 		}
 		reply := response{}
 		for view, fields := range viewFields {
 			for _, field := range fields {
 				reply.Metadata.FeatureNames = append(reply.Metadata.FeatureNames, view+"__"+field)
-				reply.Results = append(reply.Results, featureResult{Values: []json.RawMessage{json.RawMessage("null")}, Statuses: []string{"PRESENT"}, EventTimestamps: []time.Time{now}})
+				value := json.RawMessage("null")
+				if view == "request_features" && field != "ip_shipping_country_mismatch" {
+					value = json.RawMessage("1")
+					if field == "has_device" {
+						value = json.RawMessage("false")
+					}
+				}
+				timestamp := now
+				if view == "request_features" {
+					timestamp = time.Unix(0, 0).UTC()
+				}
+				reply.Results = append(reply.Results, featureResult{Values: []json.RawMessage{value}, Statuses: []string{"PRESENT"}, EventTimestamps: []time.Time{timestamp}})
 			}
 		}
 		if err := json.NewEncoder(w).Encode(reply); err != nil {
@@ -69,13 +80,32 @@ func TestOneNaturalKeyServiceRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	observation := client.Read(context.Background(), application.Request{Identity: application.Identity{IntegrationID: "integration"}, CustomerID: "customer", MethodFingerprint: "method", Input: domain.Input{AttemptedAt: now}})
-	if calls != 1 || len(observation.Views) != 4 {
+	observation := client.Read(context.Background(), application.Request{Identity: application.Identity{IntegrationID: "integration"}, CustomerID: "customer", MethodFingerprint: "method", MerchantAccountCreatedAt: now.Add(-24 * time.Hour), ItemCount: 2, Input: domain.Input{AttemptedAt: now, AmountMinor: 500}})
+	if calls != 1 || len(observation.Views) != 5 {
 		t.Fatalf("calls = %d, views = %d", calls, len(observation.Views))
 	}
 	for _, view := range observation.Views {
 		if view.Status != "available" {
 			t.Fatalf("null coverage status = %s", view.Status)
 		}
+	}
+}
+
+func TestRequestFeatureBooleansAndNullRetainScoringTime(t *testing.T) {
+	now := time.Now().UTC()
+	fields := map[string]featureResult{}
+	for _, name := range viewFields["request_features"] {
+		value := json.RawMessage("1")
+		if name == "ip_shipping_country_mismatch" {
+			value = json.RawMessage("null")
+		}
+		if name == "has_device" {
+			value = json.RawMessage("false")
+		}
+		fields["request_features__"+name] = featureResult{Values: []json.RawMessage{value}, Statuses: []string{"PRESENT"}, EventTimestamps: []time.Time{time.Unix(0, 0)}}
+	}
+	result := evaluate("request_features", viewFields["request_features"], fields, now, time.Hour)
+	if result.Status != "available" || !result.EventTimestamp.Equal(now) || result.Values["has_device"].Boolean == nil || *result.Values["has_device"].Boolean || result.Values["ip_shipping_country_mismatch"].Boolean != nil {
+		t.Fatalf("request features lost null, false or scoring time: %+v", result)
 	}
 }
