@@ -199,7 +199,7 @@ An optional `since` day overrides the start after a backfill; the end is always 
 5. **Gate.** Require zero decode rejects and checkpointed input offsets at every seeded record's end (and the final clock control consumed). Duplicates and too-late rejects are reported, not gated. Snapshots carry no attempt IDs, so an attempts-in-snapshots gate is impossible. Counts and consumed offsets go to the run report and pipeline status.
 6. **Cleanup.** An exit handler deletes the FlinkDeployment and the epoch's topics, on success and failure.
 
-**Cutover.** History covers the v19 dataset range. Live `live-v19` starts afterwards, from the live simulator's own events, so the epochs never overlap. Live Flink starts empty, and its windows report unknown coverage for their first 24 hours. Training uses only history.
+**History and live ranges.** History covers the v19 dataset range. Live `live-v19` starts afterwards, from the live simulator's own events, so the epochs never overlap. Live Flink starts empty, and its windows report unknown coverage for their first 24 hours. Training uses only history.
 
 **Throughput.** Full v19 is about 984M events. The first month measures our replay rate and determines parallelism and runtime estimates for subsequent months. TaskManagers run on the spot pool. Months can be rerun individually.
 
@@ -298,10 +298,10 @@ No new Doppler keys. Requests:
 - **[Feature server latency inside Go's 100 ms budget]** → One call. A shadow timeout never changes the decision.
 - **[The Flink connector cannot see PyFlink Kafka sources]** → The SDK fallback.
 
-## Migration Plan
+## Rollout Plan
 
 1. **Start gate.** The implementation branch is rebased onto `origin/main` at `371d2ca`, which removes DP3's Spark short windows. The user authorized implementation and a draft PR. Validate with `--strict`.
-2. **Implement, validate, then push the draft PR.** Before data-pipelines syncs in dev, delete the old `fraud-features` Argo CD Application without cascade, orphaning its resources so Redis and the FlinkDeployment are adopted without recreation. The dev deploy is the v18 smoke run:
+2. **Implement, validate, then push the draft PR.** Dev can be recreated; no resource adoption, old-data migration or legacy compatibility is required. The dev deploy is the v18 smoke run:
    - apply, then feature writer on `live-v18`;
    - a `dp-backfill`, then `feast-materialize`;
    - a `dp-pipeline` run without a range (yesterday plus the lookback) and `feast-materialize` again, refreshing the lookback days;

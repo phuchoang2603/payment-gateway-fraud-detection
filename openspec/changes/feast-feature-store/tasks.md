@@ -176,7 +176,7 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 
 ## 12. Review fixes
 
-- [x] 12.1 Merge feature infrastructure into data-pipelines under features.enabled (dev on, prod off), deduplicate secrets/helpers, restore unchanged values comments and document the orphan/adopt cutover.
+- [x] 12.1 Merge feature infrastructure into data-pipelines under features.enabled (dev on, prod off), deduplicate secrets/helpers, restore unchanged values comments. Dev can be recreated; no legacy migration or resource-adoption work.
 - [x] 12.2 Make history atomic per table and unit, remove prepare and history watermarks/resume, add Argo retry and drain bounded reads to committed partition EOF.
 - [x] 12.3 Persist live offsets as transactional table properties, retry commit conflicts against refreshed offsets, retain nightly snapshot maintenance and cover expiry recovery.
 - [x] 12.4 Push null coverage with an always-set epoch excluded from model inputs, null-guard account ages, restore scoped Flink Deployment access and move imports.
