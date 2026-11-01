@@ -173,11 +173,6 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Observability | Metrics, logs and traces for services | [Observability](deployment/observability.md) | Done for Go services |
 | Security | Central secrets, service-to-service authorization | [Security](deployment/security.md) | Done |
 
-## Novel ideas
-
-- **Write-audit-publish on Iceberg branches, audited only where the run wrote.** Every layer writes to an `audit-<workflow>` branch, the contract's SQL rules run as native OpenMetadata tests against that branch's snapshot, and only a clean audit fast-forwards `main`. A consumer therefore never reads an unaudited row. The rules see only the range the audited commit records, through ClickHouse `additional_table_filters` and without rewriting the rule's SQL, so a check costs one month whatever the history behind it. See [range-scoped validation](data/orchestration-governance.md#range-scoped-validation).
-- **Resumable re-runs from snapshot lineage, with no state store.** Each Silver and Gold commit records its day range, the input snapshot IDs it read and the batch image in its Iceberg summary, and the marts record the same in `build_info`. Before a stage, a plan step compares these with what the run would write and skips the stage when they match. Re-running a failed month therefore resumes at the failed stage, and the record of what was built travels with the data. See [pipeline](data/offline.md#pipeline).
-
 ## Limits and scope
 
 - Synthetic data cannot establish real-world fraud-model quality. Unlabelled drift measures distribution change, not accuracy.

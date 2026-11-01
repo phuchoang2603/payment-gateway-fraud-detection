@@ -176,6 +176,11 @@ Each technique was adopted after a measured failure or cost on the v19 backfill;
 
 Event logs live under `runs/payment-gateway/spark-events/` in each environment's bucket. Start a throwaway History Server using the deployed `data-platform-spark` image, `gateway-storage` credentials and `sparkEventLogDir` from the environment's chart values. Invoke `/opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer` with the S3A settings in `SPARK_HISTORY_OPTS`, port-forward port 18080, capture the required jobs, stages and plans, then delete the pod. Save PNGs under `docs/data/images/`.
 
+## Novel ideas
+
+- **Write-audit-publish on Iceberg branches, audited only where the run wrote.** Every layer writes to an `audit-<workflow>` branch, the contract's SQL rules run as native OpenMetadata tests against that branch's snapshot, and only a clean audit fast-forwards `main`. A consumer therefore never reads an unaudited row. The rules see only the range the audited commit records, through ClickHouse `additional_table_filters` and without rewriting the rule's SQL, so a check costs one month whatever the history behind it. See [range-scoped validation](orchestration-governance.md#range-scoped-validation).
+- **Resumable re-runs from snapshot lineage, with no state store.** Each Silver and Gold commit records its day range, the input snapshot IDs it read and the batch image in its Iceberg summary, and the marts record the same in `build_info`. Before a stage, a plan step compares these with what the run would write and skips the stage when they match. Re-running a failed month therefore resumes at the failed stage, and the record of what was built travels with the data. See [pipeline](#pipeline).
+
 ## Schemas and naming
 
 Table schemas are the data-product contracts, with generated references under [`products/`](products). The namespace or database names the layer and engine; a prefix names the role. Timestamps end in `_at` (business time) or `_ts` (SCD validity), surrogate keys in `_sk`, booleans start with `is_`; Feast's `event_timestamp` and `created` keep their names.
