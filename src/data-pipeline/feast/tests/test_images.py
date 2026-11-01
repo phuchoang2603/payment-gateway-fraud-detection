@@ -1,7 +1,6 @@
-import io
 import os
+import shutil
 import subprocess
-import tarfile
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[4]
         ("data-platform-spark", "/opt/data-pipeline/feast/.venv/bin/python"),
     ],
 )
-def runtime_image(request):
+def runtime_image(request, tmp_path):
     name, python = request.param
-    context = io.BytesIO()
+    context = tmp_path / "context"
     paths = (
         subprocess.check_output(
             [
@@ -36,25 +35,24 @@ def runtime_image(request):
         .decode()
         .split("\0")
     )
-    with tarfile.open(fileobj=context, mode="w") as archive:
-        for path in filter(None, paths):
-            archive.add(ROOT / path, arcname=path)
+    for path in filter(None, paths):
+        destination = context / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / path, destination, follow_symlinks=False)
     tag = f"feast-ci-{name}:{uuid4().hex}"
-    with context:
-        subprocess.run(
-            [
-                "docker",
-                "build",
-                "--file",
-                f"infra/docker/{name}.Dockerfile",
-                "--tag",
-                tag,
-                "-",
-            ],
-            input=context.getvalue(),
-            env={**os.environ, "DOCKER_BUILDKIT": "1"},
-            check=True,
-        )
+    subprocess.run(
+        [
+            "docker",
+            "build",
+            "--file",
+            str(context / f"infra/docker/{name}.Dockerfile"),
+            "--tag",
+            tag,
+            str(context),
+        ],
+        env={**os.environ, "DOCKER_BUILDKIT": "1"},
+        check=True,
+    )
     try:
         yield name, python, tag
     finally:
