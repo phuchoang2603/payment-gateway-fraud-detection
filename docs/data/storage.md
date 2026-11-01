@@ -23,7 +23,7 @@ Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT
 
 Tables are Iceberg, registered in the Polaris REST catalog that the `lakehouse` chart deploys. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
 
-Prod v19 holds Bronze in full, Silver from 2025-10-29 to 2026-05-31 and Gold to 2026-04-30, with the backfill continuing; see [the run](offline.md#prod-v19-run).
+Prod v19 holds Bronze in full, and Silver, Gold and the marts from 2025-10-29 to 2026-08-31, with the backfill continuing to 2026-10-28; see [the run](offline.md#prod-v19-run).
 
 | Technique | Applied to | Why |
 |---|---|---|
@@ -70,4 +70,4 @@ The ID and fingerprint columns use `CODEC(ZSTD(3))`. They hold random UUIDs and 
 
 Retention is a wall-clock `TTL` of 90 days with `ttl_only_drop_parts`, matching the rolling window each build inserts; `marts.build_info` records the window, the rebuilt days and the Silver snapshots. Builds join with external sort-merge and spill, the settings the v19 checks needed above.
 
-**Evidence.** `EXPLAIN indexes = 1` and `system.query_log` (read rows, bytes, selected marks) for Q0–Q4 on the published prod marts, recorded with `build_info`'s window, once the backfill has filled the window (May to October 2026). The on-demand `warehouse-benchmark` can additionally compare raw Iceberg, an unsorted copy and the indexed mart, but the evidence does not depend on it.
+**Evidence.** `EXPLAIN indexes = 1` and `system.query_log` (read rows, bytes, selected marks) for Q0–Q4 on the published prod marts, recorded with `build_info`'s window, once the backfill has filled the 90-day window (2026-08-04 to 2026-10-28). The on-demand `warehouse-benchmark` can additionally compare raw Iceberg, an unsorted copy and the indexed mart, but the evidence does not depend on it.

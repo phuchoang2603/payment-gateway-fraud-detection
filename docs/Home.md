@@ -130,8 +130,8 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Online generator | Late arrivals and streaming duplicates | [Online data](data/online.md) | Done; see [evidence](data/online.md#evidence) |
 | Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline data](data/offline.md) | Running on prod v19; optimizations recorded from the backfill |
 | Flink jobs | Baseline, late arrivals, duplicates, windows, dead-letter topic; output ends at the feature journal topic | [Online data](data/online.md) | Done except a Flink UI metrics-panel capture; see [evidence](data/online.md#evidence) |
-| Storage | Lakehouse compaction, partitioning, Z-order; ClickHouse warehouse indexing (`ORDER BY`, skip indexes) | [Storage](data/storage.md) | Layout done on v19; mart `EXPLAIN` evidence waits for the backfilled window |
-| Orchestration | DP1 (raw → Bronze), then `dp-pipeline` (Silver, Gold, marts), each layer with ingest, validate and publish stages | [Orchestration and governance](data/orchestration-governance.md) | DP1 done; backfill through April done, May onward running |
+| Storage | Lakehouse compaction, partitioning, Z-order; ClickHouse warehouse indexing (`ORDER BY`, skip indexes) | [Storage](data/storage.md) | Partitioning, write order and mart codecs done on v19; compaction, Z-order and mart `EXPLAIN` evidence after the backfill |
+| Orchestration | DP1 (raw → Bronze), then `dp-pipeline`: Silver, then Gold and the marts side by side, each layer with ingest, validate and publish stages; unchanged stages skipped | [Orchestration and governance](data/orchestration-governance.md) | DP1 done; backfill through 2026-08-31 done, September–October running |
 | Incremental curation | Silver and Gold take a day range and overwrite only those days, so the daily run and a backfill are the same job; CI checks daily runs against one backfill for both | [Offline data](data/offline.md) | Done; prod backfill month by month |
 | Governance | Lineage and validation for DP1–DP3 in the catalog | [Orchestration and governance](data/orchestration-governance.md) | Done: source-to-marts lineage, 58 passing tests |
 | Schemas | SCD2 dimensions, `feat_` tables with `event_timestamp`/`created`, naming conventions, relationships | [Offline data](data/offline.md) | Done |
@@ -167,7 +167,7 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Area | Capability | Page | Status |
 |---|---|---|---|
 | Verification | Coverage, equivalence partitioning and boundary values, mutation testing (> 80% on changed code), property-based tests, load tests | [CI](deployment/ci.md) | Partial |
-| CI/CD | Test, build and deploy for services and pipelines | [CI](deployment/ci.md), [CD](deployment/cd.md) | Done for services and generator; pipelines in progress |
+| CI/CD | Test, build and deploy for services and pipelines | [CI](deployment/ci.md), [CD](deployment/cd.md) | Done |
 | Routing | Gateway in front of services, HTTPS | [Security](deployment/security.md) | Done for Edge |
 | Infrastructure as code | Cluster and cloud provisioning, configuration | [Infrastructure](deployment/infra.md) | Done (platform repository) |
 | Observability | Metrics, logs and traces for services | [Observability](deployment/observability.md) | Done for Go services |

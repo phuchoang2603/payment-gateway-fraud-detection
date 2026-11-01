@@ -1,6 +1,6 @@
 ## Context
 
-This change merges `rebuild-generation-to-silver` and `dp3-features-and-marts` into one data pipeline, and records the implementation as it runs on prod v19 (`main` at `4762447`, 2026-11-01).
+This change merges `rebuild-generation-to-silver` and `dp3-features-and-marts` into one data pipeline, and records the implementation as it runs on prod v19 (2026-11-01).
 
 - **Platform:** Spark 4.1.3 on the Apache Spark Operator; Iceberg 1.12 through the Polaris REST catalog; ClickHouse 26.10 reads Iceberg through a DataLakeCatalog database and holds the native marts; OpenMetadata 2.0.6 is the catalog; Argo Workflows runs every batch stage.
 - **Prod capacity:** an on-demand `aws-workers` pool of three `m6a.xlarge` nodes (step pods, Spark drivers, databases), and a spot `aws-cpu-burst` pool of up to 12 nodes, 48 vCPU and 192 GiB (Spark executors and generator shards). The ClickHouse server has about 3.4 GiB of memory and a 30 GiB volume shared with Langfuse.
@@ -432,12 +432,16 @@ Evidence is the v19 backfill itself: each technique below was adopted after a me
 | Payment-day partitions + ordered writes | Time filters scanned whole tables | Gold and the marts prune to the run's days |
 | Local fanout writes for day-laid input | The hash shuffle cost 202 GB of shuffle write on DP1 historical (Spark UI) | Silver and historical Bronze write without the shuffle |
 | Narrow dedup on `event_id` within the range | A full-history broadcast of 20M duplicated keys exceeded the driver | One shuffle per month |
-| Change-point feature rows | One row per entity per day is about 1.1B rows a year per table | 177M customer and 185M card rows through April |
+| Change-point feature rows | One row per entity per day is about 1.1B rows a year per table | 292M customer and 304M card rows through August |
 | XOR sweep for familiar devices | Joining every attempt to its customer's intervals was OOMKilled even range-scoped | One ordered window pass |
 | `persist(MEMORY_AND_DISK)`, not `localCheckpoint` | Spot reclaims lost checkpointed blocks | Recomputed from lineage instead |
 | Range-scoped checks (`additional_table_filters`) | Whole-table checks grew every month; a `SELECT *` subquery scope ran ClickHouse out of memory | check-silver + check-gold: Nov 5 + 7, Jan 11 + 21, Mar 18 + 28 min unscoped; Apr 3 + 9 min scoped |
 | Spill-safe ClickHouse settings | Hash joins in full-history checks exceeded the server | external sort and group-by, `full_sorting_merge` |
-| Per-day hash join with a small build side | The monthly sort-merge mart insert exceeded 2 GiB in May | 1.10 GiB, 66 s per day |
+| Label summary in hash passes of its own columns | June's single group-by over every label column exceeded 2 GiB | 822 MiB, 18 s a pass |
+| Fact joined in 64 hash buckets of staged attempts and labels | The monthly sort-merge insert exceeded 2 GiB in May; the per-day joins after it rescanned all labels for every day (22 s a day in June) | 16.5 s a day in August |
+| ZSTD on ID and fingerprint columns, 90-day window | About 240 bytes a row under LZ4; a 180-day window and its staging copies did not fit the 30 GiB volume | 147 bytes a row |
+| Gold and the marts side by side | The mart build waited for Gold though it reads only Silver | 44 minutes a month in July and August |
+| Skip stages already on `main` | A re-run after a later failure rebuilt every layer (22 minutes of Silver and Gold for June) | A re-run resumes at the failed stage |
 | Heap → overhead shift, `MALLOC_ARENA_MAX` | Gold executors OOMKilled in native memory | 7g + 5g pods |
 | Branch reset before a multi-commit rewrite | A retry would rebuild `dim_customer` without its history | `restage` in `replace_customers` |
 
@@ -598,7 +602,7 @@ These requests block only the dashboard evidence.
 
 ## Migration Plan
 
-Done on prod: a clean cluster, `dp1-bronze` for v19, then `dp-backfill` from 2025-10-29. Silver is published through 2026-05-31 and Gold through 2026-04-30; `dp-backfill-drbzt` continues from 2026-05-01 to 2026-10-28.
+Done on prod: a clean cluster, `dp1-bronze` for v19, then `dp-backfill` from 2025-10-29. Silver, Gold and the marts are published through 2026-08-31; `dp-backfill-8h7gq` continues to 2026-10-28.
 
 **Rollback:** revert on `main`, then drop the `silver` and `gold` namespaces and the `marts` database in the affected environment. Bronze and the source datasets are untouched.
 

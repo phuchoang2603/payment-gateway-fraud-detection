@@ -25,7 +25,7 @@
 
 - [x] 5.1 Mart DDL with time-first keys, bloom, minmax and set indexes, and a 90-day `TTL`.
 - [x] 5.2 Staged builds of the run's days, `REPLACE PARTITION` publish, `build_info`.
-- [x] 5.3 Insert the fact one day at a time with the day's attempts as the hash join's build side, and bound the label summary to the labels the rebuilt days can have.
+- [x] 5.3 Bound the label summary to the labels the rebuilt days can have, and build it in 8 hash passes of its own columns; the per-day fact inserts this task first added were replaced by 6.8.
 
 ## 6. Orchestration and validation
 
@@ -42,9 +42,9 @@
 
 - [x] 7.1 Backfill 2025-10-29 to 2026-04-30 on prod v19 and record per-month stage times in `docs/data/offline.md`.
 - [x] 7.2 Capture the Argo backfill timelines, the OpenMetadata data quality page and the source → Bronze → Silver → Gold → marts lineage.
-- [ ] 7.3 Finish the backfill (May in `dp-backfill-drbzt`, June to 2026-10-28 in `dp-backfill-8nb8m`) and add its months to the evidence table.
+- [ ] 7.3 Finish the backfill (May in `dp-backfill-drbzt`, June in `dp-backfill-wjc8k`, July to 2026-10-28 in `dp-backfill-8h7gq`; through August recorded) and add September and October to the evidence table.
 - [ ] 7.4 After the backfill, count Bronze rows per `schema_version` with and without `assessment_id` as the schema-evolution evidence.
-- [x] 7.5 Capture the three Grafana dashboards (May 2026).
+- [x] 7.5 Capture the three Grafana dashboards (May 2026, under the 180-day window kept then).
 - [ ] 7.6 Record `EXPLAIN indexes = 1` for the fixed mart queries once the marts hold the backfilled window.
 
 ## 8. Close

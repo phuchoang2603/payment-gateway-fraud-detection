@@ -23,7 +23,7 @@ The offline path from historical generation to analytics had grown into separate
 
 - `curated-payments`: day-range Silver curation with deduplication, conflict quarantine, attempt histories, label linkage, run reports, range-scoped checks, storage layout and maintenance.
 - `offline-feature-tables`: Gold Iceberg tables: SCD2 customer dimension, daily-anchored history features, point-in-time labels, naming and relationships, day-range runs.
-- `analytics-marts`: ClickHouse marts with query-driven keys and indexes, staged per-day builds, least-privilege users and indexing evidence.
+- `analytics-marts`: ClickHouse marts with query-driven keys and indexes, staged builds joined in hash buckets, least-privilege users and indexing evidence.
 - `analytics-dashboards`: Grafana dashboards as code over the marts, and the platform datasource they need.
 
 ### Modified Capabilities

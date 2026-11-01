@@ -47,7 +47,7 @@ flowchart LR
     kafka["Kafka topics"] -->|"dp1-bronze: offsets read from the rows"| bronze
     bronze[("Bronze<br/>days(occurred_at)")] -->|"silver: Bronze days D-1..D+1"| silver
     silver[("Silver<br/>payment_day")] -->|"gold: one longest window before D"| gold[("Gold features,<br/>labels, dim_customer")]
-    silver -->|"marts: one day at a time"| marts[("ClickHouse marts<br/>90 days")]
+    silver -->|"marts: 64 hash buckets"| marts[("ClickHouse marts<br/>90 days")]
     gold --> feast["Feast / training"]
     marts --> grafana["Grafana"]
 ```
@@ -102,39 +102,49 @@ ClickHouse builds `marts.fact_payment_attempt` and `marts.fact_merchant_day` fro
 
 ## Prod v19 run
 
-Bronze v19, then `dp-backfill` from 2025-10-29 on the prod cluster (11 spot executors × 3 cores, drivers on on-demand nodes). Minutes per stage, from the Argo node times:
+Bronze v19, then `dp-backfill` from 2025-10-29 on the prod cluster (11 spot executors × 3 cores, drivers on on-demand nodes). Minutes per stage, from the Argo node times. Until June the stages ran in one line and `check-gold` audited Gold and the marts together; from July Gold and the marts run side by side, so the month total no longer includes the mart build:
 
-| Month | Run | silver | check-silver | gold | marts | check-gold | Month total |
-|---|---|---|---|---|---|---|---|
-| 2025-10 (3 days) | `dp-backfill-ljwl7` | 4 | 1 | 3 | 0 | 2 | 13 |
-| 2025-11 | `dp-backfill-ljwl7` | 10 | 5 | 12 | 0 | 7 | 37 |
-| 2025-12 | `dp-backfill-ljwl7` | 12 | 9 | 13 | 0 | 15 | 51 |
-| 2026-01 | `dp-backfill-ljwl7` | 13 | 11 | 19 | 0 | 21 | 68 |
-| 2026-02 | `dp-backfill-6pqtr` | 11 | 12 | 12 | 0 | 23 | 62 |
-| 2026-03 | `dp-backfill-7xxsm` | 13 | 18 | 17 | 0 | 28 | 103 |
-| 2026-04 | `dp-backfill-np6cn` | 9 | 3 | 8 | 0 | 9 | 33 |
-| 2026-05 | `dp-backfill-drbzt` | 15 | 4 | running | | | |
+| Month | Run | silver | check-silver | gold | check-gold | marts | check-marts | Month total |
+|---|---|---|---|---|---|---|---|---|
+| 2025-10 (3 days) | `dp-backfill-ljwl7` | 4 | 1 | 3 | 2 | 0 | | 13 |
+| 2025-11 | `dp-backfill-ljwl7` | 10 | 5 | 12 | 7 | 0 | | 37 |
+| 2025-12 | `dp-backfill-ljwl7` | 12 | 9 | 13 | 15 | 0 | | 51 |
+| 2026-01 | `dp-backfill-ljwl7` | 13 | 11 | 19 | 21 | 0 | | 68 |
+| 2026-02 | `dp-backfill-6pqtr` | 11 | 12 | 12 | 23 | 0 | | 62 |
+| 2026-03 | `dp-backfill-7xxsm` | 13 | 18 | 17 | 28 | 0 | | 103 |
+| 2026-04 | `dp-backfill-np6cn` | 9 | 3 | 8 | 9 | 0 | | 33 |
+| 2026-05 | `dp-backfill-drbzt` | 15 | 4 | 15 | 10.5 | 5.3 | | 52 |
+| 2026-06 | `dp-backfill-wjc8k` | 9 | 3.6 | 9 | 14.5 | 20.5 | | 61 |
+| 2026-07 | `dp-backfill-8h7gq` | 15 | 4 | 14 | 10 | 0.5 | 1.1 | 44 |
+| 2026-08 | `dp-backfill-8h7gq` | 14.5 | 3.8 | 13.7 | 11.1 | 7.7 | 1.1 | 44 |
 
-The marts take no time before May because those days are older than the 180-day window. From November to March the Spark stages stay flat, because each run reads only its range, but the checks grow with every published month, because they audited whole tables. April is the first month with range-scoped checks: 3 and 9 minutes instead of 18 and 28.
+What the table shows:
+
+- **Spark stays flat.** Silver and Gold read only their range, so they take 9–19 minutes a month whatever the history before them.
+- **Whole-table checks grew; range-scoped ones do not.** From November to March the checks audited whole tables and grew with every published month (March: 18 + 28 minutes). From April each rule reads only the audited commit's range: 3–4 and 9–15 minutes.
+- **The mart window.** Until May the backfilled days were older than the mart window and built nothing. June rebuilt 56 days one day at a time, rescanning the whole label summary for each (20.5 minutes, about 22 s a day). From July the window is 90 days (from 2026-08-04 on 2026-11-01), so July builds nothing, and August's 28 days were joined in 64 hash buckets (7.7 minutes, about 16.5 s a day) while Gold ran.
+- **Gold and the marts side by side.** July and August took 44 minutes: Silver, its checks, Gold and its checks, with the mart build hidden behind Gold.
+- **Failures cost one month.** A month's failure stopped the backfill and the next run resumed at that month; after a later stage failed, a re-run now skips the stages whose output is already on `main` (see [pipeline](#pipeline)). Silver over three months at once overflowed the executors' 24 GiB of local disk, so the backfill stays monthly.
 
 ![Before: whole-table checks grow month by month (November to January)](images/argo-backfill-unscoped-checks.png)
 
 ![After: April with range-scoped checks, then May's first marts build](images/argo-backfill-scoped-checks.png)
 
-Published row counts (Iceberg `main`):
+Published row counts (Iceberg `main`, 2025-10-29 to 2026-08-31; the backfill continues to 2026-10-28):
 
-| Table | Rows | Covers |
-|---|---|---|
-| `silver.payment_events` | 584,836,022 | 2025-10-29 to 2026-05-31 |
-| `silver.attempts` | 115,915,077 | 2025-10-29 to 2026-05-31 |
-| `silver.labels` | 116,513,105 | 2025-10-29 to 2026-05-31 |
-| `silver.rejected_events` | 0 | 2025-10-29 to 2026-05-31 |
-| `gold.dim_customer` | 17,738,110 | 2025-10-29 to 2026-04-30 |
-| `gold.feat_customer_daily` | 176,997,829 | 2025-10-29 to 2026-04-30 |
-| `gold.feat_payment_method_daily` | 184,503,875 | 2025-10-29 to 2026-04-30 |
-| `gold.label_attempt` | 100,943,225 | 2025-10-29 to 2026-04-30 |
+| Table | Rows |
+|---|---|
+| `silver.payment_events` | 811,615,605 |
+| `silver.attempts` | 160,860,987 |
+| `silver.labels` | 161,710,464 |
+| `silver.rejected_events` | 0 |
+| `gold.dim_customer` | 29,057,482 |
+| `gold.feat_customer_daily` | 291,919,198 |
+| `gold.feat_payment_method_daily` | 304,404,578 |
+| `gold.label_attempt` | 161,710,464 |
+| `marts.fact_payment_attempt` | 13,921,891 (2026-08-04 to 2026-08-31, the 90-day window so far; 1.91 GiB, 147 bytes a row) |
 
-Every Silver and Gold rule passed in OpenMetadata: 58 tests on 15 tables. Lineage runs from the v19 dataset through Bronze and Silver to the Gold tables and marts; see [orchestration and governance](orchestration-governance.md#catalog).
+Every Silver, Gold and mart rule passed in OpenMetadata: 58 tests on 15 tables. Lineage runs from the v19 dataset through Bronze and Silver to the Gold tables and marts; see [orchestration and governance](orchestration-governance.md#catalog).
 
 ## Optimization techniques
 
@@ -142,16 +152,21 @@ Each technique was adopted after a measured failure or cost on the v19 backfill;
 
 | Technique | Problem | Result |
 |---|---|---|
-| Range model: overwrite only the run's days | Full-history recomputes grew with history; rebuilding every customer's `dim_customer` history was OOMKilled in January | Silver 9–15 minutes a month from November to May |
+| Range model: overwrite only the run's days | Full-history recomputes grew with history; rebuilding every customer's `dim_customer` history was OOMKilled in January | Silver 9–15 minutes a month from November to August |
 | Payment-day partitions, rows written in time order | Time filters scanned whole tables | Gold, checks and marts prune to the run's days through partitions and file statistics |
 | Local fanout writes for day-laid input | The hash distribution shuffle wrote 202 GB on the DP1 historical write (below) | Historical Bronze and Silver write without that shuffle |
 | Narrow deduplication within the range | A broadcast of v19's 20M duplicated event IDs exceeded the driver's result size | One shuffle on `event_id` per month |
-| Change-point feature rows | One row per entity per day would be about 1.1B rows a year per table | 177M customer and 185M card rows for six months |
+| Change-point feature rows | One row per entity per day would be about 1.1B rows a year per table | 292M customer and 304M card rows for ten months |
 | XOR sweep for familiar devices | Joining every attempt to its customer's device intervals was OOMKilled even per month | One ordered window pass per customer |
 | `persist(MEMORY_AND_DISK)` instead of `localCheckpoint` | Spot reclaims lost locally checkpointed blocks and failed the stage | Lost blocks are recomputed from lineage |
 | Range-scoped checks (`additional_table_filters`) | Whole-table checks grew every month; scoping through a `SELECT *` subquery ran ClickHouse out of memory | check-silver + check-gold: 18 + 28 minutes (March) → 3 + 9 (April) |
-| Per-day mart insert, day's attempts as the hash build side | The monthly sort-merge join exceeded the marts user's 2 GiB in May | One day: 515,302 rows, 1.10 GiB peak, 66 s |
+| Branch reset before the `dim_customer` rewrite | Its delete and append are two commits; a retry after a failure between them read the delete and would have dropped history | Every attempt starts from `main` |
 | Gold executor 9g + 3g → 7g + 5g, `MALLOC_ARENA_MAX=2` | Gold executors were OOMKilled in native memory while tasks peaked at 331 MB | Same 12 GiB pod, more room outside the heap |
+| Label summary in 8 hash passes of its own columns | June's summary read every label column in one group-by and exceeded the marts user's 2 GiB | One pass: 822 MiB, 18 s |
+| Mart fact joined in 64 hash buckets of staged attempts and labels | The monthly sort-merge join exceeded 2 GiB in May; the per-day joins that replaced it rescanned all labels for every day | August: 28 days in 7.7 minutes (16.5 s a day; June's per-day build took 22 s a day) |
+| ZSTD on the ID and fingerprint columns, 90-day window | Random UUIDs and hashes took about 240 bytes a row under LZ4; a 180-day window and its staging copies would not fit the 30 GiB volume | 147 bytes a row; the 90-day fact is about 6 GiB |
+| Gold and the marts side by side | The mart build waited for Gold although it reads only Silver | July and August: 44 minutes a month, the mart build behind Gold |
+| Skip a stage whose output is already on `main` | A re-run after a later failure rebuilt every layer (June's re-run redid 22 minutes of published Silver and Gold) | Plan steps compare range, input snapshots and batch image; a re-run resumes at the failed stage |
 | Drivers on on-demand nodes, executors on spot | A reclaimed driver restarts the whole application | Spot loss costs only executor retries |
 
 ![DP1 historical write before local fanout: 202 GB of shuffle write for the hash distribution](images/spark-dp1-hash-write-stages.png)

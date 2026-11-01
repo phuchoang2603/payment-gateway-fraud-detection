@@ -74,7 +74,7 @@ Three dashboards (payments overview, merchant drill-down, fraud outcomes) live i
 5. dashboard sidecar coverage of namespace `data`, with `folderAnnotation: grafana_folder`;
 6. if a NetworkPolicy restricts `data`, a rule allowing `observability/grafana` to reach `data/clickhouse` on TCP 9000.
 
-On prod the `grafana` user's profile allows `max_execution_time` up to 65 seconds, because clickhouse-go under the plugin sends the time left to its 60-second request deadline plus 5 seconds; a lower cap rejects every query. The historical policy is rule-based and records no risk score, so the fraud dashboard tables risk decisions against simulation truth instead of a score histogram. The screenshots cover May 2026, the first backfilled month inside the 180-day window.
+On prod the `grafana` user's profile allows `max_execution_time` up to 65 seconds, because clickhouse-go under the plugin sends the time left to its 60-second request deadline plus 5 seconds; a lower cap rejects every query. The historical policy is rule-based and records no risk score, so the fraud dashboard tables risk decisions against simulation truth instead of a score histogram. The screenshots cover May 2026, the first backfilled month inside the 180-day window the marts kept then; the window is now 90 days, so the live dashboards start at 2026-08-04.
 
 ![Payments overview: daily attempts, approval and risk-decline rate, amounts, top merchants and a 56.4% hot-merchant share](images/grafana-payments-overview.png)
 
