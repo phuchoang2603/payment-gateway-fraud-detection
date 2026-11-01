@@ -9,7 +9,13 @@ from test_stream_writer import writer as live_writer
 from fraud_feast import history
 from fraud_feast.apply import stream_schema
 from fraud_feast.repo import KEYS, TABLES
-from fraud_feast.stream_writer import HistoryWriter, watermarks
+from fraud_feast.stream_writer import IcebergWriter, StreamWriter, watermarks
+
+
+def history_writer(tables, *, offline_rows=2, offline_interval=300):
+    offline = IcebergWriter(tables, "history-ci", history=True)
+    offline.delete_range(DAY, DAY + timedelta(days=30))
+    return StreamWriter(offline, offline_rows=offline_rows, offline_interval=offline_interval)
 
 
 def seed_tables(lake):
@@ -60,11 +66,11 @@ def test_history_short_commits_retry_conflicts_and_allow_live_writes_between_bat
 
     monkeypatch.setattr(Transaction, "commit_transaction", interleave)
     tables = {scope: lake.load_table(name) for scope, name in TABLES.items()}
-    history_writer = HistoryWriter(tables, "history-ci", DAY, DAY + timedelta(days=30))
+    writer = history_writer(tables)
     stage[0] = "append"
-    history_writer.append({scope: [row(scope, epoch="history-ci")] for scope in KEYS})
+    writer.write({scope: [row(scope, epoch="history-ci")] for scope in KEYS}, {0: 1})
     live_writer(lake).append({scope: [row(scope, offset=3)] for scope in KEYS}, {0: 4})
-    history_writer.append({scope: [row(scope, offset=1, epoch="history-ci")] for scope in KEYS})
+    writer.write({scope: [row(scope, offset=1, epoch="history-ci")] for scope in KEYS}, {0: 2})
     assert delays == [0.1, 0.1]
     for table in tables.values():
         table.refresh()
@@ -85,10 +91,10 @@ def test_history_failed_unit_rerun_replaces_partial_month_without_duplicates(lak
     seed_tables(lake)
     monkeypatch.setattr(stream_writer.time, "sleep", lambda _: None)
     tables = {scope: lake.load_table(name) for scope, name in TABLES.items()}
-    history_writer = HistoryWriter(tables, "history-ci", DAY, DAY + timedelta(days=30))
+    writer = history_writer(tables)
     first = {scope: [row(scope, epoch="history-ci")] for scope in KEYS}
     second = {scope: [row(scope, offset=1, epoch="history-ci")] for scope in KEYS}
-    history_writer.append(first)
+    writer.write(first, {0: 1})
     attempts = []
 
     def failed_commit():
@@ -97,21 +103,47 @@ def test_history_failed_unit_rerun_replaces_partial_month_without_duplicates(lak
 
     monkeypatch.setattr(tables["payment_method"], "transaction", failed_commit)
     with pytest.raises(CommitFailedException, match="maintenance conflict"):
-        history_writer.append(second)
+        writer.write(second, {0: 2})
     assert len(attempts) == 4
     assert month_rows(lake.load_table(TABLES["customer"])) == [(0, 1), (1, 2)]
     assert month_rows(lake.load_table(TABLES["payment_method"])) == [(0, 1)]
 
     tables = {scope: lake.load_table(name) for scope, name in TABLES.items()}
-    rerun = HistoryWriter(tables, "history-ci", DAY, DAY + timedelta(days=30))
-    rerun.append(first)
-    rerun.append(second)
+    rerun = history_writer(tables)
+    rerun.write(first, {0: 1})
+    rerun.write(second, {0: 2})
     for table in tables.values():
         assert month_rows(table) == [(0, 1), (1, 2)]
         records = table.scan().to_arrow().to_pylist()
         assert len(records) == 4
         assert sum(record["epoch"] == "live-ci" for record in records) == 1
         assert sum(record["event_timestamp"] < DAY for record in records) == 1
+        assert watermarks(table, "history-ci") == {}
+
+
+@pytest.mark.parametrize("bound", ["rows", "interval"])
+def test_history_buffers_kafka_batches_and_flushes_remainder(lake, monkeypatch, bound):
+    from fraud_feast import stream_writer
+
+    clock = [0]
+    monkeypatch.setattr(stream_writer.time, "monotonic", lambda: clock[0])
+    tables = {scope: lake.load_table(name) for scope, name in TABLES.items()}
+    writer = history_writer(tables, offline_rows=4 if bound == "rows" else 100000)
+    for offset in range(3):
+        if offset == 1 and bound == "interval":
+            clock[0] = 300
+        flushed = writer.write(
+            {scope: [row(scope, offset, epoch="history-ci")] for scope in KEYS},
+            {0: offset + 1},
+        )
+        assert flushed == (offset == 1)
+        for table in tables.values():
+            assert len(table.snapshots()) == (0 if offset == 0 else 1)
+    assert writer.flush()
+    assert not writer.flush()
+    for table in tables.values():
+        assert len(table.snapshots()) == 2
+        assert month_rows(table) == [(0, 1), (1, 2), (2, 3)]
         assert watermarks(table, "history-ci") == {}
 
 

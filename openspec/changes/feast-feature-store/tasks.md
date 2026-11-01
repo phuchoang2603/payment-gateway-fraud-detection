@@ -33,7 +33,7 @@
 - [x] 2.2 Add `fraud_feast/repo.py` (decisions 2–4: entities, the four stored views and pure Python request_features with explicit schemas, the stream views' epoch-filtered queries, TTLs and tags, and `payment_risk_v1`) and `fraud_feast/apply.py` (creates the two stream tables, then applies). Verify in CI with:
   - a test that `repo.py`'s fields equal each definition file's feature list per entity;
   - one local-warehouse test that applies the repository and runs `get_historical_features(payment_risk_v1).to_arrow()` with `full_feature_names=True` and `label_attempt` rows. It covers the daily row on day D, a row whose `created` is later than `t`, TTL expiry to null, a snapshot written at exactly `started_at` invisible at `started_at` while a daily row anchored at that instant is returned, values read across a history and a live epoch with an unconfigured epoch ignored, and null method values for a null payment method.
-- [x] 2.3 Add `fraud_feast/stream_writer.py` (decision 5): live online and buffered offline writes, online-only `--from`/`--until` replay, and the feature writer's history mode (short range delete and per-batch commits, no history offsets, lead-in dropped). Replace `tests/test_writer.py` with `test_stream_writer.py` on the existing Redis container and a local warehouse, covering:
+- [x] 2.3 Add `fraud_feast/stream_writer.py` (decision 5): live online and buffered offline writes, online-only `--from`/`--until` replay, and the feature writer's history mode (short range delete and buffered commits, no history offsets, lead-in dropped). Replace `tests/test_writer.py` with `test_stream_writer.py` on the existing Redis container and a local warehouse, covering:
   - All modes map `event_timestamp = online_write_at + 1µs` in one shared row mapper, with a unit test of the mapping.
   - an older revision not replacing a newer online value;
   - offline resume from the table property's offsets after a crash before the Kafka commit;
@@ -187,3 +187,8 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 - [x] 13.1 Share one refresh/retry/backoff helper between live and history writes. Delete a history unit’s epoch/range in a short commit per table and append each batch in its own commit, without history offsets/properties or a final commit.
 - [x] 13.2 Cover concurrent live writes between batches, actual delete/append commit conflicts and rerunning a partially failed unit without duplicates. Document partial visibility, the counts gate and no training during replay.
 - [x] 13.3 Run affected tests, lint and strict OpenSpec validation; push the explicit branch refspec, keep the draft and report CI. All 14 affected writer/history tests, Ruff, formatting and strict OpenSpec validation (24 items) pass; CI status is reported with the pushed head.
+
+## 14. Shared history buffering
+
+- [x] 14.1 Delete HistoryWriter and route every mode through StreamWriter, with IcebergWriter as the only offline sink. History uses the live row/time buffer bounds and final flush, an initial retried range delete, and plain appends without offset state; Kafka commits remain live-only.
+- [x] 14.2 Cover history buffer commits and final remainder, retaining concurrent-live-write and failed-unit-rerun coverage. Run affected tests, lint and validation; push the explicit branch refspec and retain the draft. All 16 affected tests, Ruff, formatting and strict OpenSpec validation (24 items) pass; CI is reported with the pushed head.

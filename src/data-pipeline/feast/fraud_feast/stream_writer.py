@@ -163,9 +163,10 @@ def commit_with_retry(table, write):
 
 
 class IcebergWriter:
-    def __init__(self, tables, epoch):
+    def __init__(self, tables, epoch, *, history=False):
         self.tables = tables
         self.epoch = epoch
+        self.history = history
 
     def resume(self, partitions):
         marks = [watermarks(table.refresh(), self.epoch) for table in self.tables.values()]
@@ -175,6 +176,14 @@ class IcebergWriter:
         for scope, table in self.tables.items():
 
             def append_batch(transaction):
+                if self.history:
+                    if rows[scope]:
+                        transaction.append(
+                            pa.Table.from_pylist(
+                                rows[scope], schema=stream_schema(scope).as_arrow()
+                            )
+                        )
+                    return
                 prior = watermarks(table, self.epoch)
                 selected = [
                     row
@@ -193,22 +202,13 @@ class IcebergWriter:
 
             commit_with_retry(table, append_batch)
 
-
-class HistoryWriter:
-    def __init__(self, tables, epoch, first, last):
-        self.tables = tables
+    def delete_range(self, first, last):
         predicate = And(
-            EqualTo("epoch", epoch),
+            EqualTo("epoch", self.epoch),
             And(GreaterThanOrEqual("event_timestamp", first), LessThan("event_timestamp", last)),
         )
-        for table in tables.values():
+        for table in self.tables.values():
             commit_with_retry(table, lambda transaction: transaction.delete(predicate))
-
-    def append(self, rows):
-        for scope, table in self.tables.items():
-            if rows[scope]:
-                data = pa.Table.from_pylist(rows[scope], schema=stream_schema(scope).as_arrow())
-                commit_with_retry(table, lambda transaction: transaction.append(data))
 
 
 class StreamWriter:
@@ -385,20 +385,14 @@ def main():
         if not replay:
             lake = catalog()
             tables = {scope: lake.load_table(name) for scope, name in TABLES.items()}
-            offline = (
-                HistoryWriter(tables, epoch, history.first, history.last)
-                if history
-                else IcebergWriter(tables, epoch)
-            )
-        writer = (
-            None
-            if history
-            else StreamWriter(
-                offline,
-                store(online=True),
-                offline_interval=args.offline_interval,
-                offline_rows=args.offline_rows,
-            )
+            offline = IcebergWriter(tables, epoch, history=args.history)
+            if history:
+                offline.delete_range(history.first, history.last)
+        writer = StreamWriter(
+            offline,
+            None if history else store(online=True),
+            offline_interval=args.offline_interval,
+            offline_rows=args.offline_rows,
         )
         if replay:
             starts = resolve_range(consumer, topic, args.start, partitions)
@@ -416,9 +410,7 @@ def main():
                 scope, row, _ = decode(message, epoch)
                 if history is None or history.first <= row["event_timestamp"] < history.last:
                     rows[scope].append(row)
-            if history:
-                offline.append(rows)
-            elif writer.write(rows, offsets):
+            if writer.write(rows, offsets) and not (history or replay):
                 consumer.commit(
                     offsets=[TopicPartition(topic, p, offset) for p, offset in offsets.items()],
                     asynchronous=False,
@@ -426,7 +418,7 @@ def main():
             written += sum(map(len, rows.values()))
         if stopped.is_set() and history:
             raise RuntimeError("history replay interrupted")
-        if writer is not None and writer.flush():
+        if writer.flush() and not (history or replay):
             consumer.commit(
                 offsets=[TopicPartition(topic, p, offset) for p, offset in offsets.items()],
                 asynchronous=False,
