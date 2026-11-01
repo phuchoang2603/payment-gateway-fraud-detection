@@ -38,7 +38,7 @@ models:
     cacheSize: 9Gi
     replicas: 1
     # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
-    stopped: true
+    stopped: false
     # 0.76 leaves room on the shared GPU for the decision model (vLLM needs its whole 0.10 free at start, whichever
     # server starts first). Only 8 of its 32 layers keep a KV cache (16 KiB a token in FP8), so a 32k context is cheap;
     # the other 24 keep about 50 MiB of fp32 state per sequence, which caps concurrent sequences at 32 (1.55 GiB).
