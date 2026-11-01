@@ -212,6 +212,10 @@ spec:
       {{- if has $mode (list "seed" "writer") }}
       {{- include "data-pipelines.placement" $ | nindent 6 }}
       {{- end }}
+      {{- if eq $mode "seed" }}
+      # A fresh sort volume is owned by root; the streaming image runs as the flink group.
+      securityContext: {fsGroup: 9999}
+      {{- end }}
       {{- if eq $mode "writer" }}
       retryStrategy:
         limit: 3
@@ -274,6 +278,8 @@ spec:
           - name: DATASET_VERSION
             value: {{ $.Values.bronze.datasetVersion | quote }}
           - {name: HISTORY_SORT_MEMORY, value: 6GB}
+          # PyIceberg reads each data file whole on one thread per CPU; two keep at most two files in memory.
+          - {name: PYICEBERG_MAX_WORKERS, value: "2"}
           {{- end }}
           {{- if has $mode (list "seed" "writer") }}
           - name: HISTORY_SEED_REPORT

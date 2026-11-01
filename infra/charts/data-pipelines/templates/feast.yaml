@@ -27,6 +27,8 @@ spec:
         - - {name: verify, template: verify}
     - name: materialize
       {{- include "data-pipelines.placement" $ | nindent 6 }}
+      # A fresh spill volume is owned by root; the Spark image runs as group 185.
+      securityContext: {fsGroup: 185}
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
         command: [/opt/data-pipeline/feast/.venv/bin/python, -m, fraud_feast.materialize]
