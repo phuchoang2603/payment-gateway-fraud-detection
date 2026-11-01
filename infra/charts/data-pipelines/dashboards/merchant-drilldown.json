@@ -69,7 +69,32 @@
       ],
       "fieldConfig": {
         "defaults": {},
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "approval_rate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "options": {}
     },
@@ -130,7 +155,7 @@
           "editorType": "sql",
           "queryType": "table",
           "format": 1,
-          "rawSql": "SELECT started_at, payment_id, attempt_id, customer_id, amount_minor, outcome, risk_score\nFROM marts.fact_payment_attempt WHERE $__timeFilter(started_at) AND merchant_id = '${merchant}'\nORDER BY started_at DESC LIMIT 100"
+          "rawSql": "SELECT started_at, payment_id, attempt_id, customer_id, amount_minor, risk_outcome, outcome\nFROM marts.fact_payment_attempt WHERE $__timeFilter(started_at) AND merchant_id = '${merchant}'\nORDER BY started_at DESC LIMIT 100"
         }
       ],
       "fieldConfig": {
