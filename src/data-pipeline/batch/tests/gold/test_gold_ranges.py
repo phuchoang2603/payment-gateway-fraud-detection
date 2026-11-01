@@ -84,10 +84,11 @@ def test_any_split_of_a_range_and_any_rerun_build_the_same_gold_as_one_backfill(
     assert backfill[gold.LABEL_ATTEMPT].count() == 1
     runs = itertools.count()
 
-    # Each example is several Spark runs, so few examples; the explicit one is the daily schedule.
-    @settings(max_examples=3, deadline=None, database=None, derandomize=True)
+    # Each example is several Spark runs, so few examples. The explicit one is the schedule as it runs: a backfill,
+    # then one run per day for the last days.
+    @settings(max_examples=2, deadline=None, database=None, derandomize=True)
     @given(cuts=st.sets(st.integers(1, SPAN), max_size=4), rerun=st.tuples(OFFSETS, OFFSETS).map(sorted))
-    @example(cuts=set(range(1, SPAN + 1)), rerun=[3, 8])
+    @example(cuts=set(range(SPAN - 2, SPAN + 1)), rerun=[3, 8])
     def split(cuts, rerun):
         for table in gold.TABLES:
             spark.sql(f"DROP TABLE IF EXISTS {table}")

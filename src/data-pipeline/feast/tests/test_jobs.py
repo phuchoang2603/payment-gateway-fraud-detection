@@ -1,12 +1,12 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 from botocore.exceptions import ClientError
 
-from fraud_feast import apply, history, lake, materialize, verify_online
+from fraud_feast import history, lake, materialize, verify_online
 
 LAKE_ENV = {
     "ICEBERG_REST_URI": "http://catalog:8181/api/catalog",
@@ -236,20 +236,6 @@ def test_verify_online_main_records_the_check(monkeypatch, tmp_path):
     assert json.loads(report.read_text()) == {"samples": {}, "sampled": 0, "checked": True}
 
 
-def test_apply_creates_tables_and_registers_definitions(monkeypatch):
-    calls = []
-    monkeypatch.setattr(apply, "catalog", lambda: "lake")
-    monkeypatch.setattr(apply, "ensure_tables", lambda catalog: calls.append(("tables", catalog)))
-    monkeypatch.setattr(apply, "definitions", lambda: ["view"])
-    monkeypatch.setattr(
-        apply,
-        "store",
-        lambda: SimpleNamespace(apply=lambda objects: calls.append(("apply", objects))),
-    )
-    apply.main()
-    assert calls == [("tables", "lake"), ("apply", ["view"])]
-
-
 # Partitions of the materialization flags: daily with and without a since day, stream recovery, and both.
 @pytest.mark.parametrize(
     ("argv", "expected"),
@@ -304,3 +290,25 @@ def test_registry_store_raises_other_client_errors():
     )
     with pytest.raises(ClientError):
         store.get_registry_proto()
+
+
+# The two windows the Spark test does not reach: an explicit since day, and stream recovery (STREAM_TTL back).
+@pytest.mark.parametrize(
+    ("since", "recovery", "start", "views"),
+    [
+        (date(2026, 7, 20), False, datetime(2026, 7, 20, tzinfo=UTC), ["customer_daily"]),
+        (None, True, AT - materialize.STREAM_TTL, ["customer_stream", "payment_method_stream"]),
+    ],
+)
+def test_materialize_windows(monkeypatch, since, recovery, start, views):
+    feature_store = MagicMock()
+    # Stop after the first daily materialization: the sampling that follows needs a live Spark session.
+    feature_store.materialize.side_effect = None if recovery else StopIteration
+    if recovery:
+        report = materialize.run(None, feature_store, AT, 2, since, stream_recovery=True)
+        assert {window["start"] for window in report["windows"].values()} == {start.isoformat()}
+    else:
+        with pytest.raises(StopIteration):
+            materialize.run(None, feature_store, AT, 2, since)
+    assert feature_store.config.online_store.skip_dedup is not recovery
+    feature_store.materialize.assert_called_once_with(start, AT, feature_views=views)

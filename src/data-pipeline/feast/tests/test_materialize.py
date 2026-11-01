@@ -55,12 +55,6 @@ def test_overlap_rewrites_equal_anchor_and_deleted_entity_keeps_prior_value(spar
                 entity_rows=[{"integration_id": "overlap", key: entity}],
             ).to_dict()
             assert result["attempt_count_7d"] == [expected]
-    explicit = materialize.run(spark, feature_store, now + timedelta(hours=2), 2, DAY.date())
-    assert verify_online.validate(feature_store, explicit) == 2
-    assert all(w["start"] == DAY.isoformat() for w in explicit["windows"].values())
-    assert all(
-        w["end"] == (now + timedelta(hours=2)).isoformat() for w in explicit["windows"].values()
-    )
 
 
 def test_missing_online_sample_fails(feature_store):

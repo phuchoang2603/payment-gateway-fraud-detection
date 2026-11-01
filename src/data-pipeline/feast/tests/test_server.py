@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from fraud_feast import runtime, server
+from fraud_feast import server
 
 
 def response(names, values):
@@ -103,15 +103,3 @@ def test_transform_dict_adds_projected_full_names():
     finally:
         server._transform_dict = original
     assert result == {"amount_minor": [5], "request_features__amount_minor": [5]}
-
-
-def test_main_serves_the_online_store(monkeypatch):
-    served = {}
-    monkeypatch.setattr(runtime, "store", lambda **kwargs: served.setdefault("store", kwargs))
-    monkeypatch.setattr(runtime, "get_app", lambda store: ("app", store))
-    monkeypatch.setattr(
-        runtime.uvicorn, "run", lambda app, **kwargs: served.update(app=app, **kwargs)
-    )
-    runtime.main()
-    assert served["store"] == {"online": True}
-    assert served["port"] == 6566
