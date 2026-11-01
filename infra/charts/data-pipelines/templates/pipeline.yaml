@@ -1,7 +1,7 @@
 {{- if .Values.pipeline.enabled }}
 {{- $sizing := index .Values.spark.profiles .Values.pipeline.profile }}
 {{- $report := printf "%s/%s/gold.json" .Values.pipeline.reportRoot "{{workflow.name}}" }}
-{{- $range := list (dict "name" "DP_START" "value" "{{inputs.parameters.start}}") (dict "name" "DP_END" "value" "{{inputs.parameters.end}}") (dict "name" "DP_LOOKBACK_DAYS" "value" (toString .Values.pipeline.lookbackDays)) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.pipeline.reportRoot) }}
+{{- $range := list (dict "name" "DP_START" "value" "{{inputs.parameters.start}}") (dict "name" "DP_END" "value" "{{inputs.parameters.end}}") (dict "name" "DP_LOOKBACK_DAYS" "value" (toString .Values.pipeline.lookbackDays)) (dict "name" "RUN_ID" "value" "{{workflow.name}}") (dict "name" "RUN_REPORT_ROOT" "value" .Values.pipeline.reportRoot) (dict "name" "DP_CODE_VERSION" "value" (include "data-pipelines.codeVersion" .)) }}
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -49,20 +49,14 @@ spec:
         tasks:
           # A stage is skipped when every table it writes already holds, at the head of main, this range's output from
           # the same inputs by the same code (openmetadata.plan, batch.gold.marts plan): a re-run resumes where it failed.
-          # The digest of the batch package's source, which every Silver and Gold commit and build_info record.
-          - name: code-version
-            template: code-version
           - name: plan-silver
             template: plan-silver
-            depends: code-version
             arguments:
               parameters:
                 - name: start
                   value: "{{ "{{inputs.parameters.start}}" }}"
                 - name: end
                   value: "{{ "{{inputs.parameters.end}}" }}"
-                - name: code
-                  value: "{{ "{{tasks.code-version.outputs.result}}" }}"
           - name: silver
             template: silver
             depends: plan-silver
@@ -95,8 +89,6 @@ spec:
                   value: "{{ "{{inputs.parameters.start}}" }}"
                 - name: end
                   value: "{{ "{{inputs.parameters.end}}" }}"
-                - name: code
-                  value: "{{ "{{tasks.code-version.outputs.result}}" }}"
           - name: gold
             template: gold
             depends: plan-gold
@@ -176,17 +168,6 @@ spec:
         failureCondition: status.currentState.currentStateSummary == TerminatedWithoutReleaseResources
         manifest: |
           {{- include "data-pipelines.spark-application" (dict "root" $ "wap" true "main" "gold/features" "product" "gold-features" "stage" "gold" "sizing" $sizing "extraEnv" $range) | nindent 10 }}
-    - name: code-version
-      retryStrategy:
-        limit: 2
-        retryPolicy: OnError
-      script:
-        image: {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) | quote }}
-        command: [/opt/data-pipeline/batch/.venv/bin/python]
-        source: |
-          from batch.lakehouse import code_version
-
-          print(code_version())
 {{- include "data-pipelines.plan" (dict "root" $ "name" "plan-silver" "layer" "silver") | nindent 4 }}
 {{- include "data-pipelines.plan" (dict "root" $ "name" "plan-gold" "layer" "gold") | nindent 4 }}
 {{- include "data-pipelines.marts-step" (dict "root" $ "name" "plan-marts" "command" (list "python" "-m" "batch.gold.marts" "plan") "reportRoot" .Values.pipeline.reportRoot "ranged" true "decision" true) | nindent 4 }}

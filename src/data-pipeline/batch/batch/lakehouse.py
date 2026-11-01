@@ -1,6 +1,4 @@
-import hashlib
 import os
-from pathlib import Path
 
 from pyspark.sql import DataFrame, SparkSession
 
@@ -22,19 +20,14 @@ LOCAL_WRITE_OPTIONS = {"distribution-mode": "none", "fanout-enabled": "true"}
 # Write-audit-publish: a pipeline run writes to this branch (spark.wap.branch), its checks audit the branch heads, and
 # only a passing run fast-forwards main. Readers of another pipeline's tables use main, so they see audited data only.
 WAP_BRANCH_ENV = "WAP_BRANCH"
-# The code that wrote a commit, so a later run can tell output built from the same inputs by the same code, and skip
-# rebuilding it.
+# The code that wrote a commit (the batch image), so a later run can tell output built from the same inputs by the same
+# code, and skip rebuilding it.
 CODE_PROPERTY = "dp.code_version"
+CODE_ENV = "DP_CODE_VERSION"
 
 
 def code_version() -> str:
-    """A digest of this package's Python and SQL: the same code gives the same version whatever image carries it, so a
-    rebuild for unrelated files (contracts, Bronze's descriptor) does not invalidate Silver, Gold and the marts."""
-    root = Path(__file__).parent
-    digest = hashlib.sha256()
-    for path in sorted(p for p in root.rglob("*") if p.suffix in (".py", ".sql") and "__pycache__" not in p.parts):
-        digest.update(path.relative_to(root).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
-    return digest.hexdigest()[:16]
+    return os.environ.get(CODE_ENV, "")
 
 
 def write_ref() -> str:

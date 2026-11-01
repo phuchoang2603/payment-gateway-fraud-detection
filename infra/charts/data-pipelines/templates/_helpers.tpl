@@ -179,6 +179,11 @@ retryStrategy:
 {{- include "data-pipelines.env" .root | nindent 6 }}
 {{- end -}}
 
+{{- /* The batch image that writes Silver, Gold and the marts; a stage whose output on main came from the same range and
+inputs by this image is skipped. */}}
+{{- define "data-pipelines.codeVersion" -}}
+{{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) }}
+{{- end -}}
 {{- define "data-pipelines.plan" -}}
 - name: {{ .name }}
   retryStrategy:
@@ -188,7 +193,6 @@ retryStrategy:
     parameters:
       - name: start
       - name: end
-      - name: code
   outputs:
     parameters:
       - name: decision
@@ -209,7 +213,7 @@ retryStrategy:
       - name: DP_END
         value: {{ "{{inputs.parameters.end}}" | quote }}
       - name: DP_CODE_VERSION
-        value: {{ "{{inputs.parameters.code}}" | quote }}
+        value: {{ include "data-pipelines.codeVersion" .root | quote }}
 {{- include "data-pipelines.env" .root | nindent 6 }}
 {{- end -}}
 {{- define "data-pipelines.wapBranch" -}}
@@ -309,6 +313,8 @@ audit-{{ "{{workflow.name}}" }}
         value: {{ .root.Values.pipeline.lookbackDays | toString | quote }}
       - name: SILVER_SNAPSHOTS
         value: {{ "{{inputs.parameters.silver-snapshots}}" | quote }}
+      - name: DP_CODE_VERSION
+        value: {{ include "data-pipelines.codeVersion" .root | quote }}
       {{- end }}
 {{- include "data-pipelines.martsEnv" .root | nindent 6 }}
     resources:

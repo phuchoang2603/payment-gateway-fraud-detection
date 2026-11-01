@@ -29,7 +29,7 @@ Holds only the latest build; earlier builds are in the DP3 run reports.
 | ----- | ---- | ---------- |
 |  run_id | string | *Workflow run that built the marts.*<br />• `required` |
 |  run_range | string | *Day range of the run, as start/end.*<br />• `required` |
-|  code_version | string | *Digest of the batch package's Python and SQL that built the marts; a later run of the same range on the same Silver snapshots by the same code skips the build.*<br />• `required` |
+|  code_version | string | *Batch image that built the marts; a later run of the same range on the same Silver snapshots by the same code skips the build.*<br />• `required` |
 |  window_start | date | *First start day kept by the retention window.*<br />• `required` |
 |  window_end | date | *Last start day the live marts cover after publish: the latest of this build's last day and the previous build's window_end; window_start minus one day when the window is empty.*<br />• `required` |
 |  rebuilt_days | array | *Start days this build rebuilt: the run's days and the 45-day label lookback before them, inside the window; this covers the days whose chargeback window completes in the range.*<br />• `required` |

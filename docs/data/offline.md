@@ -61,7 +61,7 @@ flowchart LR
 
 Silver is audited and published before anything downstream reads it. Gold and the marts both read published Silver and nothing of each other, so they run side by side: the Gold Spark job overlaps the ClickHouse mart build, and the mart build, the two checks and the mart profile take turns on ClickHouse through one mutex. Each branch publishes when its own checks pass.
 
-Each plan step skips its stage when the head of `main` (or the live `build_info`, for the marts) already holds this range's output from the same input snapshots by the same batch code: a digest of the batch package's Python and SQL, so an image rebuilt for unrelated files (a contract, another pipeline) does not count as new code. Re-running a range after a later stage failed therefore resumes at that stage instead of rebuilding Silver and Gold.
+Each plan step skips its stage when the head of `main` (or the live `build_info`, for the marts) already holds this range's output from the same input snapshots by the same batch image. Re-running a range after a later stage failed therefore resumes at that stage instead of rebuilding Silver and Gold.
 
 ### DP1: raw → Bronze
 
@@ -166,7 +166,7 @@ Each technique was adopted after a measured failure or cost on the v19 backfill;
 | Mart fact joined in 64 hash buckets of staged attempts and labels | The monthly sort-merge join exceeded 2 GiB in May; the per-day joins that replaced it rescanned all labels for every day | August: 28 days in 7.7 minutes (16.5 s a day; June's per-day build took 22 s a day) |
 | ZSTD on the ID and fingerprint columns, 90-day window | Random UUIDs and hashes took about 240 bytes a row under LZ4; a 180-day window and its staging copies would not fit the 30 GiB volume | 147 bytes a row; the 90-day fact is about 6 GiB |
 | Gold and the marts side by side | The mart build waited for Gold although it reads only Silver | July and August: 44 minutes a month, the mart build behind Gold |
-| Skip a stage whose output is already on `main` | A re-run after a later failure rebuilt every layer (June's re-run redid 22 minutes of published Silver and Gold) | Plan steps compare range, input snapshots and a digest of the batch code; a re-run resumes at the failed stage |
+| Skip a stage whose output is already on `main` | A re-run after a later failure rebuilt every layer (June's re-run redid 22 minutes of published Silver and Gold) | Plan steps compare range, input snapshots and batch image; a re-run resumes at the failed stage |
 | Drivers on on-demand nodes, executors on spot | A reclaimed driver restarts the whole application | Spot loss costs only executor retries |
 
 ![DP1 historical write before local fanout: 202 GB of shuffle write for the hash distribution](images/spark-dp1-hash-write-stages.png)
