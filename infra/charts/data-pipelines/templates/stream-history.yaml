@@ -127,6 +127,11 @@ spec:
               execution.checkpointing.mode: EXACTLY_ONCE
               execution.checkpointing.dir: {{ printf "%s/checkpoints/%s" .Values.features.checkpointRoot "{{workflow.name}}/{{inputs.parameters.start}}" | quote }}
               execution.checkpointing.savepoint-dir: {{ printf "%s/savepoints/%s" .Values.features.checkpointRoot "{{workflow.name}}/{{inputs.parameters.start}}" | quote }}
+              # Unaligned checkpoints let barriers overtake the data queued in front of a slow operator, so a checkpoint
+              # does not wait for the backlog to drain. A slow one is tolerated instead of failing the job: an expiry used
+              # to restart the job from an old checkpoint, and the loop rewrote the same journal until the broker disk filled.
+              execution.checkpointing.unaligned.enabled: 'true'
+              execution.checkpointing.tolerable-failed-checkpoints: '10'
               execution.checkpointing.min-pause: 2min
               execution.checkpointing.timeout: 10min
               execution.checkpointing.num-retained: '3'
