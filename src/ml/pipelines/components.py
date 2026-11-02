@@ -1,7 +1,6 @@
 from kfp import dsl, kubernetes
 
 IMAGE = "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart"
-SPOT = {"karpenter.sh/nodepool": "aws-cpu-burst", "karpenter.sh/capacity-type": "spot"}
 CONFIG = "ml-training-config"
 CONFIG_KEYS = (
     "AWS_REGION",
@@ -219,7 +218,7 @@ def roll_out(version: str, deployed: dsl.OutputPath(str)):
     return step("roll_out", {"version": version, **RUN}, [("version", deployed)])
 
 
-def configure(task, *, memory="1G", cpu="250m", storage=True, spot=True):
+def configure(task, *, nodes, memory="1G", cpu="250m", storage=True):
     task.set_caching_options(False)
     task.set_cpu_request(cpu)
     task.set_memory_request(memory)
@@ -237,14 +236,13 @@ def configure(task, *, memory="1G", cpu="250m", storage=True, spot=True):
         kubernetes.use_secret_as_env(
             task, "ml-training-iceberg", {"ICEBERG_CLIENT_SECRET": "ICEBERG_CLIENT_SECRET"}
         )
-    if spot:
-        for key, value in SPOT.items():
-            kubernetes.add_node_selector(task, key, value)
+    for key, value in nodes.items():
+        kubernetes.add_node_selector(task, key, value)
     return task
 
 
-def spark_task(task, *, heap, memory):
-    configure(task, cpu="3", memory=memory)
+def spark_task(task, *, nodes, cpu, heap, memory):
+    configure(task, nodes=nodes, cpu=cpu, memory=memory)
     task.set_env_variable("PYSPARK_SUBMIT_ARGS", f"--driver-memory {heap} pyspark-shell")
     task.set_env_variable("SPARK_LOCAL_DIR", "/tmp/spark")
     kubernetes.empty_dir_mount(task, "spill", "/tmp/spark", size_limit="24Gi")

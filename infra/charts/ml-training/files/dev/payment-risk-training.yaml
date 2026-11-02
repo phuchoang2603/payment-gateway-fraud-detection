@@ -1,0 +1,1463 @@
+# PIPELINE DEFINITION
+# Name: payment-risk-training
+# Description: Build the payment_risk_v1 training set, train on one GPU, gate, register and roll out.
+# Inputs:
+#    cutoff: str [Default: '2026-10-29T00:00:00Z']
+#    test: str [Default: '2026-10-15..2026-10-28']
+#    train: str [Default: '2026-07-29..2026-09-30']
+#    training_set_snapshot: str [Default: '']
+#    tune_trials: int [Default: 0.0]
+#    validation: str [Default: '2026-10-01..2026-10-14']
+components:
+  comp-assemble-examples:
+    executorLabel: exec-assemble-examples
+    inputDefinitions:
+      parameters:
+        cutoff:
+          parameterType: STRING
+        existing_snapshot:
+          parameterType: STRING
+        test:
+          parameterType: STRING
+        train:
+          parameterType: STRING
+        validation:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        snapshot:
+          parameterType: STRING
+  comp-check-examples:
+    executorLabel: exec-check-examples
+    inputDefinitions:
+      parameters:
+        snapshot:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        report:
+          parameterType: STRING
+  comp-condition-2:
+    dag:
+      tasks:
+        record-version:
+          cachingOptions: {}
+          componentRef:
+            name: comp-record-version
+          inputs:
+            parameters:
+              experiment:
+                componentInputParameter: pipelinechannel--tune-params-experiment
+              fit:
+                componentInputParameter: pipelinechannel--fit-on-gpu-fit
+              model_uri:
+                componentInputParameter: pipelinechannel--fit-on-gpu-model_uri
+              params:
+                componentInputParameter: pipelinechannel--tune-params-params
+              report:
+                componentInputParameter: pipelinechannel--gate-report
+              snapshot:
+                componentInputParameter: pipelinechannel--assemble-examples-snapshot
+          taskInfo:
+            name: record-version
+        roll-out:
+          cachingOptions: {}
+          componentRef:
+            name: comp-roll-out
+          dependentTasks:
+          - record-version
+          inputs:
+            parameters:
+              version:
+                taskOutputParameter:
+                  outputParameterKey: version
+                  producerTask: record-version
+          taskInfo:
+            name: roll-out
+    inputDefinitions:
+      parameters:
+        pipelinechannel--assemble-examples-snapshot:
+          parameterType: STRING
+        pipelinechannel--fit-on-gpu-fit:
+          parameterType: STRING
+        pipelinechannel--fit-on-gpu-model_uri:
+          parameterType: STRING
+        pipelinechannel--gate-passed:
+          parameterType: STRING
+        pipelinechannel--gate-report:
+          parameterType: STRING
+        pipelinechannel--tune-params-experiment:
+          parameterType: STRING
+        pipelinechannel--tune-params-params:
+          parameterType: STRING
+  comp-fit-on-gpu:
+    executorLabel: exec-fit-on-gpu
+    inputDefinitions:
+      parameters:
+        params:
+          parameterType: STRING
+        snapshot:
+          parameterType: STRING
+        test:
+          parameterType: STRING
+        train:
+          parameterType: STRING
+        validation:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        fit:
+          parameterType: STRING
+        model_uri:
+          parameterType: STRING
+  comp-for-loop-1:
+    dag:
+      tasks:
+        stage-examples:
+          cachingOptions: {}
+          componentRef:
+            name: comp-stage-examples
+          inputs:
+            parameters:
+              chunk:
+                componentInputParameter: pipelinechannel--plan-examples-chunks-loop-item
+              cutoff:
+                componentInputParameter: pipelinechannel--cutoff
+          retryPolicy:
+            backoffDuration: 60s
+            backoffFactor: 2.0
+            backoffMaxDuration: 3600s
+            maxRetryCount: 2
+          taskInfo:
+            name: stage-examples
+    inputDefinitions:
+      parameters:
+        pipelinechannel--cutoff:
+          parameterType: STRING
+        pipelinechannel--plan-examples-chunks:
+          parameterType: LIST
+        pipelinechannel--plan-examples-chunks-loop-item:
+          parameterType: STRING
+  comp-gate:
+    executorLabel: exec-gate
+    inputDefinitions:
+      parameters:
+        model_uri:
+          parameterType: STRING
+        snapshot:
+          parameterType: STRING
+        test:
+          parameterType: STRING
+        train:
+          parameterType: STRING
+        validation:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        pr_curve:
+          artifactType:
+            schemaTitle: system.HTML
+            schemaVersion: 0.0.1
+      parameters:
+        passed:
+          parameterType: STRING
+        report:
+          parameterType: STRING
+        summary:
+          parameterType: STRING
+  comp-plan-examples:
+    executorLabel: exec-plan-examples
+    inputDefinitions:
+      parameters:
+        cutoff:
+          parameterType: STRING
+        existing_snapshot:
+          parameterType: STRING
+        test:
+          parameterType: STRING
+        train:
+          parameterType: STRING
+        validation:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        chunks:
+          parameterType: LIST
+  comp-publish-metrics:
+    executorLabel: exec-publish-metrics
+    inputDefinitions:
+      parameters:
+        summary:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        metrics:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+  comp-record-version:
+    executorLabel: exec-record-version
+    inputDefinitions:
+      parameters:
+        experiment:
+          parameterType: STRING
+        fit:
+          parameterType: STRING
+        model_uri:
+          parameterType: STRING
+        params:
+          parameterType: STRING
+        report:
+          parameterType: STRING
+        snapshot:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        version:
+          parameterType: STRING
+  comp-roll-out:
+    executorLabel: exec-roll-out
+    inputDefinitions:
+      parameters:
+        version:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        deployed:
+          parameterType: STRING
+  comp-split-windows:
+    executorLabel: exec-split-windows
+    inputDefinitions:
+      parameters:
+        snapshot:
+          parameterType: STRING
+        test:
+          parameterType: STRING
+        train:
+          parameterType: STRING
+        validation:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        report:
+          parameterType: STRING
+  comp-stage-examples:
+    executorLabel: exec-stage-examples
+    inputDefinitions:
+      parameters:
+        chunk:
+          parameterType: STRING
+        cutoff:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        rows:
+          parameterType: STRING
+  comp-tune-params:
+    executorLabel: exec-tune-params
+    inputDefinitions:
+      parameters:
+        snapshot:
+          parameterType: STRING
+        test:
+          parameterType: STRING
+        train:
+          parameterType: STRING
+        trials:
+          parameterType: NUMBER_INTEGER
+        validation:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        experiment:
+          parameterType: STRING
+        params:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-assemble-examples:
+      container:
+        args:
+        - assemble_examples
+        - --train
+        - '{{$.inputs.parameters[''train'']}}'
+        - --validation
+        - '{{$.inputs.parameters[''validation'']}}'
+        - --test
+        - '{{$.inputs.parameters[''test'']}}'
+        - --cutoff
+        - '{{$.inputs.parameters[''cutoff'']}}'
+        - --snapshot
+        - '{{$.inputs.parameters[''existing_snapshot'']}}'
+        - --run-id
+        - '{{$.pipeline_job_uuid}}'
+        - --out
+        - snapshot
+        - '{{$.outputs.parameters[''snapshot''].output_file}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        env:
+        - name: PYSPARK_SUBMIT_ARGS
+          value: --driver-memory 4g pyspark-shell
+        - name: SPARK_LOCAL_DIR
+          value: /tmp/spark
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 2.0
+          memoryLimit: 6.0
+          memoryRequest: 6.0
+          resourceCpuRequest: '2'
+          resourceMemoryLimit: 6G
+          resourceMemoryRequest: 6G
+    exec-check-examples:
+      container:
+        args:
+        - check_examples
+        - --snapshot
+        - '{{$.inputs.parameters[''snapshot'']}}'
+        - --run-id
+        - '{{$.pipeline_job_uuid}}'
+        - --out
+        - report
+        - '{{$.outputs.parameters[''report''].output_file}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 1.0
+          memoryLimit: 4.0
+          memoryRequest: 4.0
+          resourceCpuRequest: '1'
+          resourceMemoryLimit: 4G
+          resourceMemoryRequest: 4G
+    exec-fit-on-gpu:
+      container:
+        args:
+        - fit_on_gpu
+        - --snapshot
+        - '{{$.inputs.parameters[''snapshot'']}}'
+        - --train
+        - '{{$.inputs.parameters[''train'']}}'
+        - --validation
+        - '{{$.inputs.parameters[''validation'']}}'
+        - --test
+        - '{{$.inputs.parameters[''test'']}}'
+        - --params
+        - '{{$.inputs.parameters[''params'']}}'
+        - --run-id
+        - '{{$.pipeline_job_uuid}}'
+        - --out
+        - model_uri
+        - '{{$.outputs.parameters[''model_uri''].output_file}}'
+        - --out
+        - fit
+        - '{{$.outputs.parameters[''fit''].output_file}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 0.25
+          memoryLimit: 1.0
+          memoryRequest: 1.0
+          resourceCpuRequest: 250m
+          resourceMemoryLimit: 1G
+          resourceMemoryRequest: 1G
+    exec-gate:
+      container:
+        args:
+        - gate
+        - --snapshot
+        - '{{$.inputs.parameters[''snapshot'']}}'
+        - --train
+        - '{{$.inputs.parameters[''train'']}}'
+        - --validation
+        - '{{$.inputs.parameters[''validation'']}}'
+        - --test
+        - '{{$.inputs.parameters[''test'']}}'
+        - --model-uri
+        - '{{$.inputs.parameters[''model_uri'']}}'
+        - --run-id
+        - '{{$.pipeline_job_uuid}}'
+        - --out
+        - passed
+        - '{{$.outputs.parameters[''passed''].output_file}}'
+        - --out
+        - report
+        - '{{$.outputs.parameters[''report''].output_file}}'
+        - --out
+        - summary
+        - '{{$.outputs.parameters[''summary''].output_file}}'
+        - --out
+        - pr_curve
+        - '{{$.outputs.artifacts[''pr_curve''].path}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 2.0
+          memoryLimit: 6.0
+          memoryRequest: 6.0
+          resourceCpuRequest: '2'
+          resourceMemoryLimit: 6G
+          resourceMemoryRequest: 6G
+    exec-plan-examples:
+      container:
+        args:
+        - plan_examples
+        - --train
+        - '{{$.inputs.parameters[''train'']}}'
+        - --validation
+        - '{{$.inputs.parameters[''validation'']}}'
+        - --test
+        - '{{$.inputs.parameters[''test'']}}'
+        - --cutoff
+        - '{{$.inputs.parameters[''cutoff'']}}'
+        - --snapshot
+        - '{{$.inputs.parameters[''existing_snapshot'']}}'
+        - --run-id
+        - '{{$.pipeline_job_uuid}}'
+        - --out
+        - chunks
+        - '{{$.outputs.parameters[''chunks''].output_file}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        env:
+        - name: PYSPARK_SUBMIT_ARGS
+          value: --driver-memory 2g pyspark-shell
+        - name: SPARK_LOCAL_DIR
+          value: /tmp/spark
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 2.0
+          memoryLimit: 4.0
+          memoryRequest: 4.0
+          resourceCpuRequest: '2'
+          resourceMemoryLimit: 4G
+          resourceMemoryRequest: 4G
+    exec-publish-metrics:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - publish_metrics
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.18.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef publish_metrics(summary: str, metrics: dsl.Output[dsl.Metrics]):\n\
+          \    import json\n\n    data = json.loads(summary)\n    for prefix, name\
+          \ in ((\"test\", \"model\"), (\"baseline\", \"baseline\"), (\"production\"\
+          , \"production\")):\n        for metric, value in data[\"metrics\"].get(name,\
+          \ {}).items():\n            metrics.log_metric(f\"{prefix}_{metric}\", value)\n\
+          \    metrics.log_metric(\"gate_passed\", 1 if data[\"passed\"] else 0)\n\
+          \    metrics.metadata[\"training_set_snapshot\"] = str(data[\"training_set_snapshot\"\
+          ])\n    metrics.metadata[\"feature_service\"] = data[\"feature_service\"\
+          ]\n    metrics.metadata[\"sources\"] = json.dumps(data[\"sources\"], sort_keys=True)\n\
+          \n"
+        image: python:3.12-slim
+        resources:
+          cpuRequest: 0.25
+          memoryLimit: 1.0
+          memoryRequest: 1.0
+          resourceCpuRequest: 250m
+          resourceMemoryLimit: 1G
+          resourceMemoryRequest: 1G
+    exec-record-version:
+      container:
+        args:
+        - record_version
+        - --snapshot
+        - '{{$.inputs.parameters[''snapshot'']}}'
+        - --model-uri
+        - '{{$.inputs.parameters[''model_uri'']}}'
+        - --report
+        - '{{$.inputs.parameters[''report'']}}'
+        - --fit
+        - '{{$.inputs.parameters[''fit'']}}'
+        - --params
+        - '{{$.inputs.parameters[''params'']}}'
+        - --experiment
+        - '{{$.inputs.parameters[''experiment'']}}'
+        - --run-id
+        - '{{$.pipeline_job_uuid}}'
+        - --out
+        - version
+        - '{{$.outputs.parameters[''version''].output_file}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 0.25
+          memoryLimit: 1.0
+          memoryRequest: 1.0
+          resourceCpuRequest: 250m
+          resourceMemoryLimit: 1G
+          resourceMemoryRequest: 1G
+    exec-roll-out:
+      container:
+        args:
+        - roll_out
+        - --version
+        - '{{$.inputs.parameters[''version'']}}'
+        - --run-id
+        - '{{$.pipeline_job_uuid}}'
+        - --out
+        - version
+        - '{{$.outputs.parameters[''deployed''].output_file}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 0.25
+          memoryLimit: 1.0
+          memoryRequest: 1.0
+          resourceCpuRequest: 250m
+          resourceMemoryLimit: 1G
+          resourceMemoryRequest: 1G
+    exec-split-windows:
+      container:
+        args:
+        - split_windows
+        - --snapshot
+        - '{{$.inputs.parameters[''snapshot'']}}'
+        - --train
+        - '{{$.inputs.parameters[''train'']}}'
+        - --validation
+        - '{{$.inputs.parameters[''validation'']}}'
+        - --test
+        - '{{$.inputs.parameters[''test'']}}'
+        - --run-id
+        - '{{$.pipeline_job_uuid}}'
+        - --out
+        - report
+        - '{{$.outputs.parameters[''report''].output_file}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 1.0
+          memoryLimit: 4.0
+          memoryRequest: 4.0
+          resourceCpuRequest: '1'
+          resourceMemoryLimit: 4G
+          resourceMemoryRequest: 4G
+    exec-stage-examples:
+      container:
+        args:
+        - stage_examples
+        - --chunk
+        - '{{$.inputs.parameters[''chunk'']}}'
+        - --cutoff
+        - '{{$.inputs.parameters[''cutoff'']}}'
+        - --out
+        - rows
+        - '{{$.outputs.parameters[''rows''].output_file}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        env:
+        - name: PYSPARK_SUBMIT_ARGS
+          value: --driver-memory 6g pyspark-shell
+        - name: SPARK_LOCAL_DIR
+          value: /tmp/spark
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 2.0
+          memoryLimit: 8.0
+          memoryRequest: 8.0
+          resourceCpuRequest: '2'
+          resourceMemoryLimit: 8G
+          resourceMemoryRequest: 8G
+    exec-tune-params:
+      container:
+        args:
+        - tune_params
+        - --snapshot
+        - '{{$.inputs.parameters[''snapshot'']}}'
+        - --train
+        - '{{$.inputs.parameters[''train'']}}'
+        - --validation
+        - '{{$.inputs.parameters[''validation'']}}'
+        - --test
+        - '{{$.inputs.parameters[''test'']}}'
+        - --trials
+        - '{{$.inputs.parameters[''trials'']}}'
+        - --run-id
+        - '{{$.pipeline_job_uuid}}'
+        - --out
+        - params
+        - '{{$.outputs.parameters[''params''].output_file}}'
+        - --out
+        - experiment
+        - '{{$.outputs.parameters[''experiment''].output_file}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 0.25
+          memoryLimit: 1.0
+          memoryRequest: 1.0
+          resourceCpuRequest: 250m
+          resourceMemoryLimit: 1G
+          resourceMemoryRequest: 1G
+pipelineInfo:
+  description: Build the payment_risk_v1 training set, train on one GPU, gate, register
+    and roll out.
+  name: payment-risk-training
+root:
+  dag:
+    tasks:
+      assemble-examples:
+        cachingOptions: {}
+        componentRef:
+          name: comp-assemble-examples
+        dependentTasks:
+        - for-loop-1
+        inputs:
+          parameters:
+            cutoff:
+              componentInputParameter: cutoff
+            existing_snapshot:
+              componentInputParameter: training_set_snapshot
+            test:
+              componentInputParameter: test
+            train:
+              componentInputParameter: train
+            validation:
+              componentInputParameter: validation
+        taskInfo:
+          name: assemble-examples
+      check-examples:
+        cachingOptions: {}
+        componentRef:
+          name: comp-check-examples
+        dependentTasks:
+        - assemble-examples
+        inputs:
+          parameters:
+            snapshot:
+              taskOutputParameter:
+                outputParameterKey: snapshot
+                producerTask: assemble-examples
+        taskInfo:
+          name: check-examples
+      condition-2:
+        componentRef:
+          name: comp-condition-2
+        dependentTasks:
+        - assemble-examples
+        - fit-on-gpu
+        - gate
+        - tune-params
+        inputs:
+          parameters:
+            pipelinechannel--assemble-examples-snapshot:
+              taskOutputParameter:
+                outputParameterKey: snapshot
+                producerTask: assemble-examples
+            pipelinechannel--fit-on-gpu-fit:
+              taskOutputParameter:
+                outputParameterKey: fit
+                producerTask: fit-on-gpu
+            pipelinechannel--fit-on-gpu-model_uri:
+              taskOutputParameter:
+                outputParameterKey: model_uri
+                producerTask: fit-on-gpu
+            pipelinechannel--gate-passed:
+              taskOutputParameter:
+                outputParameterKey: passed
+                producerTask: gate
+            pipelinechannel--gate-report:
+              taskOutputParameter:
+                outputParameterKey: report
+                producerTask: gate
+            pipelinechannel--tune-params-experiment:
+              taskOutputParameter:
+                outputParameterKey: experiment
+                producerTask: tune-params
+            pipelinechannel--tune-params-params:
+              taskOutputParameter:
+                outputParameterKey: params
+                producerTask: tune-params
+        taskInfo:
+          name: passed
+        triggerPolicy:
+          condition: inputs.parameter_values['pipelinechannel--gate-passed'] == 'true'
+      fit-on-gpu:
+        cachingOptions: {}
+        componentRef:
+          name: comp-fit-on-gpu
+        dependentTasks:
+        - assemble-examples
+        - tune-params
+        inputs:
+          parameters:
+            params:
+              taskOutputParameter:
+                outputParameterKey: params
+                producerTask: tune-params
+            snapshot:
+              taskOutputParameter:
+                outputParameterKey: snapshot
+                producerTask: assemble-examples
+            test:
+              componentInputParameter: test
+            train:
+              componentInputParameter: train
+            validation:
+              componentInputParameter: validation
+        taskInfo:
+          name: fit-on-gpu
+      for-loop-1:
+        componentRef:
+          name: comp-for-loop-1
+        dependentTasks:
+        - plan-examples
+        inputs:
+          parameters:
+            pipelinechannel--cutoff:
+              componentInputParameter: cutoff
+            pipelinechannel--plan-examples-chunks:
+              taskOutputParameter:
+                outputParameterKey: chunks
+                producerTask: plan-examples
+        iteratorPolicy:
+          parallelismLimit: 1
+        parameterIterator:
+          itemInput: pipelinechannel--plan-examples-chunks-loop-item
+          items:
+            inputParameter: pipelinechannel--plan-examples-chunks
+        taskInfo:
+          name: for-loop-1
+      gate:
+        cachingOptions: {}
+        componentRef:
+          name: comp-gate
+        dependentTasks:
+        - assemble-examples
+        - fit-on-gpu
+        inputs:
+          parameters:
+            model_uri:
+              taskOutputParameter:
+                outputParameterKey: model_uri
+                producerTask: fit-on-gpu
+            snapshot:
+              taskOutputParameter:
+                outputParameterKey: snapshot
+                producerTask: assemble-examples
+            test:
+              componentInputParameter: test
+            train:
+              componentInputParameter: train
+            validation:
+              componentInputParameter: validation
+        taskInfo:
+          name: gate
+      plan-examples:
+        cachingOptions: {}
+        componentRef:
+          name: comp-plan-examples
+        inputs:
+          parameters:
+            cutoff:
+              componentInputParameter: cutoff
+            existing_snapshot:
+              componentInputParameter: training_set_snapshot
+            test:
+              componentInputParameter: test
+            train:
+              componentInputParameter: train
+            validation:
+              componentInputParameter: validation
+        taskInfo:
+          name: plan-examples
+      publish-metrics:
+        cachingOptions: {}
+        componentRef:
+          name: comp-publish-metrics
+        dependentTasks:
+        - gate
+        inputs:
+          parameters:
+            summary:
+              taskOutputParameter:
+                outputParameterKey: summary
+                producerTask: gate
+        taskInfo:
+          name: publish-metrics
+      split-windows:
+        cachingOptions: {}
+        componentRef:
+          name: comp-split-windows
+        dependentTasks:
+        - assemble-examples
+        - check-examples
+        inputs:
+          parameters:
+            snapshot:
+              taskOutputParameter:
+                outputParameterKey: snapshot
+                producerTask: assemble-examples
+            test:
+              componentInputParameter: test
+            train:
+              componentInputParameter: train
+            validation:
+              componentInputParameter: validation
+        taskInfo:
+          name: split-windows
+      tune-params:
+        cachingOptions: {}
+        componentRef:
+          name: comp-tune-params
+        dependentTasks:
+        - assemble-examples
+        - split-windows
+        inputs:
+          parameters:
+            snapshot:
+              taskOutputParameter:
+                outputParameterKey: snapshot
+                producerTask: assemble-examples
+            test:
+              componentInputParameter: test
+            train:
+              componentInputParameter: train
+            trials:
+              componentInputParameter: tune_trials
+            validation:
+              componentInputParameter: validation
+        taskInfo:
+          name: tune-params
+  inputDefinitions:
+    parameters:
+      cutoff:
+        defaultValue: '2026-10-29T00:00:00Z'
+        isOptional: true
+        parameterType: STRING
+      test:
+        defaultValue: 2026-10-15..2026-10-28
+        isOptional: true
+        parameterType: STRING
+      train:
+        defaultValue: 2026-07-29..2026-09-30
+        isOptional: true
+        parameterType: STRING
+      training_set_snapshot:
+        defaultValue: ''
+        isOptional: true
+        parameterType: STRING
+      tune_trials:
+        defaultValue: 0.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      validation:
+        defaultValue: 2026-10-01..2026-10-14
+        isOptional: true
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.18.0
+---
+platforms:
+  kubernetes:
+    deploymentSpec:
+      executors:
+        exec-assemble-examples:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false
+          emptyDirMounts:
+          - mountPath: /tmp/spark
+            sizeLimit: 24Gi
+            volumeName: spill
+          secretAsEnv:
+          - keyToEnv:
+            - envVar: AWS_ACCESS_KEY_ID
+              secretKey: AWS_ACCESS_KEY_ID
+            - envVar: AWS_SECRET_ACCESS_KEY
+              secretKey: AWS_SECRET_ACCESS_KEY
+            optional: false
+            secretName: ml-training-storage
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-storage
+          - keyToEnv:
+            - envVar: ICEBERG_CLIENT_SECRET
+              secretKey: ICEBERG_CLIENT_SECRET
+            optional: false
+            secretName: ml-training-iceberg
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-iceberg
+        exec-check-examples:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false
+          secretAsEnv:
+          - keyToEnv:
+            - envVar: AWS_ACCESS_KEY_ID
+              secretKey: AWS_ACCESS_KEY_ID
+            - envVar: AWS_SECRET_ACCESS_KEY
+              secretKey: AWS_SECRET_ACCESS_KEY
+            optional: false
+            secretName: ml-training-storage
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-storage
+          - keyToEnv:
+            - envVar: ICEBERG_CLIENT_SECRET
+              secretKey: ICEBERG_CLIENT_SECRET
+            optional: false
+            secretName: ml-training-iceberg
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-iceberg
+        exec-fit-on-gpu:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false
+        exec-gate:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false
+          secretAsEnv:
+          - keyToEnv:
+            - envVar: AWS_ACCESS_KEY_ID
+              secretKey: AWS_ACCESS_KEY_ID
+            - envVar: AWS_SECRET_ACCESS_KEY
+              secretKey: AWS_SECRET_ACCESS_KEY
+            optional: false
+            secretName: ml-training-storage
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-storage
+          - keyToEnv:
+            - envVar: ICEBERG_CLIENT_SECRET
+              secretKey: ICEBERG_CLIENT_SECRET
+            optional: false
+            secretName: ml-training-iceberg
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-iceberg
+        exec-plan-examples:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false
+          emptyDirMounts:
+          - mountPath: /tmp/spark
+            sizeLimit: 24Gi
+            volumeName: spill
+          secretAsEnv:
+          - keyToEnv:
+            - envVar: AWS_ACCESS_KEY_ID
+              secretKey: AWS_ACCESS_KEY_ID
+            - envVar: AWS_SECRET_ACCESS_KEY
+              secretKey: AWS_SECRET_ACCESS_KEY
+            optional: false
+            secretName: ml-training-storage
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-storage
+          - keyToEnv:
+            - envVar: ICEBERG_CLIENT_SECRET
+              secretKey: ICEBERG_CLIENT_SECRET
+            optional: false
+            secretName: ml-training-iceberg
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-iceberg
+        exec-publish-metrics:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false
+        exec-record-version:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false
+          secretAsEnv:
+          - keyToEnv:
+            - envVar: AWS_ACCESS_KEY_ID
+              secretKey: AWS_ACCESS_KEY_ID
+            - envVar: AWS_SECRET_ACCESS_KEY
+              secretKey: AWS_SECRET_ACCESS_KEY
+            optional: false
+            secretName: ml-training-storage
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-storage
+          - keyToEnv:
+            - envVar: ICEBERG_CLIENT_SECRET
+              secretKey: ICEBERG_CLIENT_SECRET
+            optional: false
+            secretName: ml-training-iceberg
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-iceberg
+        exec-roll-out:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false
+        exec-split-windows:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false
+          secretAsEnv:
+          - keyToEnv:
+            - envVar: AWS_ACCESS_KEY_ID
+              secretKey: AWS_ACCESS_KEY_ID
+            - envVar: AWS_SECRET_ACCESS_KEY
+              secretKey: AWS_SECRET_ACCESS_KEY
+            optional: false
+            secretName: ml-training-storage
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-storage
+          - keyToEnv:
+            - envVar: ICEBERG_CLIENT_SECRET
+              secretKey: ICEBERG_CLIENT_SECRET
+            optional: false
+            secretName: ml-training-iceberg
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-iceberg
+        exec-stage-examples:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false
+          emptyDirMounts:
+          - mountPath: /tmp/spark
+            sizeLimit: 24Gi
+            volumeName: spill
+          secretAsEnv:
+          - keyToEnv:
+            - envVar: AWS_ACCESS_KEY_ID
+              secretKey: AWS_ACCESS_KEY_ID
+            - envVar: AWS_SECRET_ACCESS_KEY
+              secretKey: AWS_SECRET_ACCESS_KEY
+            optional: false
+            secretName: ml-training-storage
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-storage
+          - keyToEnv:
+            - envVar: ICEBERG_CLIENT_SECRET
+              secretKey: ICEBERG_CLIENT_SECRET
+            optional: false
+            secretName: ml-training-iceberg
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-iceberg
+        exec-tune-params:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false

@@ -1,6 +1,6 @@
 # Training
 
-**Status: implemented, not yet run.** The code and the prod chart are under review. The first runs wait for the Feast change to be deployed and `stream-history` to cover `[2026-07-29, 2026-10-29)`. Code: [`src/ml`](../../src/ml); chart: [`infra/charts/ml-training`](../../infra/charts/ml-training).
+**Status: implemented, not yet run.** The code and the prod chart are under review. The first runs wait for the Feast change to be deployed and `stream-history` to cover `[2026-07-29, 2026-10-29)`. Code: [`src/ml`](../../src/ml); chart: [`infra/charts/ml-training`](../../infra/charts/ml-training). Dev runs the same chart on the RTX 5060 Ti of `dev-server1`: `files/dev` holds the pipelines compiled without Karpenter selectors and with smaller Spark sizes, and the platform's `xgboost-gpu-distributed` runtime selects the local GPU there.
 
 ## Training data
 

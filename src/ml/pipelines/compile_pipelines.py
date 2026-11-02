@@ -4,6 +4,7 @@ from pathlib import Path
 
 from kfp import compiler
 
+from environments import ENVIRONMENTS
 from payment_risk_rollout import payment_risk_rollout
 from payment_risk_training import payment_risk_training
 
@@ -17,9 +18,14 @@ CHART_FILES = Path(__file__).resolve().parents[3] / "infra" / "charts" / "ml-tra
 def compile_all(target):
     target = Path(target)
     target.mkdir(parents=True, exist_ok=True)
-    for name, pipeline in PIPELINES.items():
-        compiler.Compiler().compile(pipeline, str(target / f"{name}.yaml"))
-    return {name: (target / f"{name}.yaml").read_text() for name in PIPELINES}
+    built = {}
+    for environment in ENVIRONMENTS:
+        (target / environment.name).mkdir(exist_ok=True)
+        for name, build in PIPELINES.items():
+            file = f"{environment.name}/{name}.yaml"
+            compiler.Compiler().compile(build(environment), str(target / file))
+            built[file] = (target / file).read_text()
+    return built
 
 
 def main():
@@ -32,10 +38,9 @@ def main():
         with tempfile.TemporaryDirectory() as directory:
             built = compile_all(directory)
         stale = [
-            name
-            for name, text in built.items()
-            if not (CHART_FILES / f"{name}.yaml").exists()
-            or (CHART_FILES / f"{name}.yaml").read_text() != text
+            file
+            for file, text in built.items()
+            if not (CHART_FILES / file).exists() or (CHART_FILES / file).read_text() != text
         ]
         if stale:
             sys.exit(f"compiled pipelines are out of date: {', '.join(stale)}")

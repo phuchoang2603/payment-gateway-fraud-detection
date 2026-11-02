@@ -2,7 +2,7 @@
 {{- $placeholder := printf "%s:chart" .Values.image.repository }}
 {{- $image := include "ml-training.image" . }}
 {{- range $name := list "payment-risk-training" "payment-risk-rollout" }}
-{{- $text := $.Files.Get (printf "files/%s.yaml" $name) | replace $placeholder $image }}
+{{- $text := $.Files.Get (printf "files/%s/%s.yaml" $.Values.environment $name) | replace $placeholder $image }}
 {{- $documents := regexSplit "\n---\n" $text -1 }}
 apiVersion: pipelines.kubeflow.org/v2beta1
 kind: Pipeline

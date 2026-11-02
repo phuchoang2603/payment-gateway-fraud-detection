@@ -20,6 +20,7 @@ config:
   FEAST_STREAM_EPOCHS: history-v18,live-v18
   MODEL_REGISTRY_URL: http://model-registry-service.ml.svc.cluster.local:8080
   RUN_ROOT: s3://platform-dev/runs/payment-gateway/ml
+environment: prod
 storage:
   store: gateway-doppler
   data:
