@@ -97,7 +97,6 @@ def run_parameters(uri: str):
         "epoch",
         "seed",
         "counts",
-        "gate",
     )
     return {key: report.get(key) for key in fields if key in report or key in ("start", "end", "silver_snapshots")}
 
@@ -158,7 +157,7 @@ def main() -> int:
     sdk = client()
     parameters = run_parameters(os.environ.get("RUN_REPORT", ""))
     if names == ["stream-history"]:
-        workflow_status = "Succeeded" if parameters and parameters.get("gate") else "Failed"
+        workflow_status = "Succeeded" if parameters else "Failed"
     summary = {}
     for name in names:
         pipeline_ref = ensure_pipeline(sdk, name)

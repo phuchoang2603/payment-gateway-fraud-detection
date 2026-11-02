@@ -81,12 +81,6 @@ spec:
                 - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
                 - {name: end, value: {{ "{{inputs.parameters.end}}" | quote }}}
                 - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
-        - - name: gate
-            template: gate
-            arguments:
-              parameters:
-                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
-                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
     - name: flink
       inputs:
         parameters:
@@ -203,7 +197,7 @@ spec:
               parallelism: 1
               upgradeMode: stateless
               state: running
-    {{- range $mode := list "seed" "writer" "gate" "delete-topics" }}
+    {{- range $mode := list "seed" "writer" "delete-topics" }}
     - name: {{ $mode }}
       {{- if has $mode (list "seed" "writer") }}
       {{- include "data-pipelines.placement" $ | nindent 6 }}
@@ -225,7 +219,7 @@ spec:
       inputs:
         parameters:
           - {name: run}
-          {{- if has $mode (list "seed" "writer" "gate") }}
+          {{- if has $mode (list "seed" "writer") }}
           - {name: start}
           {{- end }}
           {{- if has $mode (list "seed" "writer") }}
@@ -242,12 +236,8 @@ spec:
         {{- end }}
         {{- else }}
         image: {{ include "data-pipelines.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
-        {{- if eq $mode "writer" }}
         command: [python, -m, fraud_feast.stream_writer]
         args: [--history, --history-start, {{ "{{inputs.parameters.start}}" | quote }}, --history-end, {{ "{{inputs.parameters.end}}" | quote }}]
-        {{- else }}
-        command: [python, -m, fraud_feast.history]
-        {{- end }}
         {{- end }}
         env:
           - name: FEATURE_EPOCH
@@ -283,14 +273,12 @@ spec:
           - name: HISTORY_SEED_REPORT
             value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}-seed.json" $.Values.features.reportRoot | quote }}
           {{- end }}
-          {{- if has $mode (list "writer" "gate") }}
+          {{- if eq $mode "writer" }}
           - name: RUN_REPORT
             value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}.json" $.Values.features.reportRoot | quote }}
           {{- end }}
           {{- if has $mode (list "seed" "writer") }}
           {{- include "data-pipelines.lakeEnv" $ | nindent 10 }}
-          {{- else if eq $mode "gate" }}
-          {{- include "data-pipelines.storageEnv" $ | nindent 10 }}
           {{- end }}
         resources:
           {{- if eq $mode "seed" }}
@@ -302,10 +290,10 @@ spec:
           requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 2Gi}
           limits: {memory: 4Gi, ephemeral-storage: 4Gi}
           {{- else }}
-          # The gate and the topic cleanup only read a report or call the Kafka admin API, and they must fit in what the
-          # on-demand pool has left while the replay holds the burst pool.
-          requests: {cpu: 50m, memory: 512Mi, ephemeral-storage: 256Mi}
-          limits: {memory: 2Gi, ephemeral-storage: 1Gi}
+          # The topic cleanup only calls the Kafka admin API, and it must fit in what the on-demand pool has left while
+          # the replay holds the burst pool.
+          requests: {cpu: 50m, memory: 128Mi, ephemeral-storage: 256Mi}
+          limits: {memory: 512Mi, ephemeral-storage: 1Gi}
           {{- end }}
         {{- if eq $mode "seed" }}
         volumeMounts:

@@ -1,4 +1,3 @@
-from copy import deepcopy
 from datetime import timedelta
 
 import pyarrow as pa
@@ -145,22 +144,3 @@ def test_history_buffers_kafka_batches_and_flushes_remainder(lake, monkeypatch, 
         assert len(table.snapshots()) == 2
         assert month_rows(table) == [(0, 1), (1, 2), (2, 3)]
         assert watermarks(table, "history-ci") == {}
-
-
-def test_gate_requires_seed_decode_success_and_finished_job():
-    report = {
-        "seed": {"done": True, "input_end": 10, "clock_end": 5},
-        "job_state": "FINISHED",
-        "counts": {"decode_rejects": 0, "duplicates": 12, "too_late": 8, "rejects": 20},
-    }
-    history.validate_gate(report)
-    for broken in ("decode", "job_state", "seed"):
-        changed = deepcopy(report)
-        if broken == "decode":
-            changed["counts"]["decode_rejects"] = 1
-        elif broken == "seed":
-            changed["seed"]["done"] = False
-        else:
-            changed["job_state"] = "RUNNING"
-        with pytest.raises(ValueError):
-            history.validate_gate(changed)

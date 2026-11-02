@@ -63,7 +63,7 @@
 - [x] 3.3 `infra/charts/live-traffic`: enable the simulator in prod on the v19 manifest and digest, at 1 payment every 30 seconds. Verify with CI helm template. The manifest was read from S3 with user authorization; its digest is pinned and the seven-day prod run is enabled.
 - [x] 3.4 `infra/charts/data-pipelines`:
   - `feast-materialize` (local Spark Argo container with Feast virtualenv and large spill emptyDir, then verify and publish; optional `since`; end always now; mutex `dp-writer`) and the suspended `feast-materialize-daily` CronWorkflow at 06:47 UTC;
-  - on-demand `stream-history` (`start`, `end`; mutex `stream-history`): per month, recreate the epoch topics, seed, a logical-clock FlinkDeployment, feature writer in history mode with short retried commits, the gate, and an exit handler that deletes the deployment and topics and publishes; RBAC for FlinkDeployments in `data`; TaskManagers on the spot pool;
+  - on-demand `stream-history` (`start`, `end`; mutex `stream-history`): per month, recreate the epoch topics, seed, a logical-clock FlinkDeployment, feature writer in history mode with short retried commits, and an exit handler that deletes the deployment and topics and publishes; RBAC for FlinkDeployments in `data`; TaskManagers on the spot pool;
   - the Redis-password ExternalSecret;
   - `features.enabled`: on in dev, off in prod.
 

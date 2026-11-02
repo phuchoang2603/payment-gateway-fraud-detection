@@ -40,7 +40,6 @@ def test_history_and_materialization_reports_keep_governance_parameters(tmp_path
         {
             "start": "2025-09-01",
             "end": "2025-10-01",
-            "gate": False,
             "job_state": "FINISHED",
             "counts": {"rejects": 1},
             "seed": {"events_per_second": 12},

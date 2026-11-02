@@ -62,38 +62,22 @@ class HistoryReplay:
         self.first, self.last = bounds(start, end)
         self.start, self.end = start, end
 
+    def check(self):
+        seed = read_json(os.environ["HISTORY_SEED_REPORT"])
+        counts = counters(finished_job())
+        if not seed or not seed.get("done") or counts["decode_rejects"]:
+            raise ValueError("history seed is incomplete or replay has decode rejects")
+        self.seed, self.counts = seed, counts
+
     def report(self, rows):
-        job = finished_job()
         write_json(
             os.environ["RUN_REPORT"],
             {
                 "start": self.start,
                 "end": self.end,
                 "epoch": os.environ["FEATURE_EPOCH"],
-                "seed": read_json(os.environ["HISTORY_SEED_REPORT"]),
-                "counts": counters(job),
+                "seed": self.seed,
+                "counts": self.counts,
                 "rows": rows,
-                "job_state": "FINISHED",
-                "gate": False,
             },
         )
-
-
-def validate_gate(report):
-    seed = report["seed"]
-    if not seed or not seed.get("done") or report["counts"]["decode_rejects"]:
-        raise ValueError("history seed is incomplete or replay has decode rejects")
-    if report["job_state"] != "FINISHED":
-        raise ValueError("history has not consumed every seeded record")
-
-
-def main():
-    uri = os.environ["RUN_REPORT"]
-    report = read_json(uri)
-    validate_gate(report)
-    report["gate"] = True
-    write_json(uri, report)
-
-
-if __name__ == "__main__":
-    main()

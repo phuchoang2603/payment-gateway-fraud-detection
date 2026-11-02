@@ -156,20 +156,44 @@ def test_history_bounds(monkeypatch, epoch, start, end, valid):
             history.bounds(start, end)
 
 
-def test_report_then_gate_marks_the_unit_passed(monkeypatch, tmp_path):
-    seed, report = tmp_path / "seed.json", tmp_path / "report.json"
-    seed.write_text(json.dumps({"done": True}))
+def replay(monkeypatch, tmp_path, *, seed, rejects=0, state="FINISHED"):
+    seed_path, report = tmp_path / "seed.json", tmp_path / "report.json"
+    seed_path.write_text(json.dumps(seed))
     monkeypatch.setenv("FEATURE_EPOCH", "history-ci")
-    monkeypatch.setenv("HISTORY_SEED_REPORT", str(seed))
+    monkeypatch.setenv("HISTORY_SEED_REPORT", str(seed_path))
     monkeypatch.setenv("RUN_REPORT", str(report))
     monkeypatch.setattr(
-        history, "rest", flink({"/jobs/overview": {"jobs": [{"jid": "j", "state": "FINISHED"}]}})
+        history, "rest", flink({"/jobs/overview": {"jobs": [{"jid": "j", "state": state}]}})
     )
-    monkeypatch.setattr(history, "counters", lambda job: {"decode_rejects": 0, "job": job})
-    history.HistoryReplay("2026-08-01", "2026-08-08").report(12)
-    history.main()
+    monkeypatch.setattr(history, "counters", lambda job: {"decode_rejects": rejects, "job": job})
+    return history.HistoryReplay("2026-08-01", "2026-08-08"), report
+
+
+def test_check_then_report_records_the_unit(monkeypatch, tmp_path):
+    unit, report = replay(monkeypatch, tmp_path, seed={"done": True})
+    unit.check()
+    unit.report(12)
     result = json.loads(report.read_text())
-    assert result["gate"] is True and result["rows"] == 12 and result["counts"]["job"] == "j"
+    assert (
+        result["rows"] == 12 and result["counts"]["job"] == "j" and result["seed"] == {"done": True}
+    )
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        {"seed": {"done": False}},
+        {"seed": {"done": True}, "rejects": 1},
+        {"seed": {"done": True}, "state": "RUNNING"},
+    ],
+)
+def test_check_refuses_an_incomplete_seed_decode_rejects_or_an_unfinished_job(
+    monkeypatch, tmp_path, broken
+):
+    unit, report = replay(monkeypatch, tmp_path, **broken)
+    with pytest.raises(ValueError):
+        unit.check()
+    assert not report.exists()
 
 
 def online_response(names, values, timestamps):

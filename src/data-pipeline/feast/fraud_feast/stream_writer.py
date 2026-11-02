@@ -289,6 +289,7 @@ def main():
         tables = {scope: lake.load_table(name) for scope, name in TABLES.items()}
         offline = IcebergWriter(tables, epoch, history=args.history)
         if history:
+            history.check()
             offline.delete_range(history.first, history.last)
         writer = StreamWriter(
             offline,
