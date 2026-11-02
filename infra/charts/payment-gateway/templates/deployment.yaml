@@ -107,6 +107,18 @@ spec:
               value: {{ $.Values.features.ttlDaily | quote }}
             - name: FRAUD_FEATURE_TTL_STREAM
               value: {{ $.Values.features.ttlStream | quote }}
+            {{- if $.Values.model.enabled }}
+            - name: FRAUD_MODEL_MODE
+              value: {{ $.Values.model.mode | quote }}
+            - name: FRAUD_MODEL_URL
+              value: {{ $.Values.model.url | quote }}
+            - name: FRAUD_MODEL_NAME
+              value: {{ $.Values.model.name | quote }}
+            - name: FRAUD_MODEL_TIMEOUT
+              value: {{ $.Values.model.timeout | quote }}
+            - name: FRAUD_MODEL_THRESHOLD
+              value: {{ $.Values.model.threshold | quote }}
+            {{- end }}
             {{- end }}
             {{- range $svc.externalSecrets }}
             {{- $secretName := .name }}

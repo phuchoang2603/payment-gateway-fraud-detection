@@ -6,6 +6,8 @@ import (
 
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/application"
 	fraudv1 "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/fraud/v1"
+	paymentsv1 "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -53,5 +55,32 @@ func evidenceProto(value application.Evidence) *fraudv1.AssessmentEvidence {
 			result.Views = append(result.Views, viewProto(name, view))
 		}
 	}
+	if value.Model != nil {
+		result.Model = modelProto(*value.Model)
+	}
 	return result
+}
+
+func modelProto(value application.ModelObservation) *fraudv1.ModelEvidence {
+	status := fraudv1.ModelStatus_MODEL_STATUS_ERROR
+	if code, ok := fraudv1.ModelStatus_value["MODEL_STATUS_"+strings.ToUpper(value.Status)]; ok {
+		status = fraudv1.ModelStatus(code)
+	}
+	result := &fraudv1.ModelEvidence{Name: value.Name, Version: value.Version, Status: status, Score: value.Score, Mode: value.Mode, Threshold: value.Threshold, Enforced: value.Enforced, Declined: value.Declined}
+	if !value.ReadAt.IsZero() {
+		result.ReadAt = timestamppb.New(value.ReadAt)
+	}
+	return result
+}
+
+// riskAssessment carries the model's version and score only when the score met the missing-feature policy.
+func riskAssessment(result application.Result, outcome paymentsv1.RiskOutcome) *paymentsv1.RiskAssessment {
+	decision := result.Evidence.Decision
+	assessment := &paymentsv1.RiskAssessment{Outcome: outcome, ReasonCodes: decision.Reasons, PolicyVersion: decision.PolicyVersion, AssessmentId: result.Evidence.AssessmentID, EvidenceSha256: result.EvidenceHash}
+	if model := result.Evidence.Model; model != nil && model.Enforced && model.Score != nil {
+		assessment.ModelVersion = proto.String(model.Version)
+		assessment.FeatureSetVersion = proto.String(result.Evidence.Features.Service)
+		assessment.RiskScore = proto.Float64(*model.Score)
+	}
+	return assessment
 }

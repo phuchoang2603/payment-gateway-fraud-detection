@@ -8,11 +8,13 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/adapters/feast"
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/adapters/kserve"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/adapters/postgres"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/application"
 
@@ -106,6 +108,31 @@ func run() error {
 	service, err := application.New(store, history, config)
 	if err != nil {
 		return err
+	}
+	if mode := os.Getenv("FRAUD_MODEL_MODE"); mode != "" && mode != "off" {
+		if history == nil {
+			return errors.New("FRAUD_MODEL_MODE needs FRAUD_FEAST_URL")
+		}
+		modelConfig := application.ModelConfig{Mode: application.ModelMode(mode), Timeout: 150 * time.Millisecond}
+		if value := os.Getenv("FRAUD_MODEL_TIMEOUT"); value != "" {
+			if modelConfig.Timeout, err = time.ParseDuration(value); err != nil {
+				return errors.New("FRAUD_MODEL_TIMEOUT must be a duration")
+			}
+		}
+		if value := os.Getenv("FRAUD_MODEL_THRESHOLD"); value != "" {
+			if modelConfig.Threshold, err = strconv.ParseFloat(value, 64); err != nil {
+				return errors.New("FRAUD_MODEL_THRESHOLD must be a number")
+			}
+		}
+		scorer, err := kserve.New(kserve.Config{URL: os.Getenv("FRAUD_MODEL_URL"), Model: os.Getenv("FRAUD_MODEL_NAME"), Timeout: modelConfig.Timeout})
+		if err != nil {
+			return err
+		}
+		defer scorer.Close()
+		modelConfig.Scorer = scorer
+		if err = service.WithModel(modelConfig); err != nil {
+			return err
+		}
 	}
 	ready, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

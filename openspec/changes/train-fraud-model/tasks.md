@@ -54,13 +54,13 @@
 
 ## 5b. Fraud model scoring
 
-- [ ] 5b.1 Add the `fraud-decision` delta spec: model scoring, the missing-feature policy, the evidence and the response fields.
-- [ ] 5b.2 Extend `contracts/fraud/v1/evidence.proto` with the model evidence and regenerate the Go bindings.
-- [ ] 5b.3 Add the pure decision policy in `internal/domain`, with `rapid` properties.
-- [ ] 5b.4 Add the KServe adapter in `internal/adapters/kserve`, with `httptest` cases for every failure.
-- [ ] 5b.5 Wire the model call, its deadline and the evidence into `internal/application`, `internal/transport/grpc` and `cmd/fraud`, keeping the evidence hash of old assessments unchanged.
-- [ ] 5b.6 Add the chart values and environment for dev and prod, and the network allowance to the predictor.
-- [ ] 5b.7 Update the fraud decision, serving and observability docs.
+- [x] 5b.1 Add the `fraud-decision` delta spec: model scoring, the missing-feature policy, the evidence and the response fields.
+- [x] 5b.2 Extend `contracts/fraud/v1/evidence.proto` with the model evidence and regenerate the Go bindings.
+- [x] 5b.3 Add the pure decision policy in `internal/domain`, with `rapid` properties.
+- [x] 5b.4 Add the KServe adapter in `internal/adapters/kserve`, with `httptest` cases for every failure.
+- [x] 5b.5 Wire the model call, its deadline and the evidence into `internal/application`, `internal/transport/grpc` and `cmd/fraud`, keeping the evidence hash of old assessments unchanged.
+- [x] 5b.6 Add the chart values and environment for dev and prod, and the network allowance to the predictor.
+- [x] 5b.7 Update the fraud decision, serving and observability docs.
 
 ## 6. Local checks and hand-off
 

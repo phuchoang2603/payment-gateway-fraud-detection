@@ -28,6 +28,25 @@ message FeatureViewEvidence {
   google.protobuf.Timestamp read_at = 4;
   map<string, FeatureValue> values = 5;
 }
+enum ModelStatus {
+  MODEL_STATUS_UNSPECIFIED = 0;
+  MODEL_STATUS_AVAILABLE = 1;
+  MODEL_STATUS_TIMEOUT = 2;
+  MODEL_STATUS_ERROR = 3;
+}
+message ModelEvidence {
+  string name = 1;
+  string version = 2;
+  ModelStatus status = 3;
+  optional double score = 4;
+  google.protobuf.Timestamp read_at = 5;
+  string mode = 6;
+  double threshold = 7;
+  // The score met the missing-feature policy and could affect the decision.
+  bool enforced = 8;
+  // The score changed an approval into a decline.
+  bool declined = 9;
+}
 message AssessmentEvidence {
   uint32 schema_version = 1;
   string assessment_id = 2;
@@ -46,4 +65,5 @@ message AssessmentEvidence {
   string used_shipping_country = 17;
   optional string used_ip_country = 18;
   bool historical_features_shadow_only = 19;
+  optional ModelEvidence model = 20;
 }

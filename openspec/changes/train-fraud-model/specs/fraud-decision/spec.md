@@ -1,0 +1,85 @@
+## MODIFIED Requirements
+
+### Requirement: Independent bounded dependency semantics
+
+Historical-feature retrieval SHALL have a bounded deadline and explicit per-view statuses. Retrieval itself SHALL NOT change a decision; only the model policy in the requirement "Model scoring and its missing-feature policy" may use the retrieved values. It SHALL be enabled only where the online feature store runs.
+
+- **Clock.** Scoring SHALL capture the server decision time before retrieval, send it as scored_at, evaluate TTL and future timestamps against it, and persist the same value as EvaluatedAt. Client attempted_at SHALL NOT control freshness.
+- **Request.** Retrieval SHALL request the configured model feature service in one call, keyed by the integration, customer and payment-method natural keys and raw request-context fields in the same entities map. Feast SHALL compute model request features in request_features; rules SHALL retain their own logic.
+- **Statuses.** It SHALL record a status for each view:
+  - `missing` when the entity has no row;
+  - `expired` when the scoring time minus the view's event timestamp exceeds the view's TTL;
+  - `future` when the event timestamp is after the scoring time;
+  - `timeout` or `error` for dependency failures and malformed responses;
+  - `available` otherwise.
+- **Unknown values.** Values of a view that is not available SHALL be recorded as unknown, never as zero. Null values in an available view SHALL remain unknown.
+- **Evidence.** Evidence SHALL record the feature service name, each view's status, event timestamp, read time and values, including nullable booleans from request_features. Request features SHALL be available at the scoring time, independently of stored-view TTLs.
+
+Retrieval failure SHALL be recorded without changing the existing valid rules decision. A required dependency or assessment execution failure SHALL block authorization with an operational error, not fabricate a fraud decline or silently approve. Model enforcement is governed by the missing-feature policy in the requirement "Model scoring and its missing-feature policy".
+
+#### Scenario: Feast unavailable during shadow rollout
+
+- **WHEN** Feast times out while the rules evaluator remains healthy
+- **THEN** the rules result remains valid and evidence records historical features as unavailable
+
+#### Scenario: Assessment execution fails
+
+- **WHEN** the assessment cannot complete durably
+- **THEN** it records an operational error and returns no successful fraud decision
+
+#### Scenario: Dormant customer beyond the TTL
+
+- **WHEN** the customer's latest daily row is older than the daily view's TTL at the scoring time
+- **THEN** evidence records that view as expired with unknown values, and the rules decision is unchanged
+
+#### Scenario: Stream snapshot already counts the scored attempt
+
+- **WHEN** the stored stream snapshot's event timestamp is after the scored attempt's start
+- **THEN** evidence records that view as future and uses none of its values
+
+#### Scenario: Store-and-forward attempt
+
+- **WHEN** client attempted_at is minutes before the server decision time
+- **THEN** request features, TTL and future classification use the server time persisted as EvaluatedAt
+
+## ADDED Requirements
+
+### Requirement: Model scoring and its missing-feature policy
+
+When a model endpoint is configured, the service SHALL, after the feature read, send one named-feature instance to the registered model's KServe predictor within a bounded deadline, and SHALL record the model name, the version the predictor reports, the call's status, the score, the read time, the mode, the threshold, and whether the score was enforced and whether it changed the outcome. The model mode SHALL be `off` (no call), `shadow` (the call is recorded and never changes the decision) or `enforce`. The deadline for the feature read plus the model call SHALL NOT exceed the assessment deadline.
+
+- **Instance.** Its keys SHALL be the full feature names `<view>__<feature>` of every view whose status is `available`, with unknown values as `null`. Features of any other view SHALL be absent, which the predictor treats as missing.
+- **Statuses.** `available` when the predictor answers HTTP 200 with exactly one score between 0 and 1 and a non-empty model version; `timeout` when the deadline passes; `error` for any other failure or malformed answer.
+- **Missing-feature policy.** The score SHALL be enforced only when the mode is `enforce`, the status is `available`, and all of `customer_daily`, `payment_method_daily`, `customer_stream`, `payment_method_stream` and `request_features` are `available`. Otherwise the rules decision SHALL stand and the evidence SHALL record the score as not enforced.
+- **Decision.** When enforced, a score at or above the threshold on an attempt the rules approve SHALL decline it with the additional reason `MODEL_RISK_HIGH`. An enforced score SHALL NOT approve an attempt the rules decline. An enforced decision SHALL carry policy version `rules-v1+model`, and the response SHALL carry the model version, the feature service as the feature-set version, and the score. A decision that is not enforced SHALL carry policy version `rules-v1` and none of those fields.
+- **Replay.** A replayed assessment SHALL return the recorded result without calling the model, and evidence recorded before this requirement SHALL keep its recorded hash.
+
+#### Scenario: Shadow scoring
+
+- **WHEN** the mode is `shadow` and the predictor answers with a score
+- **THEN** the evidence records the score as not enforced and the decision and policy version are the rules'
+
+#### Scenario: Enforced decline
+
+- **WHEN** the mode is `enforce`, all five views are available, the rules approve and the score is at or above the threshold
+- **THEN** the attempt is declined with reason `MODEL_RISK_HIGH`, policy version `rules-v1+model`, and the model version and score in the response
+
+#### Scenario: Enforced score below the threshold
+
+- **WHEN** the mode is `enforce`, all five views are available and the score is below the threshold
+- **THEN** the rules approve, the policy version is `rules-v1+model`, and the score is in the response and the evidence
+
+#### Scenario: Incomplete features
+
+- **WHEN** the mode is `enforce` and a stream view is expired
+- **THEN** the rules decision stands, the policy version is `rules-v1`, and the evidence records the score as not enforced
+
+#### Scenario: Rules decline
+
+- **WHEN** a rule declines and the enforced score is below the threshold
+- **THEN** the attempt stays declined with the rules' reasons
+
+#### Scenario: Predictor unavailable
+
+- **WHEN** the predictor times out or answers malformed
+- **THEN** the rules decision stands and the evidence records status `timeout` or `error` and no score

@@ -41,7 +41,7 @@ The system has three layers on one shared Kubernetes platform: the payment gatew
 | Payments | Go; sessions, attempts, versioned commands, recovery | Versioned rows, append-only ledger, idempotency, effect intents | Deployed |
 | Processor simulator | Go; simulated sales with configurable latency and lost responses | Operation results | Deployed |
 | Notifier | Go; signed, deduplicated webhooks with retries | Inbox, deliveries, retry state | Deployed |
-| Fraud | Go; validates inputs, applies the rules policy, retrieves features in shadow mode | Policy and decision metadata, assessments | Deployed |
+| Fraud | Go; validates inputs, applies the rules policy, retrieves features, scores with the model (enforced on dev only) | Policy and decision metadata, assessments | Deployed |
 | Kafka, Debezium, Karapace | Outbox CDC, internal event transport, schema registry | Topics, registered schemas | Deployed |
 | Historical generator | Python; per-day synthetic history to object storage | Immutable datasets v18 (dev), v19 (prod) | Deployed |
 | Live simulator | Python; current-time gateway traffic and labels | None | Deployed, disabled |
@@ -145,7 +145,8 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Model | Notebook baseline from the offline store, training pipeline, single-GPU training | [Training](ml/training.md) | In progress: implemented, prod runs pending |
 | Versioning | Model registry and incremental data versions | [Training](ml/training.md) | In progress: implemented, prod runs pending |
 | Serving | KServe inference from the registry, rollback | [Serving](ml/serving.md) | In progress: implemented, prod runs pending |
-| Scoring | Go Fraud calling the model, autoscaling, A/B traffic split | [Serving](ml/serving.md) | Planned |
+| Scoring | Go Fraud calling the model under a missing-feature policy | [Serving](ml/serving.md) | Implemented, enforced on dev only |
+| Scoring, later | Autoscaling, A/B traffic split | [Serving](ml/serving.md) | Planned |
 | Drift | Periodic drift comparison and retraining trigger | [Training](ml/training.md) | Planned |
 
 ### LLM and agent platform
