@@ -8,6 +8,14 @@ NAME = "payment-risk"
 DEFAULT_URL = "http://model-registry-service.ml.svc.cluster.local:8080"
 
 
+def flatten(value):
+    if isinstance(value, (bool, str, float)):
+        return value
+    if isinstance(value, int):
+        return str(value) if abs(value) >= 10**9 else value
+    return json.dumps(value)
+
+
 class RegistryClient:
     def __init__(self, client=None, name=NAME):
         self.name = name
@@ -27,11 +35,7 @@ class RegistryClient:
         return f"v{max(numbers, default=0) + 1}"
 
     def register(self, version, uri, properties):
-        flat = {
-            key: value if isinstance(value, (str, int, float, bool)) else json.dumps(value)
-            for key, value in properties.items()
-            if value is not None
-        }
+        flat = {key: flatten(value) for key, value in properties.items() if value is not None}
         self.client.register_model(
             self.name,
             uri,
