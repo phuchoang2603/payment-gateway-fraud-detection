@@ -303,3 +303,15 @@ def test_decode_uses_client_attempt_time_and_ignores_other_payloads():
     with pytest.raises(Rejected) as garbage:
         decode(b"\xff\xff\xff")
     assert (garbage.value.kind, garbage.value.event_id) == ("undecodable", None)
+
+
+def test_replay_leaves_out_the_coverage_timers_but_still_reports_coverage_at_the_next_row():
+    bootstrap = ANCHOR - 10 * MINUTE
+    live = Entity("customer", "integration", "customer", bootstrap)
+    replay = Entity("customer", "integration", "customer", bootstrap, coverage_timers=False)
+    assert live.advance(ANCHOR) is not None and replay.advance(ANCHOR) is not None
+    assert live.next_timer == bootstrap + HOUR
+    assert replay.next_timer is None
+    coverage, values = replay.advance(bootstrap + DAY)
+    assert coverage == {5 * MINUTE: True, HOUR: True, DAY: True}
+    assert values["attempt_count_24h"] == 0

@@ -114,6 +114,10 @@ class Entity:
     previous: str = ""
     next_timer: int | None = None
     max_entries: int = 50_000
+    # A timer at each coverage boundary lets a silent entity publish the moment its window becomes complete. Every
+    # entity shares the same boundaries, so a replay that primes millions of entities in its lead-in day would fire
+    # them all at one instant. Replay turns them off: an entity's next row carries the coverage anyway.
+    coverage_timers: bool = True
 
     def add(self, packet):
         start = packet.fact
@@ -173,9 +177,11 @@ class Entity:
         }
         if self.view == "customer" and coverage[DAY]:
             values["distinct_devices_24h"] = len(self.devices)
-        boundaries = [
-            self.bootstrap + window for window in WINDOWS if self.bootstrap + window > now
-        ]
+        boundaries = (
+            [self.bootstrap + window for window in WINDOWS if self.bootstrap + window > now]
+            if self.coverage_timers
+            else []
+        )
         if self.pending:
             boundaries.append(self.pending[0][0])
         boundaries.extend(

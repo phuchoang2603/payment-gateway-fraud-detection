@@ -131,6 +131,7 @@ spec:
               # does not wait for the backlog to drain. A slow one is tolerated instead of failing the job: an expiry used
               # to restart the job from an old checkpoint, and the loop rewrote the same journal until the broker disk filled.
               execution.checkpointing.unaligned.enabled: 'true'
+              execution.checkpointing.unaligned.interruptible-timers.enabled: 'true'
               execution.checkpointing.tolerable-failed-checkpoints: '10'
               execution.checkpointing.min-pause: 2min
               execution.checkpointing.timeout: 10min

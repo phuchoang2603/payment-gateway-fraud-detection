@@ -339,6 +339,7 @@ class Aggregate(KeyedProcessFunction):
             entity,
             packet.bootstrap,
             max_entries=self.max_entries,
+            coverage_timers=not self.logical,
         )
         if self.logical:
             while state.next_timer is not None and state.next_timer <= packet.now:

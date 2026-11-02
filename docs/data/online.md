@@ -144,6 +144,7 @@ The aggregate stage takes about 75 records/s and spends about 12 ms on each. The
 
 | Problem | Setting | Result |
 |---|---|---|
+| All entities fire one timer when the lead-in day ends | Replay leaves out the per-entity coverage-flip timers (`Entity.coverage_timers`, live mode keeps them); `unaligned.interruptible-timers.enabled: true` | A unit stalled at 18–22%, about one day of events, which is where its lead-in day ends: every primed entity shares the timer at `bootstrap + 24h`, millions fire in one pass, and no checkpoint barrier gets through. An entity's next row carries its coverage anyway |
 | A slow checkpoint restarts the job | `unaligned.enabled: true`, `tolerable-failed-checkpoints: 10` | Checkpoints expired at the 10-minute timeout, each expiry restarted the job from an old checkpoint, and the loop re-wrote the journal until the 64 Gi broker volume filled; barriers now overtake queued data and one slow checkpoint is tolerated |
 | Heap fills with keyed state | `state.backend.type: rocksdb`, incremental checkpoints, TaskManager 5 GiB | The unit passes 1M events and keeps progressing |
 | Checkpoints compete with the work | `min-pause: 2min`, `timeout: 10min`, `buffer-debloat.enabled: true` | On the heap backend: 4 checkpoints in 11 min instead of 25 in 12, no restores |
