@@ -33,11 +33,11 @@ rules:
     verbs: [get, list, watch]
   - apiGroups: [""]
     resources: [secrets]
-    resourceNames: [mlpipeline-minio-artifact]
+    resourceNames: [mlpipeline-minio-artifact, ml-training-storage, ml-training-iceberg]
     verbs: [get]
   - apiGroups: [""]
     resources: [configmaps]
-    resourceNames: [kfp-launcher]
+    resourceNames: [kfp-launcher, kubeflow-trainer-public]
     verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -1,3 +1,4 @@
+import base64
 import os
 import time
 
@@ -5,7 +6,6 @@ from kubeflow.common.types import KubernetesBackendConfig
 from kubeflow.trainer import CustomTrainerContainer, TrainerClient
 from kubeflow.trainer.options import (
     ActiveDeadlineSeconds,
-    ContainerPatch,
     JobSetSpecPatch,
     JobSetTemplatePatch,
     JobSpecPatch,
@@ -122,14 +122,6 @@ def runtime_patch():
                                     template=PodTemplatePatch(
                                         spec=PodSpecPatch(
                                             service_account_name=SERVICE_ACCOUNT,
-                                            containers=[
-                                                ContainerPatch(
-                                                    name="node",
-                                                    env=[
-                                                        i for i in worker_env() if "valueFrom" in i
-                                                    ],
-                                                )
-                                            ],
                                         )
                                     )
                                 )
@@ -142,7 +134,19 @@ def runtime_patch():
     )
 
 
+def load_secrets():
+    missing = {name: secret for name, secret in SECRET_ENV.items() if name not in os.environ}
+    if not missing:
+        return
+    objects()
+    api = client.CoreV1Api()
+    for name, secret in missing.items():
+        data = api.read_namespaced_secret(secret, namespace()).data
+        os.environ[name] = base64.b64decode(data[name]).decode()
+
+
 def train_job(name, labels, image, command, args, timeout):
+    os.environ.setdefault("KUBEFLOW_SYSTEM_NAMESPACE", namespace())
     trainer = TrainerClient(KubernetesBackendConfig(namespace=namespace()))
     trainer.train(
         runtime=RUNTIME,

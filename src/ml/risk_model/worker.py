@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 from fraud_feast.lake import catalog, s3, write_json
 
+from risk_model import kube
 from risk_model.data import DatasetReader
 from risk_model.split import WindowSplitter
 from risk_model.train import RiskTrainer, environment
@@ -105,6 +106,7 @@ def parser():
 
 def main(argv=None):
     arguments = parser().parse_args(argv)
+    kube.load_secrets()
     arguments.function(arguments)
 
 
