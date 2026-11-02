@@ -1,8 +1,9 @@
 storageClass: gp3
 storage:
-  bucket: platform-prod-142737101504-us-east-1
-  endpoint: https://s3.us-east-1.amazonaws.com
-  pathStyle: false
+  bucket: talos-proxmox-prod-platform
+  endpoint: https://storage.googleapis.com
+  region: auto
+  pathStyle: true
 database:
   nodeSelector:
     karpenter.sh/capacity-type: on-demand

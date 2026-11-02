@@ -20,8 +20,9 @@ generator:
       memory: 12Gi
       ephemeral-storage: 20Gi
 config:
-  S3_ENDPOINT: https://s3.us-east-1.amazonaws.com
-  S3_PATH_STYLE: 'false'
+  S3_ENDPOINT: https://storage.googleapis.com
+  AWS_REGION: auto
+  S3_PATH_STYLE: 'true'
 # Workflow step pods stay off spot nodes: a reclaimed resource-step pod makes Argo submit a second SparkApplication.
 workflowNodeSelector:
   karpenter.sh/nodepool: aws-workers
@@ -82,28 +83,28 @@ spark:
 bronze:
   enabled: true
   datasetVersion: v19
-  historicalRoot: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19
-  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/dp1
+  historicalRoot: s3://talos-proxmox-prod-platform/datasets/payment-gateway/historical/v19
+  reportRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/dp1
   historicalProfile: large
   activeDeadlineSeconds: 14400
 analytics:
   enabled: true
   profile: large
-  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/analytics
+  reportRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/analytics
 maintenance:
   enabled: true
   profile: large
-  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/maintenance
+  reportRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/maintenance
 pipeline:
   enabled: true
   profile: gold
-  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/pipeline
+  reportRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/pipeline
 warehouseBenchmark:
   enabled: true
-  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/warehouse-benchmark
+  reportRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/warehouse-benchmark
 dashboards:
   enabled: true
-sparkEventLogDir: s3a://platform-prod-142737101504-us-east-1/runs/payment-gateway/spark-events/
+sparkEventLogDir: s3a://talos-proxmox-prod-platform/runs/payment-gateway/spark-events/
 catalog:
   connectors:
     object-storage:
@@ -111,9 +112,10 @@ catalog:
         serviceConnection:
           config:
             awsConfig:
-              endPointURL: https://s3.us-east-1.amazonaws.com
+              awsRegion: auto
+              endPointURL: https://storage.googleapis.com
             bucketNames:
-            - platform-prod-142737101504-us-east-1
+            - talos-proxmox-prod-platform
     flink:
       source:
         serviceConnection:
@@ -124,12 +126,12 @@ checks:
   nativeTimeoutSeconds: 4800
 features:
   enabled: true
-  registry: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/feast/registry.pb
-  reportRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/feast
+  registry: s3://talos-proxmox-prod-platform/runs/payment-gateway/feast/registry.pb
+  reportRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/feast
   epochs: history-v19,live-v19
   epoch: live-v19
   historyEpoch: history-v19
-  checkpointRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/flink/history
+  checkpointRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/flink/history
   # Burst nodes have 40Gi root disks, too small for Spark spill or a week's DuckDB sort.
   scratchClass: gp3
   replicationFactor: 1
@@ -152,4 +154,4 @@ features:
         cpu: '1'
         memory: 8Gi
   streaming:
-    storageRoot: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/flink
+    storageRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/flink

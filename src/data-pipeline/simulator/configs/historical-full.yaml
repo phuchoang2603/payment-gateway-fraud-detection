@@ -5,7 +5,7 @@ minimum_source_bytes: 100000000000
 schema_changes:
   - effective_at: "2026-04-30T00:00:00Z"
     version: 3
-output: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway
+output: s3://talos-proxmox-prod-platform/datasets/payment-gateway
 world:
   seed: 2603
   integration_id: 01234567-89ab-4cde-8fab-0123456789ab

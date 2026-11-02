@@ -1,12 +1,13 @@
 objectStorage:
-  endpoint: https://s3.us-east-1.amazonaws.com
-  pathStyle: false
-  bucket: platform-prod-142737101504-us-east-1
+  endpoint: https://storage.googleapis.com
+  region: auto
+  pathStyle: true
+  bucket: talos-proxmox-prod-platform
 simulator:
   enabled: true
   runAsJob: true
   config:
-    manifest: s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19/manifest.json
+    manifest: s3://talos-proxmox-prod-platform/datasets/payment-gateway/historical/v19/manifest.json
     manifest_sha256: 78ee54fe2a607ae0c128bc6765d89238f28d00270fca5ad48a8fed44fd0f8608
     duration_seconds: 604800
     payments_per_second: 0.03333333333333333
