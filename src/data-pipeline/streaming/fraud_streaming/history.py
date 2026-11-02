@@ -6,8 +6,8 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from confluent_kafka import Producer
-from confluent_kafka.admin import AdminClient, NewTopic
+from confluent_kafka import KafkaException, Producer, TopicPartition
+from confluent_kafka.admin import AdminClient, NewTopic, OffsetSpec
 from google.protobuf.json_format import ParseDict
 
 from fraud_streaming.wire import PaymentEvent
@@ -89,27 +89,52 @@ def run_name():
     return os.environ.get("STREAM_RUN") or os.environ["FEATURE_EPOCH"]
 
 
-def write_report(report):
+def report_store():
     location = urlsplit(os.environ["HISTORY_SEED_REPORT"])
-    body = json.dumps(report, sort_keys=True).encode()
-    if location.scheme == "s3":
-        import boto3
-        from botocore.config import Config
+    if location.scheme != "s3":
+        return None, location
+    import boto3
+    from botocore.config import Config
 
-        client = boto3.client(
-            "s3",
-            endpoint_url=os.environ["S3_ENDPOINT"],
-            config=Config(
-                s3={
-                    "addressing_style": "path"
-                    if os.environ.get("S3_PATH_STYLE") == "true"
-                    else "virtual"
-                }
-            ),
-        )
+    client = boto3.client(
+        "s3",
+        endpoint_url=os.environ["S3_ENDPOINT"],
+        config=Config(
+            s3={
+                "addressing_style": "path"
+                if os.environ.get("S3_PATH_STYLE") == "true"
+                else "virtual"
+            }
+        ),
+    )
+    return client, location
+
+
+def write_report(report):
+    client, location = report_store()
+    body = json.dumps(report, sort_keys=True).encode()
+    if client:
         client.put_object(Bucket=location.netloc, Key=location.path.lstrip("/"), Body=body)
     else:
         Path(os.environ["HISTORY_SEED_REPORT"]).write_bytes(body)
+
+
+def read_report():
+    client, location = report_store()
+    try:
+        if client:
+            body = client.get_object(Bucket=location.netloc, Key=location.path.lstrip("/"))[
+                "Body"
+            ].read()
+        else:
+            body = Path(os.environ["HISTORY_SEED_REPORT"]).read_bytes()
+    except FileNotFoundError:
+        return None
+    except Exception as error:
+        if getattr(error, "response", {}).get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+            return None
+        raise
+    return json.loads(body)
 
 
 # Bronze ordering for replay: event time, then the keys that make it total.
@@ -142,12 +167,13 @@ def ordered_rows(db, table, snapshot, columns, start, end):
         db.unregister("bronze")
 
 
-def reset_topics(*, delete_only=False):
+def reset_topics(*, delete_only=False, keep_inputs=False):
     """Delete the run's topics, then recreate them empty unless delete_only. The seed calls it first, so a retried
-    seed starts from empty topics and never appends a second copy of the unit."""
+    seed starts from empty topics and never appends a second copy of the unit. keep_inputs leaves the seeded input
+    and clock topics and resets only what a Flink run writes."""
     admin = AdminClient({"bootstrap.servers": os.environ["KAFKA_BROKERS"]})
     existing = set(admin.list_topics(timeout=30).topics)
-    names = topics(run_name())
+    names = topics(run_name())[2 if keep_inputs else 0 :]
     stale = [name for name in names if name in existing]
     if stale:
         for future in admin.delete_topics(stale, operation_timeout=30).values():
@@ -180,6 +206,32 @@ def reset_topics(*, delete_only=False):
         future.result()
 
 
+def seeded(start, end, snapshot):
+    """Whether a finished seed of this unit and Bronze snapshot is still in Kafka, untouched: the input and clock
+    topics end at the offsets its report recorded."""
+    report = read_report()
+    if not report or not report.get("done"):
+        return False
+    if (report["start"], report["end"], report["epoch"], report["snapshot"]) != (
+        start,
+        end,
+        os.environ["FEATURE_EPOCH"],
+        snapshot,
+    ):
+        return False
+    input_topic, clock_topic, *_ = topics(run_name())
+    admin = AdminClient({"bootstrap.servers": os.environ["KAFKA_BROKERS"]})
+    try:
+        latest = admin.list_offsets(
+            {TopicPartition(name, 0): OffsetSpec.latest() for name in (input_topic, clock_topic)},
+            request_timeout=30,
+        )
+        ends = {partition.topic: future.result().offset for partition, future in latest.items()}
+    except KafkaException:
+        return False
+    return ends[input_topic] == report["input_end"] and ends[clock_topic] == report["clock_end"]
+
+
 def seed(start, end):
     import duckdb
 
@@ -188,11 +240,14 @@ def seed(start, end):
         raise ValueError("history start must precede end")
     epoch = os.environ["FEATURE_EPOCH"]
     input_topic, clock_topic, *_ = topics(run_name())
+    table = lake().load_table("bronze.payment_events")
+    snapshot = table.current_snapshot().snapshot_id
+    if seeded(start, end, snapshot):
+        reset_topics(keep_inputs=True)
+        return
     reset_topics()
     bootstrap = datetime.combine(first - timedelta(days=1), datetime.min.time(), UTC)
     until = datetime.combine(last, datetime.min.time(), UTC)
-    table = lake().load_table("bronze.payment_events")
-    snapshot = table.current_snapshot().snapshot_id
     wanted = {*PaymentEvent.DESCRIPTOR.fields_by_name, *PROVENANCE}
     columns = tuple(field.name for field in table.schema().fields if field.name in wanted)
     db = duckdb.connect()

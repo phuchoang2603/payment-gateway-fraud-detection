@@ -7,7 +7,7 @@ pytest.importorskip("duckdb")
 pytest.importorskip("pyiceberg")
 
 import pyarrow as pa  # noqa: E402
-from confluent_kafka import Consumer, KafkaError, TopicPartition  # noqa: E402
+from confluent_kafka import Consumer, KafkaError, Producer, TopicPartition  # noqa: E402
 from pyiceberg.catalog import load_catalog  # noqa: E402
 from test_history import bronze  # noqa: E402
 
@@ -123,3 +123,62 @@ def test_seed_writes_the_unit_in_replay_order_between_bootstrap_and_final_clocks
     assert clocks[0]["clock_us"] == int((FIRST - timedelta(days=1)).timestamp() * 1_000_000)
     assert clocks[1]["clock_us"] > recorded[-1]
     assert report["done"] and report["input_end"] == 5 and report["clock_end"] == 2
+
+
+def seed_env(monkeypatch, tmp_path, kafka, run):
+    monkeypatch.setenv("FEATURE_EPOCH", "history-ci")
+    monkeypatch.setenv("STREAM_RUN", run)
+    monkeypatch.setenv("KAFKA_BROKERS", kafka)
+    monkeypatch.setenv("HISTORY_SEED_REPORT", str(tmp_path / "seed.json"))
+
+
+def reading_bronze(monkeypatch):
+    reads = []
+    real = history.ordered_rows
+    monkeypatch.setattr(
+        history,
+        "ordered_rows",
+        lambda *args, **kwargs: reads.append(args[-2:]) or real(*args, **kwargs),
+    )
+    return reads
+
+
+def test_a_finished_seed_is_reused_and_only_the_run_outputs_are_reset(
+    kafka, bronze_table, tmp_path, monkeypatch
+):
+    seed_env(monkeypatch, tmp_path, kafka, "history-ci-reuse")
+    history.seed("2025-09-01", "2025-09-02")
+    before = [m.value() for m in consume(kafka, "payments.events.history-ci-reuse")]
+    producer = Producer({"bootstrap.servers": kafka})
+    producer.produce(
+        "fraud.feature-updates.v2.history-ci-reuse", value=b"left by an earlier Flink run"
+    )
+    producer.flush(30)
+    reads = reading_bronze(monkeypatch)
+
+    history.seed("2025-09-01", "2025-09-02")
+
+    assert reads == []
+    assert [m.value() for m in consume(kafka, "payments.events.history-ci-reuse")] == before
+    assert consume(kafka, "fraud.feature-updates.v2.history-ci-reuse") == []
+
+
+@pytest.mark.parametrize("change", ["input", "range"])
+def test_a_seed_is_redone_when_its_topics_or_range_changed(
+    kafka, bronze_table, tmp_path, monkeypatch, change
+):
+    seed_env(monkeypatch, tmp_path, kafka, f"history-ci-redo-{change}")
+    history.seed("2025-09-01", "2025-09-02")
+    if change == "input":
+        producer = Producer({"bootstrap.servers": kafka})
+        producer.produce(f"payments.events.history-ci-redo-{change}", value=b"extra")
+        producer.flush(30)
+    reads = reading_bronze(monkeypatch)
+
+    history.seed("2025-09-01", "2025-09-02" if change == "input" else "2025-09-03")
+
+    assert reads
+    keys = [m.key() for m in consume(kafka, f"payments.events.history-ci-redo-{change}")]
+    assert b"pay-0" in keys and b"extra" not in [
+        m.value() for m in consume(kafka, f"payments.events.history-ci-redo-{change}")
+    ]
