@@ -26,3 +26,6 @@ catalog:
             - platform-dev
 features:
   enabled: true
+  streaming:
+    # Suspended so a history replay and a training run fit on dev-server1 beside it.
+    liveState: suspended
