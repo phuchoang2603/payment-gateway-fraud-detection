@@ -161,7 +161,13 @@ def test_the_namespace_in_every_query_follows_the_configuration(monkeypatch):
 
     def responses(method, path, count):
         seen.append((method, path))
-        return {"pipelines": [], "experiments": [], "recurringRuns": [], "experiment_id": "e"}
+        return {
+            "pipelines": [],
+            "experiments": [],
+            "recurringRuns": [],
+            "experiment_id": "e",
+            "recurring_run_id": "r",
+        }
 
     client, _ = pipelines(responses)
     client.experiment()

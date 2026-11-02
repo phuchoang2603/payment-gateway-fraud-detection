@@ -23,6 +23,8 @@ GitHub Actions validates pull requests and `main`; successful checks gate image 
 | Property-based idempotency | [Knowledge API](../../src/llm/rag_serving/tests/test_service.py): arbitrary repeated chunk reads; [Gold ranges](../../src/data-pipeline/batch/tests/gold/test_gold_ranges.py): reruns and range splits; [payment lifecycle](../../src/payment-gateway/payments/internal/domain/payment_property_test.go): arbitrary command sequences preserve state invariants |
 | API throughput and latency | [Knowledge API Locust report](../llm/loadtest/knowledge-api-locust.html): 140.31 req/s, p95 310 ms, zero failures (2026-10-30); Feast retrieval load-test evidence pending |
 
+A Python project can set a minimum total coverage with `coverage-fail-under` under `[tool.ci]` in its `pyproject.toml`; `scripts/ci-checks.sh` passes it to pytest-cov. `src/ml` sets 90 (97.9% line and branch combined when set).
+
 ## Coverage and mutation results
 
 Coverage from CI (`python-test-evidence-*` and `go-test-evidence-*` artifacts), 2026-11-01; API rows refreshed on 2026-11-03. Go counts only handwritten code; sqlc and protobuf output is excluded.
