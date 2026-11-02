@@ -45,15 +45,15 @@ A platform admission policy rejects deleting or terminating an active workflow i
 
 | Workload | Prod placement and sizing |
 |---|---|
-| Silver and Bronze (`large`) | Spot `aws-cpu-burst`: 11 executors × 3 cores = 33 executor cores; each 9 GiB heap + 3 GiB overhead, 24 GiB ephemeral storage |
+| Silver and Bronze (`large`) | Spot pool (`talos.dev/nodepool: spot`): 11 executors × 3 cores = 33 executor cores; each 9 GiB heap + 3 GiB overhead, 24 GiB ephemeral storage |
 | Gold (`gold`) | Same executors at 7 GiB heap + 5 GiB overhead: Gold runs no Python, but its native memory outgrew 3 GiB in May 2026 |
-| Drivers | On-demand `aws-workers` (three m6a.xlarge since 2026-11-01); 500m request, 4 GiB + 1.5 GiB for `large`, 2 GiB + 1.5 GiB for `gold` |
+| Drivers | On-demand `cpu` pool (three `e2-standard-4` workers); 500m request, 4 GiB + 1.5 GiB for `large`, 2 GiB + 1.5 GiB for `gold` |
 | Every executor | `MALLOC_ARENA_MAX=2`, graceful decommission, failure exclusion, 10 Argo retries |
 | Shuffle | 1,024 partitions, AQE coalescing with 128 MB advisory size; large v19 shuffles require more than 3–4× core count |
 | Kafka mode | One 3-core executor, three shuffle partitions matching the topics |
 | Argo steps / SQL checks | Steps on on-demand workers; SQL executes on shared ClickHouse |
 
-The spot pool is capped at 12 nodes / 48 vCPU / 192 GiB. Allowed sizes are `large` and `xlarge`; an xlarge has about 3,270m pod CPU after reservations, so one 3-core executor fits. A 16 GiB node fits the executor memory; 32 GiB instances can hit the pool memory cap early. Keep generator and Spark jobs sequential. Spark retains graceful decommission and its bounded 10-retry policy.
+The spot pool is capped at 12 nodes / 48 vCPU / 192 GiB. Its only machine type is `e2-standard-4`, which has about 3,270m pod CPU after reservations, so one 3-core executor fits, and 16 GiB fits the executor memory. Keep generator and Spark jobs sequential. Spark retains graceful decommission and its bounded 10-retry policy.
 
 ## Data products and contracts
 

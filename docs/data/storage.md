@@ -7,7 +7,7 @@ Three storage roles: immutable source files in object storage, an Iceberg lakeho
 | Environment | Bucket | Engine |
 |---|---|---|
 | Dev | `platform-dev` | MinIO |
-| Prod | `platform-prod-142737101504-us-east-1` | AWS S3, versioned and private |
+| Prod | `talos-proxmox-prod-platform` | GCS through its S3-compatible XML API, versioned and private |
 
 | Prefix | Contents |
 |---|---|
@@ -17,7 +17,7 @@ Three storage roles: immutable source files in object storage, an Iceberg lakeho
 | `lakehouse/` | Iceberg table data, through the Polaris catalog |
 | `artifacts/` | Kubeflow artifacts, owned by the platform |
 
-Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT`, `S3_PATH_STYLE`, `AWS_REGION` and an `output` or root URL. Never tag active Flink state with `expire=true`, which enables the platform's finished-run lifecycle rule.
+Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT`, `S3_PATH_STYLE`, `AWS_REGION` and an `output` or root URL. Prod uses the S3 subset that GCS supports: endpoint `https://storage.googleapis.com`, signing region `auto`, path-style addressing and no object tagging. The platform expires no run objects, so finished runs are cleaned up by the workload that owns them. Clients compute checksums only when an operation requires them, and the generator's create-only writes send `x-goog-if-generation-match: 0` where S3 takes `If-None-Match: *`.
 
 ## Lakehouse
 

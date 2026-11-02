@@ -1,17 +1,19 @@
 # Infrastructure
 
-Two Talos Kubernetes clusters run the same application charts. They are provisioned and operated from the platform repository, [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox), with OpenTofu (Terraform-compatible) for Proxmox, AWS and cluster bootstrap, and Argo CD for platform components. This repository holds no Terraform stack or cloud credentials.
+Two Talos Kubernetes clusters run the same application charts. They are provisioned and operated from the platform repository, [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox), with OpenTofu (Terraform-compatible) for Proxmox, GCP and cluster bootstrap, and Argo CD for platform components. This repository holds no Terraform stack or cloud credentials.
+
+> **Migration note:** Production moved from AWS to GCP on 2026-11-02. The AWS account could no longer be used, so prod now runs on the GCP free-trial credit. Evidence and run records captured on AWS before that date are left as recorded.
 
 | | Dev | Prod |
 |---|---|---|
-| Infrastructure | Proxmox VMs: one control plane and two workers | AWS `us-east-1`, single availability zone |
-| Baseline nodes | `dev-server1` (control plane), `dev-server2`, `dev-server3` | One On-Demand `m6a.xlarge` control plane and one On-Demand `m6a.xlarge` worker |
-| Elastic capacity | None | Karpenter `aws-cpu-burst` Spot pool, up to 12 nodes / 48 vCPU / 192 GiB, large and xlarge instances, consolidated after 5 minutes |
-| GPU | One RTX 5060 Ti (16 GiB) on `dev-server1`, shared by the chat and embedding servers through one DRA claim | Karpenter `aws-gpu-training` Spot pool restricted to `g6.xlarge` (one L4); the LLM platform is disabled in prod until it is launched |
-| Volumes | `local-path` | Encrypted gp3 EBS |
-| Object storage | MinIO `platform-dev` | Private versioned S3 |
+| Infrastructure | Proxmox VMs: one control plane and two workers | GCP project `talos-proxmox`, `us-central1-a`, single zone |
+| Baseline nodes | `dev-server1` (control plane), `dev-server2`, `dev-server3` | One On-Demand `e2-standard-4` control plane and three On-Demand `e2-standard-4` workers (`cpu` pool) |
+| Elastic capacity | None | Cluster Autoscaler over a GCE Spot group (`spot` pool) of `e2-standard-4` workers, 0 to 12 nodes / 48 vCPU / 192 GiB |
+| GPU | One RTX 5060 Ti (16 GiB) on `dev-server1`, shared by the chat and embedding servers through one DRA claim | None; the platform has no cloud GPU pool, so the LLM platform is disabled in prod |
+| Volumes | `local-path` | GCE persistent disks (`pd-balanced`) through the default `cloud-block` StorageClass |
+| Object storage | MinIO `platform-dev` | GCS bucket `talos-proxmox-prod-platform` through the S3-compatible XML API |
 
-The full-scale generator uses the burst pool: one shard per Spot xlarge node, selected by `karpenter.sh/nodepool: aws-cpu-burst` and `karpenter.sh/capacity-type: spot` in the prod values. Both clusters have one control plane and are not highly available.
+The full-scale generator uses the Spot pool: one shard per Spot node, selected by `talos.dev/nodepool: spot` in the prod values. Both clusters have one control plane and are not highly available.
 
 ## Platform and application ownership
 

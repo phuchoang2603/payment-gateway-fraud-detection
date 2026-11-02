@@ -151,7 +151,7 @@ The aggregate stage takes about 75 records/s and spends about 12 ms on each. The
 | One job cannot scale out | 4-day units, 24 at once, two per 4-vCPU burst node | 23 units replay together instead of 14 |
 | Slow Python state access | `python.state.cache-size: 20000` (default 1,000) | Not measured on its own |
 | Producer outruns the broker | The seed's bounded buffer, one day per sort | The seed stays inside its memory limit |
-| Spot or autoscaler evicts a job | `karpenter.sh/do-not-disrupt` on Flink pods | No more restarts from "Underutilized" evictions |
+| Spot or autoscaler evicts a job | `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` on Flink pods | No more restarts from scale-down evictions |
 | Repeat seed passes | Seed report keyed by unit and checked against topic offsets | A restarted run keeps its seeded topics |
 
 **After** (4-day unit `20260915` on RocksDB, 50 minutes in)

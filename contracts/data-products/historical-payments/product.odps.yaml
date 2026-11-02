@@ -18,7 +18,7 @@ team:
 tags: [synthetic, source, payments]
 customProperties:
   - property: endpoint
-    value: Environment-selected MinIO or AWS S3 endpoint
+    value: Environment-selected MinIO or GCS endpoint
   - property: locationTemplate
     value: s3://{bucket}/datasets/payment-gateway/historical/{dataset_version}/
   - property: completionMarker
