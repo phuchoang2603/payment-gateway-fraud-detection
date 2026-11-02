@@ -16,8 +16,6 @@ kind: Notebook
 metadata:
   name: fraud-explore
   namespace: {{ .Values.namespace }}
-  annotations:
-    kubeflow-resource-stopped: "true"
 spec:
   template:
     spec:
