@@ -30,11 +30,9 @@ def step(name, flags, outputs=()):
     return dsl.ContainerSpec(IMAGE, ["python", "-m", "risk_model.steps"], args)
 
 
-RUN = {"run-id": dsl.PIPELINE_JOB_ID_PLACEHOLDER}
-
-
 @dsl.container_component
 def plan_examples(
+    run_id: str,
     train: str,
     validation: str,
     test: str,
@@ -50,7 +48,7 @@ def plan_examples(
             "test": test,
             "cutoff": cutoff,
             "snapshot": existing_snapshot,
-            **RUN,
+            "run-id": run_id,
         },
         [("chunks", chunks)],
     )
@@ -63,6 +61,7 @@ def stage_examples(chunk: str, cutoff: str, rows: dsl.OutputPath(str)):
 
 @dsl.container_component
 def assemble_examples(
+    run_id: str,
     train: str,
     validation: str,
     test: str,
@@ -78,30 +77,37 @@ def assemble_examples(
             "test": test,
             "cutoff": cutoff,
             "snapshot": existing_snapshot,
-            **RUN,
+            "run-id": run_id,
         },
         [("snapshot", snapshot)],
     )
 
 
 @dsl.container_component
-def check_examples(snapshot: str, report: dsl.OutputPath(str)):
-    return step("check_examples", {"snapshot": snapshot, **RUN}, [("report", report)])
+def check_examples(run_id: str, snapshot: str, report: dsl.OutputPath(str)):
+    return step("check_examples", {"snapshot": snapshot, "run-id": run_id}, [("report", report)])
 
 
 @dsl.container_component
 def split_windows(
-    snapshot: str, train: str, validation: str, test: str, report: dsl.OutputPath(str)
+    run_id: str, snapshot: str, train: str, validation: str, test: str, report: dsl.OutputPath(str)
 ):
     return step(
         "split_windows",
-        {"snapshot": snapshot, "train": train, "validation": validation, "test": test, **RUN},
+        {
+            "snapshot": snapshot,
+            "train": train,
+            "validation": validation,
+            "test": test,
+            "run-id": run_id,
+        },
         [("report", report)],
     )
 
 
 @dsl.container_component
 def tune_params(
+    run_id: str,
     snapshot: str,
     train: str,
     validation: str,
@@ -118,7 +124,7 @@ def tune_params(
             "validation": validation,
             "test": test,
             "trials": trials,
-            **RUN,
+            "run-id": run_id,
         },
         [("params", params), ("experiment", experiment)],
     )
@@ -126,6 +132,7 @@ def tune_params(
 
 @dsl.container_component
 def fit_on_gpu(
+    run_id: str,
     snapshot: str,
     train: str,
     validation: str,
@@ -142,7 +149,7 @@ def fit_on_gpu(
             "validation": validation,
             "test": test,
             "params": params,
-            **RUN,
+            "run-id": run_id,
         },
         [("model_uri", model_uri), ("fit", fit)],
     )
@@ -150,6 +157,7 @@ def fit_on_gpu(
 
 @dsl.container_component
 def gate(
+    run_id: str,
     snapshot: str,
     train: str,
     validation: str,
@@ -168,7 +176,7 @@ def gate(
             "validation": validation,
             "test": test,
             "model-uri": model_uri,
-            **RUN,
+            "run-id": run_id,
         },
         [("passed", passed), ("report", report), ("summary", summary), ("pr_curve", pr_curve.path)],
     )
@@ -190,6 +198,7 @@ def publish_metrics(summary: str, metrics: dsl.Output[dsl.Metrics]):
 
 @dsl.container_component
 def record_version(
+    run_id: str,
     snapshot: str,
     model_uri: str,
     report: str,
@@ -207,15 +216,15 @@ def record_version(
             "fit": fit,
             "params": params,
             "experiment": experiment,
-            **RUN,
+            "run-id": run_id,
         },
         [("version", version)],
     )
 
 
 @dsl.container_component
-def roll_out(version: str, deployed: dsl.OutputPath(str)):
-    return step("roll_out", {"version": version, **RUN}, [("version", deployed)])
+def roll_out(run_id: str, version: str, deployed: dsl.OutputPath(str)):
+    return step("roll_out", {"version": version, "run-id": run_id}, [("version", deployed)])
 
 
 def configure(task, *, nodes, memory="1G", cpu="250m", storage=True, retries=0):

@@ -17,6 +17,8 @@ components:
           parameterType: STRING
         existing_snapshot:
           parameterType: STRING
+        run_id:
+          parameterType: STRING
         test:
           parameterType: STRING
         train:
@@ -31,6 +33,8 @@ components:
     executorLabel: exec-check-examples
     inputDefinitions:
       parameters:
+        run_id:
+          parameterType: STRING
         snapshot:
           parameterType: STRING
     outputDefinitions:
@@ -56,6 +60,9 @@ components:
                 componentInputParameter: pipelinechannel--tune-params-params
               report:
                 componentInputParameter: pipelinechannel--gate-report
+              run_id:
+                runtimeValue:
+                  constant: '{{$.pipeline_job_uuid}}'
               snapshot:
                 componentInputParameter: pipelinechannel--assemble-examples-snapshot
           taskInfo:
@@ -68,6 +75,9 @@ components:
           - record-version
           inputs:
             parameters:
+              run_id:
+                runtimeValue:
+                  constant: '{{$.pipeline_job_uuid}}'
               version:
                 taskOutputParameter:
                   outputParameterKey: version
@@ -95,6 +105,8 @@ components:
     inputDefinitions:
       parameters:
         params:
+          parameterType: STRING
+        run_id:
           parameterType: STRING
         snapshot:
           parameterType: STRING
@@ -144,6 +156,8 @@ components:
       parameters:
         model_uri:
           parameterType: STRING
+        run_id:
+          parameterType: STRING
         snapshot:
           parameterType: STRING
         test:
@@ -172,6 +186,8 @@ components:
         cutoff:
           parameterType: STRING
         existing_snapshot:
+          parameterType: STRING
+        run_id:
           parameterType: STRING
         test:
           parameterType: STRING
@@ -209,6 +225,8 @@ components:
           parameterType: STRING
         report:
           parameterType: STRING
+        run_id:
+          parameterType: STRING
         snapshot:
           parameterType: STRING
     outputDefinitions:
@@ -219,6 +237,8 @@ components:
     executorLabel: exec-roll-out
     inputDefinitions:
       parameters:
+        run_id:
+          parameterType: STRING
         version:
           parameterType: STRING
     outputDefinitions:
@@ -229,6 +249,8 @@ components:
     executorLabel: exec-split-windows
     inputDefinitions:
       parameters:
+        run_id:
+          parameterType: STRING
         snapshot:
           parameterType: STRING
         test:
@@ -257,6 +279,8 @@ components:
     executorLabel: exec-tune-params
     inputDefinitions:
       parameters:
+        run_id:
+          parameterType: STRING
         snapshot:
           parameterType: STRING
         test:
@@ -290,7 +314,7 @@ deploymentSpec:
         - --snapshot
         - '{{$.inputs.parameters[''existing_snapshot'']}}'
         - --run-id
-        - '{{$.pipeline_job_uuid}}'
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - snapshot
         - '{{$.outputs.parameters[''snapshot''].output_file}}'
@@ -320,7 +344,7 @@ deploymentSpec:
         - --snapshot
         - '{{$.inputs.parameters[''snapshot'']}}'
         - --run-id
-        - '{{$.pipeline_job_uuid}}'
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - report
         - '{{$.outputs.parameters[''report''].output_file}}'
@@ -351,7 +375,7 @@ deploymentSpec:
         - --params
         - '{{$.inputs.parameters[''params'']}}'
         - --run-id
-        - '{{$.pipeline_job_uuid}}'
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - model_uri
         - '{{$.outputs.parameters[''model_uri''].output_file}}'
@@ -385,7 +409,7 @@ deploymentSpec:
         - --model-uri
         - '{{$.inputs.parameters[''model_uri'']}}'
         - --run-id
-        - '{{$.pipeline_job_uuid}}'
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - passed
         - '{{$.outputs.parameters[''passed''].output_file}}'
@@ -425,7 +449,7 @@ deploymentSpec:
         - --snapshot
         - '{{$.inputs.parameters[''existing_snapshot'']}}'
         - --run-id
-        - '{{$.pipeline_job_uuid}}'
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - chunks
         - '{{$.outputs.parameters[''chunks''].output_file}}'
@@ -509,7 +533,7 @@ deploymentSpec:
         - --experiment
         - '{{$.inputs.parameters[''experiment'']}}'
         - --run-id
-        - '{{$.pipeline_job_uuid}}'
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - version
         - '{{$.outputs.parameters[''version''].output_file}}'
@@ -532,7 +556,7 @@ deploymentSpec:
         - --version
         - '{{$.inputs.parameters[''version'']}}'
         - --run-id
-        - '{{$.pipeline_job_uuid}}'
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - version
         - '{{$.outputs.parameters[''deployed''].output_file}}'
@@ -561,7 +585,7 @@ deploymentSpec:
         - --test
         - '{{$.inputs.parameters[''test'']}}'
         - --run-id
-        - '{{$.pipeline_job_uuid}}'
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - report
         - '{{$.outputs.parameters[''report''].output_file}}'
@@ -622,7 +646,7 @@ deploymentSpec:
         - --trials
         - '{{$.inputs.parameters[''trials'']}}'
         - --run-id
-        - '{{$.pipeline_job_uuid}}'
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - params
         - '{{$.outputs.parameters[''params''].output_file}}'
@@ -660,6 +684,9 @@ root:
               componentInputParameter: cutoff
             existing_snapshot:
               componentInputParameter: training_set_snapshot
+            run_id:
+              runtimeValue:
+                constant: '{{$.pipeline_job_uuid}}'
             test:
               componentInputParameter: test
             train:
@@ -681,6 +708,9 @@ root:
         - assemble-examples
         inputs:
           parameters:
+            run_id:
+              runtimeValue:
+                constant: '{{$.pipeline_job_uuid}}'
             snapshot:
               taskOutputParameter:
                 outputParameterKey: snapshot
@@ -747,6 +777,9 @@ root:
               taskOutputParameter:
                 outputParameterKey: params
                 producerTask: tune-params
+            run_id:
+              runtimeValue:
+                constant: '{{$.pipeline_job_uuid}}'
             snapshot:
               taskOutputParameter:
                 outputParameterKey: snapshot
@@ -793,6 +826,9 @@ root:
               taskOutputParameter:
                 outputParameterKey: model_uri
                 producerTask: fit-on-gpu
+            run_id:
+              runtimeValue:
+                constant: '{{$.pipeline_job_uuid}}'
             snapshot:
               taskOutputParameter:
                 outputParameterKey: snapshot
@@ -815,6 +851,9 @@ root:
               componentInputParameter: cutoff
             existing_snapshot:
               componentInputParameter: training_set_snapshot
+            run_id:
+              runtimeValue:
+                constant: '{{$.pipeline_job_uuid}}'
             test:
               componentInputParameter: test
             train:
@@ -851,6 +890,9 @@ root:
         - check-examples
         inputs:
           parameters:
+            run_id:
+              runtimeValue:
+                constant: '{{$.pipeline_job_uuid}}'
             snapshot:
               taskOutputParameter:
                 outputParameterKey: snapshot
@@ -877,6 +919,9 @@ root:
         - split-windows
         inputs:
           parameters:
+            run_id:
+              runtimeValue:
+                constant: '{{$.pipeline_job_uuid}}'
             snapshot:
               taskOutputParameter:
                 outputParameterKey: snapshot

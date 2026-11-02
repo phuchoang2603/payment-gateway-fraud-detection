@@ -8,6 +8,8 @@ components:
     executorLabel: exec-roll-out
     inputDefinitions:
       parameters:
+        run_id:
+          parameterType: STRING
         version:
           parameterType: STRING
     outputDefinitions:
@@ -23,7 +25,7 @@ deploymentSpec:
         - --version
         - '{{$.inputs.parameters[''version'']}}'
         - --run-id
-        - '{{$.pipeline_job_uuid}}'
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - version
         - '{{$.outputs.parameters[''deployed''].output_file}}'
@@ -52,6 +54,9 @@ root:
           name: comp-roll-out
         inputs:
           parameters:
+            run_id:
+              runtimeValue:
+                constant: '{{$.pipeline_job_uuid}}'
             version:
               componentInputParameter: version
         taskInfo:

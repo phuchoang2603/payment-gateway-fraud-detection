@@ -40,6 +40,7 @@ def payment_risk_training(environment):
 
         plan = spark_task(
             plan_examples(
+                run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER,
                 train=train,
                 validation=validation,
                 test=test,
@@ -56,6 +57,7 @@ def payment_risk_training(environment):
             )
         examples = spark_task(
             assemble_examples(
+                run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER,
                 train=train,
                 validation=validation,
                 test=test,
@@ -67,14 +69,20 @@ def payment_risk_training(environment):
         snapshot = examples.outputs["snapshot"]
 
         checked = configure(
-            check_examples(snapshot=snapshot),
+            check_examples(run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER, snapshot=snapshot),
             nodes=environment.nodes,
             cpu="1",
             memory=environment.light_memory,
             retries=2,
         )
         split = configure(
-            split_windows(snapshot=snapshot, train=train, validation=validation, test=test),
+            split_windows(
+                run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER,
+                snapshot=snapshot,
+                train=train,
+                validation=validation,
+                test=test,
+            ),
             nodes=environment.nodes,
             cpu="1",
             memory=environment.light_memory,
@@ -83,6 +91,7 @@ def payment_risk_training(environment):
 
         tuned = configure(
             tune_params(
+                run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER,
                 snapshot=snapshot,
                 train=train,
                 validation=validation,
@@ -96,13 +105,19 @@ def payment_risk_training(environment):
 
         fitted = configure(
             fit_on_gpu(
-                snapshot=snapshot, train=train, validation=validation, test=test, params=params
+                run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER,
+                snapshot=snapshot,
+                train=train,
+                validation=validation,
+                test=test,
+                params=params,
             ),
             nodes=environment.nodes,
             storage=False,
         )
         verdict = configure(
             gate(
+                run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER,
                 snapshot=snapshot,
                 train=train,
                 validation=validation,
@@ -121,6 +136,7 @@ def payment_risk_training(environment):
         with dsl.If(verdict.outputs["passed"] == "true", name="passed"):
             registered = configure(
                 record_version(
+                    run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER,
                     snapshot=snapshot,
                     model_uri=fitted.outputs["model_uri"],
                     report=verdict.outputs["report"],
@@ -131,7 +147,9 @@ def payment_risk_training(environment):
                 nodes=environment.nodes,
             )
             configure(
-                roll_out(version=registered.outputs["version"]),
+                roll_out(
+                    run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER, version=registered.outputs["version"]
+                ),
                 nodes=environment.nodes,
                 storage=False,
             )
