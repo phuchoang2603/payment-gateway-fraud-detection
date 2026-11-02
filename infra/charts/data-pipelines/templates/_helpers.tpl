@@ -447,7 +447,7 @@ spec:
     podTemplateSpec:
       metadata:
         annotations:
-          karpenter.sh/do-not-disrupt: "true"
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
         labels:
           {{- include "data-pipelines.kafkaClientLabels" .root | nindent 10 }}
           dp-product: {{ .product }}
@@ -477,7 +477,7 @@ spec:
     podTemplateSpec:
       metadata:
         annotations:
-          karpenter.sh/do-not-disrupt: "true"
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
         labels:
           {{- include "data-pipelines.kafkaClientLabels" .root | nindent 10 }}
           dp-product: {{ .product }}

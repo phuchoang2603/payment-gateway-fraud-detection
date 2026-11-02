@@ -21,7 +21,7 @@ spec:
   activeDeadlineSeconds: {{ .Values.pipeline.activeDeadlineSeconds }}
   podMetadata:
     annotations:
-      karpenter.sh/do-not-disrupt: "true"
+      cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     labels:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
   templates:
@@ -205,7 +205,7 @@ spec:
           value: {{ .Values.bronze.datasetVersion | quote }}
     podMetadata:
       annotations:
-        karpenter.sh/do-not-disrupt: "true"
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
       labels:
         {{- include "data-pipelines.kafkaClientLabels" $ | nindent 8 }}
     templates:
@@ -246,7 +246,7 @@ spec:
       - name: end
   podMetadata:
     annotations:
-      karpenter.sh/do-not-disrupt: "true"
+      cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     labels:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
   templates:

@@ -22,7 +22,7 @@ spec:
   activeDeadlineSeconds: {{ .Values.bronze.activeDeadlineSeconds }}
   podMetadata:
     annotations:
-      karpenter.sh/do-not-disrupt: "true"
+      cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     labels:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
       dp-product: bronze-payments

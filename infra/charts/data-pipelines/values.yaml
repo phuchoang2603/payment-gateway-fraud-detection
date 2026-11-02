@@ -57,7 +57,7 @@ spark:
   retry:
     limit: 2
     policy: OnError
-  # Executor sizes for the aws-cpu-burst spot node (aws-cpu root volume 40Gi, allocatable about 3.5 vCPU and 14 GiB).
+  # Executor sizes for a prod spot node (e2-standard-4, 40Gi boot disk, allocatable about 3.5 vCPU and 14 GiB).
   # Each profile names the executor count and shuffle partitions; `dev` fits one dev node and `large` fills the prod
   # pool: 11 executors of 3 cores, one per node, with the 12th node left for the driver.
   profiles:

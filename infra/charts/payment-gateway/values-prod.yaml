@@ -1,8 +1,8 @@
 database:
   nodeSelector:
-    karpenter.sh/capacity-type: on-demand
+    talos.dev/capacity-type: on-demand
   storage:
-    storageClass: gp3
+    storageClass: cloud-block
 ingress:
   tunnel:
     hostname: pay-gateway.phuchoang.sbs

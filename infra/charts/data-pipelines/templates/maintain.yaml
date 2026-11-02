@@ -22,7 +22,7 @@ spec:
   activeDeadlineSeconds: {{ .Values.maintenance.activeDeadlineSeconds }}
   podMetadata:
     annotations:
-      karpenter.sh/do-not-disrupt: "true"
+      cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     labels:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
       dp-product: lakehouse
@@ -59,7 +59,7 @@ spec:
     {{- include "data-pipelines.workflowPlacement" $ | nindent 4 }}
     podMetadata:
       annotations:
-        karpenter.sh/do-not-disrupt: "true"
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     entrypoint: maintain
     onExit: publish
     arguments:

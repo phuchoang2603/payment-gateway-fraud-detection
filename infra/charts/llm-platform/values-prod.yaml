@@ -1,13 +1,11 @@
 gpu:
   nodeSelector:
-    karpenter.sh/nodepool: aws-gpu-training
-  tolerations:
-    - {key: burst.talos.dev/gpu-training, operator: Equal, value: "true", effect: NoSchedule}
+    talos.dev/nodepool: gpu
 
-storageClass: gp3
+storageClass: cloud-block
 
-# The three servers share one g6.xlarge (L4, 4 vCPU, 16 GiB), which leaves about 3.1 CPU and 12 GiB for pods; the
-# other GPU node of the pool stays free for training.
+# The three servers share one 4 vCPU / 16 GiB GPU node, which leaves about 3.1 CPU and 12 GiB for pods. The platform
+# has no cloud GPU pool, so no node carries this label until one exists.
 models:
   chat:
     resources:
@@ -28,7 +26,7 @@ agents:
 langfuseStores:
   postgres:
     nodeSelector:
-      karpenter.sh/capacity-type: on-demand
+      talos.dev/capacity-type: on-demand
   hostname: langfuse.phuchoang.sbs
   oidc:
     issuer: https://auth.phuchoang.sbs/dex

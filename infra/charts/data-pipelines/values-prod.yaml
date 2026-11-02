@@ -4,12 +4,11 @@ generator:
   shards: 12
   workers: 3
   retryLimit: 10
-  # One shard per aws-cpu-burst spot xlarge (pool limit 12 nodes / 48 vCPU). Dev v18 measured about 115 purchases/s per
+  # One shard per spot e2-standard-4 node (pool limit 12 nodes / 48 vCPU). Dev v18 measured about 115 purchases/s per
   # worker before the world-table change; v19 is about 190M purchases, so 36 workers need several hours.
   activeDeadlineSeconds: 64800
   nodeSelector:
-    karpenter.sh/nodepool: aws-cpu-burst
-    karpenter.sh/capacity-type: spot
+    talos.dev/nodepool: spot
   resources:
     requests:
       cpu: '3'
@@ -25,28 +24,26 @@ config:
   S3_PATH_STYLE: 'true'
 # Workflow step pods stay off spot nodes: a reclaimed resource-step pod makes Argo submit a second SparkApplication.
 workflowNodeSelector:
-  karpenter.sh/nodepool: aws-workers
+  talos.dev/nodepool: cpu
 spark:
-  # Spark pods share the generator's spot burst pool. Its 12-node limit means a Spark run and a generator run cannot both
+  # Spark pods share the generator's spot pool. Its 12-node limit means a Spark run and a generator run cannot both
   # hold their full node counts, so run them one after the other.
   nodeSelector:
-    karpenter.sh/nodepool: aws-cpu-burst
-    karpenter.sh/capacity-type: spot
+    talos.dev/nodepool: spot
   # A spot reclaim of the driver's node restarts the whole application, so drivers run on the on-demand baseline
   # pool, which has about 5.8 GiB and 1 vCPU free on one node.
   driverNodeSelector:
-    karpenter.sh/nodepool: aws-workers
+    talos.dev/nodepool: cpu
   retry:
     limit: 10
     policy: Always
-  # aws-cpu-burst allows only large and xlarge (12 nodes, 48 vCPU, 192 GiB). An xlarge leaves 3270m / 13217Mi for pods
-  # after Talos reservations and DaemonSets, so a 4-core executor does not fit: 11 executors of 3 cores, one per xlarge,
-  # each 9g + 3g (5 GiB executors on 8 GiB c-family nodes were OOM-killed in the Iceberg write; DP2's Python workers
-  # hold the broadcast duplicate keys in overhead memory), spreading shuffle over 24Gi of ephemeral storage, the
-  # practical limit of the 40Gi root volume. The driver runs on the on-demand pool at 4g + 1.5g: it collects DP2's
-  # duplicated-ID keys as a sorted array rather than a broadcast hash relation. Twelve 16 GiB nodes are the memory
-  # limit, so 32 GiB r-family spot nodes leave executors pending. Shuffle partitions stay at 1024 rather than 3-4x the
-  # 33 cores: v19 shuffles reach hundreds of GB, and AQE coalesces small partitions up to the 128 MB advisory size.
+  # The spot pool is e2-standard-4 only (12 nodes, 48 vCPU, 192 GiB). A node leaves 3270m / 13217Mi for pods
+  # after Talos reservations and DaemonSets, so a 4-core executor does not fit: 11 executors of 3 cores, one per node,
+  # each 9g + 3g (5 GiB executors were OOM-killed in the Iceberg write; DP2's Python workers hold the broadcast
+  # duplicate keys in overhead memory), spreading shuffle over 24Gi of ephemeral storage, the practical limit of the
+  # 40Gi root volume. The driver runs on the on-demand pool at 4g + 1.5g: it collects DP2's duplicated-ID keys as a
+  # sorted array rather than a broadcast hash relation. Shuffle partitions stay at 1024 rather than 3-4x the 33 cores:
+  # v19 shuffles reach hundreds of GB, and AQE coalesces small partitions up to the 128 MB advisory size.
   profiles:
     large:
       shufflePartitions: 1024
@@ -133,7 +130,7 @@ features:
   historyEpoch: history-v19
   checkpointRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/flink/history
   # Burst nodes have 40Gi root disks, too small for Spark spill or a week's DuckDB sort.
-  scratchClass: gp3
+  scratchClass: cloud-block
   replicationFactor: 1
   historyStart: "2026-07-29"
   historyEnd: "2026-10-29"
@@ -143,7 +140,7 @@ features:
   historyUnitDays: 4
   historyParallelism: 24
   redis:
-    storageClass: gp3
+    storageClass: cloud-block
     storageSize: 10Gi
     maxmemory: 6gb
     resources:

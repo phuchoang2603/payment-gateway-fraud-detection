@@ -1,4 +1,4 @@
-storageClass: gp3
+storageClass: cloud-block
 storage:
   bucket: talos-proxmox-prod-platform
   endpoint: https://storage.googleapis.com
@@ -6,4 +6,4 @@ storage:
   pathStyle: true
 database:
   nodeSelector:
-    karpenter.sh/capacity-type: on-demand
+    talos.dev/capacity-type: on-demand

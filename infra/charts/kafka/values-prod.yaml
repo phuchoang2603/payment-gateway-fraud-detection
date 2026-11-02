@@ -1,10 +1,10 @@
 kafka:
   storage:
-    storageClass: gp3
+    storageClass: cloud-block
     # The seeded input of all 23 history units (about 37 GB) and their feature journals stay until unit cleanup.
     # The journals outgrew 64Gi about 9 hours into the replay and the broker stopped.
     size: 256Gi
-  # Stream-history units all write to this one broker. Its aws-workers node has about 0.7 CPU and 2.6 GiB
+  # Stream-history units all write to this one broker. Its cpu-pool node has about 0.7 CPU and 2.6 GiB
   # unreserved, so the request stays within that and the limit lets it burst for a replay.
   jvmOptions:
     -Xms: 2g
