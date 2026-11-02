@@ -58,25 +58,41 @@ def has_rows(table, day, epochs):
     return found.num_rows > 0
 
 
-def newest_day(table, epochs):
-    days = {
+def partition_days(table):
+    return {
         next(iter(row.values()))
         for row in table.inspect.partitions().column("partition").to_pylist()
     }
-    return next((day for day in sorted(days, reverse=True) if has_rows(table, day, epochs)), None)
 
 
-def newest_stream_day(catalog):
+def latest_covered(days, span, not_after, has_rows):
+    """The latest end day, at or before `not_after`, where each of the `span` days up to it has rows."""
+    known = {}
+
+    def rows(day):
+        if day not in known:
+            known[day] = has_rows(day)
+        return known[day]
+
+    for end in sorted((day for day in days if day <= not_after), reverse=True):
+        needed = [end - timedelta(days=offset) for offset in range(span)]
+        if all(day in days for day in needed) and all(rows(day) for day in needed):
+            return end
+    return None
+
+
+def covered_end(catalog, span, not_after):
     from fraud_feast.repo import TABLES, epochs
 
-    days = [newest_day(catalog.load_table(name), epochs()) for name in TABLES.values()]
-    return None if None in days else min(days)
-
-
-def end_day(reference, lag_days, newest):
-    if newest is None:
-        raise ValueError("the stream history tables have no rows for the configured epochs")
-    return min(reference - timedelta(days=lag_days), newest)
+    configured = epochs()
+    tables = [catalog.load_table(name) for name in TABLES.values()]
+    days = set.intersection(*(partition_days(table) for table in tables))
+    return latest_covered(
+        days,
+        span,
+        not_after,
+        lambda day: all(has_rows(table, day, configured) for table in tables),
+    )
 
 
 def is_newer(cutoff, registered):

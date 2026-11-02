@@ -121,7 +121,7 @@ The final list SHALL be chosen with the model, before the first registered versi
 - **THEN** it is not part of `payment_risk_v1` when the first version is registered
 
 ### Requirement: Scheduled rolling retraining
-The platform SHALL retrain on a Kubeflow recurring run. Each run SHALL derive contiguous train, validation and test windows from its schedule time minus a lag, capped at the newest day that has rows in the stream feature tables for the configured epochs. A run SHALL stop before building a training set when its cutoff is not later than the cutoff recorded on the highest registered model version, unless forced. A run given explicit windows and cutoff SHALL use them as given. The recurring run SHALL follow the deployed pipeline version after every release, and SHALL NOT run missed schedules.
+The platform SHALL retrain on a Kubeflow recurring run. Each run SHALL derive contiguous train, validation and test windows from its schedule time minus a lag, ending on the latest day at or before that for which every day of the three windows has rows in the stream feature tables for the configured epochs. A run SHALL stop before building a training set when its cutoff is not later than the cutoff recorded on the highest registered model version, unless forced. A run given explicit windows and cutoff SHALL use them as given. The recurring run SHALL follow the deployed pipeline version after every release, and SHALL NOT run missed schedules.
 
 #### Scenario: New data since the last model
 
@@ -140,8 +140,13 @@ The platform SHALL retrain on a Kubeflow recurring run. Each run SHALL derive co
 
 #### Scenario: Windows beyond the replayed history
 
-- **WHEN** the schedule time is later than the newest replayed stream day
-- **THEN** the windows end on the newest replayed day, not on the schedule date
+- **WHEN** the schedule time is later than the last replayed stream day
+- **THEN** the windows end on the last day whose whole span has rows, not on the schedule date
+
+#### Scenario: A gap between replayed and live data
+
+- **WHEN** the replayed days and the live days are separated by days with no rows
+- **THEN** no window spans the gap, and with no fully covered span the run stops without building a training set
 
 ### Requirement: Notebook model comparison
 The exploration notebook SHALL show the fraud rate and volume per day and the null shares, compare a linear baseline, tree ensembles and the pipeline's GPU model on validation at the gate's decline and step-up operating points, evaluate every model on test with those thresholds, and show calibration and feature importance. Metrics SHALL use the stored sample weights.

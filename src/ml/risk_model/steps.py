@@ -5,7 +5,7 @@ import os
 import tempfile
 import time
 from dataclasses import asdict
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -21,7 +21,7 @@ from risk_model.schedule import Pipelines, recurring_body
 from risk_model.serve_client import ServeClient
 from risk_model.split import WindowSplitter
 from risk_model.train import RiskTrainer, load_booster, score
-from risk_model.windows import end_day, is_newer, newest_stream_day, reference_day, rolling
+from risk_model.windows import covered_end, is_newer, reference_day, rolling
 
 HYPERPARAMETERS = {
     "maxDepth": ("max_depth", "int", "3", "10"),
@@ -71,15 +71,18 @@ def plan_windows(
     from fraud_feast.lake import catalog
 
     reference = reference_day(schedule_time, create_time)
-    newest = newest_stream_day(catalog())
-    plan = rolling(end_day(reference, lag_days, newest), train_days, validation_days, test_days)
+    span = train_days + validation_days + test_days
+    covered = covered_end(catalog(), span, reference - timedelta(days=lag_days))
+    plan = rolling(
+        covered or reference - timedelta(days=lag_days), train_days, validation_days, test_days
+    )
     registered = RegistryClient().latest_cutoff()
-    run = force == "true" or is_newer(plan.cutoff, registered)
+    run = covered is not None and (force == "true" or is_newer(plan.cutoff, registered))
     write_json(
         f"{directory(run_id)}/windows.json",
         {
             "reference": str(reference),
-            "newest_stream_day": str(newest),
+            "covered_end": None if covered is None else str(covered),
             "registered_cutoff": registered,
             "windows": [str(plan.train), str(plan.validation), str(plan.test)],
             "cutoff": plan.cutoff,
