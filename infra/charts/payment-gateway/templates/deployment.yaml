@@ -103,6 +103,8 @@ spec:
               value: {{ $.Values.features.url | quote }}
             - name: FRAUD_FEATURE_SERVICE
               value: {{ $.Values.features.service | quote }}
+            - name: FRAUD_FEAST_TIMEOUT
+              value: {{ $.Values.features.timeout | quote }}
             - name: FRAUD_FEATURE_TTL_DAILY
               value: {{ $.Values.features.ttlDaily | quote }}
             - name: FRAUD_FEATURE_TTL_STREAM
