@@ -122,43 +122,88 @@ The handled variant's counters equal the injected workload: `too_late` 8, event 
 
 ### Backpressure
 
-Flink's flow control is credit-based: when an operator is slower than the one before it, its input buffers fill, the upstream operator blocks and the pressure travels back to the Kafka source, which stops polling. Nothing is dropped and nothing queues without bound in the job, and the seeded topics keep the records. In the Flink UI, an operator that is busy near 100% and red is the bottleneck, and the operators upstream of it show high backpressure.
+The live job runs at 0% backpressure (see [Flink UI](#flink-ui)). The stress case is the history replay, which reads a seeded Kafka topic as fast as the job accepts it, so the pace is set by the slowest operator and everything upstream of it waits.
 
-The live job runs at 0% backpressure (see [Flink UI](#flink-ui)). The stress case is the history replay, which reads a seeded topic as fast as the job can take it. One unit is one week at parallelism 1, because the logical clock needs a single ordered partition, so a unit cannot scale out.
+```mermaid
+flowchart LR
+    K["Seeded Kafka topic<br/>durable buffer"] --> S["Source + progress"]
+    S --> D1["Deduplicate events"]
+    D1 --> D2["Deduplicate attempts"]
+    D2 --> C["Aggregate customer windows"]
+    D2 --> M["Aggregate method windows"]
+    C --> J["Feature journal<br/>exactly-once sink"]
+    M --> J
+    C -. "full input buffers<br/>(credit-based flow control)" .-> D2
+    D2 -.-> D1
+    D1 -.-> S
+    S -. "stops polling" .-> K
+```
+
+Flink's flow control is credit-based: an operator whose input buffers are full stops granting credit to the one before it, so the pressure travels back to the Kafka source, which stops polling. Nothing is dropped and nothing grows without bound inside the job; the topic keeps the records. A checkpoint barrier travels with the data, so under backpressure it waits behind full buffers too.
+
+#### Baseline: one operator sets the pace
+
+One unit is one logical-clock job at parallelism 1, because replay needs a single ordered partition, so a unit cannot scale out. The baseline is a 7-day unit on a 3 GiB TaskManager with the JVM heap state backend.
 
 ![Backpressure in a history unit](images/online-replay-backpressure.png)
 
-*Unit `20260819` on prod, 2026-11-02 03:26 UTC (the UI shows UTC−5). The two aggregate operators are red at about 100% busy; the source and the first three operators are 90–99% backpressured and 1–8% busy.*
+*Unit `20260819`, 2026-11-02 03:26 UTC (the UI shows UTC−5). The two aggregate operators are red at about 100% busy; the source and the first three operators are 90–99% backpressured and 1–8% busy.*
 
-| Measure (unit `20260819`, REST `subtasks/metrics`) | Value |
-|---|---|
-| Source and progress observation | 96% and 88% backpressured, 4% and 12% busy |
-| Event and attempt deduplication | 68% busy, 22% backpressured |
-| Customer and method aggregation | 88% and 89% busy, 0% backpressured |
-| Aggregation input rate | 75 records/s, so about 12 ms per record |
-| Source rate | about 1,150 events/s in the first minutes, about 350 events/s from minute 10, as per-entity state grows |
-| TaskManager CPU | 1.4–1.5 of 2 cores; the four Python operators and the JVM share it |
-
-The checkpoint barrier travels with the data, so under backpressure it waits behind full buffers. With a 10 s interval and full 148 MB snapshots, checkpoints took close to the 2-minute timeout and some expired; an expired checkpoint fails the job, which restores from the last completed one.
-
-![Checkpoints before tuning](images/online-replay-checkpoints-before.png)
-
-*Before: 25 checkpoints triggered in 11 min 45 s, 22 completed, 2 failed; the latest took 1 min 59 s at 148 MB. Unit `20261007` was restored twice with "Exceeded checkpoint tolerable failure threshold".*
-
-![Checkpoints after tuning](images/online-replay-checkpoints-after.png)
-
-*After: unit `20261014` with the tuned settings, 11 min in: 4 triggered, 3 completed, 1 failed (the first), none restored; the latest took 29 s at 114 MB.*
-
-| Technique | Setting | Effect |
+| Operator (REST `subtasks/metrics`) | Backpressured | Busy |
 |---|---|---|
-| Find the bottleneck first | Busy and backpressured time per operator, from the UI or `/jobs/<id>/vertices/<id>/subtasks/metrics` | Showed that the aggregate operators, not Kafka, S3 or the seed, set the pace |
-| Keep barriers moving | `taskmanager.network.memory.buffer-debloat.enabled: true` | Smaller in-flight buffers in front of a slow operator, so barriers reach it sooner |
-| Stop checkpointing from competing with the work | `execution.checkpointing.min-pause: 2min`, `timeout: 10min` | 4 checkpoints in 11 min instead of 25 in 12, about 29 s each instead of about 2 min, and no restores. The Kafka sink's 15-minute transaction timeout still covers a pause plus a checkpoint |
-| Bound the producer | The seed's `queue.buffering.max.kbytes` and one day per sort | The seed blocks on the broker instead of growing, which keeps it inside its memory limit |
-| Scale across units, not within one | `historyParallelism` units run at once, each with its own topics, state and transactions; prod uses 4-day units, so 23 units run at once, two per 4-vCPU burst node | Whole-replay time follows the slowest unit instead of the sum; each unit costs one lead-in day, so 4-day units do 25% extra work against 14% for 7-day ones, and the burst pool's CPU limit caps how many fit |
-| Keep state off the heap | `state.backend.type: rocksdb` with incremental checkpoints; TaskManager 5 GiB, half of it managed memory shared by RocksDB and the Python workers | At about 1M events a unit's heap stood at 981 MB of 1,183 MB with repeated old-generation GCs, then heartbeats and checkpoints timed out and the job failed over to its last checkpoint, so committed offsets stopped moving; one TaskManager threw `OutOfMemoryError: Java heap space`. State no longer competes with the heap, and checkpoints upload only what changed |
+| Source | 96% | 4% |
+| Observe source progress | 88% | 12% |
+| Deduplicate events / attempts | 22% | 68% |
+| Aggregate customer / method windows | 0% | 88% / 89% |
 
-The steady rate did not change: both runs stay at about 350–400 events/s with the aggregate operators 70–90% busy. The window logic is not the cost. The window state is already incremental: an `Entity` keeps running counts per window, expiry heaps and only the attempts of the last 24 hours, never a rescan. Run outside Flink with the same pickling and snapshot encoding, one attempt costs 0.16 ms with 50,000 entities, 0.31 ms with 5,000 and 0.67 ms with 500 (about 1.4 s of CPU for 60,000 attempts at 5,000 entities), against about 12 ms per record in the job. The rest is the Python–JVM boundary: each record crosses it for state reads and writes, timers and the emitted rows, and the aggregate stage runs three emits per attempt. Rewriting the window state would therefore save a few percent at most. The levers left are fewer crossings and more units at once. The history template raises `python.state.cache-size` to 20,000 (default 1,000, far below the number of active entities), so a state read can hit the Python-side cache instead of the JVM; the rate it reaches is not measured yet. A larger bundle (20,000 records or 5 s instead of the default) was tried on the running units and made things worse: each Python stage worked through a whole bundle before the next received input, so the stages stopped overlapping (busy time alternated between 100% and 0% per stage, the source counter stayed flat for over 40 s) and checkpoints took about 350 s instead of 29 s. It was reverted to the default. Karpenter also evicted JobManager pods as "Underutilized" in the middle of the run, restarting those jobs from their last checkpoint, so the Flink pods now carry `karpenter.sh/do-not-disrupt`. Merging the two deduplication stages would remove one more crossing, but they are keyed on different identities (`event_id` and the attempt) and carry separate conflict and counter semantics, so it is not done.
+**Analysis.** `RUNNING` only proves the job is alive. The aggregate stage is the bottleneck: it takes about 75 records/s of input and spends about 12 ms on each one, while the source sits blocked. The source rate started near 1,150 events/s and settled near 350 events/s from about minute 10 as per-entity state grew. The TaskManager used 1.4–1.5 of its 2 CPUs, so the cost is the Python–JVM boundary and not a missing core.
+
+![Checkpoints under backpressure](images/online-replay-checkpoints-before.png)
+
+*Same job class: 25 checkpoints triggered in 11 min 45 s, 22 completed, 2 failed; the latest took 1 min 59 s at 148 MB. Unit `20261007` was restored twice with "Exceeded checkpoint tolerable failure threshold".*
+
+With a 10 s interval and full heap snapshots, checkpoints ran close to the 2-minute timeout and some expired. An expired checkpoint fails the job, which restores from the last completed one.
+
+#### Problems found and how each is handled
+
+| Problem | Technique | Setting | Result |
+|---|---|---|---|
+| Checkpoints compete with the work under backpressure | Space them out and give them time; shrink in-flight buffers in front of a slow operator | `execution.checkpointing.min-pause: 2min`, `timeout: 10min`, `taskmanager.network.memory.buffer-debloat.enabled: true` | On the heap backend, one unit went from 25 checkpoints in 12 min with failures to 4 in 11 min, about 29 s each and no restores. The Kafka sink's 15-minute transaction timeout still covers a pause plus a checkpoint |
+| Keyed state fills the heap | Keep state on disk, upload only what changed | `state.backend.type: rocksdb`, `execution.checkpointing.incremental: true`, TaskManager 5 GiB with managed memory split between RocksDB and the Python workers | At about 1M events a heap unit stood at 981 MB of 1,183 MB with repeated old-generation GCs, then heartbeats and checkpoints timed out and the job failed over to its last checkpoint, so committed offsets stopped moving; one TaskManager threw `OutOfMemoryError: Java heap space`. With RocksDB the same region passes with steady progress |
+| One job cannot scale out | Scale across independent units | `historyUnitDays: 4`, `historyParallelism: 24`, two units per 4-vCPU burst node (TaskManager 1.4 CPU, JobManager 0.2 CPU) | 23 units replay at once instead of 14; each unit adds one lead-in day, so 4-day units do 25% extra work against 14% for 7-day ones |
+| Slow Python state access | Larger Python-side state cache | `python.state.cache-size: 20000` (default 1,000) | Not measured separately from the other changes |
+| Producer outruns the broker | Bound the producer's own buffer | The seed's `queue.buffering.max.kbytes`, one day per sort | The seed blocks on the broker instead of growing, so it stays inside its memory limit |
+| Spot reclaim restarts a job | Do not let the autoscaler evict Flink pods | `karpenter.sh/do-not-disrupt` on the Flink pods | Karpenter had evicted JobManagers as "Underutilized" mid-run, restarting their jobs from the last checkpoint |
+| A repeated seed costs a pass over Bronze | Reuse a finished seed | The seed report is keyed by unit and checked against the topic end offsets | A restarted run keeps the seeded topics and resets only the topics Flink writes |
+
+Two attempts did not help. A 20,000-record Python bundle (default 1 s) made each Python stage finish a whole bundle before the next got input, so the stages stopped overlapping: busy time alternated between 100% and 0%, the source counter stayed flat for over 40 s and checkpoints took about 350 s. It was reverted. Rewriting the window state as incremental accumulators would not pay either: `Entity` already keeps running counts per window, expiry heaps and only the last 24 hours of attempts, and outside Flink one attempt costs 0.16 ms at 50,000 entities, 0.31 ms at 5,000 and 0.67 ms at 500, against about 12 ms per record in the job. Merging the two deduplication stages would remove one more boundary crossing, but they are keyed on different identities (`event_id` and the attempt) with separate conflict and counter semantics, so they stay apart.
+
+#### After: RocksDB, 4-day units
+
+![Backpressure on the source after the change](images/online-replay-backpressure-source.png)
+
+*Unit `20260915`, 50 min into its run (02:49 in the UI, 07:49 UTC): the source subtask is 97% backpressured, 3% busy, status `HIGH`, while it still reads 803,000 records.*
+
+![Backpressure on the customer aggregate after the change](images/online-replay-backpressure-aggregate.png)
+
+*Same unit, `Aggregate customer windows`: 0% backpressured, 10% idle, 90% busy, status `OK`. This operator is the pacemaker; it is never blocked from below.*
+
+![Checkpoints with RocksDB](images/online-replay-checkpoints-rocksdb.png)
+
+*Same unit: 18 checkpoints triggered, 16 completed, 2 failed, none restored. Checkpoint 16 uploaded 255 MB of a 335 MB state and took 58.9 s.*
+
+| Measure (unit `20260915`) | Baseline (heap, 7-day unit) | RocksDB, 4-day unit |
+|---|---|---|
+| Source / aggregate backpressured | 96% / 0% | 97% / 0% |
+| Aggregate busy | 88–89% | 90–91% |
+| Committed progress | stalls near 1M events, restoring in a loop | 363–383 events/s each at 2 units; 227–466 events/s across 6 units sampled with 14 running |
+| Checkpoints | 22 of 25 completed, latest 1 min 59 s, 148 MB | 16 of 18 completed, average 46 s, longest 157 s |
+| Checkpoint upload (average / largest) | full 148 MB | 85 / 255 MB, against 221 / 400 MB of full state |
+| TaskManager | 1.4–1.5 of 2 CPU, heap 83% full (981 of 1,183 MB) | 1.3 of 1.4 CPU, 3.6 of 5 GiB |
+
+**Analysis.** Backpressure itself did not move: the same operator is the bottleneck, so the per-unit rate stays near 350 events/s, and with 14 units sharing the pool it ranged from 227 to 466 events/s. What changed is that the job no longer fails over. The heap no longer fills and the checkpoint path completes, so progress is cumulative. RocksDB checkpoints are not shorter than the tuned heap ones (46 s on average against 29 s), because the bigger state is uploaded incrementally but still takes time; incremental checkpoints upload about 38% of the full state on average. The remaining lever is more units at once, which is limited by the 12-node, 48-vCPU burst pool.
+
+**How to reproduce the UI evidence.** Port-forward `svc/fraud-streaming-history-v19-<YYYYMMDD>-rest` to `localhost:8081`, open the running job, select an operator, and choose **BackPressure** for the per-subtask percentage and status (`HIGH` above 90% backpressured, `OK` otherwise). Open **Checkpoints** for the counts, durations and the checkpointed against full size. The same busy and backpressured figures are available as `busyTimeMsPerSecond` and `backPressuredTimeMsPerSecond` at `/jobs/<id>/vertices/<id>/subtasks/metrics`, which is where the tables above come from.
 
 ## Evidence
 
