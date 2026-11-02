@@ -1,6 +1,7 @@
 secretStore: gateway-doppler
 clientNamespaces: [data, ml]
 storageClass: local-path
+databaseSize: 5Gi
 setupImage: python:3.13.9-alpine3.22
 storage:
   secretStore: gateway-doppler

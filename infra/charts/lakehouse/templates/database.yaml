@@ -20,7 +20,7 @@ spec:
         name: iceberg-database
   storage:
     storageClass: {{ .Values.storageClass | quote }}
-    size: 5Gi
+    size: {{ .Values.databaseSize }}
   resources:
     requests: {cpu: 50m, memory: 256Mi}
     limits: {memory: 1Gi}

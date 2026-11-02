@@ -1,4 +1,5 @@
 storageClass: cloud-block
+databaseSize: 2Gi
 databaseNodeSelector:
   talos.dev/capacity-type: on-demand
 catalog:
