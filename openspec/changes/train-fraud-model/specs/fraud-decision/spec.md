@@ -46,37 +46,32 @@ Retrieval failure SHALL be recorded without changing the existing valid rules de
 
 ### Requirement: Model scoring and its missing-feature policy
 
-When a model endpoint is configured, the service SHALL, after the feature read, send one named-feature instance to the registered model's KServe predictor within a bounded deadline, and SHALL record the model name, the version the predictor reports, the call's status, the score, the read time, the mode, the threshold, and whether the score was enforced and whether it changed the outcome. The model mode SHALL be `off` (no call), `shadow` (the call is recorded and never changes the decision) or `enforce`. The deadline for the feature read plus the model call SHALL NOT exceed the assessment deadline.
+When a model endpoint is configured, the service SHALL, after the feature read, send one named-feature instance to the registered model's KServe predictor within a bounded deadline, and SHALL record the model name, the version the predictor reports, the call's status, the score, the read time, the threshold, and whether the score applied under the policy and whether it changed the outcome. The model call is always enforced; there is no mode that only records it. The deadline for the feature read plus the model call SHALL NOT exceed the assessment deadline.
 
 - **Instance.** Its keys SHALL be the full feature names `<view>__<feature>` of every view whose status is `available`, with unknown values as `null`. Features of any other view SHALL be absent, which the predictor treats as missing.
 - **Statuses.** `available` when the predictor answers HTTP 200 with exactly one score between 0 and 1 and a non-empty model version; `timeout` when the deadline passes; `error` for any other failure or malformed answer.
-- **Missing-feature policy.** The score SHALL be enforced only when the mode is `enforce`, the status is `available`, and all of `customer_daily`, `payment_method_daily`, `customer_stream`, `payment_method_stream` and `request_features` are `available`. Otherwise the rules decision SHALL stand and the evidence SHALL record the score as not enforced.
-- **Decision.** When enforced, a score at or above the threshold on an attempt the rules approve SHALL decline it with the additional reason `MODEL_RISK_HIGH`. An enforced score SHALL NOT approve an attempt the rules decline. An enforced decision SHALL carry policy version `rules-v1+model`, and the response SHALL carry the model version, the feature service as the feature-set version, and the score. A decision that is not enforced SHALL carry policy version `rules-v1` and none of those fields.
+- **Missing-feature policy.** The score SHALL apply only when the status is `available` and all of `customer_daily`, `payment_method_daily`, `customer_stream`, `payment_method_stream` and `request_features` are `available`. Otherwise the rules decision SHALL stand and the evidence SHALL record that the score did not apply.
+- **Decision.** When the score applies, a score at or above the threshold on an attempt the rules approve SHALL decline it with the additional reason `MODEL_RISK_HIGH`. An applied score SHALL NOT approve an attempt the rules decline. A decision the score applied to SHALL carry policy version `rules-v1+model`, and the response SHALL carry the model version, the feature service as the feature-set version, and the score. A decision the score did not apply to SHALL carry policy version `rules-v1` and none of those fields.
 - **Replay.** A replayed assessment SHALL return the recorded result without calling the model, and evidence recorded before this requirement SHALL keep its recorded hash.
-
-#### Scenario: Shadow scoring
-
-- **WHEN** the mode is `shadow` and the predictor answers with a score
-- **THEN** the evidence records the score as not enforced and the decision and policy version are the rules'
 
 #### Scenario: Enforced decline
 
-- **WHEN** the mode is `enforce`, all five views are available, the rules approve and the score is at or above the threshold
+- **WHEN** all five views are available, the rules approve and the score is at or above the threshold
 - **THEN** the attempt is declined with reason `MODEL_RISK_HIGH`, policy version `rules-v1+model`, and the model version and score in the response
 
 #### Scenario: Enforced score below the threshold
 
-- **WHEN** the mode is `enforce`, all five views are available and the score is below the threshold
+- **WHEN** all five views are available and the score is below the threshold
 - **THEN** the rules approve, the policy version is `rules-v1+model`, and the score is in the response and the evidence
 
 #### Scenario: Incomplete features
 
-- **WHEN** the mode is `enforce` and a stream view is expired
-- **THEN** the rules decision stands, the policy version is `rules-v1`, and the evidence records the score as not enforced
+- **WHEN** a stream view is expired
+- **THEN** the rules decision stands, the policy version is `rules-v1`, and the evidence records that the score did not apply
 
 #### Scenario: Rules decline
 
-- **WHEN** a rule declines and the enforced score is below the threshold
+- **WHEN** a rule declines and the score is below the threshold
 - **THEN** the attempt stays declined with the rules' reasons
 
 #### Scenario: Predictor unavailable

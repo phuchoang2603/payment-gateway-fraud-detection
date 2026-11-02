@@ -17,7 +17,7 @@ func scored(score float64, enforced bool) application.Result {
 		Decision:     domain.Decision{Declined: enforced, Reasons: []string{domain.ModelReason}, PolicyVersion: domain.ModelPolicyVersion},
 		Features:     application.FeatureObservation{Service: "payment_risk_v1"},
 		Model: &application.ModelObservation{
-			Name: "payment-risk", Version: "v3", Mode: "enforce", Status: application.ModelAvailable, Score: &score,
+			Name: "payment-risk", Version: "v3", Status: application.ModelAvailable, Score: &score,
 			ReadAt: readAt, Threshold: 0.8, Enforced: enforced, Declined: enforced,
 		},
 	}}
@@ -35,7 +35,7 @@ func TestAScoreThatWasNotEnforcedStaysOutOfTheResponse(t *testing.T) {
 	result := scored(0.9, false)
 	assessment := riskAssessment(result, paymentsv1.RiskOutcome_RISK_OUTCOME_APPROVE)
 	if assessment.ModelVersion != nil || assessment.FeatureSetVersion != nil || assessment.RiskScore != nil {
-		t.Fatalf("a shadow score leaked into the response: %+v", assessment)
+		t.Fatalf("a score the policy did not apply leaked into the response: %+v", assessment)
 	}
 	result.Evidence.Model = nil
 	if assessment := riskAssessment(result, paymentsv1.RiskOutcome_RISK_OUTCOME_APPROVE); assessment.ModelVersion != nil || assessment.RiskScore != nil {
@@ -47,7 +47,7 @@ func TestTheEvidenceRecordsTheModelCallEvenWhenItIsNotEnforced(t *testing.T) {
 	evidence := evidenceProto(scored(0.42, false).Evidence)
 	model := evidence.GetModel()
 	if model.GetName() != "payment-risk" || model.GetVersion() != "v3" || model.GetStatus() != fraudv1.ModelStatus_MODEL_STATUS_AVAILABLE || model.GetScore() != 0.42 || model.Score == nil ||
-		model.GetMode() != "enforce" || model.GetThreshold() != 0.8 || model.GetEnforced() || model.GetDeclined() || model.GetReadAt().AsTime().Year() != 2026 {
+		model.GetThreshold() != 0.8 || model.GetEnforced() || model.GetDeclined() || model.GetReadAt().AsTime().Year() != 2026 {
 		t.Fatalf("model evidence %+v", model)
 	}
 	if evidenceProto(application.Evidence{}).Model != nil {

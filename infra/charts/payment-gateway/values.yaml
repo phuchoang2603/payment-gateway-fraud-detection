@@ -363,10 +363,8 @@ rollout:
     maximumErrorRate: 0.01
     maximumP95Seconds: 1
     maximumSampleAgeSeconds: 120
-# Needs features.enabled. mode is shadow (record the score) or enforce (it can add a decline when every feature view is available).
+# Read with the features. A score at or above the threshold adds a decline when every feature view is available.
 model:
-  enabled: false
-  mode: shadow
   url: http://payment-risk-predictor.ml.svc.cluster.local
   name: payment-risk
   timeout: 150ms

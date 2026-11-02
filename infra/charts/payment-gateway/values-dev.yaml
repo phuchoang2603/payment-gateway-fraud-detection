@@ -9,6 +9,3 @@ ingress:
     hostname: pay-gateway-dev.phuchoang.sbs
 features:
   enabled: true
-model:
-  enabled: true
-  mode: enforce

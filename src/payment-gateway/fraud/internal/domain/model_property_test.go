@@ -9,7 +9,6 @@ import (
 
 func modelInput(t *rapid.T) ModelInput {
 	return ModelInput{
-		Enforce:   rapid.Bool().Draw(t, "enforce"),
 		Available: rapid.Bool().Draw(t, "available"),
 		Complete:  rapid.Bool().Draw(t, "complete"),
 		Score:     rapid.Float64Range(0, 1).Draw(t, "score"),
@@ -40,7 +39,7 @@ func TestTheRulesDecisionStandsUnlessThePolicyHolds(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		rules, input := rulesDecision(t), modelInput(t)
 		decision, applied := ApplyModel(rules, input)
-		eligible := input.Enforce && input.Available && input.Complete
+		eligible := input.Available && input.Complete
 		if applied != eligible {
 			t.Fatalf("applied %v for %+v", applied, input)
 		}
@@ -53,7 +52,7 @@ func TestTheRulesDecisionStandsUnlessThePolicyHolds(t *testing.T) {
 func TestAnEligibleScoreDeclinesExactlyAtOrAboveTheThreshold(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		input := modelInput(t)
-		input.Enforce, input.Available, input.Complete = true, true, true
+		input.Available, input.Complete = true, true
 		approved := Decision{PolicyVersion: PolicyVersion}
 		decision, applied := ApplyModel(approved, input)
 		if !applied || decision.PolicyVersion != ModelPolicyVersion {
@@ -70,7 +69,7 @@ func TestAnEligibleScoreDeclinesExactlyAtOrAboveTheThreshold(t *testing.T) {
 
 func TestApplyModelDoesNotAliasTheRulesReasons(t *testing.T) {
 	rules := Decision{Declined: false, Reasons: make([]string, 0, 4), PolicyVersion: PolicyVersion}
-	decision, _ := ApplyModel(rules, ModelInput{Enforce: true, Available: true, Complete: true, Score: 1, Threshold: 0.5})
+	decision, _ := ApplyModel(rules, ModelInput{Available: true, Complete: true, Score: 1, Threshold: 0.5})
 	if len(rules.Reasons) != 0 || len(decision.Reasons) != 1 {
 		t.Fatalf("rules %v decision %v", rules.Reasons, decision.Reasons)
 	}

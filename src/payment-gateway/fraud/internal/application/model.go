@@ -8,16 +8,6 @@ import (
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/domain"
 )
 
-// ModelMode says whether a model score is only recorded or can change the decision.
-type ModelMode string
-
-const (
-	// ModelShadow records the score and never changes the decision.
-	ModelShadow ModelMode = "shadow"
-	// ModelEnforce lets the score add a decline when the missing-feature policy holds.
-	ModelEnforce ModelMode = "enforce"
-)
-
 // The statuses of one model call.
 const (
 	ModelAvailable = "available"
@@ -26,13 +16,13 @@ const (
 )
 
 // ModelObservation is what one model call produced and how it was used: the model, its version and
-// score, the mode and threshold, and whether the score was enforced and changed the outcome.
+// score, the threshold, and whether the policy let the score apply and whether it changed the outcome.
 type ModelObservation struct {
-	Name, Version, Mode, Status string
-	Score                       *float64
-	ReadAt                      time.Time
-	Threshold                   float64
-	Enforced, Declined          bool
+	Name, Version, Status string
+	Score                 *float64
+	ReadAt                time.Time
+	Threshold             float64
+	Enforced, Declined    bool
 }
 
 // ModelScorer scores one assessment's features, and returns a status instead of failing.
@@ -40,10 +30,9 @@ type ModelScorer interface {
 	Score(context.Context, FeatureObservation) ModelObservation
 }
 
-// ModelConfig enables model scoring: the scorer, the mode, the call's deadline and the decline threshold.
+// ModelConfig enables model scoring: the scorer, the call's deadline and the decline threshold.
 type ModelConfig struct {
 	Scorer    ModelScorer
-	Mode      ModelMode
 	Timeout   time.Duration
 	Threshold float64
 }
@@ -64,12 +53,12 @@ func complete(features FeatureObservation) bool {
 // WithModel enables model scoring after the feature read. The feature read and the model call must fit in the assessment deadline together.
 func (s *Service) WithModel(config ModelConfig) error {
 	switch {
-	case config.Scorer == nil || (config.Mode != ModelShadow && config.Mode != ModelEnforce):
-		return errors.New("model scoring needs a scorer and the shadow or enforce mode")
+	case config.Scorer == nil:
+		return errors.New("model scoring needs a scorer")
 	case config.Timeout <= 0 || s.config.HistoryTimeout+config.Timeout > s.config.Deadline:
 		return errors.New("the feature read and the model call must fit in the assessment deadline")
-	case config.Mode == ModelEnforce && (config.Threshold <= 0 || config.Threshold > 1):
-		return errors.New("an enforced model needs a threshold above 0 and up to 1")
+	case config.Threshold <= 0 || config.Threshold > 1:
+		return errors.New("the model needs a threshold above 0 and up to 1")
 	}
 	s.model = config
 	return nil
@@ -80,9 +69,8 @@ func (s *Service) scoreModel(ctx context.Context, evidence *Evidence) {
 	call, stop := context.WithTimeout(ctx, s.model.Timeout)
 	defer stop()
 	observation := s.model.Scorer.Score(call, evidence.Features)
-	observation.Mode, observation.Threshold = string(s.model.Mode), s.model.Threshold
+	observation.Threshold = s.model.Threshold
 	input := domain.ModelInput{
-		Enforce:   s.model.Mode == ModelEnforce,
 		Available: observation.Status == ModelAvailable && observation.Score != nil,
 		Complete:  complete(evidence.Features),
 		Threshold: s.model.Threshold,

@@ -40,7 +40,8 @@ message ModelEvidence {
   ModelStatus status = 3;
   optional double score = 4;
   google.protobuf.Timestamp read_at = 5;
-  string mode = 6;
+  reserved 6;
+  reserved "mode";
   double threshold = 7;
   // The score met the missing-feature policy and could affect the decision.
   bool enforced = 8;

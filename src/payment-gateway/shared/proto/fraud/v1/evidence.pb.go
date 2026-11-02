@@ -319,7 +319,6 @@ type ModelEvidence struct {
 	Status    ModelStatus            `protobuf:"varint,3,opt,name=status,proto3,enum=fraud.v1.ModelStatus" json:"status,omitempty"`
 	Score     *float64               `protobuf:"fixed64,4,opt,name=score,proto3,oneof" json:"score,omitempty"`
 	ReadAt    *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=read_at,json=readAt,proto3" json:"read_at,omitempty"`
-	Mode      string                 `protobuf:"bytes,6,opt,name=mode,proto3" json:"mode,omitempty"`
 	Threshold float64                `protobuf:"fixed64,7,opt,name=threshold,proto3" json:"threshold,omitempty"`
 	// The score met the missing-feature policy and could affect the decision.
 	Enforced bool `protobuf:"varint,8,opt,name=enforced,proto3" json:"enforced,omitempty"`
@@ -392,13 +391,6 @@ func (x *ModelEvidence) GetReadAt() *timestamppb.Timestamp {
 		return x.ReadAt
 	}
 	return nil
-}
-
-func (x *ModelEvidence) GetMode() string {
-	if x != nil {
-		return x.Mode
-	}
-	return ""
 }
 
 func (x *ModelEvidence) GetThreshold() float64 {
@@ -612,18 +604,17 @@ const file_fraud_v1_evidence_proto_rawDesc = "" +
 	"\x06values\x18\x05 \x03(\v2).fraud.v1.FeatureViewEvidence.ValuesEntryR\x06values\x1aQ\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12,\n" +
-	"\x05value\x18\x02 \x01(\v2\x16.fraud.v1.FeatureValueR\x05value:\x028\x01\"\xb0\x02\n" +
+	"\x05value\x18\x02 \x01(\v2\x16.fraud.v1.FeatureValueR\x05value:\x028\x01\"\xa8\x02\n" +
 	"\rModelEvidence\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12-\n" +
 	"\x06status\x18\x03 \x01(\x0e2\x15.fraud.v1.ModelStatusR\x06status\x12\x19\n" +
 	"\x05score\x18\x04 \x01(\x01H\x00R\x05score\x88\x01\x01\x123\n" +
-	"\aread_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x06readAt\x12\x12\n" +
-	"\x04mode\x18\x06 \x01(\tR\x04mode\x12\x1c\n" +
+	"\aread_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x06readAt\x12\x1c\n" +
 	"\tthreshold\x18\a \x01(\x01R\tthreshold\x12\x1a\n" +
 	"\benforced\x18\b \x01(\bR\benforced\x12\x1a\n" +
 	"\bdeclined\x18\t \x01(\bR\bdeclinedB\b\n" +
-	"\x06_score\"\x85\a\n" +
+	"\x06_scoreJ\x04\b\x06\x10\aR\x04mode\"\x85\a\n" +
 	"\x12AssessmentEvidence\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12#\n" +
 	"\rassessment_id\x18\x02 \x01(\tR\fassessmentId\x12%\n" +

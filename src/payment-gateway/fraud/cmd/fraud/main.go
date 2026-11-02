@@ -109,20 +109,18 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if mode := os.Getenv("FRAUD_MODEL_MODE"); mode != "" && mode != "off" {
+	if os.Getenv("FRAUD_MODEL_URL") != "" {
 		if history == nil {
-			return errors.New("FRAUD_MODEL_MODE needs FRAUD_FEAST_URL")
+			return errors.New("FRAUD_MODEL_URL needs FRAUD_FEAST_URL")
 		}
-		modelConfig := application.ModelConfig{Mode: application.ModelMode(mode), Timeout: 150 * time.Millisecond}
+		modelConfig := application.ModelConfig{Timeout: 150 * time.Millisecond}
 		if value := os.Getenv("FRAUD_MODEL_TIMEOUT"); value != "" {
 			if modelConfig.Timeout, err = time.ParseDuration(value); err != nil {
 				return errors.New("FRAUD_MODEL_TIMEOUT must be a duration")
 			}
 		}
-		if value := os.Getenv("FRAUD_MODEL_THRESHOLD"); value != "" {
-			if modelConfig.Threshold, err = strconv.ParseFloat(value, 64); err != nil {
-				return errors.New("FRAUD_MODEL_THRESHOLD must be a number")
-			}
+		if modelConfig.Threshold, err = strconv.ParseFloat(os.Getenv("FRAUD_MODEL_THRESHOLD"), 64); err != nil {
+			return errors.New("FRAUD_MODEL_THRESHOLD must be a number")
 		}
 		scorer, err := kserve.New(kserve.Config{URL: os.Getenv("FRAUD_MODEL_URL"), Model: os.Getenv("FRAUD_MODEL_NAME"), DialTimeout: modelConfig.Timeout})
 		if err != nil {

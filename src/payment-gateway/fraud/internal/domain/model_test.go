@@ -8,7 +8,7 @@ import (
 func TestApplyModelBoundaries(t *testing.T) {
 	approved := Decision{PolicyVersion: PolicyVersion}
 	declined := Decision{Declined: true, Reasons: []string{"HIGH_AMOUNT"}, PolicyVersion: PolicyVersion}
-	eligible := ModelInput{Enforce: true, Available: true, Complete: true, Threshold: 0.8}
+	eligible := ModelInput{Available: true, Complete: true, Threshold: 0.8}
 	tests := []struct {
 		name         string
 		rules        Decision
@@ -23,7 +23,6 @@ func TestApplyModelBoundaries(t *testing.T) {
 		{"score above declines", approved, func(i *ModelInput) { i.Score = 1 }, true, true, []string{ModelReason}, ModelPolicyVersion},
 		{"rules decline stays with a low score", declined, func(i *ModelInput) { i.Score = 0 }, true, true, []string{"HIGH_AMOUNT"}, ModelPolicyVersion},
 		{"rules decline keeps its reasons with a high score", declined, func(i *ModelInput) { i.Score = 1 }, true, true, []string{"HIGH_AMOUNT"}, ModelPolicyVersion},
-		{"shadow mode changes nothing", approved, func(i *ModelInput) { i.Score, i.Enforce = 1, false }, false, false, nil, PolicyVersion},
 		{"an unavailable model changes nothing", approved, func(i *ModelInput) { i.Score, i.Available = 1, false }, false, false, nil, PolicyVersion},
 		{"incomplete features change nothing", approved, func(i *ModelInput) { i.Score, i.Complete = 1, false }, false, false, nil, PolicyVersion},
 		{"incomplete features keep a rules decline", declined, func(i *ModelInput) { i.Score, i.Complete = 1, false }, false, true, []string{"HIGH_AMOUNT"}, PolicyVersion},

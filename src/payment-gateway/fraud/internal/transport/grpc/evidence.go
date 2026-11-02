@@ -66,7 +66,7 @@ func modelProto(value application.ModelObservation) *fraudv1.ModelEvidence {
 	if code, ok := fraudv1.ModelStatus_value["MODEL_STATUS_"+strings.ToUpper(value.Status)]; ok {
 		status = fraudv1.ModelStatus(code)
 	}
-	result := &fraudv1.ModelEvidence{Name: value.Name, Version: value.Version, Status: status, Score: value.Score, Mode: value.Mode, Threshold: value.Threshold, Enforced: value.Enforced, Declined: value.Declined}
+	result := &fraudv1.ModelEvidence{Name: value.Name, Version: value.Version, Status: status, Score: value.Score, Threshold: value.Threshold, Enforced: value.Enforced, Declined: value.Declined}
 	if !value.ReadAt.IsZero() {
 		result.ReadAt = timestamppb.New(value.ReadAt)
 	}

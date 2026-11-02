@@ -91,7 +91,7 @@ func (s *Server) Decide(ctx context.Context, req *fraudv1.DecideRequest) (*fraud
 		s.decisions.Add(ctx, 1, attrs)
 	}
 	if model := result.Evidence.Model; model != nil && !result.Replayed {
-		s.models.Add(ctx, 1, metric.WithAttributes(attribute.String("status", model.Status), attribute.String("mode", model.Mode), attribute.Bool("enforced", model.Enforced)))
+		s.models.Add(ctx, 1, metric.WithAttributes(attribute.String("status", model.Status), attribute.Bool("enforced", model.Enforced)))
 		span.SetAttributes(attribute.String("fraud.model.status", model.Status), attribute.Bool("fraud.model.enforced", model.Enforced))
 	}
 	for _, reason := range decision.Reasons {
