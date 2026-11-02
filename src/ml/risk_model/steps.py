@@ -21,7 +21,6 @@ from risk_model.serve_client import ServeClient
 from risk_model.split import WindowSplitter
 from risk_model.train import RiskTrainer, load_booster, score
 
-GATEWAY = "knative-local-gateway.istio-system.svc.cluster.local"
 HYPERPARAMETERS = {
     "maxDepth": ("max_depth", "int", "3", "10"),
     "eta": ("eta", "double", "0.02", "0.3"),
@@ -329,10 +328,10 @@ def roll_out(*, version, run_id):
     registry.require_passing(version)
     previous = registry.production()
     predictor = json.loads(os.environ.get("SERVING_PREDICTOR", "{}"))
-    revision = kube.inference_service(version, predictor)
+    kube.inference_service(version, predictor)
     try:
-        host = kube.ready_host(kube.INFERENCE_NAME, revision)
-        client = ServeClient(os.environ.get("SERVING_GATEWAY", GATEWAY), host, kube.INFERENCE_NAME)
+        address = kube.wait_ready(kube.INFERENCE_NAME, version)
+        client = ServeClient(address, kube.INFERENCE_NAME)
         answer = client.score([{}])
         (result,) = answer["predictions"]
         if answer["model_version"] != version or not 0.0 <= result <= 1.0:

@@ -45,6 +45,7 @@ RUNTIME = "xgboost-gpu-distributed"
 EXPERIMENT = ("kubeflow.org", "v1beta1", "experiments")
 INFERENCE = ("serving.kserve.io", "v1beta1", "inferenceservices")
 INFERENCE_NAME = "payment-risk"
+SOURCE_URI = "internal.serving.kserve.io/storage-initializer-sourceuri"
 RUNTIME_NAME = "payment-risk-predictor"
 
 
@@ -222,14 +223,16 @@ def trial_train_job(image, command, args, timeout):
     }
 
 
+def model_uri(version):
+    return f"model-registry://{INFERENCE_NAME}/{version}"
+
+
 def inference_service(version, predictor):
     name = INFERENCE_NAME
-    predictor = dict(predictor)
-    uri = f"model-registry://{name}/{version}"
     model = {
         "modelFormat": {"name": name},
         "runtime": RUNTIME_NAME,
-        "storageUri": uri,
+        "storageUri": model_uri(version),
     }
     body = {
         "apiVersion": "serving.kserve.io/v1beta1",
@@ -237,43 +240,50 @@ def inference_service(version, predictor):
         "metadata": {
             "name": name,
             "namespace": namespace(),
-            "labels": {"networking.knative.dev/visibility": "cluster-local"},
-            "annotations": {"serving.kserve.io/deploymentMode": "Serverless"},
+            "annotations": {"serving.kserve.io/deploymentMode": "Standard"},
         },
-        "spec": {"predictor": {"serviceAccountName": SERVICE_ACCOUNT, **predictor, "model": model}},
+        "spec": {
+            "predictor": {"serviceAccountName": SERVICE_ACCOUNT, **dict(predictor), "model": model}
+        },
     }
     try:
-        existing = get(INFERENCE, name)
+        get(INFERENCE, name)
     except ApiException as error:
         if error.status != 404:
             raise
         create(INFERENCE, body)
-        return None
+        return
     group, api, plural = INFERENCE
-    current = existing["spec"]["predictor"]["model"].get("storageUri")
-    revision = existing.get("status", {}).get("components", {}).get("predictor", {})
     objects().patch_namespaced_custom_object(
         group, api, namespace(), plural, name, {"spec": {"predictor": {"model": model}}}
     )
-    return revision.get("latestCreatedRevision") if current != uri else "same"
 
 
-def ready_host(name, previous, timeout=1200):
+def rolled_out(deployment, uri):
+    annotations = deployment.spec.template.metadata.annotations or {}
+    status = deployment.status
+    replicas = deployment.spec.replicas or 0
+    return (
+        annotations.get(SOURCE_URI) == uri
+        and (status.observed_generation or 0) >= deployment.metadata.generation
+        and replicas > 0
+        and (status.replicas or 0)
+        == (status.updated_replicas or 0)
+        == (status.ready_replicas or 0)
+        == replicas
+    )
+
+
+def wait_ready(name, version, timeout=1200):
+    apps = client.AppsV1Api()
+    uri = model_uri(version)
+
     def done(resource):
-        status = resource.get("status", {})
-        predictor = status.get("components", {}).get("predictor", {})
-        created, ready = (
-            predictor.get("latestCreatedRevision"),
-            predictor.get("latestReadyRevision"),
-        )
-        if (
-            condition(resource, "Ready")
-            and ready
-            and ready == created
-            and (previous in (None, "same") or ready != previous)
-        ):
-            return predictor.get("url") or status.get("address", {}).get("url", "")
+        address = resource.get("status", {}).get("address", {}).get("url", "")
+        if condition(resource, "Ready") and address:
+            deployment = apps.read_namespaced_deployment(f"{name}-predictor", namespace())
+            return address if rolled_out(deployment, uri) else None
         return None
 
-    url, _ = wait(INFERENCE, name, done, timeout, interval=10, cleanup=False)
-    return url.split("://", 1)[-1].split("/", 1)[0]
+    address, _ = wait(INFERENCE, name, done, timeout, interval=10, cleanup=False)
+    return address

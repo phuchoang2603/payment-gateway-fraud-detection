@@ -12,7 +12,7 @@ See proposal.md for the motivation. What shapes the design:
 - **Labels.** Simulation truth is treated as real for this learning project, and is available at `started_at`. So there are no maturity gaps and no immature tail.
 - **Platform (talos-proxmox, through `8321dec`).**
   - The Model Registry 0.3.17 is at `http://model-registry-service.ml.svc.cluster.local:8080`, and has native version state (LIVE or ARCHIVED) but no aliases.
-  - KServe 0.21 Serverless runs custom predictor containers; the registry stores any artifact URI.
+  - KServe 0.21 in `Standard` (raw Deployment) mode runs custom predictor containers; the registry stores any artifact URI.
   - KFP (single-user) and Katib 0.19 (`Push`, `restricted`) are validated.
   - Runtime `xgboost-gpu-distributed`: DRA claim, non-root, image, command and args overridable. The pool is at most 2 × g6.xlarge (L4), currently On-Demand. The stock XGBoost image's NCCL is too old; a single GPU needs no NCCL.
   - Notebooks 1.11 cannot take DRA claims.
@@ -109,7 +109,7 @@ KFP v2 with `kfp-kubernetes`, on the `ml` image. It is compiled into `infra/char
 
 - **Custom predictor.** `src/ml/predictor` is a `kserve.Model` over `xgboost-cpu`, built by CI as the `predictor` image and referenced by a chart-owned `ServingRuntime`. The InferenceService names that runtime and a `model-registry://payment-risk/<version>` storage URI; KServe's storage initializer resolves the registry version and downloads the model directory into `/mnt/models`.
 - **Named features.** The booster is trained on unnamed columns and stores the ordered feature list as the `feature_order` attribute. The predictor takes `{"instances": [{feature: value}]}` (KServe v1 JSON), orders the values by that list, and treats a missing or null feature as NaN, which XGBoost treats as missing. It returns `{"predictions": [...], "model_version": "v7"}`; the version comes from `version.txt`, written next to the model by `record_version`. Callers never depend on column order.
-- **InferenceService `payment-risk`:** Serverless, `minScale: 1`, spot, cluster-local, run as `fraud-training`, whose storage secret carries the S3 settings KServe needs; created and patched by `roll_out`, not by Argo CD. Callers reach it through `knative-local-gateway` with the predictor host as `Host`.
+- **InferenceService `payment-risk`:** `Standard` mode (a Deployment and Service, no Knative), `minReplicas: 1`, spot, cluster-internal, run as `fraud-training`, whose storage secret carries the S3 settings KServe needs; created and patched by `roll_out`, not by Argo CD. Callers reach it through `knative-local-gateway` with the predictor host as `Host`.
 - **Not model-inside-image.** The course rubric names that pattern. A model image needs a registry write credential in the cluster (or a platform-run registry) and OCI support in KServe, so this change serves the registered model from object storage and records the gap in the docs. The artifact stays immutable in practice: the pipeline writes each run's directory once, and the bucket is versioned.
 
 ### 6a. Derived request features

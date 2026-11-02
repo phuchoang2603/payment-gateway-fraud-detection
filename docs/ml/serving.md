@@ -15,13 +15,13 @@ The `payment-risk` InferenceService runs a custom KServe predictor ([`src/ml/pre
 - **Model loading.** `roll_out` sets the storage URI to `model-registry://payment-risk/<version>`. KServe resolves the registry version to the model directory in object storage and mounts it for the predictor. The pipeline writes each run's directory once.
 - **Request:** `POST /v1/models/payment-risk:predict` with `{"instances": [{"feature": value, ...}]}`. Features are named, so callers never depend on column order. A missing or null feature is NaN, which XGBoost treats as missing, and an unknown key is ignored.
 - **Response:** `{"predictions": [...], "model_version": "v7"}`.
-- **Feature list:** the trained booster stores the ordered `payment_risk_v1` feature list as its `feature_order` attribute, and the registry version records it. Callers reach the service through `knative-local-gateway` with the predictor host as `Host`.
+- **Feature list:** the trained booster stores the ordered `payment_risk_v1` feature list as its `feature_order` attribute, and the registry version records it. Callers reach the service at the InferenceService's in-cluster address (`status.address.url`), a plain Service in front of one Deployment.
 - **Why custom.** The stock `kserve-xgbserver` builds an unnamed matrix, which a named booster rejects, and it cannot take named or null features.
 - **Rubric gap.** The model is not baked into the image. A model image needs a registry write credential or a platform-run registry; the version stays traceable through the Model Registry instead.
 
 ## Deploy and rollback
 
-`roll_out` is the last step of `payment-risk-training` for a passing model. It patches the storage URI, waits for the new revision, sends an empty instance and fails unless the answer is a score from the new version, then marks the version `production` and the previous one `archived`. If the check fails, it patches the previous version back. The `payment-risk-rollout` pipeline reruns the step for any earlier version that passed its gate, for rollback.
+`roll_out` is the last step of `payment-risk-training` for a passing model. It patches the storage URI, waits until the Deployment has rolled out the new storage URI, sends an empty instance and fails unless the answer is a score from the new version, then marks the version `production` and the previous one `archived`. If the check fails, it patches the previous version back. The `payment-risk-rollout` pipeline reruns the step for any earlier version that passed its gate, for rollback.
 
 ## Planned
 

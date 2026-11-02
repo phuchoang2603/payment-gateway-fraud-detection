@@ -11,7 +11,7 @@
   - the Katib 0.19 `Push` collector with a DRA-claim trial Job;
   - the `model-registry` Python client;
   - KFP Kubernetes-native `Pipeline`/`PipelineVersion`;
-  - KServe 0.21 custom predictor containers in Serverless mode, the route through `knative-local-gateway`, and that NaN rows are treated as missing;
+  - KServe 0.21 custom predictor containers in `Standard` mode, the in-cluster Service address, and that NaN rows are treated as missing;
   - Iceberg `MERGE ... NOT MATCHED BY SOURCE`;
   - PyIceberg position deletes;
   - a CUDA 12, Java, Spark 4.1.3 and Iceberg 1.12 jars, `fraud_feast[spark]`, XGBoost and PyIceberg set that installs together;
