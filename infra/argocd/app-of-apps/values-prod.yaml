@@ -5,7 +5,8 @@ applications:
     enabled: false
   data-pipelines:
     enabled: true
+  # Off for the stream-history replay; the project does not yet allow the llm namespace in prod.
   llm-platform:
-    enabled: true
+    enabled: false
   rag-pipeline:
-    enabled: true
+    enabled: false

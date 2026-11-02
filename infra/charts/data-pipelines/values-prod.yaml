@@ -135,9 +135,10 @@ features:
   replicationFactor: 1
   historyStart: "2026-07-29"
   historyEnd: "2026-10-29"
-  # A weekly unit holds about 19M seeded events, 2.5 GB at 130 compressed bytes each, until it ends; eight fit the
-  # 64Gi broker volume, and at up to 3 CPUs per unit the spot pool.
-  historyParallelism: 8
+  # A weekly unit holds about 19M seeded events, 2.5 GB at 130 compressed bytes each, until it ends. The training
+  # range is 14 units, so 16 runs them all at once: about 35 GB on the 64Gi broker volume, and up to 3 CPUs per unit
+  # on the 48-vCPU spot pool.
+  historyParallelism: 16
   redis:
     storageClass: gp3
     storageSize: 10Gi

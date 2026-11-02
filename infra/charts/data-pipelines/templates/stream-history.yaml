@@ -135,9 +135,10 @@ spec:
               restart-strategy.type: exponential-delay
               resourcemanager.taskmanager-registration.timeout: 10min
               slot.request.timeout: 15min
+            # One job, one TaskManager: the JobManager mostly coordinates checkpoints, so it requests half a CPU.
             jobManager:
               resources:
-                requests: {cpu: "1", memory: 1536Mi}
+                requests: {cpu: 500m, memory: 1536Mi}
                 limits: {memory: 1536Mi}
             taskManager:
               podTemplate:
