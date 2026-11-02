@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import pyarrow.compute as pc
 from fraud_feast.lake import read_json, s3, write_json
 from sklearn.metrics import precision_recall_curve
 
@@ -118,7 +119,7 @@ def split_windows(*, snapshot, train, validation, test, run_id):
     fraud = {}
     for name in rows:
         selected = table.filter(splitter.mask(table["started_at"], name))
-        fraud[name] = selected["label"].true_count / selected.num_rows
+        fraud[name] = pc.sum(selected["label"]).as_py() / selected.num_rows
     uri = f"{directory(run_id)}/split.json"
     write_json(uri, {"rows": rows, "sample_fraud_rate": fraud})
     return {"report": uri}
