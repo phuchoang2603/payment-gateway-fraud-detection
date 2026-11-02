@@ -16,7 +16,7 @@ config:
   ICEBERG_WAREHOUSE: lakehouse
   ICEBERG_CLIENT_ID: platform
   ICEBERG_OAUTH2_URI: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
-  FEAST_REGISTRY: s3://platform-dev/feast/payment-gateway/registry.pb
+  FEAST_REGISTRY: s3://platform-dev/runs/payment-gateway/feast/registry.pb
   FEAST_STREAM_EPOCHS: history-v18,live-v18
   MODEL_REGISTRY_URL: http://model-registry-service.ml.svc.cluster.local:8080
   RUN_ROOT: s3://platform-dev/runs/payment-gateway/ml

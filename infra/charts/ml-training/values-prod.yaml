@@ -2,6 +2,6 @@ enabled: true
 config:
   S3_ENDPOINT: https://s3.us-east-1.amazonaws.com
   S3_PATH_STYLE: 'false'
-  FEAST_REGISTRY: s3://platform-prod-142737101504-us-east-1/feast/payment-gateway/registry.pb
+  FEAST_REGISTRY: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/feast/registry.pb
   FEAST_STREAM_EPOCHS: history-v19,live-v19
   RUN_ROOT: s3://platform-prod-142737101504-us-east-1/runs/payment-gateway/ml
