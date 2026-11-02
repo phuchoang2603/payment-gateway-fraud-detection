@@ -2,7 +2,7 @@ global:
   imageTags:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/predictor: dev
-enabled: false
+enabled: true
 namespace: ml
 image:
   repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml
@@ -20,7 +20,7 @@ config:
   FEAST_STREAM_EPOCHS: history-v18,live-v18
   MODEL_REGISTRY_URL: http://model-registry-service.ml.svc.cluster.local:8080
   RUN_ROOT: s3://platform-dev/runs/payment-gateway/ml
-environment: prod
+environment: dev
 storage:
   store: gateway-doppler
   data:

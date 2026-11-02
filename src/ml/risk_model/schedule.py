@@ -69,6 +69,7 @@ class Pipelines:
     def replace(self, body):
         """Deletes recurring runs with the same name, creates `body` and returns its ID."""
         listing = self.call("GET", f"/recurringruns?namespace={namespace()}&page_size=100")
+        # The recurring-run list answers with camelCase keys while the other endpoints use snake_case.
         for run in listing.get("recurringRuns") or listing.get("recurring_runs") or []:
             if run["display_name"] == body["display_name"]:
                 self.call("DELETE", f"/recurringruns/{run['recurring_run_id']}")

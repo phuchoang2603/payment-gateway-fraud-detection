@@ -2,7 +2,6 @@ global:
   imageTags:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/predictor: dev
-enabled: true
 environment: dev
 serving:
   predictor:

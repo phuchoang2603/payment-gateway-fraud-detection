@@ -68,7 +68,6 @@ def plan_examples(
     train: str,
     validation: str,
     test: str,
-    cutoff: str,
     existing_snapshot: str,
     chunks: dsl.OutputPath(list),
 ):

@@ -120,8 +120,7 @@ func (c *Client) Score(ctx context.Context, features application.FeatureObservat
 }
 
 func failureStatus(ctx context.Context, err error) string {
-	var timeout net.Error
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) || errors.As(err, &timeout) && timeout.Timeout() {
+	if application.TimedOut(ctx, err) {
 		return application.ModelTimeout
 	}
 	return application.ModelError

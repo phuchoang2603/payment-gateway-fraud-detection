@@ -10,7 +10,6 @@ from risk_model.train import (
     RiskTrainer,
     environment,
     load_booster,
-    save_model,
     score,
 )
 
@@ -64,12 +63,11 @@ def test_the_baseline_scores_probabilities_for_every_row():
 
 
 def test_a_model_survives_saving_and_loading_with_its_feature_order(tmp_path):
-    """save_model writes both files, and load_booster returns the same scores and the feature order."""
+    """load_booster returns the same scores and the feature order of a saved booster."""
     train, validation = make(3, 300), make(4, 120)
     booster = RiskTrainer({"max_depth": 3}, device="cpu").fit(train, validation)
-    save_model(booster, tmp_path / "model")
-    assert (tmp_path / "model" / "model.joblib").exists()
-    loaded, order = load_booster(tmp_path / "model" / "model.json")
+    booster.save_model(tmp_path / "model.json")
+    loaded, order = load_booster(tmp_path / "model.json")
     assert order == FEATURES
     probe = make(5, 20).x
     assert np.array_equal(score(booster, probe), score(loaded, probe))

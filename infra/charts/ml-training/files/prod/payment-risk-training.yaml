@@ -229,8 +229,6 @@ components:
             name: comp-plan-examples
           inputs:
             parameters:
-              cutoff:
-                componentInputParameter: pipelinechannel--plan-windows-cutoff
               existing_snapshot:
                 componentInputParameter: pipelinechannel--training_set_snapshot
               run_id:
@@ -480,8 +478,6 @@ components:
     executorLabel: exec-plan-examples
     inputDefinitions:
       parameters:
-        cutoff:
-          parameterType: STRING
         existing_snapshot:
           parameterType: STRING
         run_id:
@@ -783,8 +779,6 @@ deploymentSpec:
         - '{{$.inputs.parameters[''validation'']}}'
         - --test
         - '{{$.inputs.parameters[''test'']}}'
-        - --cutoff
-        - '{{$.inputs.parameters[''cutoff'']}}'
         - --existing-snapshot
         - '{{$.inputs.parameters[''existing_snapshot'']}}'
         - --out

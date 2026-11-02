@@ -35,20 +35,16 @@ spec:
             - sh
             - -c
             - cp -n /opt/notebooks/*.ipynb /home/ml/ || true; exec jupyter lab --ServerApp.ip=0.0.0.0 --ServerApp.port=8888 --ServerApp.token= --ServerApp.password= --ServerApp.allow_origin=* --ServerApp.base_url="$NB_PREFIX"
+          envFrom:
+            - configMapRef:
+                name: ml-training-config
+            - secretRef:
+                name: ml-training-storage
+            - secretRef:
+                name: ml-training-iceberg
           env:
-            {{- include "ml-training.workerEnv" . | nindent 12 }}
-            - name: ML_NAMESPACE
-              value: {{ .Values.namespace | quote }}
-            - name: ML_IMAGE
-              value: {{ include "ml-training.image" . | quote }}
             - name: RUN_ROOT
               value: {{ printf "%s/notebook" .Values.config.RUN_ROOT | quote }}
-            - name: FEAST_REGISTRY
-              value: {{ .Values.config.FEAST_REGISTRY | quote }}
-            - name: FEAST_STREAM_EPOCHS
-              value: {{ .Values.config.FEAST_STREAM_EPOCHS | quote }}
-            - name: FEAST_S3_ENDPOINT_URL
-              value: {{ .Values.config.S3_ENDPOINT | quote }}
           ports:
             - name: notebook-port
               containerPort: 8888

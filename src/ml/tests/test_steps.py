@@ -307,7 +307,7 @@ def lake(monkeypatch):
 def test_planning_examples_fences_the_sources_and_lists_the_chunks(lake, files):
     """plan_examples prepares staging over the whole range, stores the fence and returns the chunks."""
     result = steps.plan_examples(
-        run_id="r1", train=TRAIN, validation=VALIDATION, test=TEST, cutoff=CUTOFF, chunk_days=2
+        run_id="r1", train=TRAIN, validation=VALIDATION, test=TEST, chunk_days=2
     )
     assert json.loads(result["chunks"]) == ["2026-10-15/2026-10-17", "2026-10-17/2026-10-19"]
     assert lake.calls == [
@@ -325,21 +325,14 @@ def test_planning_stops_spark_when_it_fails(lake, files, monkeypatch):
 
     monkeypatch.setattr(dataset, "prepare", broken)
     with pytest.raises(RuntimeError):
-        steps.plan_examples(
-            run_id="r1", train=TRAIN, validation=VALIDATION, test=TEST, cutoff=CUTOFF
-        )
+        steps.plan_examples(run_id="r1", train=TRAIN, validation=VALIDATION, test=TEST)
     assert lake.spark.stopped
 
 
 def test_an_existing_snapshot_needs_no_planning_or_assembly(monkeypatch, lake, files):
     """With an existing snapshot, plan returns no chunks and assemble only confirms the snapshot."""
     result = steps.plan_examples(
-        run_id="r1",
-        train=TRAIN,
-        validation=VALIDATION,
-        test=TEST,
-        cutoff=CUTOFF,
-        existing_snapshot="7",
+        run_id="r1", train=TRAIN, validation=VALIDATION, test=TEST, existing_snapshot="7"
     )
     assert result == {"chunks": "[]"} and lake.calls == []
     serving(monkeypatch, Reader())

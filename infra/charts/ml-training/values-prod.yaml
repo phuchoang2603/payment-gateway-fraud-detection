@@ -1,4 +1,4 @@
-enabled: true
+environment: prod
 config:
   S3_ENDPOINT: https://storage.googleapis.com
   AWS_REGION: auto

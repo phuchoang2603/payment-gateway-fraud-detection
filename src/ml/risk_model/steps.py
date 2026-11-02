@@ -16,7 +16,7 @@ from fraud_feast.lake import catalog, read_json, s3, write_json
 from sklearn.metrics import precision_recall_curve
 
 from risk_model import kube
-from risk_model.data import DatasetReader
+from risk_model.data import CHUNK_DAYS, DatasetReader
 from risk_model.evaluate import MARGIN, GateEvaluator, pr_curve_html
 from risk_model.registry import RegistryClient
 from risk_model.schedule import Pipelines, recurring_body
@@ -83,25 +83,23 @@ def plan_windows(
         covered or reference - timedelta(days=lag_days), train_days, validation_days, test_days
     )
     registered = RegistryClient().latest_cutoff()
-    run = covered is not None and (force or is_newer(plan.cutoff, registered))
+    chosen = {
+        "train": str(plan.train),
+        "validation": str(plan.validation),
+        "test": str(plan.test),
+        "cutoff": plan.cutoff,
+        "run": covered is not None and (force or is_newer(plan.cutoff, registered)),
+    }
     write_json(
         f"{directory(run_id)}/windows.json",
         {
             "reference": str(reference),
             "covered_end": None if covered is None else str(covered),
             "registered_cutoff": registered,
-            "windows": [str(plan.train), str(plan.validation), str(plan.test)],
-            "cutoff": plan.cutoff,
-            "run": run,
+            **chosen,
         },
     )
-    return {
-        "train": str(plan.train),
-        "validation": str(plan.validation),
-        "test": str(plan.test),
-        "cutoff": plan.cutoff,
-        "run": run,
-    }
+    return chosen
 
 
 def ensure_schedule(
@@ -135,20 +133,16 @@ def ensure_schedule(
 
 
 def plan_examples(
-    *, train, validation, test, cutoff, run_id, existing_snapshot="", chunk_days: int = 16
+    *, train, validation, test, run_id, existing_snapshot="", chunk_days: int = CHUNK_DAYS
 ):
     """Fences the sources, prepares staging and returns the day chunks to stage, none for an existing snapshot."""
     if existing_snapshot:
         return {"chunks": "[]"}
-    from risk_model.dataset import chunks, feast_store, fence_path, prepare, session
+    from risk_model.dataset import chunks, fence_path, prepare, spark_session
 
     splitter = WindowSplitter(train, validation, test)
-    store = feast_store()
-    spark = session(store)
-    try:
+    with spark_session() as (store, spark):
         before = prepare(spark, store, splitter.start, splitter.end)
-    finally:
-        spark.stop()
     write_json(fence_path(directory(run_id)), {"before": before})
     pieces = chunks(splitter.start, splitter.end, chunk_days)
     return {"chunks": json.dumps([f"{first}/{last}" for first, last in pieces])}
@@ -156,15 +150,11 @@ def plan_examples(
 
 def stage_examples(*, chunk, cutoff):
     """Stages one `first/last` chunk of days and returns the number of rows staged."""
-    from risk_model.dataset import feast_store, session, stage
+    from risk_model.dataset import spark_session, stage
 
     first, last = (date.fromisoformat(day) for day in chunk.split("/"))
-    store = feast_store()
-    spark = session(store)
-    try:
+    with spark_session() as (store, spark):
         return {"rows": str(stage(spark, store, first, last, cutoff))}
-    finally:
-        spark.stop()
 
 
 def assemble_examples(*, train, validation, test, cutoff, run_id, existing_snapshot=""):
@@ -175,16 +165,12 @@ def assemble_examples(*, train, validation, test, cutoff, run_id, existing_snaps
     splitter = WindowSplitter(train, validation, test)
     if existing_snapshot:
         return {"snapshot": str(DatasetReader.at(existing_snapshot).snapshot_id)}
-    from risk_model.dataset import feast_store, fence_path, merge_examples, session
+    from risk_model.dataset import fence_path, merge_examples, spark_session
 
     started = time.monotonic()
-    store = feast_store()
-    spark = session(store)
-    try:
+    with spark_session() as (store, spark):
         before = read_json(fence_path(directory(run_id)))["before"]
         built = merge_examples(spark, store, splitter.start, splitter.end, cutoff, before)
-    finally:
-        spark.stop()
     write_json(
         f"{directory(run_id)}/examples.json",
         {**asdict(built), "seconds": round(time.monotonic() - started, 1)},

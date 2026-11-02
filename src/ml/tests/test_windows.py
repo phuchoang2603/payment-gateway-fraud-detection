@@ -146,6 +146,19 @@ def test_the_latest_covered_day_skips_a_gap_between_replay_and_live_data():
     assert latest_covered(days, 1, date(2026, 11, 2), lambda _: True) == date(2026, 11, 2)
 
 
+def test_each_day_is_checked_for_rows_only_once_across_overlapping_spans():
+    """Candidate spans overlap, so a day that was already looked up is not looked up again."""
+    asked = []
+
+    def covers(day):
+        asked.append(day)
+        return day != date(2026, 10, 20)
+
+    days = run(date(2026, 10, 14), date(2026, 10, 20))
+    assert latest_covered(days, 3, date(2026, 10, 20), covers) == date(2026, 10, 19)
+    assert len(asked) == len(set(asked))
+
+
 def test_the_latest_covered_day_stops_at_the_cap_and_needs_the_whole_span_before_it():
     """The latest covered day stops at the cap and needs the whole span before it."""
     days = run(date(2026, 10, 14), date(2026, 10, 20))

@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
 
@@ -12,12 +13,11 @@ from fraud_feast.repo import DAILY_TABLES, TABLES, epochs
 from fraud_feast.training import entity_rows
 from pyspark.sql import functions as F
 
-from risk_model.data import BUCKETS, KEY, TABLE
+from risk_model.data import BUCKETS, CHUNK_DAYS, KEY, TABLE
 
 SERVICE = "payment_risk_v1"
 STAGE = "ml.payment_risk_v1_stage"
 SAMPLE_BUCKETS = 100
-CHUNK_DAYS = 16
 LABEL_TABLES = ("gold.label_attempt", "silver.attempts", "silver.payment_events")
 PREFIX = "spark.sql.iceberg.snapshot-property."
 
@@ -272,3 +272,14 @@ def feast_store():
     from fraud_feast.runtime import store
 
     return store(redis=False)
+
+
+@contextmanager
+def spark_session():
+    """Yields the Feast store and a Spark session on it, and stops the session on exit."""
+    store = feast_store()
+    spark = session(store)
+    try:
+        yield store, spark
+    finally:
+        spark.stop()

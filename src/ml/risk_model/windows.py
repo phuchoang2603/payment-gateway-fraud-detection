@@ -1,5 +1,6 @@
 """Rolling train, validation and test windows for scheduled retraining, and the data coverage they need."""
 
+import functools
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 
@@ -76,18 +77,15 @@ def partition_days(table):
     }
 
 
-def latest_covered(days, span, not_after, has_rows):
-    """The latest end day, at or before `not_after`, where each of the `span` days up to it has rows."""
-    known = {}
+def latest_covered(days, span, not_after, covers):
+    """The latest end day, at or before `not_after`, where each of the `span` days up to it has rows.
 
-    def rows(day):
-        if day not in known:
-            known[day] = has_rows(day)
-        return known[day]
-
+    `covers(day)` says whether a day has rows, and is asked at most once per day.
+    """
+    covers = functools.cache(covers)
     for end in sorted((day for day in days if day <= not_after), reverse=True):
         needed = [end - timedelta(days=offset) for offset in range(span)]
-        if all(day in days for day in needed) and all(rows(day) for day in needed):
+        if all(day in days for day in needed) and all(covers(day) for day in needed):
             return end
     return None
 

@@ -237,8 +237,7 @@ func evaluate(view string, names []string, fields map[string]featureResult, scor
 }
 
 func failureStatus(ctx context.Context, err error) string {
-	var timeout net.Error
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) || errors.As(err, &timeout) && timeout.Timeout() {
+	if application.TimedOut(ctx, err) {
 		return "timeout"
 	}
 	return "error"

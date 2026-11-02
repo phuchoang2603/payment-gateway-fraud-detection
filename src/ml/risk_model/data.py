@@ -11,6 +11,7 @@ from pyiceberg.expressions import And, GreaterThanOrEqual, LessThan
 TABLE = "ml.payment_risk_v1_examples"
 KEY = ("integration_id", "payment_id", "attempt_id")
 BUCKETS = 1000
+CHUNK_DAYS = 16
 META = (*KEY, "started_at", "label", "bucket", "row_hash")
 
 
@@ -137,10 +138,9 @@ class DatasetReader:
         wrong = [
             name
             for name in self.features
-            if not (
-                pa.types.is_integer(table.schema.field(name).type)
-                or pa.types.is_floating(table.schema.field(name).type)
-                or pa.types.is_boolean(table.schema.field(name).type)
+            if not any(
+                check(table.schema.field(name).type)
+                for check in (pa.types.is_integer, pa.types.is_floating, pa.types.is_boolean)
             )
         ]
         if wrong:

@@ -135,7 +135,7 @@ A stopped `Notebook` `fraud-explore` (the `ml` image, 20 Gi, CPU), listed in the
 2. split;
 3. submit the same single-GPU TrainJob and wait;
 4. evaluate on validation;
-5. save `.joblib` and `model.json` to its PVC.
+5. save `model.json` to its PVC.
 
 Notebooks can't take GPU claims, which is why training goes through the TrainJob.
 

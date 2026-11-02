@@ -1,10 +1,8 @@
 """Training: the XGBoost trainer, the linear baseline, model files and the hyperparameter table."""
 
 import json
-from pathlib import Path
 from typing import NamedTuple
 
-import joblib
 import numpy as np
 import xgboost as xgb
 from sklearn.impute import SimpleImputer
@@ -99,14 +97,6 @@ def score(model, x):
     if isinstance(model, xgb.Booster):
         return model.predict(xgb.DMatrix(x))
     return model.predict_proba(x)[:, 1]
-
-
-def save_model(booster, directory):
-    """Writes `model.json` and `model.joblib` for a booster into `directory`."""
-    directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    booster.save_model(directory / "model.json")
-    joblib.dump(booster, directory / "model.joblib")
 
 
 def load_booster(path):
