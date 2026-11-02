@@ -143,7 +143,7 @@ spec:
     args: [-pym, fraud_streaming.job]
     parallelism: 1
     upgradeMode: last-state
-    state: {{ .Values.features.streaming.liveState }}
+    state: running
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
