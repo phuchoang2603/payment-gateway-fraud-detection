@@ -1,10 +1,10 @@
 environment: dev
 namePrefix: payment-gateway-dev
-# Dev runs the gateway, streaming and data pipelines for the feature-store runs; the LLM applications are off so
-# they do not compete with them for dev-server1.
+# Dev runs the gateway, streaming, data pipelines and a bounded live simulator for the feature-store and model runs; the
+# LLM applications are off so they do not compete with them for dev-server1.
 applications:
   live-traffic:
-    enabled: false
+    enabled: true
   llm-platform:
     enabled: false
   rag-pipeline:
