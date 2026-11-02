@@ -114,6 +114,13 @@ spec:
               # states, far fewer than the active entities. Keep the default bundle: a larger one makes each Python stage
               # finish a whole bundle before the next gets input, so the stages stop overlapping.
               python.state.cache-size: '20000'
+              # Keyed state lives in RocksDB on local disk, not the JVM heap: the dedup horizon alone outgrew a 1 GB heap
+              # at about 1M events. Incremental checkpoints upload only what changed. The managed memory is split between
+              # RocksDB and the Python workers.
+              state.backend.type: rocksdb
+              execution.checkpointing.incremental: 'true'
+              taskmanager.memory.managed.fraction: '0.5'
+              taskmanager.memory.managed.consumer-weights: STATE_BACKEND:50,PYTHON:50
               execution.shutdown-on-application-finish: "false"
               execution.checkpointing.interval: 10s
               execution.checkpointing.storage: filesystem
@@ -135,19 +142,19 @@ spec:
               restart-strategy.type: exponential-delay
               resourcemanager.taskmanager-registration.timeout: 10min
               slot.request.timeout: 15min
-            # One job, one TaskManager: the JobManager mostly coordinates checkpoints, so it requests half a CPU.
+            # One job, one TaskManager. A burst node has 4 vCPU, so two units fit on it: the JobManager only coordinates
+            # checkpoints and the TaskManager uses about 1.5 cores.
             jobManager:
               resources:
-                requests: {cpu: 500m, memory: 1536Mi}
-                limits: {memory: 1536Mi}
+                requests: {cpu: 200m, memory: 1280Mi}
+                limits: {memory: 1280Mi}
             taskManager:
               podTemplate:
                 spec:
                   {{- include "data-pipelines.placement" $ | nindent 18 }}
-              # The Python worker and the TaskManager JVM each need a core.
               resources:
-                requests: {cpu: "2", memory: 3Gi}
-                limits: {memory: 3Gi}
+                requests: {cpu: 1400m, memory: 5Gi}
+                limits: {memory: 5Gi}
             podTemplate:
               metadata:
                 annotations:
@@ -279,7 +286,7 @@ spec:
           {{- end }}
           {{- if has $mode (list "seed" "writer") }}
           - name: HISTORY_SEED_REPORT
-            value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}-seed.json" $.Values.features.reportRoot | quote }}
+            value: {{ printf "%s/history/seeds/{{inputs.parameters.run}}.json" $.Values.features.reportRoot | quote }}
           {{- end }}
           {{- if eq $mode "writer" }}
           - name: RUN_REPORT
