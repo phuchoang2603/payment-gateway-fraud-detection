@@ -120,6 +120,45 @@ Results with the module defaults: seed 2603, 1,200 attempts and 1,221 deliveries
 
 The handled variant's counters equal the injected workload: `too_late` 8, event `duplicates_dropped` 17, `rejected` (conflicting) 4, and lateness 5–15 minutes 58.
 
+### Backpressure
+
+Flink's flow control is credit-based: when an operator is slower than the one before it, its input buffers fill, the upstream operator blocks and the pressure travels back to the Kafka source, which stops polling. Nothing is dropped and nothing queues without bound in the job, and the seeded topics keep the records. In the Flink UI, an operator that is busy near 100% and red is the bottleneck, and the operators upstream of it show high backpressure.
+
+The live job runs at 0% backpressure (see [Flink UI](#flink-ui)). The stress case is the history replay, which reads a seeded topic as fast as the job can take it. One unit is one week at parallelism 1, because the logical clock needs a single ordered partition, so a unit cannot scale out.
+
+![Backpressure in a history unit](images/online-replay-backpressure.png)
+
+*Unit `20260819` on prod, 2026-11-02 03:26 UTC (the UI shows UTC−5). The two aggregate operators are red at about 100% busy; the source and the first three operators are 90–99% backpressured and 1–8% busy.*
+
+| Measure (unit `20260819`, REST `subtasks/metrics`) | Value |
+|---|---|
+| Source and progress observation | 96% and 88% backpressured, 4% and 12% busy |
+| Event and attempt deduplication | 68% busy, 22% backpressured |
+| Customer and method aggregation | 88% and 89% busy, 0% backpressured |
+| Aggregation input rate | 75 records/s, so about 12 ms per record |
+| Source rate | about 1,150 events/s in the first minutes, about 350 events/s from minute 10, as per-entity state grows |
+| TaskManager CPU | 1.4–1.5 of 2 cores; the four Python operators and the JVM share it |
+
+The checkpoint barrier travels with the data, so under backpressure it waits behind full buffers. With a 10 s interval and full 148 MB snapshots, checkpoints took close to the 2-minute timeout and some expired; an expired checkpoint fails the job, which restores from the last completed one.
+
+![Checkpoints before tuning](images/online-replay-checkpoints-before.png)
+
+*Before: 25 checkpoints triggered in 11 min 45 s, 22 completed, 2 failed; the latest took 1 min 59 s at 148 MB. Unit `20261007` was restored twice with "Exceeded checkpoint tolerable failure threshold".*
+
+![Checkpoints after tuning](images/online-replay-checkpoints-after.png)
+
+*After: unit `20261014` with the tuned settings, 11 min in: 4 triggered, 3 completed, 1 failed (the first), none restored; the latest took 29 s at 114 MB.*
+
+| Technique | Setting | Effect |
+|---|---|---|
+| Find the bottleneck first | Busy and backpressured time per operator, from the UI or `/jobs/<id>/vertices/<id>/subtasks/metrics` | Showed that the aggregate operators, not Kafka, S3 or the seed, set the pace |
+| Keep barriers moving | `taskmanager.network.memory.buffer-debloat.enabled: true` | Smaller in-flight buffers in front of a slow operator, so barriers reach it sooner |
+| Stop checkpointing from competing with the work | `execution.checkpointing.min-pause: 2min`, `timeout: 10min` | 4 checkpoints in 11 min instead of 25 in 12, about 29 s each instead of about 2 min, and no restores. The Kafka sink's 15-minute transaction timeout still covers a pause plus a checkpoint |
+| Bound the producer | The seed's `queue.buffering.max.kbytes` and one day per sort | The seed blocks on the broker instead of growing, which keeps it inside its memory limit |
+| Scale across units, not within one | `historyParallelism` units run at once, each with its own topics, state and transactions | Whole-replay time follows the slowest unit instead of the sum; the burst pool's CPU limit caps how many fit |
+
+The steady rate did not change: both runs stay at about 350–400 events/s with the aggregate operators 70–90% busy. The cost is per record: every attempt and every window boundary reads, updates and writes back one pickled `Entity` snapshot with all of its attempts from the last 24 hours. Replacing that with incremental window state, and testing `python.state.cache-size` and a larger Python bundle, are the next steps; the run that tried them was cut short when its unit was recreated.
+
 ## Evidence
 
 One bounded dev run on 2026-10-29, from PR #101's dev releases. Prod was untouched.
