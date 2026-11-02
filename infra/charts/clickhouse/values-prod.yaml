@@ -1,7 +1,7 @@
 storageClass: cloud-block
 nodeSelector:
   talos.dev/capacity-type: on-demand
-# Prod runs on two m6a.xlarge On-Demand workers (4 vCPU / 16 GiB each) that already host the other
+# Prod runs on the On-Demand e2-standard-4 workers (4 vCPU / 16 GiB each) that already host the other
 # databases. Requests are sized to fit beside them, with no CPU limit so queries are not throttled.
 # ClickHouse derives max_server_memory_usage from the 4Gi cgroup limit; the 0.85 ratio in the
 # instance settings leaves about 3.4Gi for queries, and the mark cache is capped below the limit.
