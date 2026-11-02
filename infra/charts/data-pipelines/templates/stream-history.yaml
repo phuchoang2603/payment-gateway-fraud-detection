@@ -61,11 +61,6 @@ spec:
           - {name: end}
           - {name: run}
       steps:
-        - - name: topics
-            template: topics
-            arguments:
-              parameters:
-                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
         - - name: seed
             template: seed
             arguments:
@@ -207,7 +202,7 @@ spec:
               parallelism: 1
               upgradeMode: stateless
               state: running
-    {{- range $mode := list "topics" "seed" "writer" "gate" "delete-topics" }}
+    {{- range $mode := list "seed" "writer" "gate" "delete-topics" }}
     - name: {{ $mode }}
       {{- if has $mode (list "seed" "writer") }}
       {{- include "data-pipelines.placement" $ | nindent 6 }}
@@ -216,7 +211,9 @@ spec:
       # A fresh sort volume is owned by root; the streaming image runs as the flink group.
       securityContext: {fsGroup: 9999}
       {{- end }}
-      {{- if eq $mode "writer" }}
+      {{- if has $mode (list "seed" "writer") }}
+      # A spot reclaim or a transient catalog or broker error retries the step. The seed recreates its topics empty
+      # before writing, and the writer replaces the unit's rows, so a retry leaves one copy.
       retryStrategy:
         limit: 3
         retryPolicy: Always
@@ -232,15 +229,13 @@ spec:
           - {name: end}
           {{- end }}
       container:
-        {{- if has $mode (list "topics" "seed" "delete-topics") }}
+        {{- if has $mode (list "seed" "delete-topics") }}
         image: {{ include "data-pipelines.image" (dict "image" $.Values.images.streaming "global" $.Values.global) | quote }}
         command: [/app/history-venv/bin/python, -m, fraud_streaming.history]
         {{- if eq $mode "seed" }}
         args: [seed, --start, {{ "{{inputs.parameters.start}}" | quote }}, --end, {{ "{{inputs.parameters.end}}" | quote }}]
-        {{- else if eq $mode "delete-topics" }}
-        args: [topics, --delete]
         {{- else }}
-        args: [topics]
+        args: [topics, --delete]
         {{- end }}
         {{- else }}
         image: {{ include "data-pipelines.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
@@ -266,21 +261,20 @@ spec:
           {{- end }}
           - name: STREAM_RUN
             value: {{ "{{inputs.parameters.run}}" | quote }}
-          {{- if has $mode (list "topics" "seed" "delete-topics") }}
+          {{- if has $mode (list "seed" "delete-topics") }}
           - name: KAFKA_BROKERS
             value: {{ $.Values.bronze.kafka.bootstrapServers | quote }}
           {{- end }}
-          {{- if eq $mode "topics" }}
+          {{- if eq $mode "seed" }}
           - name: HISTORY_REPLICATION_FACTOR
             value: {{ $.Values.features.replicationFactor | quote }}
           {{- end }}
           {{- if eq $mode "seed" }}
           - name: DATASET_VERSION
             value: {{ $.Values.bronze.datasetVersion | quote }}
-          # DuckDB's sort and the Bronze file PyIceberg is decoding share the 10Gi limit; a decoded file takes a few
-          # GiB, so one reader thread and a 4 GB sort leave headroom.
-          - {name: HISTORY_SORT_MEMORY, value: 4GB}
-          - {name: PYICEBERG_MAX_WORKERS, value: "1"}
+          # The seed sorts one day of Bronze at a time; the sort and the file PyIceberg is decoding share the limit.
+          - {name: HISTORY_SORT_MEMORY, value: 3GB}
+          - {name: PYICEBERG_MAX_WORKERS, value: "2"}
           {{- end }}
           {{- if has $mode (list "seed" "writer") }}
           - name: HISTORY_SEED_REPORT
@@ -299,8 +293,8 @@ spec:
           {{- if eq $mode "seed" }}
           # DuckDB sorts a week of Bronze under HISTORY_SORT_MEMORY and spills the rest to the sort volume; the Arrow
           # batches and the producer queue need the headroom above it.
-          requests: {cpu: "1", memory: 8Gi, ephemeral-storage: 2Gi}
-          limits: {memory: 10Gi, ephemeral-storage: 4Gi}
+          requests: {cpu: "1", memory: 6Gi, ephemeral-storage: 2Gi}
+          limits: {memory: 8Gi, ephemeral-storage: 4Gi}
           {{- else }}
           requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 2Gi}
           limits: {memory: 4Gi, ephemeral-storage: 4Gi}

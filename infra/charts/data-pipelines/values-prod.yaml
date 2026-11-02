@@ -135,8 +135,9 @@ features:
   replicationFactor: 1
   historyStart: "2026-07-29"
   historyEnd: "2026-10-29"
-  # Four weekly units fit the 64Gi broker volume and the spot pool; topics are deleted when each unit ends.
-  historyParallelism: 4
+  # A weekly unit holds about 19M seeded events, 2.5 GB at 130 compressed bytes each, until it ends; eight fit the
+  # 64Gi broker volume, and at up to 3 CPUs per unit the spot pool.
+  historyParallelism: 8
   redis:
     storageClass: gp3
     storageSize: 10Gi

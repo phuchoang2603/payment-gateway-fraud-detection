@@ -22,6 +22,12 @@ check_python() (
     COVERAGE_FILE="$reports/.coverage" uv run --locked --with "pytest-cov==$PYTEST_COV" pytest -q --durations=10 \
       --cov=. --cov-config="$coverage_config" --cov-report=term \
       --cov-report="xml:$reports/coverage.xml" --cov-report="html:$reports/coverage-html"
+    # A project whose code runs in a second, incompatible environment names it in [tool.ci] test-groups; the tests
+    # that need it skip in the default environment and run here.
+    local group
+    for group in $(python3 -c 'import tomllib; print(" ".join(tomllib.load(open("pyproject.toml", "rb")).get("tool", {}).get("ci", {}).get("test-groups", [])))'); do
+      uv run --locked --no-default-groups --group dev --group "$group" pytest -q --durations=5
+    done
   fi
 )
 

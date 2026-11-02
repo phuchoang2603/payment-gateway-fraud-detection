@@ -33,3 +33,5 @@ offline_store:
     spark.sql.catalog.lake.client.region: ${AWS_REGION}
 materialization:
   pull_latest_features: true
+  # Feast converts every latest row to protos at once without a batch size; prod has millions of entities.
+  online_write_batch_size: 50000

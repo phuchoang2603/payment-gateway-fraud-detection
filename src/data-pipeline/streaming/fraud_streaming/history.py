@@ -112,38 +112,101 @@ def write_report(report):
         Path(os.environ["HISTORY_SEED_REPORT"]).write_bytes(body)
 
 
+# Bronze ordering for replay: event time, then the keys that make it total.
+ORDER = "recorded_at, integration_id, payment_id, aggregate_version, event_id, _source_file, _kafka_offset"
+# Columns the seed reads, where Bronze has them: the event fields it encodes and the provenance that orders duplicates.
+PROVENANCE = ("_source_file", "_kafka_offset")
+
+
+def days(first, last):
+    while first < last:
+        yield first, min(first + timedelta(days=1), last)
+        first += timedelta(days=1)
+
+
+def ordered_rows(db, table, snapshot, columns, start, end):
+    """Bronze rows recorded in [start, end), in replay order. One day at a time keeps the sort and the decoded files
+    to one day's events, so memory does not grow with the unit."""
+    from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan
+
+    predicate = And(
+        EqualTo("_dataset_version", os.environ["DATASET_VERSION"]),
+        And(GreaterThanOrEqual("recorded_at", start), LessThan("recorded_at", end)),
+    )
+    scan = table.scan(row_filter=predicate, selected_fields=columns, snapshot_id=snapshot)
+    db.register("bronze", scan.to_arrow_batch_reader())
+    try:
+        for batch in db.sql(f"SELECT * FROM bronze ORDER BY {ORDER}").to_arrow_reader(10000):
+            yield from batch.to_pylist()
+    finally:
+        db.unregister("bronze")
+
+
+def reset_topics(*, delete_only=False):
+    """Delete the run's topics, then recreate them empty unless delete_only. The seed calls it first, so a retried
+    seed starts from empty topics and never appends a second copy of the unit."""
+    admin = AdminClient({"bootstrap.servers": os.environ["KAFKA_BROKERS"]})
+    existing = set(admin.list_topics(timeout=30).topics)
+    names = topics(run_name())
+    stale = [name for name in names if name in existing]
+    if stale:
+        for future in admin.delete_topics(stale, operation_timeout=30).values():
+            future.result()
+    if delete_only:
+        return
+    deadline = time.monotonic() + 120
+    while existing.intersection(names):
+        if time.monotonic() > deadline:
+            raise TimeoutError("history topics were not deleted")
+        time.sleep(1)
+        existing = set(admin.list_topics(timeout=30).topics)
+    configs = {
+        "retention.ms": "-1",
+        "retention.bytes": "-1",
+        "cleanup.policy": "delete",
+        "compression.type": "zstd",
+    }
+    for future in admin.create_topics(
+        [
+            NewTopic(
+                name,
+                num_partitions=1,
+                replication_factor=int(os.environ.get("HISTORY_REPLICATION_FACTOR", "1")),
+                config=configs,
+            )
+            for name in names
+        ]
+    ).values():
+        future.result()
+
+
 def seed(start, end):
     import duckdb
-    from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, LessThan
 
     first, last = date.fromisoformat(start), date.fromisoformat(end)
     if first >= last:
         raise ValueError("history start must precede end")
     epoch = os.environ["FEATURE_EPOCH"]
     input_topic, clock_topic, *_ = topics(run_name())
+    reset_topics()
     bootstrap = datetime.combine(first - timedelta(days=1), datetime.min.time(), UTC)
     until = datetime.combine(last, datetime.min.time(), UTC)
     table = lake().load_table("bronze.payment_events")
     snapshot = table.current_snapshot().snapshot_id
-    predicate = And(
-        EqualTo("_dataset_version", os.environ["DATASET_VERSION"]),
-        And(GreaterThanOrEqual("recorded_at", bootstrap), LessThan("recorded_at", until)),
-    )
-    scan = table.scan(row_filter=predicate, snapshot_id=snapshot).to_arrow_batch_reader()
+    wanted = {*PaymentEvent.DESCRIPTOR.fields_by_name, *PROVENANCE}
+    columns = tuple(field.name for field in table.schema().fields if field.name in wanted)
     db = duckdb.connect()
     db.execute(f"SET memory_limit = '{os.environ.get('HISTORY_SORT_MEMORY', '1GB')}'")
     db.execute("SET temp_directory = '/tmp/history-sort'")
-    db.register("bronze", scan)
-    reader = db.sql(
-        "SELECT * FROM bronze ORDER BY recorded_at, integration_id, payment_id, aggregate_version, event_id, _source_file, _kafka_offset"
-    ).to_arrow_reader(10000)
+    db.execute("SET preserve_insertion_order = false")
     brokers = os.environ["KAFKA_BROKERS"]
     producer = Producer(
         {
             "bootstrap.servers": brokers,
             "enable.idempotence": True,
             "acks": "all",
-            "queue.buffering.max.messages": 500000,
+            # Bounds the producer's own buffer; produce() blocks on BufferError until it drains.
+            "queue.buffering.max.kbytes": 262144,
             "linger.ms": 50,
             "batch.size": 1048576,
             "compression.type": "zstd",
@@ -157,7 +220,7 @@ def seed(start, end):
             failures.append(str(error))
 
     def flush():
-        if producer.flush(60) or failures:
+        if producer.flush(120) or failures:
             raise RuntimeError("history Kafka delivery failed")
 
     def clock(instant):
@@ -181,8 +244,8 @@ def seed(start, end):
     began = time.monotonic()
     clock(int(bootstrap.timestamp() * 1_000_000))
     try:
-        for batch in reader:
-            for row in batch.to_pylist():
+        for day_start, day_end in days(bootstrap, until):
+            for row in ordered_rows(db, table, snapshot, columns, day_start, day_end):
                 record = {
                     "partition": 0,
                     "key": row["payment_id"].encode(),
@@ -239,38 +302,7 @@ def main():
             )
             raise
     elif args.mode == "topics":
-        admin = AdminClient({"bootstrap.servers": os.environ["KAFKA_BROKERS"]})
-        existing = set(admin.list_topics(timeout=30).topics)
-        names = topics(run_name())
-        stale = [name for name in names if name in existing]
-        if stale:
-            for future in admin.delete_topics(stale, operation_timeout=30).values():
-                future.result()
-        if not args.delete:
-            deadline = time.monotonic() + 120
-            while existing.intersection(names):
-                if time.monotonic() > deadline:
-                    raise TimeoutError("history topics were not deleted")
-                time.sleep(1)
-                existing = set(admin.list_topics(timeout=30).topics)
-            configs = {
-                "retention.ms": "-1",
-                "retention.bytes": "-1",
-                "cleanup.policy": "delete",
-                "compression.type": "zstd",
-            }
-            for name, future in admin.create_topics(
-                [
-                    NewTopic(
-                        name,
-                        num_partitions=1,
-                        replication_factor=int(os.environ.get("HISTORY_REPLICATION_FACTOR", "1")),
-                        config=configs,
-                    )
-                    for name in names
-                ]
-            ).items():
-                future.result()
+        reset_topics(delete_only=args.delete)
     else:
         planned = units(date.fromisoformat(args.start), date.fromisoformat(args.end), args.days)
         # The Flink Role names each unit's Deployment from the chart's history range and unit length.
