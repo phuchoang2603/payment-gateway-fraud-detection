@@ -215,10 +215,12 @@ spec:
       {{- if has $mode (list "seed" "writer") }}
       # A spot reclaim or a transient catalog or broker error retries the step. The seed recreates its topics empty
       # before writing, and the writer replaces the unit's rows, so a retry leaves one copy.
+      # Backoff without maxDuration: Argo measures maxDuration from the step's first start, so a seed reclaimed after
+      # two minutes would never retry.
       retryStrategy:
-        limit: 3
+        limit: 5
         retryPolicy: Always
-        backoff: {duration: 10s, factor: 2, maxDuration: 2m}
+        backoff: {duration: 30s, factor: 2, cap: 5m}
       {{- end }}
       inputs:
         parameters:
