@@ -169,7 +169,7 @@ gateway:
       port: 8080
 
 secretStore: gateway-doppler
-# Platform-owned credentials this app consumes: the Kubeflow artifacts identity and the shared ClickHouse users.
+# Platform-owned credentials this app consumes: the Kubeflow artifacts identity and the Dex client secret.
 platformSecretStore: doppler
 
 # The platform's metrics agent, enrolled in the ambient mesh so it can be admitted by identity.
@@ -209,7 +209,7 @@ agents:
   egressGateway: cluster.local/ns/ate-system/sa/atenet-egress
   # kagent's public A2A endpoint, /agents/<namespace>/<name>, served by its controller. The platform's waypoint admits
   # the gateway there by mesh identity; the gateway also signs a short-lived token per request as its machine
-  # principal, with a platform key.
+  # principal, with a key from the application Doppler project.
   a2a:
     controller: {host: kagent-controller.kagent.svc.cluster.local, port: 8083}
     signing:
