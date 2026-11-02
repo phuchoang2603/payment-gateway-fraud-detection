@@ -111,10 +111,9 @@ spec:
               python.executable: /app/.venv/bin/python
               python.client.executable: /app/.venv/bin/python
               # Every state read and write of a keyed Python operator crosses to the JVM. The default cache holds 1000
-              # states, far fewer than the active entities, and a bundle closes every second.
+              # states, far fewer than the active entities. Keep the default bundle: a larger one makes each Python stage
+              # finish a whole bundle before the next gets input, so the stages stop overlapping.
               python.state.cache-size: '20000'
-              python.fn-execution.bundle.size: '20000'
-              python.fn-execution.bundle.time: '5000'
               execution.shutdown-on-application-finish: "false"
               execution.checkpointing.interval: 10s
               execution.checkpointing.storage: filesystem
@@ -151,6 +150,8 @@ spec:
                 limits: {memory: 3Gi}
             podTemplate:
               metadata:
+                annotations:
+                  karpenter.sh/do-not-disrupt: "true"
                 labels:
                   app.kubernetes.io/name: fraud-streaming
                   istio.io/dataplane-mode: none
