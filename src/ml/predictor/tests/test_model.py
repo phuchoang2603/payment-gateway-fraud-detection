@@ -1,3 +1,5 @@
+"""Property tests for the predictor: scores depend on feature names, and missing values behave alike."""
+
 import json
 
 import numpy as np
@@ -11,6 +13,7 @@ FEATURES = ["amount", "age_days", "attempts_5m"]
 
 
 def served(tmp_path_factory):
+    """Returns a loaded model trained on random data, with version `v7`."""
     directory = tmp_path_factory.mktemp("models")
     generator = np.random.default_rng(3)
     x = generator.normal(size=(400, len(FEATURES))).astype(np.float32)
@@ -34,6 +37,7 @@ rows = st.lists(st.fixed_dictionaries({}, optional={name: values for name in FEA
 
 
 def test_scores_follow_feature_names_not_key_order(tmp_path_factory):
+    """Scores are the same for any key order and for repeated calls."""
     model = served(tmp_path_factory)
 
     @settings(max_examples=40, deadline=None)
@@ -52,6 +56,7 @@ def test_scores_follow_feature_names_not_key_order(tmp_path_factory):
 
 
 def test_missing_null_and_unknown_features_are_treated_alike(tmp_path_factory):
+    """A missing, a null and an unknown feature give the same score."""
     model = served(tmp_path_factory)
     explicit = {"amount": 1.0, "age_days": None, "attempts_5m": None}
     assert model.score([explicit]) == model.score([{"amount": 1.0}])
@@ -59,6 +64,7 @@ def test_missing_null_and_unknown_features_are_treated_alike(tmp_path_factory):
 
 
 def test_response_names_the_model_version(tmp_path_factory):
+    """The response carries the model version and one score between 0 and 1 per instance."""
     model = served(tmp_path_factory)
     response = model.predict({"instances": [{"amount": 2.0}, {}]})
     assert response["model_version"] == "v7"

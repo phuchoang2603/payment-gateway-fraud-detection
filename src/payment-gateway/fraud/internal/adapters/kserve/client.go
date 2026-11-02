@@ -21,24 +21,31 @@ const maxAnswer = 64 * 1024
 
 var modelName = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 
+// Config is the predictor endpoint, the model name and the connection timeout. The request deadline
+// belongs to the caller's context, not to the client.
 type Config struct {
-	URL, Model string
-	Timeout    time.Duration
+	URL, Model  string
+	DialTimeout time.Duration
 }
+
+// Client calls a KServe predictor over its v1 JSON protocol.
 type Client struct {
 	config Config
 	http   *http.Client
 	now    func() time.Time
 }
 
+// New returns a client for an `http` predictor endpoint and a Kubernetes-style model name.
 func New(config Config) (*Client, error) {
 	endpoint, err := url.Parse(config.URL)
-	if err != nil || endpoint.Scheme != "http" || endpoint.Host == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || !modelName.MatchString(config.Model) || config.Timeout <= 0 {
+	if err != nil || endpoint.Scheme != "http" || endpoint.Host == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || !modelName.MatchString(config.Model) || config.DialTimeout <= 0 {
 		return nil, errors.New("invalid model endpoint, name or timeout")
 	}
-	transport := &http.Transport{DialContext: (&net.Dialer{Timeout: config.Timeout}).DialContext, MaxConnsPerHost: 64, MaxIdleConns: 64, MaxIdleConnsPerHost: 64, IdleConnTimeout: time.Minute, ResponseHeaderTimeout: config.Timeout}
-	return &Client{config: config, http: &http.Client{Transport: transport, Timeout: config.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, now: time.Now}, nil
+	transport := &http.Transport{DialContext: (&net.Dialer{Timeout: config.DialTimeout}).DialContext, MaxConnsPerHost: 64, MaxIdleConns: 64, MaxIdleConnsPerHost: 64, IdleConnTimeout: time.Minute}
+	return &Client{config: config, http: &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, now: time.Now}, nil
 }
+
+// Close releases the client's idle connections.
 func (c *Client) Close() { c.http.CloseIdleConnections() }
 
 // instance names every value of an available view `<view>__<feature>`, the names the model was trained on. Unknown values are null, and the other views are absent, which the predictor reads as missing.
@@ -64,11 +71,11 @@ func instance(features application.FeatureObservation) map[string]any {
 	return row
 }
 
+// Score sends one named-feature instance and returns the observation: the model's version and score,
+// or a timeout or error status. The caller's context is the only deadline.
 func (c *Client) Score(ctx context.Context, features application.FeatureObservation) (observation application.ModelObservation) {
 	observation = application.ModelObservation{Name: c.config.Model, Status: application.ModelError}
 	defer func() { observation.ReadAt = c.now().UTC() }()
-	ctx, cancel := context.WithTimeout(ctx, c.config.Timeout)
-	defer cancel()
 	body, err := json.Marshal(struct {
 		Instances []map[string]any `json:"instances"`
 	}{[]map[string]any{instance(features)}})

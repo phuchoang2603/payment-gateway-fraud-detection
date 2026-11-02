@@ -1,3 +1,5 @@
+"""The Kubeflow pipeline components: one container step per `risk_model.steps` function."""
+
 from kfp import dsl, kubernetes
 
 IMAGE = "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart"
@@ -21,12 +23,18 @@ CONFIG_KEYS = (
 )
 
 
-def step(name, flags, outputs=()):
+def step(name, values, outputs=()):
+    """Returns the container spec that runs one step.
+
+    `values` is the component's `locals()`: every entry except the named `outputs` becomes a
+    `--dashed-name value` argument, and each output becomes `--out name path`.
+    """
     args = [name]
-    for flag, value in flags.items():
-        args += [f"--{flag}", value]
-    for output, path in outputs:
-        args += ["--out", output, path]
+    for key, value in values.items():
+        if key not in outputs:
+            args += [f"--{key.replace('_', '-')}", value]
+    for key in outputs:
+        args += ["--out", key, values[key]]
     return dsl.ContainerSpec(IMAGE, ["python", "-m", "risk_model.steps"], args)
 
 
@@ -39,7 +47,7 @@ def plan_windows(
     validation_days: int,
     test_days: int,
     lag_days: int,
-    force: str,
+    force: bool,
     fixed_train: str,
     fixed_validation: str,
     fixed_test: str,
@@ -50,30 +58,8 @@ def plan_windows(
     cutoff: dsl.OutputPath(str),
     run: dsl.OutputPath(str),
 ):
-    return step(
-        "plan_windows",
-        {
-            "run-id": run_id,
-            "schedule-time": schedule_time,
-            "create-time": create_time,
-            "train-days": train_days,
-            "validation-days": validation_days,
-            "test-days": test_days,
-            "lag-days": lag_days,
-            "force": force,
-            "fixed-train": fixed_train,
-            "fixed-validation": fixed_validation,
-            "fixed-test": fixed_test,
-            "fixed-cutoff": fixed_cutoff,
-        },
-        [
-            ("train", train),
-            ("validation", validation),
-            ("test", test),
-            ("cutoff", cutoff),
-            ("run", run),
-        ],
-    )
+    """Chooses the run's windows and whether there is new data to train on."""
+    return step("plan_windows", locals(), ("train", "validation", "test", "cutoff", "run"))
 
 
 @dsl.container_component
@@ -86,23 +72,14 @@ def plan_examples(
     existing_snapshot: str,
     chunks: dsl.OutputPath(list),
 ):
-    return step(
-        "plan_examples",
-        {
-            "train": train,
-            "validation": validation,
-            "test": test,
-            "cutoff": cutoff,
-            "snapshot": existing_snapshot,
-            "run-id": run_id,
-        },
-        [("chunks", chunks)],
-    )
+    """Fences the sources and lists the day chunks to stage."""
+    return step("plan_examples", locals(), ("chunks",))
 
 
 @dsl.container_component
 def stage_examples(chunk: str, cutoff: str, rows: dsl.OutputPath(str)):
-    return step("stage_examples", {"chunk": chunk, "cutoff": cutoff}, [("rows", rows)])
+    """Stages one chunk of days with its features."""
+    return step("stage_examples", locals(), ("rows",))
 
 
 @dsl.container_component
@@ -115,40 +92,27 @@ def assemble_examples(
     existing_snapshot: str,
     snapshot: dsl.OutputPath(str),
 ):
-    return step(
-        "assemble_examples",
-        {
-            "train": train,
-            "validation": validation,
-            "test": test,
-            "cutoff": cutoff,
-            "snapshot": existing_snapshot,
-            "run-id": run_id,
-        },
-        [("snapshot", snapshot)],
-    )
+    """Merges the staged chunks into a new training-set version."""
+    return step("assemble_examples", locals(), ("snapshot",))
 
 
 @dsl.container_component
 def check_examples(run_id: str, snapshot: str, report: dsl.OutputPath(str)):
-    return step("check_examples", {"snapshot": snapshot, "run-id": run_id}, [("report", report)])
+    """Validates the training-set version."""
+    return step("check_examples", locals(), ("report",))
 
 
 @dsl.container_component
 def split_windows(
-    run_id: str, snapshot: str, train: str, validation: str, test: str, report: dsl.OutputPath(str)
+    run_id: str,
+    snapshot: str,
+    train: str,
+    validation: str,
+    test: str,
+    report: dsl.OutputPath(str),
 ):
-    return step(
-        "split_windows",
-        {
-            "snapshot": snapshot,
-            "train": train,
-            "validation": validation,
-            "test": test,
-            "run-id": run_id,
-        },
-        [("report", report)],
-    )
+    """Counts the rows and fraud rate of each window."""
+    return step("split_windows", locals(), ("report",))
 
 
 @dsl.container_component
@@ -162,18 +126,8 @@ def tune_params(
     params: dsl.OutputPath(str),
     experiment: dsl.OutputPath(str),
 ):
-    return step(
-        "tune_params",
-        {
-            "snapshot": snapshot,
-            "train": train,
-            "validation": validation,
-            "test": test,
-            "trials": trials,
-            "run-id": run_id,
-        },
-        [("params", params), ("experiment", experiment)],
-    )
+    """Searches hyperparameters with a Katib experiment."""
+    return step("tune_params", locals(), ("params", "experiment"))
 
 
 @dsl.container_component
@@ -187,18 +141,8 @@ def fit_on_gpu(
     model_uri: dsl.OutputPath(str),
     fit: dsl.OutputPath(str),
 ):
-    return step(
-        "fit_on_gpu",
-        {
-            "snapshot": snapshot,
-            "train": train,
-            "validation": validation,
-            "test": test,
-            "params": params,
-            "run-id": run_id,
-        },
-        [("model_uri", model_uri), ("fit", fit)],
-    )
+    """Trains the model in a one-GPU TrainJob."""
+    return step("fit_on_gpu", locals(), ("model_uri", "fit"))
 
 
 @dsl.container_component
@@ -214,22 +158,14 @@ def gate(
     summary: dsl.OutputPath(str),
     pr_curve: dsl.Output[dsl.HTML],
 ):
-    return step(
-        "gate",
-        {
-            "snapshot": snapshot,
-            "train": train,
-            "validation": validation,
-            "test": test,
-            "model-uri": model_uri,
-            "run-id": run_id,
-        },
-        [("passed", passed), ("report", report), ("summary", summary), ("pr_curve", pr_curve.path)],
-    )
+    """Evaluates the model against the baseline and production."""
+    values = {**locals(), "pr_curve": pr_curve.path}
+    return step("gate", values, ("passed", "report", "summary", "pr_curve"))
 
 
 @dsl.component(base_image="python:3.12-slim")
 def publish_metrics(summary: str, metrics: dsl.Output[dsl.Metrics]):
+    """Logs the gate's metrics for the model, the baseline and production as KFP metrics."""
     import json
 
     data = json.loads(summary)
@@ -250,27 +186,18 @@ def record_version(
     experiment: str,
     version: dsl.OutputPath(str),
 ):
-    return step(
-        "record_version",
-        {
-            "snapshot": snapshot,
-            "model-uri": model_uri,
-            "report": report,
-            "fit": fit,
-            "params": params,
-            "experiment": experiment,
-            "run-id": run_id,
-        },
-        [("version", version)],
-    )
+    """Registers the passing model in the Model Registry."""
+    return step("record_version", locals(), ("version",))
 
 
 @dsl.container_component
 def roll_out(run_id: str, version: str, deployed: dsl.OutputPath(str)):
-    return step("roll_out", {"version": version, "run-id": run_id}, [("version", deployed)])
+    """Serves the registered version, checks it and promotes it."""
+    return step("roll_out", locals(), ("deployed",))
 
 
 def configure(task, *, nodes, memory="1G", cpu="250m", storage=True, retries=0):
+    """Sets a step's caching, retries, resources, environment, credentials and node selector."""
     task.set_caching_options(False)
     if retries:
         task.set_retry(num_retries=retries, backoff_duration="30s")
@@ -296,6 +223,7 @@ def configure(task, *, nodes, memory="1G", cpu="250m", storage=True, retries=0):
 
 
 def spark_task(task, *, nodes, cpu, heap, memory):
+    """Configures a step that runs local Spark on `cpu` cores with a driver heap and a spill volume."""
     configure(task, nodes=nodes, cpu=cpu, memory=memory, retries=2)
     task.set_env_variable("SPARK_MASTER", f"local[{cpu}]")
     task.set_env_variable("PYSPARK_SUBMIT_ARGS", f"--driver-memory {heap} pyspark-shell")

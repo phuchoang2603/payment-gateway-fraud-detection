@@ -1,3 +1,5 @@
+"""Rolling train, validation and test windows for scheduled retraining, and the data coverage they need."""
+
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 
@@ -8,16 +10,20 @@ from risk_model.split import Window
 
 @dataclass(frozen=True)
 class Plan:
+    """Three contiguous windows, train then validation then test."""
+
     train: Window
     validation: Window
     test: Window
 
     @property
     def cutoff(self):
+        """Returns midnight after the test window as a UTC timestamp."""
         return self.test.end.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def rolling(end_day, train_days, validation_days, test_days):
+    """Returns the Plan whose test window ends on `end_day`, with the given window lengths in days."""
     if min(train_days, validation_days, test_days) < 1:
         raise ValueError("every window needs at least one day")
     test = Window(end_day - timedelta(days=test_days - 1), end_day)
@@ -28,16 +34,19 @@ def rolling(end_day, train_days, validation_days, test_days):
 
 
 def instant(text):
+    """Returns a timestamp as an aware UTC datetime, or None if it is not a real time."""
     try:
         value = datetime.fromisoformat(str(text).strip().replace("Z", "+00:00"))
     except ValueError:
         return None
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
+    # KFP passes a 1970 placeholder as the schedule time on manual runs, so any year up to 2000 means "no time".
     return value.astimezone(UTC) if value.year > 2000 else None
 
 
 def reference_day(schedule_time, create_time):
+    """Returns the UTC day of the schedule time, or of the creation time when there is no schedule time."""
     moment = instant(schedule_time) or instant(create_time)
     if moment is None:
         raise ValueError("neither the schedule time nor the creation time is a timestamp")
@@ -45,6 +54,7 @@ def reference_day(schedule_time, create_time):
 
 
 def has_rows(table, day, epochs):
+    """Returns whether a stream table has a row in one of the epochs on a UTC day."""
     start = datetime.combine(day, time.min, UTC)
     found = table.scan(
         row_filter=And(
@@ -59,6 +69,7 @@ def has_rows(table, day, epochs):
 
 
 def partition_days(table):
+    """Returns the set of days a stream table has partitions for."""
     return {
         next(iter(row.values()))
         for row in table.inspect.partitions().column("partition").to_pylist()
@@ -82,6 +93,7 @@ def latest_covered(days, span, not_after, has_rows):
 
 
 def covered_end(catalog, span, not_after):
+    """Returns the latest covered end day for the stream tables of the configured epochs, or None."""
     from fraud_feast.repo import TABLES, epochs
 
     configured = epochs()
@@ -96,4 +108,5 @@ def covered_end(catalog, span, not_after):
 
 
 def is_newer(cutoff, registered):
+    """Returns whether a cutoff is later than the registered one, which counts as older when missing."""
     return registered is None or instant(cutoff) > instant(registered)

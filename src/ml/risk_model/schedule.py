@@ -1,21 +1,30 @@
+"""The Kubeflow Pipelines API calls that keep the recurring retraining run pointed at the current pipeline."""
+
 import json
 import os
 import time
 import urllib.request
 
+from risk_model.cluster import MODEL_NAME, SERVICE_ACCOUNT, namespace
+
 PIPELINE = "payment-risk-training"
-EXPERIMENT = "payment-risk"
-SERVICE_ACCOUNT = "fraud-training"
+EXPERIMENT = MODEL_NAME
 
 
 class Pipelines:
+    """A small client for the Kubeflow Pipelines v2 REST API.
+
+    `base` is the API server address, `KFP_URL` or the in-cluster service when omitted, and `sleep`
+    is injectable so tests do not wait.
+    """
+
     def __init__(self, base=None, sleep=time.sleep):
-        self.base = (
-            base or os.environ.get("KFP_URL", "http://ml-pipeline.ml.svc.cluster.local:8888")
-        ).rstrip("/") + "/apis/v2beta1"
+        default = f"http://ml-pipeline.{namespace()}.svc.cluster.local:8888"
+        self.base = (base or os.environ.get("KFP_URL", default)).rstrip("/") + "/apis/v2beta1"
         self.sleep = sleep
 
     def call(self, method, path, body=None):
+        """Sends one JSON request and returns the decoded answer, or an empty dict for no body."""
         request = urllib.request.Request(
             self.base + path,
             data=None if body is None else json.dumps(body).encode(),
@@ -27,9 +36,10 @@ class Pipelines:
         return json.loads(text) if text else {}
 
     def version(self, name, timeout, interval=15):
+        """Waits for a pipeline version to appear and returns its pipeline and version IDs."""
         deadline = time.monotonic() + timeout
         while True:
-            pipelines = self.call("GET", "/pipelines?namespace=ml&page_size=100").get(
+            pipelines = self.call("GET", f"/pipelines?namespace={namespace()}&page_size=100").get(
                 "pipelines", []
             )
             pipeline = next((p for p in pipelines if p["display_name"] == PIPELINE), None)
@@ -44,15 +54,21 @@ class Pipelines:
             self.sleep(interval)
 
     def experiment(self):
-        found = self.call("GET", "/experiments?namespace=ml&page_size=100").get("experiments", [])
+        """Returns the ID of the experiment the runs belong to, creating it if needed."""
+        found = self.call("GET", f"/experiments?namespace={namespace()}&page_size=100").get(
+            "experiments", []
+        )
         match = next((e for e in found if e["display_name"] == EXPERIMENT), None)
         return (
             match
-            or self.call("POST", "/experiments", {"display_name": EXPERIMENT, "namespace": "ml"})
+            or self.call(
+                "POST", "/experiments", {"display_name": EXPERIMENT, "namespace": namespace()}
+            )
         )["experiment_id"]
 
     def replace(self, body):
-        listing = self.call("GET", "/recurringruns?namespace=ml&page_size=100")
+        """Deletes recurring runs with the same name, creates `body` and returns its ID."""
+        listing = self.call("GET", f"/recurringruns?namespace={namespace()}&page_size=100")
         for run in listing.get("recurringRuns") or listing.get("recurring_runs") or []:
             if run["display_name"] == body["display_name"]:
                 self.call("DELETE", f"/recurringruns/{run['recurring_run_id']}")
@@ -60,6 +76,7 @@ class Pipelines:
 
 
 def recurring_body(*, pipeline_id, version_id, experiment_id, cron, enabled, parameters):
+    """Returns the request that creates the recurring run on one pipeline version and cron schedule."""
     return {
         "display_name": PIPELINE,
         "description": "Rolling-window retraining of payment_risk_v1",

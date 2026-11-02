@@ -19,7 +19,7 @@
 
 ## 1. `risk_model`
 
-- [x] 1.1 Create `src/ml`, a uv project on Python 3.12 with pinned dependencies. Write `dataset.py` (design decision 2), `data.py`, `split.py`, `train.py`, `worker.py`, `evaluate.py`, `registry.py` (decision 3), `steps.py`, and `serve_client.py` (decision 6). Verify with `uv lock`, `ruff` and `ruff format --check`.
+- [x] 1.1 Create `src/ml`, a uv project on Python 3.12 with pinned dependencies. Write `dataset.py` (design decision 2), `data.py`, `split.py`, `train.py`, `worker.py`, `evaluate.py`, `registry.py` (decision 3), `steps.py`, `kube.py` and `cluster.py` (decision 6). Verify with `uv lock`, `ruff` and `ruff format --check`.
 - [x] 1.1a Write the fenced snapshot IDs and the feature service to the KFP run and the registry version. Verify with `ruff`.
 - [x] 1.1b Send the derived request-feature candidates (design decision 6a) to the Feast implementation thread through the user, for the `request_features` view and Go Fraud's request. Its answer on the row-timestamp candidate is pending; the candidates and the dropped one are in design.md.
 - [ ] 1.2 Add the tests of design decision 9, using the Feast change's test repository for `dataset`, and wire `src/ml` into the existing Python test job. Verify in CI.

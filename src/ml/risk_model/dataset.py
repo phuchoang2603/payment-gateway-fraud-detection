@@ -1,8 +1,10 @@
+"""Builds the training set through Feast: plan, fence, stage chunks of days, then merge into Iceberg."""
+
 import json
 import os
 import tempfile
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 import pyarrow as pa
 from feast.type_map import feast_value_type_to_pa
@@ -22,6 +24,8 @@ PREFIX = "spark.sql.iceberg.snapshot-property."
 
 @dataclass
 class Build:
+    """What one build wrote: the new snapshot, whether it changed anything, counts and provenance."""
+
     snapshot_id: int
     changed: bool
     rows: int
@@ -33,19 +37,23 @@ class Build:
 
 
 def sources():
+    """Returns the Iceberg tables whose snapshots a build records and fences."""
     return [f"lake.{name}" for name in (*LABEL_TABLES, *DAILY_TABLES.values(), *TABLES.values())]
 
 
 def current(spark, table):
+    """Returns the current snapshot ID of a table, or None when it has none."""
     row = spark.sql(f"SELECT snapshot_id FROM {table}.refs WHERE name = 'main'").first()
     return None if row is None else row[0]
 
 
 def fence(spark):
+    """Returns the current snapshot ID of every source table."""
     return {table: current(spark, table) for table in sources()}
 
 
 def feature_names(store):
+    """Returns the `<view>__<feature>` names of the feature service, in order."""
     return [
         f"{projection.name_to_use()}__{feature.name}"
         for projection in store.get_feature_service(SERVICE).feature_view_projections
@@ -54,6 +62,7 @@ def feature_names(store):
 
 
 def check_coverage(spark, start, end):
+    """Raises ValueError unless the stream tables cover `[start, end)` for the configured epochs."""
     selected = ",".join(f"'{value}'" for value in epochs())
     first, last = None, None
     for table in TABLES.values():
@@ -70,9 +79,9 @@ def check_coverage(spark, start, end):
         raise ValueError(f"stream history covers {first}..{last}, not {start}..{end}")
 
 
-def day_rows(store, rows, day, staging):
+def day_rows(store, rows, day):
+    """Returns one day of entity rows joined with the feature service's values, as an Arrow table."""
     start = datetime.combine(day, time.min, UTC)
-    store.config.offline_store.staging_location = str(staging)
     job = store.get_historical_features(
         entity_df=rows.where(
             (F.col("started_at") >= F.lit(start))
@@ -85,6 +94,7 @@ def day_rows(store, rows, day, staging):
 
 
 def stage_schema(store):
+    """Returns the Arrow schema of staged rows: keys, time, label, bucket and every feature."""
     features = {
         f"{projection.name_to_use()}__{feature.name}": feast_value_type_to_pa(
             feature.dtype.to_value_type()
@@ -104,7 +114,7 @@ def stage_schema(store):
 
 
 def ensure_table(spark, frame):
-    spark.sql("CREATE NAMESPACE IF NOT EXISTS lake.ml")
+    """Creates the examples table, merge-on-read and partitioned by day, if it does not exist."""
     if spark.catalog.tableExists(f"lake.{TABLE}"):
         return
     (
@@ -121,6 +131,10 @@ def ensure_table(spark, frame):
 
 
 def merge(spark, frame, properties):
+    """Merges rows into the examples table, deleting rows that left the window, and records the properties.
+
+    The properties are written into the new snapshot's summary through the session configuration.
+    """
     keys = " AND ".join(f"t.{name} = s.{name}" for name in (*KEY, "row_hash"))
     frame.createOrReplaceTempView("examples")
     for name, value in properties.items():
@@ -137,26 +151,38 @@ def merge(spark, frame, properties):
 
 
 def fence_path(directory):
+    """Returns where a run keeps the source snapshots it fenced."""
     return f"{directory}/fence.json"
 
 
 def chunks(first, last, days=CHUNK_DAYS):
+    """Returns `(start, end)` pairs of at most `days` days that tile `[first, last)`."""
     starts = [first + timedelta(days=offset) for offset in range(0, (last - first).days, days)]
     return [(start, min(start + timedelta(days=days), last)) for start in starts]
 
 
 def prepare(spark, store, first, last):
+    """Checks coverage, fences the sources, creates an empty staging table and returns the fence."""
     check_coverage(spark, first, last)
     before = fence(spark)
     spark.sql("CREATE NAMESPACE IF NOT EXISTS lake.ml")
-    spark.sql(f"DROP TABLE IF EXISTS lake.{STAGE}")
+    drop_stage(spark)
     spark.createDataFrame(stage_schema(store).empty_table()).writeTo(f"lake.{STAGE}").using(
         "iceberg"
     ).partitionedBy(F.days("started_at")).create()
     return before
 
 
+def drop_stage(spark):
+    """Drops the staging table if it exists."""
+    spark.sql(f"DROP TABLE IF EXISTS lake.{STAGE}")
+
+
 def stage(spark, store, first, last, cutoff, sample_buckets=SAMPLE_BUCKETS):
+    """Stages the sampled rows of `[first, last)` with their features and returns how many it staged.
+
+    Restaging a range replaces its rows, so a retried chunk never duplicates them.
+    """
     rows = entity_rows(spark, first.isoformat(), last.isoformat(), cutoff).withColumn(
         "bucket", F.pmod(F.xxhash64(*KEY), F.lit(BUCKETS)).cast("int")
     )
@@ -164,8 +190,9 @@ def stage(spark, store, first, last, cutoff, sample_buckets=SAMPLE_BUCKETS):
     schema = stage_schema(store)
     days = []
     with tempfile.TemporaryDirectory(dir=os.environ.get("SPARK_LOCAL_DIR")) as staging:
+        store.config.offline_store.staging_location = staging
         for number in range((last - first).days):
-            table = day_rows(store, rows, first + timedelta(days=number), staging)
+            table = day_rows(store, rows, first + timedelta(days=number))
             if table.num_rows:
                 days.append(table.select(schema.names).cast(schema))
     start = datetime.combine(first, time.min, UTC).isoformat()
@@ -180,6 +207,11 @@ def stage(spark, store, first, last, cutoff, sample_buckets=SAMPLE_BUCKETS):
 
 
 def merge_examples(spark, store, first, last, cutoff, before, sample_buckets=SAMPLE_BUCKETS):
+    """Merges the staged rows into the examples table as a new version, then drops the staging table.
+
+    `before` is the fence from `prepare`. Raises if nothing was staged or a source table moved since
+    then, in which case nothing is written. Returns a Build.
+    """
     features = feature_names(store)
     frame = spark.table(f"lake.{STAGE}").withColumn(
         "row_hash", F.xxhash64(F.col("label"), *[F.col(name) for name in features])
@@ -209,6 +241,7 @@ def merge_examples(spark, store, first, last, cutoff, before, sample_buckets=SAM
         },
     )
     snapshot = current(spark, f"lake.{TABLE}")
+    drop_stage(spark)
     return Build(
         snapshot_id=snapshot,
         changed=snapshot != previous,
@@ -221,18 +254,8 @@ def merge_examples(spark, store, first, last, cutoff, before, sample_buckets=SAM
     )
 
 
-def build(spark, store, start, end, cutoff, sample_buckets=SAMPLE_BUCKETS):
-    first, last = date.fromisoformat(str(start)), date.fromisoformat(str(end))
-    before = prepare(spark, store, first, last)
-    try:
-        for chunk_start, chunk_end in chunks(first, last):
-            stage(spark, store, chunk_start, chunk_end, cutoff, sample_buckets)
-        return merge_examples(spark, store, first, last, cutoff, before, sample_buckets)
-    finally:
-        spark.sql(f"DROP TABLE IF EXISTS lake.{STAGE}")
-
-
 def session(store):
+    """Returns the local Spark session configured from the Feast offline store."""
     from pyspark.sql import SparkSession
 
     configuration = {
@@ -245,6 +268,7 @@ def session(store):
 
 
 def feast_store():
+    """Returns the Feast store with no online store, for reading training data."""
     from fraud_feast.runtime import store
 
     return store(redis=False)

@@ -1,3 +1,5 @@
+"""Evaluation: operating thresholds, metrics, the promotion gate and the precision-recall chart."""
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -8,17 +10,25 @@ STEP_UP_FPR = 0.01
 MARGIN = 0.005
 
 
-def threshold_at(y, scores, w, rate):
-    fpr, _, thresholds = roc_curve(y, scores, sample_weight=w)
-    return float(min(thresholds[max(np.searchsorted(fpr, rate, side="right") - 1, 0)], 2.0))
+def operating_index(curve, rate):
+    """Returns the index of the last ROC point whose false-positive rate is at most `rate`."""
+    fpr = curve[0]
+    return max(np.searchsorted(fpr, rate, side="right") - 1, 0)
 
 
-def recall_at(y, scores, w, rate):
-    fpr, tpr, _ = roc_curve(y, scores, sample_weight=w)
-    return float(tpr[max(np.searchsorted(fpr, rate, side="right") - 1, 0)])
+def threshold_at(curve, rate):
+    """Returns the score threshold at a false-positive rate, read from a `roc_curve` result."""
+    # roc_curve's first threshold is infinity, which would not serialize, so it is capped.
+    return float(min(curve[2][operating_index(curve, rate)], 2.0))
+
+
+def recall_at(curve, rate):
+    """Returns the recall at a false-positive rate, read from a `roc_curve` result."""
+    return float(curve[1][operating_index(curve, rate)])
 
 
 def measure(y, scores, w, decline):
+    """Returns PR-AUC, ROC-AUC, recall at 1% FPR, and precision and recall at the decline threshold."""
     flagged = scores >= decline
     positive = y > 0
     true_positive = w[flagged & positive].sum()
@@ -26,7 +36,7 @@ def measure(y, scores, w, decline):
     return {
         "pr_auc": float(average_precision_score(y, scores, sample_weight=w)),
         "roc_auc": float(roc_auc_score(y, scores, sample_weight=w)),
-        "recall_at_1pct_fpr": recall_at(y, scores, w, STEP_UP_FPR),
+        "recall_at_1pct_fpr": recall_at(roc_curve(y, scores, sample_weight=w), STEP_UP_FPR),
         "precision_at_decline": float(true_positive / flagged_weight) if flagged_weight else 0.0,
         "recall_at_decline": float(true_positive / w[positive].sum()),
     }
@@ -34,27 +44,42 @@ def measure(y, scores, w, decline):
 
 @dataclass
 class Verdict:
+    """The outcome of the gate: whether the model passed and the reasons it did not."""
+
     passed: bool
     reasons: list
 
 
 class GateEvaluator:
+    """Measures candidate models and decides whether the new model may replace production.
+
+    `margin` is the PR-AUC the new model must gain over the production version. `thresholds` finds
+    the decline and step-up score levels on validation data, `evaluate` measures each candidate on
+    test data at its own decline threshold, and `gate` compares the new model with the baseline and
+    production and returns a Verdict. Metrics use the stored sample weights, so they reflect the real
+    fraud rate despite the down-sampled negatives.
+    """
+
     def __init__(self, margin=MARGIN):
         self.margin = margin
 
     def thresholds(self, y, scores, w):
+        """Returns the decline and step-up thresholds at 0.1% and 1% false-positive rate."""
+        curve = roc_curve(y, scores, sample_weight=w)
         return {
-            "decline": threshold_at(y, scores, w, DECLINE_FPR),
-            "step_up": threshold_at(y, scores, w, STEP_UP_FPR),
+            "decline": threshold_at(curve, DECLINE_FPR),
+            "step_up": threshold_at(curve, STEP_UP_FPR),
         }
 
     def evaluate(self, thresholds, y, w, candidates):
+        """Returns the metrics of each named candidate's scores at its own decline threshold."""
         return {
             name: measure(y, scores, w, thresholds[name]["decline"])
             for name, scores in candidates.items()
         }
 
     def gate(self, metrics):
+        """Returns a Verdict: the model must beat the baseline and, if one exists, production by the margin."""
         new, baseline = metrics["model"], metrics["baseline"]
         reasons = []
         if new["pr_auc"] <= baseline["pr_auc"]:
@@ -77,6 +102,7 @@ class GateEvaluator:
 
 
 def pr_curve_html(curves, points=200):
+    """Returns an SVG of precision against recall for up to three named curves."""
     palette = ["#2563eb", "#9ca3af", "#dc2626"]
     paths = []
     for color, (name, (precision, recall)) in zip(palette, curves.items()):

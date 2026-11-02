@@ -1,3 +1,5 @@
+"""The pipeline steps: each is a function run as `python -m risk_model.steps <step>` in a pipeline pod."""
+
 import argparse
 import inspect
 import json
@@ -10,7 +12,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import pyarrow.compute as pc
-from fraud_feast.lake import read_json, s3, write_json
+from fraud_feast.lake import catalog, read_json, s3, write_json
 from sklearn.metrics import precision_recall_curve
 
 from risk_model import kube
@@ -18,30 +20,30 @@ from risk_model.data import DatasetReader
 from risk_model.evaluate import MARGIN, GateEvaluator, pr_curve_html
 from risk_model.registry import RegistryClient
 from risk_model.schedule import Pipelines, recurring_body
-from risk_model.serve_client import ServeClient
 from risk_model.split import WindowSplitter
-from risk_model.train import RiskTrainer, load_booster, score
+from risk_model.train import HYPERPARAMETERS, RiskTrainer, load_booster, score
 from risk_model.windows import covered_end, is_newer, reference_day, rolling
-
-HYPERPARAMETERS = {
-    "maxDepth": ("max_depth", "int", "3", "10"),
-    "eta": ("eta", "double", "0.02", "0.3"),
-    "subsample": ("subsample", "double", "0.5", "1.0"),
-    "colsampleBytree": ("colsample_bytree", "double", "0.5", "1.0"),
-    "minChildWeight": ("min_child_weight", "double", "1", "20"),
-    "regLambda": ("lambda", "double", "0.1", "10"),
-}
 
 
 def directory(run_id):
+    """Returns the run directory in object storage for a pipeline run ID."""
     return f"{os.environ['RUN_ROOT'].rstrip('/')}/{run_id}"
 
 
-def download(uri):
+def download(uri, target):
+    """Downloads an `s3://` URI to the local path `target` and returns the path as text."""
     source = urlsplit(uri)
-    path = Path(tempfile.mkdtemp()) / "model.json"
-    s3().download_file(source.netloc, source.path.lstrip("/"), str(path))
-    return str(path)
+    s3().download_file(source.netloc, source.path.lstrip("/"), str(target))
+    return str(target)
+
+
+def flags(**values):
+    """Returns `--name value` command-line parts for keyword values, with underscores as dashes."""
+    return [
+        part
+        for name, value in values.items()
+        for part in (f"--{name.replace('_', '-')}", str(value))
+    ]
 
 
 def plan_windows(
@@ -53,12 +55,18 @@ def plan_windows(
     validation_days: int = 14,
     test_days: int = 14,
     lag_days: int = 1,
-    force="false",
+    force: bool = False,
     fixed_train="",
     fixed_validation="",
     fixed_test="",
     fixed_cutoff="",
 ):
+    """Chooses the windows and cutoff of a run, and whether it has new data to train on.
+
+    All four `fixed_*` values override the rule. Otherwise the windows end on the latest day, at or
+    before the schedule time minus `lag_days`, whose whole span the stream tables cover. The run
+    proceeds unless that cutoff is not newer than the newest registered model's, or `force` is set.
+    """
     if fixed_train and fixed_validation and fixed_test and fixed_cutoff:
         WindowSplitter(fixed_train, fixed_validation, fixed_test)
         return {
@@ -66,10 +74,8 @@ def plan_windows(
             "validation": fixed_validation,
             "test": fixed_test,
             "cutoff": fixed_cutoff,
-            "run": "true",
+            "run": True,
         }
-    from fraud_feast.lake import catalog
-
     reference = reference_day(schedule_time, create_time)
     span = train_days + validation_days + test_days
     covered = covered_end(catalog(), span, reference - timedelta(days=lag_days))
@@ -77,7 +83,7 @@ def plan_windows(
         covered or reference - timedelta(days=lag_days), train_days, validation_days, test_days
     )
     registered = RegistryClient().latest_cutoff()
-    run = covered is not None and (force == "true" or is_newer(plan.cutoff, registered))
+    run = covered is not None and (force or is_newer(plan.cutoff, registered))
     write_json(
         f"{directory(run_id)}/windows.json",
         {
@@ -94,7 +100,7 @@ def plan_windows(
         "validation": str(plan.validation),
         "test": str(plan.test),
         "cutoff": plan.cutoff,
-        "run": "true" if run else "false",
+        "run": run,
     }
 
 
@@ -102,13 +108,14 @@ def ensure_schedule(
     *,
     version,
     cron,
-    enabled="true",
+    enabled: bool = True,
     train_days: int = 56,
     validation_days: int = 14,
     test_days: int = 14,
     lag_days: int = 1,
     timeout: int = 900,
 ):
+    """Points the recurring retraining run at a pipeline version, waiting for it to appear in the API."""
     pipelines = Pipelines()
     pipeline_id, version_id = pipelines.version(version, timeout)
     body = recurring_body(
@@ -116,7 +123,7 @@ def ensure_schedule(
         version_id=version_id,
         experiment_id=pipelines.experiment(),
         cron=cron,
-        enabled=enabled == "true",
+        enabled=enabled,
         parameters={
             "train_days": train_days,
             "validation_days": validation_days,
@@ -127,8 +134,11 @@ def ensure_schedule(
     return {"recurring_run": pipelines.replace(body)}
 
 
-def plan_examples(*, train, validation, test, cutoff, run_id, snapshot="", chunk_days: int = 16):
-    if snapshot:
+def plan_examples(
+    *, train, validation, test, cutoff, run_id, existing_snapshot="", chunk_days: int = 16
+):
+    """Fences the sources, prepares staging and returns the day chunks to stage, none for an existing snapshot."""
+    if existing_snapshot:
         return {"chunks": "[]"}
     from risk_model.dataset import chunks, feast_store, fence_path, prepare, session
 
@@ -145,6 +155,7 @@ def plan_examples(*, train, validation, test, cutoff, run_id, snapshot="", chunk
 
 
 def stage_examples(*, chunk, cutoff):
+    """Stages one `first/last` chunk of days and returns the number of rows staged."""
     from risk_model.dataset import feast_store, session, stage
 
     first, last = (date.fromisoformat(day) for day in chunk.split("/"))
@@ -156,10 +167,14 @@ def stage_examples(*, chunk, cutoff):
         spark.stop()
 
 
-def assemble_examples(*, train, validation, test, cutoff, run_id, snapshot=""):
+def assemble_examples(*, train, validation, test, cutoff, run_id, existing_snapshot=""):
+    """Merges the staged chunks into a new training-set version and returns its snapshot ID.
+
+    A given `existing_snapshot` is only checked and returned.
+    """
     splitter = WindowSplitter(train, validation, test)
-    if snapshot:
-        return {"snapshot": str(DatasetReader.at(snapshot).snapshot_id)}
+    if existing_snapshot:
+        return {"snapshot": str(DatasetReader.at(existing_snapshot).snapshot_id)}
     from risk_model.dataset import feast_store, fence_path, merge_examples, session
 
     started = time.monotonic()
@@ -168,7 +183,6 @@ def assemble_examples(*, train, validation, test, cutoff, run_id, snapshot=""):
     try:
         before = read_json(fence_path(directory(run_id)))["before"]
         built = merge_examples(spark, store, splitter.start, splitter.end, cutoff, before)
-        spark.sql("DROP TABLE IF EXISTS lake.ml.payment_risk_v1_stage")
     finally:
         spark.stop()
     write_json(
@@ -185,6 +199,7 @@ def check_examples(
     fraud_rate_min: float = 0.0005,
     fraud_rate_max: float = 0.25,
 ):
+    """Validates a training-set version, writes the report and fails the step when it is invalid."""
     report = DatasetReader.at(snapshot).validate((fraud_rate_min, fraud_rate_max))
     uri = f"{directory(run_id)}/check.json"
     write_json(uri, report)
@@ -194,6 +209,7 @@ def check_examples(
 
 
 def split_windows(*, snapshot, train, validation, test, run_id):
+    """Counts the rows and the sampled fraud rate of each window and fails if a window is empty."""
     splitter = WindowSplitter(train, validation, test)
     table = DatasetReader.at(snapshot).scan(columns=["started_at", "label"])
     rows = splitter.counts(table["started_at"])
@@ -221,18 +237,19 @@ def tune_params(
     tune_rate: float = 0.05,
     timeout_seconds: int = 7200,
 ):
+    """Runs a Katib experiment of `trials` GPU trials and returns the best hyperparameters as JSON.
+
+    With no trials it returns empty parameters, so the trainer uses its defaults.
+    """
     if not trials:
         return {"params": "{}", "experiment": ""}
-    arguments = ["--seed", "7", "--rate", str(tune_rate)]
-    for flag, value in (
-        ("snapshot", snapshot),
-        ("train", train),
-        ("validation", validation),
-        ("test", test),
-    ):
-        arguments += [f"--{flag}", value]
-    for parameter, (hyper, _, _, _) in HYPERPARAMETERS.items():
-        arguments += [f"--{hyper.replace('_', '-')}", f"${{trialParameters.{parameter}}}"]
+    arguments = [
+        "trial",
+        *flags(
+            seed=7, rate=tune_rate, snapshot=snapshot, train=train, validation=validation, test=test
+        ),
+        *flags(**{h.xgboost: f"${{trialParameters.{h.katib}}}" for h in HYPERPARAMETERS}),
+    ]
     name = f"payment-risk-{run_id[:8]}"
     body = {
         "apiVersion": "kubeflow.org/v1beta1",
@@ -246,21 +263,21 @@ def tune_params(
             "maxFailedTrialCount": 2,
             "parameters": [
                 {
-                    "name": parameter,
-                    "parameterType": kind,
-                    "feasibleSpace": {"min": low, "max": high},
+                    "name": h.katib,
+                    "parameterType": h.kind,
+                    "feasibleSpace": {"min": h.low, "max": h.high},
                 }
-                for parameter, (_, kind, low, high) in HYPERPARAMETERS.items()
+                for h in HYPERPARAMETERS
             ],
             "trialTemplate": {
                 "primaryContainerName": "node",
                 "trialParameters": [
-                    {"name": parameter, "reference": parameter} for parameter in HYPERPARAMETERS
+                    {"name": h.katib, "reference": h.katib} for h in HYPERPARAMETERS
                 ],
-                "trialSpec": kube.trial_train_job(
+                "trialSpec": kube.train_job_spec(
                     os.environ["ML_IMAGE"],
                     ["python", "-m", "risk_model.worker"],
-                    ["trial", *arguments],
+                    arguments,
                     timeout_seconds,
                 ),
             },
@@ -280,11 +297,9 @@ def tune_params(
     if outcome != "succeeded" or not optimal.get("parameterAssignments"):
         raise RuntimeError(f"Experiment {name} {outcome} without an optimal trial")
     assigned = {item["name"]: item["value"] for item in optimal["parameterAssignments"]}
+    by_name = {h.katib: h for h in HYPERPARAMETERS}
     params = {
-        HYPERPARAMETERS[parameter][0]: int(value)
-        if HYPERPARAMETERS[parameter][1] == "int"
-        else float(value)
-        for parameter, value in assigned.items()
+        by_name[name].xgboost: by_name[name].convert(value) for name, value in assigned.items()
     }
     return {"params": json.dumps(params, sort_keys=True), "experiment": name}
 
@@ -299,17 +314,20 @@ def fit_on_gpu(
     run_id,
     timeout_seconds: int = 5400,
 ):
+    """Trains the model in a one-GPU TrainJob and returns where its files and run record are."""
     root = directory(run_id)
-    flags = {
-        "snapshot": snapshot,
-        "train": train,
-        "validation": validation,
-        "test": test,
-        "params": params or "{}",
-        "model-dir": f"{root}/model",
-        "run-dir": root,
-    }
-    arguments = ["fit", *[part for name, value in flags.items() for part in (f"--{name}", value)]]
+    arguments = [
+        "fit",
+        *flags(
+            snapshot=snapshot,
+            train=train,
+            validation=validation,
+            test=test,
+            params=params or "{}",
+            model_dir=f"{root}/model",
+            run_dir=root,
+        ),
+    ]
     kube.train_job(
         f"payment-risk-fit-{run_id[:8]}",
         {"app.kubernetes.io/name": "payment-risk", "pipeline-run": run_id},
@@ -322,24 +340,35 @@ def fit_on_gpu(
 
 
 def gate(*, snapshot, train, validation, test, model_uri, run_id, margin: float = MARGIN):
+    """Measures the new model against the baseline and production on the test window and decides.
+
+    Returns whether it passed, the report location, a JSON summary and a precision-recall chart.
+    """
     splitter = WindowSplitter(train, validation, test)
     reader = DatasetReader.at(snapshot)
     training, tuning, holdout = (
         reader.read(splitter[name]) for name in ("train", "validation", "test")
     )
-    booster, features = load_booster(download(f"{model_uri.rstrip('/')}/model.json"))
-    if features != reader.features:
-        raise ValueError("model feature order differs from the training set's")
-    models = {"model": booster, "baseline": RiskTrainer(device="cpu").baseline(training)}
-    columns = {"model": slice(None), "baseline": slice(None)}
     registry = RegistryClient()
     current = registry.production()
-    if current:
-        older, order = load_booster(
-            download(f"{registry.artifact_uri(current).rstrip('/')}/model.json")
+    with tempfile.TemporaryDirectory() as scratch:
+        files = Path(scratch)
+        booster, features = load_booster(
+            download(f"{model_uri.rstrip('/')}/model.json", files / "model.json")
         )
-        models["production"] = older
-        columns["production"] = [reader.features.index(name) for name in order]
+        if features != reader.features:
+            raise ValueError("model feature order differs from the training set's")
+        models = {"model": booster, "baseline": RiskTrainer(device="cpu").baseline(training)}
+        columns = {"model": slice(None), "baseline": slice(None)}
+        if current:
+            older, order = load_booster(
+                download(
+                    f"{registry.artifact_uri(current).rstrip('/')}/model.json",
+                    files / "production.json",
+                )
+            )
+            models["production"] = older
+            columns["production"] = [reader.features.index(name) for name in order]
     evaluator = GateEvaluator(margin)
     thresholds, scores = {}, {}
     for name, model in models.items():
@@ -365,7 +394,7 @@ def gate(*, snapshot, train, validation, test, model_uri, run_id, margin: float 
         for name, values in scores.items()
     }
     return {
-        "passed": "true" if verdict.passed else "false",
+        "passed": verdict.passed,
         "report": f"{root}/gate.json",
         "summary": json.dumps({**report, **reader.provenance()}),
         "pr_curve": pr_curve_html(curves),
@@ -373,6 +402,7 @@ def gate(*, snapshot, train, validation, test, model_uri, run_id, margin: float 
 
 
 def record_version(*, snapshot, model_uri, report, fit, params, run_id, experiment=""):
+    """Registers a passing model with its provenance and metrics, and returns its version name."""
     provenance = DatasetReader.at(snapshot).provenance()
     gate_report, run = read_json(report), read_json(fit)
     registry = RegistryClient()
@@ -409,6 +439,10 @@ def record_version(*, snapshot, model_uri, report, fit, params, run_id, experime
 
 
 def roll_out(*, version, run_id):
+    """Serves a passing version, checks it answers with a score, then promotes it.
+
+    A version that fails to serve or to score restores the previous production version and raises.
+    """
     registry = RegistryClient()
     registry.require_passing(version)
     previous = registry.production()
@@ -416,8 +450,7 @@ def roll_out(*, version, run_id):
     kube.inference_service(version, predictor)
     try:
         address = kube.wait_ready(kube.INFERENCE_NAME, version)
-        client = ServeClient(address, kube.INFERENCE_NAME)
-        answer = client.score([{}])
+        answer = kube.predict(address, [{}])
         (result,) = answer["predictions"]
         if answer["model_version"] != version or not 0.0 <= result <= 1.0:
             raise RuntimeError(f"payment-risk answered {answer} instead of a {version} score")
@@ -426,7 +459,7 @@ def roll_out(*, version, run_id):
             kube.inference_service(previous, predictor)
         raise
     registry.promote(version, run_id)
-    return {"version": version, "previous": previous or ""}
+    return {"deployed": version, "previous": previous or ""}
 
 
 STEPS = {
@@ -448,7 +481,26 @@ STEPS = {
 }
 
 
+def truth(text):
+    """Parses a command-line boolean: `true` in any case, or `1`."""
+    return str(text).lower() in ("true", "1")
+
+
+def text(value):
+    """Returns a step result as the text written to its output file; booleans become `true`/`false`."""
+    return ("true" if value else "false") if isinstance(value, bool) else str(value)
+
+
+def argument_type(annotation):
+    """Returns the argparse type for a step parameter's annotation: int, float, bool or text."""
+    return {int: int, float: float, bool: truth}.get(annotation, str)
+
+
 def main(argv=None):
+    """Runs the step named on the command line and writes each `--out NAME PATH` result.
+
+    Each parameter of the step function becomes a `--dashed-name` option, typed by its annotation.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("step", choices=sorted(STEPS))
     parser.add_argument("--out", nargs=2, action="append", default=[], metavar=("NAME", "PATH"))
@@ -460,14 +512,14 @@ def main(argv=None):
         options.add_argument(
             f"--{parameter.name.replace('_', '-')}",
             dest=parameter.name,
-            type=parameter.annotation if parameter.annotation in (int, float) else str,
+            type=argument_type(parameter.annotation),
             required=required,
             default=None if required else parameter.default,
         )
     result = function(**vars(options.parse_args(remaining)))
     for name, path in arguments.out:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        Path(path).write_text(result[name])
+        Path(path).write_text(text(result[name]))
 
 
 if __name__ == "__main__":

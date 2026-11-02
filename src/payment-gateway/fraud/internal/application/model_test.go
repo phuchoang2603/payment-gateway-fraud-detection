@@ -45,7 +45,7 @@ func (f *fakeScorer) Score(ctx context.Context, features FeatureObservation) Mod
 
 func available() FeatureObservation {
 	views := map[string]ViewObservation{}
-	for _, name := range requiredViews {
+	for _, name := range RequiredViews {
 		views[name] = ViewObservation{Status: "available"}
 	}
 	return FeatureObservation{Service: "payment_risk_v1", Views: views}
@@ -116,7 +116,7 @@ func TestShadowModeRecordsTheScoreAndLeavesTheRulesDecision(t *testing.T) {
 }
 
 func TestAnIncompleteViewKeepsTheRulesDecisionForEveryRequiredView(t *testing.T) {
-	for _, name := range requiredViews {
+	for _, name := range RequiredViews {
 		t.Run(name, func(t *testing.T) {
 			features := available()
 			features.Views[name] = ViewObservation{Status: "expired"}
@@ -168,7 +168,7 @@ func TestTheScorerSeesTheFeatureReadUnderItsOwnDeadline(t *testing.T) {
 	features := available()
 	scorer := &fakeScorer{observation: answer(0.1)}
 	decide(t, features, scorer, ModelShadow, 0, 1000)
-	if scorer.calls != 1 || scorer.seen.Service != "payment_risk_v1" || len(scorer.seen.Views) != len(requiredViews) {
+	if scorer.calls != 1 || scorer.seen.Service != "payment_risk_v1" || len(scorer.seen.Views) != len(RequiredViews) {
 		t.Fatalf("scorer saw %+v after %d calls", scorer.seen, scorer.calls)
 	}
 	if scorer.deadline <= 0 || scorer.deadline > 150*time.Millisecond {

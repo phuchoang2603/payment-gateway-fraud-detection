@@ -1,3 +1,5 @@
+"""Time-ordered train, validation and test windows, and the masks that select their rows."""
+
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 
@@ -9,11 +11,14 @@ NAMES = ("train", "validation", "test")
 
 @dataclass(frozen=True)
 class Window:
+    """A range of UTC days, first and last inclusive."""
+
     first: date
     last: date
 
     @classmethod
     def parse(cls, text):
+        """Returns the Window for text like `2026-07-29..2026-09-30`, or raises ValueError."""
         first, separator, last = str(text).partition("..")
         if not separator:
             raise ValueError(f"window {text!r} must look like 2026-07-29..2026-09-30")
@@ -24,17 +29,27 @@ class Window:
 
     @property
     def start(self):
+        """Returns the first instant of the window."""
         return datetime.combine(self.first, time.min, UTC)
 
     @property
     def end(self):
+        """Returns the first instant after the window."""
         return datetime.combine(self.last + timedelta(days=1), time.min, UTC)
 
     def __str__(self):
+        """Returns the window as text like `2026-07-29..2026-09-30`."""
         return f"{self.first}..{self.last}"
 
 
 class WindowSplitter:
+    """Holds the train, validation and test windows and selects rows by time.
+
+    Each window is a Window or text like `2026-07-29..2026-09-30`. The windows must follow one another
+    with no overlap and no gap, or ValueError is raised. `mask` and `counts` classify a timestamp
+    column, and `counts` fails on any row outside every window.
+    """
+
     def __init__(self, train, validation, test):
         self.windows = {
             name: value if isinstance(value, Window) else Window.parse(value)
@@ -48,17 +63,21 @@ class WindowSplitter:
                 raise ValueError(f"{later} window must start the day after the {earlier} window")
 
     def __getitem__(self, name):
+        """Returns the window called `train`, `validation` or `test`."""
         return self.windows[name]
 
     @property
     def start(self):
+        """Returns the first day of the train window."""
         return self.windows["train"].first
 
     @property
     def end(self):
+        """Returns the day after the test window."""
         return self.windows["test"].last + timedelta(days=1)
 
     def mask(self, column, name):
+        """Returns a boolean Arrow mask of the rows of a timestamp column inside a window."""
         window = self.windows[name]
         return pc.and_(
             pc.greater_equal(column, pa.scalar(window.start, column.type)),
@@ -66,6 +85,7 @@ class WindowSplitter:
         )
 
     def counts(self, started_at):
+        """Returns the row count of each window, and raises ValueError for rows outside all of them."""
         column = pa.chunked_array([started_at]) if isinstance(started_at, pa.Array) else started_at
         counts = {}
         for name in self.windows:

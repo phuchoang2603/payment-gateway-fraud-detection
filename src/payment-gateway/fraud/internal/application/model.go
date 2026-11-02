@@ -8,19 +8,25 @@ import (
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/domain"
 )
 
+// ModelMode says whether a model score is only recorded or can change the decision.
 type ModelMode string
 
 const (
-	ModelShadow  ModelMode = "shadow"
+	// ModelShadow records the score and never changes the decision.
+	ModelShadow ModelMode = "shadow"
+	// ModelEnforce lets the score add a decline when the missing-feature policy holds.
 	ModelEnforce ModelMode = "enforce"
 )
 
+// The statuses of one model call.
 const (
 	ModelAvailable = "available"
 	ModelTimeout   = "timeout"
 	ModelError     = "error"
 )
 
+// ModelObservation is what one model call produced and how it was used: the model, its version and
+// score, the mode and threshold, and whether the score was enforced and changed the outcome.
 type ModelObservation struct {
 	Name, Version, Mode, Status string
 	Score                       *float64
@@ -29,10 +35,12 @@ type ModelObservation struct {
 	Enforced, Declined          bool
 }
 
+// ModelScorer scores one assessment's features, and returns a status instead of failing.
 type ModelScorer interface {
 	Score(context.Context, FeatureObservation) ModelObservation
 }
 
+// ModelConfig enables model scoring: the scorer, the mode, the call's deadline and the decline threshold.
 type ModelConfig struct {
 	Scorer    ModelScorer
 	Mode      ModelMode
@@ -40,10 +48,12 @@ type ModelConfig struct {
 	Threshold float64
 }
 
-var requiredViews = []string{"customer_daily", "payment_method_daily", "customer_stream", "payment_method_stream", "request_features"}
+// RequiredViews are the feature views that must all be available before a score can be enforced. They
+// are the views of the feature service, which the Feast adapter's tests check.
+var RequiredViews = []string{"customer_daily", "payment_method_daily", "customer_stream", "payment_method_stream", "request_features"}
 
 func complete(features FeatureObservation) bool {
-	for _, name := range requiredViews {
+	for _, name := range RequiredViews {
 		if features.Views[name].Status != "available" {
 			return false
 		}
@@ -65,6 +75,7 @@ func (s *Service) WithModel(config ModelConfig) error {
 	return nil
 }
 
+// scoreModel calls the scorer and applies the missing-feature policy to the evidence's decision.
 func (s *Service) scoreModel(ctx context.Context, evidence *Evidence) {
 	call, stop := context.WithTimeout(ctx, s.model.Timeout)
 	defer stop()

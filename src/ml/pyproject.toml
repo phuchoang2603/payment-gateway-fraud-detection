@@ -10,9 +10,7 @@ dependencies = [
     "pyarrow>=21",
     "pyiceberg[pyarrow]>=0.10,<0.11",
     "model-registry==0.3.18",
-    "kubeflow==0.5.0",
     "kubernetes>=31,<36",
-    "pyyaml>=6,<7",
 ]
 
 [project.optional-dependencies]
@@ -40,4 +38,4 @@ pythonpath = ["."]
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["E4", "E7", "E9", "F", "I", "D100", "D101", "D102", "D103", "D104"]

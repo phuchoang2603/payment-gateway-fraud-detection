@@ -1,6 +1,7 @@
 package kserve
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -15,7 +16,7 @@ var fixedNow = time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
 
 func newClient(t *testing.T, url string, timeout time.Duration) *Client {
 	t.Helper()
-	client, err := New(Config{URL: url, Model: "payment-risk", Timeout: timeout})
+	client, err := New(Config{URL: url, Model: "payment-risk", DialTimeout: timeout})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +151,9 @@ func TestASlowPredictorTimesOutAndADeadOneIsAnError(t *testing.T) {
 	}))
 	defer server.Close()
 	defer close(release)
-	slow := newClient(t, server.URL, 30*time.Millisecond).Score(t.Context(), views(nil))
+	deadline, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+	defer cancel()
+	slow := newClient(t, server.URL, time.Second).Score(deadline, views(nil))
 	if slow.Status != application.ModelTimeout || slow.Score != nil {
 		t.Fatalf("slow predictor: %+v", slow)
 	}
@@ -163,7 +166,7 @@ func TestASlowPredictorTimesOutAndADeadOneIsAnError(t *testing.T) {
 }
 
 func TestAnEndpointOrNameThatCouldMisdirectTheCallIsRejected(t *testing.T) {
-	valid := Config{URL: "http://payment-risk-predictor.ml.svc.cluster.local", Model: "payment-risk", Timeout: time.Second}
+	valid := Config{URL: "http://payment-risk-predictor.ml.svc.cluster.local", Model: "payment-risk", DialTimeout: time.Second}
 	if _, err := New(valid); err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +182,7 @@ func TestAnEndpointOrNameThatCouldMisdirectTheCallIsRejected(t *testing.T) {
 		"path in name": func(c *Config) { c.Model = "a/b" },
 		"colon":        func(c *Config) { c.Model = "a:predict" },
 		"leading dash": func(c *Config) { c.Model = "-a" },
-		"no timeout":   func(c *Config) { c.Timeout = 0 },
+		"no timeout":   func(c *Config) { c.DialTimeout = 0 },
 	} {
 		config := valid
 		mutate(&config)

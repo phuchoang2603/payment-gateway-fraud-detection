@@ -22,12 +22,12 @@ deploymentSpec:
       container:
         args:
         - roll_out
-        - --version
-        - '{{$.inputs.parameters[''version'']}}'
         - --run-id
         - '{{$.inputs.parameters[''run_id'']}}'
+        - --version
+        - '{{$.inputs.parameters[''version'']}}'
         - --out
-        - version
+        - deployed
         - '{{$.outputs.parameters[''deployed''].output_file}}'
         command:
         - python

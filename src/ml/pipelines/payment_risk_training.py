@@ -1,3 +1,5 @@
+"""The `payment-risk-training` pipeline: plan windows, build the set, train, gate, register and serve."""
+
 from kfp import dsl
 
 from components import (
@@ -19,6 +21,8 @@ from components import (
 
 
 def payment_risk_training(environment):
+    """Returns the training pipeline for an environment's node selectors and Spark sizes."""
+
     @dsl.pipeline(
         name="payment-risk-training",
         description="Build the payment_risk_v1 training set, train on one GPU, gate, register and roll out.",
@@ -34,9 +38,18 @@ def payment_risk_training(environment):
         validation_days: int = 14,
         test_days: int = 14,
         lag_days: int = 1,
-        force: str = "false",
+        force: bool = False,
     ):
-        windows = configure(
+        def light(task):
+            return configure(
+                task,
+                nodes=environment.nodes,
+                cpu="1",
+                memory=environment.light_memory,
+                retries=2,
+            )
+
+        windows = light(
             plan_windows(
                 run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER,
                 schedule_time=dsl.PIPELINE_JOB_SCHEDULE_TIME_UTC_PLACEHOLDER,
@@ -50,11 +63,7 @@ def payment_risk_training(environment):
                 fixed_validation=validation,
                 fixed_test=test,
                 fixed_cutoff=cutoff,
-            ),
-            nodes=environment.nodes,
-            cpu="1",
-            memory=environment.light_memory,
-            retries=2,
+            )
         )
         train_window = windows.outputs["train"]
         validation_window = windows.outputs["validation"]
@@ -101,25 +110,17 @@ def payment_risk_training(environment):
             ).after(staged)
             snapshot = examples.outputs["snapshot"]
 
-            checked = configure(
-                check_examples(run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER, snapshot=snapshot),
-                nodes=environment.nodes,
-                cpu="1",
-                memory=environment.light_memory,
-                retries=2,
+            checked = light(
+                check_examples(run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER, snapshot=snapshot)
             )
-            split = configure(
+            split = light(
                 split_windows(
                     run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER,
                     snapshot=snapshot,
                     train=train_window,
                     validation=validation_window,
                     test=test_window,
-                ),
-                nodes=environment.nodes,
-                cpu="1",
-                memory=environment.light_memory,
-                retries=2,
+                )
             ).after(checked)
 
             tuned = configure(

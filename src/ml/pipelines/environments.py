@@ -1,8 +1,12 @@
+"""Where and how big the pipeline steps run in each environment."""
+
 from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
 class Environment:
+    """The node selectors and sizes one environment runs the pipeline with."""
+
     name: str
     nodes: dict = field(default_factory=dict)
     spark_cpu: str = "3"

@@ -1,3 +1,5 @@
+"""Compiles the pipelines for every environment into the chart, or checks the chart is current."""
+
 import argparse
 import sys
 from pathlib import Path
@@ -16,6 +18,7 @@ CHART_FILES = Path(__file__).resolve().parents[3] / "infra" / "charts" / "ml-tra
 
 
 def compile_all(target):
+    """Compiles every pipeline for every environment into `target` and returns the YAML by path."""
     target = Path(target)
     target.mkdir(parents=True, exist_ok=True)
     built = {}
@@ -29,6 +32,7 @@ def compile_all(target):
 
 
 def main():
+    """Compiles into the chart, or with `--check` fails when the chart's files are out of date."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     arguments = parser.parse_args()

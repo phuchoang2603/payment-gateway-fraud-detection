@@ -1253,46 +1253,6 @@ wheels = [
 ]
 
 [[package]]
-name = "kubeflow"
-version = "0.5.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "kubeflow-katib-api" },
-    { name = "kubeflow-trainer-api" },
-    { name = "kubernetes" },
-    { name = "pydantic" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/df/91/f4a745a247a3d588933d4fe00388c331b65d03ad72eaa96a79b021db2f7e/kubeflow-0.5.0.tar.gz", hash = "sha256:716c09eea9e9245d5abc6d2a556a9911d6f8b1138d98be24ddebe38e9b925ee3", size = 5786872, upload-time = "2026-08-10T10:05:39.209Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/cf/72/47667a1a8152ba9478f8151c689048320f2afa455b5b942f5f04f78f1ea8/kubeflow-0.5.0-py3-none-any.whl", hash = "sha256:c4deef307d8acf36c4737311b849665419c747973504fa37a175f1057e1b5599", size = 235019, upload-time = "2026-08-10T10:05:37.676Z" },
-]
-
-[[package]]
-name = "kubeflow-katib-api"
-version = "0.19.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/3f/15/06c2aa05a4737de728d7ded8afb027f5aa8925679458c39d6348281f00e2/kubeflow_katib_api-0.19.0.tar.gz", hash = "sha256:c20f92a1417163fb63231c91320d5dddfff363ee661bea861917ea0f97f6cfdd", size = 190700, upload-time = "2025-10-30T22:09:49.941Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d0/8c/63d81d2c3ecb7c22daf1dc67c24beacef82bfc9c9974351490e6c8d119a0/kubeflow_katib_api-0.19.0-py3-none-any.whl", hash = "sha256:e16517b237baf55a37c329fd58399571470910815c9b9af92452075a930bc7bd", size = 642995, upload-time = "2025-10-30T22:09:48.701Z" },
-]
-
-[[package]]
-name = "kubeflow-trainer-api"
-version = "2.3.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/cb/c0/618473b4f1a9172e844dafc079992a2e451a265d6e357d4525853bdbf3c9/kubeflow_trainer_api-2.3.0.tar.gz", hash = "sha256:8d6fca2f8e9956427b06459722e739fb6ea8c45caac55a1470a20644a9527d92", size = 244283, upload-time = "2026-08-07T01:45:42.195Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e5/93/4db816302fee8d549174249fe8a5615ed84934c40610ff70d10633183f55/kubeflow_trainer_api-2.3.0-py3-none-any.whl", hash = "sha256:0a08637b113ff220b04d819ce76e82b0ddcb2ef0dc87f33f3fbf5f366c74aeee", size = 892503, upload-time = "2026-08-07T01:45:40.561Z" },
-]
-
-[[package]]
 name = "kubernetes"
 version = "35.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2290,13 +2250,11 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fraud-feast", extra = ["spark"] },
-    { name = "kubeflow" },
     { name = "kubernetes" },
     { name = "model-registry" },
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pyiceberg", extra = ["pyarrow"] },
-    { name = "pyyaml" },
     { name = "scikit-learn" },
     { name = "xgboost" },
 ]
@@ -2319,14 +2277,12 @@ dev = [
 requires-dist = [
     { name = "fraud-feast", extras = ["spark"], editable = "../data-pipeline/feast" },
     { name = "jupyterlab", marker = "extra == 'notebook'", specifier = ">=4.4,<5" },
-    { name = "kubeflow", specifier = "==0.5.0" },
     { name = "kubernetes", specifier = ">=31,<36" },
     { name = "matplotlib", marker = "extra == 'notebook'", specifier = ">=3.9,<4" },
     { name = "model-registry", specifier = "==0.3.18" },
     { name = "pandas", specifier = ">=2.2,<3" },
     { name = "pyarrow", specifier = ">=21" },
     { name = "pyiceberg", extras = ["pyarrow"], specifier = ">=0.10,<0.11" },
-    { name = "pyyaml", specifier = ">=6,<7" },
     { name = "scikit-learn", specifier = "==1.9.1" },
     { name = "xgboost", specifier = "==2.1.4" },
 ]

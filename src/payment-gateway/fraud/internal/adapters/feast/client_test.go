@@ -133,3 +133,18 @@ func TestRequestFeatureBooleansAndNullRetainScoringTime(t *testing.T) {
 		t.Fatalf("request features lost null, false or scoring time: %+v", result)
 	}
 }
+
+func TestTheViewsReadAreExactlyTheViewsAnEnforcedModelScoreNeeds(t *testing.T) {
+	read := map[string]bool{}
+	for view := range viewFields {
+		read[view] = true
+	}
+	if len(read) != len(application.RequiredViews) {
+		t.Fatalf("the adapter reads %d views, the policy requires %d", len(read), len(application.RequiredViews))
+	}
+	for _, view := range application.RequiredViews {
+		if !read[view] {
+			t.Fatalf("the policy requires %s, which the adapter does not read", view)
+		}
+	}
+}

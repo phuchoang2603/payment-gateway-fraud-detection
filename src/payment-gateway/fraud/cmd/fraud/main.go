@@ -124,7 +124,7 @@ func run() error {
 				return errors.New("FRAUD_MODEL_THRESHOLD must be a number")
 			}
 		}
-		scorer, err := kserve.New(kserve.Config{URL: os.Getenv("FRAUD_MODEL_URL"), Model: os.Getenv("FRAUD_MODEL_NAME"), Timeout: modelConfig.Timeout})
+		scorer, err := kserve.New(kserve.Config{URL: os.Getenv("FRAUD_MODEL_URL"), Model: os.Getenv("FRAUD_MODEL_NAME"), DialTimeout: modelConfig.Timeout})
 		if err != nil {
 			return err
 		}

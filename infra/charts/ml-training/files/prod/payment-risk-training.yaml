@@ -3,7 +3,7 @@
 # Description: Build the payment_risk_v1 training set, train on one GPU, gate, register and roll out.
 # Inputs:
 #    cutoff: str [Default: '']
-#    force: str [Default: 'false']
+#    force: bool [Default: False]
 #    lag_days: int [Default: 1.0]
 #    test: str [Default: '']
 #    test_days: int [Default: 14.0]
@@ -511,7 +511,7 @@ components:
         fixed_validation:
           parameterType: STRING
         force:
-          parameterType: STRING
+          parameterType: BOOLEAN
         lag_days:
           parameterType: NUMBER_INTEGER
         run_id:
@@ -640,6 +640,8 @@ deploymentSpec:
       container:
         args:
         - assemble_examples
+        - --run-id
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --train
         - '{{$.inputs.parameters[''train'']}}'
         - --validation
@@ -648,10 +650,8 @@ deploymentSpec:
         - '{{$.inputs.parameters[''test'']}}'
         - --cutoff
         - '{{$.inputs.parameters[''cutoff'']}}'
-        - --snapshot
+        - --existing-snapshot
         - '{{$.inputs.parameters[''existing_snapshot'']}}'
-        - --run-id
-        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - snapshot
         - '{{$.outputs.parameters[''snapshot''].output_file}}'
@@ -678,10 +678,10 @@ deploymentSpec:
       container:
         args:
         - check_examples
-        - --snapshot
-        - '{{$.inputs.parameters[''snapshot'']}}'
         - --run-id
         - '{{$.inputs.parameters[''run_id'']}}'
+        - --snapshot
+        - '{{$.inputs.parameters[''snapshot'']}}'
         - --out
         - report
         - '{{$.outputs.parameters[''report''].output_file}}'
@@ -701,6 +701,8 @@ deploymentSpec:
       container:
         args:
         - fit_on_gpu
+        - --run-id
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --snapshot
         - '{{$.inputs.parameters[''snapshot'']}}'
         - --train
@@ -711,8 +713,6 @@ deploymentSpec:
         - '{{$.inputs.parameters[''test'']}}'
         - --params
         - '{{$.inputs.parameters[''params'']}}'
-        - --run-id
-        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - model_uri
         - '{{$.outputs.parameters[''model_uri''].output_file}}'
@@ -735,6 +735,8 @@ deploymentSpec:
       container:
         args:
         - gate
+        - --run-id
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --snapshot
         - '{{$.inputs.parameters[''snapshot'']}}'
         - --train
@@ -745,8 +747,6 @@ deploymentSpec:
         - '{{$.inputs.parameters[''test'']}}'
         - --model-uri
         - '{{$.inputs.parameters[''model_uri'']}}'
-        - --run-id
-        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - passed
         - '{{$.outputs.parameters[''passed''].output_file}}'
@@ -775,6 +775,8 @@ deploymentSpec:
       container:
         args:
         - plan_examples
+        - --run-id
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --train
         - '{{$.inputs.parameters[''train'']}}'
         - --validation
@@ -783,10 +785,8 @@ deploymentSpec:
         - '{{$.inputs.parameters[''test'']}}'
         - --cutoff
         - '{{$.inputs.parameters[''cutoff'']}}'
-        - --snapshot
+        - --existing-snapshot
         - '{{$.inputs.parameters[''existing_snapshot'']}}'
-        - --run-id
-        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - chunks
         - '{{$.outputs.parameters[''chunks''].output_file}}'
@@ -891,12 +891,13 @@ deploymentSpec:
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef publish_metrics(summary: str, metrics: dsl.Output[dsl.Metrics]):\n\
-          \    import json\n\n    data = json.loads(summary)\n    for prefix, name\
-          \ in ((\"test\", \"model\"), (\"baseline\", \"baseline\"), (\"production\"\
-          , \"production\")):\n        for metric, value in data[\"metrics\"].get(name,\
-          \ {}).items():\n            metrics.log_metric(f\"{prefix}_{metric}\", value)\n\
-          \    metrics.log_metric(\"gate_passed\", 1 if data[\"passed\"] else 0)\n\
-          \n"
+          \    \"\"\"Logs the gate's metrics for the model, the baseline and production\
+          \ as KFP metrics.\"\"\"\n    import json\n\n    data = json.loads(summary)\n\
+          \    for prefix, name in ((\"test\", \"model\"), (\"baseline\", \"baseline\"\
+          ), (\"production\", \"production\")):\n        for metric, value in data[\"\
+          metrics\"].get(name, {}).items():\n            metrics.log_metric(f\"{prefix}_{metric}\"\
+          , value)\n    metrics.log_metric(\"gate_passed\", 1 if data[\"passed\"]\
+          \ else 0)\n\n"
         image: python:3.12-slim
         resources:
           cpuRequest: 0.25
@@ -909,6 +910,8 @@ deploymentSpec:
       container:
         args:
         - record_version
+        - --run-id
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --snapshot
         - '{{$.inputs.parameters[''snapshot'']}}'
         - --model-uri
@@ -921,8 +924,6 @@ deploymentSpec:
         - '{{$.inputs.parameters[''params'']}}'
         - --experiment
         - '{{$.inputs.parameters[''experiment'']}}'
-        - --run-id
-        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - version
         - '{{$.outputs.parameters[''version''].output_file}}'
@@ -942,12 +943,12 @@ deploymentSpec:
       container:
         args:
         - roll_out
-        - --version
-        - '{{$.inputs.parameters[''version'']}}'
         - --run-id
         - '{{$.inputs.parameters[''run_id'']}}'
+        - --version
+        - '{{$.inputs.parameters[''version'']}}'
         - --out
-        - version
+        - deployed
         - '{{$.outputs.parameters[''deployed''].output_file}}'
         command:
         - python
@@ -965,6 +966,8 @@ deploymentSpec:
       container:
         args:
         - split_windows
+        - --run-id
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --snapshot
         - '{{$.inputs.parameters[''snapshot'']}}'
         - --train
@@ -973,8 +976,6 @@ deploymentSpec:
         - '{{$.inputs.parameters[''validation'']}}'
         - --test
         - '{{$.inputs.parameters[''test'']}}'
-        - --run-id
-        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - report
         - '{{$.outputs.parameters[''report''].output_file}}'
@@ -1024,6 +1025,8 @@ deploymentSpec:
       container:
         args:
         - tune_params
+        - --run-id
+        - '{{$.inputs.parameters[''run_id'']}}'
         - --snapshot
         - '{{$.inputs.parameters[''snapshot'']}}'
         - --train
@@ -1034,8 +1037,6 @@ deploymentSpec:
         - '{{$.inputs.parameters[''test'']}}'
         - --trials
         - '{{$.inputs.parameters[''trials'']}}'
-        - --run-id
-        - '{{$.inputs.parameters[''run_id'']}}'
         - --out
         - params
         - '{{$.outputs.parameters[''params''].output_file}}'
@@ -1144,9 +1145,9 @@ root:
         isOptional: true
         parameterType: STRING
       force:
-        defaultValue: 'false'
+        defaultValue: false
         isOptional: true
-        parameterType: STRING
+        parameterType: BOOLEAN
       lag_days:
         defaultValue: 1.0
         isOptional: true

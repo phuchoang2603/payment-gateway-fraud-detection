@@ -1,3 +1,5 @@
+"""Shared fixtures: a local Spark session with Iceberg, and a Feast test repository."""
+
 import os
 
 import pytest
@@ -5,6 +7,7 @@ import pytest
 
 @pytest.fixture(scope="session")
 def spark(tmp_path_factory):
+    """Returns a local Spark session with an Iceberg warehouse and the `gold`, `silver` and `ml` namespaces."""
     from fraud_feast.spark_jars import manifest
     from pyspark.sql import SparkSession
 
@@ -37,6 +40,7 @@ def spark(tmp_path_factory):
 
 @pytest.fixture
 def feature_store(tmp_path, monkeypatch):
+    """Returns a Feast store on local files with the fraud feature definitions applied."""
     from feast import FeatureStore
     from feast.repo_config import RepoConfig
     from fraud_feast.repo import definitions

@@ -71,7 +71,7 @@ This is the only Spark in the training code.
 | `GateEvaluator` | Thresholds on validation: decline where at most 0.1% of legitimate payments are flagged (one wrongly declined customer in a thousand), step-up at 1% (extra friction that is tolerable); weighted test metrics; the gate |
 | `RegistryClient` | The platform registry client: register a version with metadata; find `production`; mark `production` (custom property) and archive the previous version (native ARCHIVED state) |
 
-The other modules are `dataset.py`, `steps.py` (one function per pipeline step), `worker.py` (the TrainJob entrypoint) and `serve_client.py` (a small JSON client used by the deploy check). The notebook calls `steps`.
+The other modules are `dataset.py`, `steps.py` (one function per pipeline step), `worker.py` (the TrainJob entrypoint), `kube.py` (the cluster calls, including the deploy check's predict request) and `cluster.py` (the names they share). The notebook calls `steps`.
 
 ### 4. Pipeline `payment-risk-training`
 
@@ -99,7 +99,7 @@ KFP v2 with `kfp-kubernetes`, on the `ml` image. It is compiled into `infra/char
   - a Java runtime;
   - Spark 4.1.3 with the Iceberg 1.12 and AWS jars, pinned as in `data-platform-spark`;
   - `fraud_feast[spark]` from `src/data-pipeline/feast`;
-  - pinned `xgboost`, `pyiceberg`, `scikit-learn`, `kfp`, `model-registry` and the Kubeflow SDK;
+  - pinned `xgboost`, `pyiceberg`, `scikit-learn`, `kfp`, and `model-registry`;
   - JupyterLab.
 
   It runs non-root, and is never the stock Trainer image.
@@ -174,7 +174,7 @@ These are added to the existing Python test job.
 API checks against released sources (task 0.4). Each deviation from the decisions above is stated with its reason.
 
 - **Dependency split.** `kfp` needs `protobuf<7` and `fraud_feast` pins 7.36.1, so the pipelines are a separate uv project, `src/ml/pipelines`. Every step is a container component running `python -m risk_model.steps <step>` in the `ml` image, which holds no `kfp`. Only the metrics step is a lightweight component, on a stock Python image.
-  - The `fit_on_gpu` TrainJob is created with the Kubeflow SDK (`kubeflow` 0.5.0, `TrainerClient.train` with `CustomTrainerContainer` and the `kubeflow.trainer.options` overrides). The SDK reads `ClusterTrainingRuntime`s, so talos-proxmox grants `ml/fraud-training` a read-only ClusterRole; a namespaced Role cannot.
+  - The `fit_on_gpu` TrainJob and the Katib trial are built from one raw `TrainJob` template (`kube.train_job_spec`), not the Kubeflow SDK. The SDK's `CustomTrainerContainer.env` takes literal values only, and the Trainer webhook rejects secret-backed environment set through a runtime patch, so the credentials go in `spec.trainer.env` as `secretKeyRef`s and the runtime patch only sets the service account (its `manager` must be domain-prefixed). The pods read their own credentials, so `fraud-training` needs no Secret read and no `ClusterTrainingRuntime` read.
   - The InferenceService and the Katib Experiment are raw objects, because the SDK has no KServe client, and its optimizer client takes a function trainer only and cannot set a service account or secret-backed env on the trial.
 - **XGBoost 2.1.4, not the newest.** Training (CUDA 12) and the predictor (`xgboost-cpu`) use the same version, so a model file always loads in the version that wrote it; 3.4 wheels are built for CUDA 13.
   - The model is trained on unnamed columns. The ordered feature list is stored as the `feature_order` attribute and on the registry version, and the predictor does the ordering.

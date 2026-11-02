@@ -1,3 +1,5 @@
+"""Tests for the time windows and the splitter that classifies rows by them."""
+
 from datetime import UTC, datetime
 
 import pyarrow as pa
@@ -9,10 +11,12 @@ DEFAULT = ("2026-07-29..2026-09-30", "2026-10-01..2026-10-14", "2026-10-15..2026
 
 
 def stamps(*values):
+    """Returns an Arrow timestamp column from ISO-formatted strings."""
     return pa.array([datetime.fromisoformat(v) for v in values], pa.timestamp("us", tz="UTC"))
 
 
 def test_default_windows_cover_every_row_exactly_once():
+    """Default windows cover every row exactly once."""
     splitter = WindowSplitter(*DEFAULT)
     counts = splitter.counts(
         stamps(
@@ -36,11 +40,13 @@ def test_default_windows_cover_every_row_exactly_once():
     ],
 )
 def test_overlapping_gapped_or_misordered_windows_are_rejected(windows):
+    """Overlapping gapped or misordered windows are rejected."""
     with pytest.raises(ValueError):
         WindowSplitter(*windows)
 
 
 def test_row_outside_every_window_is_rejected():
+    """Row outside every window is rejected."""
     splitter = WindowSplitter(*DEFAULT)
     with pytest.raises(ValueError, match="outside every window"):
         splitter.counts(stamps("2026-07-28T23:59:59+00:00", "2026-08-01T00:00:00+00:00"))
