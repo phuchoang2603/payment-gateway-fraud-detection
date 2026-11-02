@@ -298,9 +298,14 @@ spec:
           # batches and the producer queue need the headroom above it.
           requests: {cpu: "1", memory: 6Gi, ephemeral-storage: 2Gi}
           limits: {memory: 8Gi, ephemeral-storage: 4Gi}
-          {{- else }}
+          {{- else if eq $mode "writer" }}
           requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 2Gi}
           limits: {memory: 4Gi, ephemeral-storage: 4Gi}
+          {{- else }}
+          # The gate and the topic cleanup only read a report or call the Kafka admin API, and they must fit in what the
+          # on-demand pool has left while the replay holds the burst pool.
+          requests: {cpu: 50m, memory: 512Mi, ephemeral-storage: 256Mi}
+          limits: {memory: 2Gi, ephemeral-storage: 1Gi}
           {{- end }}
         {{- if eq $mode "seed" }}
         volumeMounts:
