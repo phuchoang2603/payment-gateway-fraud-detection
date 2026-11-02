@@ -20,7 +20,7 @@ PROD = Environment(
 )
 DEV = Environment(
     name="dev",
-    spark_cpu="2",
+    spark_cpu="1",
     parallelism=1,
     plan=("2g", "4G"),
     stage=("6g", "8G"),

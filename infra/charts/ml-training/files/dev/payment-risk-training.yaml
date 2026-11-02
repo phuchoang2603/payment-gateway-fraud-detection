@@ -661,17 +661,17 @@ deploymentSpec:
         - risk_model.steps
         env:
         - name: SPARK_MASTER
-          value: local[2]
+          value: local[1]
         - name: PYSPARK_SUBMIT_ARGS
           value: --driver-memory 4g pyspark-shell
         - name: SPARK_LOCAL_DIR
           value: /tmp/spark
         image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
         resources:
-          cpuRequest: 2.0
+          cpuRequest: 1.0
           memoryLimit: 6.0
           memoryRequest: 6.0
-          resourceCpuRequest: '2'
+          resourceCpuRequest: '1'
           resourceMemoryLimit: 6G
           resourceMemoryRequest: 6G
     exec-check-examples:
@@ -796,17 +796,17 @@ deploymentSpec:
         - risk_model.steps
         env:
         - name: SPARK_MASTER
-          value: local[2]
+          value: local[1]
         - name: PYSPARK_SUBMIT_ARGS
           value: --driver-memory 2g pyspark-shell
         - name: SPARK_LOCAL_DIR
           value: /tmp/spark
         image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
         resources:
-          cpuRequest: 2.0
+          cpuRequest: 1.0
           memoryLimit: 4.0
           memoryRequest: 4.0
-          resourceCpuRequest: '2'
+          resourceCpuRequest: '1'
           resourceMemoryLimit: 4G
           resourceMemoryRequest: 4G
     exec-plan-windows:
@@ -1007,17 +1007,17 @@ deploymentSpec:
         - risk_model.steps
         env:
         - name: SPARK_MASTER
-          value: local[2]
+          value: local[1]
         - name: PYSPARK_SUBMIT_ARGS
           value: --driver-memory 6g pyspark-shell
         - name: SPARK_LOCAL_DIR
           value: /tmp/spark
         image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
         resources:
-          cpuRequest: 2.0
+          cpuRequest: 1.0
           memoryLimit: 8.0
           memoryRequest: 8.0
-          resourceCpuRequest: '2'
+          resourceCpuRequest: '1'
           resourceMemoryLimit: 8G
           resourceMemoryRequest: 8G
     exec-tune-params:
