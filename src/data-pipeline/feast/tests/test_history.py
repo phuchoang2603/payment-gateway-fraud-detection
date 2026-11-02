@@ -5,7 +5,6 @@ import pytest
 from test_stream_writer import DAY, row
 from test_stream_writer import writer as live_writer
 
-from fraud_feast import history
 from fraud_feast.apply import stream_schema
 from fraud_feast.repo import KEYS, TABLES
 from fraud_feast.stream_writer import IcebergWriter, StreamWriter, watermarks
