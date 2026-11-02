@@ -82,8 +82,6 @@ services:
       value: payments.payment-gateway.svc.cluster.local:8000
     - name: EDGE_VAULT_ADDRESS
       value: vault-simulator.payment-gateway.svc.cluster.local:8000
-    - name: EDGE_PUBLIC_BASE_URL
-      value: https://pay-gateway-dev.phuchoang.sbs
     - name: EDGE_TRUSTED_PROXY_HEADER
       value: X-Forwarded-For
     - name: EDGE_TRUSTED_PROXY_HOPS
@@ -112,10 +110,9 @@ services:
       - podSelector:
           matchLabels:
             app.kubernetes.io/name: live-simulator
+    publicUrlEnv: EDGE_PUBLIC_BASE_URL
     httpRoute:
       enabled: true
-      hostnames:
-      - pay-gateway-dev.phuchoang.sbs
   fraud-service:
     database: fraud
     mesh:

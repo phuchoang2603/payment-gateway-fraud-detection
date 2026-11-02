@@ -9,10 +9,8 @@ metadata:
 spec:
   parentRefs:
     - name: {{ $.Values.ingress.name }}
-  {{- with $svc.httpRoute.hostnames }}
   hostnames:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- toYaml ($svc.httpRoute.hostnames | default (list $.Values.ingress.tunnel.hostname)) | nindent 4 }}
   rules:
     - matches:
         - path:

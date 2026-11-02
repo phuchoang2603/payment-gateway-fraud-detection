@@ -118,6 +118,10 @@ spec:
                   key: {{ .secretKey }}
             {{- end }}
             {{- end }}
+            {{- with $svc.publicUrlEnv }}
+            - name: {{ . }}
+              value: {{ printf "https://%s" $.Values.ingress.tunnel.hostname | quote }}
+            {{- end }}
             {{- with $svc.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

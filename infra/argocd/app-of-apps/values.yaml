@@ -43,6 +43,7 @@ applications:
         name: edge-canary
         jsonPointers: [/spec/selector/rollouts-pod-template-hash]
   live-traffic:
+    enabled: false
     destinationNamespace: payment-gateway
     path: infra/charts/live-traffic
   data-pipelines:
@@ -56,7 +57,9 @@ applications:
   clickhouse:
     destinationNamespace: data
     path: infra/charts/clickhouse
+  # The LLM applications stay off in every environment until the cluster has capacity and the llm namespace is allowed.
   llm-platform:
+    enabled: false
     destinationNamespace: llm
     path: infra/charts/llm-platform
     # KEDA owns the agents' worker pool size; the chart only sets its starting size.
@@ -65,5 +68,6 @@ applications:
         kind: WorkerPool
         jsonPointers: [/spec/replicas]
   rag-pipeline:
+    enabled: false
     destinationNamespace: llm
     path: infra/charts/rag-pipeline

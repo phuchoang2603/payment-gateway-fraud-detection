@@ -1,11 +1,1 @@
-polaris:
-  # Dev shares three nodes with Spark runs; at 250m the catalog missed liveness probes under load and was killed mid-request.
-  resources:
-    requests:
-      cpu: "1"
-      memory: 768Mi
-    limits:
-      memory: 1536Mi
-  extraEnv:
-  - name: JAVA_TOOL_OPTIONS
-    value: -Xms256m -Xmx768m
+storageClass: local-path
