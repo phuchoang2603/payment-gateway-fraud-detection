@@ -34,6 +34,12 @@ class RegistryClient:
         numbers = [int(v.name[1:]) for v in self.versions() if v.name[1:].isdigit()]
         return f"v{max(numbers, default=0) + 1}"
 
+    def latest_cutoff(self):
+        numbered = [(int(v.name[1:]), v) for v in self.versions() if v.name[1:].isdigit()]
+        if not numbered:
+            return None
+        return (max(numbered, key=lambda pair: pair[0])[1].custom_properties or {}).get("cutoff")
+
     def register(self, version, uri, properties):
         flat = {key: flatten(value) for key, value in properties.items() if value is not None}
         self.client.register_model(

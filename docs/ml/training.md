@@ -18,7 +18,9 @@
 | validation | 2026-10-01..2026-10-14 |
 | test | 2026-10-15..2026-10-28 |
 
-The windows are pipeline parameters. `WindowSplitter` rejects overlapping, gapped or misordered windows, and rows outside every window.
+These are the windows of the first run. A scheduled run rolls them: contiguous test, validation and train windows of 14, 14 and 56 days ending on the schedule date minus one day, or on the newest replayed stream day if that is earlier (`risk_model.windows.rolling`). Passing all four of `train`, `validation`, `test` and `cutoff` overrides the rule. `WindowSplitter` rejects overlapping, gapped or misordered windows, and rows outside every window.
+
+A Kubeflow recurring run, created by a hook Job in the chart after each sync so it follows the deployed pipeline version, starts the pipeline daily with no catch-up. The first step, `plan_windows`, stops the run when its cutoff is not later than the cutoff of the highest registered version, so a day without new replayed history costs one small pod. On dev the schedule is on with 4, 1 and 1 day windows, because only 2026-10-14 to 2026-10-21 is replayed; on prod it is off until a prod run has been done.
 
 ## Pipeline
 
@@ -26,6 +28,7 @@ The windows are pipeline parameters. `WindowSplitter` rejects overlapping, gappe
 
 | Step | Does |
 |---|---|
+| `plan_windows` | Rolling windows from the schedule time, and the skip when there is no new data; every step below runs only when it says so |
 | `plan_examples`, `stage_examples`, `assemble_examples` | Plan the chunks and fence the source tables, stage each chunk in parallel, then merge into a new training-set version; a given `training_set_snapshot` skips all three |
 | `check_examples` | Missing or mistyped columns, duplicate keys, null labels, per-day fraud rate bounds; writes the null share per feature and day |
 | `split_windows` | Window checks, counts and sample fraud rate per split |
@@ -44,7 +47,7 @@ The windows are pipeline parameters. `WindowSplitter` rejects overlapping, gappe
 
 ## Derived request features
 
-The notebook ablates the candidate `request_features` columns on validation PR-AUC before the first registered version, because changing the inputs afterwards needs `payment_risk_v2`.
+The [notebook](../../src/ml/notebooks/payment_risk_exploration.ipynb) also compares a linear baseline, a random forest, histogram gradient boosting, CPU XGBoost and the GPU model on validation and test at the gate's two operating thresholds, with calibration and feature importance. It ablates the candidate `request_features` columns on validation PR-AUC before the first registered version, because changing the inputs afterwards needs `payment_risk_v2`.
 
 ## Drift
 

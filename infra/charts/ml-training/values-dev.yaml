@@ -9,3 +9,9 @@ serving:
     nodeSelector: null
 notebook:
   storageClass: local-path
+schedule:
+  enabled: true
+  # Only 2026-10-14 to 2026-10-21 is replayed on dev, so the windows are small.
+  trainDays: 4
+  validationDays: 1
+  testDays: 1

@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-notebook = ["jupyterlab>=4.4,<5"]
+notebook = ["jupyterlab>=4.4,<5", "matplotlib>=3.9,<4"]
 
 [dependency-groups]
 dev = ["hypothesis>=6.170,<7", "pyspark==4.1.3", "pytest==9.0.2", "ruff==0.14.14"]

@@ -30,6 +30,14 @@ iceberg:
   store: doppler
   data:
     ICEBERG_CLIENT_SECRET: ICEBERG_CLIENT_SECRET
+schedule:
+  enabled: false
+  # KFP cron: second minute hour day-of-month month day-of-week.
+  cron: "0 17 3 * * *"
+  trainDays: 56
+  validationDays: 14
+  testDays: 14
+  lagDays: 1
 serving:
   resources:
     requests: {cpu: 500m, memory: 1Gi}

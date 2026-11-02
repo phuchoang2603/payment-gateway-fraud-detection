@@ -33,7 +33,7 @@ See proposal.md for the motivation. What shapes the design:
 
 - Feature, label or request-field logic in training code; any source other than Feast; writes to Gold.
 - Distributed or CPU training.
-- Go Fraud calling the model, drift and retraining (roadmap), A/B splits, and GitHub-driven promotion.
+- Drift checks (roadmap), A/B splits, and GitHub-driven promotion.
 
 ## Decisions
 
@@ -79,6 +79,7 @@ KFP v2 with `kfp-kubernetes`, on the `ml` image. It is compiled into `infra/char
 
 | Step | Does |
 |---|---|
+| `plan_windows` | Decision 7a: rolling windows, and a skip when there is no new data. Every step below runs under `dsl.If(run)` |
 | `plan_examples`, `stage_examples` (parallel chunks), `assemble_examples` | Decision 2, which returns the snapshot ID. A given `training_set_snapshot` skips it |
 | `check_examples` | Spec checks; the report goes to the run directory; fails the run on failure |
 | `split_windows` | Window checks; counts and fraud rate per split |
@@ -86,7 +87,7 @@ KFP v2 with `kfp-kubernetes`, on the `ml` image. It is compiled into `infra/char
 | `fit_on_gpu` | A `TrainJob` on `xgboost-gpu-distributed` with `numNodes: 1`, image and command overridden by `python -m risk_model.worker`; uploads `model.json` and its feature list, then exits 0 |
 | `gate` | Baseline, production version and new model on test; the gate (beats the baseline; at least +0.005 PR-AUC over production without a worse recall at 1% FPR. The margin sits above the spread between retrains on the same data, so a new version replaces production only on a real gain); KFP `Metrics` and the PR curve |
 | `record_version` (`dsl.If(passed)`) | Writes the version next to the model file and registers a registry version with the spec's metadata, including the fenced snapshot IDs and the feature service. The artifact URI is the model directory in object storage |
-| `roll_out` (`dsl.If(passed)`) | Patches the InferenceService to `model-registry://payment-risk/<version>`. KServe resolves the registry version, downloads the model and rolls out a new revision. Then sends one request with an empty instance and fails the step unless the answer is a score from the new version. Then marks `production` and archives the previous version |
+| `roll_out` (`dsl.If(passed)`) | Patches the InferenceService to `model-registry://payment-risk/<version>`. KServe resolves the registry version, downloads the model and rolls the Deployment out to it. Then sends one request with an empty instance and fails the step unless the answer is a score from the new version. Then marks `production` and archives the previous version |
 
 - **`payment-risk-rollout`** (`version`) reruns `roll_out` for an earlier passing version, for rollback.
 - **Run directory:** run files go to `s3://<bucket>/runs/payment-gateway/ml/<kfp-run-id>/`.
@@ -109,7 +110,7 @@ KFP v2 with `kfp-kubernetes`, on the `ml` image. It is compiled into `infra/char
 
 - **Custom predictor.** `src/ml/predictor` is a `kserve.Model` over `xgboost-cpu`, built by CI as the `predictor` image and referenced by a chart-owned `ServingRuntime`. The InferenceService names that runtime and a `model-registry://payment-risk/<version>` storage URI; KServe's storage initializer resolves the registry version and downloads the model directory into `/mnt/models`.
 - **Named features.** The booster is trained on unnamed columns and stores the ordered feature list as the `feature_order` attribute. The predictor takes `{"instances": [{feature: value}]}` (KServe v1 JSON), orders the values by that list, and treats a missing or null feature as NaN, which XGBoost treats as missing. It returns `{"predictions": [...], "model_version": "v7"}`; the version comes from `version.txt`, written next to the model by `record_version`. Callers never depend on column order.
-- **InferenceService `payment-risk`:** `Standard` mode (a Deployment and Service, no Knative), `minReplicas: 1`, spot, cluster-internal, run as `fraud-training`, whose storage secret carries the S3 settings KServe needs; created and patched by `roll_out`, not by Argo CD. Callers reach it through `knative-local-gateway` with the predictor host as `Host`.
+- **InferenceService `payment-risk`:** `Standard` mode (a Deployment and Service, no Knative), `minReplicas: 1`, spot, cluster-internal, run as `fraud-training`, whose storage secret carries the S3 settings KServe needs; created and patched by `roll_out`, not by Argo CD. Callers reach it at the InferenceService's in-cluster Service address.
 - **Not model-inside-image.** The course rubric names that pattern. A model image needs a registry write credential in the cluster (or a platform-run registry) and OCI support in KServe, so this change serves the registered model from object storage and records the gap in the docs. The artifact stays immutable in practice: the pipeline writes each run's directory once, and the bucket is versioned.
 
 ### 6a. Derived request features
@@ -138,7 +139,16 @@ A stopped `Notebook` `fraud-explore` (the `ml` image, 20 Gi gp3, CPU), listed in
 
 Notebooks can't take GPU claims, which is why training goes through the TrainJob.
 
-### 8. Chart `ml-training` (prod only)
+The notebook also compares a linear baseline, a random forest, histogram gradient boosting, CPU XGBoost and the GPU model on validation at the gate's two operating thresholds, evaluates on test, and shows calibration and feature importance. Its windows come from `risk_model.windows.rolling`, the rule the scheduled run uses.
+
+### 7a. Rolling retraining
+
+- **`plan_windows`** is the pipeline's first step. From the run's schedule time (its creation time for a manual run), a lag and the newest day with rows in the stream tables for the configured epochs, it sets `end_day = min(schedule date - lag, newest day)` and lays out contiguous test, validation and train windows ending there (`risk_model.windows.rolling`). The newest day comes from the two stream tables' day partitions, then one filtered one-row scan per candidate day, with no Spark.
+- **Skip guard.** The rest of the pipeline runs under `dsl.If(run == "true")`. `run` is false when the cutoff is not later than the `cutoff` property of the highest registered version, unless `force` is set. A gate that fails retrains on the next run over the same data, since only passing models are registered.
+- **Explicit windows.** A run that passes all four of `train`, `validation`, `test` and `cutoff` uses them as given.
+- **Schedule.** A KFP `RecurringRun` (`max_concurrency` 1, `no_catchup`) is created by a PostSync hook Job in the chart, which waits for the current `PipelineVersion` to appear in the API and then deletes and recreates the run pointing at it, so the schedule follows every release. Window sizes are chart values: 56, 14 and 14 days on prod, 4, 1 and 1 on dev, where only a week is replayed. Prod keeps the schedule off until a prod run has been done.
+
+### 8. Chart `ml-training`
 
 - **Resources:**
   - ServiceAccount `fraud-training`, with a Role in `ml` (TrainJobs, Katib Experiments and Trials, InferenceServices, `workflowtaskresults`, Pods and logs read);
@@ -146,7 +156,7 @@ Notebooks can't take GPU claims, which is why training goes through the TrainJob
   - the Katib trial template;
   - the two `Pipeline`/`PipelineVersion`s;
   - the stopped Notebook.
-- **App:** prod only, in app-of-apps. It creates no Namespace or Profile.
+- **App:** in app-of-apps for dev and prod, with an environment value that picks the compiled pipelines (`files/dev`, `files/prod`). Dev runs on the local GPU and smaller Spark sizes. It creates no Namespace or Profile.
 - **Images:** `ml` (rebuilt when `src/ml` or `src/data-pipeline/feast` change) and `predictor` (rebuilt when `src/ml/predictor` changes), in `service-images.json`.
 
 ### 9. Tests in CI, no local runs

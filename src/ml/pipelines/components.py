@@ -31,6 +31,52 @@ def step(name, flags, outputs=()):
 
 
 @dsl.container_component
+def plan_windows(
+    run_id: str,
+    schedule_time: str,
+    create_time: str,
+    train_days: int,
+    validation_days: int,
+    test_days: int,
+    lag_days: int,
+    force: str,
+    fixed_train: str,
+    fixed_validation: str,
+    fixed_test: str,
+    fixed_cutoff: str,
+    train: dsl.OutputPath(str),
+    validation: dsl.OutputPath(str),
+    test: dsl.OutputPath(str),
+    cutoff: dsl.OutputPath(str),
+    run: dsl.OutputPath(str),
+):
+    return step(
+        "plan_windows",
+        {
+            "run-id": run_id,
+            "schedule-time": schedule_time,
+            "create-time": create_time,
+            "train-days": train_days,
+            "validation-days": validation_days,
+            "test-days": test_days,
+            "lag-days": lag_days,
+            "force": force,
+            "fixed-train": fixed_train,
+            "fixed-validation": fixed_validation,
+            "fixed-test": fixed_test,
+            "fixed-cutoff": fixed_cutoff,
+        },
+        [
+            ("train", train),
+            ("validation", validation),
+            ("test", test),
+            ("cutoff", cutoff),
+            ("run", run),
+        ],
+    )
+
+
+@dsl.container_component
 def plan_examples(
     run_id: str,
     train: str,

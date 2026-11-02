@@ -38,9 +38,10 @@ This change trains `payment_risk_v1` on that service, through the platform's Kub
   A `payment-risk-rollout` pipeline redeploys an earlier version, for rollback.
 - **Serving:** a custom KServe predictor, referenced by a chart-owned `ServingRuntime`, serves the registered version from `model-registry://payment-risk/<version>`. Callers send named features as JSON, and a missing or null feature is treated as missing.
 - **Workspace wiring (BREAKING for the stale `kubeflow-workspace` spec).** The app deploys only consumer resources into the platform `ml` namespace: the ServiceAccount and Role, ExternalSecrets, the stopped notebook, and the pipeline definitions. The platform owns the registry, KServe, Katib, Trainer, the GPU runtime and capacity, and the `ml` Profile.
+- **Rolling retraining:** a Kubeflow `RecurringRun` starts `payment-risk-training` with windows derived from its schedule time, and a run whose cutoff is not newer than the newest registered model stops before building a training set.
+- **Go Fraud scores with the model:** a KServe adapter calls the registered predictor after the Feast read. The score can decline an attempt only under an explicit missing-feature policy, and is always recorded in the assessment evidence.
 - **Not in this change:**
-  - Go Fraud calling the model;
-  - drift checks and retraining (roadmap);
+  - drift checks (roadmap);
   - distributed training (the user chose a single GPU);
   - an A/B split.
 
@@ -55,15 +56,16 @@ This change trains `payment_risk_v1` on that service, through the platform's Kub
 ### Modified Capabilities
 
 - `kubeflow-workspace`: drops the app-owned Profile and registry. The app's resources live in the platform `ml` namespace, and the platform owns the Kubeflow services.
+- `fraud-decision`: model scoring in the assessment, the missing-feature policy, and the evidence it records.
 
 ## Impact
 
-- **Code:** new `src/ml`: `risk_model` (including a small JSON client), the pipelines `payment-risk-training` and `payment-risk-rollout`, and the notebook.
+- **Code:** new `src/ml`: `risk_model` (including a small JSON client and the rolling-window planner), the pipelines `payment-risk-training` and `payment-risk-rollout`, and the notebook; `src/payment-gateway/fraud` (a KServe adapter and the decision policy).
 - **Images:**
   - new `predictor`: the KServe custom predictor, CPU XGBoost;
   - new `ml`: a CUDA 12 runtime with pinned XGBoost, plus Java, Spark 4.1.3 with the Iceberg 1.12 and AWS jars, and `fraud_feast[spark]` from `src/data-pipeline/feast`;
 - **Charts:**
-  - new `infra/charts/ml-training` (prod only, in `ml`): ServiceAccount and Role, ExternalSecrets, Notebook, `Pipeline`/`PipelineVersion`s, Katib trial template;
+  - new `infra/charts/ml-training` (dev and prod, in `ml`): ServiceAccount and Role, ExternalSecrets, Notebook, `Pipeline`/`PipelineVersion`s, Katib trial template;
   - `infra/argocd/app-of-apps`.
 - **Data:** the Polaris namespace `ml` and its table `ml.payment_risk_v1_examples`.
 - **Docs:** `docs/ml/training.md`, `docs/ml/serving.md`, the roadmap rows.

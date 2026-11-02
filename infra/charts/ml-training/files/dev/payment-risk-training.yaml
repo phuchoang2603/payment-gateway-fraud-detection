@@ -2,12 +2,17 @@
 # Name: payment-risk-training
 # Description: Build the payment_risk_v1 training set, train on one GPU, gate, register and roll out.
 # Inputs:
-#    cutoff: str [Default: '2026-10-29T00:00:00Z']
-#    test: str [Default: '2026-10-15..2026-10-28']
-#    train: str [Default: '2026-07-29..2026-09-30']
+#    cutoff: str [Default: '']
+#    force: str [Default: 'false']
+#    lag_days: int [Default: 1.0]
+#    test: str [Default: '']
+#    test_days: int [Default: 14.0]
+#    train: str [Default: '']
+#    train_days: int [Default: 56.0]
 #    training_set_snapshot: str [Default: '']
 #    tune_trials: int [Default: 0.0]
-#    validation: str [Default: '2026-10-01..2026-10-14']
+#    validation: str [Default: '']
+#    validation_days: int [Default: 14.0]
 components:
   comp-assemble-examples:
     executorLabel: exec-assemble-examples
@@ -41,7 +46,295 @@ components:
       parameters:
         report:
           parameterType: STRING
-  comp-condition-2:
+  comp-condition-1:
+    dag:
+      tasks:
+        assemble-examples:
+          cachingOptions: {}
+          componentRef:
+            name: comp-assemble-examples
+          dependentTasks:
+          - for-loop-2
+          inputs:
+            parameters:
+              cutoff:
+                componentInputParameter: pipelinechannel--plan-windows-cutoff
+              existing_snapshot:
+                componentInputParameter: pipelinechannel--training_set_snapshot
+              run_id:
+                runtimeValue:
+                  constant: '{{$.pipeline_job_uuid}}'
+              test:
+                componentInputParameter: pipelinechannel--plan-windows-test
+              train:
+                componentInputParameter: pipelinechannel--plan-windows-train
+              validation:
+                componentInputParameter: pipelinechannel--plan-windows-validation
+          retryPolicy:
+            backoffDuration: 30s
+            backoffFactor: 2.0
+            backoffMaxDuration: 3600s
+            maxRetryCount: 2
+          taskInfo:
+            name: assemble-examples
+        check-examples:
+          cachingOptions: {}
+          componentRef:
+            name: comp-check-examples
+          dependentTasks:
+          - assemble-examples
+          inputs:
+            parameters:
+              run_id:
+                runtimeValue:
+                  constant: '{{$.pipeline_job_uuid}}'
+              snapshot:
+                taskOutputParameter:
+                  outputParameterKey: snapshot
+                  producerTask: assemble-examples
+          retryPolicy:
+            backoffDuration: 30s
+            backoffFactor: 2.0
+            backoffMaxDuration: 3600s
+            maxRetryCount: 2
+          taskInfo:
+            name: check-examples
+        condition-3:
+          componentRef:
+            name: comp-condition-3
+          dependentTasks:
+          - assemble-examples
+          - fit-on-gpu
+          - gate
+          - tune-params
+          inputs:
+            parameters:
+              pipelinechannel--assemble-examples-snapshot:
+                taskOutputParameter:
+                  outputParameterKey: snapshot
+                  producerTask: assemble-examples
+              pipelinechannel--fit-on-gpu-fit:
+                taskOutputParameter:
+                  outputParameterKey: fit
+                  producerTask: fit-on-gpu
+              pipelinechannel--fit-on-gpu-model_uri:
+                taskOutputParameter:
+                  outputParameterKey: model_uri
+                  producerTask: fit-on-gpu
+              pipelinechannel--gate-passed:
+                taskOutputParameter:
+                  outputParameterKey: passed
+                  producerTask: gate
+              pipelinechannel--gate-report:
+                taskOutputParameter:
+                  outputParameterKey: report
+                  producerTask: gate
+              pipelinechannel--plan-windows-run:
+                componentInputParameter: pipelinechannel--plan-windows-run
+              pipelinechannel--tune-params-experiment:
+                taskOutputParameter:
+                  outputParameterKey: experiment
+                  producerTask: tune-params
+              pipelinechannel--tune-params-params:
+                taskOutputParameter:
+                  outputParameterKey: params
+                  producerTask: tune-params
+          taskInfo:
+            name: passed
+          triggerPolicy:
+            condition: inputs.parameter_values['pipelinechannel--gate-passed'] ==
+              'true'
+        fit-on-gpu:
+          cachingOptions: {}
+          componentRef:
+            name: comp-fit-on-gpu
+          dependentTasks:
+          - assemble-examples
+          - tune-params
+          inputs:
+            parameters:
+              params:
+                taskOutputParameter:
+                  outputParameterKey: params
+                  producerTask: tune-params
+              run_id:
+                runtimeValue:
+                  constant: '{{$.pipeline_job_uuid}}'
+              snapshot:
+                taskOutputParameter:
+                  outputParameterKey: snapshot
+                  producerTask: assemble-examples
+              test:
+                componentInputParameter: pipelinechannel--plan-windows-test
+              train:
+                componentInputParameter: pipelinechannel--plan-windows-train
+              validation:
+                componentInputParameter: pipelinechannel--plan-windows-validation
+          taskInfo:
+            name: fit-on-gpu
+        for-loop-2:
+          componentRef:
+            name: comp-for-loop-2
+          dependentTasks:
+          - plan-examples
+          inputs:
+            parameters:
+              pipelinechannel--plan-examples-chunks:
+                taskOutputParameter:
+                  outputParameterKey: chunks
+                  producerTask: plan-examples
+              pipelinechannel--plan-windows-cutoff:
+                componentInputParameter: pipelinechannel--plan-windows-cutoff
+              pipelinechannel--plan-windows-run:
+                componentInputParameter: pipelinechannel--plan-windows-run
+          iteratorPolicy:
+            parallelismLimit: 1
+          parameterIterator:
+            itemInput: pipelinechannel--plan-examples-chunks-loop-item
+            items:
+              inputParameter: pipelinechannel--plan-examples-chunks
+          taskInfo:
+            name: for-loop-2
+        gate:
+          cachingOptions: {}
+          componentRef:
+            name: comp-gate
+          dependentTasks:
+          - assemble-examples
+          - fit-on-gpu
+          inputs:
+            parameters:
+              model_uri:
+                taskOutputParameter:
+                  outputParameterKey: model_uri
+                  producerTask: fit-on-gpu
+              run_id:
+                runtimeValue:
+                  constant: '{{$.pipeline_job_uuid}}'
+              snapshot:
+                taskOutputParameter:
+                  outputParameterKey: snapshot
+                  producerTask: assemble-examples
+              test:
+                componentInputParameter: pipelinechannel--plan-windows-test
+              train:
+                componentInputParameter: pipelinechannel--plan-windows-train
+              validation:
+                componentInputParameter: pipelinechannel--plan-windows-validation
+          taskInfo:
+            name: gate
+        plan-examples:
+          cachingOptions: {}
+          componentRef:
+            name: comp-plan-examples
+          inputs:
+            parameters:
+              cutoff:
+                componentInputParameter: pipelinechannel--plan-windows-cutoff
+              existing_snapshot:
+                componentInputParameter: pipelinechannel--training_set_snapshot
+              run_id:
+                runtimeValue:
+                  constant: '{{$.pipeline_job_uuid}}'
+              test:
+                componentInputParameter: pipelinechannel--plan-windows-test
+              train:
+                componentInputParameter: pipelinechannel--plan-windows-train
+              validation:
+                componentInputParameter: pipelinechannel--plan-windows-validation
+          retryPolicy:
+            backoffDuration: 30s
+            backoffFactor: 2.0
+            backoffMaxDuration: 3600s
+            maxRetryCount: 2
+          taskInfo:
+            name: plan-examples
+        publish-metrics:
+          cachingOptions: {}
+          componentRef:
+            name: comp-publish-metrics
+          dependentTasks:
+          - gate
+          inputs:
+            parameters:
+              summary:
+                taskOutputParameter:
+                  outputParameterKey: summary
+                  producerTask: gate
+          taskInfo:
+            name: publish-metrics
+        split-windows:
+          cachingOptions: {}
+          componentRef:
+            name: comp-split-windows
+          dependentTasks:
+          - assemble-examples
+          - check-examples
+          inputs:
+            parameters:
+              run_id:
+                runtimeValue:
+                  constant: '{{$.pipeline_job_uuid}}'
+              snapshot:
+                taskOutputParameter:
+                  outputParameterKey: snapshot
+                  producerTask: assemble-examples
+              test:
+                componentInputParameter: pipelinechannel--plan-windows-test
+              train:
+                componentInputParameter: pipelinechannel--plan-windows-train
+              validation:
+                componentInputParameter: pipelinechannel--plan-windows-validation
+          retryPolicy:
+            backoffDuration: 30s
+            backoffFactor: 2.0
+            backoffMaxDuration: 3600s
+            maxRetryCount: 2
+          taskInfo:
+            name: split-windows
+        tune-params:
+          cachingOptions: {}
+          componentRef:
+            name: comp-tune-params
+          dependentTasks:
+          - assemble-examples
+          - split-windows
+          inputs:
+            parameters:
+              run_id:
+                runtimeValue:
+                  constant: '{{$.pipeline_job_uuid}}'
+              snapshot:
+                taskOutputParameter:
+                  outputParameterKey: snapshot
+                  producerTask: assemble-examples
+              test:
+                componentInputParameter: pipelinechannel--plan-windows-test
+              train:
+                componentInputParameter: pipelinechannel--plan-windows-train
+              trials:
+                componentInputParameter: pipelinechannel--tune_trials
+              validation:
+                componentInputParameter: pipelinechannel--plan-windows-validation
+          taskInfo:
+            name: tune-params
+    inputDefinitions:
+      parameters:
+        pipelinechannel--plan-windows-cutoff:
+          parameterType: STRING
+        pipelinechannel--plan-windows-run:
+          parameterType: STRING
+        pipelinechannel--plan-windows-test:
+          parameterType: STRING
+        pipelinechannel--plan-windows-train:
+          parameterType: STRING
+        pipelinechannel--plan-windows-validation:
+          parameterType: STRING
+        pipelinechannel--training_set_snapshot:
+          parameterType: STRING
+        pipelinechannel--tune_trials:
+          parameterType: NUMBER_INTEGER
+  comp-condition-3:
     dag:
       tasks:
         record-version:
@@ -96,6 +389,8 @@ components:
           parameterType: STRING
         pipelinechannel--gate-report:
           parameterType: STRING
+        pipelinechannel--plan-windows-run:
+          parameterType: STRING
         pipelinechannel--tune-params-experiment:
           parameterType: STRING
         pipelinechannel--tune-params-params:
@@ -122,7 +417,7 @@ components:
           parameterType: STRING
         model_uri:
           parameterType: STRING
-  comp-for-loop-1:
+  comp-for-loop-2:
     dag:
       tasks:
         stage-examples:
@@ -134,7 +429,7 @@ components:
               chunk:
                 componentInputParameter: pipelinechannel--plan-examples-chunks-loop-item
               cutoff:
-                componentInputParameter: pipelinechannel--cutoff
+                componentInputParameter: pipelinechannel--plan-windows-cutoff
           retryPolicy:
             backoffDuration: 30s
             backoffFactor: 2.0
@@ -144,11 +439,13 @@ components:
             name: stage-examples
     inputDefinitions:
       parameters:
-        pipelinechannel--cutoff:
-          parameterType: STRING
         pipelinechannel--plan-examples-chunks:
           parameterType: LIST
         pipelinechannel--plan-examples-chunks-loop-item:
+          parameterType: STRING
+        pipelinechannel--plan-windows-cutoff:
+          parameterType: STRING
+        pipelinechannel--plan-windows-run:
           parameterType: STRING
   comp-gate:
     executorLabel: exec-gate
@@ -199,6 +496,46 @@ components:
       parameters:
         chunks:
           parameterType: LIST
+  comp-plan-windows:
+    executorLabel: exec-plan-windows
+    inputDefinitions:
+      parameters:
+        create_time:
+          parameterType: STRING
+        fixed_cutoff:
+          parameterType: STRING
+        fixed_test:
+          parameterType: STRING
+        fixed_train:
+          parameterType: STRING
+        fixed_validation:
+          parameterType: STRING
+        force:
+          parameterType: STRING
+        lag_days:
+          parameterType: NUMBER_INTEGER
+        run_id:
+          parameterType: STRING
+        schedule_time:
+          parameterType: STRING
+        test_days:
+          parameterType: NUMBER_INTEGER
+        train_days:
+          parameterType: NUMBER_INTEGER
+        validation_days:
+          parameterType: NUMBER_INTEGER
+    outputDefinitions:
+      parameters:
+        cutoff:
+          parameterType: STRING
+        run:
+          parameterType: STRING
+        test:
+          parameterType: STRING
+        train:
+          parameterType: STRING
+        validation:
+          parameterType: STRING
   comp-publish-metrics:
     executorLabel: exec-publish-metrics
     inputDefinitions:
@@ -472,6 +809,61 @@ deploymentSpec:
           resourceCpuRequest: '2'
           resourceMemoryLimit: 4G
           resourceMemoryRequest: 4G
+    exec-plan-windows:
+      container:
+        args:
+        - plan_windows
+        - --run-id
+        - '{{$.inputs.parameters[''run_id'']}}'
+        - --schedule-time
+        - '{{$.inputs.parameters[''schedule_time'']}}'
+        - --create-time
+        - '{{$.inputs.parameters[''create_time'']}}'
+        - --train-days
+        - '{{$.inputs.parameters[''train_days'']}}'
+        - --validation-days
+        - '{{$.inputs.parameters[''validation_days'']}}'
+        - --test-days
+        - '{{$.inputs.parameters[''test_days'']}}'
+        - --lag-days
+        - '{{$.inputs.parameters[''lag_days'']}}'
+        - --force
+        - '{{$.inputs.parameters[''force'']}}'
+        - --fixed-train
+        - '{{$.inputs.parameters[''fixed_train'']}}'
+        - --fixed-validation
+        - '{{$.inputs.parameters[''fixed_validation'']}}'
+        - --fixed-test
+        - '{{$.inputs.parameters[''fixed_test'']}}'
+        - --fixed-cutoff
+        - '{{$.inputs.parameters[''fixed_cutoff'']}}'
+        - --out
+        - train
+        - '{{$.outputs.parameters[''train''].output_file}}'
+        - --out
+        - validation
+        - '{{$.outputs.parameters[''validation''].output_file}}'
+        - --out
+        - test
+        - '{{$.outputs.parameters[''test''].output_file}}'
+        - --out
+        - cutoff
+        - '{{$.outputs.parameters[''cutoff''].output_file}}'
+        - --out
+        - run
+        - '{{$.outputs.parameters[''run''].output_file}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 1.0
+          memoryLimit: 4.0
+          memoryRequest: 4.0
+          resourceCpuRequest: '1'
+          resourceMemoryLimit: 4G
+          resourceMemoryRequest: 4G
     exec-publish-metrics:
       container:
         args:
@@ -669,284 +1061,112 @@ pipelineInfo:
 root:
   dag:
     tasks:
-      assemble-examples:
-        cachingOptions: {}
+      condition-1:
         componentRef:
-          name: comp-assemble-examples
+          name: comp-condition-1
         dependentTasks:
-        - for-loop-1
+        - plan-windows
         inputs:
           parameters:
-            cutoff:
-              componentInputParameter: cutoff
-            existing_snapshot:
+            pipelinechannel--plan-windows-cutoff:
+              taskOutputParameter:
+                outputParameterKey: cutoff
+                producerTask: plan-windows
+            pipelinechannel--plan-windows-run:
+              taskOutputParameter:
+                outputParameterKey: run
+                producerTask: plan-windows
+            pipelinechannel--plan-windows-test:
+              taskOutputParameter:
+                outputParameterKey: test
+                producerTask: plan-windows
+            pipelinechannel--plan-windows-train:
+              taskOutputParameter:
+                outputParameterKey: train
+                producerTask: plan-windows
+            pipelinechannel--plan-windows-validation:
+              taskOutputParameter:
+                outputParameterKey: validation
+                producerTask: plan-windows
+            pipelinechannel--training_set_snapshot:
               componentInputParameter: training_set_snapshot
-            run_id:
-              runtimeValue:
-                constant: '{{$.pipeline_job_uuid}}'
-            test:
-              componentInputParameter: test
-            train:
-              componentInputParameter: train
-            validation:
-              componentInputParameter: validation
-        retryPolicy:
-          backoffDuration: 30s
-          backoffFactor: 2.0
-          backoffMaxDuration: 3600s
-          maxRetryCount: 2
-        taskInfo:
-          name: assemble-examples
-      check-examples:
-        cachingOptions: {}
-        componentRef:
-          name: comp-check-examples
-        dependentTasks:
-        - assemble-examples
-        inputs:
-          parameters:
-            run_id:
-              runtimeValue:
-                constant: '{{$.pipeline_job_uuid}}'
-            snapshot:
-              taskOutputParameter:
-                outputParameterKey: snapshot
-                producerTask: assemble-examples
-        retryPolicy:
-          backoffDuration: 30s
-          backoffFactor: 2.0
-          backoffMaxDuration: 3600s
-          maxRetryCount: 2
-        taskInfo:
-          name: check-examples
-      condition-2:
-        componentRef:
-          name: comp-condition-2
-        dependentTasks:
-        - assemble-examples
-        - fit-on-gpu
-        - gate
-        - tune-params
-        inputs:
-          parameters:
-            pipelinechannel--assemble-examples-snapshot:
-              taskOutputParameter:
-                outputParameterKey: snapshot
-                producerTask: assemble-examples
-            pipelinechannel--fit-on-gpu-fit:
-              taskOutputParameter:
-                outputParameterKey: fit
-                producerTask: fit-on-gpu
-            pipelinechannel--fit-on-gpu-model_uri:
-              taskOutputParameter:
-                outputParameterKey: model_uri
-                producerTask: fit-on-gpu
-            pipelinechannel--gate-passed:
-              taskOutputParameter:
-                outputParameterKey: passed
-                producerTask: gate
-            pipelinechannel--gate-report:
-              taskOutputParameter:
-                outputParameterKey: report
-                producerTask: gate
-            pipelinechannel--tune-params-experiment:
-              taskOutputParameter:
-                outputParameterKey: experiment
-                producerTask: tune-params
-            pipelinechannel--tune-params-params:
-              taskOutputParameter:
-                outputParameterKey: params
-                producerTask: tune-params
-        taskInfo:
-          name: passed
-        triggerPolicy:
-          condition: inputs.parameter_values['pipelinechannel--gate-passed'] == 'true'
-      fit-on-gpu:
-        cachingOptions: {}
-        componentRef:
-          name: comp-fit-on-gpu
-        dependentTasks:
-        - assemble-examples
-        - tune-params
-        inputs:
-          parameters:
-            params:
-              taskOutputParameter:
-                outputParameterKey: params
-                producerTask: tune-params
-            run_id:
-              runtimeValue:
-                constant: '{{$.pipeline_job_uuid}}'
-            snapshot:
-              taskOutputParameter:
-                outputParameterKey: snapshot
-                producerTask: assemble-examples
-            test:
-              componentInputParameter: test
-            train:
-              componentInputParameter: train
-            validation:
-              componentInputParameter: validation
-        taskInfo:
-          name: fit-on-gpu
-      for-loop-1:
-        componentRef:
-          name: comp-for-loop-1
-        dependentTasks:
-        - plan-examples
-        inputs:
-          parameters:
-            pipelinechannel--cutoff:
-              componentInputParameter: cutoff
-            pipelinechannel--plan-examples-chunks:
-              taskOutputParameter:
-                outputParameterKey: chunks
-                producerTask: plan-examples
-        iteratorPolicy:
-          parallelismLimit: 1
-        parameterIterator:
-          itemInput: pipelinechannel--plan-examples-chunks-loop-item
-          items:
-            inputParameter: pipelinechannel--plan-examples-chunks
-        taskInfo:
-          name: for-loop-1
-      gate:
-        cachingOptions: {}
-        componentRef:
-          name: comp-gate
-        dependentTasks:
-        - assemble-examples
-        - fit-on-gpu
-        inputs:
-          parameters:
-            model_uri:
-              taskOutputParameter:
-                outputParameterKey: model_uri
-                producerTask: fit-on-gpu
-            run_id:
-              runtimeValue:
-                constant: '{{$.pipeline_job_uuid}}'
-            snapshot:
-              taskOutputParameter:
-                outputParameterKey: snapshot
-                producerTask: assemble-examples
-            test:
-              componentInputParameter: test
-            train:
-              componentInputParameter: train
-            validation:
-              componentInputParameter: validation
-        taskInfo:
-          name: gate
-      plan-examples:
-        cachingOptions: {}
-        componentRef:
-          name: comp-plan-examples
-        inputs:
-          parameters:
-            cutoff:
-              componentInputParameter: cutoff
-            existing_snapshot:
-              componentInputParameter: training_set_snapshot
-            run_id:
-              runtimeValue:
-                constant: '{{$.pipeline_job_uuid}}'
-            test:
-              componentInputParameter: test
-            train:
-              componentInputParameter: train
-            validation:
-              componentInputParameter: validation
-        retryPolicy:
-          backoffDuration: 30s
-          backoffFactor: 2.0
-          backoffMaxDuration: 3600s
-          maxRetryCount: 2
-        taskInfo:
-          name: plan-examples
-      publish-metrics:
-        cachingOptions: {}
-        componentRef:
-          name: comp-publish-metrics
-        dependentTasks:
-        - gate
-        inputs:
-          parameters:
-            summary:
-              taskOutputParameter:
-                outputParameterKey: summary
-                producerTask: gate
-        taskInfo:
-          name: publish-metrics
-      split-windows:
-        cachingOptions: {}
-        componentRef:
-          name: comp-split-windows
-        dependentTasks:
-        - assemble-examples
-        - check-examples
-        inputs:
-          parameters:
-            run_id:
-              runtimeValue:
-                constant: '{{$.pipeline_job_uuid}}'
-            snapshot:
-              taskOutputParameter:
-                outputParameterKey: snapshot
-                producerTask: assemble-examples
-            test:
-              componentInputParameter: test
-            train:
-              componentInputParameter: train
-            validation:
-              componentInputParameter: validation
-        retryPolicy:
-          backoffDuration: 30s
-          backoffFactor: 2.0
-          backoffMaxDuration: 3600s
-          maxRetryCount: 2
-        taskInfo:
-          name: split-windows
-      tune-params:
-        cachingOptions: {}
-        componentRef:
-          name: comp-tune-params
-        dependentTasks:
-        - assemble-examples
-        - split-windows
-        inputs:
-          parameters:
-            run_id:
-              runtimeValue:
-                constant: '{{$.pipeline_job_uuid}}'
-            snapshot:
-              taskOutputParameter:
-                outputParameterKey: snapshot
-                producerTask: assemble-examples
-            test:
-              componentInputParameter: test
-            train:
-              componentInputParameter: train
-            trials:
+            pipelinechannel--tune_trials:
               componentInputParameter: tune_trials
-            validation:
-              componentInputParameter: validation
         taskInfo:
-          name: tune-params
+          name: new-data
+        triggerPolicy:
+          condition: inputs.parameter_values['pipelinechannel--plan-windows-run']
+            == 'true'
+      plan-windows:
+        cachingOptions: {}
+        componentRef:
+          name: comp-plan-windows
+        inputs:
+          parameters:
+            create_time:
+              runtimeValue:
+                constant: '{{$.pipeline_job_create_time_utc}}'
+            fixed_cutoff:
+              componentInputParameter: cutoff
+            fixed_test:
+              componentInputParameter: test
+            fixed_train:
+              componentInputParameter: train
+            fixed_validation:
+              componentInputParameter: validation
+            force:
+              componentInputParameter: force
+            lag_days:
+              componentInputParameter: lag_days
+            run_id:
+              runtimeValue:
+                constant: '{{$.pipeline_job_uuid}}'
+            schedule_time:
+              runtimeValue:
+                constant: '{{$.pipeline_job_schedule_time_utc}}'
+            test_days:
+              componentInputParameter: test_days
+            train_days:
+              componentInputParameter: train_days
+            validation_days:
+              componentInputParameter: validation_days
+        retryPolicy:
+          backoffDuration: 30s
+          backoffFactor: 2.0
+          backoffMaxDuration: 3600s
+          maxRetryCount: 2
+        taskInfo:
+          name: plan-windows
   inputDefinitions:
     parameters:
       cutoff:
-        defaultValue: '2026-10-29T00:00:00Z'
+        defaultValue: ''
         isOptional: true
         parameterType: STRING
+      force:
+        defaultValue: 'false'
+        isOptional: true
+        parameterType: STRING
+      lag_days:
+        defaultValue: 1.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
       test:
-        defaultValue: 2026-10-15..2026-10-28
+        defaultValue: ''
         isOptional: true
         parameterType: STRING
+      test_days:
+        defaultValue: 14.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
       train:
-        defaultValue: 2026-07-29..2026-09-30
+        defaultValue: ''
         isOptional: true
         parameterType: STRING
+      train_days:
+        defaultValue: 56.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
       training_set_snapshot:
         defaultValue: ''
         isOptional: true
@@ -956,9 +1176,13 @@ root:
         isOptional: true
         parameterType: NUMBER_INTEGER
       validation:
-        defaultValue: 2026-10-01..2026-10-14
+        defaultValue: ''
         isOptional: true
         parameterType: STRING
+      validation_days:
+        defaultValue: 14.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
 schemaVersion: 2.1.0
 sdkVersion: kfp-2.18.0
 ---
@@ -1221,6 +1445,63 @@ platforms:
           - mountPath: /tmp/spark
             sizeLimit: 24Gi
             volumeName: spill
+          secretAsEnv:
+          - keyToEnv:
+            - envVar: AWS_ACCESS_KEY_ID
+              secretKey: AWS_ACCESS_KEY_ID
+            - envVar: AWS_SECRET_ACCESS_KEY
+              secretKey: AWS_SECRET_ACCESS_KEY
+            optional: false
+            secretName: ml-training-storage
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-storage
+          - keyToEnv:
+            - envVar: ICEBERG_CLIENT_SECRET
+              secretKey: ICEBERG_CLIENT_SECRET
+            optional: false
+            secretName: ml-training-iceberg
+            secretNameParameter:
+              runtimeValue:
+                constant: ml-training-iceberg
+        exec-plan-windows:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            optional: false
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID

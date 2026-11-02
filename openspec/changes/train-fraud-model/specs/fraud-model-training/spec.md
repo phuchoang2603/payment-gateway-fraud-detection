@@ -120,6 +120,37 @@ The final list SHALL be chosen with the model, before the first registered versi
 - **WHEN** adding a candidate does not improve validation PR-AUC
 - **THEN** it is not part of `payment_risk_v1` when the first version is registered
 
+### Requirement: Scheduled rolling retraining
+The platform SHALL retrain on a Kubeflow recurring run. Each run SHALL derive contiguous train, validation and test windows from its schedule time minus a lag, capped at the newest day that has rows in the stream feature tables for the configured epochs. A run SHALL stop before building a training set when its cutoff is not later than the cutoff recorded on the highest registered model version, unless forced. A run given explicit windows and cutoff SHALL use them as given. The recurring run SHALL follow the deployed pipeline version after every release, and SHALL NOT run missed schedules.
+
+#### Scenario: New data since the last model
+
+- **WHEN** a scheduled run's end day is later than the end of the highest registered version's test window
+- **THEN** the run builds a training set over the rolling windows and continues through the gate
+
+#### Scenario: No new data
+
+- **WHEN** a scheduled run's cutoff equals or precedes the highest registered version's cutoff
+- **THEN** the run finishes after planning its windows without building a training set, training or registering anything
+
+#### Scenario: Release changes the pipeline
+
+- **WHEN** a release deploys a new pipeline version
+- **THEN** the recurring run is recreated against that version
+
+#### Scenario: Windows beyond the replayed history
+
+- **WHEN** the schedule time is later than the newest replayed stream day
+- **THEN** the windows end on the newest replayed day, not on the schedule date
+
+### Requirement: Notebook model comparison
+The exploration notebook SHALL show the fraud rate and volume per day and the null shares, compare a linear baseline, tree ensembles and the pipeline's GPU model on validation at the gate's decline and step-up operating points, evaluate every model on test with those thresholds, and show calibration and feature importance. Metrics SHALL use the stored sample weights.
+
+#### Scenario: Pipeline model against simpler models
+
+- **WHEN** the notebook has trained the simpler models and the GPU model on one training-set version
+- **THEN** it reports each model's PR-AUC and recall at 1% false-positive rate on validation and on test, and runs the pipeline's own gate on the GPU model
+
 ### Requirement: Training runs on the shared platform without owning it
 Training workloads SHALL run in the platform's ML workspace on the platform's pipeline, training, tuning, serving, registry and notebook services, with the application's own service account and object and catalog credentials.
 

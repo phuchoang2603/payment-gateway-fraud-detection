@@ -1,0 +1,52 @@
+{{- if and .Values.enabled .Values.schedule.enabled }}
+{{- $text := .Files.Get (printf "files/%s/payment-risk-training.yaml" .Values.environment) | replace (printf "%s:chart" .Values.image.repository) (include "ml-training.image" .) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ml-training-schedule
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: fraud-training
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: schedule
+          image: {{ include "ml-training.image" . | quote }}
+          command: [python, -m, risk_model.steps, ensure_schedule]
+          args:
+            - --version
+            - {{ printf "payment-risk-training-%s" (sha256sum $text | trunc 10) | quote }}
+            - --cron
+            - {{ .Values.schedule.cron | quote }}
+            - --train-days
+            - {{ .Values.schedule.trainDays | quote }}
+            - --validation-days
+            - {{ .Values.schedule.validationDays | quote }}
+            - --test-days
+            - {{ .Values.schedule.testDays | quote }}
+            - --lag-days
+            - {{ .Values.schedule.lagDays | quote }}
+          env:
+            - name: KFP_URL
+              value: http://ml-pipeline.{{ .Values.namespace }}.svc.cluster.local:8888
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 512Mi}
+{{- end }}

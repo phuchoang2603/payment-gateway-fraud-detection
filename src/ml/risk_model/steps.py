@@ -17,9 +17,11 @@ from risk_model import kube
 from risk_model.data import DatasetReader
 from risk_model.evaluate import MARGIN, GateEvaluator, pr_curve_html
 from risk_model.registry import RegistryClient
+from risk_model.schedule import Pipelines, recurring_body
 from risk_model.serve_client import ServeClient
 from risk_model.split import WindowSplitter
 from risk_model.train import RiskTrainer, load_booster, score
+from risk_model.windows import end_day, is_newer, newest_stream_day, reference_day, rolling
 
 HYPERPARAMETERS = {
     "maxDepth": ("max_depth", "int", "3", "10"),
@@ -40,6 +42,86 @@ def download(uri):
     path = Path(tempfile.mkdtemp()) / "model.json"
     s3().download_file(source.netloc, source.path.lstrip("/"), str(path))
     return str(path)
+
+
+def plan_windows(
+    *,
+    run_id,
+    schedule_time="",
+    create_time="",
+    train_days: int = 56,
+    validation_days: int = 14,
+    test_days: int = 14,
+    lag_days: int = 1,
+    force="false",
+    fixed_train="",
+    fixed_validation="",
+    fixed_test="",
+    fixed_cutoff="",
+):
+    if fixed_train and fixed_validation and fixed_test and fixed_cutoff:
+        WindowSplitter(fixed_train, fixed_validation, fixed_test)
+        return {
+            "train": fixed_train,
+            "validation": fixed_validation,
+            "test": fixed_test,
+            "cutoff": fixed_cutoff,
+            "run": "true",
+        }
+    from fraud_feast.lake import catalog
+
+    reference = reference_day(schedule_time, create_time)
+    newest = newest_stream_day(catalog())
+    plan = rolling(end_day(reference, lag_days, newest), train_days, validation_days, test_days)
+    registered = RegistryClient().latest_cutoff()
+    run = force == "true" or is_newer(plan.cutoff, registered)
+    write_json(
+        f"{directory(run_id)}/windows.json",
+        {
+            "reference": str(reference),
+            "newest_stream_day": str(newest),
+            "registered_cutoff": registered,
+            "windows": [str(plan.train), str(plan.validation), str(plan.test)],
+            "cutoff": plan.cutoff,
+            "run": run,
+        },
+    )
+    return {
+        "train": str(plan.train),
+        "validation": str(plan.validation),
+        "test": str(plan.test),
+        "cutoff": plan.cutoff,
+        "run": "true" if run else "false",
+    }
+
+
+def ensure_schedule(
+    *,
+    version,
+    cron,
+    enabled="true",
+    train_days: int = 56,
+    validation_days: int = 14,
+    test_days: int = 14,
+    lag_days: int = 1,
+    timeout: int = 900,
+):
+    pipelines = Pipelines()
+    pipeline_id, version_id = pipelines.version(version, timeout)
+    body = recurring_body(
+        pipeline_id=pipeline_id,
+        version_id=version_id,
+        experiment_id=pipelines.experiment(),
+        cron=cron,
+        enabled=enabled == "true",
+        parameters={
+            "train_days": train_days,
+            "validation_days": validation_days,
+            "test_days": test_days,
+            "lag_days": lag_days,
+        },
+    )
+    return {"recurring_run": pipelines.replace(body)}
 
 
 def plan_examples(*, train, validation, test, cutoff, run_id, snapshot="", chunk_days: int = 16):
@@ -347,6 +429,8 @@ def roll_out(*, version, run_id):
 STEPS = {
     function.__name__: function
     for function in (
+        plan_windows,
+        ensure_schedule,
         plan_examples,
         stage_examples,
         assemble_examples,

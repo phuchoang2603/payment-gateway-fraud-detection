@@ -34,14 +34,33 @@
 - [x] 3.1 Add `src/ml/pipelines/payment-risk-training.py` and `payment-risk-rollout.py` (design decision 4), plus a `scripts/` compile helper into `infra/charts/ml-training/files/`. Verify that compilation succeeds locally.
 - [x] 3.2 Add `src/ml/notebooks/payment_risk_exploration.ipynb` (decision 7), committed without outputs. Verify that it imports only `risk_model` and the standard libraries.
 
-## 4. Chart `ml-training` (prod only)
+## 4. Chart `ml-training`
 
-- [x] 4.1 Create `infra/charts/ml-training` (design decision 8) and its app-of-apps entry, prod only. Verify with `helm lint` and `helm template` (dev renders nothing).
+- [x] 4.1 Create `infra/charts/ml-training` (design decision 8) and its app-of-apps entry for dev and prod. Verify with `helm lint` and `helm template` for both.
 - [x] 4.2 Remove stale text claiming an app-owned Profile or registry (`docs/deployment/infra.md`, `docs/payment-gateway/architecture.md`). Verify with `git grep -n -i 'fraud-ml-prod'`.
 
 ## 5. Docs
 
 - [x] 5.1 Update `docs/ml/training.md` (data through Feast, labels and windows, pipeline, single-GPU training, Katib, registry), `docs/ml/serving.md` (custom predictor, named JSON features, deploy and rollback), and the roadmap tables in `docs/Home.md` (drift and retraining, and Go Fraud scoring, as planned). Verify that the links resolve.
+
+## 5a. Rolling retraining and the notebook
+
+- [x] 5a.1 Add `risk_model/windows.py` (`rolling`, the newest replayed stream day, the skip guard), `RegistryClient.latest_cutoff`, and the `plan_windows` step with a `windows.json` run file.
+- [x] 5a.2 Make `plan_windows` the pipeline's first step, run the rest under `dsl.If(run)`, take the schedule and creation times as input parameters, and recompile `files/dev` and `files/prod`.
+- [x] 5a.3 Add `risk_model/schedule.py` and the `ensure_schedule` step, and the chart's PostSync hook Job and `schedule` values (on in dev with 4, 1 and 1 days, off in prod).
+- [x] 5a.4 Add `hypothesis` properties for the windows, and unit tests for the guard and the recurring-run request.
+- [x] 5a.5 Rewrite the notebook around a five-model comparison, operating thresholds, test evaluation, calibration, importance and the pipeline's gate; add `matplotlib` to the `notebook` extra.
+- [x] 5a.6 Update `docs/ml/training.md` for the schedule and the notebook.
+
+## 5b. Fraud model scoring
+
+- [ ] 5b.1 Add the `fraud-decision` delta spec: model scoring, the missing-feature policy, the evidence and the response fields.
+- [ ] 5b.2 Extend `contracts/fraud/v1/evidence.proto` with the model evidence and regenerate the Go bindings.
+- [ ] 5b.3 Add the pure decision policy in `internal/domain`, with `rapid` properties.
+- [ ] 5b.4 Add the KServe adapter in `internal/adapters/kserve`, with `httptest` cases for every failure.
+- [ ] 5b.5 Wire the model call, its deadline and the evidence into `internal/application`, `internal/transport/grpc` and `cmd/fraud`, keeping the evidence hash of old assessments unchanged.
+- [ ] 5b.6 Add the chart values and environment for dev and prod, and the network allowance to the predictor.
+- [ ] 5b.7 Update the fraud decision, serving and observability docs.
 
 ## 6. Local checks and hand-off
 
