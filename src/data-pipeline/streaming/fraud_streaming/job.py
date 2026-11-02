@@ -5,7 +5,14 @@ from pyflink.common import Configuration, Types, WatermarkStrategy
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import StreamTableEnvironment
 
-from fraud_streaming.operators import REJECTS, Aggregate, Clock, Deduplicate, ObserveSource
+from fraud_streaming.operators import (
+    REJECTS,
+    Aggregate,
+    Clock,
+    Deduplicate,
+    ObserveSource,
+    Timeline,
+)
 
 
 def sql_literal(value):
@@ -16,6 +23,7 @@ def build_updates(packets, *, epoch, logical, max_entries):
     # Every operator that yields to REJECTS must have its side output read, or rejects leak
     # into its main output.
     rejects = [packets.get_side_output(REJECTS)]
+    timeline = Timeline(logical)
     if logical:
         packets = packets.assign_timestamps_and_watermarks(
             WatermarkStrategy.for_monotonous_timestamps().with_timestamp_assigner(Clock())
@@ -23,13 +31,13 @@ def build_updates(packets, *, epoch, logical, max_entries):
     events = (
         packets.filter(lambda packet: packet.fact is not None)
         .key_by(lambda packet: packet.fact.event_id)
-        .process(Deduplicate(logical, "event"))
+        .process(Deduplicate(timeline, "event"))
         .uid("event-deduplication-v3")
         .name("Deduplicate events")
     )
     starts = (
         events.key_by(lambda packet: json.dumps(packet.fact.identity))
-        .process(Deduplicate(logical, "attempt"))
+        .process(Deduplicate(timeline, "attempt"))
         .uid("attempt-deduplication-v1")
         .name("Deduplicate attempts")
     )
@@ -50,7 +58,7 @@ def build_updates(packets, *, epoch, logical, max_entries):
                 Aggregate(
                     view=view,
                     epoch=epoch,
-                    logical=logical,
+                    timeline=timeline,
                     max_entries=max_entries,
                 ),
                 output_type=row_type,

@@ -90,20 +90,41 @@ def timer_at(timestamp):
     return (timestamp + 999) // 1000
 
 
-def register(ctx, timestamp, logical):
-    service = ctx.timer_service()
-    if logical:
-        service.register_event_time_timer(timer_at(timestamp))
-    else:
-        service.register_processing_time_timer(timer_at(timestamp))
+class Timeline:
+    """Where an operator reads "now" and how it schedules timers. Live follows the wall clock with processing-time
+    timers; a replay follows the clock the seed wrote with event-time timers. The operators are otherwise the same."""
 
+    def __init__(self, logical):
+        self.logical = logical
+        # Every entity primed in a replay's lead-in day shares its coverage boundaries, so timers there would fire
+        # millions at once; the entity's next row carries the coverage instead.
+        self.coverage_timers = not logical
 
-def delete_timer(ctx, timestamp, logical):
-    service = ctx.timer_service()
-    if logical:
-        service.delete_event_time_timer(timer_at(timestamp))
-    else:
-        service.delete_processing_time_timer(timer_at(timestamp))
+    def now(self, packet):
+        return packet.now if self.logical else micros()
+
+    def register(self, ctx, timestamp):
+        service = ctx.timer_service()
+        if self.logical:
+            service.register_event_time_timer(timer_at(timestamp))
+        else:
+            service.register_processing_time_timer(timer_at(timestamp))
+
+    def delete(self, ctx, timestamp):
+        service = ctx.timer_service()
+        if self.logical:
+            service.delete_event_time_timer(timer_at(timestamp))
+        else:
+            service.delete_processing_time_timer(timer_at(timestamp))
+
+    def fire_at(self, state, timestamp):
+        """The instants an entity publishes at when a timer fires: each of its due boundaries in a replay, the
+        wall clock live."""
+        if not self.logical:
+            yield micros()
+            return
+        while state.next_timer is not None and state.next_timer <= timestamp * 1000:
+            yield state.next_timer
 
 
 class Clock(TimestampAssigner):
@@ -241,8 +262,8 @@ class ObserveSource(KeyedProcessFunction):
 class Deduplicate(KeyedProcessFunction):
     """Drop identical redeliveries of one identity and dead-letter conflicting content."""
 
-    def __init__(self, logical, scope):
-        self.logical = logical
+    def __init__(self, timeline, scope):
+        self.timeline = timeline
         self.scope = scope
 
     def open(self, runtime_context):
@@ -277,7 +298,7 @@ class Deduplicate(KeyedProcessFunction):
                 )
             )
             return
-        if self.logical and self.expires.value() is not None and packet.now >= self.expires.value():
+        if self.expires.value() is not None and packet.now >= self.expires.value():
             self.state.clear()
             self.expires.clear()
         content = dedup_content(self.scope, fact)
@@ -293,7 +314,7 @@ class Deduplicate(KeyedProcessFunction):
             self.lateness[lateness_bucket(packet.now - fact.started_at)].inc()
         self.state.update(content)
         self.expires.update(fact.started_at + DEDUP_RETENTION)
-        register(ctx, fact.started_at + DEDUP_RETENTION, self.logical)
+        self.timeline.register(ctx, fact.started_at + DEDUP_RETENTION)
         yield packet
 
     def on_timer(self, timestamp, ctx):
@@ -305,10 +326,10 @@ class Deduplicate(KeyedProcessFunction):
 
 
 class Aggregate(KeyedProcessFunction):
-    def __init__(self, *, view, epoch, logical, max_entries):
+    def __init__(self, *, view, epoch, timeline, max_entries):
         self.view = view
         self.epoch = epoch
-        self.logical = logical
+        self.timeline = timeline
         self.max_entries = max_entries
 
     def open(self, runtime_context):
@@ -320,9 +341,9 @@ class Aggregate(KeyedProcessFunction):
         previous_timer = state.next_timer
         values = state.advance(now)
         if previous_timer is not None and previous_timer != state.next_timer:
-            delete_timer(ctx, previous_timer, self.logical)
+            self.timeline.delete(ctx, previous_timer)
         if state.next_timer is not None and state.next_timer != previous_timer:
-            register(ctx, state.next_timer, self.logical)
+            self.timeline.register(ctx, state.next_timer)
         self.state.update(state)
         if values is not None:
             yield Row(
@@ -339,20 +360,15 @@ class Aggregate(KeyedProcessFunction):
             entity,
             packet.bootstrap,
             max_entries=self.max_entries,
-            coverage_timers=not self.logical,
+            coverage_timers=self.timeline.coverage_timers,
         )
-        if self.logical:
-            while state.next_timer is not None and state.next_timer <= packet.now:
-                yield from self.emit(state, state.next_timer, ctx)
+        while state.next_timer is not None and state.next_timer <= packet.now:
+            yield from self.emit(state, state.next_timer, ctx)
         state.add(packet)
-        now = packet.now if self.logical else micros()
-        yield from self.emit(state, now, ctx)
+        yield from self.emit(state, self.timeline.now(packet), ctx)
 
     def on_timer(self, timestamp, ctx):
         state = self.state.value()
         if state is not None:
-            if self.logical:
-                while state.next_timer is not None and state.next_timer <= timestamp * 1000:
-                    yield from self.emit(state, state.next_timer, ctx)
-            else:
-                yield from self.emit(state, micros(), ctx)
+            for instant in self.timeline.fire_at(state, timestamp):
+                yield from self.emit(state, instant, ctx)
