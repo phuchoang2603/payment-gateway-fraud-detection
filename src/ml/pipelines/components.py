@@ -191,9 +191,6 @@ def publish_metrics(summary: str, metrics: dsl.Output[dsl.Metrics]):
         for metric, value in data["metrics"].get(name, {}).items():
             metrics.log_metric(f"{prefix}_{metric}", value)
     metrics.log_metric("gate_passed", 1 if data["passed"] else 0)
-    metrics.metadata["training_set_snapshot"] = str(data["training_set_snapshot"])
-    metrics.metadata["feature_service"] = data["feature_service"]
-    metrics.metadata["sources"] = json.dumps(data["sources"], sort_keys=True)
 
 
 @dsl.container_component

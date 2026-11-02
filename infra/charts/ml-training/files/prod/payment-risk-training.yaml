@@ -504,9 +504,6 @@ deploymentSpec:
           , \"production\")):\n        for metric, value in data[\"metrics\"].get(name,\
           \ {}).items():\n            metrics.log_metric(f\"{prefix}_{metric}\", value)\n\
           \    metrics.log_metric(\"gate_passed\", 1 if data[\"passed\"] else 0)\n\
-          \    metrics.metadata[\"training_set_snapshot\"] = str(data[\"training_set_snapshot\"\
-          ])\n    metrics.metadata[\"feature_service\"] = data[\"feature_service\"\
-          ]\n    metrics.metadata[\"sources\"] = json.dumps(data[\"sources\"], sort_keys=True)\n\
           \n"
         image: python:3.12-slim
         resources:
