@@ -280,14 +280,14 @@ No new Doppler keys. Each request was checked against `talos-proxmox` and the li
 5. **Bucket access:** the registry lives under `runs/payment-gateway/feast/`, which the foundation-owned prod policy and the dev MinIO policy already grant, so no `feast/` prefix is needed.
 6. **Flink history runs:** the operator reconciles any FlinkDeployment in `data`; `aws-cpu-burst` has room for the history TaskManagers.
 7. **Training retrieval access:** `iceberg-catalog-private` already admits `ml` on 8181. Object credentials for `ml` belong to the training change.
-8. **Kafka disk:** prod Kafka is one broker with a 5Gi gp3 volume; this repository's `kafka` chart raises it to 64Gi for one seeded month plus its journal, and the history topics use replication factor 1 to match the single broker.
+8. **Kafka disk:** prod Kafka is one broker with a 5Gi gp3 volume; this repository's `kafka` chart raises it to 256Gi (64Gi filled about 9 hours into the replay) for the seeded input and journals of all history units, and the history topics use replication factor 1 to match the single broker.
 
 ## Risks / Trade-offs
 
 - **[Training/serving skew of the DP3 delay]** → Training sees the daily anchor at midnight, while serving gets it after `dp-daily` and materialization (about 07:00 UTC). The definition's `availability` block records this, and the TTL's 12 hours covers it.
 - **[The v19 replay takes days]** → restartable units (4 days in prod) run up to 24 at a time, and the first training replay is limited to `[2026-07-29, 2026-10-29)`.
 - **[The seed encodes events differently from production]** → A CI round trip through `wire.decode`, and the per-month gate on decode rejects and the bounded job reaching FINISHED.
-- **[Kafka disk during the replay]** → Kafka must hold the entire seeded month and its output until unit cleanup. The history topics use zstd compression; prod Kafka storage is 64Gi for one v19 month (about 85M input events plus the journal); the first dev month measures the real size.
+- **[Kafka disk during the replay]** → Kafka must hold the entire seeded month and its output until unit cleanup. The history topics use zstd compression; prod Kafka storage is 256Gi for the 23 four-day units (about 37 GB of input); the journals are the larger part and filled the first 64Gi volume.
 - **[Training/serving skew of Flink's processing delay]** → History has none; serving misses attempts Flink has not processed yet. The page states it, and the evidence samples it.
 - **[Flink's first 24 hours have unknown coverage]** → Serving reports those values as unknown, never zero. Training history uses the replay's one-day lead-in.
 - **[DP3 rewrites older anchors]** → Overlap covers daily lookback; backfills require an explicit since day.

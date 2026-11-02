@@ -98,7 +98,7 @@ This change assigns one engine to each feature definition so training and servin
   - `fraud-snapshot-v2.examples.json` gains lateness-boundary cases.
 - **Infra:**
   - `infra/charts/data-pipelines`: Flink, Redis, the stream writer, server and apply hook under `features.enabled` (dev on, prod off until provisioned); the `feast-materialize` and `stream-history` templates, the materialization CronWorkflow, RBAC for the history FlinkDeployment, and the Flink connector;
-  - `infra/charts/kafka`: ACLs for the history topics and 64Gi prod broker storage;
+  - `infra/charts/kafka`: ACLs for the history topics and 256Gi prod broker storage;
   - `infra/charts/live-traffic`: prod values;
   - `infra/charts/payment-gateway`: Fraud feature configuration and removal of the dedicated submission Redis;
   - the `data-platform-spark` image gains a Feast virtualenv.
