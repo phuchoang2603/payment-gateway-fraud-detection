@@ -124,7 +124,7 @@ components:
               cutoff:
                 componentInputParameter: pipelinechannel--cutoff
           retryPolicy:
-            backoffDuration: 60s
+            backoffDuration: 30s
             backoffFactor: 2.0
             backoffMaxDuration: 3600s
             maxRetryCount: 2
@@ -299,6 +299,8 @@ deploymentSpec:
         - -m
         - risk_model.steps
         env:
+        - name: SPARK_MASTER
+          value: local[3]
         - name: PYSPARK_SUBMIT_ARGS
           value: --driver-memory 12g pyspark-shell
         - name: SPARK_LOCAL_DIR
@@ -432,6 +434,8 @@ deploymentSpec:
         - -m
         - risk_model.steps
         env:
+        - name: SPARK_MASTER
+          value: local[3]
         - name: PYSPARK_SUBMIT_ARGS
           value: --driver-memory 4g pyspark-shell
         - name: SPARK_LOCAL_DIR
@@ -589,6 +593,8 @@ deploymentSpec:
         - -m
         - risk_model.steps
         env:
+        - name: SPARK_MASTER
+          value: local[3]
         - name: PYSPARK_SUBMIT_ARGS
           value: --driver-memory 22g pyspark-shell
         - name: SPARK_LOCAL_DIR
@@ -660,6 +666,11 @@ root:
               componentInputParameter: train
             validation:
               componentInputParameter: validation
+        retryPolicy:
+          backoffDuration: 30s
+          backoffFactor: 2.0
+          backoffMaxDuration: 3600s
+          maxRetryCount: 2
         taskInfo:
           name: assemble-examples
       check-examples:
@@ -674,6 +685,11 @@ root:
               taskOutputParameter:
                 outputParameterKey: snapshot
                 producerTask: assemble-examples
+        retryPolicy:
+          backoffDuration: 30s
+          backoffFactor: 2.0
+          backoffMaxDuration: 3600s
+          maxRetryCount: 2
         taskInfo:
           name: check-examples
       condition-2:
@@ -805,6 +821,11 @@ root:
               componentInputParameter: train
             validation:
               componentInputParameter: validation
+        retryPolicy:
+          backoffDuration: 30s
+          backoffFactor: 2.0
+          backoffMaxDuration: 3600s
+          maxRetryCount: 2
         taskInfo:
           name: plan-examples
       publish-metrics:
@@ -840,6 +861,11 @@ root:
               componentInputParameter: train
             validation:
               componentInputParameter: validation
+        retryPolicy:
+          backoffDuration: 30s
+          backoffFactor: 2.0
+          backoffMaxDuration: 3600s
+          maxRetryCount: 2
         taskInfo:
           name: split-windows
       tune-params:

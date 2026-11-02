@@ -218,8 +218,10 @@ def roll_out(version: str, deployed: dsl.OutputPath(str)):
     return step("roll_out", {"version": version, **RUN}, [("version", deployed)])
 
 
-def configure(task, *, nodes, memory="1G", cpu="250m", storage=True):
+def configure(task, *, nodes, memory="1G", cpu="250m", storage=True, retries=0):
     task.set_caching_options(False)
+    if retries:
+        task.set_retry(num_retries=retries, backoff_duration="30s")
     task.set_cpu_request(cpu)
     task.set_memory_request(memory)
     task.set_memory_limit(memory)
@@ -242,7 +244,8 @@ def configure(task, *, nodes, memory="1G", cpu="250m", storage=True):
 
 
 def spark_task(task, *, nodes, cpu, heap, memory):
-    configure(task, nodes=nodes, cpu=cpu, memory=memory)
+    configure(task, nodes=nodes, cpu=cpu, memory=memory, retries=2)
+    task.set_env_variable("SPARK_MASTER", f"local[{cpu}]")
     task.set_env_variable("PYSPARK_SUBMIT_ARGS", f"--driver-memory {heap} pyspark-shell")
     task.set_env_variable("SPARK_LOCAL_DIR", "/tmp/spark")
     kubernetes.empty_dir_mount(task, "spill", "/tmp/spark", size_limit="24Gi")

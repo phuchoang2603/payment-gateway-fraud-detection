@@ -54,7 +54,6 @@ def payment_risk_training(environment):
             staged = spark_task(
                 stage_examples(chunk=chunk, cutoff=cutoff), **spark(environment.stage)
             )
-            staged.set_retry(num_retries=2, backoff_duration="60s")
         examples = spark_task(
             assemble_examples(
                 train=train,
@@ -72,12 +71,14 @@ def payment_risk_training(environment):
             nodes=environment.nodes,
             cpu="1",
             memory=environment.light_memory,
+            retries=2,
         )
         split = configure(
             split_windows(snapshot=snapshot, train=train, validation=validation, test=test),
             nodes=environment.nodes,
             cpu="1",
             memory=environment.light_memory,
+            retries=2,
         ).after(checked)
 
         tuned = configure(
