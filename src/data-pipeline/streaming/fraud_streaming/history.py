@@ -104,7 +104,8 @@ def report_store():
                 "addressing_style": "path"
                 if os.environ.get("S3_PATH_STYLE") == "true"
                 else "virtual"
-            }
+            },
+            request_checksum_calculation="when_required",
         ),
     )
     return client, location

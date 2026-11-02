@@ -71,6 +71,7 @@ def s3_client():
             connect_timeout=10,
             read_timeout=60,
             retries={"max_attempts": 5},
+            request_checksum_calculation="when_required",
             s3={"addressing_style": "path" if os.environ.get("S3_PATH_STYLE", "false") == "true" else "virtual"},
         ),
     )
