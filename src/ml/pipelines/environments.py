@@ -20,7 +20,7 @@ class Environment:
 
 PROD = Environment(
     name="prod",
-    nodes={"karpenter.sh/nodepool": "aws-cpu-burst", "karpenter.sh/capacity-type": "spot"},
+    nodes={"talos.dev/nodepool": "spot"},
 )
 DEV = Environment(
     name="dev",

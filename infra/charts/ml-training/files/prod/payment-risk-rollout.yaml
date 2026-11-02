@@ -112,5 +112,4 @@ platforms:
             optional: false
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot

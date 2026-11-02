@@ -70,6 +70,6 @@ This change trains `payment_risk_v1` on that service, through the platform's Kub
 - **Data:** the Polaris namespace `ml` and its table `ml.payment_risk_v1_examples`.
 - **Docs:** `docs/ml/training.md`, `docs/ml/serving.md`, the roadmap rows.
 - **Dependencies:** the Feast change merged and deployed, and `stream-history` run over `[2026-07-29, 2026-10-29)`.
-  - The platform has already provided the registry, KServe, Katib, Trainer, `xgboost-gpu-distributed`, 2 × g6.xlarge and the `ml` Dashboard Profile.
+  - The platform has already provided the registry, KServe, Katib, Trainer, `xgboost-gpu-distributed` and the `ml` Dashboard Profile.
   - Its Spark-operator-watches-`ml` change (`ae12236`) is no longer needed.
 - **Sequencing:** planning on `plan/training-on-gold`. Implementation, pushes and every cluster run wait for the user's approval, and GPU runs are serialized with the model-server benchmarks.

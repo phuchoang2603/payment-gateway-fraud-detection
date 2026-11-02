@@ -1235,8 +1235,7 @@ platforms:
             volumeName: spill
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1296,8 +1295,7 @@ platforms:
             optional: false
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1357,8 +1355,7 @@ platforms:
             optional: false
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot
         exec-gate:
           configMapAsEnv:
           - configMapName: ml-training-config
@@ -1399,8 +1396,7 @@ platforms:
             optional: false
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1464,8 +1460,7 @@ platforms:
             volumeName: spill
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1525,8 +1520,7 @@ platforms:
             optional: false
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1586,8 +1580,7 @@ platforms:
             optional: false
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot
         exec-record-version:
           configMapAsEnv:
           - configMapName: ml-training-config
@@ -1628,8 +1621,7 @@ platforms:
             optional: false
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1689,8 +1681,7 @@ platforms:
             optional: false
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot
         exec-split-windows:
           configMapAsEnv:
           - configMapName: ml-training-config
@@ -1731,8 +1722,7 @@ platforms:
             optional: false
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1796,8 +1786,7 @@ platforms:
             volumeName: spill
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1857,5 +1846,4 @@ platforms:
             optional: false
           nodeSelector:
             labels:
-              karpenter.sh/capacity-type: spot
-              karpenter.sh/nodepool: aws-cpu-burst
+              talos.dev/nodepool: spot

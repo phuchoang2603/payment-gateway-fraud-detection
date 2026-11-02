@@ -27,7 +27,7 @@ storage:
     AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
     AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
 iceberg:
-  store: doppler
+  store: gateway-doppler
   data:
     ICEBERG_CLIENT_SECRET: ICEBERG_CLIENT_SECRET
 schedule:
@@ -45,10 +45,9 @@ serving:
   predictor:
     minReplicas: 1
     nodeSelector:
-      karpenter.sh/nodepool: aws-cpu-burst
-      karpenter.sh/capacity-type: spot
+      talos.dev/nodepool: spot
 notebook:
-  storageClass: gp3
+  storageClass: cloud-block
   storageSize: 20Gi
   resources:
     requests: {cpu: '1', memory: 4Gi}

@@ -1,6 +1,6 @@
 ## 0. Start gate
 
-- [x] 0.1 Platform Kubeflow request sent and handed off at talos-proxmox `e01aba9`: Model Registry, KServe from the registry, Katib, Trainer, GPU runtime `xgboost-gpu-distributed`, 2 × g6.xlarge. Recorded in design.md.
+- [x] 0.1 Platform Kubeflow request sent and handed off at talos-proxmox `e01aba9`: Model Registry, KServe from the registry, Katib, Trainer, GPU runtime `xgboost-gpu-distributed`. Recorded in design.md.
 - [x] 0.2 Consult the Feast threads and the platform. Recorded in design.md:
   - Feast plan (approved 2026-11-01): request features from the on-demand view `request_features`; `fraud_feast.training.entity_rows`; stream visibility at write time + 1µs, so the entity timestamp is plain `started_at`; local-mode Spark for training and materialization; replay `[2026-07-29, 2026-10-29)`; simulation-truth labels; no gaps.
   - Platform: the Dashboard lists `ml` (`8321dec`); the Spark operator watching `ml` (`ae12236`) is no longer needed.

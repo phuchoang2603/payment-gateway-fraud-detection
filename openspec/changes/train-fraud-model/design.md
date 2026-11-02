@@ -14,11 +14,11 @@ See proposal.md for the motivation. What shapes the design:
   - The Model Registry 0.3.17 is at `http://model-registry-service.ml.svc.cluster.local:8080`, and has native version state (LIVE or ARCHIVED) but no aliases.
   - KServe 0.21 in `Standard` (raw Deployment) mode runs custom predictor containers; the registry stores any artifact URI.
   - KFP (single-user) and Katib 0.19 (`Push`, `restricted`) are validated.
-  - Runtime `xgboost-gpu-distributed`: DRA claim, non-root, image, command and args overridable. The pool is at most 2 × g6.xlarge (L4), currently On-Demand. The stock XGBoost image's NCCL is too old; a single GPU needs no NCCL.
+  - Runtime `xgboost-gpu-distributed`: DRA claim, non-root, image, command and args overridable. On prod it selects the platform's `gpu` node pool (at most two nodes), which has no cloud GPU capacity yet. The stock XGBoost image's NCCL is too old; a single GPU needs no NCCL.
   - Notebooks 1.11 cannot take DRA claims.
   - The Dashboard lists `ml` through a platform-owned `Profile/ml`.
   - The GPUs are shared with model-server benchmarks.
-- **Capacity:** spot `aws-cpu-burst` has large and xlarge nodes up to 12, including r-family (32 GiB). The root volume leaves about 24 Gi for pod scratch space.
+- **Capacity:** the prod `spot` pool has up to 12 e2-standard-4 nodes. The boot disk leaves about 24 Gi for pod scratch space.
 - **Course rubric (MLE):** notebook (offline store plus labels, split, train, evaluate, save); KFP with at least load, split, train and evaluate; model and incremental data versions; KServe; five key classes; property-based tests.
 
 ## Goals / Non-Goals
@@ -129,7 +129,7 @@ These are added to Feast's `request_features` on-demand view (python mode) in `f
 
 ### 7. Notebook
 
-A stopped `Notebook` `fraud-explore` (the `ml` image, 20 Gi gp3, CPU), listed in the Dashboard under `ml`. It runs `steps`:
+A stopped `Notebook` `fraud-explore` (the `ml` image, 20 Gi, CPU), listed in the Dashboard under `ml`. It runs `steps`:
 
 1. build or load a training set;
 2. split;
