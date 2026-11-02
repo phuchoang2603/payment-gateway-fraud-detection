@@ -127,7 +127,7 @@ Deployment SHALL provide one opt-in single-replica simulator workload running tr
 
 ### Requirement: Environment data-pipeline deployment
 
-Dev and prod SHALL enable the historical generator, DP1 Bronze, `dp-pipeline`, `dp-backfill`, `maintain-lakehouse` and the on-demand benchmark templates in `data`, with the suspended `dp-daily` and nightly maintenance schedules. All templates SHALL use externally supplied credentials, commit-tagged images and explicit resource budgets. Historical source selection SHALL default to v18 in dev and v19 in prod. In prod, workflow step pods and Spark drivers SHALL run on the on-demand `aws-workers` pool and Spark executors on the spot `aws-cpu-burst` pool. The schedules SHALL remain suspended in both environments until explicitly enabled.
+Dev and prod SHALL enable the historical generator, DP1 Bronze, `dp-pipeline`, `dp-backfill`, `maintain-lakehouse` and the on-demand benchmark templates in `data`, with the suspended `dp-daily` and nightly maintenance schedules. All templates SHALL use externally supplied credentials, commit-tagged images and explicit resource budgets. Historical source selection SHALL default to v18 in dev and v19 in prod. In prod, workflow step pods and Spark drivers SHALL run on the on-demand `cpu` node pool and Spark executors on the `spot` node pool. The schedules SHALL remain suspended in both environments until explicitly enabled.
 
 #### Scenario: Fresh environment rollout
 
@@ -137,7 +137,7 @@ Dev and prod SHALL enable the historical generator, DP1 Bronze, `dp-pipeline`, `
 #### Scenario: Prod driver placement
 
 - **WHEN** prod renders a Spark application
-- **THEN** its driver selects the `aws-workers` node pool and its executors the spot burst pool
+- **THEN** its driver selects the `cpu` node pool and its executors the `spot` node pool
 
 ### Requirement: Data-platform ownership boundary
 Application deployment SHALL own DP1 workloads in the platform-owned data namespace. The shared platform SHALL own Argo, the native Workflow lifecycle admission policy and binding scoped to `data`, Apache Spark Operator and its CRDs, the Altinity ClickHouse operator 0.27.4 and its CRDs watching `data`, OpenMetadata and its PostgreSQL/OpenSearch backing services. The operator SHALL be reconciled in the platform repository through Argo CD. Application deployment SHALL own its SQL/contracts, native ingestion workflow configuration and the ClickHouse instance and users it queries, but not the operator. The final deployment SHALL have no dedicated Kafka requirement for governance. Removing DP1 SHALL NOT adopt or remove those shared services or destroy source, lake or governance state.
@@ -211,7 +211,7 @@ The app-of-apps SHALL deploy chart `infra/charts/llm-platform` as application `l
 
 #### Scenario: Remove the application
 - **WHEN** the `llm-platform` application is deleted
-- **THEN** shared controllers, CRDs, GatewayClasses, NodePools and the `llm` namespace remain
+- **THEN** shared controllers, CRDs, GatewayClasses, node pools and the `llm` namespace remain
 
 ### Requirement: RAG pipeline application
 The app-of-apps SHALL deploy chart `infra/charts/rag-pipeline` as application `rag-pipeline` into the platform-owned `llm` namespace, enabled where `llm-platform` is enabled and disabled in prod until the user confirms. Its credentials SHALL come from `gateway-doppler`. Its workflow SHALL run only after the platform has added `llm` to the Argo Workflows controller's namespaces.
@@ -235,7 +235,7 @@ The data-pipelines application SHALL define one `ClickHouseInstallation` named `
 
 ### Requirement: Simulator credentials and image delivery
 
-Application credentials SHALL come from the environment's gateway Doppler config through `gateway-doppler`. Object credentials SHALL come from gateway Doppler through `gateway-doppler`, scoped to `datasets/payment-gateway/`, `runs/payment-gateway/` and `lakehouse/` in the environment platform bucket. Kubeflow artifacts SHALL retain their separate platform identity. The simulator SHALL NOT access vault or database internals. Historical generation and live simulation SHALL use the same package and image with separate entry points.
+Application credentials SHALL come from the environment's gateway Doppler config through `gateway-doppler`. Object credentials SHALL come from gateway Doppler through `gateway-doppler`, used under `datasets/payment-gateway/`, `runs/payment-gateway/` and `lakehouse/` in the environment platform bucket; in prod the GCS HMAC key is scoped to that bucket. Kubeflow artifacts SHALL retain their separate platform identity. The simulator SHALL NOT access vault or database internals. Historical generation and live simulation SHALL use the same package and image with separate entry points.
 
 #### Scenario: Generator permissions
 

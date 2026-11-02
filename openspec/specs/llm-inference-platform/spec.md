@@ -37,11 +37,11 @@ Requests to the model SHALL reach vLLM replicas only through the InferencePool a
 - **THEN** the pool has no ready endpoint and requests fail fast with an error instead of hanging
 
 ### Requirement: Explicit GPU claim and environment placement
-The model servers SHALL obtain their GPU through a chart-owned ResourceClaim requesting exactly one device of DeviceClass `gpu.nvidia.com`, not through extended resources. In prod they SHALL schedule only onto the platform's `aws-gpu-training` NodePool, which provides `g6.xlarge` (L4) instances, and tolerate that pool's taint. The application SHALL NOT change the pool definition.
+The model servers SHALL obtain their GPU through a chart-owned ResourceClaim requesting exactly one device of DeviceClass `gpu.nvidia.com`, not through extended resources. In prod they SHALL schedule only onto nodes labelled `talos.dev/nodepool: gpu`. The platform provides no cloud GPU pool, so the LLM platform stays disabled in prod until one exists. The application SHALL NOT change the pool definition.
 
 #### Scenario: Prod scheduling
 - **WHEN** the prod model server is enabled and no GPU node exists
-- **THEN** its pending pod causes the pool to launch one `g6.xlarge` Spot node in `us-east-1a`
+- **THEN** its pod stays pending until the platform provides a `gpu` node
 
 #### Scenario: GPU already claimed
 - **WHEN** another workload holds the environment's only GPU

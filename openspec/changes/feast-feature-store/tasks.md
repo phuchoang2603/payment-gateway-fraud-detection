@@ -57,7 +57,7 @@
   - Redis client labels and sizing values;
   - the JobManager REST policy for metadata pods;
   - remove the v1 writer, `feast.writerGroup` and `definitionHash`;
-  - prod values: `features.enabled: false`, epoch `live-v19`, Redis capacity configured for about 6 GiB on gp3 when enabled.
+  - prod values: `features.enabled: false`, epoch `live-v19`, Redis capacity configured for about 6 GiB on `cloud-block` when enabled.
 
   Verify with CI helm lint and template for every values file.
 - [x] 3.3 `infra/charts/live-traffic`: enable the simulator in prod on the v19 manifest and digest, at 1 payment every 30 seconds. Verify with CI helm template. The manifest was read from S3 with user authorization; its digest is pinned and the seven-day prod run is enabled.

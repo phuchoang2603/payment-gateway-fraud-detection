@@ -17,7 +17,7 @@ See proposal.md for the motivation. The current state that shapes the design:
   - **Daily.** The suspended `dp-daily` CronWorkflow (04:17 UTC) loads Kafka into Bronze, then runs the pipeline over yesterday plus `pipeline.lookbackDays` (2) days before it, to catch late outcomes. Rows at older anchors can therefore change or disappear between runs.
   - **Backfill.** `dp-backfill` runs the pipeline month by month, in order. The prod v19 backfill covers 2025-10-29 to 2026-10-28.
   - **Commit properties.** Every gold commit records the Silver snapshot IDs, `dp3.run_id`, `dp3.range`, `dp3.logic_version` (3) and `dp3.history_start`. `main` only moves when `publish-tables` fast-forwards it after the checks.
-  - **Placement.** Prod Spark drivers and workflow pods run on the on-demand `aws-workers` nodes, and executors on spot `aws-cpu-burst`. The on-demand pool has little free CPU.
+  - **Placement.** Prod Spark drivers and workflow pods run on the on-demand `cpu` nodes, and executors on the `spot` pool. The on-demand pool has little free CPU.
   - Gold snapshots expire after 7 days, and the last 10 are always kept (`maintain-lakehouse`).
 - **Streaming:**
   - Flink writes `fraud-snapshot-v2` updates exactly-once to `fraud.feature-updates.v2.<epoch>`, carrying integration and entity IDs, `revision`, `anchor`, `online_write_at`, coverage and values.
@@ -237,7 +237,7 @@ The published v19 manifest was read from its recorded S3 URI on 2026-10-31; its 
 |---|---|---|
 | Flink epoch | `live-v18` | `live-v19` (new) |
 | Live simulator | v18 manifest | v19 manifest, 1 payment every 30 s, bounded evidence runs (7 days by default) |
-| Redis | existing, 512 MB | about 6 GiB `maxmemory` on gp3: about 3M customer and 3M payment-method hashes for the daily views, plus the live stream keys |
+| Redis | existing, 512 MB | about 6 GiB `maxmemory` on `cloud-block`: about 3M customer and 3M payment-method hashes for the daily views, plus the live stream keys |
 | Flink, Redis, feature writer, server and Feast workflows (`features.enabled`) | on | off until platform provisioning |
 
 The prod simulator uses a Job with no retry, so completing the seven-day duration does not trigger a Deployment restart and begin another evidence run.
