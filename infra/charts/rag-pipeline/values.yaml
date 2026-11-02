@@ -18,8 +18,6 @@ uid: 65532
 pipelineNamespace: data
 storageClass: local-path
 secretStore: gateway-doppler
-# Platform-owned credentials: the Polaris client shared with the other lakehouse writers.
-platformSecretStore: doppler
 
 # The gateway storage identity, scoped to datasets/payment-gateway/, runs/payment-gateway/ and lakehouse/.
 storage:

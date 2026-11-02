@@ -10,7 +10,7 @@ spec:
   refreshInterval: 1h
   secretStoreRef:
     kind: ClusterSecretStore
-    name: {{ .Values.platformSecretStore }}
+    name: {{ .Values.secretStore }}
   target:
     name: {{ $signing.secret }}
   data:

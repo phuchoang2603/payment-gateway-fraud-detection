@@ -156,7 +156,7 @@ catalog:
   kafkaClient: data-pipelines
   icebergSecret:
     name: data-pipelines-iceberg
-    store: doppler
+    store: gateway-doppler
     data:
       ICEBERG_CLIENT_SECRET: ICEBERG_CLIENT_SECRET
   openmetadataSecret:
@@ -168,7 +168,7 @@ catalog:
     clickhouse:
       externalSecret:
         name: metadata-clickhouse
-        store: doppler
+        store: gateway-doppler
         data:
           CLICKHOUSE_PASSWORD: CLICKHOUSE_OPENMETADATA_PASSWORD
       kind: database

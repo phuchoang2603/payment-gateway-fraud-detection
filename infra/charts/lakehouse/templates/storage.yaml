@@ -29,7 +29,7 @@ spec:
   refreshInterval: 1h
   secretStoreRef:
     kind: ClusterSecretStore
-    name: doppler
+    name: {{ .Values.secretStore }}
   target:
     name: lakehouse-admin
   data:
