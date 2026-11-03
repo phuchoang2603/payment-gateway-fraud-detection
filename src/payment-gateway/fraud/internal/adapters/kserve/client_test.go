@@ -483,3 +483,63 @@ func TestAnAnswerFromAnotherVersionCountsNothing(t *testing.T) {
 		t.Errorf("counted %v", counter.seen)
 	}
 }
+
+func configOf(version, threshold string) string {
+	encoded, _ := json.Marshal(order)
+	extra := ""
+	if threshold != "" {
+		extra = `,"decline_threshold":{"string_value":"` + threshold + `"}`
+	}
+	return `{"parameters":{"feature_order":{"string_value":` + strconv.Quote(string(encoded)) + `},"registry_version":{"string_value":"` + version + `"}` + extra + `}}`
+}
+
+func TestTwoVersionsBehindOneAddressEachScoreUnderTheirOwnThreshold(t *testing.T) {
+	fake := newTriton()
+	fake.configBody = configOf("v3", "0.5")
+	client := newClient(t, fake.serve(t).URL, time.Second)
+	if first := client.Score(t.Context(), views(nil)); first.Status != application.ModelAvailable || first.Version != "v3" || first.Threshold != 0.5 {
+		t.Fatalf("first %+v", first)
+	}
+	fake.modelVersion = "4"
+	if unseen := client.Score(t.Context(), views(nil)); unseen.Status != application.ModelError || unseen.Score != nil {
+		t.Fatalf("a score from a version that was never read was used: %+v", unseen)
+	}
+	fake.configBody = configOf("v4", "0.7")
+	if second := client.Score(t.Context(), views(nil)); second.Status != application.ModelAvailable || second.Version != "v4" || second.Threshold != 0.7 {
+		t.Fatalf("second %+v", second)
+	}
+	fake.modelVersion = "3"
+	if back := client.Score(t.Context(), views(nil)); back.Status != application.ModelAvailable || back.Version != "v3" || back.Threshold != 0.5 {
+		t.Fatalf("back %+v", back)
+	}
+	if fake.configCalls.Load() != 2 {
+		t.Fatalf("config reads %d", fake.configCalls.Load())
+	}
+}
+
+func TestAThresholdThatIsNotAProbabilityIsIgnored(t *testing.T) {
+	for _, text := range []string{"", "x", "0", "-0.2", "1.5"} {
+		fake := newTriton()
+		fake.configBody = configOf("v3", text)
+		if observation := newClient(t, fake.serve(t).URL, time.Second).Score(t.Context(), views(nil)); observation.Status != application.ModelAvailable || observation.Threshold != 0 {
+			t.Fatalf("threshold %q: %+v", text, observation)
+		}
+	}
+}
+
+func TestAVersionThatNeverShowsUpInTheConfigIsGivenUpOn(t *testing.T) {
+	fake := newTriton()
+	client := newClient(t, fake.serve(t).URL, time.Second)
+	client.Score(t.Context(), views(nil))
+	fake.modelVersion = "9"
+	for range maxReads + 5 {
+		client.Score(t.Context(), views(nil))
+	}
+	reads := fake.configCalls.Load()
+	for range 5 {
+		client.Score(t.Context(), views(nil))
+	}
+	if fake.configCalls.Load() != reads || reads > int32(maxReads)+2 {
+		t.Fatalf("config reads %d then %d", reads, fake.configCalls.Load())
+	}
+}

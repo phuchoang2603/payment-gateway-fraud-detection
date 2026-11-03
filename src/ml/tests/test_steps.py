@@ -499,7 +499,7 @@ class Registry:
 
     def __init__(self, production=None, version="v3"):
         self.current, self.version = production, version
-        self.registered, self.promoted, self.puts = [], [], []
+        self.registered, self.promoted, self.puts, self.challenged = [], [], [], []
 
     def production(self):
         """Returns the production version."""
@@ -524,6 +524,10 @@ class Registry:
     def promote(self, version, run_id):
         """Records a promotion."""
         self.promoted.append((version, run_id))
+
+    def mark_challenger(self, version, run_id):
+        """Records a challenger."""
+        self.challenged.append((version, run_id))
 
 
 def launched(monkeypatch, files, production=None):
@@ -624,7 +628,7 @@ def test_registering_a_version_packages_it_for_triton_with_its_provenance(monkey
         trigger="drift",
     )
     assert result == {"version": "v4"}
-    assert packaged == [("s3://bucket/runs/r1/model", "v4", FEATURES, {"a": [0.5]})]
+    assert packaged == [("s3://bucket/runs/r1/model", "v4", FEATURES, {"a": [0.5]}, 0.9)]
     ((version, uri, properties),) = registry.registered
     assert (version, uri) == ("v4", "s3://bucket/runs/r1/model")
     assert properties["gate"] == "passed" and properties["test_pr_auc"] == 0.5
@@ -638,14 +642,19 @@ def test_registering_a_version_packages_it_for_triton_with_its_provenance(monkey
 def serve(monkeypatch):
     """Fakes the cluster side of roll_out and returns what it did and what the predictor answers."""
     monkeypatch.setenv("SERVING_PREDICTOR", json.dumps({"minReplicas": 1}))
-    state = SimpleNamespace(deployed=[], probed=[], probe_error=None, error=None)
+    state = SimpleNamespace(
+        deployed=[], probed=[], probe_error=None, error=None, names=[], deleted=[]
+    )
     registry = Registry(production="v1")
     monkeypatch.setattr(steps, "RegistryClient", lambda: registry)
-    monkeypatch.setattr(
-        steps.kube,
-        "inference_service",
-        lambda version, predictor: state.deployed.append((version, predictor)),
-    )
+
+    def deploy(version, predictor, name="payment-risk"):
+        """Records the deployment and the service it went to."""
+        state.deployed.append((version, predictor))
+        state.names.append(name)
+
+    monkeypatch.setattr(steps.kube, "inference_service", deploy)
+    monkeypatch.setattr(steps.kube, "delete", lambda kind, name: state.deleted.append(name))
 
     def ready(name, version):
         """Raises the prepared error, or returns an address."""
@@ -700,3 +709,31 @@ def test_there_is_nothing_to_restore_for_a_first_or_repeated_version(serve):
     with pytest.raises(TimeoutError):
         steps.roll_out(version="v2", run_id="r1")
     assert [v for v, _ in serve.deployed] == ["v2", "v2"]
+
+
+def test_a_challenger_is_served_beside_the_champion_and_recorded_as_the_challenger(serve):
+    """A challenger goes to its own service, is probed, and is marked without touching production."""
+    result = steps.roll_out(version="v2", run_id="r1", role="challenger")
+    assert result == {"deployed": "v2", "previous": "v1"}
+    assert serve.names == ["payment-risk-challenger"] and serve.probed == [("http://svc", "v2")]
+    assert serve.registry.challenged == [("v2", "r1")] and serve.registry.promoted == []
+
+
+def test_a_challenger_that_fails_is_removed_and_the_champion_is_left_alone(serve):
+    """A failing challenger is deleted and raises, and nothing is promoted or marked."""
+    serve.probe_error = RuntimeError("wrong version")
+    with pytest.raises(RuntimeError, match="wrong version"):
+        steps.roll_out(version="v2", run_id="r1", role="challenger")
+    assert serve.deleted == ["payment-risk-challenger"] and serve.names == [
+        "payment-risk-challenger"
+    ]
+    assert serve.registry.challenged == [] and serve.registry.promoted == []
+
+
+def test_a_challenger_needs_a_different_production_version(serve):
+    """With no production version, or production being the same version, there is nothing to run beside."""
+    for current in (None, "v2"):
+        serve.registry.current = current
+        with pytest.raises(ValueError, match="different production"):
+            steps.roll_out(version="v2", run_id="r1", role="challenger")
+    assert serve.names == []

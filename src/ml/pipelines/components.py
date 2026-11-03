@@ -194,8 +194,8 @@ def record_version(
 
 
 @dsl.container_component
-def roll_out(run_id: str, version: str, deployed: dsl.OutputPath(str)):
-    """Serves the registered version, checks it and promotes it."""
+def roll_out(run_id: str, version: str, role: str, deployed: dsl.OutputPath(str)):
+    """Serves the registered version as the champion or the challenger, and checks it."""
     return step("roll_out", locals(), ("deployed",))
 
 

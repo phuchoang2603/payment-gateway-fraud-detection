@@ -49,6 +49,18 @@ def test_the_bin_edges_of_the_reference_profile_ride_in_the_config_when_given():
     ].decode() == (triton.config_text(ORDER, "v7", edges))
 
 
+def test_the_decline_threshold_of_the_version_rides_in_the_config_when_given():
+    """The threshold is a parameter the fraud service reads per version, and absent without one."""
+    assert (
+        float(parameter(triton.config_text(ORDER, "v7", None, 0.512), "decline_threshold")) == 0.512
+    )
+    assert "decline_threshold" not in triton.config_text(ORDER, "v7")
+    files = triton.repository_files("v7", ORDER, b"m", None, 0.25)
+    assert (
+        float(parameter(files["payment-risk/config.pbtxt"].decode(), "decline_threshold")) == 0.25
+    )
+
+
 def test_the_repository_entry_has_the_config_and_the_model_in_a_numbered_directory():
     """The model sits at payment-risk/<number>/xgboost.json beside payment-risk/config.pbtxt."""
     files = triton.repository_files("v7", ORDER, b'{"model": 1}')

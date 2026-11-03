@@ -93,9 +93,9 @@
 
 ## 5f. Model A/B experiment (decided 2026-11-03: enforced, no shadow, KEDA and Standard mode stay; a waypoint HTTPRoute splits, Argo Rollouts analysis gates; the InferenceGraph and Knative were tried and dropped)
 
-- [ ] 5f.0 Platform: a `MutatingAdmissionPolicy` for the waypoint pod's seccomp profile in `ml` (requested from the platform thread; dev first, prod flag off).
-- [ ] 5f.1 Rework the Go client to keep a layout per model version (feature order, bin edges and `decline_threshold` from that version's config), fetch an unseen version's config with a few retries, score each answer under its own version, and add `model_version` and `declined` to `fraud.model.calls`; `record_version` packages `decline_threshold` into `config.pbtxt`.
-- [ ] 5f.2 Add `role=challenger` to `roll_out` (second InferenceService, `challenger` registry stage, deletion) and the `experiment` run parameter.
+- [x] 5f.0 Platform: a `MutatingAdmissionPolicy` for the waypoint pod's seccomp profile in `ml` (talos-proxmox #116 and #117, merged; running on dev, applied to prod only after its Manual Provision run).
+- [x] 5f.1 Rework the Go client to keep a layout per model version (feature order, bin edges and `decline_threshold` from that version's config), fetch an unseen version's config with a few retries, score each answer under its own version, and add `model_version` and `declined` to `fraud.model.calls`; `record_version` packages `decline_threshold` into `config.pbtxt`.
+- [x] 5f.2 Add `role=challenger` to `roll_out` (second InferenceService, `challenger` registry stage, deletion) and the `experiment` run parameter.
 - [ ] 5f.3 Chart: the waypoint `Gateway`, the `HTTPRoute` at weights 100/0 with Argo CD ignoring the weights, the `istio.io/use-waypoint` label on the champion's Service (check that KServe keeps it), a scrape of both services, the `AnalysisTemplate`, and the Role for `analysisruns`.
 - [ ] 5f.4 Add the `payment-risk-promote` pipeline: the gate (challenger against champion), stepwise weights capped at 20 percent with an `AnalysisRun` per step, promotion or abort.
 - [ ] 5f.5 Add the per-version panels to `ml-serving` and a by-version breakdown to `fraud-outcomes`.

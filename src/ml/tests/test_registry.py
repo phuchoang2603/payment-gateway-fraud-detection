@@ -171,3 +171,39 @@ def test_promotion_makes_one_version_live_and_archives_the_one_it_replaces():
     }
     assert client.client.updated == [old, new] or client.client.updated == [new, old]
     assert other not in client.client.updated and other.custom_properties == {"stage": "candidate"}
+
+
+def test_the_challenger_is_the_live_version_in_the_challenger_stage():
+    """An archived or other-stage version is not the challenger."""
+    versions = [
+        Version("v1", {"stage": "challenger"}, ModelVersionState.ARCHIVED),
+        Version("v2", {"stage": "production"}),
+        Version("v3", {"stage": "challenger"}),
+    ]
+    assert registry(*versions).challenger() == "v3"
+    assert registry(*versions[:2]).challenger() is None
+
+
+def test_marking_a_challenger_archives_the_one_it_replaces_and_leaves_production_alone():
+    """The new challenger goes live with the run recorded, the old one is archived, production stays."""
+    old = Version("v2", {"stage": "challenger"})
+    new = Version("v3", {"stage": "candidate"}, ModelVersionState.ARCHIVED)
+    champion = Version("v1", {"stage": "production"})
+    client = registry(champion, old, new)
+    client.mark_challenger("v3", "run-4")
+    assert new.state == ModelVersionState.LIVE
+    assert new.custom_properties == {"stage": "challenger", "deployed_by_run": "run-4"}
+    assert old.state == ModelVersionState.ARCHIVED and old.custom_properties == {
+        "stage": "archived"
+    }
+    assert champion not in client.client.updated and champion.custom_properties == {
+        "stage": "production"
+    }
+
+
+def test_retiring_a_version_archives_it_and_keeps_its_other_properties():
+    """An aborted challenger is archived with its facts intact."""
+    version = Version("v3", {"stage": "challenger", "gate": "passed"})
+    registry(version).retire("v3")
+    assert version.state == ModelVersionState.ARCHIVED
+    assert version.custom_properties == {"stage": "archived", "gate": "passed"}

@@ -69,11 +69,13 @@ func (s *Service) scoreModel(ctx context.Context, evidence *Evidence) {
 	call, stop := context.WithTimeout(ctx, s.model.Timeout)
 	defer stop()
 	observation := s.model.Scorer.Score(call, evidence.Features)
-	observation.Threshold = s.model.Threshold
+	if observation.Threshold <= 0 || observation.Threshold > 1 {
+		observation.Threshold = s.model.Threshold
+	}
 	input := domain.ModelInput{
 		Available: observation.Status == ModelAvailable && observation.Score != nil,
 		Complete:  complete(evidence.Features),
-		Threshold: s.model.Threshold,
+		Threshold: observation.Threshold,
 	}
 	if observation.Score != nil {
 		input.Score = *observation.Score

@@ -2,12 +2,15 @@
 # Name: payment-risk-rollout
 # Description: Serve a registered payment-risk version that passed its gate, or return to an earlier one.
 # Inputs:
+#    role: str [Default: 'champion']
 #    version: str
 components:
   comp-roll-out:
     executorLabel: exec-roll-out
     inputDefinitions:
       parameters:
+        role:
+          parameterType: STRING
         run_id:
           parameterType: STRING
         version:
@@ -26,6 +29,8 @@ deploymentSpec:
         - '{{$.inputs.parameters[''run_id'']}}'
         - --version
         - '{{$.inputs.parameters[''version'']}}'
+        - --role
+        - '{{$.inputs.parameters[''role'']}}'
         - --out
         - deployed
         - '{{$.outputs.parameters[''deployed''].output_file}}'
@@ -54,6 +59,8 @@ root:
           name: comp-roll-out
         inputs:
           parameters:
+            role:
+              componentInputParameter: role
             run_id:
               runtimeValue:
                 constant: '{{$.pipeline_job_uuid}}'
@@ -63,6 +70,10 @@ root:
           name: roll-out
   inputDefinitions:
     parameters:
+      role:
+        defaultValue: champion
+        isOptional: true
+        parameterType: STRING
       version:
         parameterType: STRING
 schemaVersion: 2.1.0

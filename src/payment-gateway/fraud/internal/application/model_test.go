@@ -225,3 +225,20 @@ func TestWithModelValidatesTheModeBudgetAndThreshold(t *testing.T) {
 		})
 	}
 }
+
+func TestTheThresholdOfTheVersionThatAnsweredDecidesAndIsRecorded(t *testing.T) {
+	observation := answer(0.7)
+	observation.Version, observation.Threshold = "v4", 0.6
+	evidence, _ := decide(t, available(), &fakeScorer{observation: observation}, 0.8, 1000)
+	model := evidence.Model
+	if !evidence.Decision.Declined || model == nil || model.Threshold != 0.6 || model.Version != "v4" || !model.Declined {
+		t.Fatalf("decision %+v model %+v", evidence.Decision, model)
+	}
+	for _, threshold := range []float64{0, -1, 1.5} {
+		observation.Threshold = threshold
+		evidence, _ = decide(t, available(), &fakeScorer{observation: observation}, 0.8, 1000)
+		if evidence.Decision.Declined || evidence.Model.Threshold != 0.8 {
+			t.Fatalf("threshold %v: decision %+v model %+v", threshold, evidence.Decision, evidence.Model)
+		}
+	}
+}

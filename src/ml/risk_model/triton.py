@@ -20,12 +20,12 @@ def number(version):
     return int(version.removeprefix("v"))
 
 
-def config_text(order, version, edges=None):
+def config_text(order, version, edges=None, threshold=None):
     """Returns the `config.pbtxt` of the FIL model for an ordered feature list.
 
     The instance group is `KIND_GPU`, never `KIND_AUTO`, because auto falls back to the CPU. The
-    feature order, the registry version and the bin edges of the reference profile ride along as
-    parameters, so a caller can read them back from the served model.
+    feature order, the registry version, the bin edges of the reference profile and the version's
+    decline threshold ride along as parameters, so a caller can read them back from the served model.
     """
     parameters = {
         "model_type": "xgboost_json",
@@ -38,6 +38,8 @@ def config_text(order, version, edges=None):
     }
     if edges is not None:
         parameters["bin_edges"] = json.dumps(edges, separators=(",", ":"))
+    if threshold is not None:
+        parameters["decline_threshold"] = repr(float(threshold))
     entries = ",\n".join(
         f"  {{ key: {json.dumps(key)} value: {{ string_value: {json.dumps(value)} }} }}"
         for key, value in parameters.items()
@@ -53,24 +55,26 @@ def config_text(order, version, edges=None):
     )
 
 
-def repository_files(version, order, model, edges=None):
+def repository_files(version, order, model, edges=None, threshold=None):
     """Returns the files of the repository entry, keyed by path below the model directory.
 
     `model` is the booster's JSON. The version directory is the version's integer, so every answer
     from Triton names the registry version that made it.
     """
     return {
-        f"{MODEL_NAME}/config.pbtxt": config_text(order, version, edges).encode(),
+        f"{MODEL_NAME}/config.pbtxt": config_text(order, version, edges, threshold).encode(),
         f"{MODEL_NAME}/{number(version)}/xgboost.json": model,
     }
 
 
-def package(model_uri, version, order, edges=None):
+def package(model_uri, version, order, edges=None, threshold=None):
     """Writes the Triton repository entry of a version into its model directory."""
     target = urlsplit(model_uri)
     prefix = target.path.strip("/")
     source = s3().get_object(Bucket=target.netloc, Key=f"{prefix}/model.json")
-    for path, body in repository_files(version, order, source["Body"].read(), edges).items():
+    for path, body in repository_files(
+        version, order, source["Body"].read(), edges, threshold
+    ).items():
         s3().put_object(Bucket=target.netloc, Key=f"{prefix}/{path}", Body=body)
 
 

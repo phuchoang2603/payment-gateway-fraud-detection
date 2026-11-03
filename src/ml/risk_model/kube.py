@@ -32,6 +32,7 @@ TRAINJOB = ("trainer.kubeflow.org", "v1alpha1", "trainjobs")
 EXPERIMENT = ("kubeflow.org", "v1beta1", "experiments")
 INFERENCE = ("serving.kserve.io", "v1beta1", "inferenceservices")
 INFERENCE_NAME = MODEL_NAME
+CHALLENGER_NAME = f"{MODEL_NAME}-challenger"
 SOURCE_URI = "internal.serving.kserve.io/storage-initializer-sourceuri"
 RUNTIME_NAME = "payment-risk-triton"
 AUTOSCALER_CLASS = "serving.kserve.io/autoscalerClass"
@@ -200,17 +201,17 @@ def model_uri(version):
     return f"model-registry://{INFERENCE_NAME}/{version}"
 
 
-def inference_service(version, predictor):
-    """Creates the InferenceService for a model version, or replaces its whole predictor section.
+def inference_service(version, predictor, name=INFERENCE_NAME):
+    """Creates the InferenceService `name` for a model version, or replaces its whole predictor section.
 
     `predictor` holds the chart's serving settings, such as replicas, resources and node selectors.
+    The champion and the challenger serve the same registered model under different service names.
     """
-    name = INFERENCE_NAME
     spec = {
         "serviceAccountName": SERVICE_ACCOUNT,
         **predictor,
         "model": {
-            "modelFormat": {"name": name},
+            "modelFormat": {"name": INFERENCE_NAME},
             "runtime": RUNTIME_NAME,
             "storageUri": model_uri(version),
         },

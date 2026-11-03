@@ -5,6 +5,7 @@
 #    cutoff: str [Default: '']
 #    force: bool [Default: False]
 #    lag_days: int [Default: 1.0]
+#    role: str [Default: 'champion']
 #    test: str [Default: '']
 #    test_days: int [Default: 14.0]
 #    train: str [Default: '']
@@ -132,6 +133,8 @@ components:
                   producerTask: gate
               pipelinechannel--plan-windows-run:
                 componentInputParameter: pipelinechannel--plan-windows-run
+              pipelinechannel--role:
+                componentInputParameter: pipelinechannel--role
               pipelinechannel--trigger:
                 componentInputParameter: pipelinechannel--trigger
               pipelinechannel--tune-params-experiment:
@@ -336,6 +339,8 @@ components:
           parameterType: STRING
         pipelinechannel--plan-windows-validation:
           parameterType: STRING
+        pipelinechannel--role:
+          parameterType: STRING
         pipelinechannel--training_set_snapshot:
           parameterType: STRING
         pipelinechannel--trigger:
@@ -378,6 +383,8 @@ components:
           - record-version
           inputs:
             parameters:
+              role:
+                componentInputParameter: pipelinechannel--role
               run_id:
                 runtimeValue:
                   constant: '{{$.pipeline_job_uuid}}'
@@ -400,6 +407,8 @@ components:
         pipelinechannel--gate-report:
           parameterType: STRING
         pipelinechannel--plan-windows-run:
+          parameterType: STRING
+        pipelinechannel--role:
           parameterType: STRING
         pipelinechannel--trigger:
           parameterType: STRING
@@ -586,6 +595,8 @@ components:
     executorLabel: exec-roll-out
     inputDefinitions:
       parameters:
+        role:
+          parameterType: STRING
         run_id:
           parameterType: STRING
         version:
@@ -959,6 +970,8 @@ deploymentSpec:
         - '{{$.inputs.parameters[''run_id'']}}'
         - --version
         - '{{$.inputs.parameters[''version'']}}'
+        - --role
+        - '{{$.inputs.parameters[''role'']}}'
         - --out
         - deployed
         - '{{$.outputs.parameters[''deployed''].output_file}}'
@@ -1101,6 +1114,8 @@ root:
               taskOutputParameter:
                 outputParameterKey: validation
                 producerTask: plan-windows
+            pipelinechannel--role:
+              componentInputParameter: role
             pipelinechannel--training_set_snapshot:
               componentInputParameter: training_set_snapshot
             pipelinechannel--trigger:
@@ -1166,6 +1181,10 @@ root:
         defaultValue: 1.0
         isOptional: true
         parameterType: NUMBER_INTEGER
+      role:
+        defaultValue: champion
+        isOptional: true
+        parameterType: STRING
       test:
         defaultValue: ''
         isOptional: true

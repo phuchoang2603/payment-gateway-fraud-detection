@@ -12,9 +12,9 @@ def payment_risk_rollout(environment):
         name="payment-risk-rollout",
         description="Serve a registered payment-risk version that passed its gate, or return to an earlier one.",
     )
-    def rollout(version: str):
+    def rollout(version: str, role: str = "champion"):
         configure(
-            roll_out(run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER, version=version),
+            roll_out(run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER, version=version, role=role),
             nodes=environment.nodes,
             storage=False,
         )

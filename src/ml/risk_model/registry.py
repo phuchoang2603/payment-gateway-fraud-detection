@@ -109,6 +109,36 @@ class RegistryClient:
             raise ValueError(f"{self.name} {version} did not pass the evaluation gate")
         return properties
 
+    def challenger(self):
+        """Returns the name of the live challenger version, or None."""
+        for version in self.versions():
+            properties = version.custom_properties or {}
+            if properties.get("stage") == "challenger" and version.state == ModelVersionState.LIVE:
+                return version.name
+        return None
+
+    def mark_challenger(self, version, run_id):
+        """Makes a version the live challenger and archives the challenger it replaces."""
+        for other in self.versions():
+            properties = dict(other.custom_properties or {})
+            if other.name == version:
+                other.state = ModelVersionState.LIVE
+                properties.update(stage="challenger", deployed_by_run=run_id)
+            elif properties.get("stage") == "challenger":
+                other.state = ModelVersionState.ARCHIVED
+                properties["stage"] = "archived"
+            else:
+                continue
+            other.custom_properties = properties
+            self.client.update(other)
+
+    def retire(self, version):
+        """Archives a version that is no longer served, such as an aborted challenger."""
+        found = self.get(version)
+        found.state = ModelVersionState.ARCHIVED
+        found.custom_properties = {**(found.custom_properties or {}), "stage": "archived"}
+        self.client.update(found)
+
     def promote(self, version, run_id):
         """Makes a version the live production one and archives the version it replaces."""
         for other in self.versions():

@@ -364,7 +364,13 @@ def record_version(*, snapshot, model_uri, report, fit, params, run_id, experime
     gate_report, run = read_json(report), read_json(fit)
     registry = RegistryClient()
     version = registry.next_version()
-    triton.package(model_uri, version, provenance["features"], drift.edges_of(run["reference"]))
+    triton.package(
+        model_uri,
+        version,
+        provenance["features"],
+        drift.edges_of(run["reference"]),
+        gate_report["thresholds"]["decline"],
+    )
     registry.register(
         version,
         model_uri,
@@ -392,15 +398,28 @@ def record_version(*, snapshot, model_uri, report, fit, params, run_id, experime
     return {"version": version}
 
 
-def roll_out(*, version, run_id):
-    """Serves a passing version, checks it answers with a score, then promotes it.
+def roll_out(*, version, run_id, role: str = "champion"):
+    """Serves a passing version as the champion or the challenger, checks it answers with a score, then records it.
 
-    A version that fails to serve or to score restores the previous production version and raises.
+    A champion that fails to serve or to score restores the previous production version and raises. A
+    challenger that fails is removed and raises, and leaves the champion alone.
     """
     registry = RegistryClient()
     registry.require_passing(version)
-    previous = registry.production()
     predictor = json.loads(os.environ.get("SERVING_PREDICTOR", "{}"))
+    if role == "challenger":
+        champion = registry.production()
+        if champion is None or champion == version:
+            raise ValueError("a challenger needs a different production version to run beside")
+        kube.inference_service(version, predictor, kube.CHALLENGER_NAME)
+        try:
+            triton.probe(kube.wait_ready(kube.CHALLENGER_NAME, version), version)
+        except Exception:
+            kube.delete(kube.INFERENCE, kube.CHALLENGER_NAME)
+            raise
+        registry.mark_challenger(version, run_id)
+        return {"deployed": version, "previous": champion}
+    previous = registry.production()
     kube.inference_service(version, predictor)
     try:
         triton.probe(kube.wait_ready(kube.INFERENCE_NAME, version), version)

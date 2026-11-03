@@ -40,6 +40,7 @@ def payment_risk_training(environment):
         lag_days: int = 1,
         force: bool = False,
         trigger: str = "",
+        role: str = "champion",
     ):
         run_id = dsl.PIPELINE_JOB_ID_PLACEHOLDER
 
@@ -168,6 +169,7 @@ def payment_risk_training(environment):
                     roll_out(
                         run_id=run_id,
                         version=registered.outputs["version"],
+                        role=role,
                     ),
                     nodes=environment.nodes,
                     storage=False,

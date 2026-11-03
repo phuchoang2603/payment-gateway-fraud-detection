@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,6 +30,8 @@ const (
 	inputName    = "input__0"
 	outputName   = "output__0"
 	headerLength = "Inference-Header-Content-Length"
+	maxReads     = 20
+	retryAfter   = time.Minute
 )
 
 var (
@@ -47,24 +50,31 @@ type Config struct {
 	Bins        metric.Int64Counter
 }
 
-// served is what the client knows of the model Triton serves: the registry version it was packaged as, the feature
-// order that packaging recorded and, when it recorded them, each feature's bin edges with the attributes that count a
-// value into each bin (the last bin is the missing one).
+// served is what the client knows of one model version Triton serves: the registry version it was packaged as, the
+// feature order and decline threshold that packaging recorded (a zero threshold means it recorded none) and, when it
+// recorded them, each feature's bin edges with the attributes that count a value into each bin (the last bin is the
+// missing one).
 type served struct {
-	version string
-	order   []string
-	edges   [][]float64
-	options [][]metric.AddOption
+	version   string
+	order     []string
+	threshold float64
+	edges     [][]float64
+	options   [][]metric.AddOption
 }
 
 // Client calls a Triton model over the Open Inference Protocol v2. Features travel as one binary FP32 row in the
 // order the served model was packaged with, because the binary extension is the only way to send a missing value as NaN.
+// While two versions are served behind one address, answers come from either, so the client keeps what it learned of
+// each version and scores an answer under the version that made it.
 type Client struct {
-	config Config
-	http   *http.Client
-	now    func() time.Time
-	mu     sync.RWMutex
-	known  served
+	config  Config
+	http    *http.Client
+	now     func() time.Time
+	mu      sync.RWMutex
+	known   map[string]served
+	order   []string
+	pending map[string]int
+	gaveUp  map[string]time.Time
 }
 
 // New returns a client for an `http` model server endpoint and a Kubernetes-style model name.
@@ -74,7 +84,7 @@ func New(config Config) (*Client, error) {
 		return nil, errors.New("invalid model endpoint, name or timeout")
 	}
 	transport := &http.Transport{DialContext: (&net.Dialer{Timeout: config.DialTimeout}).DialContext, MaxConnsPerHost: 64, MaxIdleConns: 64, MaxIdleConnsPerHost: 64, IdleConnTimeout: time.Minute}
-	return &Client{config: config, http: &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, now: time.Now}, nil
+	return &Client{config: config, known: map[string]served{}, pending: map[string]int{}, gaveUp: map[string]time.Time{}, http: &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, now: time.Now}, nil
 }
 
 // Close releases the client's idle connections.
@@ -105,29 +115,34 @@ func row(features application.FeatureObservation, order []string) []float32 {
 	return values
 }
 
-// Score sends one row and returns the observation: the model's version and score, or a timeout or error status.
-// The caller's context is the only deadline. A score from a model version other than the one the feature order
-// belongs to is discarded and the order is read again on the next call, so a rollout never scores a mismatched row.
+// Score sends one row and returns the observation: the model's version, score and decline threshold, or a timeout or
+// error status. The caller's context is the only deadline. A score from a version whose configuration the client has
+// not read, or whose feature order differs from the one the row was laid out in, is discarded, and the configuration is
+// read again on the next call, so a rollout never scores a mismatched row.
 func (c *Client) Score(ctx context.Context, features application.FeatureObservation) (observation application.ModelObservation) {
 	observation = application.ModelObservation{Name: c.config.Model, Status: application.ModelError}
 	defer func() { observation.ReadAt = c.now().UTC() }()
-	layout, err := c.layout(ctx)
+	order, err := c.layout(ctx)
 	if err != nil {
 		observation.Status = failureStatus(ctx, err)
 		return observation
 	}
-	values := row(features, layout.order)
+	values := row(features, order)
 	score, version, err := c.infer(ctx, values)
 	if err != nil {
 		observation.Status = failureStatus(ctx, err)
 		return observation
 	}
-	if version != layout.version {
-		c.forget(layout)
+	layout, found := c.lookup(version)
+	if !found {
+		c.want(version)
+		return observation
+	}
+	if !slices.Equal(layout.order, order) {
 		return observation
 	}
 	c.count(ctx, layout, values)
-	observation.Status, observation.Version, observation.Score = application.ModelAvailable, version, &score
+	observation.Status, observation.Version, observation.Score, observation.Threshold = application.ModelAvailable, version, &score, layout.threshold
 	return observation
 }
 
@@ -145,29 +160,50 @@ func (c *Client) count(ctx context.Context, layout served, values []float32) {
 	}
 }
 
-func (c *Client) layout(ctx context.Context) (served, error) {
+// layout returns the feature order rows are laid out in. It reads the model's configuration when the client knows no
+// version yet, and again while an answer from a version it has not read is waiting to be learned.
+func (c *Client) layout(ctx context.Context) ([]string, error) {
 	c.mu.RLock()
-	known := c.known
+	order, waiting := c.order, len(c.pending) > 0
 	c.mu.RUnlock()
-	if len(known.order) > 0 {
-		return known, nil
+	if len(order) > 0 && !waiting {
+		return order, nil
 	}
 	fetched, err := c.fetch(ctx)
 	if err != nil {
-		return served{}, err
+		if len(order) > 0 {
+			return order, nil
+		}
+		return nil, err
 	}
-	c.mu.Lock()
-	c.known = fetched
-	c.mu.Unlock()
-	return fetched, nil
-}
-
-func (c *Client) forget(stale served) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.known.version == stale.version {
-		c.known = served{}
+	c.known[fetched.version] = fetched
+	delete(c.pending, fetched.version)
+	for version := range c.pending {
+		if c.pending[version]++; c.pending[version] > maxReads {
+			delete(c.pending, version)
+			c.gaveUp[version] = c.now()
+		}
 	}
+	c.order = fetched.order
+	return c.order, nil
+}
+
+func (c *Client) lookup(version string) (served, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	layout, found := c.known[version]
+	return layout, found
+}
+
+func (c *Client) want(version string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, waiting := c.pending[version]; waiting || c.now().Sub(c.gaveUp[version]) < retryAfter {
+		return
+	}
+	c.pending[version] = 0
 }
 
 func (c *Client) address(path string) string {
@@ -198,6 +234,9 @@ func (c *Client) fetch(ctx context.Context) (served, error) {
 		return served{}, errInvalid
 	}
 	known := served{version: version, order: order}
+	if threshold, err := strconv.ParseFloat(config.Parameters["decline_threshold"].StringValue, 64); err == nil && threshold > 0 && threshold <= 1 {
+		known.threshold = threshold
+	}
 	c.profile(&known, config.Parameters["bin_edges"].StringValue)
 	return known, nil
 }

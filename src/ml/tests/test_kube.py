@@ -316,6 +316,15 @@ def test_a_predictor_with_autoscaling_selects_the_keda_autoscaler_class(cluster)
     }
 
 
+def test_a_challenger_service_has_its_own_name_and_serves_the_same_registered_model(cluster):
+    """The service name changes, and the model format and the registry URI stay the registered model's."""
+    kube.inference_service("v3", {"minReplicas": 1}, kube.CHALLENGER_NAME)
+    ((_, _, body),) = cluster.created
+    assert body["metadata"]["name"] == "payment-risk-challenger"
+    model = body["spec"]["predictor"]["model"]
+    assert model["modelFormat"] == {"name": "payment-risk"} and model["storageUri"].endswith("/v3")
+
+
 def test_an_error_other_than_not_found_reading_the_inference_service_is_raised(monkeypatch):
     """Only a missing service is created; any other error propagates."""
 
