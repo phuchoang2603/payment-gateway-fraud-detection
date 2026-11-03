@@ -42,7 +42,7 @@ One kagent `ModelConfig`, `default-model-config`, used by every agent: provider 
 
 ![kagent model config: default-model-config in llm-agents, key from the Secret llm-gateway-agents, base URL http://agentgateway.llm.svc.cluster.local/v1](images/agents-modelconfig.png)
 
-The configuration evidence has two parts: the screenshot above shows the base URL, while [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) generates that URL as `http://agentgateway.llm.svc.cluster.local/v1` and binds the same ModelConfig to the templates. The [gateway checks](gateway.md#checks-on-dev) record successful authenticated model/tool calls and denied direct access. To prove a new release end to end, capture its ModelConfig, one agent tool/model trace and the matching gateway route counters for the same request window; a configuration screenshot by itself establishes intent rather than traffic traversal.
+[`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) generates this shared base URL and binds the ModelConfig to every template. Pair the configuration capture with [gateway call/mesh checks](gateway.md#checks-on-dev); a new end-to-end proof needs one trace matched to gateway route counters.
 
 ## Agents
 

@@ -22,6 +22,8 @@ Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT
 
 ## Lakehouse
 
+On a fresh bucket, initialize `runs/payment-gateway/spark-events/` with a hidden `.keep` object before submitting Spark: its event logger requires an existing directory prefix.
+
 Tables are Iceberg, registered in the Polaris REST catalog that the `lakehouse` chart deploys. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
 
 The recorded AWS v19 backfill held Bronze in full, and Silver and Gold from 2025-10-29 to 2026-10-28; see [the run](offline.md#prod-v19-run). Those totals are not a verification of the fresh GCP deployment.
@@ -35,7 +37,7 @@ The recorded AWS v19 backfill held Bronze in full, and Silver and Gold from 2025
 | Z-order | `silver.attempts` by `customer_id` and `payment_method_fingerprint`, one month at a time, on demand (`maintain-lakehouse task=zorder start end`) | Feature queries filter one customer or card over a window; clustering lets file statistics skip files. The report compares one customer's planned files and bytes for that month before and after |
 | Maintenance | All tables, nightly | `expire_snapshots` (older than 7 days, last 10 kept) and dropping `audit-*` branches older than 7 days, which would otherwise pin their files; no full-table rewrites, so its cost does not grow with history |
 
-**Evidence (prod v19, `maintain-lakehouse-zorder-8z67x`, 2026-11-01).**
+**Recorded AWS evidence (v19, `maintain-lakehouse-zorder-8z67x`, 2026-11-01).**
 
 - **Partitioning prunes:** one Bronze day (2025-10-29) plans 4 of 2,904 files and 282 MB of 113.7 GB.
 - **Z-order does not prune at this layout:** September 2026 of `silver.attempts` was rewritten with `zorder(customer_id, payment_method_fingerprint)` in 70 seconds, and the month's busiest customer still plans all 30 files (2.50 GB before, 2.52 GB after). Each day partition is one file under the 256 MB target, so the customer appears in every file and file statistics cannot skip any; clustering only helps once a partition spans several files, or through Parquet row-group statistics, which planning does not count. Silver therefore keeps its time order and is not Z-ordered on a schedule.
@@ -46,9 +48,13 @@ Kafka offsets are derived from the Bronze rows themselves, not from snapshot met
 
 ### Implementation references
 
-[`batch/spark.py`](../../src/data-pipeline/batch/batch/spark.py) configures the Iceberg REST catalog and S3 clients. [`bronze/ingest.py`](../../src/data-pipeline/batch/batch/bronze/ingest.py) defines the day partitions and historical schema merge; [`silver/curate.py`](../../src/data-pipeline/batch/batch/silver/curate.py) defines deduplication and local write order. [`batch/lakehouse.py`](../../src/data-pipeline/batch/batch/lakehouse.py) owns audit-branch writes and table properties, and [`batch/maintenance.py`](../../src/data-pipeline/batch/batch/maintenance.py) implements maintenance. The SQL warehouse's native table/index definitions are in [`gold/sql/marts`](../../src/data-pipeline/batch/batch/gold/sql/marts); [`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py) builds and publishes their staging partitions.
+Catalog/session setup: [`spark.py`](../../src/data-pipeline/batch/batch/spark.py). Table properties and branch writes: [`lakehouse.py`](../../src/data-pipeline/batch/batch/lakehouse.py). Maintenance: [`maintenance.py`](../../src/data-pipeline/batch/batch/maintenance.py). Mart DDL/build: [`gold/sql/marts`](../../src/data-pipeline/batch/batch/gold/sql/marts), [`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py). Schema merge and dedup belong to [offline processing](offline.md#spark-processing).
 
-Read the measurements below by the operation they measure: partition pruning reduces planned input, the DP1 fanout change removes a write shuffle, and ClickHouse indexes reduce query scans. They do not establish a schema-evolution or deduplication speedup. Z-order was measured and rejected for this one-file-per-day layout; it is not an adopted optimization.
+### Write distribution results
+
+Recorded AWS DP1 hash distribution wrote 202 GB of shuffle. Historical Bronze/Silver input already touches few day partitions, so local fanout writes remove that redistribution. This is write-layout evidence, not a skew-join comparison.
+
+![DP1 historical hash-distribution shuffle before local fanout](images/spark-dp1-hash-write-stages.png)
 
 ## Warehouse
 
@@ -56,7 +62,7 @@ ClickHouse reads the Iceberg tables directly through the `lakehouse` DataLakeCat
 
 ### Running SQL inside ClickHouse's limits
 
-The prod server has about 3.4 GiB of memory, and the `marts` profile caps a query at 2 GiB. Two patterns keep the checks and the mart builds inside that:
+The `marts` profile caps queries at 2 GiB. Three techniques kept the recorded builds/checks within that limit:
 
 - **Spill instead of hash.** Every contract rule runs with external aggregation (800 MB threshold), external sort (400 MB), `join_algorithm = 'full_sorting_merge'`, `max_threads = 2` and `max_block_size = 16384`. On v19, a full-history amount/context join finished this way in 18m48s at 1.77 GiB peak, writing 17.8 GiB of sort spill, after hash joins exceeded the server.
 - **Read only the run's range.** Rules are scoped to the audited commit's range with `additional_table_filters` (see [range-scoped validation](orchestration-governance.md#range-scoped-validation)), so their cost follows one month instead of the whole table.
@@ -90,11 +96,11 @@ DP3 builds two native MergeTree marts in the ClickHouse `marts` database ([DDL](
 
 Time comes first because almost every dashboard and tool query has a time range; a merchant-first key would make network-wide time queries scan every partition. The hot merchant holds about half of all attempts, so Q1 is reported for it and for a median merchant. No projections: a customer-ordered copy would double storage on the 30 GiB volume shared with Langfuse.
 
-The ID and fingerprint columns use `CODEC(ZSTD(3))`. They hold random UUIDs and SHA-256 hex, which LZ4 barely compresses: before the codec the fact took about 240 bytes a row (6.4 GiB for May 6 – June 30, 2026), and a 180-day window would not have fitted the 30 GiB volume with a build's staging copies. On a 2M-row sample ZSTD stored a UUID string in 18.5 bytes instead of 35.5 and a fingerprint in 32.2 instead of 63.4, close to the native `UUID` and `FixedString(32)` sizes, so the columns stay strings. A build stages about 13 GiB (attempts, label summary, fact) next to the live fact, and ClickHouse keeps the parts its merges replace for `old_parts_lifetime`; at the default 480 s those leftovers filled the volume during September 2026's build, so the server keeps them 60 s.
+ID/fingerprint columns use `CODEC(ZSTD(3))`: before the codec the fact took about 240 bytes a row (6.4 GiB for May 6 – June 30, 2026), and a 180-day window would not have fitted the 30 GiB volume with a build's staging copies. On a 2M-row sample ZSTD stored a UUID string in 18.5 bytes instead of 35.5 and a fingerprint in 32.2 instead of 63.4, close to the native `UUID` and `FixedString(32)` sizes, so the columns stay strings. A build stages about 13 GiB (attempts, label summary, fact) next to the live fact, and ClickHouse keeps the parts its merges replace for `old_parts_lifetime`; at the default 480 s those leftovers filled the volume during September 2026's build, so the server keeps them 60 s.
 
-Retention is a wall-clock `TTL` of 90 days with `ttl_only_drop_parts`, matching the rolling window each build inserts; `marts.build_info` records the window, the rebuilt days and the Silver snapshots. Builds join with external sort-merge and spill, the settings the v19 checks needed above.
+Retention is a wall-clock `TTL` of 90 days with `ttl_only_drop_parts`, matching the rolling window each build inserts; `marts.build_info` records the window, the rebuilt days and the Silver snapshots. Checks use external sort-merge and spill; mart construction uses the bounded hash joins above.
 
-**Evidence.** Each fixed query on the prod marts over the full window (2026-08-04 to 2026-10-28: 44.2M rows, 576 parts, 5,732 granules), from `EXPLAIN indexes = 1` and `system.query_log`, warm, with the query and query-condition caches off. The hot merchant is the one with the most attempts, the customer the one with the most attempts and the card the one shared by the most customers.
+**Recorded AWS evidence.** Each fixed query on the marts over the full window (2026-08-04 to 2026-10-28: 44.2M rows, 576 parts, 5,732 granules), from `EXPLAIN indexes = 1` and `system.query_log`, warm, with the query and query-condition caches off. The hot merchant is the one with the most attempts, the customer the one with the most attempts and the card the one shared by the most customers.
 
 | Query | Pruned by | Granules read | Rows read | Time | Without skip indexes |
 |---|---|---|---|---|---|
@@ -114,3 +120,26 @@ What it shows:
 - **The daily mart answers KPIs without the fact:** 12 ms against 340 ms for the same merchant and month from attempts.
 
 The on-demand `warehouse-benchmark` can additionally compare raw Iceberg and an unsorted copy, but it makes a second 6 GiB copy of the fact on the shared 30 GiB volume, so it was not run on prod.
+
+## Schemas and naming
+
+Table schemas are the data-product contracts, with generated references under [`products/`](products). The namespace or database names the layer and engine; a prefix names the role. Timestamps end in `_at` (business time) or `_ts` (SCD validity), surrogate keys in `_sk`, booleans start with `is_`; Feast's `event_timestamp` and `created` keep their names.
+
+| Layer | Location | Tables |
+|---|---|---|
+| Bronze | Iceberg `bronze` | `payment_events`, `fraud_labels`, `rejected_records` |
+| Silver | Iceberg `silver` | `payment_events`, `attempts`, `labels`, `rejected_events` |
+| Gold, ML | Iceberg `gold` | `dim_customer`, `feat_customer_daily`, `feat_payment_method_daily`, `label_attempt` |
+| Gold, analytics | ClickHouse `marts` | `fact_payment_attempt`, `fact_merchant_day`, `build_info` |
+
+```mermaid
+erDiagram
+    dim_customer ||--o{ fact_payment_attempt : "customer, valid at started_at"
+    fact_merchant_day ||--o{ fact_payment_attempt : "merchant, day of started_at"
+    fact_payment_attempt ||--o{ label_attempt : "attempt key"
+    feat_customer_daily ||--o{ label_attempt : "customer, latest event_timestamp <= label event_timestamp"
+    feat_payment_method_daily ||--o{ label_attempt : "card, latest event_timestamp <= label event_timestamp"
+    dim_customer ||--o{ feat_customer_daily : "customer"
+```
+
+Point-in-time rules: join `dim_customer` on the customer key with `valid_from_ts <= t` and `valid_to_ts` null or after `t`. Join a feature table to a label row on the entity key, taking the latest feature row with `event_timestamp` at or before the label's `event_timestamp`; filter labels by `label_available_at` at or before the training cutoff.

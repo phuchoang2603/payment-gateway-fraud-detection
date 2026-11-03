@@ -2,7 +2,7 @@
 
 Argo Workflows orchestrates the finite data pipelines; OpenMetadata is the catalog for lineage, contracts and data validation. They stand in for the course's Airflow and DataHub. Connections and credentials are defined once in the charts and Doppler and reused by every pipeline.
 
-The [evidence map](review-evidence.md) links each review criterion to code, existing UI captures and the remaining measurements. Historical backfill captures below remain evidence of those recorded runs; they are not a health check for the fresh GCP deployment.
+[Home](../Home.md#data-platform) maps coursework criteria to these pages. Workflow/catalog captures below describe their recorded runs.
 
 ## Workflows
 
