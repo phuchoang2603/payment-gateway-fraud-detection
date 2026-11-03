@@ -59,7 +59,22 @@ Dev exploration used snapshot `8122563810631209408`: training October 14–18, v
 | `payment_method_amount_to_30d_avg` | 0.9598 |
 | `scored_hour_utc` | 0.9597 |
 
-This small sample supports retaining the customer ratio and reconsidering the other two candidates; the feature service has not been changed. CPU XGBoost reached test PR-AUC 0.9881 against the linear baseline's 0.9035. The GPU TrainJob exceeded its active deadline, so this notebook produced no GPU comparison, gate result or saved GPU model. Subsequent cells reported missing variables because execution continued after that failure.
+A single validation day cannot rank these, because dev fraud arrives in bursts: the seven days hold 5 to 131 positives each. The notebook therefore also scores each feature set walk-forward on the last four days, training on the earlier days with three seeds. The table gives the change in mean PR-AUC against all features, the days (of 4) on which the set was worse, and the worst day:
+
+| Removed | Change in PR-AUC | Days worse | Worst day |
+|---|---:|---:|---:|
+| `customer_amount_to_30d_avg` | -0.0076 | 2 | -0.0468 |
+| `payment_method_amount_to_30d_avg` | +0.0266 | 2 | -0.0182 |
+| `scored_hour_utc` | -0.0134 | 3 | -0.0387 |
+| view `customer_daily` | +0.1005 | 1 | -0.0006 |
+| view `customer_stream` | -0.0195 | 3 | -0.0398 |
+| view `payment_method_daily` | +0.0148 | 2 | -0.0372 |
+| view `payment_method_stream` | +0.0019 | 1 | -0.0337 |
+| view `request_features` | -0.0870 | 4 | -0.1162 |
+
+The two methods disagree on the direction for each derived candidate, so the dev data supports no change to the feature service, and it has not been changed. Only the `request_features` and `customer_stream` views hurt on most days when removed. `request_features__item_count` is 1 on all 1,490 rows because the simulator builds every order from one purchase. Stream features are null for 53% of legitimate and 13% of fraudulent attempts, so a missing stream snapshot is itself a signal. The production run over the full window decides the rest.
+
+CPU XGBoost reached test PR-AUC 0.9881 against the linear baseline's 0.9035. The GPU TrainJob stayed pending until its active deadline because `dev-server1`, the only GPU node, had 90% of its CPU requested, including the running Notebook, which now avoids GPU nodes. This run produced no GPU comparison, gate result or saved GPU model; later cells reported missing variables because execution continued after that failure.
 
 ## Drift
 
