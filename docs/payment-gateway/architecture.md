@@ -76,7 +76,22 @@ sequenceDiagram
 | Hosted checkout: `/checkout/` | Browser cookie, cross-site request protection and one key retained across form resubmission |
 | Synthetic tokenization: `/v1/payment-methods` | Synthetic integration only; rejects cards outside the fictional allow-list |
 
-Only `/checkout/` is publicly routed. Merchant JSON APIs and gRPC services remain private under Istio service-account authorization. Vault exposes metadata to Edge and fixture resolution only to the processor. Tokens and card data stay out of events, Fraud inputs, Redis and analytics.
+Vault exposes metadata to Edge and fixture resolution only to the processor. Tokens and card data stay out of events, Fraud inputs, Redis and analytics.
+
+## Routing and gateway
+
+Istio Gateway API is the platform equivalent of the rubric's NGINX ingress. The app owns its Gateway and HTTPRoute; the platform owns the controller and Cloudflare tunnel.
+
+`Client HTTPS → Cloudflare → tunnel → Istio Gateway → edge / edge-canary`
+
+| Setting | Configuration |
+|---|---|
+| Dev / prod hostname | `pay-gateway-dev.phuchoang.sbs` / `pay-gateway.phuchoang.sbs` in [environment values](../../infra/charts/payment-gateway) |
+| Tunnel and ClusterIP Gateway | [`ingress.yaml`](../../infra/charts/payment-gateway/templates/ingress.yaml) |
+| `/checkout/` prefix, hostname, HTTPS forwarding header and timeouts | [`http-route.yaml`](../../infra/charts/payment-gateway/templates/http-route.yaml) |
+| Stable/canary weights | [Rollouts strategy](../../infra/charts/payment-gateway/templates/_rollout.tpl); prod acceptance on 2026-11-03: 10/25/50% stages, then promotion |
+
+TLS terminates at Cloudflare; the tunnel targets the internal HTTP listener. Public `/v1/payments` has no route and returned HTTP 404 during prod acceptance. Internal callers use the stable Edge Service; service-account policies enforce strict mTLS for private service calls.
 
 ## Consistency and recovery
 

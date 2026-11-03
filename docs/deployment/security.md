@@ -1,4 +1,4 @@
-# Security, secrets and routing
+# Security and secrets
 
 ## Central secret delivery
 
@@ -26,30 +26,13 @@ Card data is synthetic. The vault encrypts fictional fixtures and issues opaque 
 
 Gateway acceptance on 2026-10-23 covers synthetic tokenization, authenticated checkout and signed webhook delivery. Central secret delivery is configured in the linked manifests; a sanitized ExternalSecret readiness capture is still needed for the rubric's visual proof.
 
-## Routing and gateway
+## Gateway access controls
 
-Istio Gateway API is the platform equivalent of the rubric's NGINX ingress. The app owns its Gateway and HTTPRoute; the platform owns the controller and Cloudflare tunnel.
-
-### Public checkout
-
-`Client HTTPS → Cloudflare → tunnel → Istio Gateway → edge / edge-canary`
-
-| Setting | Configuration |
-|---|---|
-| Dev / prod hostname | `pay-gateway-dev.phuchoang.sbs` / `pay-gateway.phuchoang.sbs` in [environment values](../../infra/charts/payment-gateway) |
-| Tunnel and ClusterIP Gateway | [`ingress.yaml`](../../infra/charts/payment-gateway/templates/ingress.yaml) |
-| `/checkout/` prefix, hostname, HTTPS forwarding header and timeouts | [`http-route.yaml`](../../infra/charts/payment-gateway/templates/http-route.yaml) |
-| Stable/canary weights | [Rollouts strategy](../../infra/charts/payment-gateway/templates/_rollout.tpl); prod acceptance on 2026-11-03: 10/25/50% stages, then promotion |
-
-TLS terminates at Cloudflare; the tunnel targets the internal HTTP listener. Public `/v1/payments` has no route and returned HTTP 404 during prod acceptance. Internal callers use the stable Edge Service; Fraud and the other JSON/gRPC APIs are ClusterIP-only under strict mTLS and service-account authorization.
-
-### Authentication and other gateways
-
-Hosted checkout uses bounded checkout credentials; internal merchant calls use integration API keys hashed with SHA-256. This is separate from the rubric's username/password gateway example.
+Hosted checkout uses session-bound credentials; internal merchant calls use integration API keys hashed with SHA-256.
 
 | Surface | Authentication and policy |
 |---|---|
 | Models, MCP tools and agents | agentgateway: per-client API keys, rate/token limits and mesh-only backend access; dev checks returned 401 without a key and 20 × 429 in a 160-request burst |
-| Grafana and other platform UIs | Platform-owned ingress and access configuration in [`talos-proxmox/apps`](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps) |
+| Grafana and other platform UIs | Platform-owned access configuration in [`talos-proxmox/apps`](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps) |
 
 UI access-control screenshots and a dedicated feature-API gateway rate-limit acceptance remain missing.

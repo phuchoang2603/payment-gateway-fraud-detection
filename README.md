@@ -36,7 +36,7 @@ The platform (Terraform/OpenTofu provisioning, Talos clusters on Proxmox for dev
 
 ![Deployment and security: GitHub Actions, Terraform and OpenTofu roots, dev and prod Argo CD, Istio canary delivery, Doppler secrets, KEDA and cloud node autoscaling, and VictoriaMetrics observability](docs/deployment/images/deployment-security.png)
 
-Docs: [CI, validation and verification](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/ci) · [infrastructure and IaC](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/infra) · [Docker, CD and canary deployment](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/cd) · [observability](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/deployment-observability) · [security, secrets and routing](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/security)
+Docs: [CI, validation and verification](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/ci) · [infrastructure and IaC](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/infra) · [Docker, CD and canary deployment](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/cd) · [observability](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/deployment-observability) · [security and secrets](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/security)
 
 ## Repository structure
 

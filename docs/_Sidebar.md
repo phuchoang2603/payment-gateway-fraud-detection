@@ -34,4 +34,4 @@
 - [Infrastructure and IaC](deployment/infra.md)
 - [Docker, CD and canary deployment](deployment/cd.md)
 - [Observability](deployment/observability.md)
-- [Security, secrets and routing](deployment/security.md)
+- [Security and secrets](deployment/security.md)
