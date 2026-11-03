@@ -1,6 +1,8 @@
 # Online data
 
-Live gateway events and bounded historical replay use the same PyFlink feature operators. Both publish an epoch-scoped feature journal; the feature writer pushes updates to Feast/Redis and appends stream features to Iceberg. Spark handles the [offline path](offline.md); physical storage is covered in [storage](storage.md).
+Live gateway events and bounded historical replay use the same PyFlink feature operators. Both publish an epoch-scoped feature journal and persist stream features to Iceberg; the live feature writer also pushes updates to Feast/Redis. Spark handles the [offline path](offline.md); physical storage is covered in [storage](storage.md).
+
+## Live simulator
 
 ```mermaid
 flowchart LR
@@ -15,8 +17,6 @@ flowchart LR
     lb -.-> br
 ```
 
-## Live simulator
-
 - Tokenizes synthetic cards, creates payments and submits attempts through Edge with run-scoped idempotency keys; retries reuse the same key and content.
 - Publishes simulation-truth labels after each attempt and schedules chargebacks for successful fraud on `fraud.labels.v1`. Label availability is the actual publication time. The schedule is held in memory, so an interrupted run reports unfinished labels instead of claiming them.
 - Configuration comes from `SIMULATOR_CONFIG`, rendered by the `live-traffic` chart.
@@ -25,15 +25,9 @@ flowchart LR
 
 The simulator continues the historical entity world: it rebuilds the world from the manifest's recorded configuration and checks the manifest's `world_digest` before sending anything.
 
-## Historical replay
+<a id="streaming-features"></a>
 
-[`stream-history`](../../infra/charts/data-pipelines/templates/stream-history.yaml) plans bounded date units, seeds isolated Kafka topics from Bronze, runs Flink to `FINISHED`, writes history features, then cleans up and publishes lineage. [`history.py`](../../src/data-pipeline/streaming/fraud_streaming/history.py) owns planning/seeding; [`job.py`](../../src/data-pipeline/streaming/fraud_streaming/job.py) runs the shared operators with a logical seed clock. Historical topics and epoch `history-v19` are isolated from live `payments.events.v1` and `live-v19`; replay never overwrites live features.
-
-Run `stream-history` with `start`/`end` only after Bronze is published. Unit size and parallelism come from `features.historyUnitDays` and `features.historyParallelism` in the environment's values. [Orchestration](orchestration-governance.md#workflows) owns the workflow stages; [feature-store recovery](../ml/feature-store.md) owns materialization.
-
-## Streaming features
-
-### Runtime
+### Flink processing
 
 - Flink and PyFlink 2.2.1 on the platform's Flink operator, Kubernetes HA, checkpoints and savepoints in object storage under `runs/payment-gateway/flink/`.
 - Parallelism one; each manager requests one CPU, the TaskManager 2 GiB.
@@ -43,8 +37,6 @@ Run `stream-history` with `start`/`end` only after Bronze is published. Unit siz
 ### Windows
 
 The job reads only `attempt_started` events, keyed on the client `attempted_at`; risk decisions do not gate contributions. Per-customer and per-method attempt counts over 5 minutes, 1 hour and 24 hours, plus distinct customer devices over 24 hours, cover `[t − window, t)`. Per-window coverage stays unknown until the job has run for that window's length, and missing history is null, never zero. An attempt time after its observed availability fails the job. Long 7- and 30-day windows are computed offline by DP3, not by Flink; there is no HybridSource bootstrap. See [feature store](../ml/feature-store.md).
-
-### Window code
 
 Each keyed customer/method [`Entity`](../../src/data-pipeline/streaming/fraud_streaming/model.py) expires old entries before admitting pending ones. The admission loop is:
 
@@ -77,7 +69,7 @@ Consider a covered entity at 12:10 UTC, with no other attempts:
 | Attempt time 11:59 on the previous day, delivered at 12:10 | It is beyond the 24-hour retained horizon | `Packet.too_late` is true; the operator increments `too_late` and omits the contribution |
 | Existing identity with different business content | Keeping an arbitrary copy hides a conflict | The reject sink records `conflicting_duplicate` |
 
-These are boundary examples, not newly captured live output. In live mode [`Timeline`](../../src/data-pipeline/streaming/fraud_streaming/operators.py) uses processing-time timers while `Entity` applies attempt-time membership. Logical history replay uses seed-clock event-time timers. A watermark screenshot alone therefore cannot prove live late-arrival correctness. Too-late records are counted and logged; they do not have a dedicated too-late side-output topic. The rejects topic serves invalid or conflicting records.
+These are boundary examples, not newly captured live output. In live mode [`Timeline`](../../src/data-pipeline/streaming/fraud_streaming/operators.py) uses processing-time timers while `Entity` applies attempt-time membership. A watermark screenshot alone therefore cannot prove live late-arrival correctness. Too-late records are counted and logged; they do not have a dedicated too-late side-output topic. The rejects topic serves invalid or conflicting records.
 
 ### Metrics
 
@@ -88,7 +80,7 @@ These are boundary examples, not newly captured live output. In live mode [`Time
 | `lateness=lt_1m`, `1m_5m`, `5m_15m`, `15m_24h`, `too_late`, `attempts` | Processing time minus `attempted_at` for each new attempt, so configured and observed lateness can be compared |
 | `reject_class=<class>`, `rejected` | Dead-lettered records per class: `undecodable`, `invalid_event`, `invalid_context`, `conflicting_duplicate` |
 
-### Replay benchmark
+### Local correctness comparison
 
 [`fraud_streaming/benchmark.py`](../../src/data-pipeline/streaming/fraud_streaming/benchmark.py) replays a seeded workload with known shares through the job's own window, deduplication and horizon logic:
 - late attempts (5–15 minutes);
@@ -121,15 +113,73 @@ The handled variant's counters equal the injected workload: `too_late` 8, event 
 
 The chart summarizes the module defaults; the command above reproduces its values. It measures local correctness, not Flink throughput. Live too-late proof still needs an input older than 24 hours, the counter delta and unchanged feature contributions.
 
-## Historical replay optimization
+<a id="evidence"></a>
+
+### Dev validation
+
+One bounded dev run on 2026-10-29, from PR #101's dev releases. Prod was untouched.
+
+- **Run:** simulator run `e0810a50db3f41a4b6fb2b0f99b37c7a`, 11:17:10–12:18:31 UTC. Traffic was admitted for 3,600 s (until 12:17:10); held store-and-forward attempts kept flushing until the pod was removed.
+- **Configuration:** v18 manifest `a466e98e…cb553`, 1 payment/s, concurrency 4, `late_rate` 0.05 with 300–600 s delays, redelivery at 0.015.
+- **Flink:** job `a95a3fad89bf1791e9ce32b3453b8879`, epoch `live-v18`.
+- **Raw source:** `payments.events.v1`, read from the offsets at the run start. Bronze Kafka mode was not deployed in dev during the run.
+
+| Measure | Configured | Simulator report | Raw `payments.events.v1` | Flink metrics (11:51:40–12:12:49) |
+|---|---|---|---|---|
+| Late attempts | 5%, 300–600 s | 178 sent and 12 unsent at shutdown, of 3,600 admitted; delays 305–598 s | 178 of 3,590 unique attempt starts (4.96%) had `recorded_at − attempted_at` of 5–15 minutes; the other 3,412 were under 1 minute | lateness `5m_15m` 58, `1m_5m` 3, `lt_1m` 1,210, of 1,271 unique attempts (4.56% in `5m_15m`) |
+| Duplicates | 1.5% of committed events | 265 selected of 18,133 consumed (1.46%) | 265 extra deliveries over 18,133 unique event IDs (1.46%), all carrying the redelivery header | event `duplicates_dropped` 15 of 1,286 attempt-start deliveries (1.17%); attempt-stage duplicates 0 |
+| Too late | none injected | — | — | `too_late` never registered (0) |
+| Rejects | none injected | — | reject topic: 0 records | `rejected` never registered (0) |
+
+Flink counters reset on restart and count only attempt starts; raw-topic duplicate rates cover all event types. The `1m_5m` metric includes processing delay, so it need not equal network lateness. No too-late or poison records were injected in this live run; replay fixtures cover those paths locally.
+
+![Backpressure on the event deduplication operator](images/online-backpressure.png)
+
+*Same dev run at about 12:12 UTC: event deduplication is 0% backpressured, 95% idle and 5% busy.*
+
+The counters above came from Flink's REST API (`/jobs/<id>/vertices/<id>/metrics`), using port 6125 allowed by the Cilium policy. A UI metrics-panel capture is still missing.
+
+### Restart
+
+![Checkpoint history](images/online-checkpoints.png)
+
+*Before the restart, about 11:51 UTC (07:51 in the UI): checkpoints 171–180 completed every 10 s in about 0.7–1.2 s, at about 6.4 MB.*
+
+| Step | Result |
+|---|---|
+| TaskManager pod deleted | 11:51:38 UTC; last completed checkpoint 181 |
+| Job restored | from checkpoint 181 at 11:51:40.443 UTC, 2.4 s after deletion |
+| First new checkpoint | 182 completed at 11:52:43.455 UTC, about 65 s after deletion |
+| Journal integrity | `fraud.feature-updates.v2.live-v18` over the run: 13,159 updates for 5,746 entities, with 0 repeated or conflicting `(key, revision)` pairs and 0 revision regressions, across this restart and the upgrade restart before it |
+
+## Historical replay
+
+[`stream-history`](../../infra/charts/data-pipelines/templates/stream-history.yaml) plans bounded date units, seeds isolated Kafka topics from Bronze, runs Flink to `FINISHED`, writes history features, then cleans up and publishes lineage. [`history.py`](../../src/data-pipeline/streaming/fraud_streaming/history.py) owns planning/seeding; [`job.py`](../../src/data-pipeline/streaming/fraud_streaming/job.py) runs the shared operators with a logical seed clock. Historical topics and epoch `history-v19` are isolated from live `payments.events.v1` and `live-v19`; replay never overwrites live features.
+
+Run `stream-history` with `start`/`end` only after Bronze is published. Unit size and parallelism come from `features.historyUnitDays` and `features.historyParallelism` in the environment's values. [Orchestration](orchestration-governance.md#workflows) owns the workflow stages; [feature-store recovery](../ml/feature-store.md) owns materialization.
+
+### Flink processing and publication
+
+Replay uses the same [windows](#windows), [deduplication and rejects](#late-too-late-and-duplicate-trace) as live traffic. Instead of wall-clock processing-time timers, it advances event-time timers with the logical seed clock, so old attempts contribute at their historical availability time. Each unit runs at parallelism 1 to preserve ordering; separate units run concurrently. The history writer replaces only the unit's Iceberg rows and does not push to Redis.
+
+```mermaid
+flowchart LR
+    bronze[Published Bronze] --> seed[Seed isolated Kafka topics]
+    seed --> flink[Flink with logical seed clock]
+    flink --> journal[History feature journal]
+    journal --> writer[Feature writer]
+    writer --> iceberg[Iceberg stream features]
+```
+
+### Backpressure and optimization
+
+<a id="historical-replay-optimization"></a>
 
 <a id="backpressure"></a>
 
 Recorded AWS-era replay measurements; current settings come from the environment values.
 
 History replay drains seeded Kafka as fast as downstream operators accept it. Credit-based backpressure pauses source polling; Kafka retains the queued records.
-
-One unit is one job at parallelism 1, because replay needs a single ordered partition, so it cannot scale out.
 
 **Baseline** (7-day unit, 3 GiB TaskManager, JVM heap state): the aggregate operators are red at about 100% busy, and everything upstream is backpressured.
 
@@ -174,42 +224,3 @@ RocksDB fixed stability; aggregation remains the bottleneck at about 350 events/
 **Not adopted:** a 20,000-record Python bundle caused 40-second stalls and ~350-second checkpoints. Window counts are already incremental (0.16–0.67 ms/attempt outside Flink versus ~12 ms inside); merging dedup stages needs separate state/recovery validation.
 
 **Reproduce.** Port-forward `svc/fraud-streaming-history-v19-<YYYYMMDD>-rest`, open the job and pick an operator's **BackPressure** tab (`HIGH` above 90%), and use **Checkpoints** for durations and sizes. The same figures are at `/jobs/<id>/vertices/<id>/subtasks/metrics` (`busyTimeMsPerSecond`, `backPressuredTimeMsPerSecond`).
-
-## Evidence
-
-One bounded dev run on 2026-10-29, from PR #101's dev releases. Prod was untouched.
-
-- **Run:** simulator run `e0810a50db3f41a4b6fb2b0f99b37c7a`, 11:17:10–12:18:31 UTC. Traffic was admitted for 3,600 s (until 12:17:10); held store-and-forward attempts kept flushing until the pod was removed.
-- **Configuration:** v18 manifest `a466e98e…cb553`, 1 payment/s, concurrency 4, `late_rate` 0.05 with 300–600 s delays, redelivery at 0.015.
-- **Flink:** job `a95a3fad89bf1791e9ce32b3453b8879`, epoch `live-v18`.
-- **Raw source:** `payments.events.v1`, read from the offsets at the run start. Bronze Kafka mode was not deployed in dev during the run.
-
-### Configured versus observed
-
-| Measure | Configured | Simulator report | Raw `payments.events.v1` | Flink metrics (11:51:40–12:12:49) |
-|---|---|---|---|---|
-| Late attempts | 5%, 300–600 s | 178 sent and 12 unsent at shutdown, of 3,600 admitted; delays 305–598 s | 178 of 3,590 unique attempt starts (4.96%) had `recorded_at − attempted_at` of 5–15 minutes; the other 3,412 were under 1 minute | lateness `5m_15m` 58, `1m_5m` 3, `lt_1m` 1,210, of 1,271 unique attempts (4.56% in `5m_15m`) |
-| Duplicates | 1.5% of committed events | 265 selected of 18,133 consumed (1.46%) | 265 extra deliveries over 18,133 unique event IDs (1.46%), all carrying the redelivery header | event `duplicates_dropped` 15 of 1,286 attempt-start deliveries (1.17%); attempt-stage duplicates 0 |
-| Too late | none injected | — | — | `too_late` never registered (0) |
-| Rejects | none injected | — | reject topic: 0 records | `rejected` never registered (0) |
-
-Flink counters reset on restart and count only attempt starts; raw-topic duplicate rates cover all event types. The `1m_5m` metric includes processing delay, so it need not equal network lateness. No too-late or poison records were injected in this live run; replay fixtures cover those paths locally.
-
-![Backpressure on the event deduplication operator](images/online-backpressure.png)
-
-*Same dev run at about 12:12 UTC: event deduplication is 0% backpressured, 95% idle and 5% busy.*
-
-The counters above came from Flink's REST API (`/jobs/<id>/vertices/<id>/metrics`), using port 6125 allowed by the Cilium policy. A UI metrics-panel capture is still missing.
-
-### Restart
-
-![Checkpoint history](images/online-checkpoints.png)
-
-*Before the restart, about 11:51 UTC (07:51 in the UI): checkpoints 171–180 completed every 10 s in about 0.7–1.2 s, at about 6.4 MB.*
-
-| Step | Result |
-|---|---|
-| TaskManager pod deleted | 11:51:38 UTC; last completed checkpoint 181 |
-| Job restored | from checkpoint 181 at 11:51:40.443 UTC, 2.4 s after deletion |
-| First new checkpoint | 182 completed at 11:52:43.455 UTC, about 65 s after deletion |
-| Journal integrity | `fraud.feature-updates.v2.live-v18` over the run: 13,159 updates for 5,746 entities, with 0 repeated or conflicting `(key, revision)` pairs and 0 revision regressions, across this restart and the upgrade restart before it |
