@@ -57,6 +57,24 @@ For an incident, run `kubectl --kubeconfig ~/.kube/talos-prod.yaml argo rollouts
 
 Prod acceptance on 2026-11-03 preserved ready stable endpoints through Deployment adoption and removal. A candidate with no traffic aborted at its first measurement after the five-minute warm-up. A faulted candidate was rejected at 7.2% errors and insufficient traffic (97 requests against a minimum of 100), restoring stable/canary weights to 100/0; the rollout alert fired and resolved on retry. Argo CD reconciliation preserved active weights, internal callers stayed on stable, and public `/v1/payments` remained HTTP 404. The healthy retry passed both observations at 10%, 25% and 50%, then promoted automatically with ready endpoints on the new stable revision.
 
+Browser captures from the retained prod AnalysisRuns below show the failed attempts and healthy retry. The Rollouts UI displays UTC−05:00; all captures are from 2026-11-03.
+
+With no candidate traffic, Analysis 2-1 failed after warm-up. The blank measurement is an empty query result, not zero requests.
+
+![No-data analysis rejected an empty candidate request result](images/edge-analysis-no-data-2026-11-03.png)
+
+The fault attempt, Analysis 2-1.1, failed the 1% error threshold: the UI rounds the stored 0.0721649 fraction to 0.07. Its request guard also failed; freshness and p95 passed.
+
+![Faulted candidate failed the error-rate guard](images/edge-analysis-failed-2026-11-03.png)
+
+On the healthy retry, final-stage Analysis 2-5 passed all four guards. Its two request observations were 1,703 and 1,832.
+
+![Healthy candidate passed both final-stage observations](images/edge-analysis-passed-2026-11-03.png)
+
+All three stages completed, promoting revision `787688ff9d` to stable at 100% traffic.
+
+![Completed Edge rollout with the new stable revision](images/edge-rollout-promoted-2026-11-03.png)
+
 ## Runtime configuration
 
 Python services take settings from configuration files and environment variables, never command-line flags. Every service validates its configuration at startup and exits non-zero with a sanitized diagnostic on invalid values; booleans accept only `true` or `false`.

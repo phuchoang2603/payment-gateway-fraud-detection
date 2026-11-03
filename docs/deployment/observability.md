@@ -52,3 +52,23 @@ Deployed acceptance on 2026-10-24 (change [`go-service-observability`](../../ope
 Fraud retrieves online features directly through its [Feast adapter](../../src/payment-gateway/fraud/internal/adapters/feast/client.go). Feature/model diagnostics, serving deadlines and cold starts require separate verification from Edge checkout canary analysis.
 
 Prod verification on 2026-11-03 confirmed Kafka and Flink scrape targets, both operational dashboards in Grafana, native Workflow/Spark signals, candidate-specific OTLP series, a connected Edge/Payments trace and matching request logs. The rollout failure alert fired after an aborted candidate and resolved on retry. External alert delivery remains disabled by the shared `blackhole` receiver.
+
+The gateway dashboard captures the fault spike and healthy retry over 16:45–18:20 UTC on 2026-11-03. Repeated `edge` legends represent separate series; the [AnalysisRun captures](cd.md#edge-progressive-delivery) identify the candidate hash and guard results. Checkout GET load verifies this route and its Payments dependency; it does not verify fraud decisions or webhook delivery.
+
+![Gateway request rate, errors and HTTP/RPC latency during acceptance](images/gateway-operations-2026-11-03.png)
+
+Over the same window, Kafka reports zero under-replicated partitions and Flink reports one running job. The cumulative failed-checkpoint counter remains at six, with no increase in this window. Negative consumer-lag values at the start reflect uncommitted offsets; they are not evidence of a healthy backlog.
+
+![Kafka and Flink metrics during the acceptance window](images/data-operations-2026-11-03.png)
+
+Grafana Explore retains firing samples for `EdgeRolloutDegraded` during the aborted attempts (16:55–18:05 UTC; this Explore capture displays UTC−05:00). Gaps mean no firing series, not a measured zero. The completed Rollout above corroborates recovery; this graph does not prove external notification delivery.
+
+![Historical firing samples for the Edge rollout failure alert](images/edge-rollout-alert-2026-11-03.png)
+
+A sampled checkout GET at 18:15:21 UTC connects the Edge HTTP span, Edge gRPC client span and Payments server span in trace `ff6be5d585c2a57c11a65627699f03ec` (9.25 ms, HTTP 200). Explore displays UTC−05:00. This read-only checkout trace covers two services, not the full payment and notifier lifecycle.
+
+![Connected Edge and Payments checkout trace in Grafana](images/checkout-trace-2026-11-03.png)
+
+Filtering VictoriaLogs by that exact trace ID returns two request log entries. The separate log-volume panel has no data; the log results below it establish correlation.
+
+![Two request logs matching the checkout trace ID](images/checkout-trace-logs-2026-11-03.png)
