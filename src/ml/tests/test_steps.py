@@ -168,6 +168,7 @@ def test_every_pipeline_step_is_registered_by_its_function_name():
         "gate",
         "record_version",
         "roll_out",
+        "promote_challenger",
     }
     assert all(steps.STEPS[name].__name__ == name for name in steps.STEPS)
 
