@@ -242,7 +242,7 @@ def test_store_and_forward_sends_original_click_time(capsys):
         config = SimpleNamespace(integration_id="integration")
         world = SimpleNamespace(digest="world", payment_method_fingerprint=lambda index: "expected")
 
-        def purchase(self, seed, ordinal, now):
+        def purchase(self, seed, ordinal, now, drift=None):
             order = {"seller": {"external_id": "seller"}, "buyer": {"external_id": "buyer"}}
             return order, {"simulated_client": {"ip_country": "US"}}, 0, "ok", 0, False, False, 0
 
