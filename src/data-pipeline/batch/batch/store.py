@@ -1,3 +1,5 @@
+"""Read source manifests and persist batch reports in local or S3-compatible storage."""
+
 import json
 import os
 from functools import lru_cache

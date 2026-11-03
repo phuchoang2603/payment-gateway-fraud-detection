@@ -1,3 +1,5 @@
+"""Manage Iceberg snapshots, audit branches and range-bounded writes."""
+
 import os
 
 from pyspark.sql import DataFrame, SparkSession

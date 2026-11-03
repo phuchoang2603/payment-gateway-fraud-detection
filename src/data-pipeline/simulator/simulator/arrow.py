@@ -1,3 +1,5 @@
+"""Define the typed Arrow schemas written by the historical generator."""
+
 from typing import Any
 
 import pyarrow as pa
@@ -61,6 +63,7 @@ SIGNALS = pa.struct(
 
 
 def payment_event_schema() -> pa.Schema:
+    """Return the current nested event schema before version-specific field projection."""
     return pa.schema(
         [
             pa.field("event_id", pa.string(), nullable=False),

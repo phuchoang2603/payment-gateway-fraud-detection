@@ -1,3 +1,5 @@
+"""Build a deterministic synthetic population with correlated purchases and fraud scenarios."""
+
 import hmac
 import ipaddress
 import json
@@ -53,10 +55,14 @@ SECONDS_PER_DAY = 86400
 
 
 class StrictModel(BaseModel):
+    """Keep generation configuration immutable and reject unknown or non-finite inputs."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
 
 class EntityCounts(StrictModel):
+    """Bound the synthetic entity domains independently of observed distinct counts."""
+
     customers: int = Field(gt=0)
     merchants: int = Field(gt=0)
     devices: int = Field(gt=0)
@@ -66,6 +72,8 @@ class EntityCounts(StrictModel):
 
 
 class PurchaseBehavior(StrictModel):
+    """Configure purchase intensity, merchant skew, context reuse and processor outcomes."""
+
     purchases_per_customer_day: float = Field(gt=0)
     merchant_zipf_exponent: float = Field(gt=0)
     category_zipf_exponent: float = Field(gt=0)
@@ -88,11 +96,15 @@ class PurchaseBehavior(StrictModel):
 
 
 class HighValueScenario(StrictModel):
+    """Configure deliberate high-amount purchases and their price multiplier."""
+
     rate: float = Field(ge=0, le=1)
     amount_multiplier: float = Field(gt=1)
 
 
 class CompromiseScenario(StrictModel):
+    """Configure a multi-day customer compromise campaign."""
+
     rate: float = Field(ge=0, le=1, description="Daily probability that a customer becomes compromised")
     window_days: int = Field(gt=0)
     attempts_per_day: float = Field(gt=0)
@@ -100,6 +112,8 @@ class CompromiseScenario(StrictModel):
 
 
 class CardTestingScenario(StrictModel):
+    """Configure short bursts of low-value attempts with elevated decline probability."""
+
     rate: float = Field(ge=0, description="Expected bursts per day")
     burst_size: int = Field(gt=1)
     burst_minutes: int = Field(gt=0, le=60)
@@ -107,10 +121,14 @@ class CardTestingScenario(StrictModel):
 
 
 class FriendlyFraudScenario(StrictModel):
+    """Configure chargebacks on otherwise legitimate successful purchases."""
+
     rate: float = Field(ge=0, le=1)
 
 
 class Scenarios(StrictModel):
+    """Collect independent fraud scenario parameters used by the synthetic world."""
+
     obvious_high_value: HighValueScenario
     stolen_card_new_device: CompromiseScenario
     account_takeover: CompromiseScenario
@@ -119,6 +137,8 @@ class Scenarios(StrictModel):
 
 
 class LabelDelays(StrictModel):
+    """Bound reporting delay and the probability that a chargeback is observed."""
+
     reporting_probability: float = Field(default=0.85, ge=0, le=1)
     min_days: int = Field(ge=0)
     max_days: int = Field(ge=0)
@@ -131,6 +151,8 @@ class LabelDelays(StrictModel):
 
 
 class WorldConfig(StrictModel):
+    """Pin population, randomness, calibration inputs and synthetic identity settings."""
+
     seed: int = Field(ge=0)
     integration_id: UUID
     synthetic_key: str = Field(min_length=1)
@@ -142,12 +164,14 @@ class WorldConfig(StrictModel):
 
 
 def entity_id(integration_id: UUID, kind: str, external_id: str) -> str:
+    """Derive a stable integration-scoped UUID for a merchant or customer."""
     if kind not in ("merchant", "customer"):
         raise ValueError(f"unsupported entity kind: {kind}")
     return str(uuid5(IDENTITY_NAMESPACE, f"{integration_id}:{kind}:{external_id}"))
 
 
 def fingerprint(synthetic_key: str, kind: str, value: str) -> str:
+    """Normalize a synthetic identity and produce its keyed, gateway-compatible fingerprint."""
     if kind == "ip_network":
         address = ipaddress.ip_address(value)
         prefix = 24 if address.version == 4 else 48
@@ -164,10 +188,12 @@ def fingerprint(synthetic_key: str, kind: str, value: str) -> str:
 
 
 def stage_rng(seed: int, stage: int, *keys: int) -> np.random.Generator:
+    """Derive an independent random stream from the seed, stage and stable entity keys."""
     return np.random.default_rng(np.random.SeedSequence([seed, stage, *keys]))
 
 
 def zipf_weights(count: int, exponent: float) -> np.ndarray:
+    """Normalize a finite Zipf distribution over the configured entity domain."""
     weights = np.arange(1, count + 1, dtype=float) ** (-exponent)
     return weights / weights.sum()
 
@@ -191,6 +217,7 @@ def zone(index: int) -> ZoneInfo:
 
 @cache
 def hourly_weights(day: date, region: int):
+    """Map local-hour, weekday and seasonal weights onto a UTC generation day."""
     midnight = datetime.combine(day, time.min, UTC)
     local = [(midnight + timedelta(hours=hour, minutes=30)).astimezone(zone(region)) for hour in range(24)]
     weights = np.array([CALIBRATION["local_hour_weights"][value.hour] for value in local])
@@ -205,15 +232,19 @@ def hourly_weights(day: date, region: int):
 
 @cache
 def hourly_cdf(day: date, region: int) -> np.ndarray:
+    """Build the cumulative UTC-hour distribution for arrival-time sampling."""
     return np.cumsum(hourly_weights(day, region)[0])
 
 
 def draw(rng: np.random.Generator, cdf: np.ndarray) -> int:
+    """Sample a finite cumulative distribution without returning an out-of-range index."""
     return min(int(np.searchsorted(cdf, rng.random(), side="right")), len(cdf) - 1)
 
 
 @dataclass(frozen=True)
 class Merchant:
+    """Hold stable merchant identity, account age and product category."""
+
     id: str
     external_id: str
     created_at: datetime
@@ -222,6 +253,8 @@ class Merchant:
 
 @dataclass(frozen=True)
 class Customer:
+    """Hold stable customer identity and familiar merchants, devices and payment methods."""
+
     index: int
     id: str
     external_id: str
@@ -237,6 +270,8 @@ class Customer:
 
 @dataclass(frozen=True)
 class Purchase:
+    """Carry correlated checkout context and simulation truth into lifecycle generation."""
+
     customer_id: str
     customer_external_id: str
     customer_created_at: datetime
@@ -268,6 +303,8 @@ class Purchase:
 
 
 class World:
+    """Reuse a seeded population while deriving purchase randomness from stable keys."""
+
     def __init__(self, config: WorldConfig):
         self.config = config
         self.start_date = config.start_date
@@ -339,6 +376,7 @@ class World:
 
     @lru_cache(maxsize=None)
     def merchant(self, index: int) -> Merchant:
+        """Reconstruct a merchant from its stable population index."""
         rng = self._rng(MERCHANT_STAGE, index)
         category = draw(rng, np.cumsum(self._category_weights))
         age = int(rng.integers(30, 1500))
@@ -351,6 +389,7 @@ class World:
         )
 
     def customer(self, index: int) -> Customer:
+        """Reconstruct customer context from precomputed population arrays."""
         counts, table = self.config.counts, self._customers
         external_id = f"buyer-{index + 1:06d}"
         shared = index // 2
@@ -389,9 +428,11 @@ class World:
         return address, fingerprint(self.config.synthetic_key, "ip_network", address)
 
     def payment_method_fingerprint(self, index: int) -> str:
+        """Match the gateway fingerprint for the synthetic card identity."""
         return fingerprint(self.config.synthetic_key, "payment_method", f"tok_card-{index:06d}_ok")
 
     def processor_outcome(self, rng: np.random.Generator, scenario: int) -> str:
+        """Sample a terminal processor outcome using scenario-specific decline rates."""
         behavior = self.config.behavior
         if scenario == CARD_TESTING:
             return "issuer_declined" if rng.random() < self.config.scenarios.card_testing.decline_rate else "succeeded"
@@ -410,6 +451,7 @@ class World:
         return rng.poisson(rates)
 
     def day_purchases(self, day: date, customers: range) -> list[tuple[int, int]]:
+        """Enumerate each selected customer's Poisson purchases with stable purchase numbers."""
         counts = self._day_counts(day)[customers.start : customers.stop]
         customer_of = np.repeat(np.arange(customers.start, customers.stop), counts)
         starts = np.cumsum(counts) - counts
@@ -417,16 +459,20 @@ class World:
         return list(zip(customer_of.tolist(), number.tolist()))
 
     def purchase_rng(self, day: date, customer: int, number: int) -> np.random.Generator:
+        """Isolate a purchase stream from worker order and shard assignment."""
         return self._rng(PURCHASE_STAGE, self._offset(day), customer, number)
 
     def burst_count(self, day: date) -> int:
+        """Sample the daily number of independent card-testing campaigns."""
         rng = self._rng(BURST_COUNT_STAGE, self._offset(day))
         return int(rng.poisson(self.config.scenarios.card_testing.rate))
 
     def burst_rng(self, day: date, burst: int, number: int) -> np.random.Generator:
+        """Isolate one attempt's random stream within a card-testing burst."""
         return self._rng(BURST_PURCHASE_STAGE, self._offset(day), burst, number)
 
     def purchase(self, rng: np.random.Generator, day: date, customer: int) -> Purchase:
+        """Sample a correlated checkout from familiar context, merchant skew and fraud campaigns."""
         counts, behavior, scenarios = self.config.counts, self.config.behavior, self.config.scenarios
         offset = self._offset(day)
         customer = self.customer(customer)
@@ -490,6 +536,7 @@ class World:
         )
 
     def card_test(self, rng: np.random.Generator, day: date, burst: int) -> Purchase:
+        """Sample one low-value attempt within a shared victim's short testing campaign."""
         counts, testing = self.config.counts, self.config.scenarios.card_testing
         burst_rng = self._rng(BURST_STAGE, self._offset(day), burst)
         victim = self.customer(int(burst_rng.integers(counts.customers)))

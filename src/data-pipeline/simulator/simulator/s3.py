@@ -1,3 +1,5 @@
+"""Configure S3-compatible clients, including signed GCS create-only preconditions."""
+
 import os
 from urllib.parse import urlsplit
 

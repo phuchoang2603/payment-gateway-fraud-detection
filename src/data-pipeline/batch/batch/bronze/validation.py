@@ -1,3 +1,5 @@
+"""Express Bronze payload and required-field checks as Spark column predicates."""
+
 from pathlib import Path
 
 import yaml

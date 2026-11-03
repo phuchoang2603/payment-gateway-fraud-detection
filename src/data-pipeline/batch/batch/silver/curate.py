@@ -80,6 +80,7 @@ def payment_days(events: DataFrame, first, last) -> DataFrame:
 
 
 def with_event_hash(events: DataFrame) -> DataFrame:
+    """Hash business content while excluding delivery time and ingestion provenance."""
     return events.withColumn("event_hash", F.sha2(F.to_json(F.struct(*EVENT_HASH_FIELDS)), 256))
 
 
@@ -208,6 +209,7 @@ def attempts(events: DataFrame, payment_status: DataFrame) -> DataFrame:
 
 
 def payments(events: DataFrame) -> DataFrame:
+    """Reduce canonical events to payment-level status and lifecycle metadata."""
     ordered = Window.partitionBy(*PAYMENT_KEY).orderBy("aggregate_version")
     return (
         events.withColumn(
@@ -234,6 +236,7 @@ def payments(events: DataFrame) -> DataFrame:
 
 
 def label_observations(labels: DataFrame) -> DataFrame:
+    """Canonicalize repeated label observations by their business identity."""
     hashed = labels.withColumn("observation_id", F.sha2(F.to_json(F.struct(*LABEL_HASH_FIELDS)), 256))
     per_observation = Window.partitionBy("observation_id").orderBy("_ingested_at", "_source")
     return (
@@ -244,6 +247,7 @@ def label_observations(labels: DataFrame) -> DataFrame:
 
 
 def link_labels(labels: DataFrame, attempts: DataFrame, payment_status: DataFrame) -> DataFrame:
+    """Classify observations against known attempts without treating unknown labels as negatives."""
     attempt = attempts.select(
         *ATTEMPT_KEY,
         F.col("started_at").alias("attempt_started_at"),
@@ -304,6 +308,7 @@ def counts_by(frame: DataFrame, column: str) -> dict:
 
 
 def run(spark, run_id: str, start_day, end_day) -> dict:
+    """Rebuild the requested payment days and availability-day labels from pinned Bronze snapshots."""
     floor, cutoff = midnight(start_day), midnight(end_day + DAY)
     snapshots = {table: ref_snapshot(spark, table) for table in BRONZE_PROPERTIES}
     pins = {

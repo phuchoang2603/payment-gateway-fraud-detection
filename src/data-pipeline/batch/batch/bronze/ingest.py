@@ -62,6 +62,7 @@ def kafka_sources():
 
 
 def run_historical(spark, root, version, run_id):
+    """Ingest a manifest-pinned dataset without discarding duplicate source deliveries."""
     store = Store(root)
     manifest = store.read_json("manifest.json")
     if manifest["dataset_version"] != version:
@@ -167,6 +168,7 @@ def read_parts(spark, root, table, parts):
 
 
 def run_kafka(spark, bootstrap, run_id):
+    """Append accepted and rejected Kafka records from committed Bronze offsets."""
     ensure_tables(spark)
     for table in (EVENTS, LABELS, REJECTED):
         stage(spark, table)
@@ -252,6 +254,7 @@ def _from_offsets(starts):
 
 
 def watermarks(bootstrap, topic):
+    """Recover restart offsets from persisted rows rather than expiring snapshot metadata."""
     consumer = Consumer(
         {"bootstrap.servers": bootstrap, "group.id": "dp1-bronze-watermarks", "enable.auto.commit": False}
     )

@@ -1,3 +1,5 @@
+"""Conform evolving Parquet and protobuf records to the canonical Bronze schema."""
+
 import os
 from pathlib import Path
 
@@ -111,6 +113,7 @@ def rejected_ddl():
 
 
 def business_schema(spark: SparkSession, columns) -> StructType:
+    """Resolve contract column definitions into a Spark struct schema."""
     return spark.createDataFrame([], ddl(columns)).schema
 
 
@@ -131,6 +134,7 @@ def conform(expression: Column, source: DataType, target: DataType) -> Column:
 
 
 def conform_frame(frame: DataFrame, target: StructType, keep=()) -> DataFrame:
+    """Align fields by name and fill absent evolving fields with typed nulls."""
     names = set(frame.columns)
     return frame.select(
         *[
@@ -144,6 +148,7 @@ def conform_frame(frame: DataFrame, target: StructType, keep=()) -> DataFrame:
 
 
 def decode_events(value: Column) -> Column:
+    """Decode event protobuf bytes and derive the populated payload case."""
     decoded = _decode(value, EVENT_MESSAGE)
     expired = F.when(
         decoded["payment_expired"].isNotNull(),
@@ -154,6 +159,7 @@ def decode_events(value: Column) -> Column:
 
 
 def decode_labels(value: Column) -> Column:
+    """Decode label protobuf bytes into the canonical business struct."""
     return _decode(value, LABEL_MESSAGE)
 
 

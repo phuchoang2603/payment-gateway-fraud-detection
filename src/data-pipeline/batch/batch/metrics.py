@@ -1,3 +1,5 @@
+"""Capture Spark phase timings and the jobs, stages and tasks belonging to each phase."""
+
 import time
 from contextlib import contextmanager
 

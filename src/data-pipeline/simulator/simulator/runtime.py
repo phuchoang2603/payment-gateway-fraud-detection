@@ -1,3 +1,5 @@
+"""Dispatch historical generation, shard production and manifest publication commands."""
+
 import json
 import os
 import sys

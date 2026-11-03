@@ -107,11 +107,20 @@ For the Kafka input mode, the same tables also hold decoded records with topic/p
 
 For example, nested `attempt_started.context.snapshot.total.minor_units` becomes `silver.attempts.amount_minor` (`bigint`), customer context becomes `customer_id`, and assessment outcome/ID become `risk_outcome`/`assessment_id`. `started_at` is server event time; `attempted_at` preserves client time. Terminal events produce `outcome`/`outcome_at`; pending/unknown attempts remain unresolved rather than becoming invented declines. v2 rows retain null assessment IDs after flattening. Raw evidence digests remain in canonical events rather than becoming attempt features.
 
-**Deduplication and schema checks.** Two identical `evt-1` copies become one; two `evt-2` copies with amounts 100/999 quarantine all three deliveries of their payment ([executable fixture](../../src/data-pipeline/batch/tests/silver/test_silver.py)). Recorded Bronze counts were 514,342,841 v2 and 469,384,242 v3 events: the new decision fields were absent in all 101,943,941 v2 decisions and present in all 93,028,261 v3 decisions. These establish correctness; side-by-side schema/dedup Spark UI captures remain missing.
+**Deduplication and schema checks.** Recorded SQL over v19 Bronze established:
+
+| Input / problem | Transformation | Verified result |
+|---|---|---|
+| 514,342,841 v2 events; 101,943,941 decisions | Read absent physical fields as typed nulls | New decision fields absent in every v2 decision |
+| 469,384,242 v3 events; 93,028,261 decisions | Preserve the added nested fields | New decision fields present in every v3 decision |
+| Identical `evt-1` deliveries | Collapse by business hash; retain earliest `recorded_at` | One canonical event |
+| Conflicting `evt-2` amounts 100/999 | Quarantine the payment rather than selecting an arbitrary copy | All three deliveries of that payment rejected |
+
+The last two rows are [executable fixtures](../../src/data-pipeline/batch/tests/silver/test_silver.py), not full-history duplicate counts. A [Bronze-to-Silver integration test](../../src/data-pipeline/batch/tests/bronze/test_bronze.py) additionally writes physically different v2/v3 Parquet schemas plus one redelivery: Bronze retains 11 deliveries, Silver emits 10 events and two valid attempts, and only v3 has an assessment ID. Full-source and published Silver totals cover different lifecycle boundaries, so subtracting them does not establish an exact duplicate count. SQL checks establish correctness; controlled before/after Spark UI captures remain missing.
 
 **Scale techniques.** A narrow event-ID/hash aggregation replaces a broadcast of about 20M duplicate IDs; attempt construction uses one grouped aggregation instead of separate payload windows and joins. Range overwrites avoid full-history recomputation. `persist(MEMORY_AND_DISK)` allows lost Spot blocks to be recomputed from lineage instead of relying on local checkpoints.
 
-**Controlled skew comparison.** [`silver/benchmark.py`](../../src/data-pipeline/batch/batch/silver/benchmark.py) compares a cached, pinned range with skew handling off, AQE skew handling on and 16-bucket salting. Broadcast is disabled; counts/checksums must agree and the AQE plan must show a real skew split. Run `dp2-benchmark start=2026-09-01 end=2026-09-30` after Silver publishes that range. Production timings remain unrecorded; AQE being enabled alone does not demonstrate an optimization.
+**Controlled skew comparison.** [`silver/benchmark.py`](../../src/data-pipeline/batch/batch/silver/benchmark.py) compares a cached, pinned range with skew handling off, AQE skew handling on and 16-bucket salting. Both static and adaptive broadcast are disabled; salting hashes the retained `attempt_id`. Counts/checksums must agree and the AQE plan must show a real skew split. Run `dp2-benchmark start=2026-09-01 end=2026-09-30` after Silver publishes that range. Production timings remain unrecorded; AQE being enabled alone does not demonstrate an optimization.
 
 ### DP3: Silver → Gold history features
 

@@ -66,6 +66,13 @@ jobs:
         with:
           path: ~/.ivy2.5.2
           key: spark-ivy-${{ hashFiles(format('{0}/tests/conftest.py', matrix.project)) }}
+      - uses: actions/cache@v4
+        if: matrix.project == 'src/llm/rag_serving'
+        with:
+          path: src/llm/rag_serving/mutants
+          key: knowledge-mutmut-3.8.1-${{ runner.os }}-${{ hashFiles('src/llm/rag_serving/tests/**', 'src/llm/rag_serving/pyproject.toml', 'src/llm/common/**', 'src/llm/uv.lock', 'scripts/ci-checks.sh') }}-${{ github.sha }}
+          restore-keys: |
+            knowledge-mutmut-3.8.1-${{ runner.os }}-${{ hashFiles('src/llm/rag_serving/tests/**', 'src/llm/rag_serving/pyproject.toml', 'src/llm/common/**', 'src/llm/uv.lock', 'scripts/ci-checks.sh') }}-
       - name: Python lint, format and tests
         env:
           PY_PROJECT: ${{ matrix.project }}

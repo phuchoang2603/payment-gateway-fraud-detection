@@ -1,3 +1,5 @@
+"""Expand synthetic purchases into ordered payment events and delayed label observations."""
+
 from collections.abc import Callable
 from datetime import UTC, date, datetime, time, timedelta
 from hashlib import sha256
@@ -20,6 +22,7 @@ SHIPPING_COUNTRY = "US"
 def risk_reasons(
     amount: int, customer_created_at: datetime, attempted_at: datetime, shipping_country: str, ip_country: str | None
 ) -> list[str]:
+    """Evaluate the historical rules policy without using simulation truth."""
     reasons = []
     if amount > HIGH_AMOUNT_MINOR:
         reasons.append("HIGH_AMOUNT")
@@ -43,6 +46,7 @@ def payment_history(
     schema_version_at: Callable[[datetime], int],
     duplicate_rate: float,
 ) -> tuple[list[Record], list[Record]]:
+    """Return lifecycle deliveries and labels, preserving IDs across deliberate redelivery."""
     behavior = world.config.behavior
     integration_id = str(world.config.integration_id)
     payment_id = str(uuid5(IDENTITY_NAMESPACE, f"{world.digest}:{day.isoformat()}:{key}:payment"))

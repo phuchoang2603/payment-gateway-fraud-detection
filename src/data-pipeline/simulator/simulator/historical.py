@@ -1,3 +1,5 @@
+"""Generate resumable, contract-versioned Parquet datasets and publish immutable manifests."""
+
 import hashlib
 import json
 import math
@@ -31,22 +33,32 @@ CONTRACT_FILES = {EVENTS: "payment-events.odcs.yaml", LABELS: "fraud-labels.odcs
 
 
 class GenerationError(Exception):
+    """Reject generation or publication that cannot satisfy the dataset contract."""
+
     pass
 
 
 class ConfigurationChanged(GenerationError):
+    """Refuse to resume a version with different configuration or generator code."""
+
     pass
 
 
 class VersionPublished(GenerationError):
+    """Refuse to overwrite a dataset whose manifest is already published."""
+
     pass
 
 
 class SourceTooSmall(GenerationError):
+    """Reject publication below the configured physical source-size minimum."""
+
     pass
 
 
 class SchemaChange(StrictModel):
+    """Activate a contract-declared schema version at an absolute event-time boundary."""
+
     effective_at: datetime
     version: int = Field(ge=3)
 
@@ -59,6 +71,8 @@ class SchemaChange(StrictModel):
 
 
 class GeneratorConfig(StrictModel):
+    """Validate generation inputs and derive output-independent dataset identity."""
+
     dataset_version: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
     duration_days: int = Field(gt=0)
     duplicate_rate: float = Field(default=0, ge=0, lt=1)
@@ -97,10 +111,12 @@ class GeneratorConfig(StrictModel):
         return self.model_dump(mode="json", exclude={"output"})
 
     def identity(self, generator_digest: str) -> str:
+        """Hash logical inputs and source identity independently of the destination root."""
         document = {"configuration": self.logical(), "generator_digest": generator_digest}
         return hashlib.sha256(json.dumps(document, sort_keys=True).encode()).hexdigest()
 
     def schema_version_at(self, occurred_at: datetime) -> int:
+        """Select the latest schema effective at the event occurrence time."""
         version = 2
         for change in self.schema_changes:
             if occurred_at >= change.effective_at:
@@ -109,11 +125,13 @@ class GeneratorConfig(StrictModel):
 
 
 def load_generator_config(path: Path) -> GeneratorConfig:
+    """Parse and validate the historical generation YAML configuration."""
     return GeneratorConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 @cache
 def load_contract(directory: Path) -> tuple[tuple[tuple[tuple[str, ...], int], ...], dict[str, str]]:
+    """Read version-gated nested field paths and source contract identities."""
     documents = {
         table: yaml.safe_load((directory / name).read_text(encoding="utf-8")) for table, name in CONTRACT_FILES.items()
     }
@@ -137,6 +155,7 @@ def load_contract(directory: Path) -> tuple[tuple[tuple[tuple[str, ...], int], .
 
 
 def generator_digest(contracts: Path) -> str:
+    """Hash generator source bytes and contracts for immutable dataset provenance."""
     package = Path(__file__).parent
     digest = hashlib.sha256()
     for path in [package / name for name in GENERATOR_SOURCES] + [
@@ -238,6 +257,7 @@ def _chunk_purchases(config: GeneratorConfig, world: World, offset: int, chunk: 
 
 
 def write_part(config: GeneratorConfig, contracts: Path, offset: int, chunk: int) -> list[dict]:
+    """Write one customer chunk for one purchase day, separating physical schema versions."""
     world = _world(config.world)
     day = config.day(offset)
     declared, _ = load_contract(contracts)
@@ -382,6 +402,7 @@ def _results(config: GeneratorConfig, contracts: Path, pairs, workers: int):
 
 
 def produce(config: GeneratorConfig, contracts: Path, shard: tuple[int, int] = (0, 1), workers: int = 1) -> None:
+    """Generate this shard's incomplete days and mark each day only after all chunks finish."""
     digest = generator_digest(contracts)
     _check_schema_versions(config, contracts)
     index, count = shard
@@ -409,6 +430,7 @@ def produce(config: GeneratorConfig, contracts: Path, shard: tuple[int, int] = (
 
 
 def publish(config: GeneratorConfig, contracts: Path) -> dict:
+    """Publish a create-only manifest after validating configuration and every day marker."""
     digest = generator_digest(contracts)
     _check_schema_versions(config, contracts)
     store = open_store(config.output, config.dataset_version)
@@ -418,5 +440,6 @@ def publish(config: GeneratorConfig, contracts: Path) -> dict:
 
 
 def generate(config: GeneratorConfig, contracts: Path, workers: int = 1) -> dict:
+    """Produce all days locally or in worker processes, then publish the completed dataset."""
     produce(config, contracts, workers=workers)
     return publish(config, contracts)

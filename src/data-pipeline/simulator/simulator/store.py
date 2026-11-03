@@ -1,3 +1,5 @@
+"""Publish generator files and create-only markers through local or S3-compatible storage."""
+
 import os
 import shutil
 import uuid
@@ -13,10 +15,14 @@ PRECONDITION_CODES = frozenset({"PreconditionFailed", "ConditionalRequestConflic
 
 
 class ObjectExists(Exception):
+    """Signal a failed create-only write without replacing the existing object."""
+
     pass
 
 
 class LocalStore:
+    """Publish files atomically and implement create-only markers using hard links."""
+
     def __init__(self, root: Path):
         self.root = root
 
@@ -52,6 +58,8 @@ class LocalStore:
 
 
 class S3Store:
+    """Access dataset-relative objects through the configured S3-compatible client."""
+
     def __init__(self, bucket: str, prefix: str, s3):
         self.bucket = bucket
         self.prefix = prefix
@@ -83,6 +91,7 @@ class S3Store:
 
 
 def open_store(output: str, dataset: str):
+    """Resolve a dataset version beneath the historical prefix of a local or S3 root."""
     if not output.startswith("s3://"):
         return LocalStore(Path(output).expanduser().resolve() / "historical" / dataset)
     parsed = urlsplit(output)
