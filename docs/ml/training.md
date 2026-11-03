@@ -1,6 +1,6 @@
 # Training
 
-**Status: implemented, not yet run.** The code and the prod chart are under review. The first runs wait for the Feast change to be deployed and `stream-history` to cover `[2026-07-29, 2026-10-29)`. Code: [`src/ml`](../../src/ml); chart: [`infra/charts/ml-training`](../../infra/charts/ml-training). Dev runs the same chart on the RTX 5060 Ti of `dev-server1`: `files/dev` holds the pipelines compiled without node selectors and with smaller Spark sizes, and the platform's `xgboost-gpu-distributed` runtime selects the local GPU there.
+**Status: dev exploration run; production evidence pending.** The code and the prod chart are under review. Production runs wait for `stream-history` to cover `[2026-07-29, 2026-10-29)`. Code: [`src/ml`](../../src/ml); chart: [`infra/charts/ml-training`](../../infra/charts/ml-training). Dev runs the same chart on the RTX 5060 Ti of `dev-server1`: `files/dev` holds the pipelines compiled without node selectors and with smaller Spark sizes, and the platform's `xgboost-gpu-distributed` runtime selects the local GPU there.
 
 ## Training data
 
@@ -48,6 +48,18 @@ A Kubeflow recurring run, created by a hook Job in the chart after each sync so 
 ## Derived request features
 
 The [notebook](../../src/ml/notebooks/payment_risk_exploration.ipynb) also compares a linear baseline, a random forest, histogram gradient boosting, CPU XGBoost and the GPU model on validation and test at the gate's two operating thresholds, with calibration and feature importance. It ablates the candidate `request_features` columns on validation PR-AUC before the first registered version, because changing the inputs afterwards needs `payment_risk_v2`.
+
+The notebook accepts `NOTEBOOK_END_DAY`, `NOTEBOOK_TRAIN_DAYS`, `NOTEBOOK_VALIDATION_DAYS`, `NOTEBOOK_TEST_DAYS`, `NOTEBOOK_COMPARE_RATE`, `NOTEBOOK_ABLATION_RATE` and `NOTEBOOK_SNAPSHOT` as environment overrides. An unset snapshot builds a new dataset version.
+
+Dev exploration used snapshot `8122563810631209408`: training October 14–18, validation October 19 and test October 20, 2026, with a 10% negative sample throughout. The splits contained 988, 215 and 287 rows, including 119, 54 and 131 positives respectively. Validation PR-AUC with all features was 0.9583; removing each derived candidate gave:
+
+| Removed candidate | Validation PR-AUC |
+|---|---:|
+| `customer_amount_to_30d_avg` | 0.9565 |
+| `payment_method_amount_to_30d_avg` | 0.9598 |
+| `scored_hour_utc` | 0.9597 |
+
+This small sample supports retaining the customer ratio and reconsidering the other two candidates; the feature service has not been changed. CPU XGBoost reached test PR-AUC 0.9881 against the linear baseline's 0.9035. The GPU TrainJob exceeded its active deadline, so this notebook produced no GPU comparison, gate result or saved GPU model. Subsequent cells reported missing variables because execution continued after that failure.
 
 ## Drift
 
