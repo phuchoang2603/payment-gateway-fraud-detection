@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from botocore.awsrequest import AWSResponse
@@ -23,12 +24,20 @@ def put(monkeypatch, endpoint, **options):
     s3.put_object(Bucket="bucket", Key="key", Body=b"body", **options)
     request = sent[0]
     headers = {name: value.decode() if isinstance(value, bytes) else value for name, value in request.headers.items()}
-    return SimpleNamespace(url=request.url, headers=headers)
+    body = request.body.read() if hasattr(request.body, "read") else request.body
+    return SimpleNamespace(url=request.url, headers=headers, body=body)
 
 
 def test_gcs_create_only_write_uses_generation_precondition(monkeypatch):
     request = put(monkeypatch, "https://storage.googleapis.com", IfNoneMatch="*")
-    assert request.url == "https://storage.googleapis.com/bucket/key"
+    url = urlsplit(request.url)
+    assert f"{url.scheme}://{url.netloc}{url.path}" == "https://storage.googleapis.com/bucket/key"
+    query = parse_qs(url.query)
+    assert query["X-Amz-Algorithm"] == ["AWS4-HMAC-SHA256"]
+    assert "x-goog-if-generation-match" in query["X-Amz-SignedHeaders"][0].split(";")
+    assert query["X-Amz-Signature"]
+    assert not any(name.lower().startswith("x-amz-") for name in request.headers)
+    assert request.body == b"body"
     assert request.headers["x-goog-if-generation-match"] == "0"
     assert "If-None-Match" not in request.headers
 

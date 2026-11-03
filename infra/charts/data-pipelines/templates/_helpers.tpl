@@ -498,6 +498,14 @@ spec:
 {{- define "data-pipelines.feastEnv" -}}
 - name: FEAST_S3_ENDPOINT_URL
   value: {{ .Values.config.S3_ENDPOINT | quote }}
+{{- if eq .Values.config.S3_ENDPOINT "https://storage.googleapis.com" }}
+- name: AWS_REQUEST_CHECKSUM_CALCULATION
+  value: WHEN_REQUIRED
+- name: AWS_RESPONSE_CHECKSUM_VALIDATION
+  value: WHEN_REQUIRED
+- name: AWS_DEFAULT_REGION
+  value: {{ .Values.config.AWS_REGION | quote }}
+{{- end }}
 - name: FEAST_REGISTRY
   value: {{ .Values.features.registry | quote }}
 - name: FEAST_STREAM_EPOCHS
