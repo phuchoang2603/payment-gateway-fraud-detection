@@ -146,7 +146,7 @@ spec:
               s3.path.style.access: {{ .Values.config.S3_PATH_STYLE | toString | quote }}
               s3.region: {{ .Values.config.AWS_REGION | quote }}
               {{- if eq .Values.config.S3_ENDPOINT "https://storage.googleapis.com" }}
-              s3.endpoint.region: {{ .Values.config.AWS_REGION | quote }}
+              fs.s3a.endpoint.region: {{ .Values.config.AWS_REGION | quote }}
               {{- end }}
               restart-strategy.type: exponential-delay
               resourcemanager.taskmanager-registration.timeout: 10min
