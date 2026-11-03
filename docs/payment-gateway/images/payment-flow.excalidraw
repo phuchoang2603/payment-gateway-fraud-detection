@@ -4162,7 +4162,7 @@
       "id": "examples",
       "type": "rectangle",
       "x": 1350,
-      "y": 750,
+      "y": 1170,
       "width": 460,
       "height": 100,
       "angle": 0,
@@ -4185,14 +4185,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "examples-icon",
       "type": "image",
       "x": 1365.0,
-      "y": 775.0,
+      "y": 1195.0,
       "width": 50,
       "height": 50.0,
       "angle": 0,
@@ -4219,14 +4219,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "examples-text",
       "type": "text",
       "x": 1430,
-      "y": 757.5,
+      "y": 1177.5,
       "width": 368,
       "height": 85.0,
       "angle": 0,
@@ -4255,7 +4255,7 @@
       "text": "Feast historical retrieval\nPinned Iceberg snapshots + PIT\njoins\nTemporal split / label cutoff",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -4263,7 +4263,7 @@
       "id": "tune",
       "type": "rectangle",
       "x": 1880,
-      "y": 750,
+      "y": 1170,
       "width": 460,
       "height": 100,
       "angle": 0,
@@ -4286,14 +4286,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "tune-icon",
       "type": "image",
       "x": 1895.0,
-      "y": 775.0,
+      "y": 1195.0,
       "width": 50,
       "height": 50.0,
       "angle": 0,
@@ -4320,14 +4320,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "tune-text",
       "type": "text",
       "x": 1960,
-      "y": 768.125,
+      "y": 1188.125,
       "width": 368,
       "height": 63.75,
       "angle": 0,
@@ -4356,14 +4356,14 @@
       "text": "Katib tuning\nParallel trials \u2192 best parameters\nRecorded with the training run",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "fit",
       "type": "rectangle",
-      "x": 1350,
+      "x": 1880,
       "y": 960,
       "width": 460,
       "height": 100,
@@ -4387,13 +4387,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "fit-icon",
       "type": "image",
-      "x": 1365.0,
+      "x": 1895.0,
       "y": 985.2148557397176,
       "width": 50,
       "height": 49.570288520564766,
@@ -4421,13 +4421,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "fit-text",
       "type": "text",
-      "x": 1430,
+      "x": 1960,
       "y": 987.5,
       "width": 368,
       "height": 45.0,
@@ -4457,14 +4457,14 @@
       "text": "Kubeflow Trainer\nXGBoost fit + pinned artifact",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "gate",
       "type": "rectangle",
-      "x": 1880,
+      "x": 1350,
       "y": 960,
       "width": 460,
       "height": 100,
@@ -4488,13 +4488,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "gate-icon",
       "type": "image",
-      "x": 1895.0,
+      "x": 1365.0,
       "y": 985.2148557397176,
       "width": 50,
       "height": 49.570288520564766,
@@ -4522,13 +4522,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "gate-text",
       "type": "text",
-      "x": 1960,
+      "x": 1430,
       "y": 978.125,
       "width": 368,
       "height": 63.75,
@@ -4558,7 +4558,7 @@
       "text": "Evaluation gate\nTemporal holdout + metric\nthresholds",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -4566,7 +4566,7 @@
       "id": "registry",
       "type": "rectangle",
       "x": 1350,
-      "y": 1170,
+      "y": 750,
       "width": 460,
       "height": 100,
       "angle": 0,
@@ -4589,14 +4589,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "registry-icon",
       "type": "image",
       "x": 1365.0,
-      "y": 1195.2148557397177,
+      "y": 775.2148557397177,
       "width": 50,
       "height": 49.570288520564766,
       "angle": 0,
@@ -4623,14 +4623,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "registry-text",
       "type": "text",
       "x": 1430,
-      "y": 1198.75,
+      "y": 778.75,
       "width": 368,
       "height": 42.5,
       "angle": 0,
@@ -4659,7 +4659,7 @@
       "text": "Kubeflow Model Registry\nVersion + artifact URI + provenance",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -4667,7 +4667,7 @@
       "id": "rollout",
       "type": "rectangle",
       "x": 1880,
-      "y": 1170,
+      "y": 750,
       "width": 460,
       "height": 100,
       "angle": 0,
@@ -4690,14 +4690,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "rollout-icon",
       "type": "image",
       "x": 1895.0,
-      "y": 1195.0,
+      "y": 775.0,
       "width": 50,
       "height": 50.0,
       "angle": 0,
@@ -4724,14 +4724,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1
     },
     {
       "id": "rollout-text",
       "type": "text",
       "x": 1960,
-      "y": 1198.75,
+      "y": 778.75,
       "width": 368,
       "height": 42.5,
       "angle": 0,
@@ -4760,7 +4760,7 @@
       "text": "payment-risk-rollout\nKServe deployment + rollback",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -4768,9 +4768,9 @@
       "id": "training-note",
       "type": "text",
       "x": 1350,
-      "y": 1310,
+      "y": 724,
       "width": 970,
-      "height": 42.5,
+      "height": 20,
       "angle": 0,
       "autoResize": true,
       "backgroundColor": "transparent",
@@ -4778,7 +4778,7 @@
       "containerId": null,
       "fillStyle": "solid",
       "fontFamily": 3,
-      "fontSize": 17,
+      "fontSize": 16,
       "frameId": null,
       "groupIds": [],
       "index": null,
@@ -4787,17 +4787,17 @@
       "link": null,
       "locked": false,
       "opacity": 100,
-      "originalText": "Kubeflow Pipelines: tune \u2192 fit \u2192 evaluate \u2192 register \u2192 rollout.\nModel artifacts and reports: artifacts/ and runs/.",
+      "originalText": "Kubeflow Pipelines \u00b7 model artifacts: artifacts/ \u00b7 reports: runs/",
       "roughness": 0,
       "roundness": null,
       "seed": 34766760,
       "strokeColor": "#212529",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "text": "Kubeflow Pipelines: tune \u2192 fit \u2192 evaluate \u2192 register \u2192 rollout.\nModel artifacts and reports: artifacts/ and runs/.",
+      "text": "Kubeflow Pipelines \u00b7 model artifacts: artifacts/ \u00b7 reports: runs/",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -7978,19 +7978,15 @@
         ],
         [
           180,
-          -595
+          -610
         ],
         [
-          -875,
-          -595
+          -600,
+          -610
         ],
         [
-          -875,
-          -1190
-        ],
-        [
-          -830,
-          -1190
+          -600,
+          -720
         ]
       ],
       "roughness": 0,
@@ -8002,16 +7998,16 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
-      "width": 1055,
-      "height": 1190
+      "width": 780,
+      "height": 720
     },
     {
       "id": "pinned-features-label",
       "type": "text",
-      "x": 1720,
-      "y": 1360,
+      "x": 1610,
+      "y": 1320,
       "width": 420,
       "height": 21.25,
       "angle": 0,
@@ -8040,7 +8036,7 @@
       "text": "(1) pinned features + labels",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -8048,7 +8044,7 @@
       "id": "tune-run",
       "type": "arrow",
       "x": 1810,
-      "y": 800,
+      "y": 1220,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -8083,7 +8079,7 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "width": 70,
       "height": 0
@@ -8092,7 +8088,7 @@
       "id": "tune-run-label",
       "type": "text",
       "x": 1825,
-      "y": 768,
+      "y": 1188,
       "width": 60,
       "height": 21.25,
       "angle": 0,
@@ -8121,7 +8117,7 @@
       "text": "(2)",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -8129,7 +8125,7 @@
       "id": "fit-run",
       "type": "arrow",
       "x": 2110,
-      "y": 850,
+      "y": 1170,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -8152,15 +8148,7 @@
         ],
         [
           0,
-          50
-        ],
-        [
-          -530,
-          50
-        ],
-        [
-          -530,
-          110
+          -110
         ]
       ],
       "roughness": 0,
@@ -8172,17 +8160,17 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
-      "width": 530,
+      "width": 0,
       "height": 110
     },
     {
       "id": "fit-run-label",
       "type": "text",
-      "x": 1620,
-      "y": 874,
-      "width": 330,
+      "x": 2130,
+      "y": 1100,
+      "width": 200,
       "height": 21.25,
       "angle": 0,
       "autoResize": true,
@@ -8210,14 +8198,14 @@
       "text": "(3) best parameters",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "gate-run",
       "type": "arrow",
-      "x": 1810,
+      "x": 1880,
       "y": 1010,
       "angle": 0,
       "backgroundColor": "transparent",
@@ -8240,7 +8228,7 @@
           0
         ],
         [
-          70,
+          -70,
           0
         ]
       ],
@@ -8253,7 +8241,7 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "width": 70,
       "height": 0
@@ -8291,15 +8279,15 @@
       "text": "(4)",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "register-run",
       "type": "arrow",
-      "x": 2110,
-      "y": 1060,
+      "x": 1580,
+      "y": 960,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -8322,15 +8310,7 @@
         ],
         [
           0,
-          50
-        ],
-        [
-          -530,
-          50
-        ],
-        [
-          -530,
-          110
+          -110
         ]
       ],
       "roughness": 0,
@@ -8342,17 +8322,17 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
-      "width": 530,
+      "width": 0,
       "height": 110
     },
     {
       "id": "register-run-label",
       "type": "text",
-      "x": 1620,
-      "y": 1084,
-      "width": 330,
+      "x": 1600,
+      "y": 890,
+      "width": 300,
       "height": 21.25,
       "angle": 0,
       "autoResize": true,
@@ -8380,7 +8360,7 @@
       "text": "(5) passing model",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -8388,7 +8368,7 @@
       "id": "rollout-run",
       "type": "arrow",
       "x": 1810,
-      "y": 1220,
+      "y": 800,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -8423,7 +8403,7 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "width": 70,
       "height": 0
@@ -8432,7 +8412,7 @@
       "id": "rollout-run-label",
       "type": "text",
       "x": 1825,
-      "y": 1188,
+      "y": 768,
       "width": 60,
       "height": 21.25,
       "angle": 0,
@@ -8461,7 +8441,7 @@
       "text": "(6)",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -8469,7 +8449,7 @@
       "id": "deployed",
       "type": "arrow",
       "x": 2340,
-      "y": 1220,
+      "y": 800,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -8496,11 +8476,11 @@
         ],
         [
           30,
-          -792.5
+          -372.5
         ],
         [
           0,
-          -792.5
+          -372.5
         ]
       ],
       "roughness": 0,
@@ -8512,10 +8492,10 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "width": 30,
-      "height": 792.5
+      "height": 372.5
     },
     {
       "id": "deployed-label",
