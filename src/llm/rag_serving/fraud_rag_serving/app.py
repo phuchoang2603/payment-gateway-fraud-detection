@@ -5,13 +5,11 @@ in worker threads so they do not block unrelated requests on the event loop.
 """
 
 import asyncio
-import os
 from contextlib import asynccontextmanager
 from typing import Literal
 
 import httpx
 import psycopg
-import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi import Path as PathParam
 from fraud_rag_common import store
@@ -225,8 +223,3 @@ async def get_chunk(chunk_id: str = PathParam(pattern=CHUNK_ID, max_length=200))
 
 app.mount("/metrics", make_asgi_app())
 app.mount("/", mcp_app)
-
-
-def main() -> None:  # pragma: no cover
-    """Start the ASGI service on the configured application port."""
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8080")), access_log=False)

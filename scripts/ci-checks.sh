@@ -34,6 +34,7 @@ check_python() (
       uv run --locked --with mutmut==3.8.1 mutmut run --max-children 2 \
         'fraud_rag_serving.app.*' > "$reports/mutation.txt" 2>&1 || mutation_status=$?
       cat "$reports/mutation.txt"
+      uv run --locked --with mutmut==3.8.1 mutmut export-cicd-stats
       if [[ -f mutants/mutmut-cicd-stats.json ]]; then
         cp mutants/mutmut-cicd-stats.json "$reports/mutation-stats.json"
       fi

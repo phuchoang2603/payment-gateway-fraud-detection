@@ -41,8 +41,11 @@ ROWS = {
 class FakeEmbedder:
     def __init__(self):
         self.calls = 0
+        self.client = object()
 
     async def query(self, client, text):
+        assert client is self.client
+        assert isinstance(text, str) and text
         self.calls += 1
         return [1.0]
 
@@ -51,13 +54,22 @@ class FakeEmbedder:
 def client(monkeypatch):
     embedder = FakeEmbedder()
     monkeypatch.setattr(service.knowledge, "embedder", embedder)
-    monkeypatch.setattr(service.knowledge, "feature_store", object())
-    monkeypatch.setattr(store, "read", lambda fs, ids: [ROWS.get(chunk_id) for chunk_id in ids])
-    monkeypatch.setattr(
-        store,
-        "search",
-        lambda fs, vector, top_k: [("checkout-api#public-routes", 0.2), ("decline-codes#high-amount", 0.1)],
-    )
+    registry = object()
+    monkeypatch.setattr(service.knowledge, "feature_store", registry)
+    monkeypatch.setattr(service.knowledge, "client", embedder.client)
+
+    def read(fs, ids):
+        assert fs is registry
+        return [ROWS.get(chunk_id) for chunk_id in ids]
+
+    def search(fs, vector, top_k):
+        assert fs is registry
+        assert vector == [1.0]
+        assert isinstance(top_k, int) and top_k > 0
+        return [("checkout-api#public-routes", 0.2), ("decline-codes#high-amount", 0.1)][:top_k]
+
+    monkeypatch.setattr(store, "read", read)
+    monkeypatch.setattr(store, "search", search)
     test_client = TestClient(service.app)
     test_client.embedder = embedder
     return test_client
@@ -168,15 +180,34 @@ def test_liveness_needs_nothing(client):
     assert client.get("/healthz").json() == {"status": "ok"}
 
 
-def test_readiness_follows_the_database(client, monkeypatch):
-    monkeypatch.setattr(service, "ping", lambda: None)
-    assert client.get("/readyz").status_code == 200
+@pytest.mark.parametrize("query_fails", [False, True])
+def test_readiness_probes_the_database_and_hides_dependency_errors(client, monkeypatch, query_fails):
+    queries = []
 
-    def down():
-        raise OSError("connection refused")
+    class Connection:
+        def __enter__(self):
+            return self
 
-    monkeypatch.setattr(service, "ping", down)
-    assert client.get("/readyz").status_code == 503
+        def __exit__(self, *_):
+            return False
+
+        def execute(self, query):
+            queries.append(query)
+            if query_fails:
+                raise OSError("private database error")
+
+    def connect(*, host, connect_timeout):
+        assert host == "knowledge-db"
+        assert 0 < connect_timeout <= 3
+        return Connection()
+
+    monkeypatch.setattr(store, "connection", lambda: {"host": "knowledge-db"})
+    monkeypatch.setattr(service.psycopg, "connect", connect)
+    response = client.get("/readyz")
+
+    assert queries == ["SELECT 1"]
+    assert response.status_code == (503 if query_fails else 200)
+    assert response.json() == ({"detail": "knowledge store unavailable"} if query_fails else {"status": "ready"})
 
 
 def test_store_loads_lazily_and_answers_503_until_the_registry_exists(client, monkeypatch):
@@ -193,6 +224,7 @@ def test_store_loads_lazily_and_answers_503_until_the_registry_exists(client, mo
             return name
 
     monkeypatch.setattr(store, "store", Loaded)
+    monkeypatch.setattr(store, "read", lambda fs, ids: [ROWS.get(chunk_id) for chunk_id in ids])
     assert client.get("/v1/chunks/decline-codes%23high-amount").status_code == 200
     assert isinstance(service.knowledge.feature_store, Loaded)
 
@@ -217,16 +249,18 @@ def test_warm_loads_the_store_and_tolerates_a_missing_registry(monkeypatch):
 
 
 def test_metrics_count_rest_requests_and_tool_outcomes(client):
+    counters = [
+        service.REQUESTS.labels("/v1/chunks/{chunk_id}", "200"),
+        service.TOOL_CALLS.labels("search_knowledge", "success"),
+        service.TOOL_CALLS.labels("get_knowledge_chunk", "failure"),
+    ]
+    before = [counter._value.get() for counter in counters]
     client.get("/v1/chunks/decline-codes%23high-amount")
     asyncio.run(service.search_knowledge("high amount"))
     with pytest.raises(ValueError):
         asyncio.run(service.get_knowledge_chunk("decline-codes#missing"))
 
-    metrics = client.get("/metrics/").text
-
-    assert 'knowledge_api_requests_total{endpoint="/v1/chunks/{chunk_id}",status="200"}' in metrics
-    assert 'knowledge_mcp_tool_calls_total{outcome="success",tool="search_knowledge"}' in metrics
-    assert 'knowledge_mcp_tool_calls_total{outcome="failure",tool="get_knowledge_chunk"}' in metrics
+    assert [counter._value.get() for counter in counters] == [value + 1 for value in before]
 
 
 def test_lifespan_builds_the_embedder_and_serves_mcp(monkeypatch):
