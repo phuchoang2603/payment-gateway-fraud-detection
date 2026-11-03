@@ -66,6 +66,21 @@ def worker_env():
     return env
 
 
+def json_patch(kind, name, operations):
+    """Applies RFC 6902 operations to a custom resource.
+
+    The generated client always sends a merge patch for custom resources, which rejects a list. A client
+    of its own whose default `Content-Type` is the JSON-patch type is applied after that header, so only
+    this call changes it.
+    """
+    group, version, plural = kind
+    patcher = client.ApiClient(connect().configuration)
+    patcher.set_default_header("Content-Type", "application/json-patch+json")
+    client.CustomObjectsApi(patcher).patch_namespaced_custom_object(
+        group, version, namespace(), plural, name, operations
+    )
+
+
 def create(kind, body):
     """Creates a custom resource in the namespace and returns its name."""
     group, version, plural = kind
@@ -214,15 +229,7 @@ def inference_service(version, predictor):
             },
         )
         return
-    group, api, plural = INFERENCE
-    objects().patch_namespaced_custom_object(
-        group,
-        api,
-        namespace(),
-        plural,
-        name,
-        [{"op": "replace", "path": "/spec/predictor", "value": spec}],
-    )
+    json_patch(INFERENCE, name, [{"op": "replace", "path": "/spec/predictor", "value": spec}])
 
 
 def rolled_out(deployment, uri):

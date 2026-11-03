@@ -53,6 +53,11 @@ def cluster(monkeypatch):
     """Replaces the API and the sleep, and returns the fake custom-objects API."""
     fake = FakeObjects()
     monkeypatch.setattr(kube, "objects", lambda: fake)
+    monkeypatch.setattr(
+        kube,
+        "json_patch",
+        lambda kind, name, operations: fake.patched.append((kind[2], name, operations)),
+    )
     monkeypatch.setattr(kube.time, "sleep", lambda _: None)
     return fake
 
@@ -346,3 +351,43 @@ def test_wait_ready_ignores_a_service_without_an_address(cluster, monkeypatch):
     with pytest.raises(TimeoutError, match="stopped after one poll"):
         kube.wait_ready("payment-risk", "v2")
     assert cluster.deleted == []
+
+
+def test_a_json_patch_goes_through_a_client_that_sends_the_json_patch_content_type(monkeypatch):
+    """The patch uses its own client with the JSON-patch default header, on the shared configuration."""
+    seen = {}
+
+    class Api:
+        """An API client that records its configuration and default headers."""
+
+        def __init__(self, configuration):
+            seen["configuration"], self.headers = configuration, {}
+
+        def set_default_header(self, name, value):
+            """Records a default header."""
+            self.headers[name] = value
+
+    class Objects:
+        """A custom-objects API that records its client and the patch."""
+
+        def __init__(self, api):
+            seen["api"] = api
+
+        def patch_namespaced_custom_object(self, *arguments):
+            """Records the arguments."""
+            seen["arguments"] = arguments
+
+    monkeypatch.setattr(kube, "connect", lambda: SimpleNamespace(configuration="shared"))
+    monkeypatch.setattr(kube.client, "ApiClient", Api)
+    monkeypatch.setattr(kube.client, "CustomObjectsApi", Objects)
+    kube.json_patch(kube.INFERENCE, "payment-risk", [{"op": "remove", "path": "/x"}])
+    assert seen["configuration"] == "shared"
+    assert seen["api"].headers == {"Content-Type": "application/json-patch+json"}
+    assert seen["arguments"] == (
+        "serving.kserve.io",
+        "v1beta1",
+        "ml",
+        "inferenceservices",
+        "payment-risk",
+        [{"op": "remove", "path": "/x"}],
+    )
