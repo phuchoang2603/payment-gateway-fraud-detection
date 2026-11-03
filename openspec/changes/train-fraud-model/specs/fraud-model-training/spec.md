@@ -120,28 +120,23 @@ The final list SHALL be chosen with the model, before the first registered versi
 - **WHEN** adding a candidate does not improve validation PR-AUC
 - **THEN** it is not part of `payment_risk_v1` when the first version is registered
 
-### Requirement: Scheduled rolling retraining
-The platform SHALL retrain on a Kubeflow recurring run. Each run SHALL derive contiguous train, validation and test windows from its schedule time minus a lag, ending on the latest day at or before that for which every day of the three windows has rows in the stream feature tables for the configured epochs. A run SHALL stop before building a training set when its cutoff is not later than the cutoff recorded on the highest registered model version, unless forced. A run given explicit windows and cutoff SHALL use them as given. The recurring run SHALL follow the deployed pipeline version after every release, and SHALL NOT run missed schedules.
+### Requirement: Rolling windows for each retraining run
+Every training run SHALL derive contiguous train, validation and test windows from its start time minus a lag, ending on the latest day at or before that for which every day of the three windows has rows in the stream feature tables for the configured epochs. A run SHALL stop before building a training set when its cutoff is not later than the cutoff recorded on the highest registered model version, unless forced. A run given explicit windows and cutoff SHALL use them as given. No Kubeflow recurring run SHALL start training; runs start from the drift check or by hand.
 
 #### Scenario: New data since the last model
 
-- **WHEN** a scheduled run's end day is later than the end of the highest registered version's test window
+- **WHEN** a run's end day is later than the end of the highest registered version's test window
 - **THEN** the run builds a training set over the rolling windows and continues through the gate
 
 #### Scenario: No new data
 
-- **WHEN** a scheduled run's cutoff equals or precedes the highest registered version's cutoff
+- **WHEN** a run's cutoff equals or precedes the highest registered version's cutoff
 - **THEN** the run finishes after planning its windows without building a training set, training or registering anything
-
-#### Scenario: Release changes the pipeline
-
-- **WHEN** a release deploys a new pipeline version
-- **THEN** the recurring run is recreated against that version
 
 #### Scenario: Windows beyond the replayed history
 
-- **WHEN** the schedule time is later than the last replayed stream day
-- **THEN** the windows end on the last day whose whole span has rows, not on the schedule date
+- **WHEN** the run's start time is later than the last replayed stream day
+- **THEN** the windows end on the last day whose whole span has rows, not on the start date
 
 #### Scenario: A gap between replayed and live data
 
@@ -189,11 +184,16 @@ A periodic comparison SHALL measure, for the served version, the population stab
 - **THEN** the dashboard shows its index and the overall state changes only when the configured breach rule holds
 
 ### Requirement: Drift-triggered retraining through the Kubeflow API
-When the breach rule holds in both a short and a long window, a single job SHALL create one run of the training pipeline through the Kubeflow API, named for the version and the hour. It SHALL create none while a drift-triggered run is pending or running, within the cooldown after the previous one, when the serving version's cutoff is younger than the minimum age, or after the bound on runs per week. The run SHALL pass through the same gate and promotion rules as any other, and a version it registers SHALL record that a drift caused it and the drift summary.
+When the breach rule holds in both a short and a long window, a single job SHALL create one run of the training pipeline through the Kubeflow API, named for the version and the hour. It SHALL create none while a drift-triggered run is pending or running, within the cooldown after the previous one, when the serving version's cutoff is younger than the minimum age, or after the bound on runs per week. The same check SHALL also create a run when the serving version's cutoff is older than a configured age ceiling, so a failure of the metrics path cannot leave the model stale for ever. The run SHALL pass through the same gate and promotion rules as any other, and a version it registers SHALL record that a drift caused it and the drift summary.
 
 #### Scenario: Persistent drift
 - **WHEN** the breach rule holds in both windows, no drift-triggered run is active, and the cooldown and the weekly bound allow it
 - **THEN** one training run starts, and a repeated check an hour later starts none
+
+#### Scenario: Stale model without drift data
+
+- **WHEN** the serving version's cutoff is older than the age ceiling and no drift run is active or cooling down
+- **THEN** one training run starts, named for the age rule, and passes the same gate
 
 #### Scenario: Retrained model does not pass the gate
 - **WHEN** the triggered run fails the gate

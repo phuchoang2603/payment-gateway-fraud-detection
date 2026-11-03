@@ -79,19 +79,19 @@
 - [x] 5d.4 On dev: scale a second predictor replica under load on the shared GPU, and load the dashboard's panels.
 - [ ] 5d.5 After merge: confirm the dashboard in Grafana and the ScaledObject on the real `payment-risk` service, and tune the 5 ms queue-time target against prod traffic.
 
-## 5e. Drift and drift-triggered retraining (planned; decisions 1 to 3 and 7 in the design first)
+## 5e. Drift and drift-triggered retraining (decided 2026-11-03: Go-side bins, a new FastAPI image, drift is the only trigger, live simulator overlay)
 
 - [ ] 5e.1 Add `risk_model/drift.py`: weighted-quantile `profile`, smoothed `psi`, the missing-share shift, the breach rule and the trigger policy as pure functions, with property-based tests (PSI of a sample against itself is 0, bin proportions sum to 1, the policy is monotone in the thresholds).
 - [ ] 5e.2 Compute the reference profile in `record_version`, store it as the registry property `reference` and as a `config.pbtxt` parameter, and record `trigger` and the drift summary on a version a drift run registers.
 - [ ] 5e.3 Count scored features into bins in Go Fraud (`fraud.model.feature_bin` by feature, bin and model version), reading the profile from the served model's config with the existing version check; measure the per-request cost.
 - [ ] 5e.4 Add the drift service (`GET /v1/drift`, `/v1/reference`, probes, `/metrics`) with a Helm Deployment, a KEDA ScaledObject and a `VMPodScrape`, and its image entry in `service-images.json` if decision 2 picks a new image.
-- [ ] 5e.5 Add the hourly `payment-risk-drift-check` CronJob: the policy, the KFP run creation through `risk_model.schedule.Pipelines`, deduplication, cooldown and the weekly bound.
-- [ ] 5e.6 Change the recurring run to the weekly backstop in the chart values.
+- [ ] 5e.5 Add the hourly `payment-risk-drift-check` CronJob: the policy, the KFP run creation through `risk_model.schedule.Pipelines`, deduplication, cooldown, the weekly bound and the age ceiling.
+- [ ] 5e.6 Remove the recurring run: the `ensure_schedule` step and `Pipelines.ensure_schedule`, the PostSync hook Job, the `schedule` values and their tests; keep the `Pipelines` REST client and `plan_windows`; add the 14-day age ceiling to the check's policy. Update `docs/ml/training.md`.
 - [ ] 5e.7 Add the live simulator `drift` steps (validated, deterministic, world digest unchanged) with tests, and one example step in the dev values.
 - [ ] 5e.8 Add the drift panels to the `ml-serving` dashboard and a Locust run of the drift API for the rubric's load row.
 - [ ] 5e.9 Update `docs/ml/training.md` (Drift) and the roadmap rows; proof and pending verification stay in separate sentences.
 
-## 5f. Model A/B experiment (planned; decisions 4 to 6 in the design first)
+## 5f. Model A/B experiment (decided 2026-11-03: enforced, no shadow, split in Go Fraud; an InferenceGraph was tried and is blocked by the namespace's Pod Security)
 
 - [ ] 5f.1 Add the arms and the stable cohort assignment to Go Fraud (`model.arms`, `model.experiment`, per-arm client, version check and threshold), the optional `arm` on `ModelEvidence`, and the chart values with the percentage cap validated in the chart.
 - [ ] 5f.2 Add `role=challenger` to `roll_out`, the `challenger` registry stage, and deletion of the challenger service; `experiment.enabled` makes a gate-passed run deploy as challenger.
@@ -115,8 +115,8 @@
 - [x] 7.6 Write the evidence into `docs/ml/training.md` and `docs/ml/serving.md` as numbers and tables. Results that miss expectations are recorded as observed.
 - [ ] 7.7 Run the same steps on prod once its stream history is replayed, with the user's approval.
 - [ ] 7.8 Run `payment-risk-training` without a snapshot on a cluster with room for the 8 GB staging pod, and record the incremental training-set snapshot summary.
-- [ ] 7.9 With the user's approval, on dev only: run the live simulator with a drift step, show the drift state and the dashboard, and show one triggered run, the repeated check starting none, and the gate outcome.
-- [ ] 7.10 With the user's approval, on dev only: deploy a challenger at a small percentage, show both versions side by side, the stable cohort, an abort by guard, and a promotion.
+- [ ] 7.9 Approved by the user on 2026-11-03, on dev only: run the live simulator with a drift step, show the drift state and the dashboard, and show one triggered run, the repeated check starting none, and the gate outcome.
+- [ ] 7.10 Approved by the user on 2026-11-03, on dev only: deploy a challenger at a small percentage, show both versions side by side, the stable cohort, an abort by guard, and a promotion.
 
 ## 8. Archive
 
