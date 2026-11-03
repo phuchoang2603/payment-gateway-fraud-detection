@@ -19,7 +19,7 @@ Docs: [domain](https://github.com/phuchoang2603/payment-gateway-fraud-detection/
 
 The [refurbished marketplace](https://github.com/phuchoang2603/refurbished-marketplace) creates payments and receives signed outcomes. This repo owns hosted checkout, payment attempts, fraud decisions, simulated processing and recovery, durable events and webhook delivery.
 
-Kafka events and synthetic history feed Spark's Bronze/Silver/Gold lakehouse and Flink's streaming features. Feast serves daily and streaming features from Redis to Go Fraud, which applies rules and the KServe model score. Kubeflow builds point-in-time training examples, tunes XGBoost with Katib, trains and evaluates it, registers passing versions and rolls them out to KServe.
+Kafka events and synthetic history feed Spark's Bronze/Silver/Gold lakehouse and Flink's streaming features. Argo Workflows orchestrates data jobs and write–audit–publish checks; OpenMetadata records contracts, quality results and lineage. Feast serves daily and streaming features from Redis to Go Fraud, which applies rules and the KServe model score. Kubeflow builds point-in-time training examples, tunes XGBoost with Katib, trains and evaluates it, registers passing versions and rolls them out to KServe.
 
 [![Payment gateway, data and ML flow: Go services and state, Kafka topics and consumers, Spark and Flink, Feast and Redis, and Kubeflow training and KServe rollout](docs/payment-gateway/images/payment-flow.png)](docs/payment-gateway/images/payment-flow.png)
 
