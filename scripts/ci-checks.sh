@@ -28,6 +28,21 @@ check_python() (
     for group in $(python3 -c 'import tomllib; print(" ".join(tomllib.load(open("pyproject.toml", "rb")).get("tool", {}).get("ci", {}).get("test-groups", [])))'); do
       uv run --locked --no-default-groups --group dev --group "$group" pytest -q --durations=5
     done
+    if [[ "$1" == src/llm/rag_serving && -n "${MUTATION_BASE:-}" ]] &&
+      ! git diff --quiet "$MUTATION_BASE" HEAD -- fraud_rag_serving/app.py; then
+      local mutation_status=0
+      uv run --locked --with mutmut==3.8.1 mutmut run --max-children 2 \
+        'fraud_rag_serving.app.*' > "$reports/mutation.txt" 2>&1 || mutation_status=$?
+      cat "$reports/mutation.txt"
+      if [[ -f mutants/mutmut-cicd-stats.json ]]; then
+        cp mutants/mutmut-cicd-stats.json "$reports/mutation-stats.json"
+      fi
+      if [[ "$mutation_status" != 0 ]]; then
+        return "$mutation_status"
+      fi
+      uv run --locked --with mutmut==3.8.1 mutmut results > "$reports/mutation-results.txt"
+      cat "$reports/mutation-results.txt"
+    fi
   fi
 )
 

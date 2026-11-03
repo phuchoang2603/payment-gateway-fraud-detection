@@ -28,6 +28,8 @@ TOOL_CALLS = Counter("knowledge_mcp_tool_calls_total", "Knowledge MCP tool calls
 
 
 class Chunk(BaseModel):
+    """Expose one versioned, citable knowledge passage and its source provenance."""
+
     chunk_id: str
     doc_id: str
     title: str
@@ -41,17 +43,23 @@ class Chunk(BaseModel):
 
 
 class SearchRequest(BaseModel):
+    """Bound semantic-search input size, result count and optional audience."""
+
     query: str = Field(min_length=1, max_length=2000)
     top_k: int = Field(default=5, ge=1, le=20)
     audience: Audience | None = None
 
 
 class SearchHit(BaseModel):
+    """Pair a retrieved passage with its vector distance."""
+
     distance: float
     chunk: Chunk
 
 
 class SearchResponse(BaseModel):
+    """Return nearest matching passages in ascending distance order."""
+
     hits: list[SearchHit]
 
 
@@ -81,17 +89,20 @@ class Knowledge:
     # Loading Feast takes seconds, longer than the gateway allows the first tool call; a missing registry is retried
     # on first use.
     async def warm(self) -> None:
+        """Attempt registry initialization without making a missing registry fatal to startup."""
         try:
             await self.store()
         except HTTPException:
             pass
 
     async def chunk(self, chunk_id: str) -> Chunk | None:
+        """Read a passage by stable ID without calling the embedding gateway."""
         feature_store = await self.store()
         rows = await asyncio.to_thread(store.read, feature_store, [chunk_id])
         return Chunk(**rows[0]) if rows and rows[0] else None
 
     async def search(self, request: SearchRequest) -> SearchResponse:
+        """Embed once, retrieve candidates and filter passages by the requested audience."""
         feature_store = await self.store()
         vector = await self.embedder.query(self.client, request.query)
         depth = request.top_k * 3 if request.audience else request.top_k
@@ -113,6 +124,7 @@ mcp = MCPServer(
 
 
 async def counted(tool: str, call):
+    """Count successful and failed MCP calls while preserving their result or exception."""
     try:
         result = await call
     except Exception:
@@ -123,6 +135,7 @@ async def counted(tool: str, call):
 
 
 async def find_chunk(chunk_id: str) -> Chunk:
+    """Resolve a passage or raise the MCP tool’s unknown-ID error."""
     found = await knowledge.chunk(chunk_id)
     if found is None:
         raise ValueError(f"unknown chunk_id: {chunk_id}")
@@ -154,6 +167,7 @@ mcp_app = mcp.streamable_http_app(
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    """Share one HTTP client and cancel registry warmup when the application stops."""
     knowledge.embedder = Embedder.from_env()
     async with httpx.AsyncClient(timeout=30.0) as client:
         knowledge.client = client
@@ -170,6 +184,7 @@ app = FastAPI(title="Payment-gateway knowledge API", version="0.1.0", lifespan=l
 
 @app.middleware("http")
 async def count_requests(request: Request, call_next):
+    """Count versioned REST responses using route templates rather than raw IDs."""
     response = await call_next(request)
     route = request.scope.get("route")
     if route is not None and request.url.path.startswith("/v1/"):
@@ -179,16 +194,19 @@ async def count_requests(request: Request, call_next):
 
 @app.get("/healthz")
 async def healthz() -> dict:
+    """Report process liveness independently of external storage."""
     return {"status": "ok"}
 
 
 def ping() -> None:
+    """Check database connectivity with a bounded connection timeout."""
     with psycopg.connect(**store.connection(), connect_timeout=3) as conn:
         conn.execute("SELECT 1")
 
 
 @app.get("/readyz")
 async def readyz() -> dict:
+    """Report readiness only when the knowledge database can answer a query."""
     try:
         await asyncio.to_thread(ping)
     except Exception as error:
@@ -198,6 +216,7 @@ async def readyz() -> dict:
 
 @app.get("/v1/chunks/{chunk_id}", response_model=Chunk, responses={404: {"description": "Unknown chunk"}})
 async def get_chunk(chunk_id: str = PathParam(pattern=CHUNK_ID, max_length=200)) -> Chunk:
+    """Return a validated passage ID or an HTTP 404 when the passage is absent."""
     found = await knowledge.chunk(chunk_id)
     if found is None:
         raise HTTPException(status_code=404, detail="unknown chunk_id")
@@ -209,4 +228,5 @@ app.mount("/", mcp_app)
 
 
 def main() -> None:  # pragma: no cover
+    """Start the ASGI service on the configured application port."""
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8080")), access_log=False)

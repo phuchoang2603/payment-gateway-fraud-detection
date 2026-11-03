@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from pyspark.sql import functions as F
 
@@ -97,3 +99,47 @@ def test_hot_key_share_uses_all_attempts_as_denominator(spark, attempts):
 
     assert share["merchant_id"] == "m-1"
     assert share["denominator"] == 82
+
+
+def test_workflow_entrypoint_keeps_salt_identity_and_pins_the_report(spark, attempts, report_root, monkeypatch):
+    monkeypatch.setenv("RUN_ID", "skew-entrypoint")
+    monkeypatch.setenv("DP_START", "2026-07-31")
+    monkeypatch.setenv("DP_END", "2026-07-31")
+    monkeypatch.setattr(benchmark, "session", lambda _: spark)
+    monkeypatch.setattr(spark, "stop", lambda: None)
+    monkeypatch.setattr(benchmark, "ref_snapshot", lambda *_: 123)
+    monkeypatch.setattr(benchmark, "read_at", lambda *_: attempts.withColumn("payment_day", F.to_date("started_at")))
+
+    def compare(session, selected):
+        totals = benchmark.collected_totals(selected)
+        baseline = guard(benchmark.join_baseline(selected, totals))
+        salted = guard(benchmark.join_salted(selected, totals))
+        benchmark.same_output(baseline, salted, "salted")
+        selected.unpersist()
+        return {"equal_output_rows": baseline[0]}
+
+    monkeypatch.setattr(benchmark, "benchmark", compare)
+
+    assert benchmark.main() == 0
+    report = json.loads((report_root / "skew-entrypoint" / "benchmark.json").read_text())
+    assert report["silver_snapshot_id"] == 123
+    assert report["attempts"] == 82
+    assert report["equal_output_rows"] == 3
+
+
+def test_join_failure_restores_an_unset_adaptive_broadcast_threshold(spark, attempts):
+    key = "spark.sql.adaptive.autoBroadcastJoinThreshold"
+    previous = spark.conf.get(key, None)
+    spark.conf.unset(key)
+
+    def broken(*_):
+        assert spark.conf.get(key) == "-1"
+        raise RuntimeError("join failed")
+
+    try:
+        with pytest.raises(RuntimeError, match="join failed"):
+            benchmark.run_variant(spark, attempts, attempts, "broken", broken, benchmark.SORT_MERGE, {})
+        assert spark.conf.get(key, None) is None
+    finally:
+        if previous is not None:
+            spark.conf.set(key, previous)

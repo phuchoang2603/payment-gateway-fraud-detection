@@ -1,7 +1,7 @@
 import json
 import shutil
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pyarrow.parquet as pq
@@ -196,7 +196,7 @@ def test_duplicate_exports_are_republished_with_a_later_recorded_at(tmp_path):
         content = {key: value for key, value in original.items() if key != "recorded_at"}
         for copy in republished:
             assert {key: value for key, value in copy.items() if key != "recorded_at"} == content
-            assert copy["recorded_at"] > original["recorded_at"]
+            assert timedelta(seconds=1) <= copy["recorded_at"] - original["recorded_at"] <= timedelta(seconds=300)
 
 
 def test_parts_are_never_empty_and_rows_sit_on_their_side_of_the_change(tmp_path):
@@ -280,3 +280,29 @@ def test_publish_refuses_while_any_shard_is_missing(tmp_path):
     with pytest.raises(GenerationError):
         publish(config_for(root), CONTRACTS)
     assert not (dataset_of(root) / "manifest.json").exists()
+
+
+def test_chargeback_labels_are_delayed_observations_of_successful_attempts(tmp_path):
+    root = tmp_path / "out"
+    config = config_for(root, **{"world.scenarios.friendly_fraud.rate": 1})
+    run(config)
+    events = read_rows(dataset_of(root), "payment_events")
+    labels = read_rows(dataset_of(root), "fraud_labels")
+    succeeded = {
+        row["payment_succeeded"]["attempt_id"]: row["occurred_at"]
+        for row in events
+        if row["payment_succeeded"] is not None
+    }
+    truth = {row["attempt_id"]: row for row in labels if row["source"] == "LABEL_SOURCE_SIMULATION_TRUTH"}
+    chargebacks = [row for row in labels if row["source"] == "LABEL_SOURCE_CHARGEBACK"]
+    assert chargebacks
+    for row in chargebacks:
+        assert row["is_fraud"] is True
+        assert row["attempt_id"] in succeeded
+        assert row["occurred_at"] == truth[row["attempt_id"]]["occurred_at"]
+        delay = row["label_available_at"] - succeeded[row["attempt_id"]]
+        assert (
+            timedelta(days=config.world.label_delays.min_days)
+            <= delay
+            <= timedelta(days=config.world.label_delays.max_days)
+        )

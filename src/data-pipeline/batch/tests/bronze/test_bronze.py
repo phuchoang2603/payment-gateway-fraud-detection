@@ -7,6 +7,8 @@ from pyspark.sql import functions as F
 
 from batch.bronze import ingest as bronze
 from batch.bronze.schema import EVENT_COLUMNS, LABEL_COLUMNS, business_schema, decode_events
+from batch.silver import curate as silver
+from tests.events import approved, created, label, requested, started, succeeded
 from tests.historical import EVENTS_PART, LABELS_PART, write_manifest, write_part
 
 MOMENT = datetime(2026, 7, 31, 12, tzinfo=timezone.utc)
@@ -128,3 +130,78 @@ def test_corrupt_protobuf_bytes_are_flagged_and_empty_message_decodes(spark):
 
     assert decoded[0]["decoded"]["event_id"] == ""
     assert decoded[1]["decoded"] is None or decoded[1]["decoded"]["event_id"] is None
+
+
+@pytest.fixture
+def mixed_schema_tables(spark):
+    tables = (bronze.EVENTS, bronze.LABELS, *silver.TABLES)
+    for table in tables:
+        spark.sql(f"DROP TABLE IF EXISTS {table}")
+    yield
+    for table in tables:
+        spark.sql(f"DROP TABLE IF EXISTS {table}")
+
+
+def test_mixed_physical_schemas_and_redelivery_survive_bronze_then_canonicalize_in_silver(
+    spark, tmp_path, report_root, mixed_schema_tables
+):
+    schema = business_schema(spark, EVENT_COLUMNS)
+    files = []
+    for version in (2, 3):
+        payment, attempt = f"pay-v{version}", f"att-v{version}"
+        rows = [
+            created(payment, f"v{version}-1"),
+            started(payment, f"v{version}-2", 2, 1, attempt),
+            approved(payment, f"v{version}-3", 3, 2, attempt),
+            requested(payment, f"v{version}-4", 4, 3, attempt),
+            succeeded(payment, f"v{version}-5", 5, 4, attempt),
+        ]
+        for row in rows:
+            row["schema_version"] = version
+        physical = schema
+        if version == 2:
+            physical = (
+                spark.createDataFrame([], schema)
+                .withColumn("attempt_started", F.col("attempt_started").dropFields("signals.user_agent_family"))
+                .withColumn(
+                    "risk_decision_recorded",
+                    F.col("risk_decision_recorded").dropFields(
+                        "assessment.assessment_id", "assessment.evidence_sha256"
+                    ),
+                )
+                .schema
+            )
+        else:
+            rows.append({**rows[2], "recorded_at": MOMENT.replace(minute=10)})
+        path = f"payment_events/date=2026-07-31/part-00000.v{version}.parquet"
+        files.append(write_part(spark, tmp_path, path, rows, physical))
+
+    files.append(
+        write_part(
+            spark,
+            tmp_path,
+            LABELS_PART,
+            [label(f"pay-v{version}", f"att-v{version}", available=10) for version in (2, 3)],
+            business_schema(spark, LABEL_COLUMNS),
+        )
+    )
+    write_manifest(tmp_path, files, version="mixed-schema")
+    bronze.run_historical(spark, str(tmp_path), "mixed-schema", "mixed-bronze")
+
+    decisions = spark.table(bronze.EVENTS).where(F.col("risk_decision_recorded").isNotNull())
+    assert decisions.count() == 3
+    field = "risk_decision_recorded.assessment.assessment_id"
+    assert (
+        decisions.where(F.col("schema_version") == 2).first()["risk_decision_recorded"]["assessment"]["assessment_id"]
+        is None
+    )
+    assert decisions.where((F.col("schema_version") == 3) & F.col(field).isNotNull()).count() == 2
+
+    silver.run(spark, "mixed-silver", MOMENT.date(), MOMENT.date())
+
+    assert spark.table(bronze.EVENTS).where(F.col("_dataset_version") == "mixed-schema").count() == 11
+    assert spark.table(silver.PAYMENT_EVENTS).count() == 10
+    attempts = {row.attempt_id: row for row in spark.table(silver.ATTEMPTS).collect()}
+    assert attempts["att-v2"].assessment_id is None
+    assert attempts["att-v3"].assessment_id == "assessment-1"
+    assert all(row.lifecycle_valid for row in attempts.values())

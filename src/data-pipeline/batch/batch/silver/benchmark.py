@@ -23,10 +23,12 @@ SALT_BUCKETS = 16
 SORT_MERGE = {
     "spark.sql.adaptive.enabled": "true",
     "spark.sql.autoBroadcastJoinThreshold": "-1",
+    "spark.sql.adaptive.autoBroadcastJoinThreshold": "-1",
 }
 
 
 def merchant_totals(attempts: DataFrame) -> DataFrame:
+    """Aggregate the shared merchant dimension before timing join variants."""
     return attempts.groupBy("merchant_id").agg(
         F.count("*").alias("merchant_attempts"),
         F.sum("amount_minor").alias("merchant_amount"),
@@ -34,6 +36,7 @@ def merchant_totals(attempts: DataFrame) -> DataFrame:
 
 
 def per_merchant_day(joined: DataFrame) -> DataFrame:
+    """Reduce each joined variant to the same merchant/day output grain."""
     return joined.groupBy("merchant_id", F.to_date("started_at").alias("day")).agg(
         F.count("*").alias("attempts"),
         F.sum("amount_minor").alias("amount_minor"),
@@ -42,6 +45,7 @@ def per_merchant_day(joined: DataFrame) -> DataFrame:
 
 
 def join_baseline(attempts: DataFrame, totals: DataFrame) -> DataFrame:
+    """Join on the unsalted merchant key using the active Spark settings."""
     return per_merchant_day(attempts.join(totals, "merchant_id"))
 
 
@@ -104,6 +108,7 @@ def skew_report(spark, plan) -> dict:
 
 
 def same_output(baseline, candidate, name: str) -> None:
+    """Reject variants whose row count or order-independent checksum differs."""
     if baseline != candidate:
         raise AssertionError(f"variant {name} output differs from baseline: {candidate} != {baseline}")
 
@@ -116,7 +121,8 @@ def collected_totals(attempts: DataFrame) -> DataFrame:
 
 
 def run_variant(spark, attempts: DataFrame, totals: DataFrame, name: str, build, settings: dict, phases: dict):
-    previous = {key: spark.conf.get(key) for key in settings}
+    """Time one join variant and restore its Spark settings even after failure."""
+    previous = {key: spark.conf.get(key, None) for key in settings}
     for key, value in settings.items():
         spark.conf.set(key, value)
     try:
@@ -126,10 +132,14 @@ def run_variant(spark, attempts: DataFrame, totals: DataFrame, name: str, build,
         return rows, checksum, skew_report(spark, plan)
     finally:
         for key, value in previous.items():
-            spark.conf.set(key, value)
+            if value is None:
+                spark.conf.unset(key)
+            else:
+                spark.conf.set(key, value)
 
 
 def skewed_merchant_join(spark, attempts: DataFrame, phases: dict, aqe_thresholds: dict | None = None) -> dict:
+    """Compare baseline, actual AQE skew splitting and salting on identical cached input."""
     attempts.count()
     totals = collected_totals(attempts)
     results, baseline = {}, None
@@ -150,6 +160,7 @@ def skewed_merchant_join(spark, attempts: DataFrame, phases: dict, aqe_threshold
 
 
 def hot_key_share(attempts: DataFrame) -> dict:
+    """Measure the busiest merchant against all selected attempts."""
     totals = attempts.groupBy("merchant_id").count()
     top = totals.orderBy(F.desc("count")).first()
     total = attempts.count()
@@ -157,6 +168,7 @@ def hot_key_share(attempts: DataFrame) -> dict:
 
 
 def spill_bytes(spark, stage_ids: list) -> dict:
+    """Read memory and disk spill counters for selected stages from the Spark UI API."""
     sc = spark.sparkContext
     if not sc.uiWebUrl:
         return {"memory": None, "disk": None}
@@ -169,6 +181,7 @@ def spill_bytes(spark, stage_ids: list) -> dict:
 
 
 def benchmark(spark, attempts: DataFrame) -> dict:
+    """Collect hot-key distribution, correctness guards and timed join phases."""
     phases: dict = {}
     return {
         "hot_key": hot_key_share(attempts),
@@ -178,6 +191,7 @@ def benchmark(spark, attempts: DataFrame) -> dict:
 
 
 def main():
+    """Benchmark a pinned Silver range and persist its reproducible run report."""
     run_id = os.environ["RUN_ID"]
     spark = session("dp2-benchmark")
     try:
@@ -186,7 +200,7 @@ def main():
         attempts = (
             read_at(spark, ATTEMPTS, silver_snapshot)
             .where((F.col(PAYMENT_DAY) >= first) & (F.col(PAYMENT_DAY) <= last))
-            .select("merchant_id", "started_at", "amount_minor", "outcome")
+            .select("merchant_id", "attempt_id", "started_at", "amount_minor")
             .persist()
         )
         result = {

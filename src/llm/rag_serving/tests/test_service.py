@@ -3,6 +3,8 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 from fraud_rag_common import store
+from hypothesis import given, settings
+from hypothesis import strategies as st
 from pydantic import ValidationError
 
 from fraud_rag_serving import app as service
@@ -83,11 +85,71 @@ def test_search_tool_ranks_by_distance_and_filters_audience(client):
     assert [hit.chunk.chunk_id for hit in analyst] == ["decline-codes#high-amount"]
 
 
-@pytest.mark.parametrize("arguments", [{"query": ""}, {"query": "x", "top_k": 0}, {"query": "x", "top_k": 21}])
+@pytest.mark.parametrize(
+    "arguments",
+    [{"query": ""}, {"query": "x" * 2001}, {"query": "x", "top_k": 0}, {"query": "x", "top_k": 21}],
+)
 def test_invalid_search_is_rejected_without_calling_the_gateway(client, arguments):
     with pytest.raises(ValidationError):
         asyncio.run(service.search_knowledge(**arguments))
     assert client.embedder.calls == 0
+
+
+@pytest.mark.parametrize("query,top_k", [("x", 1), ("x" * 2000, 20)])
+def test_search_accepts_boundary_values_and_limits_results(client, query, top_k):
+    hits = asyncio.run(service.search_knowledge(query, top_k=top_k)).hits
+
+    assert len(hits) == min(top_k, len(ROWS))
+    assert client.embedder.calls == 1
+
+
+def test_repeated_chunk_reads_are_stable_for_arbitrary_existing_ids(client):
+    @settings(max_examples=10, derandomize=True)
+    @given(ids=st.lists(st.sampled_from(list(ROWS)), min_size=1, max_size=10))
+    def repeated(ids):
+        async def read():
+            return [await service.get_knowledge_chunk(chunk_id) for chunk_id in ids]
+
+        first, second = asyncio.run(read()), asyncio.run(read())
+        assert [chunk.model_dump() for chunk in first] == [ROWS[chunk_id] for chunk_id in ids]
+        assert first == second
+        assert client.embedder.calls == 0
+
+    repeated()
+
+
+def test_concurrent_first_reads_initialize_the_registry_once(monkeypatch):
+    loaded = []
+
+    class Registry:
+        def get_feature_view(self, name):
+            assert name == store.VIEW
+
+    def load():
+        registry = Registry()
+        loaded.append(registry)
+        return registry
+
+    monkeypatch.setattr(store, "store", load)
+    knowledge = service.Knowledge()
+
+    async def read():
+        return await asyncio.gather(*(knowledge.store() for _ in range(10)))
+
+    results = asyncio.run(read())
+    assert len(loaded) == 1
+    assert all(result is loaded[0] for result in results)
+
+
+def test_embedding_failure_does_not_return_partial_search_results(client, monkeypatch):
+    async def unavailable(*_):
+        raise TimeoutError("embedding unavailable")
+
+    monkeypatch.setattr(client.embedder, "query", unavailable)
+    with pytest.raises(TimeoutError, match="embedding unavailable"):
+        asyncio.run(service.search_knowledge("high amount"))
+
+    assert 'knowledge_mcp_tool_calls_total{outcome="failure",tool="search_knowledge"}' in client.get("/metrics/").text
 
 
 def test_mcp_exposes_two_tools_backed_by_the_same_functions(client):

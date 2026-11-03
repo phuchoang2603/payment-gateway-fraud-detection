@@ -47,6 +47,8 @@ jobs:
     name: Python ${{ matrix.project }}
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.14"
@@ -68,6 +70,7 @@ jobs:
         env:
           PY_PROJECT: ${{ matrix.project }}
           CI_TEST_REPORTS: /tmp/python-test-evidence
+          MUTATION_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: bash scripts/ci-checks.sh python "$PY_PROJECT"
       - uses: actions/upload-artifact@v7.0.2
         if: always()
