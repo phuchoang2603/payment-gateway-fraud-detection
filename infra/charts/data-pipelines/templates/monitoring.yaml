@@ -1,0 +1,32 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: payment-data
+  namespace: {{ .Values.namespace }}
+spec:
+  groups:
+    - name: payment-data
+      rules:
+        - alert: PaymentDataPodFailure
+          expr: kube_pod_status_phase{namespace={{ .Values.namespace | quote }},phase="Failed"} == 1
+          for: 10m
+          labels: {severity: warning, namespace: {{ .Values.namespace | quote }}}
+          annotations:
+            summary: Data workload pod remains failed
+            dashboard: /d/gateway-data-operations
+        {{- if .Values.features.enabled }}
+        - alert: FlinkCheckpointFailures
+          expr: increase(flink_jobmanager_job_numberOfFailedCheckpoints{namespace={{ .Values.namespace | quote }}}[15m]) > 2
+          for: 5m
+          labels: {severity: warning, namespace: {{ .Values.namespace | quote }}}
+          annotations:
+            summary: Feature processing checkpoints repeatedly fail
+            dashboard: /d/gateway-data-operations
+        - alert: FlinkTelemetryMissing
+          expr: absent_over_time(up{namespace={{ .Values.namespace | quote }},job="fraud-streaming"}[10m]) or max(up{namespace={{ .Values.namespace | quote }},job="fraud-streaming"}) == 0
+          for: 5m
+          labels: {severity: warning, namespace: {{ .Values.namespace | quote }}}
+          annotations:
+            summary: Enabled Flink feature processing has no usable scrape target
+            dashboard: /d/gateway-data-operations
+        {{- end }}

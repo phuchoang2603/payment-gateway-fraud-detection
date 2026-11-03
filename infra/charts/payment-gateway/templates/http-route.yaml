@@ -29,5 +29,11 @@ spec:
       backendRefs:
         - name: {{ $name }}
           port: {{ (first $svc.ports).containerPort }}
+          {{- if and (eq $name "edge") $.Values.rollout.enabled }}
+          weight: 100
+        - name: edge-canary
+          port: {{ (first $svc.ports).containerPort }}
+          weight: 0
+          {{- end }}
 {{- end }}
 {{- end }}

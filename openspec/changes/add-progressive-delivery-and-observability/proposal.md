@@ -7,7 +7,7 @@ The deployment diagram includes progressive delivery and operational visibility 
 - Add Argo Rollouts canaries for the public Edge checkout route through the existing Istio Gateway API HTTPRoute, with candidate-specific analysis, promotion and automatic traffic rollback.
 - **BREAKING**: replace the Edge Deployment with a Rollout through a staged migration; retain the internal `edge` Service and existing checkout hostname, path and security boundaries.
 - Correct environment/revision telemetry identity; add application-owned operational dashboards and alerts using the shared VictoriaMetrics, VictoriaLogs, VictoriaTraces and Grafana services.
-- Complete missing Kafka/Connect and Flink metric collection; expose enabled workload health and retain existing RAG/LLM scrapes and ClickHouse analytics dashboards.
+- Complete missing Kafka and Flink metric collection; expose enabled workload health and retain existing RAG/LLM scrapes and ClickHouse analytics dashboards.
 - Record platform prerequisites: Rollouts controller/CRDs and Gateway API plugin, Grafana dashboard discovery in `payment-gateway`, and shared scrape/rule/query access. Do not install shared infrastructure from this repository.
 
 ## Capabilities

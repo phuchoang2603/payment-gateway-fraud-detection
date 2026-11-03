@@ -1,0 +1,76 @@
+{{- if .Values.rollout.enabled }}
+{{- $edge := index (include "payment-gateway.services" . | fromYaml) "edge" }}
+{{- if not $edge }}{{ fail "Edge rollout requires the edge service" }}{{- end }}
+{{- if .Values.rollout.migration }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: edge
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  replicas: {{ $edge.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "payment-gateway.selector" "edge" | nindent 6 }}
+  workloadRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: edge
+    scaleDown: never
+  {{- include "payment-gateway.canary" . | nindent 2 }}
+---
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: edge-canary
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ (first $edge.ports).containerPort }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "payment-gateway.selector" "edge" | nindent 4 }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: edge-checkout
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  args:
+    - name: revision
+  metrics:
+    {{- $revision := "{{args.revision}}" }}
+    {{- $selector := printf "\"service.name\"=\"edge\",\"deployment.environment\"=%s,\"k8s.namespace.name\"=%s,\"rollout.revision\"=\"%s\",\"http.route\"=~\"(GET|POST) /checkout/.*\"" (.Values.telemetry.environment | quote) (.Release.Namespace | quote) $revision }}
+    {{- $count := printf "{__name__=\"http.server.request.duration_count\",%s}" $selector }}
+    {{- $buckets := printf "{__name__=\"http.server.request.duration_bucket\",%s}" $selector }}
+    {{- $errors := printf "{__name__=\"http.server.request.duration_count\",%s,\"http.response.status_code\"=~\"5..\"}" $selector }}
+    {{- $window := .Values.rollout.analysis.window }}
+    {{- $metrics := list
+      (dict "name" "requests" "condition" (printf "result[0] >= %v" .Values.rollout.analysis.minimumRequests) "query" (printf "sum(increase(%s[%s]))" $count $window))
+      (dict "name" "freshness" "condition" (printf "result[0] <= %v" .Values.rollout.analysis.maximumSampleAgeSeconds) "query" (printf "time() - max(timestamp(%s))" $count))
+      (dict "name" "error-rate" "condition" (printf "result[0] <= %v" .Values.rollout.analysis.maximumErrorRate) "query" (printf "(sum(increase(%s[%s])) or vector(0)) / sum(increase(%s[%s]))" $errors $window $count $window))
+      (dict "name" "p95" "condition" (printf "result[0] <= %v" .Values.rollout.analysis.maximumP95Seconds) "query" (printf "histogram_quantile(0.95, sum by (le) (rate(%s[%s])))" $buckets $window)) }}
+    {{- range $metrics }}
+    - name: {{ .name }}
+      initialDelay: {{ $.Values.rollout.analysis.warmup }}
+      interval: {{ $.Values.rollout.analysis.interval }}
+      count: {{ $.Values.rollout.analysis.count }}
+      failureLimit: 0
+      consecutiveErrorLimit: 2
+      successCondition: {{ printf "len(result) == 1 && !isNaN(result[0]) && !isInf(result[0]) && result[0] >= 0 && %s" .condition | quote }}
+      provider:
+        prometheus:
+          address: {{ $.Values.rollout.metricsAddress }}
+          timeout: 10
+          query: {{ .query | quote }}
+    {{- end }}
+{{- end }}

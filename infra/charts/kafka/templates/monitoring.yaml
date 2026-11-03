@@ -1,0 +1,110 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-metrics
+  namespace: {{ .Release.Namespace }}
+data:
+  kafka.yml: |
+    lowercaseOutputName: true
+    rules:
+      - pattern: 'kafka.server<type=ReplicaManager, name=(UnderReplicatedPartitions|UnderMinIsrPartitionCount|OfflineReplicaCount)><>Value'
+        name: kafka_server_replicamanager_$1
+        type: GAUGE
+      - pattern: 'kafka.controller<type=KafkaController, name=(ActiveControllerCount|OfflinePartitionsCount)><>Value'
+        name: kafka_controller_kafkacontroller_$1
+        type: GAUGE
+      - pattern: 'kafka.server<type=BrokerTopicMetrics, name=(MessagesInPerSec|BytesInPerSec|BytesOutPerSec)><>Count'
+        name: kafka_server_brokertopicmetrics_$1_total
+        type: COUNTER
+{{- range $component := list "kafka" "exporter" }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: {{ printf "payment-gateway-%s" $component }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      strimzi.io/name: {{ if eq $component "kafka" }}{{ $.Values.kafka.clusterName }}-kafka{{ else }}{{ $.Values.kafka.clusterName }}-kafka-exporter{{ end }}
+  podMetricsEndpoints:
+    - port: tcp-prometheus
+      interval: 30s
+      sampleLimit: 10000
+      relabelConfigs:
+        - targetLabel: job
+          replacement: {{ printf "payment-gateway-%s" $component }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "payment-gateway-%s-metrics" $component }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      strimzi.io/name: {{ if eq $component "kafka" }}{{ $.Values.kafka.clusterName }}-kafka{{ else }}{{ $.Values.kafka.clusterName }}-kafka-exporter{{ end }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $.Values.monitoring.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports: [{port: 9404, protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ printf "payment-gateway-%s-metrics-boundary" $component }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  endpointSelector:
+    matchLabels:
+      strimzi.io/name: {{ if eq $component "kafka" }}{{ $.Values.kafka.clusterName }}-kafka{{ else }}{{ $.Values.kafka.clusterName }}-kafka-exporter{{ end }}
+  ingressDeny:
+    - fromEndpoints:
+        - matchExpressions:
+            - key: k8s:io.kubernetes.pod.namespace
+              operator: NotIn
+              values: [{{ $.Values.monitoring.namespace | quote }}]
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ $.Values.monitoring.namespace }}
+          matchExpressions:
+            - key: k8s:io.cilium.k8s.policy.serviceaccount
+              operator: NotIn
+              values: [{{ $.Values.monitoring.serviceAccount | quote }}]
+      toPorts:
+        - ports: [{port: '9404', protocol: TCP}]
+    - fromEntities: [world]
+      toPorts:
+        - ports: [{port: '9404', protocol: TCP}]
+{{- end }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: payment-kafka
+  namespace: {{ .Release.Namespace }}
+spec:
+  groups:
+    - name: payment-kafka
+      rules:
+        - alert: PaymentKafkaLag
+          expr: sum by (consumergroup, topic) (kafka_consumergroup_lag{namespace={{ .Release.Namespace | quote }}}) > 10000
+          for: 10m
+          labels: {severity: warning, namespace: {{ .Release.Namespace | quote }}}
+          annotations:
+            summary: Payment topic consumer lag remains above 10000 records
+            dashboard: /d/gateway-data-operations
+        - alert: PaymentKafkaMetricsMissing
+          expr: absent_over_time(up{namespace={{ .Release.Namespace | quote }},job="payment-gateway-kafka"}[10m]) or max(up{namespace={{ .Release.Namespace | quote }},job="payment-gateway-kafka"}) == 0
+          for: 5m
+          labels: {severity: warning, namespace: {{ .Release.Namespace | quote }}}
+          annotations:
+            summary: Payment Kafka metrics are unavailable
+            dashboard: /d/gateway-data-operations
+{{- end }}

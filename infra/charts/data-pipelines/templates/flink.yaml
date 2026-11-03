@@ -59,6 +59,8 @@ spec:
     taskmanager.data.port: '6121'
     blob.server.port: '6124'
     metrics.internal.query-service.port: '6125'
+    metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+    metrics.reporter.prom.port: '9249'
     python.executable: /app/.venv/bin/python
     python.client.executable: /app/.venv/bin/python
     execution.checkpointing.interval: 10s
@@ -102,6 +104,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: flink-main-container
+          ports:
+            - {name: metrics, containerPort: 9249, protocol: TCP}
           env:
             {{- if eq .Values.config.S3_ENDPOINT "https://storage.googleapis.com" }}
             - name: ENABLE_BUILT_IN_PLUGINS
@@ -174,6 +178,12 @@ spec:
             app.kubernetes.io/name: data-pipelines
       toPorts:
         - ports: [{port: '8081', protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            k8s:io.cilium.k8s.policy.serviceaccount: vmagent-vmks
+      toPorts:
+        - ports: [{port: '9249', protocol: TCP}]
   egress:
     - toEndpoints:
         - matchLabels:
@@ -204,4 +214,21 @@ spec:
     - toEntities: [world]
       toPorts:
         - ports: [{port: '443', protocol: TCP}]
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: fraud-streaming
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fraud-streaming
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
+      sampleLimit: 10000
+      relabelConfigs:
+        - targetLabel: job
+          replacement: fraud-streaming
 {{- end }}

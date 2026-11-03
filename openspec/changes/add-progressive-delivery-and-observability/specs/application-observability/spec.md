@@ -15,11 +15,11 @@ Telemetry SHALL identify its actual environment, cluster, namespace, stable serv
 
 ### Requirement: Operational visibility for enabled workloads
 
-Application-owned Grafana dashboards SHALL use shared data sources to show gateway request/error/latency, payment outcomes, notification retries/backlog, rollout state and enabled data-path health. Collection SHALL include Kafka/Connect health and lag, Flink job/checkpoint/backpressure signals, and available Spark/Argo lifecycle signals. Existing analytics and LLM/RAG dashboards and scrapes SHALL be reused. Disabled workloads SHALL be distinguished from missing telemetry; unavailable signals SHALL NOT be represented as healthy zero values.
+Application-owned Grafana dashboards SHALL use shared data sources to show gateway request/error/latency, payment outcomes, notification retries/backlog, rollout state and enabled data-path health. Collection SHALL include Kafka health and lag, Flink job/checkpoint/backpressure signals, and available Spark/Argo lifecycle signals. Existing analytics and LLM/RAG dashboards and scrapes SHALL be reused. Disabled workloads SHALL be distinguished from missing telemetry; unavailable signals SHALL NOT be represented as healthy zero values.
 
 #### Scenario: Inspect a failing data path
 
-- **WHEN** an enabled connector or Flink job fails or accumulates lag
+- **WHEN** an enabled Flink job fails or a Kafka consumer accumulates lag
 - **THEN** operators can identify the affected workload and correlate its operational signals with shared logs
 
 #### Scenario: Disabled application
@@ -29,7 +29,7 @@ Application-owned Grafana dashboards SHALL use shared data sources to show gatew
 
 ### Requirement: Actionable alerts and correlated diagnostics
 
-Enabled workloads SHALL have sustained-condition alerts for request failures/latency, notification backlog, connector/job failure or lag, failed rollout analysis and missing required telemetry. Alerts SHALL identify environment and workload and link to relevant dashboards or operational guidance. Sampled request diagnostics SHALL support trace-to-log navigation through the shared Grafana data sources.
+Enabled workloads SHALL have sustained-condition alerts for request failures/latency, notification backlog, job failure or consumer lag, failed rollout analysis and missing required telemetry. Alerts SHALL identify environment and workload and link to relevant dashboards or operational guidance. Sampled request diagnostics SHALL support trace-to-log navigation through the shared Grafana data sources.
 
 #### Scenario: Sustained degradation
 

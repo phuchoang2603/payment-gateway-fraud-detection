@@ -1,0 +1,552 @@
+{
+  "uid": "gateway-operations",
+  "title": "Payment gateway operations",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "tags": [
+    "payment-gateway",
+    "operations"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "type": "custom",
+        "query": "dev,prod",
+        "current": {
+          "text": "prod",
+          "value": "prod"
+        }
+      },
+      {
+        "name": "namespace",
+        "type": "constant",
+        "query": "payment-gateway",
+        "hide": 2
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "Logs",
+      "url": "/explore?left={\"datasource\":\"VictoriaLogs\",\"queries\":[{\"expr\":\"_stream:{namespace=\\\"payment-gateway\\\"}\",\"refId\":\"A\"}]}"
+    },
+    {
+      "title": "Traces",
+      "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\"}]}"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "HTTP request rate",
+      "description": "Revision-specific OTLP HTTP histograms; probes are excluded. No data means no observed requests.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (\"service.name\",\"service.version\",\"rollout.revision\") (rate({__name__=\"http.server.request.duration_count\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"$namespace\"}[5m]))",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "HTTP 5xx fraction",
+      "description": "Successful business declines are not transport failures; missing data is not a healthy zero.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (\"service.name\",\"service.version\",\"rollout.revision\") (rate({__name__=\"http.server.request.duration_count\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"$namespace\",\"http.response.status_code\"=~\"5..\"}[5m])) or (0 * sum by (\"service.name\",\"service.version\",\"rollout.revision\") (rate({__name__=\"http.server.request.duration_count\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"$namespace\"}[5m])))) / sum by (\"service.name\",\"service.version\",\"rollout.revision\") (rate({__name__=\"http.server.request.duration_count\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"$namespace\"}[5m]))",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "HTTP p95",
+      "description": "OTLP latency by source revision. Use rollout revision for chart-only changes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95,sum by (le,\"service.name\",\"service.version\",\"rollout.revision\") (rate({__name__=\"http.server.request.duration_bucket\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"$namespace\"}[5m])))",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "RPC p95",
+      "description": "No data if no RPC observations; inspect actual SDK metric names before interpreting.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95,sum by (le,\"service.name\") (rate({__name__=\"rpc.server.call.duration_bucket\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"$namespace\"}[5m])))",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Fraud outcomes",
+      "description": "One outcome per assessed decision; rule matches are separate.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate({__name__=\"fraud.decisions\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"$namespace\"}[5m]))",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Notification backlog",
+      "description": "Missing telemetry remains No data.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{__name__=\"notifier.deliveries.pending\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"$namespace\"}",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Oldest notification",
+      "description": "Age of the oldest pending delivery.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{__name__=\"notifier.oldest.pending.age\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"$namespace\"}",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Delivery outcomes",
+      "description": "Bounded outcome labels; no destination URL or payment identifiers.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 27,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate({__name__=\"notifier.deliveries\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"$namespace\"}[5m]))",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Workload readiness",
+      "description": "Canonical Go Deployments until Edge adoption. Rollout replica metrics appear after platform controller monitoring is ready.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kube_deployment_status_replicas_available{environment=\"$environment\",namespace=\"$namespace\"}",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Rollout replicas",
+      "description": "No data before platform Rollouts metrics discovery; never infer successful adoption from zero.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rollout_info_replicas_available{environment=\"$environment\",namespace=\"$namespace\",name=\"edge\"}",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Analysis failures",
+      "description": "Requires controller analysis metrics; inspect AnalysisRuns directly when unavailable.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "analysis_run_phase{environment=\"$environment\",namespace=\"$namespace\",phase=\"Failed\"}",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Container restarts",
+      "description": "Kubernetes lifecycle telemetry includes database and Kafka dependencies.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 45,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{environment=\"$environment\",namespace=\"$namespace\"}[15m]))",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    }
+  ]
+}

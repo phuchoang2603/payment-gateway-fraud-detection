@@ -77,6 +77,14 @@ spec:
                   operator: In
                   values: {{ .Values.kafka.dataClients | toJson }}
           {{- end }}
+    {{- if .Values.monitoring.enabled }}
+    metricsConfig:
+      type: jmxPrometheusExporter
+      valueFrom:
+        configMapKeyRef:
+          name: kafka-metrics
+          key: kafka.yml
+    {{- end }}
     config:
       auto.create.topics.enable: "false"
       offsets.topic.replication.factor: {{ .Values.kafka.replicationFactor }}
@@ -84,6 +92,13 @@ spec:
       transaction.state.log.min.isr: {{ .Values.kafka.minInsyncReplicas }}
       default.replication.factor: {{ .Values.kafka.replicationFactor }}
       min.insync.replicas: {{ .Values.kafka.minInsyncReplicas }}
+  {{- if .Values.monitoring.enabled }}
+  kafkaExporter:
+    topicRegex: {{ .Values.monitoring.topicRegex | quote }}
+    groupRegex: {{ .Values.monitoring.groupRegex | quote }}
+    resources:
+      {{- toYaml .Values.monitoring.exporterResources | nindent 6 }}
+  {{- end }}
   entityOperator:
     topicOperator:
       reconciliationIntervalMs: 120000

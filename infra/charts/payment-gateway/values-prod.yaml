@@ -1,3 +1,6 @@
+telemetry:
+  cluster: prod-talos
+  environment: prod
 database:
   nodeSelector:
     talos.dev/capacity-type: on-demand

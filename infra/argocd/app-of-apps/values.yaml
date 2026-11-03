@@ -26,6 +26,22 @@ applications:
   payment-gateway:
     destinationNamespace: payment-gateway
     path: infra/charts/payment-gateway
+    ignoreDifferences:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        namespace: payment-gateway
+        name: edge
+        jqPathExpressions: [".spec.rules[].backendRefs[].weight"]
+      - group: ""
+        kind: Service
+        namespace: payment-gateway
+        name: edge
+        jsonPointers: [/spec/selector/rollouts-pod-template-hash]
+      - group: ""
+        kind: Service
+        namespace: payment-gateway
+        name: edge-canary
+        jsonPointers: [/spec/selector/rollouts-pod-template-hash]
   live-traffic:
     destinationNamespace: payment-gateway
     path: infra/charts/live-traffic

@@ -10,7 +10,8 @@ RUN apt-get update \
 WORKDIR /app
 COPY src/data-pipeline/streaming/pyproject.toml src/data-pipeline/streaming/uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project --no-install-package apache-flink-libraries \
-    && mkdir -p /opt/flink/plugins/s3-fs-presto \
+    && mkdir -p /opt/flink/plugins/prometheus /opt/flink/plugins/s3-fs-presto \
+    && cp /opt/flink/opt/flink-metrics-prometheus-2.2.1.jar /opt/flink/plugins/prometheus/ \
     && cp /opt/flink/opt/flink-s3-fs-presto-2.2.1.jar /opt/flink/plugins/s3-fs-presto/ \
     && wget -q -O /opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar \
        https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/5.0.0-2.2/flink-sql-connector-kafka-5.0.0-2.2.jar \
@@ -25,7 +26,7 @@ FROM flink:2.2.1-java17
 COPY --from=build /opt/python /opt/python
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /app/history-venv /app/history-venv
-COPY --from=build /opt/flink/plugins/s3-fs-presto /opt/flink/plugins/s3-fs-presto
+COPY --from=build /opt/flink/plugins /opt/flink/plugins
 COPY --from=build /opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar /opt/flink/lib/zstd-jni-1.5.6-10.jar /opt/flink/lib/
 WORKDIR /app
 COPY src/data-pipeline/streaming/fraud_streaming ./fraud_streaming

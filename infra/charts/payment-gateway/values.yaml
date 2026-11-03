@@ -345,3 +345,25 @@ features:
   service: payment_risk_v1
   ttlDaily: 756h
   ttlStream: 24h5m
+
+telemetry:
+  cluster: dev-talos
+  environment: dev
+monitoring:
+  enabled: true
+  folder: Payment Gateway
+rollout:
+  enabled: false
+  migration: false
+  legacyReplicas: 1
+  metricsAddress: http://vmsingle-vmks.observability.svc.cluster.local:8428
+  weights: [10, 25, 50]
+  analysis:
+    warmup: 5m
+    interval: 1m
+    count: 2
+    window: 5m
+    minimumRequests: 100
+    maximumErrorRate: 0.01
+    maximumP95Seconds: 1
+    maximumSampleAgeSeconds: 120

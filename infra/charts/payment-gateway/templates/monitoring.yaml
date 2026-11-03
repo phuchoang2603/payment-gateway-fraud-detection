@@ -1,0 +1,69 @@
+{{- if .Values.monitoring.enabled }}
+{{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-{{ base $path | trimSuffix ".json" }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: {{ $.Values.monitoring.folder | quote }}
+data:
+  {{ base $path }}: |-
+    {{- $.Files.Get $path | nindent 4 }}
+{{- end }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: payment-gateway
+  namespace: {{ .Release.Namespace }}
+spec:
+  groups:
+    - name: payment-gateway
+      rules:
+        - alert: GatewayHTTPFailures
+          expr: |
+            sum(rate({__name__="http.server.request.duration_count","deployment.environment"={{ .Values.telemetry.environment | quote }},"k8s.namespace.name"={{ .Release.Namespace | quote }},"http.response.status_code"=~"5.."}[5m]))
+            / sum(rate({__name__="http.server.request.duration_count","deployment.environment"={{ .Values.telemetry.environment | quote }},"k8s.namespace.name"={{ .Release.Namespace | quote }}}[5m])) > 0.01
+          for: 5m
+          labels: {severity: warning, environment: {{ .Values.telemetry.environment | quote }}, namespace: {{ .Release.Namespace | quote }}}
+          annotations:
+            summary: Gateway HTTP server failures exceed one percent
+            dashboard: /d/gateway-operations
+        - alert: GatewayHTTPLatency
+          expr: |
+            histogram_quantile(0.95, sum by (le) (rate({__name__="http.server.request.duration_bucket","deployment.environment"={{ .Values.telemetry.environment | quote }},"k8s.namespace.name"={{ .Release.Namespace | quote }}}[5m]))) > 1
+          for: 5m
+          labels: {severity: warning, environment: {{ .Values.telemetry.environment | quote }}, namespace: {{ .Release.Namespace | quote }}}
+          annotations:
+            summary: Gateway HTTP p95 exceeds one second
+            dashboard: /d/gateway-operations
+        - alert: NotificationBacklog
+          expr: |
+            max({__name__="notifier.oldest.pending.age","deployment.environment"={{ .Values.telemetry.environment | quote }},"k8s.namespace.name"={{ .Release.Namespace | quote }}}) > 300
+          for: 5m
+          labels: {severity: warning, environment: {{ .Values.telemetry.environment | quote }}, namespace: {{ .Release.Namespace | quote }}}
+          annotations:
+            summary: Oldest notification has waited over five minutes
+            dashboard: /d/gateway-operations
+        - alert: GatewayTelemetryMissing
+          expr: |
+            absent_over_time({__name__="payments.pending.outcome.age","deployment.environment"={{ .Values.telemetry.environment | quote }},"k8s.namespace.name"={{ .Release.Namespace | quote }}}[10m])
+          for: 5m
+          labels: {severity: warning, environment: {{ .Values.telemetry.environment | quote }}, namespace: {{ .Release.Namespace | quote }}}
+          annotations:
+            summary: Required gateway background telemetry is missing
+            dashboard: /d/gateway-operations
+        {{- if .Values.rollout.enabled }}
+        - alert: EdgeRolloutDegraded
+          expr: rollout_info{namespace={{ .Release.Namespace | quote }},name="edge",phase="Degraded"} == 1
+          for: 1m
+          labels: {severity: warning, environment: {{ .Values.telemetry.environment | quote }}, namespace: {{ .Release.Namespace | quote }}}
+          annotations:
+            summary: Edge progressive delivery is degraded
+            dashboard: /d/gateway-operations
+        {{- end }}
+{{- end }}

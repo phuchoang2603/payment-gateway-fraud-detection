@@ -43,7 +43,23 @@ flowchart LR
 | `llm-platform` | `llm`, `llm-agents` | Chat and embedding model servers, agent gateway and its policy, the sandbox egress proxy, Langfuse with its Postgres and Redis; in `llm-agents` the global model config, MCP servers, sandboxed agents and their Substrate worker pool; a catalog Job per release that publishes agentregistry entries, prompts to Langfuse and AI assets to OpenMetadata; see [LLM agents](../llm/agents.md) |
 | `rag-pipeline` | `llm` | RAG knowledge workflow (corpus, chunks, embeddings through the gateway, Feast write, checks and lineage), its Feast pgvector Postgres, and the knowledge API that also serves the MCP tools, autoscaled by KEDA; see [RAG](../llm/rag.md) |
 
-The prod release enables every application except `live-traffic`, `llm-platform` and `rag-pipeline`; `data-pipelines.features.enabled` runs Flink, the feature writer, Redis and the Feast server. Enabled applications include the gateway services with their databases, Redis and Kafka; `data-pipelines` with the generator, Bronze, Silver, analytics, maintenance and feature workflows, with the OpenMetadata connections and register job; `clickhouse`; and `lakehouse`. Prod is not bootstrapped yet, so this describes its release configuration. Application pods are stateless; Postgres and the Payments and Feast Redis instances own the persistent volumes.
+The prod release enables every application except `live-traffic`, `llm-platform` and `rag-pipeline`; `data-pipelines.features.enabled` runs Flink, the feature writer, Redis and the Feast server. Enabled applications include the gateway services with their databases, Redis and Kafka; `data-pipelines` with the generator, Bronze, Silver, analytics, maintenance and feature workflows, with the OpenMetadata connections and register job; `clickhouse`; and `lakehouse`. Application pods are stateless; Postgres and the Payments and Feast Redis instances own the persistent volumes.
+
+## Edge progressive delivery
+
+Only the public Edge checkout route uses a canary; the other five Go services remain Deployments. Internal callers use the stable `edge` Service. The existing Istio HTTPRoute retains its hostname, path, HTTPS header and timeouts, with `edge`/`edge-canary` weights controlled by Argo Rollouts. Argo CD ignores only this route's weights and the two Services' controller-owned hash selectors.
+
+Before setting `rollout.enabled`, the platform owner must install compatible pinned Rollouts CRDs/controller and the `argoproj-labs/gatewayAPI` plugin, grant access to the namespace and `edge` HTTPRoute, and permit controller queries to `http://vmsingle-vmks.observability.svc.cluster.local:8428`. Grafana discovery and controller metrics collection also belong to the platform. At initial implementation, these prerequisites are being coordinated; a rendered Rollout is not a deployed canary.
+
+Adopt through separately published prod releases:
+
+1. Set `rollout.enabled: true`, `rollout.migration: true`, retaining `legacyReplicas: 1`. The temporary `workloadRef` uses `scaleDown: never`; verify the new Rollout replicas and stable endpoints before reducing legacy replicas.
+2. Set `legacyReplicas: 0` after stable checkout requests succeed through Rollout endpoints. Verify the stable-only route and Argo CD convergence.
+3. Publish the inline Rollout (`migration: false`) and prune the old Edge Deployment only after endpoint continuity is verified. Remove the temporary migration configuration after handover. Dev remains configuration-only; acceptance runs directly against prod.
+
+Subsequent candidates receive 10%, 25%, then 50% of public checkout traffic. Each step warms up for five minutes and requires two passing observations, one minute apart: at least 100 candidate checkout requests in five minutes, 5xx fraction at most 1%, p95 at most one second and latest sample age at most 120 seconds. Queries select environment, namespace and Rollout pod hash; business declines do not count as 5xx. Empty, stale, non-finite or insufficient observations abort after warm-up; three consecutive query errors abort. The rollout's progress deadline is 30 minutes. Low traffic cannot silently promote.
+
+For an incident, run `kubectl --kubeconfig ~/.kube/talos-prod.yaml argo rollouts abort edge -n payment-gateway` when the kubectl plugin is installed, then revert the source image/chart and publish through the existing release flow. Confirm stable endpoints and HTTPRoute weights before considering recovery complete. Abort does not undo database migrations or changes to other services. Reverting controller adoption requires ready Deployment endpoints and stable-only routing before removing Rollout resources.
 
 ## Runtime configuration
 
