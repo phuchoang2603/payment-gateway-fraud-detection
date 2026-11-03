@@ -18,9 +18,9 @@
 | validation | 2026-10-01..2026-10-14 |
 | test | 2026-10-15..2026-10-28 |
 
-These are the windows of the first run. A scheduled run rolls them: contiguous test, validation and train windows of 14, 14 and 56 days ending on the schedule date minus one day, or on the latest earlier day for which every day of the three windows has rows in the stream tables (`risk_model.windows.rolling`, `latest_covered`), so a gap between replayed and live history is never spanned. Passing all four of `train`, `validation`, `test` and `cutoff` overrides the rule. `WindowSplitter` rejects overlapping, gapped or misordered windows, and rows outside every window.
+These are the windows planned for the first prod run. A scheduled run rolls them: contiguous test, validation and train windows of 14, 14 and 56 days ending on the schedule date minus one day, or on the latest earlier day for which every day of the three windows has rows in the stream tables (`risk_model.windows.rolling`, `latest_covered`), so a gap between replayed and live history is never spanned. Passing all four of `train`, `validation`, `test` and `cutoff` overrides the rule. `WindowSplitter` rejects overlapping, gapped or misordered windows, and rows outside every window.
 
-A Kubeflow recurring run, created by a hook Job in the chart after each sync so it follows the deployed pipeline version, starts the pipeline daily with no catch-up. The first step, `plan_windows`, stops the run when its cutoff is not later than the cutoff of the highest registered version, so a day without new replayed history costs one small pod. On dev the schedule is on with 4, 1 and 1 day windows, because only 2026-10-14 to 2026-10-21 is replayed; on prod it is off until a prod run has been done.
+A Kubeflow recurring run, created by a hook Job in the chart after each sync so it follows the deployed pipeline version, starts the pipeline daily with no catch-up. The first step, `plan_windows`, stops the run when its cutoff is not later than the cutoff of the highest registered version, so a day without new replayed history costs one small pod. On dev the schedule is on with 36, 9 and 9 day windows, because 2026-09-02 to 2026-10-27 is replayed; on prod it is off until a prod run has been done.
 
 ## Pipeline
 
@@ -45,27 +45,37 @@ A Kubeflow recurring run, created by a hook Job in the chart after each sync so 
 - **Run files** are written to `s3://<bucket>/runs/payment-gateway/ml/<run-id>/`.
 - All scoring runs on the GPU. Notebooks cannot take GPU claims, so the notebook submits the same kind of TrainJob (`steps.fit_on_gpu`, `steps.gate`, `steps.experiments`) and reads the results; it avoids GPU nodes so it cannot starve them. The baseline is a depth-1 XGBoost model, an additive model stronger than the earlier logistic regression, so the gate rejects more candidates.
 
-## Derived request features
+## Evidence on dev
 
-The [notebook](../../src/ml/notebooks/payment_risk_exploration.ipynb) also compares five XGBoost models on the GPU, from the depth-1 baseline to the pipeline's settings, on validation and test at the gate's two operating thresholds, with calibration and feature importance. It scores the candidate `request_features` and each view walk-forward before the first registered version, because changing the inputs afterwards needs `payment_risk_v2`.
+Everything below ran on dev (RTX 5060 Ti) against training-set snapshot `7781420152380000469`, which holds the replayed history 2026-09-02 to 2026-10-27 at a 10% negative sample. The Kubeflow screenshots come from `kubeflow-dev.phuchoang.sbs`. Prod runs wait for its stream history ([tasks](../../openspec/changes/train-fraud-model/tasks.md), 7.7).
 
-The notebook accepts `NOTEBOOK_END_DAY`, `NOTEBOOK_TRAIN_DAYS`, `NOTEBOOK_VALIDATION_DAYS`, `NOTEBOOK_TEST_DAYS`, `NOTEBOOK_COMPARE_RATE`, `NOTEBOOK_ABLATION_RATE`, `NOTEBOOK_FOLDS` and `NOTEBOOK_SNAPSHOT` as environment overrides. An unset snapshot builds a new dataset version.
+| Rubric item | Evidence |
+|---|---|
+| Notebook: offline store and labels, split, train, evaluate, save | [Notebook](#notebook) |
+| Kubeflow pipeline with load, split, train and evaluate | [Pipeline runs](#pipeline-runs) |
+| Model and incremental data versions | [Versions](#versions) |
+| KServe | [Serving](serving.md#model-service) |
+| Five key classes, property-based tests | [Code](#code) |
 
-Dev exploration ran the notebook on snapshot `7781420152380000469`: training September 4 to October 9, validation October 10–18 and test October 19–27, 2026, with a 10% negative sample throughout (the replay covers September 2 to October 27). The splits held 8,863, 1,946 and 1,933 rows with 2,676, 389 and 438 positives, and a weighted fraud rate of 4.1%, 2.4% and 2.8%. Every fit and score ran in a GPU job while Triton held the same GPU: the pipeline's fit took 3.4 seconds.
+### Notebook
 
-On the test window, with thresholds from validation:
+[`payment_risk_exploration.ipynb`](../../src/ml/notebooks/payment_risk_exploration.ipynb) is committed without outputs. It was executed top to bottom with `jupyter nbconvert --execute` in a one-off Job, because the Notebook server avoids GPU nodes while its volume sits on one, and the figures below are that execution's outputs, saved as PNG. Its fits and scores run in GPU TrainJobs (`steps.fit_on_gpu`, `steps.gate`, `steps.experiments`) while Triton holds the same GPU. Environment overrides: `NOTEBOOK_END_DAY`, `NOTEBOOK_TRAIN_DAYS`, `NOTEBOOK_VALIDATION_DAYS`, `NOTEBOOK_TEST_DAYS`, `NOTEBOOK_COMPARE_RATE`, `NOTEBOOK_ABLATION_RATE`, `NOTEBOOK_FOLDS` and `NOTEBOOK_SNAPSHOT`; an unset snapshot builds a new dataset version.
 
-| Model | PR-AUC | Recall at 1% FPR | Recall in top 5% |
+**Split.** Training 2026-09-04..2026-10-09, validation 2026-10-10..2026-10-18, test 2026-10-19..2026-10-27 (36, 9 and 9 days from `windows.rolling`, cutoff 2026-10-28).
+
+| Split | Rows | Positives | Weighted fraud rate |
 |---|---:|---:|---:|
-| Pipeline model (depth 6, every stored negative) | 0.9370 | 0.9110 | 0.9498 |
-| Boosting, depth 5 | 0.9294 | 0.9110 | 0.9384 |
-| Boosting, depth 3 | 0.9231 | 0.8995 | 0.9315 |
-| Additive baseline, depth 1 | 0.9156 | 0.8881 | 0.9155 |
-| Random forest | 0.9073 | 0.8676 | 0.9224 |
+| train | 8,863 | 2,676 | 4.1% |
+| validation | 1,946 | 389 | 2.4% |
+| test | 1,933 | 438 | 2.8% |
 
-The gate passed: 0.9370 against 0.9156 for the baseline. The thresholds on validation are 0.512 to decline (0.1% FPR) and 0.078 for step-up (1%), and the served threshold is 0.512. Dev data is simulated and separates easily, so these numbers do not predict production.
+![Weighted fraud rate and attempts per day over the replay, and the features with the most nulls](images/notebook-data.png)
 
-Fraud arrives in bursts, with 5 to 159 positives per day, so features are scored walk-forward over the last 14 days (training on the earlier days, three seeds, 378 fits in one job). The table gives the change in mean PR-AUC against all features when the feature or view is removed, the days (of 14) the set was worse and better, and the worst day:
+Fraud arrives in bursts, with 5 to 159 positives per day. Stream features are null for 51% of legitimate and 9% of fraudulent attempts, so a missing stream snapshot is itself a signal. The features that separate fraud from legitimate attempts most are the customer's 5-minute to 24-hour attempt counts and distinct devices:
+
+![Standardized mean gap between fraud and legitimate attempts, top 12 features](images/notebook-feature-gap.png)
+
+**Which features earn their place.** Each candidate is scored walk-forward over the last 14 days (training on the earlier days, three seeds, 378 fits in one job). The table gives the change in mean PR-AUC against all features when the feature or view is removed, the days (of 14) the set was worse and better, and the worst day:
 
 | Removed | Change in PR-AUC | Days worse / better | Worst day |
 |---|---:|---:|---:|
@@ -78,11 +88,33 @@ Fraud arrives in bursts, with 5 to 159 positives per day, so features are scored
 | `payment_method_amount_to_30d_avg` | +0.0159 | 5 / 9 | -0.0634 |
 | view `customer_daily` | +0.0190 | 6 / 8 | -0.0258 |
 
-Only the first four hurt consistently when removed. The four that help on average win on 7 to 9 of 14 days, which is not a decisive split, so the evidence supports neither dropping nor adding them, and the feature service has not been changed. The seven-day sample had suggested dropping all of `customer_daily` (+0.10); with 30 days of history it does not. `request_features__item_count` is 1 on all rows because the simulator builds every order from one purchase. Stream features are null for 51% of legitimate and 9% of fraudulent attempts, so a missing stream snapshot is itself a signal.
+Only the first four hurt consistently when removed. The four that help on average win on 7 to 9 of 14 days, which is not a decisive split, so the evidence supports neither dropping nor adding them, and the feature service is unchanged. `request_features__item_count` is 1 on all rows because the simulator builds every order from one purchase.
 
-## Dev pipeline runs
+**Five models, simple to strong.** All train and score on the GPU, from the depth-1 additive baseline the gate uses to the pipeline's own settings. On the test window, with thresholds from validation:
 
-Two `payment-risk-training` runs and one `payment-risk-rollout` run went through Kubeflow on dev against snapshot `7781420152380000469` (windows 2026-09-04..2026-10-28 as 36, 9 and 9 days, cutoff 2026-10-28). The Kubeflow UI is at `kubeflow-dev.phuchoang.sbs`. The earlier seven-day `v1` was set to `ARCHIVED` and its model files deleted, because the registry has no delete call.
+| Model | PR-AUC | Recall at 1% FPR | Recall in top 5% |
+|---|---:|---:|---:|
+| Pipeline model (depth 6, every stored negative) | 0.9370 | 0.9110 | 0.9498 |
+| Boosting, depth 5 | 0.9294 | 0.9110 | 0.9384 |
+| Boosting, depth 3 | 0.9231 | 0.8995 | 0.9315 |
+| Additive baseline, depth 1 | 0.9156 | 0.8881 | 0.9155 |
+| Random forest | 0.9073 | 0.8676 | 0.9224 |
+
+![Test PR-AUC and recall at 1% FPR per model, and the precision-recall curves](images/notebook-models.png)
+
+**Thresholds and test.** The decline threshold is 0.512 (0.1% of legitimate attempts declined on validation) and step-up is 0.078 (1%). Applied unchanged to the test window, the pipeline model declines 379 of 438 weighted frauds and 50 of 14,950 legitimate attempts, and reviewing the top 5% of scores catches 95% of fraud, 19.0 times a random review.
+
+![Validation precision and recall by score with the two thresholds](images/notebook-thresholds.png)
+
+![Test confusion matrix at the decline threshold](images/notebook-confusion.png)
+
+![Top 15 features by gain, and calibration by score decile](images/notebook-importance.png)
+
+The pipeline's fit took 4.0 s and stopped at round 45. The notebook's last cell runs `steps.gate` against production, which by then was this same model, so it reports "did not pass": the gate requires a 0.005 PR-AUC margin over production. Saving writes `model.json` and `baseline.json` to the run directory.
+
+### Pipeline runs
+
+Two `payment-risk-training` runs and one `payment-risk-rollout` run went through Kubeflow Pipelines. The first run searched hyperparameters with Katib, the second reused the snapshot with the default settings.
 
 | Run | Pipeline | Steps | Wall time | Result |
 |---|---|---:|---:|---|
@@ -90,27 +122,40 @@ Two `payment-risk-training` runs and one `payment-risk-rollout` run went through
 | `f3060333` | rollout, `version=v1` | 3 of 3 | 1 min 47 s | Triton served `v1` again |
 | `6cb31a0e` | training, `tune_trials=0`, `force=true` | 26 of 26 | 20 min 30 s | registered `v3`, rolled out, now live |
 
-Katib ran four trials, two at a time, in 1 min 52 s. Each trial was a single-GPU TrainJob and printed validation PR-AUC on the 5% negative sample:
+![Run caef6f06: plan_examples, the staging loop, assemble, check, split, tune_params, fit_on_gpu, gate, publish_metrics and the record_version and roll_out branch, all green](images/kfp-training-run.png)
 
-| Trial | Depth | eta | Validation PR-AUC |
-|---|---:|---:|---:|
-| `rfvwf8jq` (selected) | 8 | 0.258 | 0.9177 |
-| `d8mmftjs` | 4 | 0.192 | 0.9169 |
-| `5jzqccpc` | 10 | 0.276 | 0.9165 |
-| `fs29wswm` | 10 | 0.276 | 0.9165 |
+Katib ran four trials, two at a time, in 1 min 52 s. Each trial is a single-GPU TrainJob that prints validation PR-AUC on the 5% negative sample, and `rfvwf8jq` was selected:
 
-The fit TrainJob took 24 s with the tuned settings and 44 s with the defaults, the gate TrainJob 21 s and 28 s, all while Triton held the same GPU. Registered test metrics:
+![Katib experiment payment-risk-caef6f06: four succeeded trials with their parameters and PR-AUC](images/katib-trials.png)
 
-| Version | Settings | PR-AUC | ROC-AUC | Recall at 1% FPR | Precision at decline | Decline / step-up threshold |
+The fit TrainJob took 24 s with the tuned settings and 44 s with the defaults, the gate TrainJob 21 s and 28 s, all while Triton held the same GPU.
+
+### Versions
+
+| Version | Settings | Test PR-AUC | ROC-AUC | Recall at 1% FPR | Precision at decline | Decline / step-up threshold |
 |---|---|---:|---:|---:|---:|---|
 | `v2` | tuned | 0.9235 | 0.9836 | 0.8904 | 0.9494 | 0.5607 / 0.1169 |
 | `v3` | defaults | 0.9370 | 0.9895 | 0.9110 | 0.8834 | 0.5122 / 0.0783 |
 
-Four trials did not beat the defaults, so `v3` was gated against `v2` and replaced it. Both gates compared against a depth-1 baseline trained in the same job.
+Four trials did not beat the defaults, so `v3` was gated against `v2` and replaced it. `v2` is `ARCHIVED`; the first version was archived too and its model files deleted, because the registry has no delete call. The registry UI hides archived versions.
 
-The second training run reused the snapshot. A run without one waited 16 minutes for the 8 GB staging pod, which the two small dev workers could not place (dev-server3 had about 6.8 GiB of memory requests free), and was terminated.
+![Model Registry, payment-risk v3: properties including cutoff, pipeline run, feature service, params, sources and thresholds](images/registry-version.png)
 
-Triton answered a binary request for `v2` with all 50 features missing, and with only `amount_minor` and `has_device` set, with `model_version` 2 and a probability of 0.8937 in both cases. `kubectl get inferenceservice` shows storage URI `model-registry://payment-risk/v3` after the second run.
+Every version records its data version: the training-set snapshot (`7781420152380000469` for `v2` and `v3`), the snapshot IDs of the daily, stream, label, attempt and payment-event tables, the windows, the cutoff, the feature service and the ordered feature list. The training set is one Iceberg table with one `MERGE` per run, so each version reads back by snapshot ID. The second run reused the snapshot: a run without one waited 16 minutes for the 8 GB staging pod, which the two small dev workers could not place (dev-server3 had about 6.8 GiB of memory requests free), and was terminated. An incremental rebuild is task 7.8.
+
+### Code
+
+The five key classes, each with its own tests in [`src/ml/tests`](../../src/ml/tests):
+
+| Class | Module | Role |
+|---|---|---|
+| `WindowSplitter` | `split.py` | Holds the train, validation and test windows and selects rows by time; rejects overlap, gaps and rows outside every window |
+| `DatasetReader` | `data.py` | Reads one snapshot of the training-set table: sample rate, provenance, validation and weighted numpy `Split`s |
+| `RiskTrainer` | `train.py` | GPU XGBoost fit with early stopping, the depth-1 baseline, scoring |
+| `GateEvaluator` | `evaluate.py` | Thresholds from validation, test metrics, the pass or fail verdict |
+| `RegistryClient` | `registry.py` | Versions, properties, registration, the passed-gate check and promotion in the Model Registry |
+
+Property-based tests (Hypothesis): rolling windows are contiguous, sized and end on the end day, and shift by the same days when the end day moves (`test_windows.py`); the same rows in any order train the same model (`test_train.py`).
 
 ## Drift
 

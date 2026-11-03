@@ -41,13 +41,13 @@
 
 ## 5. Docs
 
-- [x] 5.1 Update `docs/ml/training.md` (data through Feast, labels and windows, pipeline, single-GPU training, Katib, registry), `docs/ml/serving.md` (custom predictor, named JSON features, deploy and rollback), and the roadmap tables in `docs/Home.md` (drift and retraining, and Go Fraud scoring, as planned). Verify that the links resolve.
+- [x] 5.1 Update `docs/ml/training.md` (data through Feast, labels and windows, pipeline, single-GPU training, Katib, registry), `docs/ml/serving.md` (Triton, binary tensor requests, deploy and rollback), and the roadmap tables in `docs/Home.md` (drift and retraining, and Go Fraud scoring, as planned). Verify that the links resolve.
 
 ## 5a. Rolling retraining and the notebook
 
 - [x] 5a.1 Add `risk_model/windows.py` (`rolling`, the newest replayed stream day, the skip guard), `RegistryClient.latest_cutoff`, and the `plan_windows` step with a `windows.json` run file.
 - [x] 5a.2 Make `plan_windows` the pipeline's first step, run the rest under `dsl.If(run)`, take the schedule and creation times as input parameters, and recompile `files/dev` and `files/prod`.
-- [x] 5a.3 Add `risk_model/schedule.py` and the `ensure_schedule` step, and the chart's PostSync hook Job and `schedule` values (on in dev with 4, 1 and 1 days, off in prod).
+- [x] 5a.3 Add `risk_model/schedule.py` and the `ensure_schedule` step, and the chart's PostSync hook Job and `schedule` values (on in dev with 36, 9 and 9 days, off in prod).
 - [x] 5a.4 Add `hypothesis` properties for the windows, and unit tests for the guard and the recurring-run request.
 - [x] 5a.5 Rewrite the notebook around a five-model comparison, operating thresholds, test evaluation, calibration, importance and the pipeline's gate; add `matplotlib` to the `notebook` extra.
 - [x] 5a.6 Update `docs/ml/training.md` for the schedule and the notebook.

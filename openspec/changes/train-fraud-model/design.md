@@ -139,7 +139,7 @@ A stopped `Notebook` `fraud-explore` (the `ml` image, 20 Gi, CPU), listed in the
 
 Notebooks can't take GPU claims, which is why training goes through the TrainJob.
 
-The notebook also compares a linear baseline, a random forest, histogram gradient boosting, CPU XGBoost and the GPU model on validation at the gate's two operating thresholds, evaluates on test, and shows calibration and feature importance. Its windows come from `risk_model.windows.rolling`, the rule the scheduled run uses.
+The notebook also compares five XGBoost models on the GPU, from the depth-1 additive baseline to the pipeline's settings, on validation at the gate's two operating thresholds, evaluates on test, and shows calibration and feature importance. Its windows come from `risk_model.windows.rolling`, the rule the scheduled run uses.
 
 ### 7a. Rolling retraining
 

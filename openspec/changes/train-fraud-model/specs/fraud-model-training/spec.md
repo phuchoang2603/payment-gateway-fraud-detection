@@ -71,7 +71,7 @@ The evaluate step SHALL set the decision thresholds on validation:
 - **decline threshold:** 0.1% of legitimate payments flagged;
 - **step-up threshold:** 1% flagged.
 
-On test, with the sampling weights, it SHALL report for the new model, a logistic-regression baseline and the current production version when one exists:
+On test, with the sampling weights, it SHALL report for the new model, a depth-1 additive XGBoost baseline and the current production version when one exists:
 
 - PR-AUC, ROC-AUC and recall at 1% false-positive rate;
 - precision and recall at the decline threshold.

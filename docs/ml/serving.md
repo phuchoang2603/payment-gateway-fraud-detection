@@ -25,6 +25,10 @@ The `payment-risk` InferenceService runs NVIDIA Triton with the FIL backend on t
 
 `roll_out` is the last step of `payment-risk-training` for a passing model. It patches the storage URI, waits until the Deployment has rolled out the new storage URI, sends an all-missing row and fails unless Triton answers with a probability from the new version, then marks the version `production` and the previous one `archived`. If the check fails, it patches the previous version back. The `payment-risk-rollout` pipeline reruns the step for any earlier version that passed its gate, for rollback.
 
+On dev, `payment-risk-rollout` with `version=v1` served the earlier version again in 1 min 47 s (3 of 3 steps), and the next training run rolled `v3` out in 20 min 30 s. A binary request for `v2` with all 50 features missing, and one with only `amount_minor` and `has_device` set, both returned `model_version` 2 and a probability of 0.8937. The Kubeflow endpoints page shows the service ready on the `payment-risk-triton` runtime with the registry URI of the live version; the model's registry entry is on [training](training.md#versions).
+
+![KServe endpoint payment-risk: ready, Triton runtime, storage URI model-registry://payment-risk/v3](images/kserve-endpoint.png)
+
 ## Planned
 
 | Capability | Plan |
