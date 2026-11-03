@@ -14,7 +14,7 @@ The [refurbished marketplace](https://github.com/phuchoang2603/refurbished-marke
 
 Kafka events and synthetic history feed Spark's Bronze/Silver/Gold lakehouse and Flink's streaming features. Argo Workflows orchestrates data jobs and write–audit–publish checks; OpenMetadata records contracts, quality results and lineage. Feast serves daily and streaming features from Redis to Go Fraud, which applies rules and the KServe model score. Kubeflow builds point-in-time training examples, tunes XGBoost with Katib, trains and evaluates it, registers passing versions and rolls them out to KServe.
 
-[![Payment gateway, data and ML flow: Go services and state, Kafka topics and consumers, Spark and Flink, Feast and Redis, and Kubeflow training and KServe rollout](docs/payment-gateway/images/payment-flow.png)](docs/payment-gateway/images/payment-flow.png)
+[![Payment gateway, data and ML flow: Go services and CloudNativePG Postgres, Strimzi Kafka topics and consumers, Spark and Flink, Feast and Redis, and Kubeflow training and KServe rollout](docs/payment-gateway/images/payment-flow.png)](docs/payment-gateway/images/payment-flow.png)
 
 Gateway docs: [architecture](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/architecture) · [flows](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/flows) · [conventions](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/conventions)
 
