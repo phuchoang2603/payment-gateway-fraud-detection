@@ -27,7 +27,7 @@
 ## 2. Images
 
 - [ ] 2.1 Add `infra/docker/ml.Dockerfile` (CUDA 12 runtime, Java, Spark with the Iceberg and AWS jars, `fraud_feast[spark]`, the pinned stack, non-root, JupyterLab, the notebook). Update `service-images.json` (`ml` rebuild paths include `src/data-pipeline/feast`) and the app-of-apps tags. Verify that the CI image builds pass.
-- [ ] 2.2 Add `src/ml/predictor` (the KServe custom predictor, with `hypothesis` tests), `infra/docker/predictor.Dockerfile`, the `predictor` entry in `service-images.json` and the chart's `ServingRuntime`. Verify in CI.
+- [x] 2.2 Serve with Triton instead of a custom predictor: the chart's `ServingRuntime` runs the pinned Triton image, and `src/ml/predictor`, its Dockerfile and its `service-images.json` entry are removed. Verify in CI.
 
 ## 3. Pipelines and notebook
 
@@ -61,6 +61,15 @@
 - [x] 5b.5 Wire the model call, its deadline and the evidence into `internal/application`, `internal/transport/grpc` and `cmd/fraud`, keeping the evidence hash of old assessments unchanged.
 - [x] 5b.6 Add the chart values and environment for dev and prod, and the network allowance to the predictor.
 - [x] 5b.7 Update the fraud decision, serving and observability docs.
+
+## 5c. Triton and GPU scoring
+
+- [x] 5c.1 Spike on dev: Triton 26.10 with the FIL backend loads the model on the RTX 5060 Ti, matches CPU XGBoost within 6e-8 including NaN rows, and shares the GPU with a training pod through one claim.
+- [x] 5c.2 Add `risk_model/triton.py` (repository packaging, v2 client, probe), `risk_model/objects.py`, and package the repository in `record_version`; `roll_out` probes through Triton.
+- [x] 5c.3 Move gate and notebook scoring to GPU jobs: `worker gate` and `worker experiments`, a depth-1 XGBoost baseline, scoring on `device=cuda`.
+- [x] 5c.4 Add the chart's shared `ResourceClaim`, `TrainingRuntime` and Triton `ServingRuntime` for dev and prod.
+- [x] 5c.5 Rewrite the Go adapter for the v2 protocol with binary tensors, a cached feature order and version-checked scores.
+- [ ] 5c.6 After CI and the dev release: roll a version out on dev, check the fraud service's evidence, run a gate and a notebook comparison through GPU jobs, and record the numbers.
 
 ## 6. Local checks and hand-off
 

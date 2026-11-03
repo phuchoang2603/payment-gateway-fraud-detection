@@ -12,7 +12,7 @@ See proposal.md for the motivation. What shapes the design:
 - **Labels.** Simulation truth is treated as real for this learning project, and is available at `started_at`. So there are no maturity gaps and no immature tail.
 - **Platform (talos-proxmox, through `8321dec`).**
   - The Model Registry 0.3.17 is at `http://model-registry-service.ml.svc.cluster.local:8080`, and has native version state (LIVE or ARCHIVED) but no aliases.
-  - KServe 0.21 in `Standard` (raw Deployment) mode runs custom predictor containers; the registry stores any artifact URI.
+  - KServe 0.21 in `Standard` (raw Deployment) mode runs a chart-owned `ServingRuntime` container, here Triton; the registry stores any artifact URI.
   - KFP (single-user) and Katib 0.19 (`Push`, `restricted`) are validated.
   - Runtime `xgboost-gpu-distributed`: DRA claim, non-root, image, command and args overridable. On prod it selects the platform's `gpu` node pool (at most two nodes), which has no cloud GPU capacity yet. The stock XGBoost image's NCCL is too old; a single GPU needs no NCCL.
   - Notebooks 1.11 cannot take DRA claims.
@@ -108,9 +108,9 @@ KFP v2 with `kfp-kubernetes`, on the `ml` image. It is compiled into `infra/char
 
 ### 6. Serving
 
-- **Custom predictor.** `src/ml/predictor` is a `kserve.Model` over `xgboost-cpu`, built by CI as the `predictor` image and referenced by a chart-owned `ServingRuntime`. The InferenceService names that runtime and a `model-registry://payment-risk/<version>` storage URI; KServe's storage initializer resolves the registry version and downloads the model directory into `/mnt/models`.
-- **Named features.** The booster is trained on unnamed columns and stores the ordered feature list as the `feature_order` attribute. The predictor takes `{"instances": [{feature: value}]}` (KServe v1 JSON), orders the values by that list, and treats a missing or null feature as NaN, which XGBoost treats as missing. It returns `{"predictions": [...], "model_version": "v7"}`; the version comes from `version.txt`, written next to the model by `record_version`. Callers never depend on column order.
-- **InferenceService `payment-risk`:** `Standard` mode (a Deployment and Service, no Knative), `minReplicas: 1`, spot, cluster-internal, run as `fraud-training`, whose storage secret carries the S3 settings KServe needs; created and patched by `roll_out`, not by Argo CD. Callers reach it at the InferenceService's in-cluster Service address.
+- **Triton on the GPU.** A chart-owned `ServingRuntime` runs `nvcr.io/nvidia/tritonserver` (pinned by digest) with the FIL backend on `KIND_GPU`. The InferenceService names that runtime and a `model-registry://payment-risk/<version>` storage URI; KServe's storage initializer resolves the registry version and downloads the model directory into `/mnt/models`, where `record_version` has written `payment-risk/config.pbtxt` and `payment-risk/<N>/xgboost.json`. The runtime, the fit and trial TrainJobs and the gate and experiment jobs all reference one `ResourceClaim`, because a TrainJob cannot patch `resourceClaims`; the chart therefore owns a `TrainingRuntime` that holds the claim.
+- **Named features.** The booster is trained on unnamed columns and stores the ordered feature list as the `feature_order` attribute; `config.pbtxt` repeats it as a parameter with the registry version. Go reads the order from the model's config, lays the row out in that order, sends it as binary FP32 with NaN for anything missing, and reads the fraud class from the two-class answer. The response's `model_version` is the number of the version directory, so a score from another version than the cached order is discarded.
+- **InferenceService `payment-risk`:** `Standard` mode (a Deployment and Service, no Knative), `minReplicas: 1`, on the GPU node, cluster-internal, run as `fraud-training`, whose storage secret carries the S3 settings KServe needs; created and patched by `roll_out`, not by Argo CD. Callers reach it at the InferenceService's in-cluster Service address.
 - **Not model-inside-image.** The course rubric names that pattern. A model image needs a registry write credential in the cluster (or a platform-run registry) and OCI support in KServe, so this change serves the registered model from object storage and records the gap in the docs. The artifact stays immutable in practice: the pipeline writes each run's directory once, and the bucket is versioned.
 
 ### 6a. Derived request features
@@ -157,7 +157,7 @@ The notebook also compares a linear baseline, a random forest, histogram gradien
   - the two `Pipeline`/`PipelineVersion`s;
   - the stopped Notebook.
 - **App:** in app-of-apps for dev and prod, with an environment value that picks the compiled pipelines (`files/dev`, `files/prod`). Dev runs on the local GPU and smaller Spark sizes. It creates no Namespace or Profile.
-- **Images:** `ml` (rebuilt when `src/ml` or `src/data-pipeline/feast` change) and `predictor` (rebuilt when `src/ml/predictor` changes), in `service-images.json`.
+- **Images:** `ml` (rebuilt when `src/ml` or `src/data-pipeline/feast` change) in `service-images.json`; Triton comes from NGC, pinned by digest.
 
 ### 9. Tests in CI, no local runs
 
@@ -165,7 +165,7 @@ The notebook also compares a linear baseline, a random forest, histogram gradien
 - a `WindowSplitter` window test;
 - a `hypothesis` property: the same rows in any order train the same model (CPU in CI);
 - a gate test;
-- predictor properties (`hypothesis`): scores are identical across repeated calls and across key order, a null, a missing and an unknown feature behave alike, and the response names the model version.
+- Triton packaging and client: the config is GPU-only and carries the feature order and version, the repository layout is `payment-risk/<N>/xgboost.json`, NaN survives the binary framing, and the probe rejects another version or an impossible probability. The Go adapter is tested against a fake v2 server for every failure and for a version change between calls.
 
 These are added to the existing Python test job.
 
@@ -176,15 +176,15 @@ API checks against released sources (task 0.4). Each deviation from the decision
 - **Dependency split.** `kfp` needs `protobuf<7` and `fraud_feast` pins 7.36.1, so the pipelines are a separate uv project, `src/ml/pipelines`. Every step is a container component running `python -m risk_model.steps <step>` in the `ml` image, which holds no `kfp`. Only the metrics step is a lightweight component, on a stock Python image.
   - The `fit_on_gpu` TrainJob and the Katib trial are built from one raw `TrainJob` template (`kube.train_job_spec`), not the Kubeflow SDK. The SDK's `CustomTrainerContainer.env` takes literal values only, and the Trainer webhook rejects secret-backed environment set through a runtime patch, so the credentials go in `spec.trainer.env` as `secretKeyRef`s and the runtime patch only sets the service account (its `manager` must be domain-prefixed). The pods read their own credentials, so `fraud-training` needs no Secret read and no `ClusterTrainingRuntime` read.
   - The InferenceService and the Katib Experiment are raw objects, because the SDK has no KServe client, and its optimizer client takes a function trainer only and cannot set a service account or secret-backed env on the trial.
-- **XGBoost 2.1.4, not the newest.** Training (CUDA 12) and the predictor (`xgboost-cpu`) use the same version, so a model file always loads in the version that wrote it; 3.4 wheels are built for CUDA 13.
-  - The model is trained on unnamed columns. The ordered feature list is stored as the `feature_order` attribute and on the registry version, and the predictor does the ordering.
+- **XGBoost 2.1.4, not the newest.** Training (CUDA 12) writes the JSON that Triton's FIL backend loads. A dev check of 215 real rows against CPU XGBoost on the same file agreed within 6e-8, which is the guard against the two reading the format differently; 3.4 wheels are built for CUDA 13.
+  - The model is trained on unnamed columns. The ordered feature list is stored as the `feature_order` attribute, on the registry version and in the Triton config, and the Go adapter does the ordering.
   - The booster is cut at the best iteration, so the served score equals the evaluated one.
 - **Feast 0.67 Spark offline store.** `to_spark_df()` does not apply on-demand views; only `to_arrow()` and `to_df()` do, and by default `to_arrow()` collects through pandas. With `staging_location` set to a local directory, `to_arrow()` writes Spark's result as Parquet and reads it back with `pyarrow`, then applies the views, with no pandas. Each day of the sampled set is small enough for one Arrow table. `pandas` stays below 3 because Feast requires it.
 - **Iceberg.** Snapshot properties come from session configuration `spark.sql.iceberg.snapshot-property.<key>` (Iceberg 1.12 `SparkWriteConf.extraSnapshotMetadata`), because a SQL `MERGE` takes no write options. `WHEN NOT MATCHED BY SOURCE` is covered by Iceberg's own merge tests. The table is format v2, because PyIceberg 0.10 reads position deletes but not deletion vectors.
 - **Model Registry client 0.3.18** (server 0.3.17). Custom properties are scalar only, so lists and maps are stored as JSON strings. `production` is a property; replacement sets the native `ARCHIVED` state, and a rollback sets `LIVE` again.
 - **KFP Kubernetes-native.** A `PipelineVersion` carries `pipelineName`, `pipelineSpec` and `platformSpec`, so the compiler's two documents are split in the chart. The version name carries a hash of the rendered content, so each changed definition or image tag is a new version. The compiled files hold an image placeholder that the chart replaces.
 - **Katib 0.19.** The `tune_params` step creates the Experiment with a `TrainJob` trial on the same runtime, so the GPU claim and placement come from the runtime. Metrics use the default StdOut collector: the worker prints `aucpr=<value>`. The collector sidecar copies the trial container's restricted security context only when the controller sets `injectSecurityContext`, which talos-proxmox now enables. Tuning is off when `tune_trials` is 0. The Push collector would avoid the sidecar but needs the Katib SDK, which cannot share an environment with `fraud_feast`.
-- **KServe 0.21.** The predictor is a custom `ServingRuntime` container with the v1 JSON protocol. The host for the smoke request comes from the predictor URL in the InferenceService status. The stock `kserve-xgbserver` is not used: it loads `xgboost~=2.1.1`, builds an unnamed matrix, and has no way to take named features.
+- **KServe 0.21.** Triton runs as a chart-owned `ServingRuntime` container with the v2 protocol, not the stock `kserve-tritonserver`, whose image is Triton 23.05 and predates Blackwell GPUs. The host for the smoke request comes from the predictor URL in the InferenceService status. The stock `kserve-xgbserver` is not used: it is a CPU server.
 - **Tuning data.** Trials read the pinned training-set snapshot read-only, on a 5% negative sample (`tune_rate`), so parallel trials stay cheap and the final fit uses the full stored sample.
 - **Image.** The Spark runtime comes from the `pyspark` wheel with the pinned jars from `spark_jars`, on a CUDA 12.6 runtime base, not from the Apache Spark image.
 - **Derived request features (task 1.1b).** The Feast change now provides `customer_amount_to_30d_avg`, `payment_method_amount_to_30d_avg` and `scored_hour_utc` in `request_features`, and offline retrieval with `store(redis=False)`. The days-since-latest-daily-row candidate stays dropped, because Feast passes an on-demand view feature values, not their row timestamps.

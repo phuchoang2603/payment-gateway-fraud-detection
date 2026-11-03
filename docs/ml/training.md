@@ -33,8 +33,8 @@ A Kubeflow recurring run, created by a hook Job in the chart after each sync so 
 | `check_examples` | Missing or mistyped columns, duplicate keys, null labels, per-day fraud rate bounds; writes the null share per feature and day |
 | `split_windows` | Window checks, counts and sample fraud rate per split |
 | `tune_params` | Optional (`tune_trials` above 0). A Katib experiment: `tpe`, 8 trials, 2 in parallel, each a single-GPU TrainJob printing validation PR-AUC on a 5% negative sample, reading the pinned snapshot read-only |
-| `fit_on_gpu` | A Trainer `TrainJob` on `xgboost-gpu-distributed` with one node. It trains XGBoost on `device=cuda` over rows sorted by key and early-stops on validation `aucpr`; it never falls back to CPU |
-| `gate` | Logistic-regression baseline, current production version and new model on test; thresholds from validation; KFP metrics and a PR-curve artifact |
+| `fit_on_gpu` | A Trainer `TrainJob` on the chart's `payment-risk-xgboost` runtime with one node, which holds the shared GPU claim. It trains XGBoost on `device=cuda` over rows sorted by key and early-stops on validation `aucpr`, then the depth-1 additive baseline the gate compares against; it never falls back to CPU |
+| `gate` | A GPU `TrainJob` scores the new model, the additive baseline and the current production version; thresholds from validation, metrics on test; KFP metrics and a PR-curve artifact. The step only launches the job and reads its report |
 | `record_version` | Registers a passing model |
 | `roll_out` | Serves the registered version, see [serving](serving.md) |
 
@@ -43,11 +43,11 @@ A Kubeflow recurring run, created by a hook Job in the chart after each sync so 
 - **Single GPU.** The trainer uses one L4 and no collective, so NCCL is not involved. Distributed training and a model-inside-image deployment are not used.
 - **Registry.** A passing model is a new version of `payment-risk` in the Kubeflow Model Registry. The artifact URI is the model directory; the properties hold hyperparameters, test metrics, thresholds, ordered feature list, feature service, training-set snapshot and the source snapshot IDs, windows, cutoff, GPU and library versions, and the pipeline run. `production` and `archived` are properties; a replaced version is also set to the native `ARCHIVED` state.
 - **Run files** are written to `s3://<bucket>/runs/payment-gateway/ml/<run-id>/`.
-- GPU runs are serialized with the model-server benchmarks. Notebooks cannot take GPU claims, so the notebook submits the same TrainJob.
+- All scoring runs on the GPU. Notebooks cannot take GPU claims, so the notebook submits the same kind of TrainJob (`steps.fit_on_gpu`, `steps.gate`, `steps.experiments`) and reads the results; it avoids GPU nodes so it cannot starve them. The baseline is a depth-1 XGBoost model, an additive model stronger than the earlier logistic regression, so the gate rejects more candidates.
 
 ## Derived request features
 
-The [notebook](../../src/ml/notebooks/payment_risk_exploration.ipynb) also compares a linear baseline, a random forest, histogram gradient boosting, CPU XGBoost and the GPU model on validation and test at the gate's two operating thresholds, with calibration and feature importance. It ablates the candidate `request_features` columns on validation PR-AUC before the first registered version, because changing the inputs afterwards needs `payment_risk_v2`.
+The [notebook](../../src/ml/notebooks/payment_risk_exploration.ipynb) also compares five XGBoost models on the GPU, from the depth-1 baseline to the pipeline's settings, on validation and test at the gate's two operating thresholds, with calibration and feature importance. It scores the candidate `request_features` and each view walk-forward before the first registered version, because changing the inputs afterwards needs `payment_risk_v2`.
 
 The notebook accepts `NOTEBOOK_END_DAY`, `NOTEBOOK_TRAIN_DAYS`, `NOTEBOOK_VALIDATION_DAYS`, `NOTEBOOK_TEST_DAYS`, `NOTEBOOK_COMPARE_RATE`, `NOTEBOOK_ABLATION_RATE` and `NOTEBOOK_SNAPSHOT` as environment overrides. An unset snapshot builds a new dataset version.
 
