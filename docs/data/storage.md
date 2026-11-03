@@ -156,8 +156,8 @@ erDiagram
     dim_customer ||--o{ feat_customer_daily : "customer"
 ```
 
-The live OpenMetadata capture (2026-11-03) shows the ClickHouse projection of `silver.attempts`: 25 columns, including integer minor-unit amounts, string attempt identities and UTC microsecond timestamps. The connector exposes these fields as nullable; required-field and uniqueness rules run as contract checks. The catalog has no registered table constraints or attached native contract here. The relationships above are logical joins, not database-enforced foreign keys; Grafana panels demonstrate mart values rather than schema constraints.
+OpenMetadata shows 25 `silver.attempts` columns, including integer amounts, string IDs and UTC microsecond timestamps (GCP, 2026-11-03). The ClickHouse projection exposes nullable fields; contracts validate the data. Relationships above are logical joins, without database-enforced foreign keys or registered catalog constraints.
 
-![Live Silver attempts schema in OpenMetadata, showing column names, types and four passing quality checks](images/silver-attempts-schema-2026-11-03.png)
+![Silver attempts column names and types in OpenMetadata](images/silver-attempts-schema-2026-11-03.png)
 
 Point-in-time rules: join `dim_customer` on the customer key with `valid_from_ts <= t` and `valid_to_ts` null or after `t`. Join a feature table to a label row on the entity key, taking the latest feature row with `event_timestamp` at or before the label's `event_timestamp`; filter labels by `label_available_at` at or before the training cutoff.

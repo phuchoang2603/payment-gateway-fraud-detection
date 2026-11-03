@@ -52,11 +52,11 @@ The >90% line-coverage requirement applies to feature and knowledge APIs. Genera
 
 ![Successful Python CI run on main, with all nine project jobs passing](images/python-ci-passed-2026-11-03.png)
 
-The screenshots below render the unmodified coverage.py reports from that run's `python-test-evidence-*` artifacts. The **Statements** column measures line coverage; the header combines statements and branches. Knowledge `app.py` and feature `server.py`/`request.py` each reach 100%; project totals include bootstrap and supporting modules.
+Native coverage.py reports from the run’s artifacts show 100% for knowledge `app.py` and feature `server.py`/`request.py`. **Statements** is line coverage; the header combines statements and branches.
 
-![Native knowledge API coverage report: 97.1% statements, 100% branches and app.py fully covered](images/knowledge-api-coverage-2026-11-03.png)
+![Knowledge API coverage: 97.1% lines, 100% branches](images/knowledge-api-coverage-2026-11-03.png)
 
-![Native feature API coverage report: 92.3% statements, 87.5% branches and server.py and request.py fully covered](images/feature-api-coverage-2026-11-03.png)
+![Feature API coverage: 92.3% lines, 87.5% branches](images/feature-api-coverage-2026-11-03.png)
 
 The knowledge API mutation baseline killed **98/107 mutants (91.6%)**: nine survived, none untested, skipped or timed out. Native mutation reports are CI artifacts; the HTTP listener bootstrap lives in `__main__.py`, outside the API mutation scope.
 

@@ -92,7 +92,9 @@ For the Kafka input mode, the same tables also hold decoded records with topic/p
 
 **Technique and tradeoff.** Historical files already touch few day partitions, so Bronze uses local fanout writes instead of a redundant hash redistribution. Recorded AWS DP1 hash distribution wrote about 202 GB of shuffle; this is write-layout evidence, not proof of a skew-join speedup.
 
-![Recorded DP1 workflow: Spark, checks and publish](images/argo-dp1-bronze.png)
+Recorded AWS DP1 Spark stages show 15 completed stages, including event/label writes and row-count checks.
+
+![DP1 Spark stages: reads, writes, checks and shuffle metrics](images/spark-dp1-stages.png)
 
 ### DP2: Bronze → canonical Silver
 
@@ -153,8 +155,6 @@ The 5-minute/1-hour/24-hour stream-feature tables are produced by Flink and its 
 
 ## Recorded backfill and execution improvements
 
-
-
 The following results predate GCP. Source regeneration there does not establish a completed GCP backfill.
 <a id="prod-v19-run"></a>
 
@@ -176,12 +176,6 @@ Bronze v19, then `dp-backfill` from 2025-10-29 on the prod cluster (11 spot exec
 | 2026-09 | `dp-backfill-ww2pp` | skipped | skipped | 13.8 | 10.8 | 12.7 | 1.2 | 28 |
 | 2026-10 (28 days) | `dp-backfill-ww2pp` | 12.5 | 3.5 | 11.9 | 10.9 | 16.2 | 1.3 | 50 |
 
-![Before: whole-table checks grow month by month (November to January)](images/argo-backfill-unscoped-checks.png)
-
-![After: April with range-scoped checks, then May's first marts build](images/argo-backfill-scoped-checks.png)
-
-![September and October 2026 in one backfill: September's Silver, its checks and publish are skipped as already on main, and in both months Gold and the marts run side by side after Silver](images/argo-backfill-parallel-skip.png)
-
 Published row counts (Iceberg `main`, 2025-10-29 to 2026-10-28):
 
 | Table | Rows |
@@ -200,7 +194,7 @@ Published row counts (Iceberg `main`, 2025-10-29 to 2026-10-28):
 Every Silver, Gold and mart rule passed in OpenMetadata: 58 tests on 15 tables. Lineage runs from the v19 dataset through Bronze and Silver to the Gold tables and marts.
 
 
-### Execution techniques behind these runs
+### Execution techniques
 
 | Technique | Problem and recorded result |
 |---|---|

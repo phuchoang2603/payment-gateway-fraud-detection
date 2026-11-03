@@ -41,9 +41,9 @@ sequenceDiagram
 
 A platform admission policy rejects deleting or terminating an active workflow in `data`; stop runs with `shutdown: Stop`.
 
-The GCP run `dp-backfill-v19-gcp-oct-b-6wrsz` completed all 15 tasks for October 16–28, 2026. Captured on 2026-11-03, its graph shows Silver checks before publication, then Gold and marts building in parallel with their own checks and publish steps, followed by catalog publication on exit.
+GCP backfill `dp-backfill-v19-gcp-oct-b-6wrsz` passed all 15 tasks for October 16–28, 2026: Silver → parallel Gold/marts, with checks before each publication.
 
-![Successful GCP backfill in Argo: Silver validation and publication, parallel Gold and marts, and exit handler](images/argo-gcp-backfill-2026-11-03.png)
+![GCP backfill: checks before publication, Gold and marts in parallel](images/argo-gcp-backfill-2026-11-03.png)
 
 ### Spark sizing and placement
 
@@ -81,9 +81,9 @@ Each rule is pinned to its table's audited snapshot and audits only the rows the
 
 Recorded AWS backfill checks fell from 18 + 28 minutes in March to 3 + 9 in April after range scoping. A first attempt at scoping wrapped each table in a `SELECT * … WHERE` subquery, which made ClickHouse materialize it and ran out of memory on `silver_attempt_amount_context`; the setting keeps the rule's own plan.
 
-The live GCP capture on 2026-11-03 shows all four `silver.attempts` rules passing: outcome follows start, known states, valid lifecycle and unique attempt.
+GCP, 2026-11-03: all four `silver.attempts` rules pass—outcome after start, known states, valid lifecycle and unique attempt.
 
-![Live Silver attempts validation: four successful tests, no failed or aborted tests](images/silver-attempts-quality-2026-11-03.png)
+![Silver attempts: four passing quality checks](images/silver-attempts-quality-2026-11-03.png)
 
 ## Catalog
 
