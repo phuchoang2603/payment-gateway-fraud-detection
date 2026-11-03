@@ -3,8 +3,7 @@
 A payment gateway for a refurbished-electronics marketplace, with a real-time fraud decision on every payment attempt. Its events and a synthetic history feed a lakehouse, a feature store and a fraud model, and read-only analyst agents explain declines and risk decisions on top. Synthetic cards only. The [project wiki](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki) covers the domain, the data problems, the AI problem, the architecture and the roadmap.
 
 - [Overview](#overview)
-- [Ecommerce payment gateway integration](#ecommerce-payment-gateway-integration)
-- [Data pipeline and ML](#data-pipeline-and-ml)
+- [Payment gateway, data pipeline and ML](#payment-gateway-data-pipeline-and-ml)
 - [LLM and agents](#llm-and-agents)
 - [Deployment and security](#deployment-and-security)
 - [Repository structure](#repository-structure)
@@ -16,25 +15,19 @@ _Diagram to come._
 
 Docs: [domain](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki#domain) · [architecture](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki#architecture) · [roadmap](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki#roadmap)
 
-## Ecommerce payment gateway integration
+## Payment gateway, data pipeline and ML
 
-The [refurbished marketplace](https://github.com/phuchoang2603/refurbished-marketplace) sends checkout snapshots; the gateway owns hosted checkout, payment attempts, fraud decisions, simulated processing and signed outcome webhooks.
+The [refurbished marketplace](https://github.com/phuchoang2603/refurbished-marketplace) prepares orders and reserves stock through its Checkout saga before opening the gateway's hosted checkout. The Go gateway owns attempts, fraud decisions, simulated processing and signed outcomes that drive stock settlement and order finalization.
 
-![Marketplace payment flow: Checkout saga, hosted Go gateway, fraud assessment through Feast and KServe, signed webhooks, and Kafka feature updates](docs/payment-gateway/images/payment-flow.png)
+Kafka events and synthetic history feed Spark's Bronze/Silver/Gold lakehouse and Flink's streaming features. Feast serves daily and streaming features from Redis to Go Fraud, which applies rules and the KServe model score. Kubeflow builds point-in-time training examples, trains and evaluates XGBoost, registers passing versions and rolls them out to KServe.
 
-Checkout prepares the order and reserves stock through Kafka before opening the hosted session. Signed outcomes drive stock settlement and order finalization. Go Fraud reads Feast features and applies the KServe score alongside its rules.
+![Payment gateway, data and ML flow: marketplace checkout, Go payment services, Kafka, Spark and Flink processing, Feast and Redis, and Kubeflow training and KServe rollout](docs/payment-gateway/images/payment-flow.png)
 
 Diagram source: [`payment-flow.excalidraw`](docs/payment-gateway/images/payment-flow.excalidraw) · model integration: [#112](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/112).
 
-Docs: [architecture](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/architecture) · [flows](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/flows) · [conventions](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/conventions)
+Gateway docs: [architecture](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/architecture) · [flows](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/flows) · [conventions](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/conventions)
 
-## Data pipeline and ML
-
-Payment events and the synthetic history become Bronze and Silver Iceberg tables, streaming and daily features in Feast, and the training data for the fraud model served by KServe.
-
-_Diagram to come._
-
-Docs: [offline data](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/offline) · [online data](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/online) · [storage](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/storage) · [orchestration and governance](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/orchestration-governance) · [feature store](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/feature-store) · [training](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/training) · [serving](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/serving) · [background](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/background)
+Data and ML docs: [offline data](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/offline) · [online data](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/online) · [storage](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/storage) · [orchestration and governance](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/orchestration-governance) · [feature store](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/feature-store) · [training](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/training) · [serving](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/serving) · [background](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/background)
 
 ## LLM and agents
 
