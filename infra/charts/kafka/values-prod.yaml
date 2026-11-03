@@ -1,6 +1,6 @@
 kafka:
   storage:
-    storageClass: cloud-block
+    storageClass: cloud-standard
     # The seeded input of all 23 history units (about 37 GB) and their feature journals stay until unit cleanup.
     # The journals outgrew 64Gi about 9 hours into the replay and the broker stopped.
     size: 256Gi
