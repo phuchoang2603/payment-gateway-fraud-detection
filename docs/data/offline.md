@@ -27,7 +27,11 @@ The published interface is the contracts: [payment events](products/historical-p
 | v18 (dev) | `s3://platform-dev/datasets/payment-gateway/historical/v18` | `generate-historical-v18-77fzr`, 1 shard, 11m50s | 823,963 events, 161,007 labels, 181 files, 112.4 MB; 1.996% duplicates; top merchant 56.3% of purchases, top 10 merchants 71.1%; 414,059 v2 and 409,904 v3 rows |
 | v19 (recorded AWS run, full scale) | `s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19` | `generate-historical-v19-nvp7l`, 12 spot shards, 49 minutes | 983,727,083 events, 192,204,996 labels, 2,924 files over 365 days, 133.5 GB; sampled parts show about 2.0% duplicates and a 56% top-merchant share |
 
-Both were checked by reading the manifest and Parquet files back from storage: no empty parts, and every `.v2` file lacks `assessment_id` while `.v3` files have it.
+| v19 (GCP publication) | `s3://talos-proxmox-prod-platform/datasets/payment-gateway/historical/v19` | `generate-historical-v19-gcp-mstrk`, succeeded | Manifest: 983,727,083 events, 192,204,996 labels, 2,924 files over 365 days, 133,498,693,796 bytes |
+
+The dev and recorded AWS datasets were checked by reading the manifest and Parquet files back from storage: no empty parts, and every `.v2` file lacks `assessment_id` while `.v3` files have it.
+
+The [GCP publication check](evidence/gcs-v19-publication.json) downloaded the manifest and reconciled its per-file rows, bytes, dates and unique paths. Its SHA-256 is `78ee54fe2a607ae0c128bc6765d89238f28d00270fca5ad48a8fed44fd0f8608`, identical to the existing live-traffic pin. This check did not reread every Parquet object or execute the downstream backfill.
 
 ### Cardinality and skew are different measurements
 

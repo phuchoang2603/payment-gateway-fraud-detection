@@ -1,0 +1,21 @@
+{
+  "captured_at": "2026-11-03T02:56:05.729447+00:00",
+  "workflow": "generate-historical-v19-gcp-mstrk",
+  "workflow_status": "Succeeded",
+  "manifest": "s3://talos-proxmox-prod-platform/datasets/payment-gateway/historical/v19/manifest.json",
+  "manifest_sha256": "78ee54fe2a607ae0c128bc6765d89238f28d00270fca5ad48a8fed44fd0f8608",
+  "matches_live_traffic_pin": true,
+  "configuration_sha256": "146dd3081b8b1647a5804c28a34e00c5a8518876ff781a6b1d4efc5a78da3fed",
+  "generator_digest": "63916457f3a945e24ac1019bc6d257e1403cda64b9eed6de5d9895c75ae15fa4",
+  "days": 365,
+  "rows": {
+    "fraud_labels": 192204996,
+    "payment_events": 983727083
+  },
+  "files": {
+    "fraud_labels": 1460,
+    "payment_events": 1464
+  },
+  "physical_bytes": 133498693796,
+  "validation": "Downloaded published manifest; summed per-file rows and bytes, checked unique paths and 365 dates. Did not reread or hash every Parquet object; no downstream backfill validation."
+}
