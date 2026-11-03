@@ -55,6 +55,8 @@ Subsequent candidates receive 10%, 25%, then 50% of public checkout traffic. Eac
 
 For an incident, run `kubectl --kubeconfig ~/.kube/talos-prod.yaml argo rollouts abort edge -n payment-gateway` when the kubectl plugin is installed, then revert the source image/chart and publish through the existing release flow. Confirm stable endpoints and HTTPRoute weights before considering recovery complete. Abort does not undo database migrations or changes to other services.
 
+Prod acceptance on 2026-11-03 preserved ready stable endpoints through Deployment adoption and removal. A candidate with no traffic aborted at its first measurement after the five-minute warm-up. A faulted candidate was rejected at 7.2% errors and insufficient traffic (97 requests against a minimum of 100), restoring stable/canary weights to 100/0; the rollout alert fired and resolved on retry. Argo CD reconciliation preserved active weights, internal callers stayed on stable, and public `/v1/payments` remained HTTP 404. The healthy retry passed both observations at 10%, 25% and 50%, then promoted automatically with ready endpoints on the new stable revision.
+
 ## Runtime configuration
 
 Python services take settings from configuration files and environment variables, never command-line flags. Every service validates its configuration at startup and exits non-zero with a sanitized diagnostic on invalid values; booleans accept only `true` or `false`.

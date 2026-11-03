@@ -47,6 +47,8 @@ Namespace-local VMRules cover sustained gateway failures/latency, notification a
 
 ## Verification
 
-Deployed acceptance on 2026-10-24 (change [`go-service-observability`](../../openspec/changes/archive/2026-10-24-go-service-observability/proposal.md)): a sampled approved and declined flow produced connected traces across all six service identities, including fraud spans under Payments and notifier delivery spans in the same trace. With the exporter unreachable, payments still succeeded and every pod exited within 3 s of termination. Application pods used 1–4 mCPU and 3–5 MiB at idle. The operational dashboards and alerts added later require separate prod verification; this earlier run does not establish their readiness.
+Deployed acceptance on 2026-10-24 (change [`go-service-observability`](../../openspec/changes/archive/2026-10-24-go-service-observability/proposal.md)): a sampled approved and declined flow produced connected traces across all six service identities, including fraud spans under Payments and notifier delivery spans in the same trace. With the exporter unreachable, payments still succeeded and every pod exited within 3 s of termination. Application pods used 1–4 mCPU and 3–5 MiB at idle.
 
-Later Go fraud adapters will call Feast feature serving and KServe inference directly using their supported protocols and instrumentation. Their rollout must verify feature/model version diagnostics, deadlines, cold starts and trace propagation. No custom Python coordinator is required.
+Fraud retrieves online features directly through its [Feast adapter](../../src/payment-gateway/fraud/internal/adapters/feast/client.go). Feature/model diagnostics, serving deadlines and cold starts require separate verification from Edge checkout canary analysis.
+
+Prod verification on 2026-11-03 confirmed Kafka and Flink scrape targets, both operational dashboards in Grafana, native Workflow/Spark signals, candidate-specific OTLP series, a connected Edge/Payments trace and matching request logs. The rollout failure alert fired after an aborted candidate and resolved on retry. External alert delivery remains disabled by the shared `blackhole` receiver.
