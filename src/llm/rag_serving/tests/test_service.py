@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from fraud_rag_common import store
 from hypothesis import given, settings
@@ -145,11 +146,13 @@ def test_embedding_failure_does_not_return_partial_search_results(client, monkey
     async def unavailable(*_):
         raise TimeoutError("embedding unavailable")
 
+    failures = service.TOOL_CALLS.labels("search_knowledge", "failure")
+    before = failures._value.get()
     monkeypatch.setattr(client.embedder, "query", unavailable)
     with pytest.raises(TimeoutError, match="embedding unavailable"):
         asyncio.run(service.search_knowledge("high amount"))
 
-    assert 'knowledge_mcp_tool_calls_total{outcome="failure",tool="search_knowledge"}' in client.get("/metrics/").text
+    assert failures._value.get() == before + 1
 
 
 def test_mcp_exposes_two_tools_backed_by_the_same_functions(client):
@@ -229,7 +232,16 @@ def test_metrics_count_rest_requests_and_tool_outcomes(client):
 def test_lifespan_builds_the_embedder_and_serves_mcp(monkeypatch):
     monkeypatch.setattr(service.Embedder, "from_env", classmethod(lambda cls: FakeEmbedder()))
     monkeypatch.setattr(service.knowledge, "feature_store", object())
-    with TestClient(service.app) as running:
+    application = FastAPI(lifespan=service.lifespan)
+    application.mount(
+        "/",
+        service.mcp.streamable_http_app(
+            stateless_http=True,
+            json_response=True,
+            transport_security=service.TransportSecuritySettings(enable_dns_rebinding_protection=False),
+        ),
+    )
+    with TestClient(application) as running:
         assert isinstance(service.knowledge.embedder, FakeEmbedder)
         response = running.post(
             "/mcp",

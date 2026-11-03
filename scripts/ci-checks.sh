@@ -29,7 +29,7 @@ check_python() (
       uv run --locked --no-default-groups --group dev --group "$group" pytest -q --durations=5
     done
     if [[ "$1" == src/llm/rag_serving && -n "${MUTATION_BASE:-}" ]] &&
-      ! git diff --quiet "$MUTATION_BASE" HEAD -- fraud_rag_serving/app.py; then
+      ! git diff --quiet "$MUTATION_BASE" HEAD -- fraud_rag_serving/app.py tests pyproject.toml; then
       local mutation_status=0
       uv run --locked --with mutmut==3.8.1 mutmut run --max-children 2 \
         'fraud_rag_serving.app.*' > "$reports/mutation.txt" 2>&1 || mutation_status=$?
