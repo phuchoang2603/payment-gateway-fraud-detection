@@ -128,7 +128,7 @@ features:
   epochs: history-v19,live-v19
   epoch: live-v19
   historyEpoch: history-v19
-  checkpointRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/flink/history
+  checkpointRoot: s3a://talos-proxmox-prod-platform/runs/payment-gateway/flink/history
   # Burst nodes have 40Gi root disks, too small for Spark spill or a week's DuckDB sort.
   scratchClass: cloud-block
   replicationFactor: 1
@@ -151,4 +151,4 @@ features:
         cpu: '1'
         memory: 8Gi
   streaming:
-    storageRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/flink
+    storageRoot: s3a://talos-proxmox-prod-platform/runs/payment-gateway/flink

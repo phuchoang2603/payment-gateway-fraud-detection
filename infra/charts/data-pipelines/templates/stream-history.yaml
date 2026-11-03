@@ -145,6 +145,9 @@ spec:
               s3.endpoint: {{ .Values.config.S3_ENDPOINT | quote }}
               s3.path.style.access: {{ .Values.config.S3_PATH_STYLE | toString | quote }}
               s3.region: {{ .Values.config.AWS_REGION | quote }}
+              {{- if eq .Values.config.S3_ENDPOINT "https://storage.googleapis.com" }}
+              s3.endpoint.region: {{ .Values.config.AWS_REGION | quote }}
+              {{- end }}
               restart-strategy.type: exponential-delay
               resourcemanager.taskmanager-registration.timeout: 10min
               slot.request.timeout: 15min
@@ -179,6 +182,10 @@ spec:
                 containers:
                   - name: flink-main-container
                     env:
+                      {{- if eq .Values.config.S3_ENDPOINT "https://storage.googleapis.com" }}
+                      - name: ENABLE_BUILT_IN_PLUGINS
+                        value: flink-s3-fs-hadoop-2.2.1.jar
+                      {{- end }}
                       - name: AWS_ACCESS_KEY_ID
                         valueFrom:
                           secretKeyRef:
