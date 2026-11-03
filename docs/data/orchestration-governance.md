@@ -2,8 +2,6 @@
 
 Argo Workflows orchestrates the finite data pipelines; OpenMetadata is the catalog for lineage, contracts and data validation. They stand in for the course's Airflow and DataHub. Connections and credentials are defined once in the charts and Doppler and reused by every pipeline.
 
-[Home](../Home.md#data-platform) maps coursework criteria to these pages. Workflow/catalog captures below describe their recorded runs.
-
 ## Workflows
 
 All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipelines) in the `data` namespace.
@@ -12,14 +10,14 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 |---|---|---|
 | `generate-historical` | Shards in parallel → publish | v18 and original v19 published; fresh GCP publication verified separately |
 | `dp1-bronze` (historical or Kafka source) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Recorded AWS v19 completed; Kafka runs inside `dp-daily` |
-| `dp-pipeline` (`start`/`end` days) | Silver, then Gold and the marts side by side, each as plan → build on an audit branch or staging → checks → publish; OpenMetadata publish on exit. Stages and skipping: [pipeline](offline.md#pipeline) | Recorded AWS v19 completed; see [the run](offline.md#prod-v19-run) |
+| `dp-pipeline` (`start`/`end` days) | Silver, then Gold and the marts side by side, each as plan → build on an audit branch or staging → checks → publish; OpenMetadata publish on exit. Plan steps skip outputs whose range, source snapshots and image already match. | Recorded AWS v19 completed |
 | `dp-daily`, `dp-backfill` | Kafka into Bronze, then `dp-pipeline` for yesterday and two lookback days (suspended cron); `dp-pipeline` month by month in order, stopping at the first failed month | Backfill on demand; `dp-daily` suspended |
 | `maintain-lakehouse` | Task `nightly` (suspended cron) or `zorder` over one month | Implemented |
 | `feast-materialize` (`since` day, `stream-recovery`) | `feast apply` registry → materialize the daily views from each view's last end minus lookback (or `since`) through now → `verify_online` compares 200 newest keys with the offline rows; `stream-recovery` instead rebuilds the stream views from the last 24 hours 5 minutes | `feast-materialize-daily` cron, suspended |
 | `stream-history` (`start`/`end` days) | Plan `historyUnitDays` units → per unit, in parallel up to `historyParallelism`: topics → seed from Bronze → bounded Flink until FINISHED → history writer → cleanup and OpenMetadata publish | On demand |
 | `warehouse-benchmark`, `dp2-benchmark` (skewed join) | Single on-demand stage | Tools only; the evidence comes from the backfill |
 
-Every writer publishes its audit branch to `main` only after all native tests pass. Failed runs keep their branches until nightly maintenance drops branches older than seven days; the exit handler records pipeline status in OpenMetadata. Bronze holds `dp1-bronze-writer`; the `dp-pipeline` template holds `dp-writer`, so the daily run, each backfill month and maintenance serialize. Checks retry execution errors, not failed data rules. The diagram shows Silver and Gold; the marts audit staging tables instead of a branch (see [storage](storage.md#running-sql-inside-clickhouses-limits)).
+Every writer publishes its audit branch to `main` only after all native tests pass. Failed runs keep their branches until nightly maintenance drops branches older than seven days; the exit handler records pipeline status in OpenMetadata. Bronze holds `dp1-bronze-writer`; the `dp-pipeline` template holds `dp-writer`, so the daily run, each backfill month and maintenance serialize. Checks retry execution errors, not failed data rules. The diagram shows Silver and Gold; the marts audit staging tables instead of a branch.
 
 ```mermaid
 sequenceDiagram
@@ -63,11 +61,11 @@ Each data product lives in one folder under [`contracts/data-products/`](../../c
 
 | Product | Ports | Reference |
 |---|---|---|
-| `historical-payments` | `payment-events`, `fraud-labels` | [payment events](products/historical-payments/payment-events.md), [fraud labels](products/historical-payments/fraud-labels.md) |
-| `bronze-payments` | `payment-events`, `fraud-labels`, `rejected-records` | [payment events](products/bronze-payments/payment-events.md), [fraud labels](products/bronze-payments/fraud-labels.md), [rejected records](products/bronze-payments/rejected-records.md) |
-| `silver-payments` | `payment-events`, `attempts`, `labels`, `rejected-events` | [payment events](products/silver-payments/payment-events.md), [attempts](products/silver-payments/attempts.md), [labels](products/silver-payments/labels.md), [rejected events](products/silver-payments/rejected-events.md) |
-| `gold-features` | `dim-customer`, `feat-customer-daily`, `feat-payment-method-daily`, `label-attempt` | [customer dimension](products/gold-features/dim-customer.md), [customer features](products/gold-features/feat-customer-daily.md), [payment-method features](products/gold-features/feat-payment-method-daily.md), [attempt labels](products/gold-features/label-attempt.md) |
-| `payment-marts` | `fact-payment-attempt`, `fact-merchant-day`, `build-info` | [attempt fact](products/payment-marts/fact-payment-attempt.md), [merchant day](products/payment-marts/fact-merchant-day.md), [build info](products/payment-marts/build-info.md) |
+| `historical-payments` | `payment-events`, `fraud-labels` | [payment events](../../contracts/data-products/historical-payments/payment-events.odcs.yaml), [fraud labels](../../contracts/data-products/historical-payments/fraud-labels.odcs.yaml) |
+| `bronze-payments` | `payment-events`, `fraud-labels`, `rejected-records` | [payment events](../../contracts/data-products/bronze-payments/payment-events.odcs.yaml), [fraud labels](../../contracts/data-products/bronze-payments/fraud-labels.odcs.yaml), [rejected records](../../contracts/data-products/bronze-payments/rejected-records.odcs.yaml) |
+| `silver-payments` | `payment-events`, `attempts`, `labels`, `rejected-events` | [payment events](../../contracts/data-products/silver-payments/payment-events.odcs.yaml), [attempts](../../contracts/data-products/silver-payments/attempts.odcs.yaml), [labels](../../contracts/data-products/silver-payments/labels.odcs.yaml), [rejected events](../../contracts/data-products/silver-payments/rejected-events.odcs.yaml) |
+| `gold-features` | `dim-customer`, `feat-customer-daily`, `feat-payment-method-daily`, `label-attempt` | [customer dimension](../../contracts/data-products/gold-features/dim-customer.odcs.yaml), [customer features](../../contracts/data-products/gold-features/feat-customer-daily.odcs.yaml), [payment-method features](../../contracts/data-products/gold-features/feat-payment-method-daily.odcs.yaml), [attempt labels](../../contracts/data-products/gold-features/label-attempt.odcs.yaml) |
+| `payment-marts` | `fact-payment-attempt`, `fact-merchant-day`, `build-info` | [attempt fact](../../contracts/data-products/payment-marts/fact-payment-attempt.odcs.yaml), [merchant day](../../contracts/data-products/payment-marts/fact-merchant-day.odcs.yaml), [build info](../../contracts/data-products/payment-marts/build-info.odcs.yaml) |
 
 Each contract has a generated reference under [`products/<product>/`](products). CI lints every descriptor and contract with the pinned native tools and diffs each reference against a fresh export (`bash scripts/ci-checks.sh contracts`). Regenerate a reference with the export command in [`scripts/ci-checks.sh`](../../scripts/ci-checks.sh) after changing a contract.
 
@@ -77,7 +75,7 @@ Historical source contracts describe schema and meaning only. Bronze, Silver, go
 
 Each rule is pinned to its table's audited snapshot and audits only the rows the run could write. The checks read the range the audited commit records (`dp2.range` for Silver, `dp3.range` for Gold) and pass it to ClickHouse as `additional_table_filters = {'lakehouse.<schema.table>': '<filter>'}`: `payment_day` for Silver events and attempts, `partition_day` for rejected events, the availability day for labels, and the anchor or validity day for Gold. The key must not be quoted with backticks, or ClickHouse silently filters nothing. Other audited tables a rule references are pinned to their own audited snapshots, and every rule runs with external sort, external group-by and `full_sorting_merge`. Saved test definitions are not reused; the processor upserts the current contract rules.
 
-The effect on the backfill is in [the prod run](offline.md#prod-v19-run). A first attempt at scoping wrapped each table in a `SELECT * … WHERE` subquery, which made ClickHouse materialize it and ran out of memory on `silver_attempt_amount_context`; the setting keeps the rule's own plan.
+Recorded AWS backfill checks fell from 18 + 28 minutes in March to 3 + 9 in April after range scoping. A first attempt at scoping wrapped each table in a `SELECT * … WHERE` subquery, which made ClickHouse materialize it and ran out of memory on `silver_attempt_amount_context`; the setting keeps the rule's own plan.
 
 ![OpenMetadata data quality: 58 tests, all passing](images/openmetadata-data-quality.png)
 
@@ -110,7 +108,7 @@ On prod the `grafana` user's profile allows `max_execution_time` up to 65 second
 
 ### RAG knowledge workflow and AI assets
 
-The RAG pipeline's `rag-knowledge` workflow also runs in `data`, from the [`rag-pipeline` chart](../../infra/charts/rag-pipeline). It is governed the same way: the knowledge-base contract's checks run through the shared checks image, and its exit handler publishes the run status and the lineage from the corpus container to `knowledge.chunks`. See [RAG](../llm/rag.md#governance).
+The RAG pipeline's `rag-knowledge` workflow also runs in `data`, from the [`rag-pipeline` chart](../../infra/charts/rag-pipeline). It is governed the same way: the knowledge-base contract's checks run through the shared checks image, and its exit handler publishes the run status and the lineage from the corpus container to `knowledge.chunks`.
 
 ## Schema registry
 

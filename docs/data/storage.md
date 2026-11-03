@@ -26,7 +26,7 @@ On a fresh bucket, initialize `runs/payment-gateway/spark-events/` with a hidden
 
 Tables are Iceberg, registered in the Polaris REST catalog that the `lakehouse` chart deploys. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
 
-The recorded AWS v19 backfill held Bronze in full, and Silver and Gold from 2025-10-29 to 2026-10-28; see [the run](offline.md#prod-v19-run). Those totals are not a verification of the fresh GCP deployment.
+The recorded AWS v19 backfill held Bronze in full, and Silver and Gold from 2025-10-29 to 2026-10-28. Those totals are not a verification of the fresh GCP deployment.
 
 | Technique | Applied to | Why |
 |---|---|---|
@@ -48,7 +48,7 @@ Kafka offsets are derived from the Bronze rows themselves, not from snapshot met
 
 ### Implementation references
 
-Catalog/session setup: [`spark.py`](../../src/data-pipeline/batch/batch/spark.py). Table properties and branch writes: [`lakehouse.py`](../../src/data-pipeline/batch/batch/lakehouse.py). Maintenance: [`maintenance.py`](../../src/data-pipeline/batch/batch/maintenance.py). Mart DDL/build: [`gold/sql/marts`](../../src/data-pipeline/batch/batch/gold/sql/marts), [`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py). Schema merge and dedup belong to [offline processing](offline.md#spark-processing).
+Catalog/session setup: [`spark.py`](../../src/data-pipeline/batch/batch/spark.py). Table properties and branch writes: [`lakehouse.py`](../../src/data-pipeline/batch/batch/lakehouse.py). Maintenance: [`maintenance.py`](../../src/data-pipeline/batch/batch/maintenance.py). Mart DDL/build: [`gold/sql/marts`](../../src/data-pipeline/batch/batch/gold/sql/marts), [`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py). Spark merges evolving Parquet schemas and deduplicates canonical events by `event_id` before writing Silver.
 
 ### Write distribution results
 
@@ -65,8 +65,8 @@ ClickHouse reads the Iceberg tables directly through the `lakehouse` DataLakeCat
 The `marts` profile caps queries at 2 GiB. Three techniques kept the recorded builds/checks within that limit:
 
 - **Spill instead of hash.** Every contract rule runs with external aggregation (800 MB threshold), external sort (400 MB), `join_algorithm = 'full_sorting_merge'`, `max_threads = 2` and `max_block_size = 16384`. On v19, a full-history amount/context join finished this way in 18m48s at 1.77 GiB peak, writing 17.8 GiB of sort spill, after hash joins exceeded the server.
-- **Read only the run's range.** Rules are scoped to the audited commit's range with `additional_table_filters` (see [range-scoped validation](orchestration-governance.md#range-scoped-validation)), so their cost follows one month instead of the whole table.
-- **A small hash build side, read once.** The rebuilt days' attempts and their label summary are staged in MergeTree tables ordered by a payment-hash bucket, and the fact is inserted one bucket at a time: one bucket of labels `RIGHT JOIN` the same bucket of attempts with `join_algorithm = 'hash'`. ClickHouse builds the hash table from the right side, so memory holds one bucket of attempts, and the primary key limits each insert to its bucket of both tables. The label summary itself is built in 8 hash passes, each reading only its eight columns. The failures that led here are in [optimization techniques](offline.md#optimization-techniques).
+- **Read only the run's range.** Rules are scoped to the audited commit's range with `additional_table_filters`, so their cost follows one month instead of the whole table.
+- **A small hash build side, read once.** The rebuilt days' attempts and their label summary are staged in MergeTree tables ordered by a payment-hash bucket, and the fact is inserted one bucket at a time: one bucket of labels `RIGHT JOIN` the same bucket of attempts with `join_algorithm = 'hash'`. ClickHouse builds the hash table from the right side, so memory holds one bucket of attempts, and the primary key limits each insert to its bucket of both tables. The label summary itself is built in 8 hash passes, each reading only its eight columns. Earlier whole-table hash joins exceeded the memory limit; range scoping and bucketed inserts bound the working set.
 
 ```mermaid
 flowchart LR

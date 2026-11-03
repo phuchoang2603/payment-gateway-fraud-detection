@@ -113,7 +113,7 @@ flowchart TB
     F -.->|"planned scoring"| KS
 ```
 
-Only Edge `/checkout/*` is publicly routed. Internal APIs are ClusterIP-only behind the Istio ambient mesh with service-account authorization; see [routing](deployment/routing.md). The marketplace context is in the [marketplace gateway note](https://github.com/phuchoang2603/refurbished-marketplace/blob/main/docs/ecommerce-fraud-gateway.md).
+Only Edge `/checkout/*` is publicly routed. Internal APIs are ClusterIP-only behind the Istio ambient mesh with service-account authorization; see [security and routing](deployment/security.md#routing-and-gateway). The marketplace context is in the [marketplace gateway note](https://github.com/phuchoang2603/refurbished-marketplace/blob/main/docs/ecommerce-fraud-gateway.md).
 
 ## Roadmap
 
@@ -170,8 +170,7 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Infrastructure and IaC | Cloud/VM provisioning, Talos bootstrap and shared operators | [Infrastructure](deployment/infra.md) | Platform-owned; provisioning captures pending |
 | Docker, CD and canary deployment | Image optimization, test/build/deploy flow and guarded Edge promotion | [Delivery](deployment/cd.md) | Prod canary verified 2026-11-03 |
 | Observability | Metrics, logs, traces and alert evaluation | [Observability](deployment/observability.md) | Prod captures recorded; external alert delivery disabled |
-| Security and secrets | Doppler, External Secrets and service authorization | [Security](deployment/security.md) | Implemented; secret-delivery capture pending |
-| Routing and gateway | Public checkout, private APIs, authentication and gateway policy | [Routing](deployment/routing.md) | Edge verified; remaining access-control proof listed |
+| Security, secrets and routing | Doppler, External Secrets, public checkout, private APIs and gateway authorization | [Security](deployment/security.md) | Edge verified; secret-delivery and access-control captures pending |
 
 ## Limits and scope
 

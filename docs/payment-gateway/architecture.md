@@ -1,56 +1,95 @@
-# Payment gateway architecture
+# Payment gateway
 
-The gateway and its fraud decisioning path. The [verification evidence](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md) records what the prod deployment proves. It supplies Edge, Payments, notifier, vault and processor simulators, plus Go fraud decisioning; it takes synthetic payment-method tokens through hosted checkout, evaluates risk, executes simulated processor operations, and delivers durable payment outcomes.
-
-## How the gateway is organized
-
-- [Payment flows](flows.md): identity, checkout and payment-authority contracts, with the checkout and recovery sequence.
-- [Service conventions](conventions.md): code layout, dependency direction and per-service ownership rules.
-- [Docker images](../deployment/cd.md#docker-images): image builds for every service.
-- [Platform architecture](../Home.md#architecture): deployable units, ownership boundaries and the full deployment diagram.
+The gateway owns hosted checkout, payment attempts, fraud decisions, simulated processing and signed outcome webhooks. The marketplace owns orders, inventory and buyer authentication. All cards and processor responses are synthetic.
 
 ## Gateway design
 
-The gateway implements the following foundation. Production verification is recorded in [CI verification](../deployment/ci.md#deployed-verification).
+| Service | Responsibility | Owned state |
+|---|---|---|
+| Edge | Integration authentication, hosted checkout, tokenization and API translation | Checkout access; no payment database |
+| Payments | Payment/attempt lifecycle, idempotency and recovery | Postgres state, append-only event ledger and Redis idempotency |
+| Fraud | Rules, durable assessments and shadow Feast lookups | Assessment database and evidence |
+| Vault simulator | Allow-listed fictional cards, opaque tokens and restricted resolution | Encrypted fixtures and token mappings |
+| Processor simulator | Idempotent simulated sales and operation-status lookup | Operation results |
+| Notifier | Kafka consumption and signed webhook retries | Inbox and delivery state |
 
-| Component                     | Design                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Edge and Payments             | Edge loads hashed integration keys and checkout configuration. Payments derives merchant/customer UUIDv5 IDs and owns payment commands; there is no Accounts service. Fraud and provider calls use bounded deadlines.                                                                                                                                                                                                 |
-| Payment events                | Versioned payment and attempt rows are authoritative. Each transition atomically updates state and idempotency and inserts exactly one immutable ledger event; commands never rehydrate state from events.                                                                                                                                                                                                            |
-| Financial journal             | A later Payments-owned balanced financial journal, separate from workflow events. An authorization hold, captured payment and settled funds are different facts.                                                                                                                                                                                                                                                      |
-| Redis idempotency cache       | Redis atomically claims request-bound in-flight keys first, then stores completed results with TTL and noeviction; durable Postgres constraints arbitrate retries and Redis loss falls back to Postgres. Authorization submission counters use a separate persistent Redis deployment and credentials; Feast uses a third deployment. Counters begin observe-only and report unknown coverage during recovery warmup. |
-| Event publication             | The committed event table supplies the publication boundary. Debezium WAL CDC publishes stored payloads to Kafka without a second outbox table. Sequence allocation is not commit order; checkpoint CDC offsets and preserve per-payment versions.                                                                                                                                                                    |
-| Webhook delivery              | The notifier owns durable inbox/retry state and signed merchant webhooks; consumers deduplicate stable event IDs. Neither Kafka nor merchant webhook availability blocks the synchronous processor path.                                                                                                                                                                                                              |
-| Processor adapter             | An adapter maps canonical operations to the processor simulator now and a synthetic bank profile later. ISO 8583 and provider HTTP APIs remain outside payment-domain and fraud contracts. Live connectivity needs separate production scope.                                                                                                                                                                         |
-| Card vault                    | A separately deployed synthetic vault with its own database, encrypted fictional fixtures, opaque tokens and restricted APIs. It uses Edge-only allow-listed test-card tokenization to model credential isolation; PCI DSS compliance is outside this simulator boundary.                                                                                                                                             |
-| Bank files and reconciliation | Excluded for simplicity. Keep status-based processor recovery and explicit pending outcomes; do not claim settlement verification.                                                                                                                                                                                                                                                                                    |
+Each service owns its database and migrations where needed. Internal calls use versioned gRPC contracts; Edge translates HTTP requests. Feast/Redis retrieval is shadow-only: rules decide today, and KServe scoring remains pending.
 
-The initial simulator exposes a combined `Sale`; `PaymentSucceeded` records that provider result, not bank settlement. Separate authorization/capture and refunds require their own lifecycle and journal work. The initial availability objective is NFR-03. Database sharding is an explicit later scaling increment under NFR-06, not part of the first deployment.
+## Checkout flow
 
-### Bank adapter and ISO 8583
+1. The marketplace creates a payment with an integration API key, an idempotency key and an immutable order snapshot. Payments derives merchant/customer UUIDv5 identities from integration-scoped external IDs and returns hosted checkout access.
+2. The browser opens checkout. Edge exchanges the URL token for a secure HTTP-only cookie and tokenizes an allow-listed fictional card through Vault.
+3. Edge validates token ownership, resolves safe method metadata and submits an attempt. Payments commits its start and original signals before requesting Fraud assessment.
+4. Fraud records a durable decision. A risk decline ends the attempt without calling the processor; an accepted assessment permits Payments to commit a processor intent.
+5. The processor simulator resolves the fictional fixture through its restricted Vault port and executes with a stable operation key. Payments commits the known outcome or retains a pending operation for recovery.
+6. Debezium publishes committed ledger bytes to Kafka. Notifier deduplicates event IDs and delivers signed outcomes. The marketplace uses webhooks or an authenticated status query to update commerce state; a browser redirect alone does not prove success.
 
-Yes, the target must transmit and parse ISO 8583 payloads **when the selected bank/acquirer requires that interface**. The bank-facing adapter owns this translation; browsers, merchant APIs, fraud RPCs, event streams and analytical tables keep their own versioned contracts. [ISO 8583:2023](https://www.iso.org/standard/79451.html) specifies message structure/format and explicitly excludes transport and settlement. A standard number alone is insufficient to connect to a bank.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant M as Marketplace
+    participant B as Browser
+    participant E as Edge
+    participant V as Vault
+    participant P as Payments
+    participant F as Fraud
+    participant X as Processor simulator
+    participant K as Kafka via Debezium
+    participant N as Notifier
+    M->>E: Create payment with snapshot and idempotency key
+    E->>P: Create session
+    P-->>E: Hosted checkout access
+    E-->>M: Hosted checkout URL
+    M-->>B: Redirect to checkout
+    B->>E: Submit synthetic card
+    E->>V: Tokenize and resolve safe metadata
+    E->>P: Submit attempt
+    P->>P: Commit attempt start
+    P->>F: Assess original signals
+    F-->>P: Durable decision
+    alt Accepted
+        P->>P: Commit processor intent
+        P->>X: Sale with stable operation key
+        X->>V: Resolve processing fixture
+        alt Known outcome
+            X-->>P: Success or decline
+        else Timeout
+            P->>X: Recovery: query operation status
+            X-->>P: Recorded result, or remain pending
+        end
+    else Risk declined
+        P->>P: Record decline without processor effect
+    end
+    P-)K: Committed outcome through WAL CDC
+    K-)N: Event, possibly repeated
+    N-)M: Signed outcome webhook
+```
 
-Before implementing a real bank connection, obtain its integration profile and certification requirements:
+## API and access
 
-- Pin the ISO edition, MTIs, required/conditional fields, bitmap and character/binary encoding, length prefixes/framing, amount/currency mapping and response-code semantics.
-- Specify connection lifecycle, network management/echo, deadlines, authentication/encryption, and MAC/HSM/key-management responsibilities where the profile requires them. Do not assume a universal TCP, TLS or HTTP transport.
-- Persist a mapping from gateway operation identity to provider context and transaction identifiers. STAN/RRN are correlation fields within a profile, not globally unique replacements for gateway IDs.
-- Define duplicate, late, unmatched and malformed response handling; timeout recovery uses the profile's supported query or reversal/advice. If no safe resolution is available, retain pending status and surface it for inspection. A missing response must not trigger an unqualified resend of a financial request. Automated settlement reconciliation is outside scope.
-- Keep raw card credentials and sensitive ISO wire fields out of ordinary logs, event payloads, Kafka and the ML lake. Real credential retrieval/encoding must stay within the deliberately scoped cardholder-data environment.
+[HTTP handlers](../../src/payment-gateway/edge/internal/transport) implement the API; [protobuf contracts](../../contracts/payments/v1) define internal requests and events.
 
-Delivery proceeds from the gRPC operation simulator to a **named synthetic ISO profile with an actual encoded request/response exchange**. The synthetic ISO increment must prove byte fixtures, response correlation, duplicates, late responses and uncertain-outcome recovery without live cards. A selected bank's certified profile would require a separate production scope, including how to verify financial outcomes; live connectivity is not a deliverable of this simplified project. The current gRPC simulator is not an ISO 8583 implementation. The [minimum gateway plan](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/design.md#adopted-bank-integration-and-policy-direction) records these follow-up gates.
+| Operation | Authentication and behavior |
+|---|---|
+| Create/read payment: `/v1/payments` | Integration bearer key; creation requires `Idempotency-Key` and a validated HTTPS return URL |
+| Submit attempt: `/v1/checkout/sessions/{session_id}/attempts` | Session-bound checkout token and idempotency key; returns succeeded, declined or pending |
+| Hosted checkout: `/checkout/` | Browser cookie, cross-site request protection and one key retained across form resubmission |
+| Synthetic tokenization: `/v1/payment-methods` | Synthetic integration only; rejects cards outside the fictional allow-list |
 
-### Delivery sequence
+Only `/checkout/` is publicly routed. Merchant JSON APIs and gRPC services remain private under Istio service-account authorization. Vault exposes metadata to Edge and fixture resolution only to the processor. Tokens and card data stay out of events, Fraud inputs, Redis and analytics.
 
-The first working slice is hosted checkout → rules-based fraud decision → simulated capture → durable financial outcome → signed webhook delivery → marketplace integration. Demonstrate duplicates, timeouts and recovery before layering in learned risk models. The fraud contract leaves feature retrieval and model inference independently deployable as ML capabilities arrive.
+## Consistency and recovery
 
-Later gateway work adds authorization/capture and refunds; database sharding follows measured load. Feature serving and model inference arrive through the [ML serving](../ml/serving.md) path.
+Payments updates versioned state, one ledger event and durable idempotency state atomically. Redis claims request-bound keys first, with a 50 ms deadline and 24-hour TTL; Postgres uniqueness remains authoritative during cache misses or outages. Reusing a key with different content conflicts.
 
-The domain is in the [proposal](../Home.md#domain); status is in the [roadmap](../Home.md#roadmap).
+Fraud timeout/unavailability leaves the attempt pending with an assessment error, never a risk decline or processor effect. Recovery reuses the original signals and fenced assessment identity. Defaults are a five-second attempt budget, one second for Fraud, three seconds for the processor, and a five-minute assessment retry horizon bounded by payment expiry.
 
-## Feature-contract boundary
+A processor timeout means an unknown outcome. Recovery queries by the original operation key before repeating a request. Late assessments cannot authorize expired payments; expiry waits for unresolved processor effects.
 
-The attempt event carries the immutable checkout context in event schema 3. See [payment flows](flows.md) and the [feature store](../ml/feature-store.md). Rules-only Fraud persists assessment claims and immutable evidence in its own database. Submission counters are observe-only; observation failures preserve valid rules outcomes. Shadow feature retrieval reads `payment_risk_v1` from the [feature store](../ml/feature-store.md); KServe integration is pending.
+Notifier consumes `payments.events.v1`, deduplicates by event ID and retries signed `attempt.declined`, `payment.succeeded` and `payment.expired` deliveries. Receivers validate the HMAC-SHA256 signature and timestamp and deduplicate event IDs. Kafka or webhook outages do not block payment commits.
 
-Authorization counts use Redis millisecond time and `(r-window,r]`; retries retain their original registration. Process changes start a conservative 60 s coverage warmup. Runtime settings are in [gateway chart values](../../infra/charts/payment-gateway/values.yaml). The Flink controller is installed through `talos-proxmox`; the feature chart owns epoch-scoped paths below `runs/payment-gateway/flink/` in the environment platform bucket and object credentials from gateway Doppler. Checkpoint recovery for the v2 job is covered in CI and [recorded in dev](../data/online.md#restart); outage/load evidence is pending.
+## Verification and limits
+
+[Prod acceptance on 2026-10-23](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md) exercised tokenization, approvals/declines, timeout recovery, signed webhooks, Redis fallback and CDC outage catch-up. That record predates the GCP migration.
+
+The implementation has a synthetic `Sale`/status-query contract. Real bank connectivity, ISO 8583, settlement/reconciliation, refunds, a financial journal and database sharding are outside the current implementation. Synthetic isolation does not establish PCI DSS compliance.

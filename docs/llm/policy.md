@@ -1,6 +1,6 @@
 # LLM policy
 
-What the gateway checks in the content of a model call before and after the chat model sees it: a request screen by a Jev decision model, and PII guardrails. Keys, limits and the mesh are in [agent gateway](gateway.md#security-and-policy).
+What the gateway checks in the content of a model call before and after the chat model sees it: a request screen by a Jev decision model, and PII guardrails. Per-client keys and rate limits authenticate callers; mesh policies block direct backend access.
 
 - Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform): [`gateway.yaml`](../../infra/charts/llm-platform/templates/gateway.yaml) (the LLM route's prompt guard, the `decision` route and its `screen` policy), values `gateway.screening` and `gateway.piiPatterns`.
 
@@ -21,7 +21,7 @@ Masking runs first, so neither the decision model nor the chat model sees the ma
 
 ## Decision model
 
-`d3-edge` is a Jev decision model: instead of generating text, it reads a state and answers typed questions with a probability for each choice in one forward pass. It is served by vLLM on the shared GPU ([inference](inference.md#models)) on the System One API, `/v1/systemone`, which agentgateway speaks natively as its `SystemOne` format.
+`d3-edge` is a Jev decision model: instead of generating text, it reads a state and answers typed questions with a probability for each choice in one forward pass. It is served by vLLM on the shared GPU on the System One API, `/v1/systemone`, which agentgateway speaks natively as its `SystemOne` format.
 
 The gateway exposes it on its own route, `decision`, outside the LLM route's prompt guard:
 
@@ -68,4 +68,4 @@ Run through the gateway with the agents' key, the screen on 2026-11-01 and PII m
 | A direct `/v1/systemone` call with a client key | 200, passed through |
 | A prompt that asks the model to repeat a card number, an e-mail and a phone number | `card <masked>, email <EMAIL_ADDRESS>, phone <PHONE_NUMBER>` |
 
-Guard checks and screen-route calls are on the Grafana "LLM agents" dashboard ([observability](observability.md#grafana-dashboard)).
+Guard checks and screen-route calls are on the Grafana "LLM agents" dashboard, using agentgateway route/status and guard metrics.

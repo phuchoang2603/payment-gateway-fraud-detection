@@ -13,8 +13,7 @@ documents:
     title: Payment flows, recovery and expiry
     audience: analyst
     render: markdown
-    sources: [docs/payment-gateway/flows.md]
-    drop_sections: [Later database sharding]
+    sources: [docs/payment-gateway/architecture.md]
   - doc_id: risk-decision
     title: How Fraud decides and records an assessment
     audience: analyst

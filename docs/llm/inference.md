@@ -1,6 +1,6 @@
 # LLM inference
 
-Self-hosted chat, embedding and decision models for the agents, the RAG pipeline and the gateway's request screen, and how fast the chat model serves agent traffic. Every caller reaches them through the [agent gateway](gateway.md); nothing calls a model server directly.
+Self-hosted chat, embedding and decision models for the agents, the RAG pipeline and the gateway's request screen, and how fast the chat model serves agent traffic. Every caller reaches them through agentgateway with per-client API keys, request/token limits and mesh authorization; nothing calls a model server directly.
 
 - Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform) (`models.yaml`, values `models`). Application `llm-platform` in namespace `llm`, on dev and prod. On prod the three servers are meant to share one GPU node labelled `talos.dev/nodepool: gpu`; the platform has no cloud GPU pool yet, so the application stays disabled there.
 - Platform prerequisites (KServe 0.21 `LLMInferenceService` presets, the GPU DRA driver, the `llm-gpu` node group for the local model cache, agentgateway) come from the platform repository.
@@ -8,7 +8,7 @@ Self-hosted chat, embedding and decision models for the agents, the RAG pipeline
 ## Setup and verify
 
 1. Enter `devenv shell`; select `~/.kube/talos-dev.yaml`. Verify the GPU claim/DRA driver, KServe presets, agentgateway, kagent/Substrate and local model cache. Prod remains disabled until a GPU pool exists.
-2. Inspect `models`, `gpu`, `gateway` and `agents` in the chart values. Run `helm template llm-platform infra/charts/llm-platform -n llm -f infra/charts/llm-platform/values-dev.yaml` and `helm lint`, then use the [release flow](../deployment/cd.md), which supplies the agent runtime digest.
+2. Inspect `models`, `gpu`, `gateway` and `agents` in the chart values. Run `helm template llm-platform infra/charts/llm-platform -n llm -f infra/charts/llm-platform/values-dev.yaml` and `helm lint`, then push the change through GitHub Actions to `deploy/dev`; Argo CD reconciles the chart and pinned runtime image.
 3. Check `kubectl --kubeconfig ~/.kube/talos-dev.yaml get llminferenceservices -n llm`, ready endpoints and Gateway Accepted/Programmed conditions. Port-forward `svc/agentgateway` in `llm` to `18080:80`.
 4. Call through the gateway with the dev benchmark identity:
 
@@ -21,7 +21,7 @@ doppler run --project payment-gateway-fraud-detection --config dev -- sh -c '
 '
 ```
 
-Record the response with timestamp, environment and image. Repeat for `/v1/embeddings` (`qwen3-embedding`, 1024 dimensions). Authentication, rate limits and mesh checks are on [gateway](gateway.md#checks-on-dev); benchmark setup/results are below.
+Record the response with timestamp, environment and image. Repeat for `/v1/embeddings` (`qwen3-embedding`, 1024 dimensions). Dev checks returned 401 without/with an invalid key, 20 × 429 in a 160-request burst, and a connection reset when bypassing the gateway.
 
 ## Models
 
@@ -29,7 +29,7 @@ Record the response with timestamp, environment and image. Repeat for `/v1/embed
 |---|---|---|---|---|
 | [Qwen3.5-4B FP8 (RedHatAI, dynamic)](https://huggingface.co/RedHatAI/Qwen3.5-4B-FP8-dynamic) | `qwen35-4b` | `397b7ba47a99b3221ebfc0cfc5a279118cb733ad` | vLLM v0.32, FP8 weights and KV cache, text only, max length 32 768, 32 concurrent sequences, `qwen3_coder` tool-call parser, thinking off; sampling 0.7 / top-p 0.8 / presence 1.5 | Agents' chat model with tool calling |
 | [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) | `qwen3-embedding` | `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3` | vLLM pooling runner, 1024 dimensions, max length 2 048 | Knowledge-base and query embeddings |
-| [d3-edge](https://huggingface.co/vllm-sr/d3-edge) | `d3-edge` | `c454ee39b862248d70abd7f84195d2f54ffe6d43` | vLLM nightly `2b009fc6` pinned by digest (release 0.32 does not serve `/v1/systemone`), text only, max length 2 048, 16 concurrent sequences | Decision model behind the request screen ([policy](policy.md#decision-model)) |
+| [d3-edge](https://huggingface.co/vllm-sr/d3-edge) | `d3-edge` | `c454ee39b862248d70abd7f84195d2f54ffe6d43` | vLLM nightly `2b009fc6` pinned by digest (release 0.32 does not serve `/v1/systemone`), text only, max length 2 048, 16 concurrent sequences | Decision model classifying prompts as action, jailbreak or safe |
 
 All three are KServe `LLMInferenceService`s. The chat model runs behind llm-d's endpoint picker (EPP) and an InferencePool, so a second replica would join the same pool rather than a new route.
 
@@ -46,7 +46,7 @@ Each environment has one GPU, so the three models share it through a single DRA 
 
 ## Autoscaling
 
-The model servers are not autoscaled: each environment has one GPU, so a second replica cannot start. Scaling out means a second GPU replica behind the same InferencePool. The agent-side and API-side autoscaling choices are in [agents](agents.md#autoscaling).
+The model servers are not autoscaled: each environment has one GPU, so a second replica cannot start. Scaling out means a second GPU replica behind the same InferencePool. KEDA scales agent workers and the knowledge API independently of model replicas.
 
 ## Checks on dev
 
@@ -108,7 +108,7 @@ Throughput grows almost linearly to 16 concurrent requests while the time per ou
 
 ### Through the gateway
 
-The gateway adds API keys, limits, PII masking and the request screen ([policy](policy.md)). The `prefix_repetition` prompts are random tokens, which the Jev decision model reads as jailbreak attempts and the screen rejects (403), so the gateway run used 48 distinct analyst questions with 150-token answers, sent the same way to vLLM and through the gateway with the benchmark client's key:
+The gateway adds API keys, limits, PII masking and the request screen. The `prefix_repetition` prompts are random tokens, which the Jev decision model reads as jailbreak attempts and the screen rejects (403), so the gateway run used 48 distinct analyst questions with 150-token answers, sent the same way to vLLM and through the gateway with the benchmark client's key:
 
 | Concurrency | TTFT p50 direct / gateway (ms) | Output tok/s direct / gateway | TPOT p50 (ms) | Failed |
 |---|---|---|---|---|

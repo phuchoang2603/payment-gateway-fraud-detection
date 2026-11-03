@@ -90,4 +90,4 @@ The shorter-answer variants produce fewer output tokens; the risk variant has tw
 
 ![Langfuse prompt metrics for evidence-agent-system-prompt: production and variant-b side by side](images/observability-langfuse-ab.png)
 
-The RAG run's lineage and quality checks are on the [RAG](rag.md#governance) page.
+RAG governance uses OpenMetadata: the workflow publishes corpus → `knowledge.chunks` lineage, run status and contract-derived quality results.

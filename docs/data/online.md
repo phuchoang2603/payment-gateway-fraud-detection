@@ -1,6 +1,6 @@
 # Online data
 
-Live gateway events and bounded historical replay use the same PyFlink feature operators. Both publish an epoch-scoped feature journal and persist stream features to Iceberg; the live feature writer also pushes updates to Feast/Redis. Spark handles the [offline path](offline.md); physical storage is covered in [storage](storage.md).
+Live gateway events and bounded historical replay use the same PyFlink feature operators. Both publish an epoch-scoped feature journal and persist stream features to Iceberg; the live feature writer also pushes updates to Feast/Redis.
 
 ## Live simulator
 
@@ -36,7 +36,7 @@ The simulator continues the historical entity world: it rebuilds the world from 
 
 ### Windows
 
-The job reads only `attempt_started` events, keyed on the client `attempted_at`; risk decisions do not gate contributions. Per-customer and per-method attempt counts over 5 minutes, 1 hour and 24 hours, plus distinct customer devices over 24 hours, cover `[t − window, t)`. Per-window coverage stays unknown until the job has run for that window's length, and missing history is null, never zero. An attempt time after its observed availability fails the job. Long 7- and 30-day windows are computed offline by DP3, not by Flink; there is no HybridSource bootstrap. See [feature store](../ml/feature-store.md).
+The job reads only `attempt_started` events, keyed on the client `attempted_at`; risk decisions do not gate contributions. Per-customer and per-method attempt counts over 5 minutes, 1 hour and 24 hours, plus distinct customer devices over 24 hours, cover `[t − window, t)`. Per-window coverage stays unknown until the job has run for that window's length, and missing history is null, never zero. An attempt time after its observed availability fails the job. Long 7- and 30-day windows are computed offline by DP3, not by Flink; there is no HybridSource bootstrap.
 
 Each keyed customer/method [`Entity`](../../src/data-pipeline/streaming/fraud_streaming/model.py) expires old entries before admitting pending ones. The admission loop is:
 
@@ -156,7 +156,7 @@ The counters above came from Flink's REST API (`/jobs/<id>/vertices/<id>/metrics
 
 [`stream-history`](../../infra/charts/data-pipelines/templates/stream-history.yaml) plans bounded date units, seeds isolated Kafka topics from Bronze, runs Flink to `FINISHED`, writes history features, then cleans up and publishes lineage. [`history.py`](../../src/data-pipeline/streaming/fraud_streaming/history.py) owns planning/seeding; [`job.py`](../../src/data-pipeline/streaming/fraud_streaming/job.py) runs the shared operators with a logical seed clock. Historical topics and epoch `history-v19` are isolated from live `payments.events.v1` and `live-v19`; replay never overwrites live features.
 
-Run `stream-history` with `start`/`end` only after Bronze is published. Unit size and parallelism come from `features.historyUnitDays` and `features.historyParallelism` in the environment's values. [Orchestration](orchestration-governance.md#workflows) owns the workflow stages; [feature-store recovery](../ml/feature-store.md) owns materialization.
+Run `stream-history` with `start`/`end` only after Bronze is published. Unit size and parallelism come from `features.historyUnitDays` and `features.historyParallelism` in the environment's values. Redis stream recovery is a separate `feast-materialize stream-recovery` run over the last 24 hours 5 minutes.
 
 ### Flink processing and publication
 

@@ -161,7 +161,7 @@
         "openspec/specs",
         "contracts/payments/v1",
         "contracts/features/fraud-snapshot-v2.yaml",
-        "docs/payment-gateway/flows.md",
+        "docs/payment-gateway/architecture.md",
         "docs/data/products/silver-payments"
       ]
     },

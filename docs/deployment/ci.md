@@ -1,6 +1,6 @@
 # CI, validation and verification
 
-GitHub Actions validates pull requests and `main`; successful checks gate [image publication and deployment](cd.md#release-flow). Tests and builds run in CI. Local checks run in `devenv shell` (format, lint, schema validation and Helm rendering).
+GitHub Actions validates pull requests and `main`; successful checks gate image publication to GHCR and Argo CD deployment. Tests and builds run in CI. Local checks run in `devenv shell` (format, lint, schema validation and Helm rendering).
 
 ## CI checks
 
@@ -20,7 +20,7 @@ GitHub Actions validates pull requests and `main`; successful checks gate [image
 | Equivalence partitioning and boundary values | [Fraud policy](../../src/payment-gateway/fraud/internal/domain/policy_test.go): amount/account-age boundaries; [request features](../../src/data-pipeline/feast/tests/test_request.py): country pair, history and scoring hour |
 | Mutation testing, >80% on changed code | [Go CI](../../.github/workflows/go-ci.yml); the recorded full-run results below separate killed mutants from untested mutants |
 | Property-based idempotency | [Gold ranges](../../src/data-pipeline/batch/tests/gold/test_gold_ranges.py): reruns and range splits; [payment lifecycle](../../src/payment-gateway/payments/internal/domain/payment_property_test.go): arbitrary command sequences preserve state invariants |
-| API throughput and latency | [Knowledge API Locust report](../llm/rag.md#load-test-and-autoscaling); Feast retrieval load-test evidence remains pending |
+| API throughput and latency | [Knowledge API Locust report](../llm/loadtest/knowledge-api-locust.html): 140.31 req/s, p95 310 ms, zero failures (2026-10-30); Feast retrieval load-test evidence pending |
 
 ## Coverage and mutation results
 
@@ -53,4 +53,4 @@ Domain coverage is 87–100%; whole-module coverage includes transport, reposito
 
 The 2026-10-23 acceptance run against prod is recorded in the [gateway verification evidence](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md): synthetic tokenization; approve, risk-decline, processor-decline, timeout-then-recovery and expiry paths; decline-then-approve through the hosted page with signed webhooks; Redis fallback; Connect restart and Kafka outage catch-up; byte-equal topic payloads; and the ledger lifecycle check. A short smoke run does not establish the monthly availability objective or the nominal load target.
 
-On 2026-11-03, Edge canary acceptance covered no-data rejection, fault rejection and healthy promotion ([screenshots and thresholds](cd.md#edge-progressive-delivery)). The healthy run returned 14,400/14,400 checkout GETs as HTTP 200 over 20 minutes at 12 requests/s, with client p95 105 ms. This measures checkout reads, not feature-retrieval capacity or payment processing.
+On 2026-11-03, Edge canary acceptance covered no-data rejection, fault rejection and healthy promotion (10/25/50% stages, each requiring two passing observations). The healthy run returned 14,400/14,400 checkout GETs as HTTP 200 over 20 minutes at 12 requests/s, with client p95 105 ms. This measures checkout reads, not feature-retrieval capacity or payment processing.

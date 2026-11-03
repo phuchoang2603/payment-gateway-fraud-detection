@@ -1,6 +1,6 @@
 # Docker, CD and canary deployment
 
-GitHub Actions builds images after [CI validation](ci.md); Argo CD reconciles application Helm charts. CI has no cluster credentials.
+GitHub Actions builds images after contract/Helm checks, Go tests and Python tests; Argo CD reconciles application Helm charts. CI has no cluster credentials.
 
 ## Docker images
 
@@ -37,11 +37,11 @@ Measured image optimization (`linux/amd64`); compressed size is registry layer b
 3. Publication waits for every other workflow on that commit/event to succeed and skips superseded revisions. It records the chart revision and image tags in [`release.yaml`](../../infra/argocd/app-of-apps/release.yaml) on the release branch.
 4. The [dev](../../infra/argocd/dev/root.yaml) or [prod](../../infra/argocd/prod/root.yaml) root reconciles the release. Bootstrap requires the namespace, Doppler token, AppProject and root once.
 
-The same flow delivers services and pipeline WorkflowTemplates; Argo Workflows runs the jobs ([orchestration](../data/orchestration-governance.md)). Prod enables the gateway, Kafka, data pipelines with Flink/Feast, ClickHouse and lakehouse. Live traffic, LLM and RAG applications are disabled there. See [deployable units](../Home.md#deployable-units), [chart values](../../infra/charts) and [secret delivery](security.md) for workload configuration.
+The same flow delivers services and pipeline WorkflowTemplates; Argo Workflows runs their plan, build, validation and publish stages. Prod enables the gateway, Kafka, data pipelines with Flink/Feast, ClickHouse and lakehouse. Live traffic, LLM and RAG applications are disabled there. Nonsecret settings are in [chart values](../../infra/charts); Doppler credentials reach workloads through External Secrets.
 
 ## Edge progressive delivery
 
-Only Edge uses a canary; the other five Go services remain Deployments. Rollouts controls the public route's `edge`/`edge-canary` weights and Service hash selectors; Argo CD ignores those controller-owned fields. Internal callers use stable `edge`; see [routing](routing.md).
+Only Edge uses a canary; the other five Go services remain Deployments. Rollouts controls the public route's `edge`/`edge-canary` weights and Service hash selectors; Argo CD ignores those controller-owned fields. Internal callers use stable `edge`; only public `/checkout/` traffic is split.
 
 The platform supplies Rollouts v1.10.1 and Gateway API plugin v0.17.0. The application owns the [Rollout and analysis templates](../../infra/charts/payment-gateway/templates/rollout.yaml). Dev receives configuration only; acceptance runs directly against prod.
 
@@ -49,7 +49,7 @@ Subsequent candidates receive 10%, 25%, then 50% of public checkout traffic. Eac
 
 For an incident, run `kubectl --kubeconfig ~/.kube/talos-prod.yaml argo rollouts abort edge -n payment-gateway` when the kubectl plugin is installed, then revert the source image/chart and publish through the existing release flow. Confirm stable endpoints and HTTPRoute weights before considering recovery complete. Abort does not undo database migrations or changes to other services.
 
-Prod acceptance on 2026-11-03 verified abort to stable/canary weights 100/0, reconciliation without weight reset, and automatic promotion after two passing observations at each stage. [Monitoring](observability.md#verification) records the alert and request telemetry.
+Prod acceptance on 2026-11-03 verified abort to stable/canary weights 100/0, reconciliation without weight reset, and automatic promotion after two passing observations at each stage. The rollout failure alert fired on abort and resolved on retry.
 
 Browser captures from the retained prod AnalysisRuns below show the failed attempts and healthy retry. The Rollouts UI displays UTC−05:00; all captures are from 2026-11-03.
 

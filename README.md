@@ -16,7 +16,7 @@ Kafka events and synthetic history feed Spark's Bronze/Silver/Gold lakehouse and
 
 [![Payment gateway, data and ML flow: Go services and CloudNativePG Postgres, Strimzi Kafka topics and consumers, Spark and Flink, Feast and Redis, and Kubeflow training and KServe rollout](docs/payment-gateway/images/payment-flow.png)](docs/payment-gateway/images/payment-flow.png)
 
-Gateway docs: [architecture](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/architecture) · [flows](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/flows) · [conventions](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/conventions)
+Gateway docs: [payment gateway](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/architecture) · [conventions](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/conventions)
 
 Data and ML docs: [offline data](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/offline) · [online data](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/online) · [storage](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/storage) · [orchestration and governance](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/orchestration-governance) · [feature store](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/feature-store) · [training](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/training) · [serving](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/serving) · [background](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/background)
 
@@ -36,7 +36,7 @@ The platform (Terraform/OpenTofu provisioning, Talos clusters on Proxmox for dev
 
 ![Deployment and security: GitHub Actions, Terraform and OpenTofu roots, dev and prod Argo CD, Istio canary delivery, Doppler secrets, KEDA and cloud node autoscaling, and VictoriaMetrics observability](docs/deployment/images/deployment-security.png)
 
-Docs: [CI, validation and verification](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/ci) · [infrastructure and IaC](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/infra) · [Docker, CD and canary deployment](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/cd) · [observability](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/deployment-observability) · [security and secrets](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/security) · [routing and gateway](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/routing)
+Docs: [CI, validation and verification](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/ci) · [infrastructure and IaC](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/infra) · [Docker, CD and canary deployment](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/cd) · [observability](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/deployment-observability) · [security, secrets and routing](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/security)
 
 ## Repository structure
 

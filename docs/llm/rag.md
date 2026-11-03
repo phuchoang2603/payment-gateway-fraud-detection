@@ -91,7 +91,7 @@ no key                                                             →  401
 160 requests at once with one client's key                         →  140 × 200, 20 × 429
 ```
 
-The MCP checks (tools/list, `search_knowledge`, 401 without a key, refused when bypassing the gateway) are on the [gateway](gateway.md#checks-on-dev) page.
+Dev MCP checks on 2026-10-30 discovered `search_knowledge` and `get_knowledge_chunk`, returned search results with the agents key, rejected calls without a key (401), and reset direct backend connections that bypassed the gateway.
 
 ### Load test and autoscaling
 

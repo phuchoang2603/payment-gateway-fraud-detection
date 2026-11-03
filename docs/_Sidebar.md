@@ -2,8 +2,7 @@
 
 **Payment gateway**
 
-- [Architecture](payment-gateway/architecture.md)
-- [Flows](payment-gateway/flows.md)
+- [Payment gateway](payment-gateway/architecture.md)
 - [Conventions](payment-gateway/conventions.md)
 
 **Data**
@@ -35,5 +34,4 @@
 - [Infrastructure and IaC](deployment/infra.md)
 - [Docker, CD and canary deployment](deployment/cd.md)
 - [Observability](deployment/observability.md)
-- [Security and secrets](deployment/security.md)
-- [Routing and gateway](deployment/routing.md)
+- [Security, secrets and routing](deployment/security.md)

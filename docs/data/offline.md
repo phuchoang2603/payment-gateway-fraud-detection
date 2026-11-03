@@ -1,6 +1,6 @@
 # Offline data
 
-Historical Parquet → Spark Bronze → Silver → Gold features. ClickHouse builds analytics marts from published Silver; its layout is covered in [storage](storage.md). [Orchestration and governance](orchestration-governance.md) owns the workflow DAGs, checks and lineage; [online data](online.md) owns both live traffic and historical Flink replay.
+Historical Parquet → Spark Bronze → Silver → Gold features. ClickHouse builds analytics marts from published Silver. Argo Workflows runs the bounded stages; checks gate publication and OpenMetadata records results and lineage.
 
 ## Historical generator
 
@@ -81,17 +81,17 @@ For the executable conflict fixture, two identical `evt-1` copies become one; tw
 - `dim_customer` is SCD2 over the observed profile and devices used at least twice in 90 days. An ordered XOR sweep replaces the former interval join; retries reset the audit branch to `main` before rewriting.
 - `label_attempt` keeps the earliest linked label per attempt/source, with scoring time and separate `label_available_at`.
 
-The 5-minute/1-hour/24-hour feature tables are written by Flink and the feature writer, including for history; see [online data](online.md#historical-replay). Point-in-time joins and naming are in [storage](storage.md#schemas-and-naming).
+The 5-minute/1-hour/24-hour feature tables are written by Flink and the feature writer, including historical replay. Training joins select the latest feature timestamp at or before the attempt and labels available before the cutoff.
 
 ### Marts
 
-[`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py) builds a rolling 90-day analytics window from published Silver. The [storage page](storage.md#warehouse) explains staging, bucketed joins, indexes and publication.
+[`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py) builds a rolling 90-day analytics window from published Silver. It stages range-limited attempts and label summaries, builds bounded hash buckets, checks staging tables, then replaces the live partitions.
 
 ### Controlled skew comparison
 
 [`silver/benchmark.py`](../../src/data-pipeline/batch/batch/silver/benchmark.py) compares one cached, pinned range with skew handling off, AQE skew handling on and 16-bucket salting. Broadcast is disabled; row counts/checksums must match, and the AQE plan must show a real skew split. Run `dp2-benchmark start=2026-09-01 end=2026-09-30` after Silver publishes that range.
 
-Production timings for these three variants remain unrecorded. Capture wall/task times, hot-key share and final adaptive plans together. The DP1 write-distribution images on [storage](storage.md#lakehouse) measure a different operation; salting remains experimental.
+Production timings for these three variants remain unrecorded. Capture wall/task times, hot-key share and final adaptive plans together. DP1 write-distribution measurements cover writes rather than skewed joins; salting remains experimental.
 
 ## Recorded v19 backfill (AWS)
 
@@ -137,7 +137,7 @@ Published row counts (Iceberg `main`, 2025-10-29 to 2026-10-28):
 | `marts.fact_payment_attempt` | 44,209,535 (2026-08-04 to 2026-10-28, the 90-day window; 6.05 GiB, 147 bytes a row) |
 | `marts.fact_merchant_day` | 1,327,898 |
 
-Every Silver, Gold and mart rule passed in OpenMetadata: 58 tests on 15 tables. Lineage runs from the v19 dataset through Bronze and Silver to the Gold tables and marts; see [orchestration and governance](orchestration-governance.md#catalog).
+Every Silver, Gold and mart rule passed in OpenMetadata: 58 tests on 15 tables. Lineage runs from the v19 dataset through Bronze and Silver to the Gold tables and marts.
 
 ## Optimization techniques
 
@@ -161,6 +161,6 @@ Recorded AWS v19 changes; timings across months are operational results, not con
 
 Event logs are under `runs/payment-gateway/spark-events/`. Run a temporary History Server from the deployed `data-platform-spark` image with the environment's `gateway-storage` credentials and S3A settings, port-forward 18080, then remove it after capturing jobs/stages/plans. Store screenshots under `docs/data/images/`.
 
-## Schemas and naming
+## Output grains
 
-See [storage](storage.md#schemas-and-naming) for table grains, naming, SCD2 relationships and point-in-time joins.
+Silver stores one canonical event or attempt per identity. Gold daily features use an entity and UTC anchor timestamp; `dim_customer` keeps SCD2 validity ranges. Labels retain attempt identity and availability time. Feature joins take the latest row available at the scoring timestamp.

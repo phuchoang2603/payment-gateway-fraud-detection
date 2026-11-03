@@ -14,9 +14,9 @@ Fraud analysts ask an agent about decline codes, risk decisions and payment beha
 | kagent | Defining agents: model config, templates, tools, sub-agents, UI chat, the public A2A endpoint |
 | Agent Substrate | Running them: one gVisor actor per conversation, suspended to a snapshot when idle and resumed on any worker; the egress gateway that injects credentials |
 | Agent runtime (ours) | kagent's Go ADK runtime plus a Langfuse plugin: each model call's system prompt and A/B variant from Langfuse, linked to the trace |
-| agentgateway | Every A2A, model and tool call: keys and limits ([gateway](gateway.md)), the request screen and PII masking ([policy](policy.md)) |
-| `rag-api` | The knowledge tools; their list lives in its code ([RAG](rag.md)) |
-| Langfuse | The prompts, their versions and A/B tests, and the agents' traces ([observability](observability.md#langfuse)) |
+| agentgateway | Every A2A, model and tool call: per-client keys, request/token limits, action/jailbreak screening and PII masking |
+| `rag-api` | `search_knowledge` and `get_knowledge_chunk`, discovered through MCP `tools/list` |
+| Langfuse | The prompts, their versions and A/B tests, and the agents' traces |
 | agentregistry | The catalog of agents and MCP servers |
 
 ```mermaid
@@ -42,7 +42,7 @@ One kagent `ModelConfig`, `default-model-config`, used by every agent: provider 
 
 ![kagent model config: default-model-config in llm-agents, key from the Secret llm-gateway-agents, base URL http://agentgateway.llm.svc.cluster.local/v1](images/agents-modelconfig.png)
 
-[`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) generates this shared base URL and binds the ModelConfig to every template. Pair the configuration capture with [gateway call/mesh checks](gateway.md#checks-on-dev); a new end-to-end proof needs one trace matched to gateway route counters.
+[`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) generates this shared base URL and binds the ModelConfig to every template. Dev calls through this gateway returned chat completions and 1024-dimensional embeddings; direct model access from an unapproved pod was reset. A new end-to-end proof still needs one trace matched to gateway route counters.
 
 ## Agents
 
@@ -52,7 +52,7 @@ One kagent `ModelConfig`, `default-model-config`, used by every agent: provider 
 | `evidence-agent` 0.3.0 | `AgentTemplate`, compiled into the coordinator | `knowledge` MCP server | Explains declines, policy and payment behaviour from the knowledge base, citing chunk ids |
 | `risk-agent` 0.1.0 | `AgentTemplate`, compiled into the coordinator | none yet | Assesses the risk of one payment, card or customer; the scoring tool is a later change |
 
-The specialists are kagent Shared sub-agents: `subAgent` bindings compile their templates into the coordinator's runtime, and the coordinator transfers the conversation to one of them, which answers the analyst. A conversation is one actor and one trace, with no second network hop. Callers reach agents only through the gateway's A2A route ([gateway](gateway.md#routes)).
+The specialists are kagent Shared sub-agents: `subAgent` bindings compile their templates into the coordinator's runtime, and the coordinator transfers the conversation to one of them, which answers the analyst. A conversation is one actor and one trace, with no second network hop. Callers reach agents only through the gateway's `/a2a/coordinator` route.
 
 The `evidence-agent` template references the `knowledge` server without a tool list, so it gets every tool the server lists; kagent discovers them:
 
@@ -72,7 +72,7 @@ The kagent UI is published by the platform behind its Dex login:
 
 ## Runtime
 
-Every agent runs one image, [`src/llm/agent_runtime`](../../src/llm/agent_runtime): kagent's own Go ADK entrypoint, pinned to the kagent v1.0.0-rc1 commit, with one ADK plugin added. Before each model call the plugin reads the calling agent's prompt, `<agent>-system-prompt`, from Langfuse (cached for 60 s, the last version kept if Langfuse is unreachable), picks the A/B variant for the conversation and puts the prompt first in the system instruction. It also links the model call's span to that prompt version and tags the trace with the agent's side of its test ([observability](observability.md#ab-tests)).
+Every agent runs one image, [`src/llm/agent_runtime`](../../src/llm/agent_runtime): kagent's own Go ADK entrypoint, pinned to the kagent v1.0.0-rc1 commit, with one ADK plugin added. Before each model call the plugin reads the calling agent's prompt, `<agent>-system-prompt`, from Langfuse (cached for 60 s, the last version kept if Langfuse is unreachable), picks the A/B variant for the conversation and puts the prompt first in the system instruction. It also links the model call's span to that prompt version and tags the trace with the agent's side of its test.
 
 The runtime holds no credentials. The model key, the MCP key and the Langfuse key are placeholders that Substrate's egress gateway replaces on the way out, from Secrets named in each agent's `EgressPolicy` and `ModelConfig`; the gateway admits the egress gateway by its mesh identity.
 
@@ -105,7 +105,7 @@ The release catalog job publishes the entry agents and the MCP servers from the 
 
 ## Prompts and A/B tests
 
-Langfuse is the source of each agent's system prompt and A/B test. [`files/prompts/<agent>.md`](../../infra/charts/llm-platform/files/prompts) and the agent's `abTest` in the values only seed a prompt that Langfuse does not have yet; after that, prompts are edited, versioned and tested in Langfuse, and the next conversation uses the new version without a release ([observability](observability.md#langfuse)).
+Langfuse is the source of each agent's system prompt and A/B test. [`files/prompts/<agent>.md`](../../infra/charts/llm-platform/files/prompts) and the agent's `abTest` in the values only seed a prompt that Langfuse does not have yet; after that, prompts are edited, versioned and tested in Langfuse, and the next conversation uses the new version without a release.
 
 ## Autoscaling
 
@@ -113,7 +113,7 @@ Langfuse is the source of each agent's system prompt and A/B test. [`files/promp
 |---|---|---|
 | Agent conversations | Substrate actors: created on demand, suspended to zero when idle, resumed on any worker | Idle conversations cost nothing; any number wait in snapshots |
 | Agent worker pool (`llm-agents`) | KEDA, 2 to 6 workers on Substrate's busy-worker metric | Workers follow the conversations that hold them |
-| Knowledge API (`rag-api`) | KEDA, 2 to 4 replicas on its combined REST and MCP request rate | See [RAG](rag.md#load-test-and-autoscaling) |
+| Knowledge API (`rag-api`) | KEDA, 2 to 4 replicas on its combined REST and MCP request rate | Target 10 req/s per replica; a dev Locust run scaled 2 → 4 → 2 |
 | Model servers | One replica per model | One GPU per environment |
 
 ## Known limits

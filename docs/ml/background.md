@@ -1,6 +1,6 @@
 # Fraud detection background
 
-Literature background for the [training](training.md) design: fraud scenarios, detection-system layers, machine learning for card fraud and its challenges (imbalance, concept drift, delayed labels). It describes the field, not this project's results.
+Literature background for fraud-model training: fraud scenarios, detection-system layers, machine learning for card fraud and its challenges (imbalance, concept drift, delayed labels). It describes the field, not this project's results.
 
 ## Fraud Scenarios
 

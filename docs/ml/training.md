@@ -7,7 +7,7 @@
 - One row is one scored payment attempt. Features use only information available before the attempt time; labels join on attempt identity and only when `label_available_at` is before the training cutoff.
 - Target: simulation truth (`is_fraud`). Evaluation also reports chargebacks available before the cutoff, the only label production would have. An absent chargeback is unknown, not negative.
 - Splits are chronological, with a warm-up period and a gap that covers the chargeback delay, not random.
-- Background on fraud scenarios, imbalance and evaluation metrics: [background](background.md).
+- Class imbalance makes accuracy alone unsuitable; report precision, recall and PR-AUC, with delayed-label availability enforced at the cutoff.
 
 ## Pipeline
 

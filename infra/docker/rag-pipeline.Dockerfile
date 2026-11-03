@@ -15,7 +15,7 @@ COPY src/llm/rag_pipeline/fraud_rag_pipeline ./fraud_rag_pipeline
 COPY openspec/specs ./sources/openspec/specs
 COPY contracts/payments/v1 ./sources/contracts/payments/v1
 COPY contracts/features/fraud-snapshot-v2.yaml ./sources/contracts/features/fraud-snapshot-v2.yaml
-COPY docs/payment-gateway/flows.md ./sources/docs/payment-gateway/flows.md
+COPY docs/payment-gateway/architecture.md ./sources/docs/payment-gateway/architecture.md
 COPY docs/data/products/silver-payments ./sources/docs/data/products/silver-payments
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HOME=/tmp SOURCES_ROOT=/app/sources
 USER 65532:65532
