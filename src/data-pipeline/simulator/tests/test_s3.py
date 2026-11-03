@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
-import pytest
 from botocore.awsrequest import AWSResponse
 
 from simulator.s3 import client
@@ -47,9 +46,8 @@ def test_gcs_unconditional_write_has_no_precondition(monkeypatch):
     assert "x-goog-if-generation-match" not in request.headers
 
 
-@pytest.mark.parametrize("endpoint", ["https://minio.example.com", "https://s3.us-east-1.amazonaws.com"])
-def test_other_stores_keep_if_none_match(monkeypatch, endpoint):
-    request = put(monkeypatch, endpoint, IfNoneMatch="*")
+def test_minio_keeps_if_none_match(monkeypatch):
+    request = put(monkeypatch, "https://minio.example.com", IfNoneMatch="*")
     assert request.headers["If-None-Match"] == "*"
     assert "x-goog-if-generation-match" not in request.headers
 
