@@ -122,7 +122,7 @@ func run() error {
 		if modelConfig.Threshold, err = strconv.ParseFloat(os.Getenv("FRAUD_MODEL_THRESHOLD"), 64); err != nil {
 			return errors.New("FRAUD_MODEL_THRESHOLD must be a number")
 		}
-		scorer, err := kserve.New(kserve.Config{URL: os.Getenv("FRAUD_MODEL_URL"), Model: os.Getenv("FRAUD_MODEL_NAME"), DialTimeout: modelConfig.Timeout})
+		scorer, err := kserve.New(kserve.Config{URL: os.Getenv("FRAUD_MODEL_URL"), Model: os.Getenv("FRAUD_MODEL_NAME"), DialTimeout: modelConfig.Timeout, Bins: observe.Counter("fraud.model.feature_bin", "{request}")})
 		if err != nil {
 			return err
 		}

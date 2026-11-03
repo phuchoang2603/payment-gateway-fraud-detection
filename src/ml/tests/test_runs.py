@@ -1,13 +1,13 @@
-"""Tests for the Kubeflow Pipelines client and the recurring-run request."""
+"""Tests for the Kubeflow Pipelines client: finding versions, starting runs and listing automatic ones."""
 
 import io
 import json
 
 import pytest
 
-from risk_model import schedule
+from risk_model import runs
 from risk_model.cluster import SERVICE_ACCOUNT
-from risk_model.schedule import PIPELINE, Pipelines, recurring_body
+from risk_model.runs import PIPELINE, Pipelines
 
 
 def pipelines(responses):
@@ -21,38 +21,6 @@ def pipelines(responses):
 
     client.call = call
     return client, calls
-
-
-def test_the_recurring_run_follows_one_pipeline_version_and_never_catches_up():
-    """The recurring run follows one pipeline version and never catches up."""
-    body = recurring_body(
-        pipeline_id="p1",
-        version_id="v1",
-        experiment_id="e1",
-        cron="0 17 3 * * *",
-        enabled=True,
-        parameters={"train_days": 4},
-    )
-    assert body == {
-        "display_name": PIPELINE,
-        "description": "Rolling-window retraining of payment_risk_v1",
-        "experiment_id": "e1",
-        "pipeline_version_reference": {"pipeline_id": "p1", "pipeline_version_id": "v1"},
-        "runtime_config": {"parameters": {"train_days": 4}},
-        "service_account": SERVICE_ACCOUNT,
-        "trigger": {"cron_schedule": {"cron": "0 17 3 * * *"}},
-        "max_concurrency": "1",
-        "no_catchup": True,
-        "mode": "ENABLE",
-    }
-
-
-def test_a_paused_schedule_is_created_disabled():
-    """A paused schedule is created disabled."""
-    body = recurring_body(
-        pipeline_id="p", version_id="v", experiment_id="e", cron="c", enabled=False, parameters={}
-    )
-    assert body["mode"] == "DISABLE"
 
 
 def test_the_version_is_found_by_name_once_it_appears():
@@ -78,28 +46,64 @@ def test_a_version_that_never_appears_times_out():
         client.version("wanted", timeout=0)
 
 
-@pytest.mark.parametrize("key", ["recurringRuns", "recurring_runs"])
-def test_replacing_deletes_runs_with_the_same_name_and_creates_a_new_one(key):
-    """Replacing deletes runs with the same name and creates a new one."""
+def test_starting_a_run_uses_the_newest_pipeline_version_and_the_training_account():
+    """A started run points at the newest version, carries its parameters and runs as the training account."""
 
     def responses(method, path, count):
-        if method == "GET":
-            return {
-                key: [
-                    {"display_name": PIPELINE, "recurring_run_id": "old"},
-                    {"display_name": "other", "recurring_run_id": "keep"},
-                ]
-            }
-        if method == "POST":
-            return {"recurring_run_id": "new"}
-        return {}
+        if path.startswith("/pipelines?"):
+            return {"pipelines": [{"display_name": PIPELINE, "pipeline_id": "p1"}]}
+        if path.startswith("/pipelines/p1/versions"):
+            assert "page_size=1&sort_by=created_at%20desc" in path
+            return {"pipeline_versions": [{"pipeline_version_id": "v9"}]}
+        if path.startswith("/experiments?"):
+            return {"experiments": [{"display_name": "payment-risk", "experiment_id": "e1"}]}
+        return {"run_id": "r1"}
 
     client, calls = pipelines(responses)
-    assert client.replace({"display_name": PIPELINE}) == "new"
-    assert [(method, path) for method, path, _ in calls if method != "GET"] == [
-        ("DELETE", "/recurringruns/old"),
-        ("POST", "/recurringruns"),
+    assert client.start("drift-v3-x", "why", {"trigger": "drift"}) == "r1"
+    assert calls[-1] == (
+        "POST",
+        "/runs",
+        {
+            "display_name": "drift-v3-x",
+            "description": "why",
+            "experiment_id": "e1",
+            "pipeline_version_reference": {"pipeline_id": "p1", "pipeline_version_id": "v9"},
+            "runtime_config": {"parameters": {"trigger": "drift"}},
+            "service_account": SERVICE_ACCOUNT,
+        },
+    )
+
+
+def test_listing_runs_keeps_those_with_the_prefix_and_reads_their_state_and_start():
+    """Runs are listed by name prefix with their state and start time as a timezone-aware instant."""
+
+    def responses(method, path, count):
+        assert method == "GET" and "namespace=ml" in path and "display_name" in path
+        return {
+            "runs": [
+                {
+                    "display_name": "drift-v3-a",
+                    "state": "RUNNING",
+                    "created_at": "2026-11-10T08:00:00Z",
+                },
+                {
+                    "display_name": "other",
+                    "state": "SUCCEEDED",
+                    "created_at": "2026-11-10T07:00:00Z",
+                },
+                {"display_name": "drift-age-v3-b", "created_at": "2026-11-09T07:00:00+00:00"},
+            ]
+        }
+
+    client, _ = pipelines(responses)
+    found = client.runs("drift-")
+    assert [(run["name"], run["state"]) for run in found] == [
+        ("drift-v3-a", "RUNNING"),
+        ("drift-age-v3-b", ""),
     ]
+    assert found[0]["created"].utcoffset().total_seconds() == 0 and found[0]["created"].hour == 8
+    assert client.runs("nothing-") == []
 
 
 def test_the_experiment_is_created_only_when_missing():
@@ -136,7 +140,7 @@ def test_a_call_sends_json_to_the_api_and_decodes_the_answer(monkeypatch):
         sent.append((request.method, request.full_url, request.data, timeout))
         return Response(b'{"ok": true}')
 
-    monkeypatch.setattr(schedule.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(runs.urllib.request, "urlopen", urlopen)
     client = Pipelines(base="http://kfp:8888/")
     assert client.call("POST", "/runs", {"a": 1}) == {"ok": True}
     assert sent == [("POST", "http://kfp:8888/apis/v2beta1/runs", b'{"a": 1}', 60)]
@@ -144,12 +148,12 @@ def test_a_call_sends_json_to_the_api_and_decodes_the_answer(monkeypatch):
 
 def test_an_empty_answer_is_an_empty_dict_and_the_base_defaults_to_the_namespace(monkeypatch):
     """A delete's empty body decodes to {}, and the default API address follows the namespace."""
-    monkeypatch.setattr(schedule.urllib.request, "urlopen", lambda request, timeout: Response(b""))
+    monkeypatch.setattr(runs.urllib.request, "urlopen", lambda request, timeout: Response(b""))
     monkeypatch.delenv("KFP_URL", raising=False)
     monkeypatch.setenv("ML_NAMESPACE", "team")
     client = Pipelines()
     assert client.base == "http://ml-pipeline.team.svc.cluster.local:8888/apis/v2beta1"
-    assert client.call("DELETE", "/recurringruns/1") == {}
+    assert client.call("DELETE", "/runs/1") == {}
     monkeypatch.setenv("KFP_URL", "http://other:1/")
     assert Pipelines().base == "http://other:1/apis/v2beta1"
 
@@ -164,17 +168,13 @@ def test_the_namespace_in_every_query_follows_the_configuration(monkeypatch):
         return {
             "pipelines": [],
             "experiments": [],
-            "recurringRuns": [],
             "experiment_id": "e",
-            "recurring_run_id": "r",
         }
 
     client, _ = pipelines(responses)
     client.experiment()
-    client.replace({"display_name": PIPELINE})
     with pytest.raises(TimeoutError):
         client.version("v", timeout=0)
     assert ("GET", "/experiments?namespace=team&page_size=100") in seen
-    assert ("GET", "/recurringruns?namespace=team&page_size=100") in seen
     assert ("POST", "/experiments") in seen
     assert json.dumps(seen).count("namespace=ml") == 0

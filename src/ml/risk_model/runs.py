@@ -1,9 +1,11 @@
-"""The Kubeflow Pipelines API calls that keep the recurring retraining run pointed at the current pipeline."""
+"""The Kubeflow Pipelines REST calls that start retraining runs and list the ones that were started."""
 
 import json
 import os
 import time
+import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta, timezone
 
 from risk_model.cluster import MODEL_NAME, SERVICE_ACCOUNT, namespace
 
@@ -66,30 +68,48 @@ class Pipelines:
             )
         )["experiment_id"]
 
-    def replace(self, body):
-        """Deletes recurring runs with the same name, creates `body` and returns its ID."""
-        listing = self.call("GET", f"/recurringruns?namespace={namespace()}&page_size=100")
-        # The recurring-run list answers with camelCase keys while the other endpoints use snake_case.
-        for run in listing.get("recurringRuns") or listing.get("recurring_runs") or []:
-            if run["display_name"] == body["display_name"]:
-                self.call("DELETE", f"/recurringruns/{run['recurring_run_id']}")
-        return self.call("POST", "/recurringruns", body)["recurring_run_id"]
+    def runs(self, prefix, days=7):
+        """Returns the runs whose name starts with `prefix` from the last `days`, as dicts with their name, state and start."""
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        filter_ = {
+            "predicates": [
+                {"key": "display_name", "operation": "IS_SUBSTRING", "string_value": prefix},
+                {
+                    "key": "created_at",
+                    "operation": "GREATER_THAN",
+                    "timestamp_value": since.isoformat(),
+                },
+            ]
+        }
+        query = urllib.parse.quote(json.dumps(filter_))
+        listing = self.call("GET", f"/runs?namespace={namespace()}&page_size=100&filter={query}")
+        return [
+            {
+                "name": run["display_name"],
+                "state": run.get("state", ""),
+                "created": datetime.fromisoformat(run["created_at"].replace("Z", "+00:00")),
+            }
+            for run in listing.get("runs", [])
+            if run["display_name"].startswith(prefix)
+        ]
 
-
-def recurring_body(*, pipeline_id, version_id, experiment_id, cron, enabled, parameters):
-    """Returns the request that creates the recurring run on one pipeline version and cron schedule."""
-    return {
-        "display_name": PIPELINE,
-        "description": "Rolling-window retraining of payment_risk_v1",
-        "experiment_id": experiment_id,
-        "pipeline_version_reference": {
-            "pipeline_id": pipeline_id,
-            "pipeline_version_id": version_id,
-        },
-        "runtime_config": {"parameters": parameters},
-        "service_account": SERVICE_ACCOUNT,
-        "trigger": {"cron_schedule": {"cron": cron}},
-        "max_concurrency": "1",
-        "no_catchup": True,
-        "mode": "ENABLE" if enabled else "DISABLE",
-    }
+    def start(self, name, description, parameters):
+        """Starts the newest `payment-risk-training` version with `parameters` and returns the run's ID."""
+        pipelines = self.call("GET", f"/pipelines?namespace={namespace()}&page_size=100")
+        pipeline = next(p for p in pipelines["pipelines"] if p["display_name"] == PIPELINE)
+        path = (
+            f"/pipelines/{pipeline['pipeline_id']}/versions?page_size=1&sort_by=created_at%20desc"
+        )
+        version = self.call("GET", path)["pipeline_versions"][0]
+        body = {
+            "display_name": name,
+            "description": description,
+            "experiment_id": self.experiment(),
+            "pipeline_version_reference": {
+                "pipeline_id": pipeline["pipeline_id"],
+                "pipeline_version_id": version["pipeline_version_id"],
+            },
+            "runtime_config": {"parameters": parameters},
+            "service_account": SERVICE_ACCOUNT,
+        }
+        return self.call("POST", "/runs", body)["run_id"]

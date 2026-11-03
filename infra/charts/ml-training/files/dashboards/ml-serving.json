@@ -239,6 +239,142 @@
           "mode": "multi"
         }
       }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Feature drift (PSI, top 10)",
+      "description": "Population stability index of each scored feature against the serving version's reference profile over 24 hours. 0.1 is moderate and 0.2 is significant. No labels are needed.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, ml_feature_drift_psi)",
+          "legendFormat": "{{feature}} {{model_version}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Drift state and features over the threshold",
+      "description": "State: 0 insufficient samples, 1 ok, 2 drifting. The check starts a retraining run only when the 6 hour and the 24 hour windows both drift.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ml_drift_state",
+          "legendFormat": "state {{model_version}}"
+        },
+        {
+          "refId": "B",
+          "expr": "ml_drift_features_over",
+          "legendFormat": "features over {{model_version}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Scored requests counted and model age",
+      "description": "Requests counted into the reference bins over 24 hours, and the days since the serving version was registered.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ml_drift_samples",
+          "legendFormat": "requests {{model_version}}"
+        },
+        {
+          "refId": "B",
+          "expr": "(time() - ml_model_created_seconds) / 86400",
+          "legendFormat": "age in days {{model_version}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     }
   ],
   "templating": {

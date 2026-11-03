@@ -184,7 +184,7 @@ A periodic comparison SHALL measure, for the served version, the population stab
 - **THEN** the dashboard shows its index and the overall state changes only when the configured breach rule holds
 
 ### Requirement: Drift-triggered retraining through the Kubeflow API
-When the breach rule holds in both a short and a long window, a single job SHALL create one run of the training pipeline through the Kubeflow API, named for the version and the hour. It SHALL create none while a drift-triggered run is pending or running, within the cooldown after the previous one, when the serving version's cutoff is younger than the minimum age, or after the bound on runs per week. The same check SHALL also create a run when the serving version's cutoff is older than a configured age ceiling, so a failure of the metrics path cannot leave the model stale for ever. The run SHALL pass through the same gate and promotion rules as any other, and a version it registers SHALL record that a drift caused it and the drift summary.
+When the breach rule holds in both a short and a long window, a single job SHALL create one run of the training pipeline through the Kubeflow API, named for the version and the hour. It SHALL create none while a drift-triggered run is pending or running, within the cooldown after the previous one, when the serving version was registered more recently than the minimum age, or after the bound on runs per week. The same check SHALL also create a run when the serving version was registered longer ago than a configured age ceiling, so a failure of the metrics path cannot leave the model stale for ever. The run SHALL pass through the same gate and promotion rules as any other, and a version it registers SHALL record that a drift caused it and the drift summary.
 
 #### Scenario: Persistent drift
 - **WHEN** the breach rule holds in both windows, no drift-triggered run is active, and the cooldown and the weekly bound allow it
@@ -192,7 +192,7 @@ When the breach rule holds in both a short and a long window, a single job SHALL
 
 #### Scenario: Stale model without drift data
 
-- **WHEN** the serving version's cutoff is older than the age ceiling and no drift run is active or cooling down
+- **WHEN** the serving version was registered longer ago than the age ceiling and no drift run is active or cooling down
 - **THEN** one training run starts, named for the age rule, and passes the same gate
 
 #### Scenario: Retrained model does not pass the gate

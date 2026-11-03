@@ -81,14 +81,14 @@
 
 ## 5e. Drift and drift-triggered retraining (decided 2026-11-03: Go-side bins, a new FastAPI image, drift is the only trigger, live simulator overlay)
 
-- [ ] 5e.1 Add `risk_model/drift.py`: weighted-quantile `profile`, smoothed `psi`, the missing-share shift, the breach rule and the trigger policy as pure functions, with property-based tests (PSI of a sample against itself is 0, bin proportions sum to 1, the policy is monotone in the thresholds).
-- [ ] 5e.2 Compute the reference profile in `record_version`, store it as the registry property `reference` and as a `config.pbtxt` parameter, and record `trigger` and the drift summary on a version a drift run registers.
-- [ ] 5e.3 Count scored features into bins in Go Fraud (`fraud.model.feature_bin` by feature, bin and model version), reading the profile from the served model's config with the existing version check; measure the per-request cost.
-- [ ] 5e.4 Add the drift service (`GET /v1/drift`, `/v1/reference`, probes, `/metrics`) with a Helm Deployment, a KEDA ScaledObject and a `VMPodScrape`, and its image entry in `service-images.json` if decision 2 picks a new image.
-- [ ] 5e.5 Add the hourly `payment-risk-drift-check` CronJob: the policy, the KFP run creation through `risk_model.schedule.Pipelines`, deduplication, cooldown, the weekly bound and the age ceiling.
-- [ ] 5e.6 Remove the recurring run: the `ensure_schedule` step and `Pipelines.ensure_schedule`, the PostSync hook Job, the `schedule` values and their tests; keep the `Pipelines` REST client and `plan_windows`; add the 14-day age ceiling to the check's policy. Update `docs/ml/training.md`.
-- [ ] 5e.7 Add the live simulator `drift` steps (validated, deterministic, world digest unchanged) with tests, and one example step in the dev values.
-- [ ] 5e.8 Add the drift panels to the `ml-serving` dashboard and a Locust run of the drift API for the rubric's load row.
+- [x] 5e.1 Add `risk_model/drift.py`: weighted-quantile `profile`, smoothed `psi`, the missing-share shift, the breach rule and the trigger policy as pure functions, with property-based tests (PSI of a sample against itself is 0, bin proportions sum to 1, the policy is monotone in the thresholds).
+- [x] 5e.2 Compute the reference profile in `record_version`, store it as the registry property `reference` and as a `config.pbtxt` parameter, and record `trigger` and the drift summary on a version a drift run registers.
+- [x] 5e.3 Count scored features into bins in Go Fraud (`fraud.model.feature_bin` by feature, bin and model version), reading the profile from the served model's config with the existing version check. The per-request cost is not measured yet (task 7.9).
+- [x] 5e.4 Add the drift service (`GET /v1/drift`, `/v1/reference`, probes, `/metrics`) with a Helm Deployment, a KEDA ScaledObject and a `VMPodScrape`, and its image entry in `service-images.json` if decision 2 picks a new image.
+- [x] 5e.5 Add the hourly `payment-risk-drift-check` CronJob: the policy, the KFP run creation through `risk_model.schedule.Pipelines`, deduplication, cooldown, the weekly bound and the age ceiling.
+- [x] 5e.6 Remove the recurring run: the `ensure_schedule` step and `Pipelines.ensure_schedule`, the PostSync hook Job, the `schedule` values and their tests; keep the `Pipelines` REST client (now `risk_model.runs`) and `plan_windows`; add the 14-day age ceiling to the check's policy. Update `docs/ml/training.md`.
+- [x] 5e.7 Add the live simulator `drift` steps (validated, deterministic, world digest unchanged) with tests, and an example step in the chart values. A step overrides `foreign_ip_probability`, `familiar_context_probability` or `amount_scale`.
+- [x] 5e.8 Add the drift panels to the `ml-serving` dashboard. The Locust run of the drift API for the rubric's load row is pending (task 7.9).
 - [ ] 5e.9 Update `docs/ml/training.md` (Drift) and the roadmap rows; proof and pending verification stay in separate sentences.
 
 ## 5f. Model A/B experiment (decided 2026-11-03: enforced, no shadow, split in Go Fraud; an InferenceGraph was tried and is blocked by the namespace's Pod Security)

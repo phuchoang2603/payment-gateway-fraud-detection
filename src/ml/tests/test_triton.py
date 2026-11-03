@@ -39,6 +39,16 @@ def test_the_config_runs_the_fil_backend_on_the_gpu_and_carries_the_order_and_ve
     assert parameter(text, "registry_version") == "v7"
 
 
+def test_the_bin_edges_of_the_reference_profile_ride_in_the_config_when_given():
+    """The edges are a compact JSON parameter, and absent without a profile."""
+    edges = {ORDER[0]: [0.5, 1.5]}
+    assert json.loads(parameter(triton.config_text(ORDER, "v7", edges), "bin_edges")) == edges
+    assert "bin_edges" not in triton.config_text(ORDER, "v7")
+    assert triton.repository_files("v7", ORDER, b"m", edges)[
+        "payment-risk/config.pbtxt"
+    ].decode() == (triton.config_text(ORDER, "v7", edges))
+
+
 def test_the_repository_entry_has_the_config_and_the_model_in_a_numbered_directory():
     """The model sits at payment-risk/<number>/xgboost.json beside payment-risk/config.pbtxt."""
     files = triton.repository_files("v7", ORDER, b'{"model": 1}')

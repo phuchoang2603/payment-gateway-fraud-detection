@@ -13,12 +13,11 @@ from pathlib import Path
 import pyarrow.compute as pc
 from fraud_feast.lake import catalog, read_json, write_json
 
-from risk_model import kube, triton
+from risk_model import drift, kube, triton
 from risk_model.data import CHUNK_DAYS, DatasetReader
 from risk_model.evaluate import MARGIN
 from risk_model.objects import read_text, write_text
 from risk_model.registry import RegistryClient
-from risk_model.schedule import Pipelines, recurring_body
 from risk_model.split import WindowSplitter
 from risk_model.train import HYPERPARAMETERS
 from risk_model.windows import covered_end, is_newer, reference_day, rolling
@@ -92,36 +91,6 @@ def plan_windows(
         },
     )
     return chosen
-
-
-def ensure_schedule(
-    *,
-    version,
-    cron,
-    enabled: bool = True,
-    train_days: int = 56,
-    validation_days: int = 14,
-    test_days: int = 14,
-    lag_days: int = 1,
-    timeout: int = 900,
-):
-    """Points the recurring retraining run at a pipeline version, waiting for it to appear in the API."""
-    pipelines = Pipelines()
-    pipeline_id, version_id = pipelines.version(version, timeout)
-    body = recurring_body(
-        pipeline_id=pipeline_id,
-        version_id=version_id,
-        experiment_id=pipelines.experiment(),
-        cron=cron,
-        enabled=enabled,
-        parameters={
-            "train_days": train_days,
-            "validation_days": validation_days,
-            "test_days": test_days,
-            "lag_days": lag_days,
-        },
-    )
-    return {"recurring_run": pipelines.replace(body)}
 
 
 def plan_examples(
@@ -389,13 +358,13 @@ def experiments(*, run_id, spec, timeout_seconds: int = 3600):
     return {"results": f"{root}/experiments.json"}
 
 
-def record_version(*, snapshot, model_uri, report, fit, params, run_id, experiment=""):
+def record_version(*, snapshot, model_uri, report, fit, params, run_id, experiment="", trigger=""):
     """Registers a passing model and packages it for Triton, and returns its version name."""
     provenance = DatasetReader.at(snapshot).provenance()
     gate_report, run = read_json(report), read_json(fit)
     registry = RegistryClient()
     version = registry.next_version()
-    triton.package(model_uri, version, provenance["features"])
+    triton.package(model_uri, version, provenance["features"], drift.edges_of(run["reference"]))
     registry.register(
         version,
         model_uri,
@@ -412,6 +381,8 @@ def record_version(*, snapshot, model_uri, report, fit, params, run_id, experime
             "params": params,
             "experiment": experiment or None,
             "thresholds": gate_report["thresholds"],
+            "reference": run["reference"],
+            "trigger": trigger or "manual",
             "gpu": run["gpu"],
             "environment": run["environment"],
             "seconds": run["seconds"],
@@ -445,7 +416,6 @@ STEPS = {
     function.__name__: function
     for function in (
         plan_windows,
-        ensure_schedule,
         plan_examples,
         stage_examples,
         assemble_examples,

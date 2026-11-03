@@ -147,6 +147,10 @@ def test_a_fit_trains_the_model_and_its_baseline_on_the_gpu_and_writes_the_run_r
     assert record["rows"] == {"train": 40, "validation": 10} and record["best_iteration"] == 2
     assert record["gpu"] == "GPU 0" and record["environment"] == {"xgboost": "2.1.4"}
     assert isinstance(record["seconds"], float)
+    assert set(record["reference"]) == set(FEATURES)
+    assert all(
+        len(entry["share"]) == len(entry["edges"]) + 2 for entry in record["reference"].values()
+    )
 
 
 def test_a_trial_prints_the_validation_score_for_katib(monkeypatch, capsys):

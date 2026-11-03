@@ -18,6 +18,7 @@ from fraud_feast.lake import catalog, read_json, write_json
 from sklearn.metrics import precision_recall_curve
 
 from risk_model.data import DatasetReader, Split
+from risk_model.drift import profile
 from risk_model.evaluate import MARGIN, GateEvaluator, measure, pr_curve_html
 from risk_model.objects import download, upload, write_text
 from risk_model.split import Window, WindowSplitter
@@ -60,7 +61,10 @@ def gpu():
 
 
 def fit(arguments):
-    """Trains the model and its baseline, uploads both to the model directory and writes `fit.json`."""
+    """Trains the model and its baseline, uploads both to the model directory and writes `fit.json`.
+
+    The record carries the reference profile of the training split, which drift is measured against.
+    """
     started = time.monotonic()
     train, validation = splits(arguments)
     params = json.loads(arguments.params)
@@ -80,6 +84,7 @@ def fit(arguments):
             "seed": arguments.seed,
             "best_iteration": booster.num_boosted_rounds() - 1,
             "rows": {"train": len(train.y), "validation": len(validation.y)},
+            "reference": profile(train, booster.get_score(importance_type="gain")),
             "gpu": gpu(),
             "environment": environment(),
             "seconds": round(time.monotonic() - started, 1),

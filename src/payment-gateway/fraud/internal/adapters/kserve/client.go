@@ -12,10 +12,14 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/application"
 )
@@ -35,17 +39,22 @@ var (
 )
 
 // Config is the model server endpoint, the model name and the connection timeout. The request deadline
-// belongs to the caller's context, not to the client.
+// belongs to the caller's context, not to the client. Bins, when set, counts every scored feature into the bin of the
+// served model's reference profile, so drift can be measured from what the model saw.
 type Config struct {
 	URL, Model  string
 	DialTimeout time.Duration
+	Bins        metric.Int64Counter
 }
 
-// served is what the client knows of the model Triton serves: the registry version it was packaged as and the
-// feature order that packaging recorded.
+// served is what the client knows of the model Triton serves: the registry version it was packaged as, the feature
+// order that packaging recorded and, when it recorded them, each feature's bin edges with the attributes that count a
+// value into each bin (the last bin is the missing one).
 type served struct {
 	version string
 	order   []string
+	edges   [][]float64
+	options [][]metric.AddOption
 }
 
 // Client calls a Triton model over the Open Inference Protocol v2. Features travel as one binary FP32 row in the
@@ -107,7 +116,8 @@ func (c *Client) Score(ctx context.Context, features application.FeatureObservat
 		observation.Status = failureStatus(ctx, err)
 		return observation
 	}
-	score, version, err := c.infer(ctx, row(features, layout.order))
+	values := row(features, layout.order)
+	score, version, err := c.infer(ctx, values)
 	if err != nil {
 		observation.Status = failureStatus(ctx, err)
 		return observation
@@ -116,8 +126,23 @@ func (c *Client) Score(ctx context.Context, features application.FeatureObservat
 		c.forget(layout)
 		return observation
 	}
+	c.count(ctx, layout, values)
 	observation.Status, observation.Version, observation.Score = application.ModelAvailable, version, &score
 	return observation
+}
+
+// count adds each scored value to its feature's bin: the number of edges at or below it, or the missing bin for NaN.
+func (c *Client) count(ctx context.Context, layout served, values []float32) {
+	if c.config.Bins == nil || layout.edges == nil {
+		return
+	}
+	for index, value := range values {
+		edges, slot := layout.edges[index], len(layout.edges[index])+1
+		if number := float64(value); !math.IsNaN(number) {
+			slot = sort.Search(len(edges), func(at int) bool { return edges[at] > number })
+		}
+		c.config.Bins.Add(ctx, 1, layout.options[index][slot])
+	}
 }
 
 func (c *Client) layout(ctx context.Context) (served, error) {
@@ -172,7 +197,34 @@ func (c *Client) fetch(ctx context.Context) (served, error) {
 	if !versionName.MatchString(version) {
 		return served{}, errInvalid
 	}
-	return served{version: version, order: order}, nil
+	known := served{version: version, order: order}
+	c.profile(&known, config.Parameters["bin_edges"].StringValue)
+	return known, nil
+}
+
+// profile reads the bin edges of the reference profile into a served model, and ignores a missing or malformed set,
+// which only stops the counting.
+func (c *Client) profile(known *served, text string) {
+	var edges map[string][]float64
+	if c.config.Bins == nil || json.Unmarshal([]byte(text), &edges) != nil || len(edges) == 0 {
+		return
+	}
+	known.edges, known.options = make([][]float64, len(known.order)), make([][]metric.AddOption, len(known.order))
+	for index, name := range known.order {
+		list, found := edges[name]
+		if !found || !sort.Float64sAreSorted(list) {
+			known.edges, known.options = nil, nil
+			return
+		}
+		known.edges[index] = list
+		for slot := 0; slot <= len(list)+1; slot++ {
+			label := strconv.Itoa(slot)
+			if slot == len(list)+1 {
+				label = "m"
+			}
+			known.options[index] = append(known.options[index], metric.WithAttributes(attribute.String("feature", name), attribute.String("bin", label), attribute.String("model_version", known.version)))
+		}
+	}
 }
 
 // infer scores one row and returns the fraud probability and the registry version of the model that made it.

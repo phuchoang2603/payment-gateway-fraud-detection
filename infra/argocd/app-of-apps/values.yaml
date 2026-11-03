@@ -15,6 +15,7 @@ global:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/drift: dev
 destinationServer: https://kubernetes.default.svc
 namePrefix: payment-gateway
 applications:

@@ -14,6 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
+
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/application"
 )
 
@@ -399,5 +402,84 @@ func TestAnEndpointOrNameThatCouldMisdirectTheCallIsRejected(t *testing.T) {
 		if _, err := New(config); err == nil {
 			t.Errorf("%s was accepted", name)
 		}
+	}
+}
+
+// bins records the bin each value is counted into, as "feature/bin/version".
+type bins struct {
+	noop.Int64Counter
+	seen map[string]int64
+}
+
+func (b *bins) Add(_ context.Context, amount int64, options ...metric.AddOption) {
+	set := metric.NewAddConfig(options).Attributes()
+	feature, _ := set.Value("feature")
+	bin, _ := set.Value("bin")
+	version, _ := set.Value("model_version")
+	b.seen[feature.AsString()+"/"+bin.AsString()+"/"+version.AsString()] += amount
+}
+
+func profiled(t *testing.T, edges string) (*Client, *triton, *bins) {
+	t.Helper()
+	fake := newTriton()
+	encoded, _ := json.Marshal(order)
+	fake.configBody = `{"parameters":{"feature_order":{"string_value":` + strconv.Quote(string(encoded)) + `},"registry_version":{"string_value":"v3"},"bin_edges":{"string_value":` + strconv.Quote(edges) + `}}}`
+	counter := &bins{seen: map[string]int64{}}
+	client, err := New(Config{URL: fake.serve(t).URL, Model: "payment-risk", DialTimeout: time.Second, Bins: counter})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+	return client, fake, counter
+}
+
+func TestScoredFeaturesAreCountedIntoTheBinsOfTheServedProfile(t *testing.T) {
+	edges := `{"customer_daily__attempt_count_7d":[2,5],"customer_daily__decline_rate_7d":[0.5],"request_features__has_device":[1],"request_features__ip_shipping_country_mismatch":[1],"customer_stream__customer_snapshot_attempt_count_5m":[3]}`
+	client, _, counter := profiled(t, edges)
+	observation := client.Score(context.Background(), views(map[string]application.ViewObservation{
+		"customer_daily":   {Status: "available", Values: map[string]application.FeatureValue{"attempt_count_7d": integer(5), "decline_rate_7d": number(0.1)}},
+		"request_features": {Status: "available", Values: map[string]application.FeatureValue{"has_device": boolean(true), "ip_shipping_country_mismatch": boolean(false)}},
+	}))
+	if observation.Status != application.ModelAvailable {
+		t.Fatalf("status %s", observation.Status)
+	}
+	want := map[string]int64{
+		"customer_daily__attempt_count_7d/2/v3":                    1,
+		"customer_daily__decline_rate_7d/0/v3":                     1,
+		"request_features__has_device/1/v3":                        1,
+		"request_features__ip_shipping_country_mismatch/0/v3":      1,
+		"customer_stream__customer_snapshot_attempt_count_5m/m/v3": 1,
+	}
+	if len(counter.seen) != len(want) {
+		t.Fatalf("counted %v", counter.seen)
+	}
+	for key, count := range want {
+		if counter.seen[key] != count {
+			t.Errorf("%s counted %d, want %d (%v)", key, counter.seen[key], count, counter.seen)
+		}
+	}
+}
+
+func TestNothingIsCountedWithoutAProfileOrWithAMalformedOne(t *testing.T) {
+	for name, edges := range map[string]string{"none": "", "text": "nope", "unsorted": `{"customer_daily__attempt_count_7d":[5,2]}`, "missing feature": `{"customer_daily__attempt_count_7d":[2]}`} {
+		client, _, counter := profiled(t, edges)
+		if status := client.Score(context.Background(), views(nil)).Status; status != application.ModelAvailable {
+			t.Fatalf("%s: status %s", name, status)
+		}
+		if len(counter.seen) != 0 {
+			t.Errorf("%s: counted %v", name, counter.seen)
+		}
+	}
+}
+
+func TestAnAnswerFromAnotherVersionCountsNothing(t *testing.T) {
+	edges := `{"customer_daily__attempt_count_7d":[2],"customer_daily__decline_rate_7d":[1],"request_features__has_device":[1],"request_features__ip_shipping_country_mismatch":[1],"customer_stream__customer_snapshot_attempt_count_5m":[1]}`
+	client, fake, counter := profiled(t, edges)
+	fake.modelVersion = "4"
+	if status := client.Score(context.Background(), views(nil)).Status; status != application.ModelError {
+		t.Fatalf("status %s", status)
+	}
+	if len(counter.seen) != 0 {
+		t.Errorf("counted %v", counter.seen)
 	}
 }

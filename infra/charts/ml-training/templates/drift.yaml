@@ -1,0 +1,157 @@
+{{- if and .Values.enabled .Values.drift.enabled }}
+{{- $image := include "ml-training.imageOf" (dict "root" . "repository" .Values.drift.image.repository) }}
+{{- $policy := .Values.drift.policy | toJson }}
+{{- $windows := .Values.drift.windows }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-risk-drift
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.drift.autoscaling.minReplicas }}
+  selector:
+    matchLabels:
+      app: payment-risk-drift
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: payment-risk-drift
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: drift
+          image: {{ $image | quote }}
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: MODEL_REGISTRY_URL
+              value: {{ .Values.config.MODEL_REGISTRY_URL | quote }}
+            - name: METRICS_URL
+              value: {{ .Values.drift.metrics | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.environment | quote }}
+            - name: DRIFT_POLICY
+              value: {{ $policy | quote }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-risk-drift
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: payment-risk-drift
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: payment-risk-drift
+  namespace: {{ .Values.namespace }}
+spec:
+  scaleTargetRef:
+    name: payment-risk-drift
+  minReplicaCount: {{ .Values.drift.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.drift.autoscaling.maxReplicas }}
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: {{ .Values.drift.metrics }}
+        query: sum(rate(ml_drift_requests_total[2m]))
+        threshold: {{ .Values.drift.autoscaling.requestsPerSecond | quote }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: payment-risk-drift
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: payment-risk-drift
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: payment-risk-drift-check
+  namespace: {{ .Values.namespace }}
+spec:
+  schedule: {{ .Values.drift.cron | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: fraud-training
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: check
+              image: {{ include "ml-training.image" . | quote }}
+              command: [python, -m, risk_model.drift_check]
+              env:
+                - name: DRIFT_URL
+                  value: http://payment-risk-drift.{{ .Values.namespace }}.svc.cluster.local
+                - name: DRIFT_POLICY
+                  value: {{ $policy | quote }}
+                - name: KFP_URL
+                  value: http://ml-pipeline.{{ .Values.namespace }}.svc.cluster.local:8888
+                - name: TRAIN_DAYS
+                  value: {{ $windows.trainDays | quote }}
+                - name: VALIDATION_DAYS
+                  value: {{ $windows.validationDays | quote }}
+                - name: TEST_DAYS
+                  value: {{ $windows.testDays | quote }}
+                - name: LAG_DAYS
+                  value: {{ $windows.lagDays | quote }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+              resources:
+                requests: {cpu: 100m, memory: 256Mi}
+                limits: {memory: 512Mi}
+{{- end }}

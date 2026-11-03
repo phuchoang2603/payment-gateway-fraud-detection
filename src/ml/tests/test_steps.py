@@ -158,7 +158,6 @@ def test_every_pipeline_step_is_registered_by_its_function_name():
     """STEPS maps each step's name to its function."""
     assert set(steps.STEPS) == {
         "plan_windows",
-        "ensure_schedule",
         "plan_examples",
         "stage_examples",
         "assemble_examples",
@@ -249,47 +248,6 @@ def test_a_run_with_no_covered_span_stops_even_when_forced(monkeypatch, files):
     result, _ = planned(monkeypatch, None, None, force=True)
     assert result["run"] is False
     assert files["s3://bucket/runs/r1/windows.json"]["covered_end"] is None
-
-
-def test_the_recurring_run_is_pointed_at_the_requested_version(monkeypatch):
-    """ensure_schedule waits for the version, builds the request and returns the new run's ID."""
-    calls = {}
-
-    class Pipelines:
-        """A fake Kubeflow Pipelines client."""
-
-        def version(self, name, timeout):
-            """Records the wait and returns IDs."""
-            calls["version"] = (name, timeout)
-            return "pipeline", "version-id"
-
-        def experiment(self):
-            """Returns an experiment ID."""
-            return "experiment"
-
-        def replace(self, body):
-            """Records the request and returns a run ID."""
-            calls["body"] = body
-            return "run-1"
-
-    monkeypatch.setattr(steps, "Pipelines", Pipelines)
-    result = steps.ensure_schedule(
-        version="payment-risk-training-abc", cron="0 17 3 * * *", train_days=4
-    )
-    assert result == {"recurring_run": "run-1"}
-    assert calls["version"] == ("payment-risk-training-abc", 900)
-    body = calls["body"]
-    assert body["mode"] == "ENABLE" and body["trigger"] == {
-        "cron_schedule": {"cron": "0 17 3 * * *"}
-    }
-    assert body["runtime_config"]["parameters"] == {
-        "train_days": 4,
-        "validation_days": 14,
-        "test_days": 14,
-        "lag_days": 1,
-    }
-    steps.ensure_schedule(version="v", cron="c", enabled=False)
-    assert calls["body"]["mode"] == "DISABLE"
 
 
 @pytest.fixture
@@ -649,7 +607,13 @@ def test_registering_a_version_packages_it_for_triton_with_its_provenance(monkey
     packaged = []
     monkeypatch.setattr(steps.triton, "package", lambda *args: packaged.append(args))
     files["gate"] = {"thresholds": {"decline": 0.9}, "metrics": {"model": {"pr_auc": 0.5}}}
-    files["fit"] = {"gpu": "RTX", "environment": {"xgboost": "2.1.4"}, "seconds": 12.5}
+    reference = {"a": {"edges": [0.5], "share": [0.4, 0.5, 0.1], "gain": 2.0}}
+    files["fit"] = {
+        "gpu": "RTX",
+        "environment": {"xgboost": "2.1.4"},
+        "seconds": 12.5,
+        "reference": reference,
+    }
     result = steps.record_version(
         snapshot="7",
         model_uri="s3://bucket/runs/r1/model",
@@ -657,13 +621,15 @@ def test_registering_a_version_packages_it_for_triton_with_its_provenance(monkey
         fit="fit",
         params='{"eta": 0.1}',
         run_id="r1",
+        trigger="drift",
     )
     assert result == {"version": "v4"}
-    assert packaged == [("s3://bucket/runs/r1/model", "v4", FEATURES)]
+    assert packaged == [("s3://bucket/runs/r1/model", "v4", FEATURES, {"a": [0.5]})]
     ((version, uri, properties),) = registry.registered
     assert (version, uri) == ("v4", "s3://bucket/runs/r1/model")
     assert properties["gate"] == "passed" and properties["test_pr_auc"] == 0.5
     assert properties["pipeline_run"] == "r1" and properties["experiment"] is None
+    assert properties["reference"] == reference and properties["trigger"] == "drift"
     assert properties["training_set_snapshot"] == 7 and properties["gpu"] == "RTX"
     assert properties["thresholds"] == {"decline": 0.9} and properties["params"] == '{"eta": 0.1}'
 

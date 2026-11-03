@@ -10,6 +10,7 @@
 #    train: str [Default: '']
 #    train_days: int [Default: 56.0]
 #    training_set_snapshot: str [Default: '']
+#    trigger: str [Default: '']
 #    tune_trials: int [Default: 0.0]
 #    validation: str [Default: '']
 #    validation_days: int [Default: 14.0]
@@ -131,6 +132,8 @@ components:
                   producerTask: gate
               pipelinechannel--plan-windows-run:
                 componentInputParameter: pipelinechannel--plan-windows-run
+              pipelinechannel--trigger:
+                componentInputParameter: pipelinechannel--trigger
               pipelinechannel--tune-params-experiment:
                 taskOutputParameter:
                   outputParameterKey: experiment
@@ -335,6 +338,8 @@ components:
           parameterType: STRING
         pipelinechannel--training_set_snapshot:
           parameterType: STRING
+        pipelinechannel--trigger:
+          parameterType: STRING
         pipelinechannel--tune_trials:
           parameterType: NUMBER_INTEGER
   comp-condition-3:
@@ -361,6 +366,8 @@ components:
                   constant: '{{$.pipeline_job_uuid}}'
               snapshot:
                 componentInputParameter: pipelinechannel--assemble-examples-snapshot
+              trigger:
+                componentInputParameter: pipelinechannel--trigger
           taskInfo:
             name: record-version
         roll-out:
@@ -393,6 +400,8 @@ components:
         pipelinechannel--gate-report:
           parameterType: STRING
         pipelinechannel--plan-windows-run:
+          parameterType: STRING
+        pipelinechannel--trigger:
           parameterType: STRING
         pipelinechannel--tune-params-experiment:
           parameterType: STRING
@@ -566,6 +575,8 @@ components:
         run_id:
           parameterType: STRING
         snapshot:
+          parameterType: STRING
+        trigger:
           parameterType: STRING
     outputDefinitions:
       parameters:
@@ -923,6 +934,8 @@ deploymentSpec:
         - '{{$.inputs.parameters[''params'']}}'
         - --experiment
         - '{{$.inputs.parameters[''experiment'']}}'
+        - --trigger
+        - '{{$.inputs.parameters[''trigger'']}}'
         - --out
         - version
         - '{{$.outputs.parameters[''version''].output_file}}'
@@ -1090,6 +1103,8 @@ root:
                 producerTask: plan-windows
             pipelinechannel--training_set_snapshot:
               componentInputParameter: training_set_snapshot
+            pipelinechannel--trigger:
+              componentInputParameter: trigger
             pipelinechannel--tune_trials:
               componentInputParameter: tune_trials
         taskInfo:
@@ -1168,6 +1183,10 @@ root:
         isOptional: true
         parameterType: NUMBER_INTEGER
       training_set_snapshot:
+        defaultValue: ''
+        isOptional: true
+        parameterType: STRING
+      trigger:
         defaultValue: ''
         isOptional: true
         parameterType: STRING

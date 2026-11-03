@@ -1,6 +1,7 @@
 global:
   imageTags:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/drift: dev
 enabled: true
 namespace: ml
 image:
@@ -42,14 +43,24 @@ iceberg:
   store: gateway-doppler
   data:
     ICEBERG_CLIENT_SECRET: ICEBERG_CLIENT_SECRET
-schedule:
-  enabled: false
-  # KFP cron: second minute hour day-of-month month day-of-week.
-  cron: "0 17 3 * * *"
-  trainDays: 56
-  validationDays: 14
-  testDays: 14
-  lagDays: 1
+drift:
+  enabled: true
+  image:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/drift
+  metrics: http://vmsingle-vmks.observability.svc.cluster.local:8428
+  # Hourly, at minute 17. The check starts at most one retraining run, and only when the policy allows it.
+  cron: "17 * * * *"
+  policy:
+    samples: 2000
+  windows:
+    trainDays: 56
+    validationDays: 14
+    testDays: 14
+    lagDays: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    requestsPerSecond: "5"
 dashboards:
   namespace: observability
   folder: ML

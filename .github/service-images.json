@@ -201,6 +201,18 @@
         "src/ml/notebooks",
         "src/data-pipeline/feast"
       ]
+    },
+    {
+      "service": "drift",
+      "image-suffix": "/drift",
+      "context": ".",
+      "dockerfile": "infra/docker/drift.Dockerfile",
+      "paths": [
+        "infra/docker/drift.Dockerfile",
+        "src/ml/risk_model/__init__.py",
+        "src/ml/risk_model/drift.py",
+        "src/ml/risk_model/drift_service.py"
+      ]
     }
   ]
 }

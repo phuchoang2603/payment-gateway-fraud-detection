@@ -39,6 +39,7 @@ def payment_risk_training(environment):
         test_days: int = 14,
         lag_days: int = 1,
         force: bool = False,
+        trigger: str = "",
     ):
         run_id = dsl.PIPELINE_JOB_ID_PLACEHOLDER
 
@@ -159,6 +160,7 @@ def payment_risk_training(environment):
                         fit=fitted.outputs["fit"],
                         params=params,
                         experiment=experiment,
+                        trigger=trigger,
                     ),
                     nodes=environment.nodes,
                 )

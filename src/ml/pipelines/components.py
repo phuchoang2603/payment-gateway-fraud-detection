@@ -186,6 +186,7 @@ def record_version(
     fit: str,
     params: str,
     experiment: str,
+    trigger: str,
     version: dsl.OutputPath(str),
 ):
     """Registers the passing model in the Model Registry."""
