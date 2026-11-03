@@ -7,3 +7,11 @@ catalog:
   endpoint: https://storage.googleapis.com
   region: auto
   pathStyle: true
+polaris:
+  extraEnv:
+  - name: JAVA_TOOL_OPTIONS
+    value: -Xms128m -Xmx512m
+  - name: AWS_REQUEST_CHECKSUM_CALCULATION
+    value: WHEN_REQUIRED
+  - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+    value: WHEN_REQUIRED
