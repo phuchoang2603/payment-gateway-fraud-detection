@@ -1,30 +1,28 @@
-# Security
+# Security and secrets
 
-## Secrets
+## Central secret delivery
 
-All credentials live in Doppler and reach Kubernetes through External Secrets; nothing secret is in Git or rendered manifests.
+Doppler → External Secrets → Kubernetes Secret → workload `secretKeyRef`. Credentials stay in Doppler; endpoints, bucket names and other nonsecret settings stay in [chart values](../../infra/charts).
 
-- Application ExternalSecrets use the `gateway-doppler` store, selecting the `payment-gateway-fraud-detection/dev` or `prd` config. Its bootstrap Secret is `payment-gateway/doppler-token` (key `dopplerToken`), created from a read-only token for that config.
-- Services read secrets as environment variables through `secretKeyRef`; there are no secret file mounts. Restart the affected Deployment after rotation.
-- Required gateway keys:
-  - databases: `GATEWAY_DB_PAYMENTS_PASSWORD`, `GATEWAY_DB_PAYMENTS_APP_PASSWORD`, `GATEWAY_DB_PAYMENTS_CDC_PASSWORD`, `GATEWAY_DB_FRAUD_PASSWORD`, `GATEWAY_DB_FRAUD_APP_PASSWORD`, `GATEWAY_DB_NOTIFIER_PASSWORD`, `GATEWAY_DB_VAULT_PASSWORD`, `GATEWAY_DB_PROCESSOR_PASSWORD`;
-  - Redis and keys: `GATEWAY_REDIS_PASSWORD`, `GATEWAY_FEAST_REDIS_PASSWORD`, `GATEWAY_PAYMENTS_ENCRYPTION_KEY`, `GATEWAY_CHECKOUT_TOKEN_KEY`, `GATEWAY_VAULT_ENCRYPTION_KEY`, `GATEWAY_FINGERPRINT_KEY`, `GATEWAY_CHECKOUT_COOKIE_KEY`;
-  - integrations: `GATEWAY_INTEGRATIONS_JSON`, `OPENMETADATA_TOKEN`, and `GATEWAY_SYNTHETIC_API_KEY` when simulation is enabled;
-  - storage and catalog: `OBJECT_GATEWAY_ACCESS_KEY_ID`, `OBJECT_GATEWAY_SECRET_ACCESS_KEY`, `CLICKHOUSE_ADMIN_PASSWORD`, `CLICKHOUSE_OPENMETADATA_PASSWORD`, `CLICKHOUSE_MARTS_PASSWORD`, `ICEBERG_POSTGRES_PASSWORD`, `ICEBERG_CLIENT_SECRET`, `ICEBERG_TOKEN_PRIVATE_KEY`, `ICEBERG_TOKEN_PUBLIC_KEY`;
-  - LLM gateway clients: `LLM_GATEWAY_AGENTS_API_KEY`, `LLM_GATEWAY_BENCHMARK_API_KEY`, `LLM_GATEWAY_RAG_INGEST_API_KEY`, `LLM_GATEWAY_RAG_API_KEY`, `LLM_GATEWAY_CATALOG_API_KEY`, and the A2A signing key `KAGENT_GATEWAY_SIGNING_KEY`. The gateway reads them from one labelled Secret with a client id per key; each client also gets its own key Secret in the namespace it runs in. The models are self-hosted, so there is no model-provider key.
-  - RAG knowledge store: `RAG_DB_WRITER_PASSWORD` (the pipeline, which owns the schema) and `RAG_DB_READER_PASSWORD` (the knowledge API, read-only).
-  - Langfuse: `LANGFUSE_SALT`, `LANGFUSE_ENCRYPTION_KEY`, `LANGFUSE_NEXTAUTH_SECRET`, `LANGFUSE_POSTGRES_PASSWORD`, `LANGFUSE_REDIS_PASSWORD`, `LANGFUSE_INIT_PUBLIC_KEY`, `LANGFUSE_INIT_SECRET_KEY`, `LANGFUSE_INIT_USER_PASSWORD`. Its ClickHouse password is `CLICKHOUSE_LANGFUSE_PASSWORD`; the object-storage identity and its Dex client secret (`LANGFUSE_OIDC_CLIENT_SECRET`; users sign in through the platform's Dex, password login is off) come from platform Doppler through the `doppler` store.
-- One gateway storage identity per environment is shared by the generator, Flink, lakehouse runtime and metadata connections, used under `datasets/payment-gateway/`, `runs/payment-gateway/` and `lakehouse/`. In prod it is a GCS HMAC key scoped to the shared bucket, so those prefixes are a convention rather than an access boundary.
+| Configuration | Source |
+|---|---|
+| `gateway-doppler` store, project `payment-gateway-fraud-detection`, configs `dev` / `prd` | [SecretStore template](../../infra/charts/secret-store/templates/secret-store.yaml), [prod values](../../infra/charts/secret-store/values-prod.yaml) |
+| Database, Redis, encryption, integration and object-storage key mappings | [Gateway ExternalSecrets](../../infra/charts/payment-gateway/templates/external-secrets.yaml), [database secrets](../../infra/charts/payment-gateway/templates/database-external-secrets.yaml), [service values](../../infra/charts/payment-gateway/values.yaml) |
+| LLM/RAG client keys and backing-service credentials | [LLM chart](../../infra/charts/llm-platform), [RAG chart](../../infra/charts/rag-pipeline) |
 
-`GATEWAY_INTEGRATIONS_JSON` is an array of `integration_id`, `name`, `api_key_sha256`, `synthetic` and an optional `webhook: {url, secret, events}`. The synthetic integration ID must match the historical dataset.
+Bootstrap `payment-gateway/doppler-token` (`dopplerToken`) from a read-only token for the environment. The store restricts eligible namespaces. After rotation, restart affected workloads so environment variables refresh, using the [canary flow](cd.md#edge-progressive-delivery) for Edge.
 
-## Service-to-service authorization
+One storage identity per environment serves the generator, Flink, lakehouse and metadata jobs. Prod uses GCS HMAC keys for the shared bucket; `datasets/`, `runs/` and `lakehouse/` prefixes are conventions, not authorization boundaries.
 
-- Gateway pods enroll in the Istio ambient mesh with strict mTLS and service-account `AuthorizationPolicy` rules. Services speak plaintext gRPC inside the mesh.
-- The vault serves Edge on port 8000 and processor-only fixture resolution on port 8001; its policy admits only Edge to 8000 and only the processor to 8001.
-- Each service owns its own database with separate migration and runtime roles; Payments has a replication principal limited to the event ledger.
-- Fraud and all JSON APIs are ClusterIP-only. Only Edge `/checkout/*` is publicly routed, over HTTPS.
+## Access boundaries
 
-## Card data
+- [Istio policies](../../infra/charts/payment-gateway/templates/mesh.yaml) enforce strict mTLS and service-account authorization. Vault admits Edge on port 8000 and processor resolution on 8001.
+- [Network policies](../../infra/charts/payment-gateway/templates/network-policy.yaml) restrict pod traffic; [database policies](../../infra/charts/payment-gateway/templates/database-network-policy.yaml) isolate database access.
+- Each service owns a database with separate migration/runtime roles; Payments CDC has a replication identity.
+- Public exposure and authentication are described in [routing and gateway](routing.md).
 
-Card data is synthetic. Only Edge tokenizes allow-listed fictional cards; stored fixtures are encrypted with a vault-only key; tokens, raw card fields and fixtures never appear in logs, events, Fraud, Redis or the lake. This demonstrates a PCI DSS-oriented boundary, not compliance.
+Card data is synthetic. The vault encrypts fictional fixtures and issues opaque tokens; raw card data stays out of logs, events, Fraud, Redis and the lake. This demonstrates PCI DSS-oriented isolation, not compliance.
+
+## Verification
+
+[Recorded gateway acceptance](ci.md#deployed-verification) covers synthetic tokenization, authenticated checkout and signed webhook delivery. Central secret delivery is configured in the linked manifests; a sanitized ExternalSecret readiness capture is still needed for the rubric's visual proof.

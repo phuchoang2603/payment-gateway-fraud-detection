@@ -6,12 +6,12 @@ The gateway and its fraud decisioning path. The [verification evidence](../../op
 
 - [Payment flows](flows.md): identity, checkout and payment-authority contracts, with the checkout and recovery sequence.
 - [Service conventions](conventions.md): code layout, dependency direction and per-service ownership rules.
-- [Docker images](../deployment/docker.md): image builds for every service.
+- [Docker images](../deployment/cd.md#docker-images): image builds for every service.
 - [Platform architecture](../Home.md#architecture): deployable units, ownership boundaries and the full deployment diagram.
 
 ## Gateway design
 
-The gateway implements the following foundation. Production verification is recorded in [CD](../deployment/cd.md#gateway-verification).
+The gateway implements the following foundation. Production verification is recorded in [CI verification](../deployment/ci.md#deployed-verification).
 
 | Component                     | Design                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -53,4 +53,4 @@ The domain is in the [proposal](../Home.md#domain); status is in the [roadmap](.
 
 The attempt event carries the immutable checkout context in event schema 3. See [payment flows](flows.md) and the [feature store](../ml/feature-store.md). Rules-only Fraud persists assessment claims and immutable evidence in its own database. Submission counters are observe-only; observation failures preserve valid rules outcomes. Shadow feature retrieval reads `payment_risk_v1` from the [feature store](../ml/feature-store.md); KServe integration is pending.
 
-Authorization counts use Redis millisecond time and `(r-window,r]`; retries retain their original registration. Process changes start a conservative 60 s coverage warmup. Runtime variables and initial observation thresholds are in [CD runtime configuration](../deployment/cd.md#runtime-configuration). The Flink controller is installed through `talos-proxmox`; the feature chart owns epoch-scoped paths below `runs/payment-gateway/flink/` in the environment platform bucket and object credentials from gateway Doppler. Checkpoint recovery for the v2 job is covered in CI and [recorded in dev](../data/online.md#restart); outage/load evidence is pending.
+Authorization counts use Redis millisecond time and `(r-window,r]`; retries retain their original registration. Process changes start a conservative 60 s coverage warmup. Runtime settings are in [gateway chart values](../../infra/charts/payment-gateway/values.yaml). The Flink controller is installed through `talos-proxmox`; the feature chart owns epoch-scoped paths below `runs/payment-gateway/flink/` in the environment platform bucket and object credentials from gateway Doppler. Checkpoint recovery for the v2 job is covered in CI and [recorded in dev](../data/online.md#restart); outage/load evidence is pending.

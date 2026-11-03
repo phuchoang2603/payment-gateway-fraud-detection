@@ -1,4 +1,4 @@
-# Infrastructure
+# Infrastructure and IaC
 
 Two Talos Kubernetes clusters run the same application charts. They are provisioned and operated from the platform repository, [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox), with OpenTofu (Terraform-compatible) for Proxmox, GCP and cluster bootstrap, and Argo CD for platform components. This repository holds no Terraform stack or cloud credentials.
 
@@ -26,4 +26,13 @@ The full-scale generator uses the Spot pool: one shard per Spot node, selected b
 
 Removing an application chart never removes shared services, buckets, catalog databases or namespaces.
 
-Captures of the provisioning runs are added here.
+## Provisioning code and evidence
+
+| Platform code | Responsibility |
+|---|---|
+| [`terraform/foundation`](https://github.com/phuchoang2603/talos-proxmox/tree/main/terraform/foundation) | Shared identities, state and secret contracts |
+| [`terraform/proxmox`](https://github.com/phuchoang2603/talos-proxmox/tree/main/terraform/proxmox) / [`terraform/gcp`](https://github.com/phuchoang2603/talos-proxmox/tree/main/terraform/gcp) | Dev VMs / prod network, instances, worker groups and storage |
+| [`terraform/talos`](https://github.com/phuchoang2603/talos-proxmox/tree/main/terraform/talos) / [`terraform/cluster`](https://github.com/phuchoang2603/talos-proxmox/tree/main/terraform/cluster) | Talos bootstrap and environment configuration |
+| [`apps`](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps) | Shared operators and platform services through Argo CD |
+
+Talos machine configuration and GitOps replace the rubric's Ansible-on-VM configuration. The [platform provisioning workflow](https://github.com/phuchoang2603/talos-proxmox/blob/main/docs/architecture/terraform-ci.md) describes plan/apply; provisioning-run screenshots remain missing from this submission. Application deployment evidence is in [CD](cd.md#edge-progressive-delivery).

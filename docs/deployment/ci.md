@@ -1,35 +1,28 @@
-# Continuous integration
+# CI, validation and verification
 
-GitHub Actions runs every check on pull requests and `main`. Tests and image builds run only in CI; local work is limited to non-test checks (lint, format, schema validation, Helm rendering, `openspec validate --strict`) inside `devenv shell`.
+GitHub Actions validates pull requests and `main`; successful checks gate [image publication and deployment](cd.md#release-flow). Tests and builds run in CI. Local checks run in `devenv shell` (format, lint, schema validation and Helm rendering).
 
-## Workflows
+## CI checks
 
-| Workflow | Jobs |
+| Workflow | Validation |
 |---|---|
-| [`ci.yml`](../../.github/workflows/ci.yml) | Contract lint and generated-reference diff, Helm lint and render of every chart and values file |
-| [`go-ci.yml`](../../.github/workflows/go-ci.yml) | Per-module Go lint (golangci-lint, gofumpt), tests including Postgres integration tests through testcontainers, and mutation testing |
-| [`python-ci.yml`](../../.github/workflows/python-ci.yml) | Ruff lint and format and pytest for each Python project |
-| [`release.yml`](../../.github/workflows/release.yml) and [`build-image.yml`](../../.github/workflows/build-image.yml) | Release planning, affected image builds, and publication of the dev or prod release; see [CD](cd.md) |
-| [`wiki.yml`](../../.github/workflows/wiki.yml) | Publishes `docs/` to the project wiki from `main` |
+| [CI](../../.github/workflows/ci.yml) | Contract lint, generated-reference diff, Helm lint/render for all charts and values |
+| [Go CI](../../.github/workflows/go-ci.yml) | Lint, unit tests, Postgres integration tests through testcontainers, changed-code mutation testing on PRs |
+| [Python CI](../../.github/workflows/python-ci.yml) | Ruff lint/format and pytest per project |
 
-Check logic lives in [`scripts/ci-checks.sh`](../../scripts/ci-checks.sh) so workflow steps stay short.
+[`scripts/ci-checks.sh`](../../scripts/ci-checks.sh) holds shared checks. On PRs, [`ci-matrix.py`](../../scripts/ci-matrix.py) selects affected projects and local dependencies; `main` tests every project.
 
-On pull requests, the Go and Python workflows test only the projects the change affects: [`scripts/ci-matrix.py`](../../scripts/ci-matrix.py) keeps a project when the diff touches its directory, a local dependency its manifest declares (Go `replace` paths, uv workspace and path sources, pytest import paths), `contracts/`, `scripts/` or the workflows. Pushes to `main` test every project.
+## Test techniques
 
-## Test design
+| FSDS criterion | Implementation example |
+|---|---|
+| API tests with fixtures and mocks | [Feast server tests](../../src/data-pipeline/feast/tests/test_server.py), [fixtures](../../src/data-pipeline/feast/tests/conftest.py): FastAPI client against a store double |
+| Equivalence partitioning and boundary values | [Fraud policy](../../src/payment-gateway/fraud/internal/domain/policy_test.go): amount/account-age boundaries; [request features](../../src/data-pipeline/feast/tests/test_request.py): country pair, history and scoring hour |
+| Mutation testing, >80% on changed code | [Go CI](../../.github/workflows/go-ci.yml); the recorded full-run results below separate killed mutants from untested mutants |
+| Property-based idempotency | [Gold ranges](../../src/data-pipeline/batch/tests/gold/test_gold_ranges.py): reruns and range splits; [payment lifecycle](../../src/payment-gateway/payments/internal/domain/payment_property_test.go): arbitrary command sequences preserve state invariants |
+| API throughput and latency | [Knowledge API Locust report](../llm/rag.md#load-test-and-autoscaling); Feast retrieval load-test evidence remains pending |
 
-- Tests protect business rules, boundaries, failure modes and integration contracts; there are no configuration-only or getter tests.
-- Equivalence partitions and boundary values parametrize rule tests, for example the fraud policy's amount and account-age boundaries and the generator's invalid schema schedules.
-- Property-style determinism checks: the generator produces equal records across worker counts, shard splits and interruption.
-- Property-based tests generate the inputs and check invariants instead of fixed examples (Hypothesis in Python, `rapid` in Go):
-  - **Idempotent ranges:** any split of a Silver or Gold range into consecutive runs, followed by any rerun of part of it, builds the same tables as one backfill; the daily schedule is always one of the examples.
-  - **Streaming windows:** any arrival sequence with late starts, redeliveries and checkpoint restores matches the reference snapshot.
-  - **Payment lifecycle:** any command sequence keeps one active attempt, moves phases forward only, accepts nothing after a terminal status and leaves the state untouched when it rejects a command.
-  - **Service rules:** fraud rules fire exactly when their conditions hold and never flip with a higher amount; backoff stays within its cap; webhook signatures change with every input; fingerprints ignore formatting only; card numbers pass Luhn exactly when valid.
-- Go mutation testing runs on the changed code of each pull request.
-- The Feast request view and the feature server are tested with fixtures and mocks: the server through FastAPI's test client against a Feast store double, and the view through equivalence partitions and boundary values of the country pair, account age, 30-day history and scoring hour, plus a Hypothesis property that the same request always gives the same features.
-
-## Evidence
+## Coverage and mutation results
 
 Coverage from CI (`python-test-evidence-*` and `go-test-evidence-*` artifacts), 2026-11-01. Go counts only handwritten code; sqlc and protobuf output is excluded.
 
@@ -54,6 +47,10 @@ Coverage from CI (`python-test-evidence-*` and `go-test-evidence-*` artifacts), 
 | processor-simulator | 100% | 37.2% | 6 killed, 0 lived, 40 not covered: 100%, 13.0% |
 | shared | | 42.1% | 64 killed, 0 lived, 25 not covered: 100%, 71.9% |
 
-Every mutant that a test reaches is killed. The business rules sit in the domain packages, which reach 87–100%; the rest of each module is gRPC and HTTP wiring, repositories covered by the Postgres integration tests, and process startup, which the per-module totals include.
+Domain coverage is 87–100%; whole-module coverage includes transport, repositories and startup. These figures do **not** establish the rubric's >90% coverage target for every project. Captures of the CI test/coverage output are still missing; the tables record artifact results.
 
-**Pending evidence:** a Locust load test of the feature-retrieval API, once Feast retrieval is enabled.
+## Deployed verification
+
+The 2026-10-23 acceptance run against prod is recorded in the [gateway verification evidence](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md): synthetic tokenization; approve, risk-decline, processor-decline, timeout-then-recovery and expiry paths; decline-then-approve through the hosted page with signed webhooks; Redis fallback; Connect restart and Kafka outage catch-up; byte-equal topic payloads; and the ledger lifecycle check. A short smoke run does not establish the monthly availability objective or the nominal load target.
+
+On 2026-11-03, Edge canary acceptance covered no-data rejection, fault rejection and healthy promotion ([screenshots and thresholds](cd.md#edge-progressive-delivery)). The healthy run returned 14,400/14,400 checkout GETs as HTTP 200 over 20 minutes at 12 requests/s, with client p95 105 ms. This measures checkout reads, not feature-retrieval capacity or payment processing.

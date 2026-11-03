@@ -1,49 +1,28 @@
 # Observability
 
-The shared platform owns Victoria agents, Victoria stores and Grafana. The six Go services (edge, payments, fraud, notifier, vault-simulator and processor-simulator) use `shared/observe` to export traces and application metrics over OTLP/HTTP. Logs remain single-line JSON stdout with lowercase `level`, `msg`, `service`, and actual active `trace_id`/`span_id` fields. Startup logs carry no fabricated span IDs. Fraud retains the stable `fraud-service` identity; `service.instance.id` and `service.version` carry pod UID and image revision separately.
+The platform owns VictoriaMetrics, VictoriaLogs, VictoriaTraces and Grafana. Application charts own telemetry settings, dashboards and alert rules; no separate application monitoring stack is deployed.
 
-Both exports default to disabled in the binaries. Enable them explicitly with `TRACING_ENABLED=true` and `METRICS_ENABLED=true`, plus the corresponding full HTTP URLs in `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`. The chart points traces to `http://vtagent-vmks.observability.svc.cluster.local:10429/insert/opentelemetry/v1/traces` and metrics to `http://vmagent-vmks.observability.svc.cluster.local:8429/opentelemetry/v1/metrics`, sets cluster/environment resource attributes and uses the SDK’s default cumulative metric temporality, and uses a 60-second metric interval (30 seconds for prod Edge) and parent-based 0.1 trace sampling. Incoming sampling decisions are retained. Chart `telemetry.metricsEndpoint` and `telemetry.tracesEndpoint` control the destinations. The agents buffer remote writes on bounded persistent queues separate from the stores; no OpenTelemetry collector is used.
+## Collection and signals
 
-Export queues hold at most 512 spans in batches of 128. Each export has a 2 s timeout; each provider has an independent 3 s shutdown budget that does not inherit cancelled request contexts. Readiness, payment processing and Kafka acknowledgements do not depend on exporter availability. OTLP uses HTTP/protobuf to the cluster-local Victoria agents, consistent with existing internal transport. No OTLP log exporter, Prometheus listener on 8010 or application collector is installed. Namespace-local dashboards and rules use the shared platform services.
+Six Go services export metrics and traces through [`shared/observe`](../../src/payment-gateway/shared/observe) over OTLP/HTTP. JSON stdout logs carry active `trace_id`/`span_id` fields for correlation. [Chart telemetry values](../../infra/charts/payment-gateway/values.yaml) configure the shared agents, export intervals and sampling; the binaries default to disabled.
 
-HTTP spans use route templates and exclude query strings, paths containing tokens, bodies and headers. gRPC stats handlers instrument clients and servers, suppressing health probes. Fraud policy evaluation has its own child span. Webhook delivery records a client span without capturing the destination URL, signatures or body; its W3C headers propagate the active context. Arbitrary baggage is neither extracted nor injected.
+| Signal | What it measures |
+|---|---|
+| HTTP / gRPC | Request rate, failures and latency; business declines are successful RPCs |
+| Payments / Fraud / processor | Attempt duration, pending outcomes, Redis fallback, decisions and policy duration |
+| Notifier | Delivery outcomes, pending age and consumer progress |
+| Kafka / Flink | Broker replication, consumer lag, running jobs and checkpoint failures through native exporters |
+| Workflow / Spark / Rollout | Shared controller signals and pod state; no executor-level Spark instrumentation |
 
-Payment events store nullable `tracingspancontext` beside immutable protobuf bytes. The carrier is W3C `traceparent`/`tracestate` serialized as Java Properties. EventRouter forwards this field explicitly as the `tracingspancontext` Kafka header, including when Connect has no active tracing SDK. Notifier also accepts native W3C headers, starts a consumer span, and persists the resulting context with the delivery. Each retry restores that parent and starts a distinct attempt span. Missing or malformed metadata leaves valid business events consumable; bodies, signatures, ordering and acknowledgement rules are unchanged. This does not configure Kafka Connect to export Java spans.
+Trace context crosses gRPC and the Debezium event header into notifier retries. Bounded export queues/timeouts keep payment readiness and processing independent of telemetry availability. Spans exclude bodies, query strings, token-bearing paths and sensitive headers; metric labels exclude payment/customer/event IDs.
 
-Application instruments:
+## Dashboards and alerts
 
-| OTLP instrument | Unit | Attributes |
-| --- | --- | --- |
-| `payments.attempt.duration` | `s` | none |
-| `payments.attempt.failures` | `{attempt}` | `reason` |
-| `payments.pending.outcome.age` | `s` | none |
-| `payments.redis.idempotency.hits` | `{lookup}` | none |
-| `payments.redis.idempotency.misses` | `{lookup}` | none |
-| `payments.redis.idempotency.errors` | `{operation}` | none |
-| `notifier.deliveries` | `{attempt}` | `outcome` |
-| `notifier.deliveries.pending` | `{delivery}` | none |
-| `notifier.oldest.pending.age` | `s` | none |
-| `notifier.consumed.events` | `{event}` | `result` |
-| `notifier.consumer.errors` | `{error}` | `stage` |
-| `notifier.consumer.last.event.age` | `s` | none |
-| `notifier.consumer.last.commit.timestamp` | `s` (Unix epoch) | none |
-| `processor.sale.outcomes` | `{sale}` | `outcome` |
-| `rpc.server.call.duration` histogram count and duration | `s` | standard RPC method/status attributes |
-| `fraud.decisions` (one per decision); `fraud.reason.matches` (one per matched reason) | `{decision}`; `{match}` | `outcome`, `policy.version`; `reason`, `policy.version` |
-| `fraud.policy.duration` | `s` | `outcome`, `policy.version` |
-| `http.server.request.duration`, `http.client.request.duration` histogram count and duration | `s` | bounded method, route (server only), status/error |
+[Gateway dashboards](../../infra/charts/payment-gateway/dashboards) and [monitoring rules](../../infra/charts/payment-gateway/templates/monitoring.yaml) cover service operations and canary health. [Data dashboards](../../infra/charts/data-pipelines/dashboards) cover Kafka/Flink and job state. Grafana discovers their labelled ConfigMaps; VMAgent/VMAlert select application namespaces.
 
-RPC full-call duration is separate from fraud policy duration. Successful declines return gRPC OK and count as successful RPCs. RPC instruments are supplied by the pinned `otelgrpc` version; confirm their actual storage names during acceptance. Per-payment/customer/request/event identifiers are excluded from metric labels. Platform container metrics cover resource capacity; redundant Go/process Prometheus collectors have been removed.
+Select the environment before comparing results. VictoriaMetrics preserves dotted OTLP names and resource labels; canary queries also select `rollout.revision`. Missing series remain **No data**, never a healthy zero. The canary thresholds are acceptance settings, not measured SLOs.
 
-## Operational views
-
-The gateway and data charts ship the **Payment gateway operations** (`/d/gateway-operations`) and **Payment data operations** (`/d/gateway-data-operations`) dashboards. Select the environment before comparing requests, errors, latency, notification backlog, workload readiness and restarts. Rollout panels require the shared controller; Kafka and Flink panels require their native exporters. Missing series remain **No data**; they do not imply a healthy zero. Existing ClickHouse analytics dashboards remain separate.
-
-VictoriaMetrics preserves dotted OTLP names and resource labels. Queries use selectors such as `{__name__="http.server.request.duration_count","deployment.environment"="prod","service.name"="edge"}`. The chart adds namespace and candidate `rollout.revision`; source `service.version` and pod UID remain separate. Shared duration histograms measured in seconds include subsecond buckets and a one-second boundary. The one-second p95 canary threshold is an initial acceptance setting, not a measured SLO.
-
-Strimzi exports bounded broker JMX measurements and payment-topic consumer lag on 9404. The pinned Flink image already includes `plugins/metrics-prometheus/flink-metrics-prometheus-2.2.1.jar`; live and historical replay jobs enable that reporter on 9249; collection is restricted to the observability vmagent identity. Workflow/Spark views reuse shared controller metrics and Kubernetes pod state. They do not claim executor-level instrumentation. Enabling these exporters can restart Kafka and upgrade Flink; check active replay/backfill state first.
-
-Namespace-local VMRules cover sustained gateway failures/latency, notification age, Kafka lag, failed data pods, checkpoint failures and required-signal absence. Flink alerts follow `features.enabled`; Edge alerts target its Rollout. The shared VMAlert/Alertmanager owns evaluation and routing. Its current `blackhole` receiver retains alert visibility in the shared UI without external notification delivery. Grafana must discover dashboard ConfigMaps in `payment-gateway` and `data`; VMAgent/VMAlert must select those namespaces.
+Namespace-local rules cover sustained errors/latency, notification age, lag, failed jobs, checkpoint failures and missing signals. Shared Alertmanager currently routes to `blackhole`: alerts evaluate and are visible, but no external notifications are delivered. LLM-specific telemetry remains in [LLM observability](../llm/observability.md).
 
 ## Verification
 
@@ -61,7 +40,7 @@ Over the same window, Kafka reports zero under-replicated partitions and Flink r
 
 ![Kafka and Flink metrics during the acceptance window](images/data-operations-2026-11-03.png)
 
-Grafana Explore retains firing samples for `EdgeRolloutDegraded` during the aborted attempts (16:55–18:05 UTC; this Explore capture displays UTC−05:00). Gaps mean no firing series, not a measured zero. The completed Rollout above corroborates recovery; this graph does not prove external notification delivery.
+Grafana Explore retains firing samples for `EdgeRolloutDegraded` during the aborted attempts (16:55–18:05 UTC; this Explore capture displays UTC−05:00). Gaps mean no firing series, not a measured zero. The [completed Rollout](cd.md#edge-progressive-delivery) corroborates recovery; external notifications remain disabled.
 
 ![Historical firing samples for the Edge rollout failure alert](images/edge-rollout-alert-2026-11-03.png)
 

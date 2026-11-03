@@ -113,7 +113,7 @@ flowchart TB
     F -.->|"planned scoring"| KS
 ```
 
-Only Edge `/checkout/*` is publicly routed. Internal APIs are ClusterIP-only behind the Istio ambient mesh with service-account authorization; see [security](deployment/security.md). The marketplace context is in the [marketplace gateway note](https://github.com/phuchoang2603/refurbished-marketplace/blob/main/docs/ecommerce-fraud-gateway.md).
+Only Edge `/checkout/*` is publicly routed. Internal APIs are ClusterIP-only behind the Istio ambient mesh with service-account authorization; see [routing](deployment/routing.md). The marketplace context is in the [marketplace gateway note](https://github.com/phuchoang2603/refurbished-marketplace/blob/main/docs/ecommerce-fraud-gateway.md).
 
 ## Roadmap
 
@@ -125,9 +125,9 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 
 | Area | Capability | Page | Status |
 |---|---|---|---|
-| Engineering fundamentals | Multi-stage Docker images and size comparison | [Docker images](deployment/docker.md) | Done; Spark image 5.07 → 3.06 GB, streaming −25% compressed |
+| Engineering fundamentals | Multi-stage Docker images and size comparison | [Docker images](deployment/cd.md#docker-images) | Done; Spark image 5.07 → 3.06 GB, streaming −25% compressed |
 | Offline generator | Skew, schema evolution, duplicates; ≥ 100 GB stored for Bronze ingestion | [Offline data](data/offline.md) | Done (v19: 133.5 GB) |
-| Online generator | Late arrivals and streaming duplicates | [Online data](data/online.md) | Done; see [evidence](data/online.md#evidence) |
+| Online generator | Late arrivals and streaming duplicates | [Online data](data/online.md) | Done; see [evidence](data/online.md#dev-validation) |
 | Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline data](data/offline.md) | Recorded AWS v19 completed; controlled skew timings and schema/dedup UI comparisons pending |
 | Flink jobs | Baseline, late arrivals, duplicates, windows, dead-letter topic; output ends at the feature journal topic | [Online data](data/online.md) | Local correctness and dev recovery covered; live too-late proof and metrics-panel capture pending |
 | Storage | Lakehouse compaction, partitioning, Z-order; ClickHouse warehouse indexing (`ORDER BY`, skip indexes) | [Storage](data/storage.md) | Done on v19: partitioning, write order, mart codecs and `EXPLAIN`; a Z-order run showed no file skipping at one file per day |
@@ -166,12 +166,12 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 
 | Area | Capability | Page | Status |
 |---|---|---|---|
-| Verification | Coverage, equivalence partitioning and boundary values, mutation testing (> 80% on changed code), property-based tests, load tests | [CI](deployment/ci.md) | Partial |
-| CI/CD | Test, build and deploy for services and pipelines | [CI](deployment/ci.md), [CD](deployment/cd.md) | Done |
-| Routing | Gateway in front of services, HTTPS | [Security](deployment/security.md) | Done for Edge |
-| Infrastructure as code | Cluster and cloud provisioning, configuration | [Infrastructure](deployment/infra.md) | Done (platform repository) |
-| Observability | Metrics, logs and traces for services | [Observability](deployment/observability.md) | Done for Go services |
-| Security | Central secrets, service-to-service authorization | [Security](deployment/security.md) | Done |
+| CI, validation and verification | Coverage, boundary tests, changed-code mutation tests, property tests and load tests | [CI](deployment/ci.md) | Partial; coverage and remaining proof gaps listed |
+| Infrastructure and IaC | Cloud/VM provisioning, Talos bootstrap and shared operators | [Infrastructure](deployment/infra.md) | Platform-owned; provisioning captures pending |
+| Docker, CD and canary deployment | Image optimization, test/build/deploy flow and guarded Edge promotion | [Delivery](deployment/cd.md) | Prod canary verified 2026-11-03 |
+| Observability | Metrics, logs, traces and alert evaluation | [Observability](deployment/observability.md) | Prod captures recorded; external alert delivery disabled |
+| Security and secrets | Doppler, External Secrets and service authorization | [Security](deployment/security.md) | Implemented; secret-delivery capture pending |
+| Routing and gateway | Public checkout, private APIs, authentication and gateway policy | [Routing](deployment/routing.md) | Edge verified; remaining access-control proof listed |
 
 ## Limits and scope
 

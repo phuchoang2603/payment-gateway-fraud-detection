@@ -31,9 +31,9 @@
 
 **Deployment**
 
-- [CI](deployment/ci.md)
-- [CD](deployment/cd.md)
-- [Docker images](deployment/docker.md)
-- [Infrastructure](deployment/infra.md)
-- [Security](deployment/security.md)
+- [CI, validation and verification](deployment/ci.md)
+- [Infrastructure and IaC](deployment/infra.md)
+- [Docker, CD and canary deployment](deployment/cd.md)
 - [Observability](deployment/observability.md)
+- [Security and secrets](deployment/security.md)
+- [Routing and gateway](deployment/routing.md)
