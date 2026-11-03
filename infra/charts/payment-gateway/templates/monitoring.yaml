@@ -57,7 +57,6 @@ spec:
           annotations:
             summary: Required gateway background telemetry is missing
             dashboard: /d/gateway-operations
-        {{- if .Values.rollout.enabled }}
         - alert: EdgeRolloutDegraded
           expr: rollout_info{namespace={{ .Release.Namespace | quote }},name="edge",phase=~"Abort|Timeout|Error|InvalidSpec"} == 1
           for: 1m
@@ -65,5 +64,4 @@ spec:
           annotations:
             summary: Edge progressive delivery is degraded
             dashboard: /d/gateway-operations
-        {{- end }}
 {{- end }}

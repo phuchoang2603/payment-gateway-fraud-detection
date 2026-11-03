@@ -383,8 +383,8 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "Workflow failures",
-      "description": "Requires shared workflow controller scrape. No data explicitly means lifecycle series unavailable.",
+      "title": "Shared Workflow states",
+      "description": "Native controller phase counts across its watched namespaces. Use Data pod lifecycle and logs for repository-specific runs.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -398,8 +398,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "argo_workflows_count{environment=\"$environment\",phase=\"Failed\"}",
-          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+          "expr": "argo_workflows_gauge{environment=\"$environment\",namespace=\"operators\"}",
+          "legendFormat": "{{phase}}"
         }
       ],
       "fieldConfig": {

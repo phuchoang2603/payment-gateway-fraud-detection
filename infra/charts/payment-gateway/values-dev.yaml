@@ -1,5 +1,3 @@
-rollout:
-  enabled: true
 telemetry:
   cluster: dev-talos
   environment: dev

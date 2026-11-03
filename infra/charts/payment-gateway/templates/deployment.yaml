@@ -2,7 +2,7 @@
 {{- $port := first $svc.ports }}
 {{- $image := include "payment-gateway.image" (dict "image" $svc.image "global" $.Values.global) }}
 ---
-{{- if and (eq $name "edge") $.Values.rollout.enabled (not $.Values.rollout.migration) }}
+{{- if eq $name "edge" }}
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 {{- else }}
@@ -17,8 +17,8 @@ metadata:
   labels:
     {{- include "payment-gateway.selector" $name | nindent 4 }}
 spec:
-  replicas: {{ if and (eq $name "edge") $.Values.rollout.enabled $.Values.rollout.migration }}{{ $.Values.rollout.legacyReplicas }}{{ else }}{{ $svc.replicaCount }}{{ end }}
-  {{- if and (eq $name "edge") $.Values.rollout.enabled (not $.Values.rollout.migration) }}
+  replicas: {{ $svc.replicaCount }}
+  {{- if eq $name "edge" }}
   {{- include "payment-gateway.canary" $ | nindent 2 }}
   {{- end }}
   selector:
@@ -77,14 +77,14 @@ spec:
               value: {{ $svc.telemetry.metricsEndpoint | quote }}
             - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
               value: {{ $svc.telemetry.tracesEndpoint | quote }}
-            {{- if and (eq $name "edge") $.Values.rollout.enabled }}
+            {{- if eq $name "edge" }}
             - name: ROLLOUT_REVISION
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['rollouts-pod-template-hash']
             {{- end }}
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: {{ printf "k8s.cluster.name=%s,deployment.environment=%s,k8s.namespace.name=%s%s" $.Values.telemetry.cluster $.Values.telemetry.environment $.Release.Namespace (ternary ",rollout.revision=$(ROLLOUT_REVISION)" "" (and (eq $name "edge") $.Values.rollout.enabled)) | quote }}
+              value: {{ printf "k8s.cluster.name=%s,deployment.environment=%s,k8s.namespace.name=%s%s" $.Values.telemetry.cluster $.Values.telemetry.environment $.Release.Namespace (ternary ",rollout.revision=$(ROLLOUT_REVISION)" "" (eq $name "edge")) | quote }}
             - name: OTEL_TRACES_SAMPLER_ARG
               value: {{ $svc.telemetry.samplingRatio | quote }}
             - name: OTEL_METRIC_EXPORT_INTERVAL

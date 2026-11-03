@@ -1,27 +1,5 @@
-{{- if .Values.rollout.enabled }}
 {{- $edge := index (include "payment-gateway.services" . | fromYaml) "edge" }}
 {{- if not $edge }}{{ fail "Edge rollout requires the edge service" }}{{- end }}
-{{- if .Values.rollout.migration }}
-apiVersion: argoproj.io/v1alpha1
-kind: Rollout
-metadata:
-  name: edge
-  namespace: {{ .Release.Namespace }}
-  annotations:
-    argocd.argoproj.io/sync-wave: "5"
-spec:
-  replicas: {{ $edge.replicaCount }}
-  selector:
-    matchLabels:
-      {{- include "payment-gateway.selector" "edge" | nindent 6 }}
-  workloadRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: edge
-    scaleDown: never
-  {{- include "payment-gateway.canary" . | nindent 2 }}
----
-{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -73,4 +51,3 @@ spec:
           timeout: 10
           query: {{ .query | quote }}
     {{- end }}
-{{- end }}

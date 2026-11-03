@@ -34,7 +34,7 @@ flowchart LR
 
 | Chart | Namespace | Contents |
 |---|---|---|
-| `payment-gateway` | `payment-gateway` | The six Go services, their CNPG databases with separate owner and runtime roles, Payments idempotency Redis, secrets, routing and policies |
+| `payment-gateway` | `payment-gateway` | Edge Rollout and five Go Deployments, their CNPG databases with separate owner and runtime roles, Payments idempotency Redis, secrets, routing and policies |
 | `kafka` | `payment-gateway` | Kafka, Debezium Connect, Karapace and topic declarations |
 | `live-traffic` | `data` | Live simulator |
 | `data-pipelines` | `data` | Generator and pipeline WorkflowTemplates; Flink, Feast writer/server and Redis under `features.enabled`; OpenMetadata connections, the register job and on-demand discovery |
@@ -49,17 +49,11 @@ The prod release enables every application except `live-traffic`, `llm-platform`
 
 Only the public Edge checkout route uses a canary; the other five Go services remain Deployments. Internal callers use the stable `edge` Service. The existing Istio HTTPRoute retains its hostname, path, HTTPS header and timeouts, with `edge`/`edge-canary` weights controlled by Argo Rollouts. Argo CD ignores only this route's weights and the two Services' controller-owned hash selectors.
 
-Before setting `rollout.enabled`, the platform owner must install compatible pinned Rollouts CRDs/controller and the `argoproj-labs/gatewayAPI` plugin, grant access to the namespace and `edge` HTTPRoute, and permit controller queries to `http://vmsingle-vmks.observability.svc.cluster.local:8428`. Grafana discovery and controller metrics collection also belong to the platform. Prod runs Rollouts v1.10.1 (chart 2.43.8) and Gateway API plugin v0.17.0, pinned and delivered by the platform. The controller query path, scoped route permissions and shared scrape/discovery are verified.
-
-Adopt through separately published prod releases:
-
-1. Set `rollout.enabled: true`, `rollout.migration: true`, retaining `legacyReplicas: 1`. The temporary `workloadRef` uses `scaleDown: never`; verify the new Rollout replicas and stable endpoints before reducing legacy replicas.
-2. Set `legacyReplicas: 0` after stable checkout requests succeed through Rollout endpoints. Verify the stable-only route and Argo CD convergence.
-3. Publish the inline Rollout (`migration: false`) and prune the old Edge Deployment only after endpoint continuity is verified. Remove the temporary migration configuration after handover. Dev remains configuration-only; acceptance runs directly against prod.
+The platform supplies Rollouts v1.10.1 (chart 2.43.8) and Gateway API plugin v0.17.0, scoped access to the `edge` HTTPRoute, the metrics query path and shared Grafana/controller discovery. Edge runs as a native Rollout with its pod template in the application chart. Dev receives configuration only; acceptance runs directly against prod.
 
 Subsequent candidates receive 10%, 25%, then 50% of public checkout traffic. Each step warms up for five minutes and requires two passing observations, one minute apart: at least 100 candidate checkout requests in five minutes, 5xx fraction at most 1%, p95 at most one second and latest sample age at most 120 seconds. Queries select environment, namespace and Rollout pod hash; business declines do not count as 5xx. Empty, stale, non-finite or insufficient observations abort after warm-up; three consecutive query errors abort. The rollout's progress deadline is 30 minutes. Low traffic cannot silently promote.
 
-For an incident, run `kubectl --kubeconfig ~/.kube/talos-prod.yaml argo rollouts abort edge -n payment-gateway` when the kubectl plugin is installed, then revert the source image/chart and publish through the existing release flow. Confirm stable endpoints and HTTPRoute weights before considering recovery complete. Abort does not undo database migrations or changes to other services. Reverting controller adoption requires ready Deployment endpoints and stable-only routing before removing Rollout resources.
+For an incident, run `kubectl --kubeconfig ~/.kube/talos-prod.yaml argo rollouts abort edge -n payment-gateway` when the kubectl plugin is installed, then revert the source image/chart and publish through the existing release flow. Confirm stable endpoints and HTTPRoute weights before considering recovery complete. Abort does not undo database migrations or changes to other services.
 
 ## Runtime configuration
 

@@ -1,6 +1,3 @@
-rollout:
-  enabled: true
-  migration: true
 telemetry:
   cluster: prod-talos
   environment: prod
@@ -14,6 +11,8 @@ ingress:
     hostname: pay-gateway.phuchoang.sbs
 services:
   edge:
+    telemetry:
+      metricExportInterval: 30000
     env:
     - name: EDGE_HTTP_ADDR
       value: :8080
