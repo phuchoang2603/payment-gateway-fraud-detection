@@ -121,6 +121,20 @@ What it shows:
 
 The on-demand `warehouse-benchmark` can additionally compare raw Iceberg and an unsorted copy, but it makes a second 6 GiB copy of the fact on the shared 30 GiB volume, so it was not run on prod.
 
+### Mart dashboards
+
+Three dashboards—payments overview, merchant drill-down and fraud outcomes—query the published `marts.*` tables. They ship from [`infra/charts/data-pipelines/dashboards`](../../infra/charts/data-pipelines/dashboards) as ConfigMaps labelled `grafana_dashboard: "1"`; the platform Grafana sidecar discovers them in `data`. They are consumers of the warehouse, not OpenMetadata catalog assets.
+
+The `ClickHouse marts` datasource (UID `clickhouse-marts`) uses the native endpoint `clickhouse.data.svc.cluster.local:9000`, default database `marts` and read-only user `grafana`. Doppler supplies `CLICKHOUSE_GRAFANA_PASSWORD` to both the ClickHouse chart and platform Grafana through External Secrets. The platform provides the ClickHouse datasource plugin and permits Grafana traffic to port 9000. The server profile permits `max_execution_time` up to 65 seconds for the plugin's 60-second request deadline plus five seconds.
+
+The captures below show May 2026 from the recorded AWS backfill's former 180-day window. Current retention is 90 days; at that run's end, the window began on 2026-08-04. The historical rules policy produced no risk score, so the fraud view compares decisions with simulation truth rather than a score histogram.
+
+![Payments overview: daily attempts, approval and risk-decline rate, amounts, top merchants and a 56.4% hot-merchant share](images/grafana-payments-overview.png)
+
+![Merchant drill-down for the hot merchant: daily attempts with the approval rate on its own axis, outcome mix and recent attempts](images/grafana-merchant-drilldown.png)
+
+![Fraud outcomes: truth fraud caught against missed, chargeback rate (complete and provisional), risk decision against truth and the scenario breakdown](images/grafana-fraud-outcomes.png)
+
 ## Schemas and naming
 
 Table schemas are the data-product contracts, with generated references under [`products/`](products). The namespace or database names the layer and engine; a prefix names the role. Timestamps end in `_at` (business time) or `_ts` (SCD validity), surrogate keys in `_sk`, booleans start with `is_`; Feast's `event_timestamp` and `created` keep their names.

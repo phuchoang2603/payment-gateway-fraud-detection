@@ -87,25 +87,6 @@ Pipelines publish lineage (historical source and Kafka topics → Bronze → Sil
 
 ![OpenMetadata lineage: historical-payments-v19 → bronze.payment_events → silver.attempts → gold tables and fact_payment_attempt → fact_merchant_day](images/openmetadata-lineage.png)
 
-### Grafana dashboards
-
-Three dashboards (payments overview, merchant drill-down, fraud outcomes) live in [`infra/charts/data-pipelines/dashboards`](../../infra/charts/data-pipelines/dashboards) and ship as ConfigMaps labelled `grafana_dashboard: "1"` for the platform Grafana sidecar. They query only `marts.*` through the datasource UID `clickhouse-marts` as the read-only `grafana` user. They are not catalogued in OpenMetadata. The platform provides:
-
-1. the `grafana-clickhouse-datasource@4.23.3` plugin in the VictoriaMetrics stack's Grafana;
-2. a datasource named `ClickHouse marts` with UID `clickhouse-marts`: host `clickhouse.data.svc.cluster.local`, port 9000, native protocol, no TLS, user `grafana`, default database `marts`;
-3. Doppler keys `CLICKHOUSE_GRAFANA_PASSWORD` (this repository's ClickHouse chart and the platform Grafana) and `CLICKHOUSE_MARTS_PASSWORD` (this repository only), in dev and prod;
-4. an ExternalSecret in `observability` mapping `CLICKHOUSE_GRAFANA_PASSWORD` into Grafana;
-5. dashboard sidecar coverage of namespace `data`, with `folderAnnotation: grafana_folder`;
-6. if a NetworkPolicy restricts `data`, a rule allowing `observability/grafana` to reach `data/clickhouse` on TCP 9000.
-
-On prod the `grafana` user's profile allows `max_execution_time` up to 65 seconds, because clickhouse-go under the plugin sends the time left to its 60-second request deadline plus 5 seconds; a lower cap rejects every query. The historical policy is rule-based and records no risk score, so the fraud dashboard tables risk decisions against simulation truth instead of a score histogram. The screenshots cover May 2026, the first backfilled month inside the 180-day window the marts kept then; the window is now 90 days, so the live dashboards start at 2026-08-04.
-
-![Payments overview: daily attempts, approval and risk-decline rate, amounts, top merchants and a 56.4% hot-merchant share](images/grafana-payments-overview.png)
-
-![Merchant drill-down for the hot merchant: daily attempts with the approval rate on its own axis, outcome mix and recent attempts](images/grafana-merchant-drilldown.png)
-
-![Fraud outcomes: truth fraud caught against missed, chargeback rate (complete and provisional), risk decision against truth and the scenario breakdown](images/grafana-fraud-outcomes.png)
-
 ### RAG knowledge workflow and AI assets
 
 The RAG pipeline's `rag-knowledge` workflow also runs in `data`, from the [`rag-pipeline` chart](../../infra/charts/rag-pipeline). It is governed the same way: the knowledge-base contract's checks run through the shared checks image, and its exit handler publishes the run status and the lineage from the corpus container to `knowledge.chunks`.

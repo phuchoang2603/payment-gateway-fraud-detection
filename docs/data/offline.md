@@ -1,34 +1,60 @@
 # Offline data
 
-Historical Parquet → Spark Bronze → Silver → Gold features. ClickHouse builds analytics marts from published Silver. Argo Workflows runs the bounded stages; checks gate publication and OpenMetadata records results and lineage.
+Historical generation produces reproducible payment lifecycles and labels in Parquet. Spark preserves deliveries in Bronze, canonicalizes events and attempts in Silver, then builds Gold history features. ClickHouse builds analytics marts from Silver separately. Each stage changes the row's meaning as well as its schema.
 
-## Historical generator
+## Historical generation
 
-[`historical-full.yaml`](../../src/data-pipeline/simulator/configs/historical-full.yaml) defines v19: 365 days from 2025-10-29, seed 2603, 3M customers, 20K merchants, 3.9M payment methods and 4.2M devices. [`historical-dev.yaml`](../../src/data-pipeline/simulator/configs/historical-dev.yaml) supplies the smaller dev dataset. Implementation: [`world.py`](../../src/data-pipeline/simulator/simulator/world.py), [`lifecycle.py`](../../src/data-pipeline/simulator/simulator/lifecycle.py), [`historical.py`](../../src/data-pipeline/simulator/simulator/historical.py).
+[`historical-full.yaml`](../../src/data-pipeline/simulator/configs/historical-full.yaml) defines v19: 365 purchase-start days from 2025-10-29, seed 2603, 3M customers, 20K merchants, 3.9M payment methods and 4.2M devices. [`historical-dev.yaml`](../../src/data-pipeline/simulator/configs/historical-dev.yaml) uses a smaller population with the same generator.
 
-### Data problems
+### Model and sampling techniques
 
-| Problem | Generator configuration | Processing |
-|---|---|---|
-| Skew | `hot_merchant_share: 0.5`, merchant Zipf exponent 1.1; familiar/Zipf selection can also choose the hot merchant, giving about 56% observed share | AQE enabled; verify an actual skew split with the [controlled comparison](#controlled-skew-comparison) |
-| Schema evolution | Schema 2 → 3 on 2026-04-30; older Parquet physically lacks `assessment_id`, `evidence_sha256` and `user_agent_family` | Bronze merges schemas; contracts check field presence by version |
-| Duplicates | `duplicate_rate: 0.02`; copies retain `event_id` and business content, with a later `recorded_at` | Bronze keeps deliveries; Silver keeps the earliest identical copy and quarantines conflicting payments |
-| High cardinality | Configured entity domains above | Integration-scoped keys, bounded date ranges and exact distinct counts |
-| Delayed labels | Chargebacks become available 7–21 days after the attempt | Silver links against a 45-day lookback; training filters `label_available_at` by cutoff |
+The generator builds a synthetic world first, then purchases, then valid payment lifecycles. It does not sample every event column independently.
 
-Cardinality ratio is `count(DISTINCT key) / count(*)` for a named table/range, with nulls reported separately. Configured domain size is not an observed distinct count. For example:
+| Technique | Implementation and purpose |
+|---|---|
+| Deterministic random streams | [`world.py`](../../src/data-pipeline/simulator/simulator/world.py) derives NumPy `SeedSequence` streams from the seed, generation stage and stable day/customer/purchase keys. UUIDv5 identities and normalized HMAC fingerprints keep entities consistent. Worker count, shard assignment and reruns do not change the generated records. |
+| Unequal customer activity | A mean-normalized lognormal activity factor varies each customer's Poisson purchase count around `purchases_per_customer_day: 0.17`. This creates occasional and frequent buyers rather than one uniform rate. |
+| Calendar-aware arrival times | Region/timezone, local-hour weights, weekday multipliers and month multipliers shape purchase volume and timestamps. The [calibration file](../../src/data-pipeline/simulator/simulator/us-calibration.json) records assumptions; this is an illustrative synthetic population, not a fitted production traffic model. |
+| Popularity and hot-key skew | Merchant/category selection uses truncated Zipf distributions (exponents 1.1/1.2). Half of purchases explicitly select the hot merchant; familiar/Zipf selection can select it too, giving about 56% observed share. This stresses downstream merchant aggregations. |
+| Correlated context and spend | Purchases usually reuse familiar merchants (80%) and context (95%). Category/condition prices, customer spend and lognormal amount variation determine integer minor-unit amounts; device/network rotation and foreign-IP draws introduce changes. |
+| Fraud scenarios | High-value purchases, stolen cards, account takeover and card-testing bursts alter related amount/context/attempt behavior together. Friendly fraud adds a later chargeback case. Simulation truth remains separate from the rules policy's decision. |
+| Lifecycle expansion | [`lifecycle.py`](../../src/data-pipeline/simulator/simulator/lifecycle.py) expands each purchase into creation, attempt, risk decision and processor/result events. It models declines, retries, unknown processor outcomes and expiry; aggregate versions preserve payment order. |
+| Deliberate data problems | Each event has a 2% chance of one republished copy with the same `event_id` and business content but `recorded_at` 1–300 seconds later. Chargebacks are reported 7–21 days after successful eligible attempts; absent chargebacks are unknown, not negative. |
+
+Configured entity-domain sizes are not observed distinct counts. Cardinality ratio means `count(DISTINCT key) / count(*)` for a named table/range, with nulls reported separately. For example:
 
 ```sql
 SELECT count(*) AS attempts,
        uniqExact(customer_id) / nullIf(count(*), 0) AS customer_cardinality_ratio,
-       uniqExact(merchant_id) / nullIf(count(*), 0) AS merchant_cardinality_ratio
+       uniqExact(merchant_id) / nullIf(count(*), 0) AS merchant_cardinality_ratio,
+       countIf(customer_id IS NULL) AS customer_nulls,
+       countIf(merchant_id IS NULL) AS merchant_nulls
 FROM lakehouse.`silver.attempts`
 WHERE payment_day BETWEEN '2026-09-01' AND '2026-09-30';
 ```
 
-### Publication and reruns
+### Source schema and version change
 
-Submit `generate-historical` in `data`. Shards write per-day Parquet, separate `.v2`/`.v3` event files and `_day.json` markers; `config.json` pins inputs and the generator digest, and `manifest.json` publishes the inventory. Complete days are skipped, incomplete days regenerated, and changed inputs or an already published version are refused. Credentials come from Secrets; roots and shard settings come from chart values.
+[`arrow.py`](../../src/data-pipeline/simulator/simulator/arrow.py) defines typed Arrow schemas; [`historical.py`](../../src/data-pipeline/simulator/simulator/historical.py) writes Zstd-compressed Parquet in customer chunks with buffered row groups. Files are organized by purchase-start day, not by label availability.
+
+| Source output | Row grain | Schema |
+|---|---|---|
+| `payment_events/date=…/part-….v2.parquet` or `.v3.parquet` | One lifecycle event delivery; duplicates intentionally remain | Envelope: `event_id`, `payment_id`, `integration_id`, `aggregate_version`, `schema_version`, `occurred_at`, `recorded_at`. One nested payload, such as `attempt_started` or `risk_decision_recorded`, supplies the business fields. |
+| `fraud_labels/date=…/part-….parquet` | One label observation per attempt/source | `integration_id`, `payment_id`, `attempt_id`, `is_fraud`, `occurred_at`, `label_available_at`, `source` and optional `scenario`. Truth and chargeback observations remain separate. |
+
+The event's `occurred_at` selects the schema version: v2 before 2026-04-30, v3 from that instant. A single purchase-day partition can contain both versions when its lifecycle crosses the cutover.
+
+| Nested field added in v3 | Physical v2 Parquet | v3 meaning |
+|---|---|---|
+| `attempt_started.signals.user_agent_family` | Field absent | Client user-agent family |
+| `risk_decision_recorded.assessment.assessment_id` | Field absent | Durable assessment identity |
+| `risk_decision_recorded.assessment.evidence_sha256` | Field absent | Assessment evidence digest |
+
+The generator removes these fields from both records and Arrow schemas for v2; it does not merely fill a v3-shaped file with nulls. [Generation tests](../../src/data-pipeline/simulator/tests/test_generation.py) verify physical schemas, occurrence-time cutover and equal records across worker counts, shards and interrupted runs.
+
+### Publication and recorded generation
+
+Submit `generate-historical` in `data`. Shards write per-day Parquet, separate `.v2`/`.v3` event files and `_day.json` markers; `config.json` pins inputs and the generator digest, and `manifest.json` publishes the inventory. Complete days are skipped, incomplete days regenerated, and changed inputs or an already published version are refused. Publication also enforces the configured 100 GB minimum source size. Credentials come from Secrets; roots and shard settings come from chart values.
 
 | Dataset / run | Events | Labels | Files / size |
 |---|---:|---:|---|
@@ -38,62 +64,87 @@ Submit `generate-historical` in `data`. Shards write per-day Parquet, separate `
 
 Dev uses `s3://platform-dev/datasets/payment-gateway/historical/v18`; GCP uses `s3://talos-proxmox-prod-platform/datasets/payment-gateway/historical/v19`. GCP's manifest SHA-256 is `78ee54fe2a607ae0c128bc6765d89238f28d00270fca5ad48a8fed44fd0f8608`, matching the existing live-traffic pin. Its per-file rows/bytes, unique paths and 365 dates reconcile; this check did not reread every Parquet object or run downstream jobs. The recorded dev/AWS readbacks found no empty parts and verified physical v2/v3 schemas.
 
-## Spark processing
+## Spark transformations
 
 <a id="pipeline"></a>
 
-`dp1-bronze` ingests raw data; `dp-pipeline(start, end)` builds Silver, then Gold and the marts in parallel. Each layer writes an audit branch/staging table, validates, then publishes. Daily runs and backfills use the same range-bounded jobs. Plan steps skip outputs whose range, input snapshots and batch image already match; no separate progress database is needed.
+`dp1-bronze` ingests the published source. `dp-pipeline(start, end)` builds Silver, then Gold features and the marts in parallel because both consume Silver. Each output goes to an audit branch or staging table, passes contract checks, then publishes. Daily runs and monthly backfills share these range-bounded jobs; plan steps skip matching range/input-snapshot/image outputs.
 
 ```mermaid
 flowchart LR
-    files[Historical Parquet] --> bronze[Bronze]
-    kafka[Kafka offsets] --> bronze
-    bronze --> silver[Silver]
-    silver --> gold[Gold daily features]
-    silver --> marts[ClickHouse marts]
-    gold --> training[Feast / training]
+    raw["Parquet: nested event deliveries + label observations"] --> bronze["Bronze: same business schema + provenance"]
+    bronze --> silver["Silver: canonical events + flat attempts + linked labels"]
+    silver --> gold["Gold: entity/time features, SCD2 profiles, training labels"]
+    silver --> marts["Marts: attempt fact + merchant/day aggregates"]
 ```
 
-### DP1: raw → Bronze
+### DP1: source deliveries → Bronze
 
-[`bronze/ingest.py`](../../src/data-pipeline/batch/batch/bronze/ingest.py) keeps every delivery and source provenance. Historical ingestion validates manifest paths/sizes, reads all files with `mergeSchema=true`, replaces only that dataset version and verifies per-file row counts. Kafka ingestion resumes at the committed rows' `max(_kafka_offset) + 1`; undecodable/invalid records go to `bronze.rejected_records`. Progress survives compaction because it is stored with the rows.
+[`bronze/ingest.py`](../../src/data-pipeline/batch/batch/bronze/ingest.py) validates manifest paths/sizes, reads all event parts with `mergeSchema=true` and conforms them by field name to the target [Bronze schema](../../src/data-pipeline/batch/batch/bronze/schema.py). Historical ingestion replaces only that dataset version and verifies written row counts per source file.
+
+| Change at this boundary | Bronze result |
+|---|---|
+| Mixed physical v2/v3 schemas | One typed event schema; missing nested v2 fields become null. Existing payloads, IDs, event versions and delivery timestamps are retained; `payload_case` identifies the populated payload. Schema version still determines which fields a contract requires. |
+| Source file → queryable Iceberg row | Add `_source`, `_dataset_version`, `_source_file`, `_ingested_at` and `_run_id`. Kafka provenance fields are null for historical input. |
+| Delivery and label grain | `bronze.payment_events` keeps every delivery, including duplicates; `bronze.fraud_labels` keeps label observations. No attempt-level flattening or feature calculation happens here. |
+
+For the Kafka input mode, the same tables also hold decoded records with topic/partition/offset/timestamp provenance. Invalid records go to `bronze.rejected_records`; committed row offsets determine restart progress even after compaction.
+
+**Technique and tradeoff.** Historical files already touch few day partitions, so Bronze uses local fanout writes instead of a redundant hash redistribution. Recorded AWS DP1 hash distribution wrote about 202 GB of shuffle; this is write-layout evidence, not proof of a skew-join speedup.
 
 ![Recorded DP1 workflow: Spark, checks and publish](images/argo-dp1-bronze.png)
 
-### Silver
+### DP2: Bronze → canonical Silver
 
-[`silver/curate.py`](../../src/data-pipeline/batch/batch/silver/curate.py) reads Bronze days `start − 1` through `end + 1`, assigns each payment to its first event's UTC day and overwrites only the requested payment days. Labels are partitioned by availability day and link against 45 days of attempts.
+[`silver/curate.py`](../../src/data-pipeline/batch/batch/silver/curate.py) reads Bronze from `start − 1` through `end + 1`, assigns each payment to its first event's UTC day and overwrites only the requested payment days. This keeps a lifecycle crossing midnight together. Labels are rebuilt by availability day and linked against 45 days of attempts.
 
-| Output | Grain / rule |
+| Silver output | Schema and grain change | Transformation |
+|---|---|---|
+| `silver.payment_events` | One canonical row per `event_id`; keeps the nested envelope/payload and adds `event_hash` and `payment_day`, retaining `_source` rather than file/offset provenance | Hash business fields excluding `recorded_at`; group by event ID, retain the earliest identical delivery. |
+| `silver.rejected_events` | Rejection metadata plus serialized offending rows | Different hashes for one event ID quarantine every event of the affected payment, preventing a partly accepted lifecycle. |
+| `silver.attempts` | One flat row per `(integration_id, payment_id, attempt_id)` | Group start/decision/result events by attempt and aggregate version, join payment status, derive outcome and `lifecycle_valid`. |
+| `silver.labels` | One deduplicated observation with `observation_id`, attempt/outcome references and `linkage` | Distinguish linked, pending, orphan and violation; orphan/violation observations fail publication checks. |
+
+For example, nested `attempt_started.context.snapshot.total.minor_units` becomes `silver.attempts.amount_minor` (`bigint`), customer context becomes `customer_id`, and assessment outcome/ID become `risk_outcome`/`assessment_id`. `started_at` is server event time; `attempted_at` preserves client time. Terminal events produce `outcome`/`outcome_at`; pending/unknown attempts remain unresolved rather than becoming invented declines. v2 rows retain null assessment IDs after flattening. Raw evidence digests remain in canonical events rather than becoming attempt features.
+
+**Deduplication and schema checks.** Two identical `evt-1` copies become one; two `evt-2` copies with amounts 100/999 quarantine all three deliveries of their payment ([executable fixture](../../src/data-pipeline/batch/tests/silver/test_silver.py)). Recorded Bronze counts were 514,342,841 v2 and 469,384,242 v3 events: the new decision fields were absent in all 101,943,941 v2 decisions and present in all 93,028,261 v3 decisions. These establish correctness; side-by-side schema/dedup Spark UI captures remain missing.
+
+**Scale techniques.** A narrow event-ID/hash aggregation replaces a broadcast of about 20M duplicate IDs; attempt construction uses one grouped aggregation instead of separate payload windows and joins. Range overwrites avoid full-history recomputation. `persist(MEMORY_AND_DISK)` allows lost Spot blocks to be recomputed from lineage instead of relying on local checkpoints.
+
+**Controlled skew comparison.** [`silver/benchmark.py`](../../src/data-pipeline/batch/batch/silver/benchmark.py) compares a cached, pinned range with skew handling off, AQE skew handling on and 16-bucket salting. Broadcast is disabled; counts/checksums must agree and the AQE plan must show a real skew split. Run `dp2-benchmark start=2026-09-01 end=2026-09-30` after Silver publishes that range. Production timings remain unrecorded; AQE being enabled alone does not demonstrate an optimization.
+
+### DP3: Silver → Gold history features
+
+[`gold/features.py`](../../src/data-pipeline/batch/batch/gold/features.py) and [`gold/windows.py`](../../src/data-pipeline/batch/batch/gold/windows.py) implement [`fraud-history-batch-v1`](../../contracts/features/fraud-history-batch-v1.yaml). The grain changes from an attempt to an entity at a UTC-midnight anchor.
+
+| Gold output | Key / time fields | Derived schema |
+|---|---|---|
+| `feat_customer_daily` | `integration_id`, `customer_id`, `event_timestamp`; `created` identifies the source snapshot's commit time | Nullable counts such as `attempt_count_7d` (`bigint`), `amount_sum_minor_30d` (`bigint`), `decline_rate_7d` (`double`), and exact distinct merchants/devices/payment methods |
+| `feat_payment_method_daily` | `integration_id`, `payment_method_fingerprint`, `event_timestamp`, `created` | Equivalent card-history measures, including distinct customers |
+| `dim_customer` | `customer_sk`, customer keys, `valid_from_ts`/`valid_to_ts`, `version_number`, `is_current` | SCD2 profile fields, `profile_hash` and familiar-device state; a new version represents a change, not another payment |
+| `label_attempt` | Attempt keys, entity keys and scoring-time `event_timestamp` | Earliest linked label per attempt/source, with `is_fraud` and separate `label_available_at` |
+
+For an anchor `s`, features read `[s − window, s)` using `coalesce(attempted_at, started_at)` and require that the attempt was observed before `s`. Outcome measures additionally require `outcome_at < s`. Incomplete windows are null; a complete empty window can be zero. Training takes the latest feature row at/before scoring time and only labels available by the cutoff.
+
+**Scale techniques.** Emit rows only when a value changes or coverage completes, rather than every entity every day: recorded output was 348M customer/363M card rows instead of about 1.1B rows per daily table. Familiar devices (used at least twice in 90 days) use an ordered XOR sweep rather than an interval join. Retries reset the audit branch before the dimension's delete/append rewrite. Gold's 12 GiB executor budget shifted from 9 GiB heap + 3 GiB overhead to 7 + 5, with `MALLOC_ARENA_MAX=2`, after native-memory OOMs.
+
+The 5-minute/1-hour/24-hour stream-feature tables are produced by Flink and its writer, including replay; this Spark stage owns the 7/30-day history.
+
+### Silver → ClickHouse marts
+
+[`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py) builds a rolling 90-day analytics window independently of Gold feature computation.
+
+| Mart | Schema change from Silver |
 |---|---|
-| `silver.payment_events` | One row per `event_id`; earliest identical business-content copy |
-| `silver.rejected_events` | Every event of a payment with conflicting copies |
-| `silver.attempts` | One row per attempt, with context, client/server time, decision and outcome |
-| `silver.labels` | Distinct observations classified linked, pending, orphan or violation; orphans/violations fail checks |
+| `fact_payment_attempt` | Keep one flat attempt row, join label summaries, and add nullable `truth_is_fraud`, `truth_scenario` and `chargeback_available_at`. Convert Spark timestamps to UTC `DateTime64` and categorical fields to `LowCardinality` strings. |
+| `fact_merchant_day` | Aggregate attempts by `(integration_id, merchant_id, day)` into counts, minor-unit sums, exact distinct customers and rates; `chargeback_window_complete` marks delayed-label coverage. |
+| `build_info` | One build record with code version, rebuilt days, retention window, Silver snapshot IDs and build time for reproducibility. |
 
-For the executable conflict fixture, two identical `evt-1` copies become one; two `evt-2` copies with amounts 100/999 quarantine all three deliveries of their payment. See [`test_silver.py`](../../src/data-pipeline/batch/tests/silver/test_silver.py). [`test_generation.py`](../../src/data-pipeline/simulator/tests/test_generation.py) checks the schema cutover and physical fields. Recorded Bronze version counts were 514,342,841 v2 and 469,384,242 v3 events; new risk-decision fields were absent in all 101,943,941 v2 decisions and present in all 93,028,261 v3 decisions. These are correctness results, not schema/dedup speedups; side-by-side Spark UI captures remain missing.
+**Bounded construction.** Stage only rebuilt days, build label summaries in eight hash passes and insert the attempt fact in bounded hash buckets. Validate staging before `REPLACE PARTITION`. This keeps the mart build within ClickHouse's 2 GiB query budget and prevents a failed build from publishing partial outputs.
 
-### Gold: offline features
+## Recorded backfill and execution improvements
 
-[`gold/features.py`](../../src/data-pipeline/batch/batch/gold/features.py) and [`gold/windows.py`](../../src/data-pipeline/batch/batch/gold/windows.py) implement [`fraud-history-batch-v1`](../../contracts/features/fraud-history-batch-v1.yaml):
 
-- Customer/payment-method counts, amounts, declines and exact distinct counts over 7/30 days at UTC-midnight anchors. A run needs one longest window of history; unchanged values produce no extra row. Incomplete windows remain null.
-- `dim_customer` is SCD2 over the observed profile and devices used at least twice in 90 days. An ordered XOR sweep replaces the former interval join; retries reset the audit branch to `main` before rewriting.
-- `label_attempt` keeps the earliest linked label per attempt/source, with scoring time and separate `label_available_at`.
-
-The 5-minute/1-hour/24-hour feature tables are written by Flink and the feature writer, including historical replay. Training joins select the latest feature timestamp at or before the attempt and labels available before the cutoff.
-
-### Marts
-
-[`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py) builds a rolling 90-day analytics window from published Silver. It stages range-limited attempts and label summaries, builds bounded hash buckets, checks staging tables, then replaces the live partitions.
-
-### Controlled skew comparison
-
-[`silver/benchmark.py`](../../src/data-pipeline/batch/batch/silver/benchmark.py) compares one cached, pinned range with skew handling off, AQE skew handling on and 16-bucket salting. Broadcast is disabled; row counts/checksums must match, and the AQE plan must show a real skew split. Run `dp2-benchmark start=2026-09-01 end=2026-09-30` after Silver publishes that range.
-
-Production timings for these three variants remain unrecorded. Capture wall/task times, hot-key share and final adaptive plans together. DP1 write-distribution measurements cover writes rather than skewed joins; salting remains experimental.
-
-## Recorded v19 backfill (AWS)
 
 The following results predate GCP. Source regeneration there does not establish a completed GCP backfill.
 <a id="prod-v19-run"></a>
@@ -139,28 +190,16 @@ Published row counts (Iceberg `main`, 2025-10-29 to 2026-10-28):
 
 Every Silver, Gold and mart rule passed in OpenMetadata: 58 tests on 15 tables. Lineage runs from the v19 dataset through Bronze and Silver to the Gold tables and marts.
 
-## Optimization techniques
 
-Recorded AWS v19 changes; timings across months are operational results, not controlled same-input benchmarks.
+### Execution techniques behind these runs
 
-| Technique | Problem | Result |
-|---|---|---|
-| Range model: overwrite only the run's days | Full-history recomputes grew with history; rebuilding every customer's `dim_customer` history was OOMKilled in January | Silver 9–15 minutes a month from November to October |
-| Narrow deduplication within the range | A broadcast of v19's 20M duplicated event IDs exceeded the driver's result size | One shuffle on `event_id` per month |
-| Change-point feature rows | One row per entity per day would be about 1.1B rows a year per table | 348M customer and 363M card rows for the year |
-| XOR sweep for familiar devices | Joining every attempt to its customer's device intervals was OOMKilled even per month | One ordered window pass per customer |
-| `persist(MEMORY_AND_DISK)` instead of `localCheckpoint` | Spot reclaims lost locally checkpointed blocks and failed the stage | Lost blocks are recomputed from lineage |
-| Range-scoped checks (`additional_table_filters`) | Whole-table checks grew every month; scoping through a `SELECT *` subquery ran ClickHouse out of memory | check-silver + check-gold: 18 + 28 minutes (March) → 3 + 9 (April) |
-| Branch reset before the `dim_customer` rewrite | Its delete and append are two commits; a retry after a failure between them read the delete and would have dropped history | Every attempt starts from `main` |
-| Gold executor 9g + 3g → 7g + 5g, `MALLOC_ARENA_MAX=2` | Gold executors were OOMKilled in native memory while tasks peaked at 331 MB | Same 12 GiB pod, more room outside the heap |
-| Gold and the marts side by side | The mart build waited for Gold although it reads only Silver | July and August: 44 minutes a month, the mart build behind Gold |
-| Skip a stage whose output is already on `main` | A re-run after a later failure rebuilt every layer (June's re-run redid 22 minutes of published Silver and Gold) | Plan steps compare range, input snapshots and batch image; September's re-run skipped its published Silver and took 28 minutes |
-| Drivers on on-demand nodes, executors on spot | A reclaimed driver restarts the whole application | Spot loss costs only executor retries |
+| Technique | Problem and recorded result |
+|---|---|
+| Range-scoped checks with `additional_table_filters` | Whole-table checks grew every month; a wrapping `SELECT *` subquery also exhausted ClickHouse memory. Native range filters reduced check-silver + check-gold from 18 + 28 minutes (March) to 3 + 9 (April). |
+| Gold and marts in parallel | Marts read Silver, so waiting for Gold added no dependency protection. July/August completed in 44 minutes per month with both branches running together. |
+| Skip matching published stages | June's retry rebuilt 22 minutes of already published work. September's retry skipped Silver and finished in 28 minutes. |
+| On-demand drivers, Spot executors | Losing a driver restarts an application; executor loss costs retries. Drivers stay on on-demand nodes and executors recompute lost work. |
 
-### Viewing Spark event logs
+These month-to-month results describe operational changes, not controlled same-input benchmarks.
 
-Event logs are under `runs/payment-gateway/spark-events/`. Run a temporary History Server from the deployed `data-platform-spark` image with the environment's `gateway-storage` credentials and S3A settings, port-forward 18080, then remove it after capturing jobs/stages/plans. Store screenshots under `docs/data/images/`.
-
-## Output grains
-
-Silver stores one canonical event or attempt per identity. Gold daily features use an entity and UTC anchor timestamp; `dim_customer` keeps SCD2 validity ranges. Labels retain attempt identity and availability time. Feature joins take the latest row available at the scoring timestamp.
+Spark event logs live under `runs/payment-gateway/spark-events/`. A temporary History Server from the deployed Spark image, with the environment's storage credentials and S3A settings, exposes stages/plans through a port-forward on 18080; remove it after capture.
