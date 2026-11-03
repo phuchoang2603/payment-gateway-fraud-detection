@@ -36,7 +36,7 @@
   "links": [
     {
       "title": "Logs",
-      "url": "/explore?left={\"datasource\":\"VictoriaLogs\",\"queries\":[{\"expr\":\"_stream:{namespace=\\\"data\\\"}\",\"refId\":\"A\"}]}"
+      "url": "/explore?left=%7B%22datasource%22%3A%22VictoriaLogs%22%2C%22queries%22%3A%5B%7B%22expr%22%3A%22_stream%3A%7Bkubernetes.pod_namespace%3D%5C%22data%5C%22%7D%22%2C%22refId%22%3A%22A%22%7D%5D%7D"
     },
     {
       "title": "Traces",
@@ -441,6 +441,48 @@
         {
           "refId": "A",
           "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{environment=\"$environment\",namespace=\"$namespace\"}[15m]))",
+          "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Shared Spark failure cleanup transitions",
+      "description": "Native shared operator lifecycle counter across all namespaces. Use Data pod lifecycle and logs for this repository; executor metrics are not collected.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(sparkappstatusrecorder_sparkapp_latency_from_failed_to_terminatedwithoutreleaseresources_count{environment=\"$environment\",namespace=\"operators\"}[15m]))",
           "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
         }
       ],

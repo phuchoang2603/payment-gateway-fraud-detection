@@ -128,7 +128,7 @@ monitoring:
   namespace: observability
   serviceAccount: vmagent-vmks
   topicRegex: '^(payments\.events\..*|fraud\.(labels|feature-updates|feature-rejects)\..*)$'
-  groupRegex: '.*'
+  groupRegex: '^(gateway-notifier|fraud-features-.*|feature-writer(-.*)?|dp1-bronze-watermarks|simulator-redelivery-v1)$'
   exporterResources:
     requests: {cpu: 25m, memory: 64Mi}
     limits: {cpu: 200m, memory: 128Mi}

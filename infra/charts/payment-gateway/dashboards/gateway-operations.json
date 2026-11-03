@@ -36,7 +36,7 @@
   "links": [
     {
       "title": "Logs",
-      "url": "/explore?left={\"datasource\":\"VictoriaLogs\",\"queries\":[{\"expr\":\"_stream:{namespace=\\\"payment-gateway\\\"}\",\"refId\":\"A\"}]}"
+      "url": "/explore?left=%7B%22datasource%22%3A%22VictoriaLogs%22%2C%22queries%22%3A%5B%7B%22expr%22%3A%22_stream%3A%7Bkubernetes.pod_namespace%3D%5C%22payment-gateway%5C%22%7D%22%2C%22refId%22%3A%22A%22%7D%5D%7D"
     },
     {
       "title": "Traces",
@@ -482,7 +482,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "analysis_run_phase{environment=\"$environment\",namespace=\"$namespace\",phase=\"Failed\"}",
+          "expr": "analysis_run_info{environment=\"$environment\",namespace=\"$namespace\",phase=~\"Failed|Error\"}",
           "legendFormat": "{{service.name}}{{deployment}}{{pod}}{{connector}}{{consumergroup}}{{job_name}}{{reason}}"
         }
       ],

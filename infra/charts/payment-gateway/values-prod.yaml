@@ -1,3 +1,6 @@
+rollout:
+  enabled: true
+  migration: true
 telemetry:
   cluster: prod-talos
   environment: prod
