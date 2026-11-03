@@ -54,7 +54,7 @@ The generator removes these fields from both records and Arrow schemas for v2; i
 
 ### Publication and recorded generation
 
-Submit `generate-historical` in `data`. Shards write per-day Parquet, separate `.v2`/`.v3` event files and `_day.json` markers; `config.json` pins inputs and the generator digest, and `manifest.json` publishes the inventory. Complete days are skipped, incomplete days regenerated, and changed inputs or an already published version are refused. Publication also enforces the configured 100 GB minimum source size. Credentials come from Secrets; roots and shard settings come from chart values.
+Submit `generate-historical` in `data`. Shards write per-day Parquet, separate `.v2`/`.v3` event files and `_day.json` markers; `config.json` pins inputs and the generator digest, and `manifest.json` publishes the inventory. Complete days are skipped, incomplete days regenerated, and changed inputs or an already published version are refused. Full-scale v19 publication also enforces the configured 100 GB minimum source size. Credentials come from Secrets; roots and shard settings come from chart values.
 
 | Dataset / run | Events | Labels | Files / size |
 |---|---:|---:|---|
