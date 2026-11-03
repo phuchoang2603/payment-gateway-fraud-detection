@@ -206,12 +206,17 @@ Rubric rows: two inference versions with an A/B traffic split delivered through 
 
 Decided by the user on 2026-11-03: drift signal from Go-side bin counters; a new small FastAPI image for the drift service; enforced A/B with no shadow scoring; live simulator overlay only for generated drift; dev proof approved (tasks 7.9 and 7.10, dev only); retraining by drift only, with no recurring run (the age ceiling above is part of that check). A KServe `InferenceGraph` split was suggested and tried (section 11).
 
-Later on 2026-11-03 the user chose to go back to Knative: restore Knative Serving on the platform (a platform thread is finding and re-applying the commit that removed it), serve the predictor in KServe's Serverless mode, split the A/B with `canaryTrafficPercent` between two revisions of the one InferenceService, and use KServe's own autoscaler instead of KEDA. Everything in this change that depends on that (sections 11 and the KEDA autoscaling requirement, tasks 5d and 5f) is paused until the platform confirms three things on dev: Knative accepts the DRA `resourceClaims` of the Triton runtime, the Pod Security `restricted` namespace admits its pods, and binary tensor headers and the caller's mesh identity survive the path. If any fails, the Go-side split and KEDA stay as designed.
+Later on 2026-11-03 the user asked for Knative's `canaryTrafficPercent` instead. The platform thread checked and found it cannot work: Knative Serving 1.23.0 and the newest 1.24.0 reject `resourceClaims` and `resources.claims` as unknown fields, so the Triton runtime's shared DRA claim cannot run on it (the platform thread read upstream `knative/serving` issue #15332 as still open, which I have not checked myself). The user kept KEDA and Standard mode, and asked to try Argo Rollouts.
+
+A Rollout cannot do it directly: it must own the pods it shifts traffic to, and KServe owns the predictor Deployments (a `workloadRef` Rollout would fight KServe and the KEDA scaler). What does work is the mechanism Rollouts' Gateway API plugin uses for Edge. On dev (2026-11-03) a Gateway API `HTTPRoute` with weights 80/20 on the `payment-risk-predictor` Service, attached through an Istio ambient waypoint in `ml` (label `istio.io/use-waypoint` on the Service), split 400 binary requests 309 to 91 between two KServe services, with binary tensor responses intact and `model_version` identifying the arm. The extra hop cost 2.4 ms at the median and 9.8 ms at p99 (12.1 and 25.9 ms direct, 14.5 and 35.7 ms through the waypoint). The split is random per request. The waypoint pod is rejected by the `restricted` Pod Security for the same missing `seccompProfile` as the InferenceGraph router, so it needs the same kind of platform `MutatingAdmissionPolicy` (the spike used a temporary one, since removed). Argo Rollouts' `AnalysisTemplate` and a standalone `AnalysisRun` could gate each weight step on the per-version metrics, as Edge does; that was not tried.
+
+So two ways to split are on the table and the choice is open (section 12): the waypoint route, whose weights are a GitOps value and whose gating can reuse the Rollouts analysis engine but which assigns per request and needs the platform policy, or the Go-side split, which assigns per customer and needs nothing from the platform.
 
 Defaults applied until the user says otherwise:
 
 1. **Per-arm threshold** from the chart values (`model.arms[].threshold`), reviewed in Git, set from each version's registered decline threshold.
 2. **Abort** by deleting the challenger service from the drift check's guard, so its cohort falls back to the rules decision.
+3. **Open: the split mechanism** (waypoint route or Go-side cohort split), see section 11 and task 5f.0.
 
 ## Implementation notes
 

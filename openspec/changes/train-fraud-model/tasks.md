@@ -91,9 +91,9 @@
 - [x] 5e.8 Add the drift panels to the `ml-serving` dashboard. The Locust run of the drift API for the rubric's load row is pending (task 7.9).
 - [ ] 5e.9 Update `docs/ml/training.md` (Drift) and the roadmap rows; proof and pending verification stay in separate sentences.
 
-## 5f. Model A/B experiment (decided 2026-11-03: enforced, no shadow; the InferenceGraph was tried and dropped; the split moves to Knative `canaryTrafficPercent` if the platform restores Knative, else it stays in Go Fraud)
+## 5f. Model A/B experiment (decided 2026-11-03: enforced, no shadow; the InferenceGraph and Knative were tried and dropped; the split mechanism is open, see 5f.0)
 
-- [ ] 5f.0 After the platform confirms Knative on dev (DRA claim, restricted Pod Security, binary headers, mesh identity): serve the predictor in Serverless mode with KServe's autoscaler instead of KEDA, drop the predictor's ScaledObject and `autoScaling` values, and replace the Go-side tasks below with `canaryTrafficPercent` set by `roll_out` (the challenger is the latest revision, the champion the previous one); revise the serving and decision specs to match.
+- [ ] 5f.0 Choose the split (design section 12): the waypoint `HTTPRoute` (needs a platform policy for the waypoint pod's seccomp profile, the weights as chart values, and optionally an Argo Rollouts `AnalysisTemplate` and a standalone `AnalysisRun` per step) or the Go-side cohort split below. KEDA and Standard mode stay either way. Revise the serving and decision specs to match the choice.
 
 - [ ] 5f.1 Add the arms and the stable cohort assignment to Go Fraud (`model.arms`, `model.experiment`, per-arm client, version check and threshold), the optional `arm` on `ModelEvidence`, and the chart values with the percentage cap validated in the chart.
 - [ ] 5f.2 Add `role=challenger` to `roll_out`, the `challenger` registry stage, and deletion of the challenger service; `experiment.enabled` makes a gate-passed run deploy as challenger.
