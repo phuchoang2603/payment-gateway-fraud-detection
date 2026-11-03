@@ -8,7 +8,7 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-from risk_model.data import KEY, DatasetReader
+from risk_model.data import KEY, DatasetReader, Split
 from risk_model.split import Window
 
 FEATURES = ["customer_daily__count", "request_features__amount"]
@@ -172,3 +172,25 @@ def test_a_day_with_an_implausible_fraud_rate_fails_validation():
 def test_the_attempt_key_is_three_columns():
     """The attempt key is the integration, payment and attempt IDs."""
     assert KEY == ("integration_id", "payment_id", "attempt_id")
+
+
+def test_joined_splits_keep_every_row_in_order_with_the_shared_feature_list():
+    """join stacks the rows of several splits and keeps the feature list of the first."""
+    one = Split(
+        np.ones((2, 2), np.float32),
+        np.array([0, 1], np.float32),
+        np.ones(2, np.float32),
+        np.array(["a", "b"], object),
+        ["x", "y"],
+    )
+    two = Split(
+        np.zeros((1, 2), np.float32),
+        np.array([1], np.float32),
+        np.full(1, 5, np.float32),
+        np.array(["c"], object),
+        ["x", "y"],
+    )
+    joined = Split.join([one, two])
+    assert joined.x.shape == (3, 2) and joined.features == ["x", "y"]
+    assert joined.y.tolist() == [0, 1, 1] and joined.w.tolist() == [1, 1, 5]
+    assert joined.keys.tolist() == ["a", "b", "c"]

@@ -4,37 +4,29 @@ import argparse
 import inspect
 import json
 import os
-import tempfile
 import time
+import uuid
 from dataclasses import asdict
 from datetime import date, timedelta
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import pyarrow.compute as pc
-from fraud_feast.lake import catalog, read_json, s3, write_json
-from sklearn.metrics import precision_recall_curve
+from fraud_feast.lake import catalog, read_json, write_json
 
-from risk_model import kube
+from risk_model import kube, triton
 from risk_model.data import CHUNK_DAYS, DatasetReader
-from risk_model.evaluate import MARGIN, GateEvaluator, pr_curve_html
+from risk_model.evaluate import MARGIN
+from risk_model.objects import read_text, write_text
 from risk_model.registry import RegistryClient
 from risk_model.schedule import Pipelines, recurring_body
 from risk_model.split import WindowSplitter
-from risk_model.train import HYPERPARAMETERS, RiskTrainer, load_booster, score
+from risk_model.train import HYPERPARAMETERS
 from risk_model.windows import covered_end, is_newer, reference_day, rolling
 
 
 def directory(run_id):
     """Returns the run directory in object storage for a pipeline run ID."""
     return f"{os.environ['RUN_ROOT'].rstrip('/')}/{run_id}"
-
-
-def download(uri, target):
-    """Downloads an `s3://` URI to the local path `target` and returns the path as text."""
-    source = urlsplit(uri)
-    s3().download_file(source.netloc, source.path.lstrip("/"), str(target))
-    return str(target)
 
 
 def flags(**values):
@@ -325,80 +317,83 @@ def fit_on_gpu(
     return {"model_uri": f"{root}/model", "fit": f"{root}/fit.json"}
 
 
-def gate(*, snapshot, train, validation, test, model_uri, run_id, margin: float = MARGIN):
-    """Measures the new model against the baseline and production on the test window and decides.
+def gate(
+    *,
+    snapshot,
+    train,
+    validation,
+    test,
+    model_uri,
+    run_id,
+    margin: float = MARGIN,
+    timeout_seconds: int = 3600,
+):
+    """Measures the new model against its baseline and production on the test window and decides.
 
-    Returns whether it passed, the report location, a JSON summary and a precision-recall chart.
+    A GPU TrainJob scores the three models. Returns whether it passed, the report location, a JSON
+    summary and a precision-recall chart.
     """
-    splitter = WindowSplitter(train, validation, test)
-    reader = DatasetReader.at(snapshot)
-    training, tuning, holdout = (
-        reader.read(splitter[name]) for name in ("train", "validation", "test")
-    )
     registry = RegistryClient()
     current = registry.production()
-    with tempfile.TemporaryDirectory() as scratch:
-        files = Path(scratch)
-        booster, features = load_booster(
-            download(f"{model_uri.rstrip('/')}/model.json", files / "model.json")
-        )
-        if features != reader.features:
-            raise ValueError("model feature order differs from the training set's")
-        models = {"model": booster, "baseline": RiskTrainer(device="cpu").baseline(training)}
-        columns = {"model": slice(None), "baseline": slice(None)}
-        if current:
-            older, order = load_booster(
-                download(
-                    f"{registry.artifact_uri(current).rstrip('/')}/model.json",
-                    files / "production.json",
-                )
-            )
-            models["production"] = older
-            columns["production"] = [reader.features.index(name) for name in order]
-    evaluator = GateEvaluator(margin)
-    thresholds, scores = {}, {}
-    for name, model in models.items():
-        thresholds[name] = evaluator.thresholds(
-            tuning.y, score(model, tuning.x[:, columns[name]]), tuning.w
-        )
-        scores[name] = score(model, holdout.x[:, columns[name]])
-    metrics = evaluator.evaluate(thresholds, holdout.y, holdout.w, scores)
-    verdict = evaluator.gate(metrics)
     root = directory(run_id)
-    report = {
-        "passed": verdict.passed,
-        "reasons": verdict.reasons,
-        "metrics": metrics,
-        "thresholds": thresholds["model"],
-        "production": current,
-        "margin": margin,
-        "rows": {"validation": len(tuning.y), "test": len(holdout.y)},
-    }
-    write_json(f"{root}/gate.json", report)
-    curves = {
-        name: precision_recall_curve(holdout.y, values, sample_weight=holdout.w)[:2]
-        for name, values in scores.items()
-    }
+    arguments = [
+        "gate",
+        *flags(
+            snapshot=snapshot,
+            train=train,
+            validation=validation,
+            test=test,
+            model_dir=model_uri,
+            run_dir=root,
+            production=current or "",
+            production_uri=registry.artifact_uri(current) if current else "",
+            margin=margin,
+        ),
+    ]
+    kube.train_job(
+        f"payment-risk-gate-{run_id[:8]}",
+        {"app.kubernetes.io/name": "payment-risk", "pipeline-run": run_id},
+        os.environ["ML_IMAGE"],
+        ["python", "-m", "risk_model.worker"],
+        arguments,
+        timeout_seconds,
+    )
+    report = read_json(f"{root}/gate.json")
     return {
-        "passed": verdict.passed,
+        "passed": report["passed"],
         "report": f"{root}/gate.json",
-        "summary": json.dumps({**report, **reader.provenance()}),
-        "pr_curve": pr_curve_html(curves),
+        "summary": json.dumps({**report, **DatasetReader.at(snapshot).provenance()}),
+        "pr_curve": read_text(f"{root}/pr_curve.html"),
     }
+
+
+def experiments(*, run_id, spec, timeout_seconds: int = 3600):
+    """Runs the fits of a JSON spec in one GPU TrainJob and returns where their results are.
+
+    The spec names a snapshot and a list of fits, each with its features, parameters, training
+    windows, the window it tunes on and the windows it is evaluated on.
+    """
+    token = uuid.uuid4().hex[:8]
+    root = f"{directory(run_id)}/experiments-{token}"
+    write_text(f"{root}/spec.json", spec, "application/json")
+    kube.train_job(
+        f"payment-risk-experiments-{token}",
+        {"app.kubernetes.io/name": "payment-risk", "pipeline-run": run_id},
+        os.environ["ML_IMAGE"],
+        ["python", "-m", "risk_model.worker"],
+        ["experiments", *flags(spec=f"{root}/spec.json", run_dir=root)],
+        timeout_seconds,
+    )
+    return {"results": f"{root}/experiments.json"}
 
 
 def record_version(*, snapshot, model_uri, report, fit, params, run_id, experiment=""):
-    """Registers a passing model with its provenance and metrics, and returns its version name."""
+    """Registers a passing model and packages it for Triton, and returns its version name."""
     provenance = DatasetReader.at(snapshot).provenance()
     gate_report, run = read_json(report), read_json(fit)
     registry = RegistryClient()
     version = registry.next_version()
-    target = urlsplit(model_uri)
-    s3().put_object(
-        Bucket=target.netloc,
-        Key=f"{target.path.strip('/')}/version.txt",
-        Body=f"{version}\n".encode(),
-    )
+    triton.package(model_uri, version, provenance["features"])
     registry.register(
         version,
         model_uri,
@@ -435,11 +430,7 @@ def roll_out(*, version, run_id):
     predictor = json.loads(os.environ.get("SERVING_PREDICTOR", "{}"))
     kube.inference_service(version, predictor)
     try:
-        address = kube.wait_ready(kube.INFERENCE_NAME, version)
-        answer = kube.predict(address, [{}])
-        (result,) = answer["predictions"]
-        if answer["model_version"] != version or not 0.0 <= result <= 1.0:
-            raise RuntimeError(f"payment-risk answered {answer} instead of a {version} score")
+        triton.probe(kube.wait_ready(kube.INFERENCE_NAME, version), version)
     except Exception:
         if previous and previous != version:
             kube.inference_service(previous, predictor)

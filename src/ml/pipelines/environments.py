@@ -15,7 +15,6 @@ class Environment:
     stage: tuple = ("22g", "26G")
     assemble: tuple = ("12g", "16G")
     light_memory: str = "12G"
-    gate_memory: str = "14G"
 
 
 PROD = Environment(
@@ -30,6 +29,5 @@ DEV = Environment(
     stage=("6g", "8G"),
     assemble=("4g", "6G"),
     light_memory="4G",
-    gate_memory="6G",
 )
 ENVIRONMENTS = (PROD, DEV)

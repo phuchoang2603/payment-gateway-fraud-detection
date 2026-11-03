@@ -1,14 +1,10 @@
-"""Training: the XGBoost trainer, the linear baseline, model files and the hyperparameter table."""
+"""Training and scoring on the GPU: the XGBoost trainer, the additive baseline and the hyperparameter table."""
 
 import json
 from typing import NamedTuple
 
 import numpy as np
 import xgboost as xgb
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 
 DEFAULTS = {
     "objective": "binary:logistic",
@@ -23,6 +19,7 @@ DEFAULTS = {
 }
 ROUNDS = 2000
 EARLY_STOP = 50
+BASELINE_PARAMS = {"max_depth": 1}
 
 
 class Hyperparameter(NamedTuple):
@@ -53,25 +50,17 @@ HYPERPARAMETERS = (
 class RiskTrainer:
     """Trains the fraud model on a train split and a validation split.
 
-    `params` override the XGBoost defaults, `seed` fixes the randomness and `device` is `cuda` or `cpu`.
-    `fit` returns a booster cut at its best validation iteration, with its feature order stored as an
-    attribute; `baseline` returns the linear model the gate compares against.
+    `params` override the XGBoost defaults, `seed` fixes the randomness, `rounds` caps the boosting
+    rounds and `device` is `cuda`, which every pipeline and job uses; only unit tests pass `cpu`. `fit` returns a booster cut at its best
+    validation iteration, with its feature order stored as an attribute. The baseline the gate compares
+    against is the same trainer with `BASELINE_PARAMS`: depth-1 trees, an additive model that handles
+    missing values like the model itself.
     """
 
-    def __init__(self, params=None, seed=7, device="cuda"):
+    def __init__(self, params=None, seed=7, device="cuda", rounds=ROUNDS):
         self.params = {**DEFAULTS, **(params or {}), "seed": seed, "device": device}
-        self.seed = seed
+        self.rounds = rounds
         self.best_score = None
-
-    def baseline(self, train):
-        """Returns a median-imputed, scaled logistic regression fitted on the train split."""
-        model = make_pipeline(
-            SimpleImputer(strategy="median", keep_empty_features=True),
-            StandardScaler(),
-            LogisticRegression(max_iter=300, random_state=self.seed),
-        )
-        model.fit(train.x, train.y, logisticregression__sample_weight=train.w)
-        return model
 
     def fit(self, train, validation):
         """Returns a booster trained with early stopping on validation PR-AUC, ordered by key."""
@@ -81,7 +70,7 @@ class RiskTrainer:
         booster = xgb.train(
             self.params,
             dtrain,
-            num_boost_round=ROUNDS,
+            num_boost_round=self.rounds,
             evals=[(dvalidation, "validation")],
             early_stopping_rounds=EARLY_STOP,
             verbose_eval=False,
@@ -92,11 +81,10 @@ class RiskTrainer:
         return booster
 
 
-def score(model, x):
-    """Returns the fraud probability of every row of `x` for a booster or a scikit-learn model."""
-    if isinstance(model, xgb.Booster):
-        return model.predict(xgb.DMatrix(x))
-    return model.predict_proba(x)[:, 1]
+def score(booster, x, device="cuda"):
+    """Returns the fraud probability of every row of `x`, predicted on the named device."""
+    booster.set_param({"device": device})
+    return booster.inplace_predict(x)
 
 
 def load_booster(path):

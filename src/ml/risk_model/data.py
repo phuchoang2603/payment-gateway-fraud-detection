@@ -30,6 +30,17 @@ class Split:
         columns = [self.features.index(name) for name in names]
         return Split(self.x[:, columns], self.y, self.w, self.keys, list(names))
 
+    @classmethod
+    def join(cls, parts):
+        """Returns one Split with the rows of the given splits, which share their feature list, in order."""
+        return cls(
+            np.vstack([part.x for part in parts]),
+            np.concatenate([part.y for part in parts]),
+            np.concatenate([part.w for part in parts]),
+            np.concatenate([part.keys for part in parts]),
+            parts[0].features,
+        )
+
     def ordered(self):
         """Returns a Split sorted by attempt key, so training does not depend on read order."""
         order = np.argsort(self.keys, kind="stable")

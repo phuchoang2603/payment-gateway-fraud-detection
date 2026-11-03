@@ -1,13 +1,25 @@
 global:
   imageTags:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml: dev
-    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/predictor: dev
 enabled: true
 namespace: ml
 image:
   repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml
-predictor:
-  repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/predictor
+triton:
+  image: nvcr.io/nvidia/tritonserver:26.10-py3@sha256:b404f7de5dbeeefe0b17d7d149745a50d0989a25d0d831433b5ba63c716c2fcd
+gpu:
+  claim: ml-gpu
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
+  tolerations:
+    - key: burst.talos.dev/gpu-training
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+training:
+  resources:
+    requests: {cpu: "1", memory: 2Gi}
+    limits: {cpu: "3", memory: 8Gi}
 config:
   AWS_REGION: us-east-1
   S3_ENDPOINT: https://minio.home.phuchoang.sbs
@@ -40,12 +52,10 @@ schedule:
   lagDays: 1
 serving:
   resources:
-    requests: {cpu: 500m, memory: 1Gi}
-    limits: {memory: 2Gi}
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {memory: 4Gi}
   predictor:
     minReplicas: 1
-    nodeSelector:
-      talos.dev/nodepool: spot
 notebook:
   storageClass: cloud-block
   storageSize: 20Gi

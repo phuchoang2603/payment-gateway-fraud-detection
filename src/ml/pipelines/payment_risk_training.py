@@ -136,16 +136,13 @@ def payment_risk_training(environment):
                 nodes=environment.nodes,
                 storage=False,
             )
-            verdict = configure(
+            verdict = light(
                 gate(
                     run_id=run_id,
                     snapshot=snapshot,
                     **span,
                     model_uri=fitted.outputs["model_uri"],
-                ),
-                nodes=environment.nodes,
-                cpu="2",
-                memory=environment.gate_memory,
+                )
             )
             configure(
                 publish_metrics(summary=verdict.outputs["summary"]),

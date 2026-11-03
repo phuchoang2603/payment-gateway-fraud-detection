@@ -1,10 +1,8 @@
-"""Kubernetes calls for the training steps: TrainJobs, Katib experiments and the InferenceService."""
+"""Kubernetes calls for the pipeline steps: GPU TrainJobs, Katib experiments and the InferenceService."""
 
 import functools
-import json
 import os
 import time
-import urllib.request
 
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -28,14 +26,14 @@ SECRET_ENV = {
     "AWS_SECRET_ACCESS_KEY": STORAGE_SECRET,
     "ICEBERG_CLIENT_SECRET": ICEBERG_SECRET,
 }
-RUNTIME = "xgboost-gpu-distributed"
+RUNTIME = "payment-risk-xgboost"
 MANAGER = "fraud.payment-gateway/risk-model"
 TRAINJOB = ("trainer.kubeflow.org", "v1alpha1", "trainjobs")
 EXPERIMENT = ("kubeflow.org", "v1beta1", "experiments")
 INFERENCE = ("serving.kserve.io", "v1beta1", "inferenceservices")
 INFERENCE_NAME = MODEL_NAME
 SOURCE_URI = "internal.serving.kserve.io/storage-initializer-sourceuri"
-RUNTIME_NAME = "payment-risk-predictor"
+RUNTIME_NAME = "payment-risk-triton"
 
 
 @functools.cache
@@ -117,10 +115,11 @@ def wait(kind, name, done, timeout, interval=20, cleanup=True):
 
 
 def train_job_spec(image, command, args, timeout):
-    """Returns a one-node TrainJob on the GPU runtime, shared by the fit job and Katib trials.
+    """Returns a one-node TrainJob on the chart's GPU runtime, shared by every job that touches the GPU.
 
-    Secret-backed variables go in `spec.trainer.env`, because the Trainer webhook rejects environment
-    set through a runtime patch on the node container. The patch only runs the pod as the service account.
+    The runtime holds the shared GPU claim, which a runtime patch cannot set. Secret-backed variables go
+    in `spec.trainer.env`, because the Trainer webhook rejects environment set through a runtime patch
+    on the node container. The patch only runs the pod as the service account.
     """
     node = {"template": {"spec": {"template": {"spec": {"serviceAccountName": SERVICE_ACCOUNT}}}}}
     return {
@@ -130,7 +129,7 @@ def train_job_spec(image, command, args, timeout):
             "runtimeRef": {
                 "name": RUNTIME,
                 "apiGroup": "trainer.kubeflow.org",
-                "kind": "ClusterTrainingRuntime",
+                "kind": "TrainingRuntime",
             },
             "trainer": {
                 "numNodes": 1,
@@ -255,14 +254,3 @@ def wait_ready(name, version, timeout=1200):
 
     address, _ = wait(INFERENCE, name, done, timeout, interval=10, cleanup=False)
     return address
-
-
-def predict(address, rows, timeout=30):
-    """Sends instances to the predictor at `address` and returns its decoded JSON answer."""
-    request = urllib.request.Request(
-        f"{address.rstrip('/')}/v1/models/{INFERENCE_NAME}:predict",
-        data=json.dumps({"instances": rows}).encode(),
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.load(response)

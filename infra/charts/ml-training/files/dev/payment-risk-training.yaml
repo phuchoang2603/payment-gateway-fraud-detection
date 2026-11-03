@@ -221,6 +221,11 @@ components:
                 componentInputParameter: pipelinechannel--plan-windows-train
               validation:
                 componentInputParameter: pipelinechannel--plan-windows-validation
+          retryPolicy:
+            backoffDuration: 30s
+            backoffFactor: 2.0
+            backoffMaxDuration: 3600s
+            maxRetryCount: 2
           taskInfo:
             name: gate
         plan-examples:
@@ -761,12 +766,12 @@ deploymentSpec:
         - risk_model.steps
         image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
         resources:
-          cpuRequest: 2.0
-          memoryLimit: 6.0
-          memoryRequest: 6.0
-          resourceCpuRequest: '2'
-          resourceMemoryLimit: 6G
-          resourceMemoryRequest: 6G
+          cpuRequest: 1.0
+          memoryLimit: 4.0
+          memoryRequest: 4.0
+          resourceCpuRequest: '1'
+          resourceMemoryLimit: 4G
+          resourceMemoryRequest: 4G
     exec-plan-examples:
       container:
         args:

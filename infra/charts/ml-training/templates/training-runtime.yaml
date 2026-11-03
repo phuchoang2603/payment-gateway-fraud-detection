@@ -1,0 +1,52 @@
+{{- if .Values.enabled }}
+apiVersion: trainer.kubeflow.org/v1alpha1
+kind: TrainingRuntime
+metadata:
+  name: payment-risk-xgboost
+  namespace: {{ .Values.namespace }}
+  labels:
+    trainer.kubeflow.org/framework: xgboost
+spec:
+  mlPolicy:
+    numNodes: 1
+    xgboost: {}
+  template:
+    spec:
+      replicatedJobs:
+        - name: node
+          groupName: default
+          replicas: 1
+          template:
+            metadata:
+              labels:
+                trainer.kubeflow.org/trainjob-ancestor-step: trainer
+            spec:
+              backoffLimit: 0
+              template:
+                spec:
+                  restartPolicy: Never
+                  securityContext:
+                    runAsNonRoot: true
+                    runAsUser: 1000
+                    runAsGroup: 1000
+                    seccompProfile:
+                      type: RuntimeDefault
+                  nodeSelector:
+                    {{- toYaml .Values.gpu.nodeSelector | nindent 20 }}
+                  tolerations:
+                    {{- toYaml .Values.gpu.tolerations | nindent 20 }}
+                  resourceClaims:
+                    - name: gpu
+                      resourceClaimName: {{ .Values.gpu.claim }}
+                  containers:
+                    - name: node
+                      image: {{ include "ml-training.image" . | quote }}
+                      resources:
+                        claims:
+                          - name: gpu
+                        {{- toYaml .Values.training.resources | nindent 24 }}
+                      securityContext:
+                        allowPrivilegeEscalation: false
+                        capabilities:
+                          drop: [ALL]
+{{- end }}

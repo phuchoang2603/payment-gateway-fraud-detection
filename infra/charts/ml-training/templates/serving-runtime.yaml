@@ -2,27 +2,52 @@
 apiVersion: serving.kserve.io/v1alpha1
 kind: ServingRuntime
 metadata:
-  name: payment-risk-predictor
+  name: payment-risk-triton
   namespace: {{ .Values.namespace }}
 spec:
   supportedModelFormats:
     - name: payment-risk
       autoSelect: true
-  protocolVersions: [v1]
+  protocolVersions: [v2]
+  nodeSelector:
+    {{- toYaml .Values.gpu.nodeSelector | nindent 4 }}
+  tolerations:
+    {{- toYaml .Values.gpu.tolerations | nindent 4 }}
+  resourceClaims:
+    - name: gpu
+      resourceClaimName: {{ .Values.gpu.claim }}
   containers:
     - name: kserve-container
-      image: {{ include "ml-training.imageOf" (dict "root" . "repository" .Values.predictor.repository) }}
-      args: ["--model_name={{`{{.Name}}`}}"]
+      image: {{ .Values.triton.image | quote }}
+      args:
+        - tritonserver
+        - --model-store=/mnt/models
+        - --model-control-mode=none
+        - --strict-readiness=true
+        - --http-port=8080
+        - --allow-grpc=false
+        - --allow-metrics=false
+      env:
+        - name: HOME
+          value: /tmp
       ports:
         - containerPort: 8080
           protocol: TCP
+      readinessProbe:
+        httpGet:
+          path: /v2/health/ready
+          port: 8080
+        periodSeconds: 5
       resources:
+        claims:
+          - name: gpu
         {{- toYaml .Values.serving.resources | nindent 8 }}
       securityContext:
         allowPrivilegeEscalation: false
         capabilities:
           drop: [ALL]
         runAsNonRoot: true
+        runAsUser: 1000
         seccompProfile:
           type: RuntimeDefault
 {{- end }}

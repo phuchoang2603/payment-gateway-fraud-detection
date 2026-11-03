@@ -12,7 +12,6 @@ import pytest
 from risk_model import dataset, steps
 from risk_model.data import Split
 from risk_model.split import Window
-from risk_model.train import RiskTrainer
 
 FEATURES = ["a", "b", "c"]
 TRAIN, VALIDATION, TEST = (
@@ -563,74 +562,86 @@ class Registry:
         self.promoted.append((version, run_id))
 
 
-def gated(monkeypatch, files, production=None):
-    """Prepares fakes for gate: readers, models, downloads and the registry. Returns the registry."""
-    splits = {TRAIN: make(400, 1), VALIDATION: make(150, 2), TEST: make(150, 3)}
-    serving(monkeypatch, Reader(splits=splits))
-    new = RiskTrainer({"max_depth": 3}, device="cpu").fit(splits[TRAIN], splits[VALIDATION])
-    older = RiskTrainer({"max_depth": 2}, device="cpu").fit(
-        splits[TRAIN].select(["a", "c"]), splits[VALIDATION].select(["a", "c"])
-    )
-    loaded = iter([(new, FEATURES), (older, ["a", "c"])])
-    monkeypatch.setattr(steps, "load_booster", lambda path: next(loaded))
-    monkeypatch.setattr(steps, "download", lambda uri, target: str(target))
+def launched(monkeypatch, files, production=None):
+    """Fakes the TrainJob and the files the GPU gate writes. Returns the started jobs and the registry."""
+    monkeypatch.setenv("ML_IMAGE", "ml:1")
+    serving(monkeypatch, Reader())
     registry = Registry(production=production)
     monkeypatch.setattr(steps, "RegistryClient", lambda: registry)
-    return registry
+    started = []
+    monkeypatch.setattr(steps.kube, "train_job", lambda *a: started.append(a))
+    files["s3://bucket/runs/abcdef123456/gate.json"] = {
+        "passed": True,
+        "reasons": [],
+        "metrics": {},
+    }
+    monkeypatch.setattr(steps, "read_text", lambda uri: f"<svg from {uri}>")
+    return started, registry
 
 
-def test_the_gate_measures_the_model_against_the_baseline_and_writes_its_report(monkeypatch, files):
-    """gate returns a bool verdict, the report path, a JSON summary with provenance and an SVG chart."""
-    gated(monkeypatch, files)
+def test_the_gate_runs_the_gpu_job_and_reads_back_its_report(monkeypatch, files):
+    """gate starts one TrainJob for the run and returns the verdict, report path, summary and chart."""
+    started, _ = launched(monkeypatch, files)
     result = steps.gate(
-        snapshot="7", model_uri="s3://bucket/runs/r1/model/", run_id="r1", **WINDOWS
+        snapshot="7", model_uri="s3://bucket/runs/r1/model/", run_id="abcdef123456", **WINDOWS
     )
-    report = files["s3://bucket/runs/r1/gate.json"]
-    assert isinstance(result["passed"], bool) and result["passed"] == report["passed"]
-    assert report["passed"] == (report["reasons"] == [])
-    assert set(report["metrics"]) == {"model", "baseline"} and report["production"] is None
-    assert report["rows"] == {"validation": 150, "test": 150}
-    assert result["report"] == "s3://bucket/runs/r1/gate.json"
+    ((name, labels, image, command, args, timeout),) = started
+    assert name == "payment-risk-gate-abcdef12" and image == "ml:1" and timeout == 3600
+    assert labels == {"app.kubernetes.io/name": "payment-risk", "pipeline-run": "abcdef123456"}
+    assert command == ["python", "-m", "risk_model.worker"] and args[0] == "gate"
+    assert args[args.index("--model-dir") + 1] == "s3://bucket/runs/r1/model/"
+    assert args[args.index("--run-dir") + 1] == "s3://bucket/runs/abcdef123456"
+    assert (
+        args[args.index("--production") + 1] == ""
+        and args[args.index("--production-uri") + 1] == ""
+    )
+    assert args[args.index("--margin") + 1] == "0.005"
+    assert (
+        result["passed"] is True and result["report"] == "s3://bucket/runs/abcdef123456/gate.json"
+    )
+    assert result["pr_curve"] == "<svg from s3://bucket/runs/abcdef123456/pr_curve.html>"
     summary = json.loads(result["summary"])
-    assert (
-        summary["training_set_snapshot"] == 7
-        and summary["metrics"].keys() == report["metrics"].keys()
+    assert summary["training_set_snapshot"] == 7 and summary["passed"] is True
+
+
+def test_the_gate_hands_the_production_version_and_its_directory_to_the_job(monkeypatch, files):
+    """With a production version the job is told its name and where its model.json lives."""
+    started, _ = launched(monkeypatch, files, production="v2")
+    steps.gate(
+        snapshot="7", model_uri="s3://bucket/runs/r1/model", run_id="abcdef123456", **WINDOWS
     )
-    assert result["pr_curve"].startswith("<svg")
+    ((*_, args, _timeout),) = started
+    assert args[args.index("--production") + 1] == "v2"
+    assert args[args.index("--production-uri") + 1] == "s3://bucket/production/"
 
 
-def test_the_gate_also_measures_the_production_model_on_the_features_it_was_trained_on(
-    monkeypatch, files
-):
-    """With a production version the gate scores it on its own feature subset and compares with it."""
-    gated(monkeypatch, files, production="v2")
-    steps.gate(snapshot="7", model_uri="s3://bucket/runs/r1/model", run_id="r1", **WINDOWS)
-    report = files["s3://bucket/runs/r1/gate.json"]
-    assert (
-        set(report["metrics"]) == {"model", "baseline", "production"}
-        and report["production"] == "v2"
+def test_experiments_write_the_spec_run_one_job_and_name_the_results(monkeypatch, files):
+    """experiments uploads the spec under a fresh directory, starts one TrainJob and returns the results path."""
+    monkeypatch.setenv("ML_IMAGE", "ml:1")
+    texts, started = {}, []
+    monkeypatch.setattr(
+        steps, "write_text", lambda uri, text, kind: texts.update({uri: (text, kind)})
     )
+    monkeypatch.setattr(steps.kube, "train_job", lambda *a: started.append(a))
+    first = steps.experiments(run_id="r1", spec='{"fits": []}')
+    second = steps.experiments(run_id="r1", spec='{"fits": []}')
+    assert first["results"] != second["results"]
+    root = first["results"].removesuffix("/experiments.json")
+    assert root.startswith("s3://bucket/runs/r1/experiments-")
+    assert texts[f"{root}/spec.json"] == ('{"fits": []}', "application/json")
+    ((name, labels, image, command, args, timeout), _) = started
+    assert name.startswith("payment-risk-experiments-") and image == "ml:1" and timeout == 3600
+    assert args == ["experiments", "--spec", f"{root}/spec.json", "--run-dir", root]
+    assert labels["pipeline-run"] == "r1"
 
 
-def test_a_model_trained_on_other_features_is_rejected(monkeypatch, files):
-    """A model whose feature order differs from the training set's raises before any scoring."""
-    gated(monkeypatch, files)
-    monkeypatch.setattr(steps, "load_booster", lambda path: (object(), ["c", "b", "a"]))
-    with pytest.raises(ValueError, match="feature order"):
-        steps.gate(snapshot="7", model_uri="s3://bucket/runs/r1/model", run_id="r1", **WINDOWS)
-
-
-def test_registering_a_version_writes_its_number_next_to_the_model_with_its_provenance(
-    monkeypatch, files
-):
-    """record_version stores version.txt in the model directory and registers the run's facts."""
+def test_registering_a_version_packages_it_for_triton_with_its_provenance(monkeypatch, files):
+    """record_version writes the Triton repository entry for the version and registers the run's facts."""
     serving(monkeypatch, Reader())
     registry = Registry(version="v4")
     monkeypatch.setattr(steps, "RegistryClient", lambda: registry)
-    puts = []
-    monkeypatch.setattr(
-        steps, "s3", lambda: SimpleNamespace(put_object=lambda **kw: puts.append(kw))
-    )
+    packaged = []
+    monkeypatch.setattr(steps.triton, "package", lambda *args: packaged.append(args))
     files["gate"] = {"thresholds": {"decline": 0.9}, "metrics": {"model": {"pr_auc": 0.5}}}
     files["fit"] = {"gpu": "RTX", "environment": {"xgboost": "2.1.4"}, "seconds": 12.5}
     result = steps.record_version(
@@ -642,7 +653,7 @@ def test_registering_a_version_writes_its_number_next_to_the_model_with_its_prov
         run_id="r1",
     )
     assert result == {"version": "v4"}
-    assert puts == [{"Bucket": "bucket", "Key": "runs/r1/model/version.txt", "Body": b"v4\n"}]
+    assert packaged == [("s3://bucket/runs/r1/model", "v4", FEATURES)]
     ((version, uri, properties),) = registry.registered
     assert (version, uri) == ("v4", "s3://bucket/runs/r1/model")
     assert properties["gate"] == "passed" and properties["test_pr_auc"] == 0.5
@@ -655,9 +666,7 @@ def test_registering_a_version_writes_its_number_next_to_the_model_with_its_prov
 def serve(monkeypatch):
     """Fakes the cluster side of roll_out and returns what it did and what the predictor answers."""
     monkeypatch.setenv("SERVING_PREDICTOR", json.dumps({"minReplicas": 1}))
-    state = SimpleNamespace(
-        deployed=[], answer={"predictions": [0.3], "model_version": "v2"}, error=None
-    )
+    state = SimpleNamespace(deployed=[], probed=[], probe_error=None, error=None)
     registry = Registry(production="v1")
     monkeypatch.setattr(steps, "RegistryClient", lambda: registry)
     monkeypatch.setattr(
@@ -673,32 +682,32 @@ def serve(monkeypatch):
         return "http://svc"
 
     monkeypatch.setattr(steps.kube, "wait_ready", ready)
-    monkeypatch.setattr(steps.kube, "predict", lambda address, rows: state.answer)
+
+    def probe(address, version):
+        """Records the probe, or raises the prepared error."""
+        state.probed.append((address, version))
+        if state.probe_error:
+            raise state.probe_error
+
+    monkeypatch.setattr(steps.triton, "probe", probe)
     state.registry = registry
     return state
 
 
 def test_a_version_that_serves_a_score_is_promoted(serve):
-    """roll_out deploys the version with the chart's settings, checks a score and promotes it."""
+    """roll_out deploys the version with the chart's settings, probes Triton and promotes it."""
     assert steps.roll_out(version="v2", run_id="r1") == {"deployed": "v2", "previous": "v1"}
     assert serve.deployed == [("v2", {"minReplicas": 1})]
-    assert serve.registry.promoted == [("v2", "r1")]
+    assert serve.registry.promoted == [("v2", "r1")] and serve.probed == [("http://svc", "v2")]
 
 
-@pytest.mark.parametrize(
-    "answer",
-    [
-        {"predictions": [0.3], "model_version": "v9"},
-        {"predictions": [1.01], "model_version": "v2"},
-        {"predictions": [-0.01], "model_version": "v2"},
-    ],
-)
-def test_a_wrong_version_or_an_impossible_score_restores_the_previous_model(serve, answer):
-    """The previous version is redeployed, nothing is promoted and the step fails."""
-    serve.answer = answer
+def test_a_probe_that_fails_restores_the_previous_model(serve):
+    """A wrong version or impossible score from Triton redeploys production, promotes nothing and fails."""
+    serve.probe_error = RuntimeError("payment-risk answered version 9 instead of a v2 score")
     with pytest.raises(RuntimeError, match="instead of a v2 score"):
         steps.roll_out(version="v2", run_id="r1")
     assert [v for v, _ in serve.deployed] == ["v2", "v1"] and serve.registry.promoted == []
+    assert serve.probed == [("http://svc", "v2")]
 
 
 def test_a_rollout_that_never_becomes_ready_restores_the_previous_model_and_reraises(serve):
@@ -719,14 +728,3 @@ def test_there_is_nothing_to_restore_for_a_first_or_repeated_version(serve):
     with pytest.raises(TimeoutError):
         steps.roll_out(version="v2", run_id="r1")
     assert [v for v, _ in serve.deployed] == ["v2", "v2"]
-
-
-def test_downloading_writes_to_the_given_path_from_the_uris_bucket_and_key(monkeypatch, tmp_path):
-    """download fetches a bucket and key and returns the local path as text."""
-    seen = []
-    monkeypatch.setattr(
-        steps, "s3", lambda: SimpleNamespace(download_file=lambda *a: seen.append(a))
-    )
-    target = tmp_path / "model.json"
-    assert steps.download("s3://bucket/runs/r1/model/model.json", target) == str(target)
-    assert seen == [("bucket", "runs/r1/model/model.json", str(target))]

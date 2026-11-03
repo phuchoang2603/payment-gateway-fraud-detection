@@ -1,7 +1,5 @@
 """Tests for the Kubernetes calls, with the cluster API replaced by fakes."""
 
-import io
-import json
 from types import SimpleNamespace
 
 import pytest
@@ -204,9 +202,9 @@ def test_the_train_job_puts_secrets_in_trainer_env_and_only_the_service_account_
     spec = job["spec"]
     assert job["kind"] == "TrainJob" and spec["activeDeadlineSeconds"] == 5400
     assert spec["runtimeRef"] == {
-        "name": "xgboost-gpu-distributed",
+        "name": "payment-risk-xgboost",
         "apiGroup": "trainer.kubeflow.org",
-        "kind": "ClusterTrainingRuntime",
+        "kind": "TrainingRuntime",
     }
     trainer = spec["trainer"]
     assert (trainer["numNodes"], trainer["image"], trainer["command"], trainer["args"]) == (
@@ -272,7 +270,7 @@ def test_a_new_inference_service_is_created_in_standard_mode_with_the_chart_sett
     assert predictor["serviceAccountName"] == "fraud-training"
     assert predictor["model"] == {
         "modelFormat": {"name": "payment-risk"},
-        "runtime": "payment-risk-predictor",
+        "runtime": "payment-risk-triton",
         "storageUri": URI,
     }
     assert cluster.patched == []
@@ -348,31 +346,3 @@ def test_wait_ready_ignores_a_service_without_an_address(cluster, monkeypatch):
     with pytest.raises(TimeoutError, match="stopped after one poll"):
         kube.wait_ready("payment-risk", "v2")
     assert cluster.deleted == []
-
-
-def test_predict_posts_the_instances_to_the_model_and_returns_the_answer(monkeypatch):
-    """predict sends `{"instances": rows}` to the model's predict URL and decodes the JSON answer."""
-    sent = []
-
-    def urlopen(request, timeout):
-        sent.append(
-            (
-                request.full_url,
-                json.loads(request.data),
-                request.get_header("Content-type"),
-                timeout,
-            )
-        )
-        return io.StringIO('{"predictions": [0.5], "model_version": "v2"}')
-
-    monkeypatch.setattr(kube.urllib.request, "urlopen", urlopen)
-    answer = kube.predict("http://svc/", [{"a": 1}], timeout=5)
-    assert answer == {"predictions": [0.5], "model_version": "v2"}
-    assert sent == [
-        (
-            "http://svc/v1/models/payment-risk:predict",
-            {"instances": [{"a": 1}]},
-            "application/json",
-            5,
-        )
-    ]
