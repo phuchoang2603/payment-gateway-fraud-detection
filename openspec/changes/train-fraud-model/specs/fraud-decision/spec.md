@@ -78,3 +78,21 @@ When a model endpoint is configured, the service SHALL, after the feature read, 
 
 - **WHEN** the model server times out or answers malformed
 - **THEN** the rules decision stands and the evidence records status `timeout` or `error` and no score
+
+### Requirement: Experiment arm assignment
+While an experiment is configured, the fraud service SHALL assign each customer to the champion or the challenger by a stable hash of a configured salt and the customer's identity against a configured percentage no greater than the configured cap, SHALL score with that arm's model under that arm's threshold and the same missing-feature policy, and SHALL record the arm, its model version and its threshold in the assessment evidence. A replayed assessment SHALL return its recorded result.
+
+#### Scenario: Stable cohort
+- **WHEN** the same customer is assessed twice during an experiment with the same salt
+- **THEN** both assessments use the same arm
+
+#### Scenario: Challenger unavailable
+- **WHEN** the challenger does not answer
+- **THEN** the rules decision stands, the evidence records the arm and status `timeout` or `error`, and no score approves what the rules decline
+
+### Requirement: Feature distribution counters
+After each model call the fraud service SHALL count every scored feature into the bin its served version's reference profile assigns it, with missing and unavailable values in the missing bin, labelled by feature, bin and model version, through the existing telemetry export.
+
+#### Scenario: Missing feature
+- **WHEN** a feature view is unavailable for an assessment
+- **THEN** its features are counted in the missing bin of the version that scored it

@@ -60,3 +60,21 @@ The predictor SHALL scale between a minimum and a maximum number of replicas wit
 
 - **WHEN** the deploy step replaces the predictor of an existing service
 - **THEN** the service keeps the KEDA autoscaler class and its scaling settings
+
+### Requirement: Challenger version
+A registered version that passed its gate MAY be served as a challenger next to the champion, as its own InferenceService on the same runtime and the shared GPU claim, scaled independently. A version that did not pass SHALL be refused. A promotion SHALL make the challenger the champion in the registry and the service, archive the previous champion and remove the challenger service, after the gate has compared the challenger with the champion on the newest window, and the deploy of any earlier version SHALL still be available for rollback.
+
+#### Scenario: Challenger deployed
+- **WHEN** a training run configured for an experiment passes its gate
+- **THEN** its version is served as the challenger, the champion keeps serving, and the registry marks the stages `production` and `challenger`
+
+#### Scenario: Promotion
+- **WHEN** the promotion pipeline runs and the challenger passes the comparison
+- **THEN** the champion becomes the challenger's version, the old version is archived and the challenger service is removed
+
+### Requirement: Per-version monitoring
+Each served version SHALL be monitored in the platform's metrics store and Grafana by version: Triton's request, queue and compute metrics per service, the fraud service's model calls and feature-bin counts by model version, and, from the curated attempts, the decline and step-up rates and the score distribution by model version. Where labels or chargebacks are available the same view SHALL show outcomes against them.
+
+#### Scenario: Two versions serve
+- **WHEN** a champion and a challenger both serve
+- **THEN** the dashboard shows each version's request rate, latency, decline rate and score distribution side by side

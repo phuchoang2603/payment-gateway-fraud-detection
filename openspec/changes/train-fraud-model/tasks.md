@@ -79,6 +79,27 @@
 - [x] 5d.4 On dev: scale a second predictor replica under load on the shared GPU, and load the dashboard's panels.
 - [ ] 5d.5 After merge: confirm the dashboard in Grafana and the ScaledObject on the real `payment-risk` service, and tune the 5 ms queue-time target against prod traffic.
 
+## 5e. Drift and drift-triggered retraining (planned; decisions 1 to 3 and 7 in the design first)
+
+- [ ] 5e.1 Add `risk_model/drift.py`: weighted-quantile `profile`, smoothed `psi`, the missing-share shift, the breach rule and the trigger policy as pure functions, with property-based tests (PSI of a sample against itself is 0, bin proportions sum to 1, the policy is monotone in the thresholds).
+- [ ] 5e.2 Compute the reference profile in `record_version`, store it as the registry property `reference` and as a `config.pbtxt` parameter, and record `trigger` and the drift summary on a version a drift run registers.
+- [ ] 5e.3 Count scored features into bins in Go Fraud (`fraud.model.feature_bin` by feature, bin and model version), reading the profile from the served model's config with the existing version check; measure the per-request cost.
+- [ ] 5e.4 Add the drift service (`GET /v1/drift`, `/v1/reference`, probes, `/metrics`) with a Helm Deployment, a KEDA ScaledObject and a `VMPodScrape`, and its image entry in `service-images.json` if decision 2 picks a new image.
+- [ ] 5e.5 Add the hourly `payment-risk-drift-check` CronJob: the policy, the KFP run creation through `risk_model.schedule.Pipelines`, deduplication, cooldown and the weekly bound.
+- [ ] 5e.6 Change the recurring run to the weekly backstop in the chart values.
+- [ ] 5e.7 Add the live simulator `drift` steps (validated, deterministic, world digest unchanged) with tests, and one example step in the dev values.
+- [ ] 5e.8 Add the drift panels to the `ml-serving` dashboard and a Locust run of the drift API for the rubric's load row.
+- [ ] 5e.9 Update `docs/ml/training.md` (Drift) and the roadmap rows; proof and pending verification stay in separate sentences.
+
+## 5f. Model A/B experiment (planned; decisions 4 to 6 in the design first)
+
+- [ ] 5f.1 Add the arms and the stable cohort assignment to Go Fraud (`model.arms`, `model.experiment`, per-arm client, version check and threshold), the optional `arm` on `ModelEvidence`, and the chart values with the percentage cap validated in the chart.
+- [ ] 5f.2 Add `role=challenger` to `roll_out`, the `challenger` registry stage, and deletion of the challenger service; `experiment.enabled` makes a gate-passed run deploy as challenger.
+- [ ] 5f.3 Add the `payment-risk-promote` pipeline (gate with the challenger as the new model and the champion as production, registry and service promotion, archive and cleanup) and keep `payment-risk-rollout` for rollback.
+- [ ] 5f.4 Add the challenger guard to the drift check (error, timeout and decline-rate bounds after a minimum sample).
+- [ ] 5f.5 Add the per-version panels to `ml-serving` and a by-version breakdown to `fraud-outcomes`.
+- [ ] 5f.6 Update `docs/ml/serving.md` (A/B) and the roadmap rows.
+
 ## 6. Local checks and hand-off
 
 - [ ] 6.1 Run local non-test checks only: `ruff`, treefmt, `helm lint` and `helm template`, KFP compilation, `openspec validate train-fraud-model --strict`, and `git diff --check`. Commit locally on `feat/train-fraud-model`.
@@ -94,6 +115,8 @@
 - [x] 7.6 Write the evidence into `docs/ml/training.md` and `docs/ml/serving.md` as numbers and tables. Results that miss expectations are recorded as observed.
 - [ ] 7.7 Run the same steps on prod once its stream history is replayed, with the user's approval.
 - [ ] 7.8 Run `payment-risk-training` without a snapshot on a cluster with room for the 8 GB staging pod, and record the incremental training-set snapshot summary.
+- [ ] 7.9 With the user's approval, on dev only: run the live simulator with a drift step, show the drift state and the dashboard, and show one triggered run, the repeated check starting none, and the gate outcome.
+- [ ] 7.10 With the user's approval, on dev only: deploy a challenger at a small percentage, show both versions side by side, the stable cohort, an abort by guard, and a promotion.
 
 ## 8. Archive
 

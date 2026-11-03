@@ -43,7 +43,7 @@ The ML serving dashboard (`ml-serving` in the ML folder of the platform Grafana)
 |---|---|
 | Feature-retrieval API | Typed, validated lookups by customer and method ID with health checks, deployed by Helm with rolling update and automatic rollback |
 | Autoscaling of the retrieval API | Request-driven autoscaling for the Feast retrieval API; inference scales as above |
-| A/B testing | Two inference versions with a traffic split, deployed through CI/CD, with version-specific dashboards |
+| A/B testing | Designed, not built: a gate-passed challenger as a second InferenceService next to the champion, a stable customer-hash split in Go Fraud (at most 20%), per-arm thresholds and evidence, promotion by pipeline, and per-version panels from the shared Victoria and ClickHouse data. Pending verification on dev with the user's approval |
 | Load test | Locust run against the retrieval API, recording throughput, latency percentiles and errors as an HTML report |
 
 Every decision records the policy, model and feature versions it used. The model call never triggers payment effects; only the decision does.

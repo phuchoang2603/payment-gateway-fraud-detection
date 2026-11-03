@@ -169,3 +169,43 @@ They SHALL NOT install or modify shared controllers, node pools or the namespace
 
 - **WHEN** a pipeline run starts
 - **THEN** training and tuning pods run on GPU nodes and the other steps on the shared pools, with no new controller installed
+
+### Requirement: Reference profile per model version
+Registering a version SHALL compute a reference profile from its weighted training split: per feature, up to 10 weighted quantile bin edges over the non-missing values and the weighted share of missing values. The profile SHALL be stored on the registry version and packaged with the served model, so the profile a request is compared with is the one of the version that scored it.
+
+#### Scenario: Profile follows the version
+- **WHEN** a version is registered and later served
+- **THEN** its registry properties and its served model configuration carry the same profile, and a rollback serves the profile of the version it returns to
+
+### Requirement: Drift measurement without labels
+A periodic comparison SHALL measure, for the served version, the population stability index of each feature between the version's reference profile and the distribution of the features it scored in a recent window, and the shift in missing share. It SHALL need no labels, SHALL report `insufficient` below a configured minimum sample count, and SHALL publish the per-feature values and the overall state to the platform's metrics store for the dashboard.
+
+#### Scenario: Too few scored requests
+- **WHEN** the window holds fewer scored requests than the minimum
+- **THEN** the state is `insufficient` and no retraining is requested
+
+#### Scenario: A feature shifts
+- **WHEN** a feature's current distribution moves away from the reference
+- **THEN** the dashboard shows its index and the overall state changes only when the configured breach rule holds
+
+### Requirement: Drift-triggered retraining through the Kubeflow API
+When the breach rule holds in both a short and a long window, a single job SHALL create one run of the training pipeline through the Kubeflow API, named for the version and the hour. It SHALL create none while a drift-triggered run is pending or running, within the cooldown after the previous one, when the serving version's cutoff is younger than the minimum age, or after the bound on runs per week. The run SHALL pass through the same gate and promotion rules as any other, and a version it registers SHALL record that a drift caused it and the drift summary.
+
+#### Scenario: Persistent drift
+- **WHEN** the breach rule holds in both windows, no drift-triggered run is active, and the cooldown and the weekly bound allow it
+- **THEN** one training run starts, and a repeated check an hour later starts none
+
+#### Scenario: Retrained model does not pass the gate
+- **WHEN** the triggered run fails the gate
+- **THEN** nothing is registered or deployed, the drift stays visible, and further runs wait for the cooldown and stay within the weekly bound
+
+#### Scenario: Drift service restarts
+- **WHEN** the check job or the drift service restarts
+- **THEN** the next decision uses only the run list and the registry, and repeats no run
+
+### Requirement: Configurable generated drift
+The live traffic simulator SHALL accept a validated list of drift steps, each with a time offset and overrides of named behaviour and scenario values, and SHALL apply them when a purchase is drawn, deterministically for a seed and without changing the world's digest.
+
+#### Scenario: Drift step
+- **WHEN** the simulator passes a step's offset
+- **THEN** later purchases are drawn with the overridden values, and an unknown key fails the configuration

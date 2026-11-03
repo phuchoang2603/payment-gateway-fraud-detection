@@ -40,27 +40,31 @@ This change trains `payment_risk_v1` on that service, through the platform's Kub
 - **Workspace wiring (BREAKING for the stale `kubeflow-workspace` spec).** The app deploys only consumer resources into the platform `ml` namespace: the ServiceAccount and Role, ExternalSecrets, the stopped notebook, and the pipeline definitions. The platform owns the registry, KServe, Katib, Trainer, the GPU runtime and capacity, and the `ml` Profile.
 - **Rolling retraining:** a Kubeflow `RecurringRun` starts `payment-risk-training` with windows derived from its schedule time, and a run whose cutoff is not newer than the newest registered model stops before building a training set.
 - **Go Fraud scores with the model:** a v2 adapter calls the registered model on Triton after the Feast read. The score can decline an attempt only under an explicit missing-feature policy, and is always recorded in the assessment evidence.
+- **Drift and drift-triggered retraining.** Go Fraud counts each scored feature into the bins of the served version's reference profile, and a small drift service compares the current window with that reference (PSI per feature, with a minimum sample count) without any labels. An hourly job turns a persistent breach into one bounded, deduplicated `payment-risk-training` run through the Kubeflow API, so every existing evaluation and promotion gate still applies. The live simulator gains a configurable drift schedule to produce the drift.
+- **Model A/B experiment.** A registered version that passed its gate can serve as a challenger next to the champion, in its own InferenceService. Go Fraud assigns customers to arms by a stable hash and a Git-owned percentage, records the arm's version and threshold in the evidence, and both arms are monitored per version in the shared Victoria metrics and the ClickHouse marts. A pipeline promotes or removes the challenger. This is separate from the Edge checkout canaries.
 - **Not in this change:**
-  - drift checks (roadmap);
   - distributed training (the user chose a single GPU);
-  - an A/B split.
+  - shadow (non-enforcing) scoring, which an earlier decision removed;
+  - a second metrics or monitoring stack, and any new course-named product;
+  - regenerating the historical dataset with drift.
 
 ## Capabilities
 
 ### New Capabilities
 
 - `fraud-training-dataset`: the training set built through `payment_risk_v1`, covering its entity rows, sampling, recorded provenance, incremental versions and validation.
-- `fraud-model-training`: the notebook, the Kubeflow pipeline, time-ordered splits, single-GPU training, Katib, the evaluation gate and Model Registry versions.
-- `fraud-model-serving`: the KServe InferenceService contract, and deployment and rollback by pipeline.
+- `fraud-model-training`: the notebook, the Kubeflow pipeline, time-ordered splits, single-GPU training, Katib, the evaluation gate and Model Registry versions, the per-version reference profile, and drift measurement with its retraining trigger.
+- `fraud-model-serving`: the KServe InferenceService contract, deployment and rollback by pipeline, autoscaling and metrics, and the challenger version with per-version monitoring.
 
 ### Modified Capabilities
 
 - `kubeflow-workspace`: drops the app-owned Profile and registry. The app's resources live in the platform `ml` namespace, and the platform owns the Kubeflow services.
-- `fraud-decision`: model scoring in the assessment, the missing-feature policy, and the evidence it records.
+- `fraud-decision`: model scoring in the assessment, the missing-feature policy, and the evidence it records, plus experiment arm assignment and the feature-bin counters.
+- The live simulator's configurable drift schedule is specified under `fraud-model-training` for now; a delta spec for `historical-data-generation` can be split out if that capability should own it (design, open decision 7).
 
 ## Impact
 
-- **Code:** new `src/ml`: `risk_model` (including a small JSON client and the rolling-window planner), the pipelines `payment-risk-training` and `payment-risk-rollout`, and the notebook; `src/payment-gateway/fraud` (a Triton adapter and the decision policy).
+- **Code:** the drift service and the hourly check in `src/ml`, `risk_model.drift`, the arms and bin counters in `src/payment-gateway/fraud`, a `drift` overlay in `src/data-pipeline/simulator`'s live config; new `src/ml`: `risk_model` (including a small JSON client and the rolling-window planner), the pipelines `payment-risk-training` and `payment-risk-rollout`, and the notebook; `src/payment-gateway/fraud` (a Triton adapter and the decision policy).
 - **Images:**
   - new `ml`: a CUDA 12 runtime with pinned XGBoost, plus Java, Spark 4.1.3 with the Iceberg 1.12 and AWS jars, and `fraud_feast[spark]` from `src/data-pipeline/feast`;
 - **Charts:**
