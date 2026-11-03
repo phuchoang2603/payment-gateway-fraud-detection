@@ -24,7 +24,7 @@ flowchart LR
     DOP["Doppler"] -->|"External Secrets"| APPS
 ```
 
-- The roots are `infra/argocd/dev/root.yaml` and `infra/argocd/prod/root.yaml`. Each release records one chart source revision and per-service image tags in `infra/argocd/app-of-apps/release.yaml`.
+- The roots are `infra/argocd/dev/root.yaml` and `infra/argocd/prod/root.yaml`. Each release records one chart source revision and per-service image tags in `infra/argocd/app-of-apps/release.yaml`. Bootstrap Helm parameters must not override that release revision.
 - Images carry `pr-<number>-<full-sha>` or `main-<full-sha>` tags. The release planner (`scripts/release.py`) compares each image's build paths (`.github/service-images.json`) against its last deployed commit and rebuilds only changed images; unchanged images keep their tags, and an unreachable recorded commit counts as changed. Chart-only releases reuse every tag.
 - Draft PRs skip the service-image release workflow; marking a PR ready for review enables dev publication.
 - Publication waits for all affected image builds and for every other workflow run on the same commit and event (CI, Go CI, Python CI and any added later) to succeed, for dev and prod alike; a failed or cancelled check stops the release. It skips a superseded source revision. There are no image-pin commits or mutable `latest` tags.
@@ -49,7 +49,7 @@ The prod release enables every application except `live-traffic`, `llm-platform`
 
 Only the public Edge checkout route uses a canary; the other five Go services remain Deployments. Internal callers use the stable `edge` Service. The existing Istio HTTPRoute retains its hostname, path, HTTPS header and timeouts, with `edge`/`edge-canary` weights controlled by Argo Rollouts. Argo CD ignores only this route's weights and the two Services' controller-owned hash selectors.
 
-Before setting `rollout.enabled`, the platform owner must install compatible pinned Rollouts CRDs/controller and the `argoproj-labs/gatewayAPI` plugin, grant access to the namespace and `edge` HTTPRoute, and permit controller queries to `http://vmsingle-vmks.observability.svc.cluster.local:8428`. Grafana discovery and controller metrics collection also belong to the platform. At initial implementation, these prerequisites are being coordinated; a rendered Rollout is not a deployed canary.
+Before setting `rollout.enabled`, the platform owner must install compatible pinned Rollouts CRDs/controller and the `argoproj-labs/gatewayAPI` plugin, grant access to the namespace and `edge` HTTPRoute, and permit controller queries to `http://vmsingle-vmks.observability.svc.cluster.local:8428`. Grafana discovery and controller metrics collection also belong to the platform. Prod runs Rollouts v1.10.1 (chart 2.43.8) and Gateway API plugin v0.17.0, pinned and delivered by the platform. The controller query path, scoped route permissions and shared scrape/discovery are verified.
 
 Adopt through separately published prod releases:
 
@@ -70,7 +70,7 @@ Python services take settings from configuration files and environment variables
 | fraud | `GRPC_ADDR`, `SHUTDOWN_TIMEOUT` | `:8000`, `10s` | Internal gRPC listener and drain (max 60s) |
 | fraud | `FRAUD_DATABASE_URL`, `FRAUD_MIGRATE_DATABASE_URL` | required | Runtime and migration identities |
 | fraud | `FRAUD_ASSESSMENT_DEADLINE`, `FRAUD_ASSESSMENT_LEASE`, `FRAUD_ASSESSMENT_RETRY_HORIZON`, `FRAUD_ASSESSMENT_ERROR_BACKOFF` | `1s`, `2s`, `5m`, `250ms` | Fenced completion and bounded recovery |
-| fraud | `FRAUD_FEAST_URL`, `FRAUD_FEATURE_EPOCH`, `FRAUD_FEATURE_DEFINITION_SHA256`, `FRAUD_FEATURE_MAX_ANCHOR_AGE`, `FRAUD_FEATURE_MAX_PROGRESS_AGE` | unset; feature retrieval is disabled until the feature-store change | Shadow feature retrieval |
+| fraud | `FRAUD_FEAST_URL`, `FRAUD_FEATURE_SERVICE`, `FRAUD_FEATURE_TTL_DAILY`, `FRAUD_FEATURE_TTL_STREAM` | chart values under `features`; enabled in prod | Online history retrieval |
 | payments | `PAYMENTS_DATABASE_URL`, `PAYMENTS_MIGRATE_DATABASE_URL` | required | Runtime and migration identities |
 | payments | `PAYMENTS_REDIS_ADDR`, `PAYMENTS_REDIS_PASSWORD`, `PAYMENTS_IDEMPOTENCY_TTL` | chart values, `24h` | Redis-first idempotency with a 50 ms deadline before database fallback |
 | payments | `PAYMENTS_ATTEMPT_BUDGET`, `PAYMENTS_FRAUD_TIMEOUT`, `PAYMENTS_PROCESSOR_TIMEOUT` | `5s`, `1s`, `3s` | Attempt and dependency budgets |

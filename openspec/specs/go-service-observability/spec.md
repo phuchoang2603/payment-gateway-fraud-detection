@@ -37,7 +37,7 @@ HTTP and gRPC requests across Go services SHALL propagate valid W3C trace contex
 
 - **WHEN** a sampled edge request invokes payments, Go fraud and a Go simulator
 - **THEN** the exported spans form a connected request trace with route/RPC names and service identities
-- **AND** request-path logs expose matching trace identifiers in HyperDX
+- **AND** request-path logs expose matching trace identifiers through the shared Grafana trace/log data sources
 
 ### Requirement: Durable asynchronous context without business mutation
 
@@ -84,12 +84,12 @@ Exported diagnostics SHALL exclude credentials, authentication/signature headers
 - **THEN** its exported logs, spans and metric attributes exclude those values
 - **AND** safe request correlation remains available
 
-### Requirement: Shared-platform integration without application dashboards
+### Requirement: Shared-platform telemetry integration
 
-Workload charts SHALL configure all six Go services to use the shared node agent, with annotations matching exported service identities. Verification SHALL demonstrate fresh logs, metrics, traces and trace-to-log navigation using shared HyperDX sources/presets. Applications SHALL install no telemetry store, collector, custom dashboard or scrape deployment. Training, Feast/KServe serving and autoscaling deployments SHALL remain outside this change.
+Workload charts SHALL configure all six Go services to use the shared OTLP metric and trace endpoints, with annotations and environment/revision metadata matching exported service identities. Verification SHALL demonstrate fresh logs, metrics, traces and trace-to-log navigation using the shared VictoriaMetrics, VictoriaLogs, VictoriaTraces and Grafana services. Applications SHALL install no telemetry store or collector; namespace-local dashboard, scrape and alert definitions SHALL be permitted. Training, Feast/KServe serving and autoscaling deployment changes SHALL remain outside this capability.
 
 #### Scenario: Deployment acceptance
 
 - **WHEN** the charts are enabled and a bounded synthetic workflow exercises all six Go services
-- **THEN** each service's produced signals are readable from the shared store with matching Kubernetes/service identities
-- **AND** trace-to-log navigation works without an application-owned dashboard
+- **THEN** each service's produced signals are readable from the shared platform with matching Kubernetes/service/environment/revision identities
+- **AND** trace-to-log navigation works from the application operational dashboards without a second telemetry pipeline

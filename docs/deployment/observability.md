@@ -43,7 +43,7 @@ VictoriaMetrics preserves dotted OTLP names and resource labels. Queries use sel
 
 Strimzi exports bounded broker JMX measurements and payment-topic consumer lag on 9404. The pinned Flink image already includes `plugins/metrics-prometheus/flink-metrics-prometheus-2.2.1.jar`; live and historical replay jobs enable that reporter on 9249; collection is restricted to the observability vmagent identity. Workflow/Spark views reuse shared controller metrics and Kubernetes pod state. They do not claim executor-level instrumentation. Enabling these exporters can restart Kafka and upgrade Flink; check active replay/backfill state first.
 
-Namespace-local VMRules cover sustained gateway failures/latency, notification age, Kafka lag, failed data pods, checkpoint failures and required-signal absence. Flink and Rollout alerts are conditional on their configuration. The shared VMAlert/Alertmanager owns evaluation and routing. Grafana must discover dashboard ConfigMaps in `payment-gateway` and `data`; VMAgent/VMAlert must select those namespaces.
+Namespace-local VMRules cover sustained gateway failures/latency, notification age, Kafka lag, failed data pods, checkpoint failures and required-signal absence. Flink and Rollout alerts are conditional on their configuration. The shared VMAlert/Alertmanager owns evaluation and routing. Its current `blackhole` receiver retains alert visibility in the shared UI without external notification delivery. Grafana must discover dashboard ConfigMaps in `payment-gateway` and `data`; VMAgent/VMAlert must select those namespaces.
 
 ## Verification
 

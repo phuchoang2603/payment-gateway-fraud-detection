@@ -26,7 +26,7 @@ const (
 //	EDGE_INTEGRATIONS_JSON            JSON array of integrations (required)
 //	EDGE_PAYMENTS_ADDR                Payments gRPC target (required)
 //	EDGE_PAYMENTS_TIMEOUT             deadline for every Payments call, default 6s
-//	EDGE_VAULT_ADDRESS / VAULT_ADDRESS vault VaultService gRPC target (required)
+//	EDGE_VAULT_ADDRESS                vault VaultService gRPC target (required)
 //	EDGE_VAULT_TIMEOUT                deadline for every vault call, default 2s
 //	EDGE_PUBLIC_BASE_URL              public origin of the hosted page, e.g. https://pay.example.com (required)
 //	EDGE_TRUSTED_PROXY_HEADER         header carrying the client address, default X-Forwarded-For
@@ -75,7 +75,6 @@ func FromLookup(lookup func(string) string) (Config, error) {
 	setString(&cfg.Address, "EDGE_HTTP_ADDR")
 	setString(&cfg.IntegrationsJSON, "EDGE_INTEGRATIONS_JSON")
 	setString(&cfg.PaymentsAddr, "EDGE_PAYMENTS_ADDR")
-	setString(&cfg.VaultAddr, "VAULT_ADDRESS")
 	setString(&cfg.VaultAddr, "EDGE_VAULT_ADDRESS")
 	setString(&cfg.PublicBaseURL, "EDGE_PUBLIC_BASE_URL")
 	setString(&cfg.TrustedProxyHeader, "EDGE_TRUSTED_PROXY_HEADER")

@@ -32,7 +32,7 @@ Git-versioned ODCS contracts SHALL remain authoritative. OpenMetadata SHALL expo
 - **THEN** publication reports incomplete governance rather than silently omitting it or claiming acceptance
 
 ### Requirement: Canonical table identities
-Native ClickHouse discovery, profiling, quality execution and lineage SHALL address the same OpenMetadata table entities. ClickHouse SHALL use the existing RustFS REST catalog and separately configured warehouse access. External-catalog selection and nested schema fidelity SHALL be verified for each native workflow connection; no custom discovery, duplicate Spark/custom registrations or mandatory internal-table copies SHALL substitute for native discovery.
+Native ClickHouse discovery, profiling, quality execution and lineage SHALL address the same OpenMetadata table entities. ClickHouse SHALL use the existing Polaris REST catalog and separately configured warehouse access. External-catalog selection and nested schema fidelity SHALL be verified for each native workflow connection; no custom discovery, duplicate Spark/custom registrations or mandatory internal-table copies SHALL substitute for native discovery.
 
 #### Scenario: Execute native SQL validation
 

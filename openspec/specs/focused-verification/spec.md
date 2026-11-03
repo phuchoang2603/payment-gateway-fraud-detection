@@ -70,7 +70,7 @@ CI SHALL reuse coverage and add only distinct wire, identity and retry checks: p
 - **THEN** their business columns have the same types as the same records ingested from generated historical Parquet
 
 ### Requirement: Native ClickHouse integration evidence
-Implementation SHALL verify direct RustFS SigV4 access, external-catalog discovery, nested schemas, snapshot-specific SQL and native OpenMetadata passing/failing quality results with the selected versions. This SHALL be implementation acceptance rather than a per-batch disposable compatibility stage. Previous GX/native acceptance SHALL NOT establish acceptance of the rewritten integration or survive as an active compatibility path. SQL execution failure or unsupported discovery SHALL be reported without a hidden legacy fallback.
+Implementation SHALL verify direct S3-compatible SigV4 access, external-catalog discovery, nested schemas, snapshot-specific SQL and native OpenMetadata passing/failing quality results with the selected versions. This SHALL be implementation acceptance rather than a per-batch disposable compatibility stage. Previous GX/native acceptance SHALL NOT establish acceptance of the rewritten integration or survive as an active compatibility path. SQL execution failure or unsupported discovery SHALL be reported without a hidden legacy fallback.
 
 #### Scenario: Native external-catalog discovery is incomplete
 

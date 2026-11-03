@@ -6,7 +6,7 @@ Deploy fraud-service into the existing Talos environments with independent appli
 
 ### Requirement: Environment-specific deployment ownership
 
-Dev and prod SHALL use the same application charts with environment-specific endpoint, hostname, storage-class, secret-config and application-enablement values. Prod SHALL currently enable gateway services, PostgreSQL, Redis and Kafka/CDC while disabling live traffic/archiving, Flink/Feast, metadata jobs and Spark workflows; Fraud feature retrieval SHALL be disabled in prod. Existing shared lakehouse credential/catalog wiring SHALL remain available without pipeline compute. Gateway and Kafka SHALL reside in `payment-gateway`; data, Flink and Feast workloads SHALL reside in platform-owned `data`. The platform SHALL own Kubeflow and its `ml` workspace. Application deployment SHALL NOT create or adopt shared namespaces, Profiles or controllers.
+Dev and prod SHALL use the same application charts with environment-specific endpoint, hostname, storage-class, secret-config and application-enablement values. Prod SHALL enable gateway services, PostgreSQL, Redis, Kafka/CDC, lakehouse, ClickHouse and data-pipeline workflows with Flink/Feast feature retrieval, while keeping live traffic and LLM/RAG applications disabled. Scheduled data runs SHALL remain suspended until explicitly enabled. Gateway and Kafka SHALL reside in `payment-gateway`; data, Flink and Feast workloads SHALL reside in platform-owned `data`. The platform SHALL own Kubeflow and its `ml` workspace. Application deployment SHALL NOT create or adopt shared namespaces, Profiles or controllers.
 
 #### Scenario: Render both environments
 
@@ -32,18 +32,18 @@ The deployment SHALL provide internal gRPC access on port 8000 and configured OT
 
 ### Requirement: Shared platform ownership isolation
 
-Synchronizing or deleting this repository's applications SHALL NOT create, adopt, or delete shared observability infrastructure, its operators, or its namespace. The application deployment SHALL NOT require CRDs or data sources from the removed observability stack and SHALL NOT install an application-owned collector, dashboard or alerting resource.
+Synchronizing or deleting this repository's applications SHALL NOT create, adopt, or delete shared observability infrastructure, its operators, or its namespace. The application deployment SHALL NOT require CRDs or data sources from the removed observability stack and SHALL NOT install an application-owned collector or telemetry store. Application-owned namespace-local dashboard ConfigMaps, metric scrape definitions and alert rules SHALL use the current platform's shared discovery and data sources. Shared rollout controllers, CRDs and traffic-router plugins SHALL remain platform-owned.
 
 #### Scenario: Remove a payment-gateway application
 
 - **WHEN** its application-owned resources are removed
-- **THEN** the platform's telemetry collectors, store, and UI remain under the platform owner's control
+- **THEN** its dashboard, scrape and alert definitions are removed while the platform's telemetry collectors, stores, UI and rollout controllers remain under the platform owner's control
 
 #### Scenario: Render fraud deployment during the transition
 
 - **WHEN** the dev and prod application configurations are rendered
 - **THEN** neither requires resources from the removed observability stack
-- **AND** the Go fraud workload exports enabled application measurements over OTLP to the shared node agent without exposing the replaced Python metrics listener
+- **AND** the Go fraud workload exports enabled application measurements over OTLP to the shared endpoints without exposing the replaced Python metrics listener
 
 ### Requirement: Service quality and automated image release
 
@@ -188,7 +188,7 @@ The application SHALL own the thin metadata image and workflow configuration, us
 - **THEN** native workflows and SDK synchronization use the matched version through external secret references without installing a second catalog or retaining a parallel HTTP publisher
 
 ### Requirement: Gateway-owned lakehouse integration
-The gateway repository SHALL own gateway Doppler credential references, Polaris catalog registration and the ClickHouse `lakehouse` DataLakeCatalog database, which SHALL be created as admin after the instance accepts connections and re-created only when its definition changes. The platform SHALL own storage policies, provision production storage identities and publish credentials to gateway Doppler. The platform SHALL own the Polaris and PostgreSQL servers, durable databases and the Altinity operator's management credential. The gateway integration SHALL provide the storage Secret referenced by the platform Polaris Deployment without creating a second storage identity.
+The gateway repository SHALL own gateway Doppler credential references, Polaris catalog registration and the ClickHouse `lakehouse` DataLakeCatalog database, which SHALL be created as admin after the instance accepts connections and re-created only when its definition changes. The platform SHALL own storage policies, provision production storage identities and publish credentials to gateway Doppler. The lakehouse application SHALL own its Polaris and PostgreSQL servers and durable database resources; the platform SHALL own storage provisioning and the Altinity operator's management credential. The gateway integration SHALL provide the storage Secret referenced by its Polaris Deployment without creating a second storage identity.
 
 #### Scenario: Reconcile the gateway integration
 - **WHEN** the selected environment is reconciled with gateway credentials available
@@ -203,7 +203,7 @@ Python services SHALL read runtime settings from configuration files and environ
 - **THEN** it uses that file's output and execution settings without CLI flags, while storage credentials remain external environment secrets
 
 ### Requirement: LLM platform application
-The app-of-apps SHALL deploy chart `infra/charts/llm-platform` as application `llm-platform` into the platform-owned `llm` namespace, which is enrolled in the ambient mesh at the `restricted` Pod Security level. It SHALL be enabled in dev and disabled in prod until the user explicitly confirms enabling it. Its credentials SHALL come from `gateway-doppler`. It SHALL consume the platform's KServe, agentgateway, kagent, agentregistry and Agent Substrate controllers and CRDs, and SHALL NOT install, adopt or delete them, their namespaces or the GPU NodePool.
+The app-of-apps SHALL deploy chart `infra/charts/llm-platform` as application `llm-platform` into the platform-owned `llm` namespace, which is enrolled in the ambient mesh at the `restricted` Pod Security level. It SHALL be enabled in dev and disabled in prod until the user explicitly confirms enabling it. Its credentials SHALL come from `gateway-doppler`. It SHALL consume the platform's KServe, agentgateway, kagent, agentregistry and Agent Substrate controllers and CRDs, and SHALL NOT install, adopt or delete them, their namespaces or GPU worker infrastructure.
 
 #### Scenario: Render both environments
 - **WHEN** the dev and prod roots are rendered
@@ -221,7 +221,7 @@ The app-of-apps SHALL deploy chart `infra/charts/rag-pipeline` as application `r
 - **THEN** dev contains the `rag-pipeline` Application and prod does not
 
 ### Requirement: ClickHouse instance and users
-The data-pipelines application SHALL define one `ClickHouseInstallation` named `clickhouse` in `data`, with one shard and one replica, image `clickhouse/clickhouse-server:26.10.2.103`, and a `clickhouse` Service exposing HTTP 8123 and native 9000. The default profile SHALL set `allow_database_iceberg` to 1. Users `admin`, `langfuse` and `openmetadata` SHALL take their passwords from ExternalSecrets on ClusterSecretStore `doppler` (`CLICKHOUSE_ADMIN_PASSWORD`, `CLICKHOUSE_LANGFUSE_PASSWORD`, `CLICKHOUSE_OPENMETADATA_PASSWORD`). The chart SHALL NOT define the Altinity operator's management user, which the operator adds itself, and SHALL NOT override its profile or network settings. A setup Job SHALL create database `langfuse` after the instance accepts connections.
+The data-pipelines application SHALL define one `ClickHouseInstallation` named `clickhouse` in `data`, with one shard and one replica, image `clickhouse/clickhouse-server:26.10.2.103`, and a `clickhouse` Service exposing HTTP 8123 and native 9000. The default profile SHALL set `allow_database_iceberg` to 1. Users `admin`, `langfuse` and `openmetadata` SHALL take their passwords from ExternalSecrets on ClusterSecretStore `gateway-doppler` (`CLICKHOUSE_ADMIN_PASSWORD`, `CLICKHOUSE_LANGFUSE_PASSWORD`, `CLICKHOUSE_OPENMETADATA_PASSWORD`). The chart SHALL NOT define the Altinity operator's management user, which the operator adds itself, and SHALL NOT override its profile or network settings. A setup Job SHALL create database `langfuse` after the instance accepts connections.
 
 #### Scenario: Render the instance
 
