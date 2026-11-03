@@ -10,7 +10,7 @@ The offline path turns a reproducible synthetic history into curated tables and 
 
 | Problem | Handling | Evidence |
 |---|---|---|
-| Skew | One merchant takes about 56% of purchases. Spark AQE splits skewed partitions; the marts keep a time-first key so the hot merchant does not decide the layout, and the overview dashboard shows the hot merchant's share | 56.3% top-merchant share in v18, about 56% in v19 samples |
+| Skew | One merchant takes about 56% of purchases. Spark enables AQE; the on-demand benchmark checks whether a skew split actually occurs; the marts keep a time-first key so the hot merchant does not decide the layout, and the overview dashboard shows the hot merchant's share | 56.3% top-merchant share in v18, about 56% in v19 samples |
 | Schema evolution | Event schema 3 adds `assessment_id`, `evidence_sha256` and `user_agent_family` on 2026-04-30. DP1 reads `.v2` and `.v3` files together with `mergeSchema`, so absent version-2 fields become null; a Bronze rule requires them present exactly from version 3 | Bronze v19: version 2 is 514,342,841 events (2025-10-29 to 2026-04-29) and none of its 101,943,941 risk decisions has either field; version 3 is 469,384,242 events from 2026-04-30 and all 93,028,261 of its risk decisions have both |
 | Duplicates | About 2% of events are republished with a later `recorded_at`. Silver collapses equal business content per `event_id` and quarantines whole payments whose copies differ | `silver.rejected_events`: 0 rows for the year |
 | High cardinality | 3M customers, their payment methods and devices are kept as integration-scoped keys; features use exact distinct counts over merged intervals, and the marts use bloom-filter indexes for per-customer and per-card lookups | Gold feature tables: 348M customer and 363M card rows for the year |
@@ -25,9 +25,36 @@ The published interface is the contracts: [payment events](products/historical-p
 | Dataset | Location | Run | Result |
 |---|---|---|---|
 | v18 (dev) | `s3://platform-dev/datasets/payment-gateway/historical/v18` | `generate-historical-v18-77fzr`, 1 shard, 11m50s | 823,963 events, 161,007 labels, 181 files, 112.4 MB; 1.996% duplicates; top merchant 56.3% of purchases, top 10 merchants 71.1%; 414,059 v2 and 409,904 v3 rows |
-| v19 (prod, full scale) | `s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19` | `generate-historical-v19-nvp7l`, 12 spot shards, 49 minutes | 983,727,083 events, 192,204,996 labels, 2,924 files over 365 days, 133.5 GB; sampled parts show about 2.0% duplicates and a 56% top-merchant share |
+| v19 (recorded AWS run, full scale) | `s3://platform-prod-142737101504-us-east-1/datasets/payment-gateway/historical/v19` | `generate-historical-v19-nvp7l`, 12 spot shards, 49 minutes | 983,727,083 events, 192,204,996 labels, 2,924 files over 365 days, 133.5 GB; sampled parts show about 2.0% duplicates and a 56% top-merchant share |
 
 Both were checked by reading the manifest and Parquet files back from storage: no empty parts, and every `.v2` file lacks `assessment_id` while `.v3` files have it.
+
+### Cardinality and skew are different measurements
+
+The full configuration reserves 3M customers, 20K merchants, 3.9M payment methods and 4.2M devices. These are entity-domain sizes, not observed distinct counts in a sample. For a column `k`, report cardinality ratio as `count(DISTINCT k) / count(*)` over a named table and date range, and report nulls separately. A merchant can have low cardinality while one value dominates the rows; cardinality alone does not describe skew.
+
+For example, run this against published Silver, keeping the same range when comparing layouts:
+
+```sql
+SELECT count(*) AS attempts,
+       uniqExact(customer_id) / nullIf(count(*), 0) AS customer_cardinality_ratio,
+       uniqExact(merchant_id) / nullIf(count(*), 0) AS merchant_cardinality_ratio,
+       uniqExact(payment_method_fingerprint) / nullIf(count(*), 0) AS method_cardinality_ratio
+FROM lakehouse.`silver.attempts`
+WHERE payment_day BETWEEN '2026-09-01' AND '2026-09-30';
+```
+
+This query is a measurement recipe; its results have not been captured for the new GCP dataset. The configured `hot_merchant_share: 0.5` is one selection branch in [`World.purchase`](../../src/data-pipeline/simulator/simulator/world.py); familiar-merchant and Zipf selection can choose the same merchant too, explaining the observed share above 50%. Compare row shares with the generator configuration, not with a uniform-distribution assumption.
+
+### Schema evolution and duplicate examples
+
+| Input | Handling | Expected output |
+|---|---|---|
+| `.v2` Parquet without the new nested fields, followed by `.v3` with them | [`read_parts`](../../src/data-pipeline/batch/batch/bronze/ingest.py) reads all paths with `mergeSchema=true`; the contract checks presence by schema version | Both versions remain readable; old fields are null rather than invented values |
+| Two copies of `evt-1`, differing only in `recorded_at` | Bronze retains both; Silver hashes business fields and keeps the earliest copy | One accepted event with the earlier `recorded_at` |
+| Two `evt-2` copies with amounts 100 and 999, plus another event in that payment | Silver identifies a content conflict and quarantines the whole payment | No accepted events for that payment; all three deliveries remain inspectable in rejects |
+
+The duplicate example is executable in [`test_silver.py`](../../src/data-pipeline/batch/tests/silver/test_silver.py), `test_identical_copies_collapse_to_earliest_and_conflicts_leave_the_accepted_tables`. Generator schema boundaries and physical Parquet fields are checked in [`test_generation.py`](../../src/data-pipeline/simulator/tests/test_generation.py). These fixtures prove behavior; they are not a timed Spark optimization comparison or UI capture. The recorded year decreased from 983,727,083 Bronze deliveries to 964,433,589 accepted Silver events, but the smaller table alone does not prove the conflict path, which needs the fixture above.
 
 ### Generation and reruns
 
@@ -71,7 +98,7 @@ Bronze keeps every delivery, including duplicates, in two tables shared by both 
 - **Kafka mode** reads `payments.events.v1` and `fraud.labels.v1` directly, decodes protobuf with the payments descriptor set, and appends. Each run starts from `max(_kafka_offset) + 1` per partition, read from Bronze itself, so progress and rows commit together and survive compaction. Records that fail protobuf decoding or a required-field check go to `bronze.rejected_records` instead of blocking later runs. A record that decodes but cannot be cast to the Bronze schema fails the run.
 - **Provenance columns:** `_source`, `_dataset_version`, `_source_file`, `_kafka_topic`, `_kafka_partition`, `_kafka_offset`, `_kafka_timestamp`, `_ingested_at`, `_run_id`.
 
-Prod v19 Bronze holds 983,727,083 events (2,904 files, 113.7 GB) and 192,204,996 labels (386 files, 9.8 GB).
+Recorded AWS v19 Bronze held 983,727,083 events (2,904 files, 113.7 GB) and 192,204,996 labels (386 files, 9.8 GB).
 
 ![dp1-bronze historical run: spark, checks, publish-tables, publish](images/argo-dp1-bronze.png)
 
@@ -101,7 +128,11 @@ The `gold` stage is the Spark batch layer of a Lambda design; Flink is the speed
 
 ClickHouse builds `marts.fact_payment_attempt` and `marts.fact_merchant_day` from the published Silver over a rolling 90-day window. A run rebuilds its days and the 45-day label lookback before them, which covers the attempts its labels can belong to and the days whose 21-day chargeback window completes in it. It stages those days' attempts and their label summary once, joins them in 64 payment-hash buckets into staging tables, the checks audit staging, and publish replaces those days' partitions. See [storage](storage.md#warehouse-indexing).
 
-## Prod v19 run
+## Recorded v19 backfill (AWS)
+
+The timings, row totals and captures below describe the completed AWS-era run. Production now uses GCP; regeneration there does not establish that its downstream backfill has completed. Keep these recorded results separate from a new GCP run.
+
+<a id="prod-v19-run"></a>
 
 Bronze v19, then `dp-backfill` from 2025-10-29 on the prod cluster (11 spot executors × 3 cores, drivers on on-demand nodes). Minutes per stage, from the Argo node times. Until June the stages ran in one line and `check-gold` audited Gold and the marts together; from July Gold and the marts run side by side, so the month total no longer includes the mart build:
 
@@ -152,6 +183,12 @@ Published row counts (Iceberg `main`, 2025-10-29 to 2026-10-28):
 | `marts.fact_merchant_day` | 1,327,898 |
 
 Every Silver, Gold and mart rule passed in OpenMetadata: 58 tests on 15 tables. Lineage runs from the v19 dataset through Bronze and Silver to the Gold tables and marts; see [orchestration and governance](orchestration-governance.md#catalog).
+
+### Controlled skew comparison
+
+[`batch/silver/benchmark.py`](../../src/data-pipeline/batch/batch/silver/benchmark.py) compares the same cached, pinned attempt range using `baseline_no_skew_join`, `aqe_skew_join` and a 16-bucket `salted` join. It disables broadcast for this experiment, checks output row counts and checksums, and rejects an AQE result whose executed plan contains no actual skew split. Submit `argo submit -n data --from workflowtemplate/dp2-benchmark -p start=2026-09-01 -p end=2026-09-30` only after that Silver range is published.
+
+Capture the report's snapshot ID, hot-key share, per-variant wall/task times and final adaptive plans alongside the Spark stage screenshots. There is no recorded production timing comparison for these three variants yet. The DP1 hash-write screenshots below measure write distribution, not a skewed merchant join, and cannot substantiate a skew-join speedup. Salting is an experiment, not the production default: it replicates the small side and adds another key, so adopt it only when the same-output comparison beats AQE on the target range.
 
 ## Optimization techniques
 

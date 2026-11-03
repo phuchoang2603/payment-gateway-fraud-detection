@@ -5,6 +5,37 @@ Self-hosted chat, embedding and decision models for the agents, the RAG pipeline
 - Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform) (`models.yaml`, values `models`). Application `llm-platform` in namespace `llm`, on dev and prod. On prod the three servers are meant to share one GPU node labelled `talos.dev/nodepool: gpu`; the platform has no cloud GPU pool yet, so the application stays disabled there.
 - Platform prerequisites (KServe 0.21 `LLMInferenceService` presets, the GPU DRA driver, the `llm-gpu` node group for the local model cache, agentgateway) come from the platform repository.
 
+## Setup and verify
+
+1. Enter the repository's `devenv shell` and select the environment's kubeconfig explicitly. Start on dev (`~/.kube/talos-dev.yaml`); production has no GPU pool and is not a substitute for the recorded dev benchmark.
+2. Verify the platform prerequisites: `kubectl --kubeconfig ~/.kube/talos-dev.yaml get nodes -L talos.dev/nodepool`, the GPU ResourceClaim/DRA driver, KServe presets, agentgateway, kagent/Substrate and the local model cache. A Ready CPU node does not establish GPU readiness.
+3. Inspect `models`, `gpu`, `gateway` and `agents` in [`values.yaml`](../../infra/charts/llm-platform/values.yaml), and the per-environment overrides. Check pinned weight revisions, GPU memory shares and model names before rendering. ExternalSecrets supply credentials; endpoint and storage settings are chart values.
+4. Render `helm template llm-platform infra/charts/llm-platform -n llm -f infra/charts/llm-platform/values-dev.yaml` and lint the chart, then publish through the repository's [release flow](../deployment/cd.md). The release supplies the agent runtime image digest; rendering alone does not make an admissible production deployment.
+5. Check `kubectl --kubeconfig ~/.kube/talos-dev.yaml get llminferenceservices -n llm`, the gateway's Accepted/Programmed conditions, and ready model endpoints. Inspect model startup logs if initialization or GPU allocation fails. The first cache population can take the full startup-probe allowance.
+6. Port-forward `kubectl --kubeconfig ~/.kube/talos-dev.yaml -n llm port-forward svc/agentgateway 18080:80`. In another devenv shell, call the gateway with the benchmark client's key without printing it:
+
+```sh
+python - <<'PYTHON'
+import json, subprocess, urllib.request
+key = subprocess.check_output([
+    "doppler", "secrets", "get", "LLM_GATEWAY_BENCHMARK_API_KEY", "--plain",
+    "--project", "payment-gateway-fraud-detection", "--config", "dev",
+], text=True).strip()
+body = json.dumps({"model": "qwen35-4b", "messages": [
+    {"role": "user", "content": "Explain what a payment gateway does in one sentence."}
+], "max_tokens": 80}).encode()
+request = urllib.request.Request(
+    "http://127.0.0.1:18080/v1/chat/completions", data=body,
+    headers={"Content-Type": "application/json", "Authorization": "Bearer " + key},
+)
+with urllib.request.urlopen(request, timeout=120) as response:
+    result = json.load(response)
+    print(response.status, result["model"], result["choices"][0]["message"]["content"])
+PYTHON
+```
+
+A successful call establishes routing for that model. Repeat with `/v1/embeddings` and `qwen3-embedding` to check its 1024-dimensional response; use the [gateway checks](gateway.md#checks-on-dev) for authentication, mesh bypass and rate-limit behavior. Save the result with timestamp, environment and serving image before calling it new proof. The recorded checks below remain dev evidence.
+
 ## Models
 
 | Model | Served name | Weights (pinned revision) | Runtime | Role |

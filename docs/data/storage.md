@@ -15,7 +15,8 @@ Three storage roles: immutable source files in object storage, an Iceberg lakeho
 | `datasets/payment-gateway/knowledge/<version>/` | RAG corpus documents published by the `rag-knowledge` workflow; immutable once `manifest.json` exists |
 | `runs/payment-gateway/` | Pipeline run reports and Flink checkpoints |
 | `lakehouse/` | Iceberg table data, through the Polaris catalog |
-| `artifacts/` | Kubeflow artifacts, owned by the platform |
+| `artifacts/` | Kubeflow artifacts and `artifacts/langfuse/{events,media}/` |
+| `substrate/` | Agent snapshots, including `substrate/llm-agents/` |
 
 Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT`, `S3_PATH_STYLE`, `AWS_REGION` and an `output` or root URL. Prod uses the S3 subset that GCS supports: endpoint `https://storage.googleapis.com`, signing region `auto`, path-style addressing and no object tagging. The platform expires no run objects, so finished runs are cleaned up by the workload that owns them. Clients compute checksums only when an operation requires them, and the generator's create-only writes send `x-goog-if-generation-match: 0` where S3 takes `If-None-Match: *`.
 
@@ -23,7 +24,7 @@ Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT
 
 Tables are Iceberg, registered in the Polaris REST catalog that the `lakehouse` chart deploys. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
 
-Prod v19 holds Bronze in full, and Silver and Gold from 2025-10-29 to 2026-10-28; see [the run](offline.md#prod-v19-run).
+The recorded AWS v19 backfill held Bronze in full, and Silver and Gold from 2025-10-29 to 2026-10-28; see [the run](offline.md#prod-v19-run). Those totals are not a verification of the fresh GCP deployment.
 
 | Technique | Applied to | Why |
 |---|---|---|
@@ -42,6 +43,12 @@ Prod v19 holds Bronze in full, and Silver and Gold from 2025-10-29 to 2026-10-28
 Kafka offsets are derived from the Bronze rows themselves, not from snapshot metadata, so compaction and snapshot expiry never lose ingestion progress.
 
 `maintain-lakehouse` (task `nightly`) runs from a suspended daily 03:43 UTC CronWorkflow and holds `dp-writer` and `dp1-bronze-writer`, so it never commits alongside a pipeline run. It reports before/after files and bytes per table and the branches it dropped; task `zorder` is the on-demand storage evidence.
+
+### Implementation references
+
+[`batch/spark.py`](../../src/data-pipeline/batch/batch/spark.py) configures the Iceberg REST catalog and S3 clients. [`bronze/ingest.py`](../../src/data-pipeline/batch/batch/bronze/ingest.py) defines the day partitions and historical schema merge; [`silver/curate.py`](../../src/data-pipeline/batch/batch/silver/curate.py) defines deduplication and local write order. [`batch/lakehouse.py`](../../src/data-pipeline/batch/batch/lakehouse.py) owns audit-branch writes and table properties, and [`batch/maintenance.py`](../../src/data-pipeline/batch/batch/maintenance.py) implements maintenance. The SQL warehouse's native table/index definitions are in [`gold/sql/marts`](../../src/data-pipeline/batch/batch/gold/sql/marts); [`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py) builds and publishes their staging partitions.
+
+Read the measurements below by the operation they measure: partition pruning reduces planned input, the DP1 fanout change removes a write shuffle, and ClickHouse indexes reduce query scans. They do not establish a schema-evolution or deduplication speedup. Z-order was measured and rejected for this one-file-per-day layout; it is not an adopted optimization.
 
 ## Warehouse
 

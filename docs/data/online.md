@@ -82,6 +82,21 @@ while self.pending and self.pending[0][0] <= now:
 - **Expiry heaps.** Each window has a heap of expiry times, so evicting old attempts costs O(log n) per attempt instead of rescanning history. The job registers one Flink timer at the earliest pending or expiry boundary, so counts drop even when the customer is quiet.
 - **Revisions.** After each advance, the job compares the coverage, values, counts and source progress with the previous snapshot. Only a change increments `revision` and moves `write_at` forward, so redelivered or idle inputs produce no new revision, and a late attempt produces a new revision without changing earlier ones.
 
+### Late, too-late and duplicate trace
+
+The complete operator flow is implemented in [`job.build_updates`](../../src/data-pipeline/streaming/fraud_streaming/job.py): raw Kafka bytes → source/progress observation and validation → `event_id` deduplication → attempt-identity deduplication → customer and method keyed windows → journal; decoding and content conflicts go to the reject sink. The [job graph](#flink-ui) is the recorded UI view of that flow.
+
+Consider a covered entity at 12:10 UTC, with no other attempts:
+
+| Delivery | Before handling | After handling |
+|---|---|---|
+| Attempt time 12:00, delivered at 12:10 | An arrival-time baseline incorrectly includes it in the 5-minute count | Attempt-time handling excludes it from 5 minutes and includes it in 1 hour and 24 hours |
+| Identical redelivery of that event | A no-dedup baseline counts it twice | Event dedup drops it; there is no second contribution |
+| Attempt time 11:59 on the previous day, delivered at 12:10 | It is beyond the 24-hour retained horizon | `Packet.too_late` is true; the operator increments `too_late` and omits the contribution |
+| Existing identity with different business content | Keeping an arbitrary copy hides a conflict | The reject sink records `conflicting_duplicate` |
+
+These are boundary examples, not newly captured live output. In live mode [`Timeline`](../../src/data-pipeline/streaming/fraud_streaming/operators.py) uses processing-time timers while `Entity` applies attempt-time membership. Logical history replay uses seed-clock event-time timers. A watermark screenshot alone therefore cannot prove live late-arrival correctness. Too-late records are counted and logged; they do not have a dedicated too-late side-output topic. The rejects topic serves invalid or conflicting records.
+
 ### Metrics
 
 | Metric | Meaning |
@@ -119,6 +134,10 @@ Results with the module defaults: seed 2603, 1,200 attempts and 1,221 deliveries
 | baseline | 683 | 1,199 | 0 |
 
 The handled variant's counters equal the injected workload: `too_late` 8, event `duplicates_dropped` 17, `rejected` (conflicting) 4, and lateness 5–15 minutes 58.
+
+![Local replay correctness comparison: incorrect feature cells per variant](images/streaming-replay-correctness.png)
+
+The chart was regenerated from the [local replay report](evidence/streaming-replay.json), using the module defaults. It shows 0 of 3,234 incorrect cells with handling, compared with 683 for the combined naive baseline. This is a process-level correctness experiment, not a Flink UI screenshot or throughput benchmark. The live run below injected no too-late traffic; a future runtime capture must show an attempt older than 24 hours, the `too_late` counter delta and unchanged feature contributions together.
 
 ### Backpressure
 

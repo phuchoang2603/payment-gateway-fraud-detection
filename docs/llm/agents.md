@@ -2,7 +2,7 @@
 
 Fraud analysts ask an agent about decline codes, risk decisions and payment behaviour; it answers from the knowledge base and cites the passages it used. Agents are read-only: they cannot change risk decisions, retry payments, issue refunds or promote models, and they never sit in the payment decision path.
 
-**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route, prompts and A/B tests in Langfuse, and request screening. Also enabled on prod, on one L4 of the platform's GPU pool.
+**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route, prompts and A/B tests in Langfuse, and request screening. Production remains disabled until the GCP platform provides a GPU pool; the dev captures below do not establish production readiness.
 
 - Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform): [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) (model config, MCP servers, templates, the entry agent, worker pool and its autoscaler), [`a2a.yaml`](../../infra/charts/llm-platform/templates/a2a.yaml) (the A2A route), [`catalog.yaml`](../../infra/charts/llm-platform/templates/catalog.yaml) and [`files/catalog.py`](../../infra/charts/llm-platform/files/catalog.py) (registry, prompt seeds), prompt seeds in [`files/prompts/`](../../infra/charts/llm-platform/files/prompts).
 - Runtime: kagent 1.0.0-rc1 with Agent Substrate 1.0.0-rc1, installed by the platform; the agent runtime image is [`src/llm/agent_runtime`](../../src/llm/agent_runtime).
@@ -41,6 +41,8 @@ flowchart LR
 One kagent `ModelConfig`, `default-model-config`, used by every agent: provider OpenAI, model `qwen35-4b` with the model card's non-thinking sampling, the agents' gateway key, and the gateway's `/v1` route as base URL. Changing the model, the gateway or the key for all agents is one edit. Its sampling settings are the ones every agent uses; kagent's Go runtime takes them only from here, so A/B variants differ by prompt text.
 
 ![kagent model config: default-model-config in llm-agents, key from the Secret llm-gateway-agents, base URL http://agentgateway.llm.svc.cluster.local/v1](images/agents-modelconfig.png)
+
+The configuration evidence has two parts: the screenshot above shows the base URL, while [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) generates that URL as `http://agentgateway.llm.svc.cluster.local/v1` and binds the same ModelConfig to the templates. The [gateway checks](gateway.md#checks-on-dev) record successful authenticated model/tool calls and denied direct access. To prove a new release end to end, capture its ModelConfig, one agent tool/model trace and the matching gateway route counters for the same request window; a configuration screenshot by itself establishes intent rather than traffic traversal.
 
 ## Agents
 

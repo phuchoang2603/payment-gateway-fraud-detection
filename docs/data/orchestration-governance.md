@@ -2,16 +2,18 @@
 
 Argo Workflows orchestrates the finite data pipelines; OpenMetadata is the catalog for lineage, contracts and data validation. They stand in for the course's Airflow and DataHub. Connections and credentials are defined once in the charts and Doppler and reused by every pipeline.
 
+The [evidence map](review-evidence.md) links each review criterion to code, existing UI captures and the remaining measurements. Historical backfill captures below remain evidence of those recorded runs; they are not a health check for the fresh GCP deployment.
+
 ## Workflows
 
 All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipelines) in the `data` namespace.
 
 | Workflow | Stages | Status |
 |---|---|---|
-| `generate-historical` | Shards in parallel → publish | Done; v18 and v19 published |
-| `dp1-bronze` (historical or Kafka source) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Done on prod v19; Kafka runs inside `dp-daily` |
-| `dp-pipeline` (`start`/`end` days) | Silver, then Gold and the marts side by side, each as plan → build on an audit branch or staging → checks → publish; OpenMetadata publish on exit. Stages and skipping: [pipeline](offline.md#pipeline) | Running on prod v19; see [the run](offline.md#prod-v19-run) |
-| `dp-daily`, `dp-backfill` | Kafka into Bronze, then `dp-pipeline` for yesterday and two lookback days (suspended cron); `dp-pipeline` month by month in order, stopping at the first failed month | `dp-backfill` running; `dp-daily` suspended |
+| `generate-historical` | Shards in parallel → publish | v18 and original v19 published; fresh GCP publication verified separately |
+| `dp1-bronze` (historical or Kafka source) | Spark ingest to an audit branch → ClickHouse checks on the branch → publish branch to main → OpenMetadata publish | Recorded AWS v19 completed; Kafka runs inside `dp-daily` |
+| `dp-pipeline` (`start`/`end` days) | Silver, then Gold and the marts side by side, each as plan → build on an audit branch or staging → checks → publish; OpenMetadata publish on exit. Stages and skipping: [pipeline](offline.md#pipeline) | Recorded AWS v19 completed; see [the run](offline.md#prod-v19-run) |
+| `dp-daily`, `dp-backfill` | Kafka into Bronze, then `dp-pipeline` for yesterday and two lookback days (suspended cron); `dp-pipeline` month by month in order, stopping at the first failed month | Backfill on demand; `dp-daily` suspended |
 | `maintain-lakehouse` | Task `nightly` (suspended cron) or `zorder` over one month | Implemented |
 | `feast-materialize` (`since` day, `stream-recovery`) | `feast apply` registry → materialize the daily views from each view's last end minus lookback (or `since`) through now → `verify_online` compares 200 newest keys with the offline rows; `stream-recovery` instead rebuilds the stream views from the last 24 hours 5 minutes | `feast-materialize-daily` cron, suspended |
 | `stream-history` (`start`/`end` days) | Plan `historyUnitDays` units → per unit, in parallel up to `historyParallelism`: topics → seed from Bronze → bounded Flink until FINISHED → history writer → cleanup and OpenMetadata publish | On demand |
