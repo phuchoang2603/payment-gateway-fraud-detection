@@ -119,7 +119,7 @@ def test_the_serving_version_is_the_live_production_one_with_its_reference(monke
     source = Source("http://registry/", "http://metrics/", "dev", "payment-gateway", "payment-risk")
     found = source.serving()
     assert found["version"] == "v3" and found["reference"] == REFERENCE
-    assert found["created"] == "2026-11-03T21:20:00+00:00"
+    assert found["created"] == "2026-11-04T00:00:00+00:00"
     monkeypatch.setattr(
         drift_service,
         "get",

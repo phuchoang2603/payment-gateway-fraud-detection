@@ -65,18 +65,19 @@ def profile(split, gain=None):
     Each feature has its bin `edges`, its weighted `share` per bin with the share of missing values
     last, and its `gain` in the model (zero without one).
     """
-    total = float(split.w.sum())
+    weights = split.w.astype(np.float64)
+    total = float(weights.sum())
     gains = gain or {}
     result = {}
     for index, name in enumerate(split.features):
         column = split.x[:, index]
         known = ~np.isnan(column)
-        edges = weighted_edges(column[known], split.w[known])
+        edges = weighted_edges(column[known], weights[known])
         bins = np.searchsorted(edges, column[known].astype(np.float64), side="right")
-        share = np.bincount(bins, weights=split.w[known], minlength=len(edges) + 1) / total
+        share = np.bincount(bins, weights=weights[known], minlength=len(edges) + 1) / total
         result[name] = {
             "edges": [float(edge) for edge in edges],
-            "share": [*share.tolist(), float(split.w[~known].sum() / total)],
+            "share": [*share.tolist(), float(weights[~known].sum() / total)],
             "gain": float(gains.get(name, 0.0)),
         }
     return result
