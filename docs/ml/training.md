@@ -49,32 +49,36 @@ A Kubeflow recurring run, created by a hook Job in the chart after each sync so 
 
 The [notebook](../../src/ml/notebooks/payment_risk_exploration.ipynb) also compares five XGBoost models on the GPU, from the depth-1 baseline to the pipeline's settings, on validation and test at the gate's two operating thresholds, with calibration and feature importance. It scores the candidate `request_features` and each view walk-forward before the first registered version, because changing the inputs afterwards needs `payment_risk_v2`.
 
-The notebook accepts `NOTEBOOK_END_DAY`, `NOTEBOOK_TRAIN_DAYS`, `NOTEBOOK_VALIDATION_DAYS`, `NOTEBOOK_TEST_DAYS`, `NOTEBOOK_COMPARE_RATE`, `NOTEBOOK_ABLATION_RATE` and `NOTEBOOK_SNAPSHOT` as environment overrides. An unset snapshot builds a new dataset version.
+The notebook accepts `NOTEBOOK_END_DAY`, `NOTEBOOK_TRAIN_DAYS`, `NOTEBOOK_VALIDATION_DAYS`, `NOTEBOOK_TEST_DAYS`, `NOTEBOOK_COMPARE_RATE`, `NOTEBOOK_ABLATION_RATE`, `NOTEBOOK_FOLDS` and `NOTEBOOK_SNAPSHOT` as environment overrides. An unset snapshot builds a new dataset version.
 
-Dev exploration used snapshot `8122563810631209408`: training October 14–18, validation October 19 and test October 20, 2026, with a 10% negative sample throughout. The splits contained 988, 215 and 287 rows, including 119, 54 and 131 positives respectively. Validation PR-AUC with all features was 0.9583; removing each derived candidate gave:
+Dev exploration ran the notebook on snapshot `7781420152380000469`: training September 4 to October 9, validation October 10–18 and test October 19–27, 2026, with a 10% negative sample throughout (the replay covers September 2 to October 27). The splits held 8,863, 1,946 and 1,933 rows with 2,676, 389 and 438 positives, and a weighted fraud rate of 4.1%, 2.4% and 2.8%. Every fit and score ran in a GPU job while Triton held the same GPU: the pipeline's fit took 3.4 seconds.
 
-| Removed candidate | Validation PR-AUC |
-|---|---:|
-| `customer_amount_to_30d_avg` | 0.9565 |
-| `payment_method_amount_to_30d_avg` | 0.9598 |
-| `scored_hour_utc` | 0.9597 |
+On the test window, with thresholds from validation:
 
-A single validation day cannot rank these, because dev fraud arrives in bursts: the seven days hold 5 to 131 positives each. The notebook therefore also scores each feature set walk-forward on the last four days, training on the earlier days with three seeds. The table gives the change in mean PR-AUC against all features, the days (of 4) on which the set was worse, and the worst day:
-
-| Removed | Change in PR-AUC | Days worse | Worst day |
+| Model | PR-AUC | Recall at 1% FPR | Recall in top 5% |
 |---|---:|---:|---:|
-| `customer_amount_to_30d_avg` | -0.0076 | 2 | -0.0468 |
-| `payment_method_amount_to_30d_avg` | +0.0266 | 2 | -0.0182 |
-| `scored_hour_utc` | -0.0134 | 3 | -0.0387 |
-| view `customer_daily` | +0.1005 | 1 | -0.0006 |
-| view `customer_stream` | -0.0195 | 3 | -0.0398 |
-| view `payment_method_daily` | +0.0148 | 2 | -0.0372 |
-| view `payment_method_stream` | +0.0019 | 1 | -0.0337 |
-| view `request_features` | -0.0870 | 4 | -0.1162 |
+| Pipeline model (depth 6, every stored negative) | 0.9370 | 0.9110 | 0.9498 |
+| Boosting, depth 5 | 0.9294 | 0.9110 | 0.9384 |
+| Boosting, depth 3 | 0.9231 | 0.8995 | 0.9315 |
+| Additive baseline, depth 1 | 0.9156 | 0.8881 | 0.9155 |
+| Random forest | 0.9073 | 0.8676 | 0.9224 |
 
-The two methods disagree on the direction for each derived candidate, so the dev data supports no change to the feature service, and it has not been changed. Only the `request_features` and `customer_stream` views hurt on most days when removed. `request_features__item_count` is 1 on all 1,490 rows because the simulator builds every order from one purchase. Stream features are null for 53% of legitimate and 13% of fraudulent attempts, so a missing stream snapshot is itself a signal. The production run over the full window decides the rest.
+The gate passed: 0.9370 against 0.9156 for the baseline and 0.8229 for production `v1`, which was trained on seven days. The thresholds on validation are 0.512 to decline (0.1% FPR) and 0.078 for step-up (1%). The served threshold is still the untuned 0.8. Dev data is simulated and separates easily, so these numbers do not predict production.
 
-CPU XGBoost reached test PR-AUC 0.9881 against the linear baseline's 0.9035. The GPU TrainJob stayed pending until its active deadline because `dev-server1`, the only GPU node, had 90% of its CPU requested, including the running Notebook, which now avoids GPU nodes. This run produced no GPU comparison, gate result or saved GPU model; later cells reported missing variables because execution continued after that failure.
+Fraud arrives in bursts, with 5 to 159 positives per day, so features are scored walk-forward over the last 14 days (training on the earlier days, three seeds, 378 fits in one job). The table gives the change in mean PR-AUC against all features when the feature or view is removed, the days (of 14) the set was worse and better, and the worst day:
+
+| Removed | Change in PR-AUC | Days worse / better | Worst day |
+|---|---:|---:|---:|
+| view `request_features` | -0.2139 | 14 / 0 | -0.6618 |
+| view `customer_stream` | -0.0405 | 7 / 7 | -0.2288 |
+| `customer_amount_to_30d_avg` | -0.0181 | 10 / 4 | -0.1188 |
+| view `payment_method_stream` | -0.0099 | 10 / 4 | -0.0432 |
+| `scored_hour_utc` | +0.0046 | 5 / 7 | -0.0053 |
+| view `payment_method_daily` | +0.0158 | 5 / 9 | -0.0031 |
+| `payment_method_amount_to_30d_avg` | +0.0159 | 5 / 9 | -0.0634 |
+| view `customer_daily` | +0.0190 | 6 / 8 | -0.0258 |
+
+Only the first four hurt consistently when removed. The four that help on average win on 7 to 9 of 14 days, which is not a decisive split, so the evidence supports neither dropping nor adding them, and the feature service has not been changed. The seven-day sample had suggested dropping all of `customer_daily` (+0.10); with 30 days of history it does not. `request_features__item_count` is 1 on all rows because the simulator builds every order from one purchase. Stream features are null for 51% of legitimate and 9% of fraudulent attempts, so a missing stream snapshot is itself a signal.
 
 ## Drift
 

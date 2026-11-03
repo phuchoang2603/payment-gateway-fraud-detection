@@ -69,7 +69,7 @@
 - [x] 5c.3 Move gate and notebook scoring to GPU jobs: `worker gate` and `worker experiments`, a depth-1 XGBoost baseline, scoring on `device=cuda`.
 - [x] 5c.4 Add the chart's shared `ResourceClaim`, `TrainingRuntime` and Triton `ServingRuntime` for dev and prod.
 - [x] 5c.5 Rewrite the Go adapter for the v2 protocol with binary tensors, a cached feature order and version-checked scores.
-- [ ] 5c.6 After CI and the dev release: roll a version out on dev, check the fraud service's evidence, run a gate and a notebook comparison through GPU jobs, and record the numbers.
+- [x] 5c.6 On dev: roll `v1` out on Triton, check the fraud service's evidence, and run the gate, the model comparison and a 14-fold feature ablation through GPU jobs on the 54-day replay; the numbers are in `docs/ml/training.md`.
 
 ## 6. Local checks and hand-off
 
