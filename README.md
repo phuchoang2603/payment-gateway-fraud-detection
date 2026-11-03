@@ -20,7 +20,11 @@ Docs: [domain](https://github.com/phuchoang2603/payment-gateway-fraud-detection/
 
 The [refurbished marketplace](https://github.com/phuchoang2603/refurbished-marketplace) sends checkout snapshots; the gateway owns hosted checkout, payment attempts, fraud decisions, simulated processing and signed outcome webhooks.
 
-_Diagram to come._
+![Marketplace payment flow: Checkout saga, hosted Go gateway, fraud assessment through Feast and KServe, signed webhooks, and Kafka feature updates](docs/payment-gateway/images/payment-flow.png)
+
+Checkout prepares the order and reserves stock through Kafka before opening the hosted session. Signed outcomes drive stock settlement and order finalization. Go Fraud reads Feast features and applies the KServe score alongside its rules.
+
+Diagram source: [`payment-flow.excalidraw`](docs/payment-gateway/images/payment-flow.excalidraw) · model integration: [#112](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/112).
 
 Docs: [architecture](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/architecture) · [flows](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/flows) · [conventions](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/conventions)
 
