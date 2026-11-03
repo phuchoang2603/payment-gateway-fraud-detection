@@ -6292,8 +6292,8 @@
     {
       "id": "notify-consume",
       "type": "arrow",
-      "x": 700,
-      "y": 945,
+      "x": 770,
+      "y": 910,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -6315,24 +6315,28 @@
           0
         ],
         [
-          -65,
-          0
+          0,
+          -25
         ],
         [
-          -65,
-          -285
+          -130,
+          -25
         ],
         [
-          -695,
-          -285
+          -130,
+          -250
         ],
         [
-          -695,
-          -475
+          -765,
+          -250
         ],
         [
-          -650,
-          -475
+          -765,
+          -440
+        ],
+        [
+          -720,
+          -440
         ]
       ],
       "roughness": 0,
@@ -6344,17 +6348,17 @@
       "strokeStyle": "dashed",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
-      "width": 695,
-      "height": 475
+      "width": 765,
+      "height": 440
     },
     {
       "id": "notify-consume-label",
       "type": "text",
       "x": 40,
       "y": 635,
-      "width": 290,
+      "width": 340,
       "height": 21.25,
       "angle": 0,
       "autoResize": true,
@@ -6372,17 +6376,17 @@
       "link": null,
       "locked": false,
       "opacity": 100,
-      "originalText": "notifier consumer",
+      "originalText": "notifier: payment events",
       "roughness": 0,
       "roundness": null,
       "seed": 60102937,
       "strokeColor": "#d9480f",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "text": "notifier consumer",
+      "text": "notifier: payment events",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -6478,8 +6482,8 @@
     {
       "id": "seed",
       "type": "arrow",
-      "x": 590,
-      "y": 820,
+      "x": 320,
+      "y": 910,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -6501,16 +6505,20 @@
           0
         ],
         [
-          50,
-          0
+          0,
+          40
         ],
         [
-          50,
-          160
+          320,
+          40
         ],
         [
-          110,
-          160
+          320,
+          70
+        ],
+        [
+          380,
+          70
         ]
       ],
       "roughness": 0,
@@ -6522,17 +6530,17 @@
       "strokeStyle": "dashed",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
-      "width": 110,
-      "height": 160
+      "width": 380,
+      "height": 70
     },
     {
       "id": "seed-label",
       "type": "text",
-      "x": 600,
-      "y": 905,
-      "width": 90,
+      "x": 350,
+      "y": 920,
+      "width": 280,
       "height": 21.25,
       "angle": 0,
       "autoResize": true,
@@ -6550,17 +6558,17 @@
       "link": null,
       "locked": false,
       "opacity": 100,
-      "originalText": "seed",
+      "originalText": "seed events + clock",
       "roughness": 0,
       "roundness": null,
       "seed": 6149672,
       "strokeColor": "#868e96",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "text": "seed",
+      "text": "seed events + clock",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -6619,7 +6627,7 @@
     {
       "id": "events-bronze",
       "type": "arrow",
-      "x": 700,
+      "x": 1240,
       "y": 1040,
       "angle": 0,
       "backgroundColor": "transparent",
@@ -6642,19 +6650,27 @@
           0
         ],
         [
-          -55,
+          35,
           0
         ],
         [
-          -55,
-          370
+          35,
+          385
         ],
         [
-          -485,
-          370
+          -825,
+          385
         ],
         [
-          -485,
+          -825,
+          460
+        ],
+        [
+          -910,
+          460
+        ],
+        [
+          -910,
           480
         ]
       ],
@@ -6667,17 +6683,17 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 3,
       "versionNonce": 1,
-      "width": 485,
+      "width": 945,
       "height": 480
     },
     {
       "id": "events-bronze-label",
       "type": "text",
-      "x": 50,
-      "y": 1395,
-      "width": 290,
+      "x": 760,
+      "y": 1398,
+      "width": 400,
       "height": 21.25,
       "angle": 0,
       "autoResize": true,
@@ -6695,25 +6711,25 @@
       "link": null,
       "locked": false,
       "opacity": 100,
-      "originalText": "Spark Kafka input",
+      "originalText": "Spark: Kafka events + labels",
       "roughness": 0,
       "roundness": null,
       "seed": 225760352,
       "strokeColor": "#d9480f",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "text": "Spark Kafka input",
+      "text": "Spark: Kafka events + labels",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "labels-bronze",
       "type": "arrow",
-      "x": 700,
-      "y": 1150,
+      "x": 1240,
+      "y": 1130,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -6735,7 +6751,7 @@
           0
         ],
         [
-          -55,
+          35,
           0
         ]
       ],
@@ -6748,16 +6764,16 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
-      "width": 55,
+      "width": 35,
       "height": 0
     },
     {
       "id": "parquet-bronze",
       "type": "arrow",
-      "x": 50,
-      "y": 1790,
+      "x": 215,
+      "y": 1730,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -6779,20 +6795,8 @@
           0
         ],
         [
-          -70,
-          0
-        ],
-        [
-          -70,
-          -295
-        ],
-        [
-          130,
-          -295
-        ],
-        [
-          130,
-          -270
+          0,
+          -110
         ]
       ],
       "roughness": 0,
@@ -6804,16 +6808,16 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
-      "width": 200,
-      "height": 295
+      "width": 0,
+      "height": 110
     },
     {
       "id": "parquet-bronze-label",
       "type": "text",
-      "x": 50,
-      "y": 1692,
+      "x": 230,
+      "y": 1664,
       "width": 290,
       "height": 21.25,
       "angle": 0,
@@ -6832,17 +6836,17 @@
       "link": null,
       "locked": false,
       "opacity": 100,
-      "originalText": "historical Parquet",
+      "originalText": "read historical Parquet",
       "roughness": 0,
       "roundness": null,
       "seed": 67960193,
       "strokeColor": "#d9480f",
       "strokeStyle": "solid",
       "strokeWidth": 2,
-      "text": "historical Parquet",
+      "text": "read historical Parquet",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 1,
+      "version": 2,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
