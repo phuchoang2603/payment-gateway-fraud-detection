@@ -129,14 +129,18 @@ def wait(kind, name, done, timeout, interval=20, cleanup=True):
     raise TimeoutError(f"{kind[2]}/{name} did not finish within {timeout}s")
 
 
-def train_job_spec(image, command, args, timeout):
+def train_job_spec(image, command, args, timeout, pod_labels=None):
     """Returns a one-node TrainJob on the chart's GPU runtime, shared by every job that touches the GPU.
 
     The runtime holds the shared GPU claim, which a runtime patch cannot set. Secret-backed variables go
     in `spec.trainer.env`, because the Trainer webhook rejects environment set through a runtime patch
-    on the node container. The patch only runs the pod as the service account.
+    on the node container. The patch runs the pod as the service account and adds `pod_labels`, which a
+    Katib trial needs on its pods because Katib only injects its metrics collector into labelled pods.
     """
-    node = {"template": {"spec": {"template": {"spec": {"serviceAccountName": SERVICE_ACCOUNT}}}}}
+    pod = {"spec": {"serviceAccountName": SERVICE_ACCOUNT}}
+    if pod_labels:
+        pod["metadata"] = {"labels": pod_labels}
+    node = {"template": {"spec": {"template": pod}}}
     return {
         "apiVersion": "trainer.kubeflow.org/v1alpha1",
         "kind": "TrainJob",

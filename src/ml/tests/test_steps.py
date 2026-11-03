@@ -490,6 +490,11 @@ def test_the_experiment_searches_every_hyperparameter_and_runs_one_trial_job_per
     assert args[0] == "trial" and "--max-depth" in args and "--lambda" in args
     assert args[args.index("--lambda") + 1] == "${trialParameters.regLambda}"
     assert args[args.index("--rate") + 1] == "0.05"
+    (patch,) = trial["spec"]["runtimePatches"]
+    pod = patch["trainingRuntimeSpec"]["template"]["spec"]["replicatedJobs"][0]["template"]["spec"][
+        "template"
+    ]
+    assert pod["metadata"]["labels"] == {"katib.kubeflow.org/trial": "${trialSpec.Name}"}
     assert result == {
         "params": json.dumps({"eta": 0.1, "lambda": 1.5, "max_depth": 5}),
         "experiment": "payment-risk-abcdef12",

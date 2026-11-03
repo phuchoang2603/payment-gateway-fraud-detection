@@ -257,6 +257,7 @@ def tune_params(
                     ["python", "-m", "risk_model.worker"],
                     arguments,
                     timeout_seconds,
+                    pod_labels={"katib.kubeflow.org/trial": "${trialSpec.Name}"},
                 ),
             },
         },

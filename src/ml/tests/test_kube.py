@@ -391,3 +391,16 @@ def test_a_json_patch_goes_through_a_client_that_sends_the_json_patch_content_ty
         "payment-risk",
         [{"op": "remove", "path": "/x"}],
     )
+
+
+def test_pod_labels_go_into_the_runtime_patch_only_when_given():
+    """A Katib trial labels its pods through the patch; other jobs have no pod metadata at all."""
+
+    def pod(job):
+        patch = job["spec"]["runtimePatches"][0]["trainingRuntimeSpec"]["template"]
+        return patch["spec"]["replicatedJobs"][0]["template"]["spec"]["template"]
+
+    plain = kube.train_job_spec("ml:1", ["x"], [], 60)
+    labelled = kube.train_job_spec("ml:1", ["x"], [], 60, pod_labels={"a": "b"})
+    assert "metadata" not in pod(plain) and pod(labelled)["metadata"] == {"labels": {"a": "b"}}
+    assert pod(labelled)["spec"] == pod(plain)["spec"] == {"serviceAccountName": "fraud-training"}
