@@ -139,25 +139,31 @@ The captures below show May 2026 from the recorded AWS backfill's former 180-day
 
 Table schemas are the data-product contracts, with generated references under [`products/`](products). The namespace or database names the layer and engine; a prefix names the role. Timestamps end in `_at` (business time) or `_ts` (SCD validity), surrogate keys in `_sk`, booleans start with `is_`; Feast's `event_timestamp` and `created` keep their names.
 
-| Layer | Location | Tables |
+| Layer | Tables and role | Join grain |
 |---|---|---|
-| Bronze | Iceberg `bronze` | `payment_events`, `fraud_labels`, `rejected_records` |
-| Silver | Iceberg `silver` | `payment_events`, `attempts`, `labels`, `rejected_events` |
-| Gold, ML | Iceberg `gold` | `dim_customer`, `feat_customer_daily`, `feat_payment_method_daily`, `label_attempt` |
-| Gold, analytics | ClickHouse `marts` | `fact_payment_attempt`, `fact_merchant_day`, `build_info` |
+| Bronze | `payment_events` and `fraud_labels` preserve raw observations; `rejected_records` quarantines unreadable input. | `(integration_id, payment_id)` connects observations; duplicates remain, so neither side is unique. |
+| Silver | `payment_events` holds deduplicated lifecycle events; `attempts` folds them into attempts; `labels` tracks label observations and linkage; `rejected_events` holds contract failures. | Events use `event_id`; attempts use `(integration_id, payment_id, attempt_id)`. Multiple linked labels can refer to one attempt. |
+| Gold, ML | `dim_customer` holds SCD2 profiles; `feat_*_daily` and `feat_stream_*` hold customer/card features; `label_attempt` supplies training targets. | Profiles use `customer_sk`; features use the integration, entity and event timestamp. Joins must respect time. |
+| Gold, analytics | `marts.fact_payment_attempt` serves attempt detail; `fact_merchant_day` aggregates KPIs; `build_info` records the published input snapshots. | Attempt key; `(integration_id, merchant_id, day)` for daily aggregates. `build_info` has no business-row foreign key. |
 
-```mermaid
-erDiagram
-    dim_customer ||--o{ fact_payment_attempt : "customer, valid at started_at"
-    fact_merchant_day ||--o{ fact_payment_attempt : "merchant, day of started_at"
-    fact_payment_attempt ||--o{ label_attempt : "attempt key"
-    feat_customer_daily ||--o{ label_attempt : "customer, latest event_timestamp <= label event_timestamp"
-    feat_payment_method_daily ||--o{ label_attempt : "card, latest event_timestamp <= label event_timestamp"
-    dim_customer ||--o{ feat_customer_daily : "customer"
-```
+DbGate captures below show selected columns introspected from GCP on 2026-11-03. Arrows are explicitly defined logical joins, not database-enforced foreign keys. Quarantine tables stay unconnected because rejected input may lack usable keys.
 
-OpenMetadata shows 25 `silver.attempts` columns, including integer amounts, string IDs and UTC microsecond timestamps (GCP, 2026-11-03). The ClickHouse projection exposes nullable fields; contracts validate the data. Relationships above are logical joins, without database-enforced foreign keys or registered catalog constraints.
+![Bronze raw event and label relationship, with rejected-record quarantine](images/schema-bronze-2026-11-03.png)
 
-![Silver attempts column names and types in OpenMetadata](images/silver-attempts-schema-2026-11-03.png)
+![Silver lifecycle events, attempts, linked labels and rejected events](images/schema-silver-2026-11-03.png)
 
-Point-in-time rules: join `dim_customer` on the customer key with `valid_from_ts <= t` and `valid_to_ts` null or after `t`. Join a feature table to a label row on the entity key, taking the latest feature row with `event_timestamp` at or before the label's `event_timestamp`; filter labels by `label_available_at` at or before the training cutoff.
+For Gold, join `dim_customer` on `(integration_id, customer_id)` with `valid_from_ts <= t` and `valid_to_ts` null or after `t`. Join features on their integration/entity key, taking the latest `event_timestamp <= label.event_timestamp`; require `label_available_at <= training_cutoff`. Daily and streaming features have separate tables.
+
+![Gold customer history, training labels and daily/streaming feature tables](images/schema-gold-2026-11-03.png)
+
+The merchant-day relationship also requires `toDate(fact.started_at) = day`. ClickHouse's sort key does not enforce row uniqueness.
+
+![ClickHouse attempt fact, merchant-day aggregate, customer history and build metadata](images/schema-marts-2026-11-03.png)
+
+This customer's four SCD2 versions show changing profile hashes, adjoining validity ranges and exactly one current row with an open end.
+
+![Live customer SCD2 history with four versions and one current row](images/customer-scd2-history-2026-11-03.png)
+
+The temporal join assigns the attempt at `2026-10-16 23:49:08` to version 4, exactly when version 3 closes and version 4 opens (`[valid_from_ts, valid_to_ts)`).
+
+![Live attempt-to-customer temporal join selects version 4 at the validity boundary](images/customer-scd2-join-2026-11-03.png)
