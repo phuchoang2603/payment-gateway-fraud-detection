@@ -60,7 +60,13 @@ Pending inputs enter one microsecond after their attempt time; expiry heaps avoi
 
 ### Late, too-late and duplicate trace
 
-[`job.build_updates`](../../src/data-pipeline/streaming/fraud_streaming/job.py) wires source validation → event-ID dedup → attempt-identity dedup → customer/method windows → journal, with invalid/conflicting records sent to rejects. See the [recorded job graph](#flink-ui).
+[`job.build_updates`](../../src/data-pipeline/streaming/fraud_streaming/job.py) wires source validation → event-ID dedup → attempt-identity dedup → customer/method windows → journal, with invalid/conflicting records sent to rejects.
+
+<a id="flink-ui"></a>
+
+![Job graph](images/online-job-graph.png)
+
+*Dev run, 2026-10-29 at about 11:51 UTC: source/progress observation → event dedup → attempt dedup → customer/method aggregation → journal/reject sinks. All operators run at parallelism 1 with 0% backpressure. The capture predates operator names (`KEYED PROCESS`); the UI shows UTC−4, so 07:51 is 11:51 UTC.*
 
 Consider a covered entity at 12:10 UTC, with no other attempts:
 
@@ -189,7 +195,17 @@ One bounded dev run on 2026-10-29, from PR #101's dev releases. Prod was untouch
 
 Flink counters reset on restart and count only attempt starts; raw-topic duplicate rates cover all event types. The `1m_5m` metric includes processing delay, so it need not equal network lateness. No too-late or poison records were injected in this live run; replay fixtures cover those paths locally.
 
+![Backpressure on the event deduplication operator](images/online-backpressure.png)
+
+*Same dev run at about 12:12 UTC: event deduplication is 0% backpressured, 95% idle and 5% busy.*
+
+The counters above came from Flink's REST API (`/jobs/<id>/vertices/<id>/metrics`), using port 6125 allowed by the Cilium policy. A UI metrics-panel capture is still missing.
+
 ### Restart
+
+![Checkpoint history](images/online-checkpoints.png)
+
+*Before the restart, about 11:51 UTC (07:51 in the UI): checkpoints 171–180 completed every 10 s in about 0.7–1.2 s, at about 6.4 MB.*
 
 | Step | Result |
 |---|---|
@@ -197,23 +213,3 @@ Flink counters reset on restart and count only attempt starts; raw-topic duplica
 | Job restored | from checkpoint 181 at 11:51:40.443 UTC, 2.4 s after deletion |
 | First new checkpoint | 182 completed at 11:52:43.455 UTC, about 65 s after deletion |
 | Journal integrity | `fraud.feature-updates.v2.live-v18` over the run: 13,159 updates for 5,746 entities, with 0 repeated or conflicting `(key, revision)` pairs and 0 revision regressions, across this restart and the upgrade restart before it |
-
-### Flink UI
-
-The Flink UI shows browser local time, UTC−4: 07:25 and 07:51 in the captures are 11:25 and 11:51 UTC. The captures predate operator names, so every operator appears as `KEYED PROCESS`.
-
-![Job graph](images/online-job-graph.png)
-
-*Job graph at about 11:51 UTC, before the restart: source and progress observation, event deduplication, attempt deduplication, customer and method aggregation, and the journal and reject sinks. All run at parallelism 1 with 0% backpressure.*
-
-![Checkpoint history](images/online-checkpoints.png)
-
-*Checkpoint history at about 11:51 UTC: checkpoints 171–180 completed every 10 s in about 0.7–1.2 s, at about 6.4 MB.*
-
-![Backpressure on the event deduplication operator](images/online-backpressure.png)
-
-*Backpressure on the event deduplication operator at about 12:12 UTC: 0% backpressured, 95% idle, 5% busy.*
-
-The `too_late`, `duplicates_dropped`, `rejected` and lateness values above were read from the Flink REST API (`/jobs/<id>/vertices/<id>/metrics`). A capture of the UI's metrics panel is still missing.
-
-Metric queries use port 6125, allowed by the Cilium policy.
