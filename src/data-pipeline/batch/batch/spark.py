@@ -1,3 +1,9 @@
+"""Build UTC Spark sessions with Iceberg catalog and object-store authentication.
+
+Local tests use a Hadoop warehouse; deployed jobs use the Polaris REST catalog.
+Credential-bearing Spark configuration must remain covered by log redaction.
+"""
+
 import os
 
 from pyspark.sql import SparkSession

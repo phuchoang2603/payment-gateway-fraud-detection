@@ -1,3 +1,9 @@
+"""Validate protobuf envelopes and bind wire records to the feature contract digest.
+
+Business-content hashes separate identical redeliveries from conflicting copies;
+non-attempt events contribute source progress without adding window contributions.
+"""
+
 import hashlib
 import os
 from pathlib import Path

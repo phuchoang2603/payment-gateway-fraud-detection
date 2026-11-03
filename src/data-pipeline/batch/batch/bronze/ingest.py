@@ -1,3 +1,9 @@
+"""Ingest historical Parquet or bounded Kafka offsets without discarding raw deliveries.
+
+Historical replacement is dataset-version scoped; Kafka progress is derived from rows
+committed to Bronze so maintenance cannot detach offsets from their data.
+"""
+
 import json
 import os
 import time
@@ -151,6 +157,7 @@ def check_written_rows(spark, name, same_version, parts):
 
 
 def read_parts(spark, root, table, parts):
+    """Union versioned Parquet schemas and retain manifest-relative source provenance."""
     paths = [hadoop_uri(f"{root.rstrip('/')}/{part['path']}") for part in parts]
     return (
         spark.read.option("mergeSchema", "true")

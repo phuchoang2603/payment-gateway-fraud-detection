@@ -1,3 +1,9 @@
+"""Maintain exact attempt-time window membership independently of the Flink runtime.
+
+Times are integer microseconds. Counts cover [anchor - window, anchor), while
+publication revisions preserve the snapshots already served to online consumers.
+"""
+
 import hashlib
 import heapq
 import json
@@ -97,6 +103,8 @@ class Packet:
 
 @dataclass
 class Entity:
+    """Bound one entity's contributions with expiry heaps and device reference counts."""
+
     view: str
     integration: str
     entity: str
@@ -138,6 +146,7 @@ class Entity:
         self.available_at = max(self.available_at, packet.now)
 
     def advance(self, now):
+        """Expire old contributions and return changed values, or None for an idle revision."""
         if now < self.anchor:
             raise ValueError("entity clock regressed")
         self.anchor = now

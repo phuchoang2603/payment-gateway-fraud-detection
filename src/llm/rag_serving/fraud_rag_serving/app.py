@@ -1,3 +1,9 @@
+"""Serve read-only knowledge chunks and MCP search through one ASGI application.
+
+Embedding requests share an async HTTP client. Synchronous Feast operations run
+in worker threads so they do not block unrelated requests on the event loop.
+"""
+
 import asyncio
 import os
 from contextlib import asynccontextmanager
@@ -50,6 +56,8 @@ class SearchResponse(BaseModel):
 
 
 class Knowledge:
+    """Reuse the online registry after one successful, serialized lazy initialization."""
+
     def __init__(self):
         self.embedder: Embedder | None = None
         self.client: httpx.AsyncClient | None = None
@@ -58,6 +66,7 @@ class Knowledge:
 
     # The registry exists only after the first pipeline run, and the reader role cannot create it.
     async def store(self):
+        """Load a readable registry once; allow a later request to retry a failed load."""
         if self.feature_store is None:
             async with self.lock:
                 if self.feature_store is None:

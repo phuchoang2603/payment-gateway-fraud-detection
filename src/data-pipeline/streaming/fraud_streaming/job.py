@@ -1,3 +1,9 @@
+"""Wire payment decoding, two identity gates and keyed features to transactional Kafka sinks.
+
+History replay requires isolated topics and epochs; live and replay share the same
+feature operators but use different clocks and source bounds.
+"""
+
 import json
 import os
 
@@ -20,6 +26,7 @@ def sql_literal(value):
 
 
 def build_updates(packets, *, epoch, logical, max_entries):
+    """Return customer/method updates and every validation or identity-conflict reject."""
     # Every operator that yields to REJECTS must have its side output read, or rejects leak
     # into its main output.
     rejects = [packets.get_side_output(REJECTS)]

@@ -1,3 +1,9 @@
+"""Adapt deterministic feature state to Flink clocks, timers, metrics and side outputs.
+
+Live jobs advance with processing time; logical replay follows seed-clock progress.
+Invalid records are rejected individually while state-invariant failures stop the job.
+"""
+
 import json
 import logging
 import time
@@ -133,6 +139,8 @@ class Clock(TimestampAssigner):
 
 
 class ObserveSource(KeyedProcessFunction):
+    """Attach validated facts to checkpointed partition progress and bootstrap coverage."""
+
     def __init__(self, *, brokers, topic, partitions, logical=False, clock_topic=None):
         self.brokers = brokers
         self.topic = topic
@@ -326,6 +334,8 @@ class Deduplicate(KeyedProcessFunction):
 
 
 class Aggregate(KeyedProcessFunction):
+    """Checkpoint one entity state and publish revisions at contribution/expiry boundaries."""
+
     def __init__(self, *, view, epoch, timeline, max_entries):
         self.view = view
         self.epoch = epoch
