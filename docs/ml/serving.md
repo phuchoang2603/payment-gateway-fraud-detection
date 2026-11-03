@@ -43,7 +43,7 @@ The ML serving dashboard (`ml-serving` in the ML folder of the platform Grafana)
 |---|---|
 | Feature-retrieval API | Typed, validated lookups by customer and method ID with health checks, deployed by Helm with rolling update and automatic rollback |
 | Autoscaling of the retrieval API | Request-driven autoscaling for the Feast retrieval API; inference scales as above |
-| A/B testing | Designed, not built: a gate-passed challenger as a second InferenceService next to the champion, a stable customer-hash split in Go Fraud (at most 20%), per-arm thresholds and evidence, promotion by pipeline, and per-version panels from the shared Victoria and ClickHouse data. KServe's `InferenceGraph` splitter was tried on dev and its router pod is rejected by the namespace's Pod Security, so the split stays in Go. Pending verification on dev |
+| A/B testing | Designed, not built: a gate-passed challenger as a second InferenceService behind a Gateway API route on an Istio waypoint, weights changed only by the promotion pipeline (at most 20%) with an Argo Rollouts analysis at each step, and per-version panels from the shared Victoria and ClickHouse data. Tried and dropped: KServe's Knative canary (no DRA claims) and InferenceGraph (response headers are lost). A waypoint split passed a dev spike with binary requests. Pending: the platform's seccomp policy for the waypoint pod, and verification on dev |
 | Load test | Locust run against the retrieval API, recording throughput, latency percentiles and errors as an HTML report |
 
 Every decision records the policy, model and feature versions it used. The model call never triggers payment effects; only the decision does.

@@ -61,16 +61,24 @@ The predictor SHALL scale between a minimum and a maximum number of replicas wit
 - **WHEN** the deploy step replaces the predictor of an existing service
 - **THEN** the service keeps the KEDA autoscaler class and its scaling settings
 
-### Requirement: Challenger version
-A registered version that passed its gate MAY be served as a challenger next to the champion, as its own InferenceService on the same runtime and the shared GPU claim, scaled independently. A version that did not pass SHALL be refused. A promotion SHALL make the challenger the champion in the registry and the service, archive the previous champion and remove the challenger service, after the gate has compared the challenger with the champion on the newest window, and the deploy of any earlier version SHALL still be available for rollback.
+### Requirement: Challenger version and gated traffic split
+A registered version that passed its gate MAY be served as a challenger next to the champion, as its own InferenceService on the same runtime and the shared GPU claim, scaled independently, and a version that did not pass SHALL be refused. A Gateway API route on a mesh waypoint SHALL split the champion's Service between the two services by weights that only the promotion pipeline changes, never above a configured cap before promotion. The pipeline SHALL check each step with an analysis of the challenger's failure rate, latency and decline rate against the champion's over a minimum sample, and a failed analysis SHALL return the weights to zero and remove the challenger. A promotion SHALL make the challenger's version the champion in the registry and the service, archive the previous champion and remove the challenger, after the gate has compared the challenger with the champion on the newest window, and the deploy of any earlier version SHALL still be available for rollback.
 
 #### Scenario: Challenger deployed
-- **WHEN** a training run configured for an experiment passes its gate
-- **THEN** its version is served as the challenger, the champion keeps serving, and the registry marks the stages `production` and `challenger`
+- **WHEN** a training run started for an experiment passes its gate
+- **THEN** its version is served as the challenger at weight zero, the champion keeps serving, and the registry marks the stages `production` and `challenger`
+
+#### Scenario: Step passes
+- **WHEN** the analysis of a weight step succeeds
+- **THEN** the pipeline moves to the next weight, and a promotion follows the last step
+
+#### Scenario: Step fails
+- **WHEN** the analysis of a weight step fails
+- **THEN** the weights return to zero, the challenger service is removed and the pipeline fails with the failing metric
 
 #### Scenario: Promotion
-- **WHEN** the promotion pipeline runs and the challenger passes the comparison
-- **THEN** the champion becomes the challenger's version, the old version is archived and the challenger service is removed
+- **WHEN** the promotion pipeline completes its steps
+- **THEN** the champion serves the challenger's version, the old version is archived and the challenger service is removed
 
 ### Requirement: Per-version monitoring
 Each served version SHALL be monitored in the platform's metrics store and Grafana by version: Triton's request, queue and compute metrics per service, the fraud service's model calls and feature-bin counts by model version, and, from the curated attempts, the decline and step-up rates and the score distribution by model version. Where labels or chargebacks are available the same view SHALL show outcomes against them.

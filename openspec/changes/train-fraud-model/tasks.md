@@ -91,14 +91,13 @@
 - [x] 5e.8 Add the drift panels to the `ml-serving` dashboard. The Locust run of the drift API for the rubric's load row is pending (task 7.9).
 - [ ] 5e.9 Update `docs/ml/training.md` (Drift) and the roadmap rows; proof and pending verification stay in separate sentences.
 
-## 5f. Model A/B experiment (decided 2026-11-03: enforced, no shadow; the InferenceGraph and Knative were tried and dropped; the split mechanism is open, see 5f.0)
+## 5f. Model A/B experiment (decided 2026-11-03: enforced, no shadow, KEDA and Standard mode stay; a waypoint HTTPRoute splits, Argo Rollouts analysis gates; the InferenceGraph and Knative were tried and dropped)
 
-- [ ] 5f.0 Choose the split (design section 12): the waypoint `HTTPRoute` (needs a platform policy for the waypoint pod's seccomp profile, the weights as chart values, and optionally an Argo Rollouts `AnalysisTemplate` and a standalone `AnalysisRun` per step) or the Go-side cohort split below. KEDA and Standard mode stay either way. Revise the serving and decision specs to match the choice.
-
-- [ ] 5f.1 Add the arms and the stable cohort assignment to Go Fraud (`model.arms`, `model.experiment`, per-arm client, version check and threshold), the optional `arm` on `ModelEvidence`, and the chart values with the percentage cap validated in the chart.
-- [ ] 5f.2 Add `role=challenger` to `roll_out`, the `challenger` registry stage, and deletion of the challenger service; `experiment.enabled` makes a gate-passed run deploy as challenger.
-- [ ] 5f.3 Add the `payment-risk-promote` pipeline (gate with the challenger as the new model and the champion as production, registry and service promotion, archive and cleanup) and keep `payment-risk-rollout` for rollback.
-- [ ] 5f.4 Add the challenger guard to the drift check (error, timeout and decline-rate bounds after a minimum sample).
+- [ ] 5f.0 Platform: a `MutatingAdmissionPolicy` for the waypoint pod's seccomp profile in `ml` (requested from the platform thread; dev first, prod flag off).
+- [ ] 5f.1 Rework the Go client to keep a layout per model version (feature order, bin edges and `decline_threshold` from that version's config), fetch an unseen version's config with a few retries, score each answer under its own version, and add `model_version` and `declined` to `fraud.model.calls`; `record_version` packages `decline_threshold` into `config.pbtxt`.
+- [ ] 5f.2 Add `role=challenger` to `roll_out` (second InferenceService, `challenger` registry stage, deletion) and the `experiment` run parameter.
+- [ ] 5f.3 Chart: the waypoint `Gateway`, the `HTTPRoute` at weights 100/0 with Argo CD ignoring the weights, the `istio.io/use-waypoint` label on the champion's Service (check that KServe keeps it), a scrape of both services, the `AnalysisTemplate`, and the Role for `analysisruns`.
+- [ ] 5f.4 Add the `payment-risk-promote` pipeline: the gate (challenger against champion), stepwise weights capped at 20 percent with an `AnalysisRun` per step, promotion or abort.
 - [ ] 5f.5 Add the per-version panels to `ml-serving` and a by-version breakdown to `fraud-outcomes`.
 - [ ] 5f.6 Update `docs/ml/serving.md` (A/B) and the roadmap rows.
 
