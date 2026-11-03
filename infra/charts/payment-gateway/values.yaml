@@ -368,4 +368,4 @@ model:
   url: http://payment-risk-predictor.ml.svc.cluster.local
   name: payment-risk
   timeout: 150ms
-  threshold: 0.8
+  threshold: 0.512

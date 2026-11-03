@@ -1,6 +1,6 @@
 # Training
 
-**Status: dev exploration run; production evidence pending.** The code and the prod chart are under review. Production runs wait for `stream-history` to cover `[2026-07-29, 2026-10-29)`. Code: [`src/ml`](../../src/ml); chart: [`infra/charts/ml-training`](../../infra/charts/ml-training). Dev runs the same chart on the RTX 5060 Ti of `dev-server1`: `files/dev` holds the pipelines compiled without node selectors and with smaller Spark sizes, and the platform's `xgboost-gpu-distributed` runtime selects the local GPU there.
+**Status: dev pipeline runs done; production runs pending.** The code and the prod chart are under review. Production runs wait for `stream-history` to cover `[2026-07-29, 2026-10-29)`. Code: [`src/ml`](../../src/ml); chart: [`infra/charts/ml-training`](../../infra/charts/ml-training). Dev runs the same chart on the RTX 5060 Ti of `dev-server1`: `files/dev` holds the pipelines compiled without node selectors and with smaller Spark sizes, and the platform's `xgboost-gpu-distributed` runtime selects the local GPU there.
 
 ## Training data
 
@@ -63,7 +63,7 @@ On the test window, with thresholds from validation:
 | Additive baseline, depth 1 | 0.9156 | 0.8881 | 0.9155 |
 | Random forest | 0.9073 | 0.8676 | 0.9224 |
 
-The gate passed: 0.9370 against 0.9156 for the baseline and 0.8229 for production `v1`, which was trained on seven days. The thresholds on validation are 0.512 to decline (0.1% FPR) and 0.078 for step-up (1%). The served threshold is still the untuned 0.8. Dev data is simulated and separates easily, so these numbers do not predict production.
+The gate passed: 0.9370 against 0.9156 for the baseline. The thresholds on validation are 0.512 to decline (0.1% FPR) and 0.078 for step-up (1%), and the served threshold is 0.512. Dev data is simulated and separates easily, so these numbers do not predict production.
 
 Fraud arrives in bursts, with 5 to 159 positives per day, so features are scored walk-forward over the last 14 days (training on the earlier days, three seeds, 378 fits in one job). The table gives the change in mean PR-AUC against all features when the feature or view is removed, the days (of 14) the set was worse and better, and the worst day:
 
@@ -79,6 +79,38 @@ Fraud arrives in bursts, with 5 to 159 positives per day, so features are scored
 | view `customer_daily` | +0.0190 | 6 / 8 | -0.0258 |
 
 Only the first four hurt consistently when removed. The four that help on average win on 7 to 9 of 14 days, which is not a decisive split, so the evidence supports neither dropping nor adding them, and the feature service has not been changed. The seven-day sample had suggested dropping all of `customer_daily` (+0.10); with 30 days of history it does not. `request_features__item_count` is 1 on all rows because the simulator builds every order from one purchase. Stream features are null for 51% of legitimate and 9% of fraudulent attempts, so a missing stream snapshot is itself a signal.
+
+## Dev pipeline runs
+
+Two `payment-risk-training` runs and one `payment-risk-rollout` run went through Kubeflow on dev against snapshot `7781420152380000469` (windows 2026-09-04..2026-10-28 as 36, 9 and 9 days, cutoff 2026-10-28). The Kubeflow UI is at `kubeflow-dev.phuchoang.sbs`. The earlier seven-day `v1` was set to `ARCHIVED` and its model files deleted, because the registry has no delete call.
+
+| Run | Pipeline | Steps | Wall time | Result |
+|---|---|---:|---:|---|
+| `caef6f06` | training, `tune_trials=4` | 26 of 26 | 19 min 16 s | registered `v2`, rolled out |
+| `f3060333` | rollout, `version=v1` | 3 of 3 | 1 min 47 s | Triton served `v1` again |
+| `6cb31a0e` | training, `tune_trials=0`, `force=true` | 26 of 26 | 20 min 30 s | registered `v3`, rolled out, now live |
+
+Katib ran four trials, two at a time, in 1 min 52 s. Each trial was a single-GPU TrainJob and printed validation PR-AUC on the 5% negative sample:
+
+| Trial | Depth | eta | Validation PR-AUC |
+|---|---:|---:|---:|
+| `rfvwf8jq` (selected) | 8 | 0.258 | 0.9177 |
+| `d8mmftjs` | 4 | 0.192 | 0.9169 |
+| `5jzqccpc` | 10 | 0.276 | 0.9165 |
+| `fs29wswm` | 10 | 0.276 | 0.9165 |
+
+The fit TrainJob took 24 s with the tuned settings and 44 s with the defaults, the gate TrainJob 21 s and 28 s, all while Triton held the same GPU. Registered test metrics:
+
+| Version | Settings | PR-AUC | ROC-AUC | Recall at 1% FPR | Precision at decline | Decline / step-up threshold |
+|---|---|---:|---:|---:|---:|---|
+| `v2` | tuned | 0.9235 | 0.9836 | 0.8904 | 0.9494 | 0.5607 / 0.1169 |
+| `v3` | defaults | 0.9370 | 0.9895 | 0.9110 | 0.8834 | 0.5122 / 0.0783 |
+
+Four trials did not beat the defaults, so `v3` was gated against `v2` and replaced it. Both gates compared against a depth-1 baseline trained in the same job.
+
+The second training run reused the snapshot. A run without one waited 16 minutes for the 8 GB staging pod, which the two small dev workers could not place (dev-server3 had about 6.8 GiB of memory requests free), and was terminated.
+
+Triton answered a binary request for `v2` with all 50 features missing, and with only `amount_minor` and `has_device` set, with `model_version` 2 and a probability of 0.8937 in both cases. `kubectl get inferenceservice` shows storage URI `model-registry://payment-risk/v3` after the second run.
 
 ## Drift
 
