@@ -199,6 +199,12 @@ def roll_out(run_id: str, version: str, role: str, deployed: dsl.OutputPath(str)
     return step("roll_out", locals(), ("deployed",))
 
 
+@dsl.container_component
+def promote_challenger(run_id: str, steps_percent: str, promoted: dsl.OutputPath(str)):
+    """Shifts traffic to the challenger in analysed steps, then promotes it or removes it."""
+    return step("promote_challenger", locals(), ("promoted",))
+
+
 def configure(task, *, nodes, memory="1G", cpu="250m", storage=True, retries=0):
     """Sets a step's caching, retries, resources, environment, credentials and placement.
 

@@ -96,10 +96,10 @@
 - [x] 5f.0 Platform: a `MutatingAdmissionPolicy` for the waypoint pod's seccomp profile in `ml` (talos-proxmox #116 and #117, merged; running on dev, applied to prod only after its Manual Provision run).
 - [x] 5f.1 Rework the Go client to keep a layout per model version (feature order, bin edges and `decline_threshold` from that version's config), fetch an unseen version's config with a few retries, score each answer under its own version, and add `model_version` and `declined` to `fraud.model.calls`; `record_version` packages `decline_threshold` into `config.pbtxt`.
 - [x] 5f.2 Add `role=challenger` to `roll_out` (second InferenceService, `challenger` registry stage, deletion) and the `experiment` run parameter.
-- [ ] 5f.3 Chart: the waypoint `Gateway`, the `HTTPRoute` at weights 100/0 with Argo CD ignoring the weights, the `istio.io/use-waypoint` label on the champion's Service (check that KServe keeps it), a scrape of both services, the `AnalysisTemplate`, and the Role for `analysisruns`.
-- [ ] 5f.4 Add the `payment-risk-promote` pipeline: the gate (challenger against champion), stepwise weights capped at 20 percent with an `AnalysisRun` per step, promotion or abort.
-- [ ] 5f.5 Add the per-version panels to `ml-serving` and a by-version breakdown to `fraud-outcomes`.
-- [ ] 5f.6 Update `docs/ml/serving.md` (A/B) and the roadmap rows.
+- [x] 5f.3 Chart: the waypoint `Gateway`, the `HTTPRoute` at weights 100/0 with Argo CD ignoring the weights, the `istio.io/use-waypoint` label on the champion's Service (KServe does not copy labels from the InferenceService but keeps ones set on the Service, so `roll_out` sets it when the chart has a waypoint), a scrape of both services, the `AnalysisTemplate`, and the Role for `analysisruns`.
+- [x] 5f.4 Add the `payment-risk-promote` pipeline: the stepwise weights capped at 20 percent with an `AnalysisRun` per step, promotion or abort.
+- [x] 5f.5 Add the per-version panels to `ml-serving`. A by-version breakdown in the ClickHouse `fraud-outcomes` dashboard is not built.
+- [x] 5f.6 Update `docs/ml/serving.md` (A/B) and the roadmap rows.
 
 ## 6. Local checks and hand-off
 

@@ -1,7 +1,7 @@
 {{- if .Values.enabled }}
 {{- $placeholder := printf "%s:chart" .Values.image.repository }}
 {{- $image := include "ml-training.image" . }}
-{{- range $name := list "payment-risk-training" "payment-risk-rollout" }}
+{{- range $name := list "payment-risk-training" "payment-risk-rollout" "payment-risk-promote" }}
 {{- $text := $.Files.Get (printf "files/%s/%s.yaml" $.Values.environment $name) | replace $placeholder $image }}
 {{- $documents := regexSplit "\n---\n" $text -1 }}
 apiVersion: pipelines.kubeflow.org/v2beta1

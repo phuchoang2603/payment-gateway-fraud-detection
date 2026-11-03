@@ -375,6 +375,142 @@
           "mode": "multi"
         }
       }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Triton requests by service",
+      "description": "Champion and challenger side by side while an experiment runs. The route's weights are set by the promotion pipeline.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (serving_kserve_io_inferenceservice) (rate(nv_inference_request_success[5m]))",
+          "legendFormat": "{{serving_kserve_io_inferenceservice}} success"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (serving_kserve_io_inferenceservice) (rate(nv_inference_request_failure[5m]))",
+          "legendFormat": "{{serving_kserve_io_inferenceservice}} failure"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Triton time per request by service",
+      "description": "Mean queue plus compute time in milliseconds. The promotion analysis compares the challenger's with the champion's.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (serving_kserve_io_inferenceservice) (rate(nv_inference_queue_duration_us[5m])) + sum by (serving_kserve_io_inferenceservice) (rate(nv_inference_compute_infer_duration_us[5m]))) / clamp_min(sum by (serving_kserve_io_inferenceservice) (rate(nv_inference_request_success[5m])), 1) / 1000",
+          "legendFormat": "{{serving_kserve_io_inferenceservice}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Model calls and declines by version",
+      "description": "Calls the fraud service scored under each model version, and how many of them added a decline.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model_version) (rate({__name__=\"fraud.model.calls\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"payment-gateway\"}[5m]))",
+          "legendFormat": "calls {{model_version}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (model_version) (rate({__name__=\"fraud.model.calls\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"payment-gateway\",\"declined\"=\"true\"}[5m]))",
+          "legendFormat": "declined {{model_version}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     }
   ],
   "templating": {

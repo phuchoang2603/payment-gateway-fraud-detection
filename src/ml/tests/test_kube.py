@@ -433,3 +433,66 @@ def test_pod_labels_go_into_the_runtime_patch_only_when_given():
     labelled = kube.train_job_spec("ml:1", ["x"], [], 60, pod_labels={"a": "b"})
     assert "metadata" not in pod(plain) and pod(labelled)["metadata"] == {"labels": {"a": "b"}}
     assert pod(labelled)["spec"] == pod(plain)["spec"] == {"serviceAccountName": "fraud-training"}
+
+
+def test_the_route_weights_always_add_up_to_one_hundred(cluster, monkeypatch):
+    """The champion keeps what the challenger does not get, on the route named by the environment."""
+    monkeypatch.setenv("EXPERIMENT_ROUTE", "payment-risk-ab")
+    kube.set_weights(20)
+    kube.set_weights(0, route="other")
+    (plural, name, operations), (_, other, zero) = cluster.patched
+    assert (plural, name, other) == ("httproutes", "payment-risk-ab", "other")
+    assert [(o["path"], o["value"]) for o in operations] == [
+        ("/spec/rules/0/backendRefs/0/weight", 80),
+        ("/spec/rules/0/backendRefs/1/weight", 20),
+    ]
+    assert [o["value"] for o in zero] == [100, 0]
+
+
+def test_the_champions_service_is_labelled_with_the_waypoint(monkeypatch):
+    """The predictor Service of the named InferenceService gets the use-waypoint label."""
+    sent = []
+    monkeypatch.setenv("SERVING_WAYPOINT", "ml-waypoint")
+    monkeypatch.setattr(
+        kube,
+        "core",
+        lambda: SimpleNamespace(patch_namespaced_service=lambda *args: sent.append(args)),
+    )
+    kube.use_waypoint()
+    kube.use_waypoint("payment-risk-challenger")
+    assert sent == [
+        (
+            "payment-risk-predictor",
+            "ml",
+            {"metadata": {"labels": {"istio.io/use-waypoint": "ml-waypoint"}}},
+        ),
+        (
+            "payment-risk-challenger-predictor",
+            "ml",
+            {"metadata": {"labels": {"istio.io/use-waypoint": "ml-waypoint"}}},
+        ),
+    ]
+
+
+@pytest.mark.parametrize("phase", ["Successful", "Failed"])
+def test_an_analysis_run_is_created_waited_for_and_deleted(cluster, phase):
+    """The run is created from the template with its arguments, its end phase is returned, and it is deleted."""
+    cluster.status = {"phase": phase, "message": "done"}
+    assert kube.analysis_run("run-1", "payment-risk-challenger", {"window": "10m"}, 60) == (
+        phase,
+        "done",
+    )
+    ((plural, _, body),) = cluster.created
+    assert plural == "analysisruns" and body["spec"]["templates"] == [
+        {"templateName": "payment-risk-challenger"}
+    ]
+    assert body["spec"]["args"] == [{"name": "window", "value": "10m"}]
+    assert cluster.deleted == [("analysisruns", "run-1")]
+
+
+def test_an_analysis_that_never_ends_times_out_and_is_still_deleted(cluster):
+    """A run still running at the timeout raises and is cleaned up."""
+    cluster.status = {"phase": "Running"}
+    with pytest.raises(TimeoutError):
+        kube.analysis_run("run-2", "payment-risk-challenger", {}, 0)
+    assert ("analysisruns", "run-2") in cluster.deleted

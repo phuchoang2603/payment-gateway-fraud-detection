@@ -61,6 +61,21 @@ drift:
     minReplicas: 1
     maxReplicas: 2
     requestsPerSecond: "5"
+experiment:
+  # A challenger model behind a waypoint route, with weights only the promotion pipeline changes.
+  enabled: false
+  waypoint: ml-waypoint
+  route: payment-risk-ab
+  maxPercent: 20
+  steps: "5,20"
+  analysis:
+    window: 10m
+    interval: 2m
+    count: 3
+    minimumRequests: 100
+    maximumErrorRate: 0.01
+    latencyRatio: 2
+    declineRatio: [0.5, 2]
 dashboards:
   namespace: observability
   folder: ML

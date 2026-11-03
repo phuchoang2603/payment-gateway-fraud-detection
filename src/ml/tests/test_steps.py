@@ -500,6 +500,7 @@ class Registry:
     def __init__(self, production=None, version="v3"):
         self.current, self.version = production, version
         self.registered, self.promoted, self.puts, self.challenged = [], [], [], []
+        self.running, self.retired = None, []
 
     def production(self):
         """Returns the production version."""
@@ -524,6 +525,14 @@ class Registry:
     def promote(self, version, run_id):
         """Records a promotion."""
         self.promoted.append((version, run_id))
+
+    def challenger(self):
+        """Returns the live challenger."""
+        return self.running
+
+    def retire(self, version):
+        """Records an archived version."""
+        self.retired.append(version)
 
     def mark_challenger(self, version, run_id):
         """Records a challenger."""
@@ -737,3 +746,96 @@ def test_a_challenger_needs_a_different_production_version(serve):
         with pytest.raises(ValueError, match="different production"):
             steps.roll_out(version="v2", run_id="r1", role="challenger")
     assert serve.names == []
+
+
+@pytest.fixture
+def promoting(serve, monkeypatch):
+    """Adds a challenger and fakes the route weights and the analysis, which passes unless told otherwise."""
+    serve.registry.running = "v2"
+    serve.weights, serve.analyses, serve.verdict = [], [], ("Successful", "")
+    monkeypatch.setenv("SERVING_PREDICTOR", json.dumps({"minReplicas": 1}))
+    monkeypatch.setattr(steps.kube, "set_weights", lambda percent: serve.weights.append(percent))
+
+    def analyse(name, template, args, timeout):
+        """Records the analysis and answers the prepared verdict."""
+        serve.analyses.append((name, template, args))
+        return serve.verdict if len(serve.analyses) >= serve.fail_at else ("Successful", "")
+
+    serve.fail_at = 99
+    monkeypatch.setattr(steps.kube, "analysis_run", analyse)
+    return serve
+
+
+def test_a_challenger_that_passes_every_step_replaces_the_champion(promoting):
+    """Weights rise step by step with an analysis each, then drop to zero while the champion is updated."""
+    result = steps.promote_challenger(run_id="abcdef0123", steps_percent="5,20")
+    assert result == {"promoted": "v2", "previous": "v1"}
+    assert promoting.weights == [5, 20, 0]
+    assert [(n, t) for n, t, _ in promoting.analyses] == [
+        ("payment-risk-abcdef01-5", "payment-risk-challenger"),
+        ("payment-risk-abcdef01-20", "payment-risk-challenger"),
+    ]
+    assert promoting.analyses[0][2] == {
+        "challengerVersion": "v2",
+        "championVersion": "v1",
+        "window": "10m",
+    }
+    assert promoting.names == ["payment-risk"] and promoting.deployed[0][0] == "v2"
+    assert promoting.registry.promoted == [("v2", "abcdef0123")] and promoting.probed == [
+        ("http://svc", "v2")
+    ]
+    assert promoting.deleted == ["payment-risk-challenger"] and promoting.registry.retired == []
+
+
+def test_a_failed_analysis_removes_the_challenger_and_leaves_the_champion(promoting):
+    """The weights return to zero, the challenger service goes, its version is archived and the run fails."""
+    promoting.fail_at, promoting.verdict = 2, ("Failed", "decline-ratio")
+    with pytest.raises(
+        RuntimeError, match="v2 failed its analysis at 20 percent: Failed decline-ratio"
+    ):
+        steps.promote_challenger(run_id="abcdef0123", steps_percent="5,20")
+    assert promoting.weights == [5, 20, 0]
+    assert promoting.deleted == ["payment-risk-challenger"] and promoting.registry.retired == ["v2"]
+    assert promoting.names == [] and promoting.registry.promoted == []
+
+
+def test_a_champion_update_that_fails_restores_the_champion_and_removes_the_challenger(promoting):
+    """If the new champion does not answer, the old version is redeployed and the challenger is archived."""
+    promoting.probe_error = RuntimeError("no score")
+    with pytest.raises(RuntimeError, match="no score"):
+        steps.promote_challenger(run_id="abcdef0123", steps_percent="5")
+    assert [v for v, _ in promoting.deployed] == ["v2", "v1"]
+    assert promoting.deleted == ["payment-risk-challenger"] and promoting.registry.retired == ["v2"]
+    assert promoting.registry.promoted == []
+
+
+@pytest.mark.parametrize("plan", ["30", "20,5", "5,5", "0,5", "5,25"])
+def test_steps_must_rise_from_above_zero_to_the_cap(promoting, plan):
+    """A step above the 20 percent cap, a falling, repeated or zero step is refused before any weight moves."""
+    with pytest.raises(ValueError, match="rise from above 0"):
+        steps.promote_challenger(run_id="abcdef0123", steps_percent=plan)
+    assert promoting.weights == [] and promoting.analyses == []
+
+
+def test_the_chart_steps_and_window_apply_without_a_request_and_a_missing_challenger_is_refused(
+    promoting, monkeypatch
+):
+    """The environment supplies the steps and window, and there must be a challenger beside a champion."""
+    monkeypatch.setenv("EXPERIMENT_STEPS", "10")
+    monkeypatch.setenv("EXPERIMENT_WINDOW", "30m")
+    steps.promote_challenger(run_id="abcdef0123")
+    assert promoting.weights == [10, 0] and promoting.analyses[0][2]["window"] == "30m"
+    promoting.registry.running = None
+    with pytest.raises(ValueError, match="no challenger"):
+        steps.promote_challenger(run_id="abcdef0123")
+
+
+def test_the_champion_is_labelled_for_the_waypoint_only_when_the_chart_has_one(serve, monkeypatch):
+    """A rollout labels the Service when SERVING_WAYPOINT is set, and does nothing about it otherwise."""
+    labelled = []
+    monkeypatch.setattr(steps.kube, "use_waypoint", lambda: labelled.append(True))
+    steps.roll_out(version="v2", run_id="r1")
+    assert labelled == []
+    monkeypatch.setenv("SERVING_WAYPOINT", "ml-waypoint")
+    steps.roll_out(version="v3", run_id="r2")
+    assert labelled == [True]

@@ -6,8 +6,11 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   selector:
-    matchLabels:
-      serving.kserve.io/inferenceservice: payment-risk
+    matchExpressions:
+      - key: serving.kserve.io/inferenceservice
+        operator: In
+        values: [payment-risk, payment-risk-challenger]
+  podTargetLabels: [serving.kserve.io/inferenceservice]
   podMetricsEndpoints:
     - portNumber: 8002
       path: /metrics

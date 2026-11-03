@@ -78,3 +78,10 @@ applications:
     destinationNamespace: ml
     path: infra/charts/ml-training
     syncWave: "3"
+    # The promotion pipeline owns the route's weights, as the Edge rollout owns its own.
+    ignoreDifferences:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        namespace: ml
+        name: payment-risk-ab
+        jqPathExpressions: [".spec.rules[].backendRefs[].weight"]

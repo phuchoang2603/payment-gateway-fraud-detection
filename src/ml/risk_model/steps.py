@@ -427,8 +427,67 @@ def roll_out(*, version, run_id, role: str = "champion"):
         if previous and previous != version:
             kube.inference_service(previous, predictor)
         raise
+    if os.environ.get("SERVING_WAYPOINT"):
+        kube.use_waypoint()
     registry.promote(version, run_id)
     return {"deployed": version, "previous": previous or ""}
+
+
+def promote_challenger(*, run_id, steps_percent: str = "", timeout: int = 3600):
+    """Shifts traffic to the challenger in steps, checking each with an analysis, then promotes it or removes it.
+
+    `steps_percent` lists the weights, at most the experiment's cap, and defaults to the chart's steps. A failed
+    or erroring analysis puts the weights back to zero, removes the challenger service, archives its version and
+    raises. After the last step the champion service is updated to the challenger's version and the challenger
+    is removed.
+    """
+    registry = RegistryClient()
+    challenger, champion = registry.challenger(), registry.production()
+    if challenger is None or champion is None or challenger == champion:
+        raise ValueError("there is no challenger running beside a different champion")
+    cap = int(os.environ.get("EXPERIMENT_MAX_PERCENT", "20"))
+    plan = [
+        int(part)
+        for part in (steps_percent or os.environ.get("EXPERIMENT_STEPS", "5,20")).split(",")
+    ]
+    if plan != sorted(set(plan)) or plan[0] <= 0 or plan[-1] > cap:
+        raise ValueError(f"the steps must rise from above 0 to at most {cap} percent")
+    window = os.environ.get("EXPERIMENT_WINDOW", "10m")
+    predictor = json.loads(os.environ.get("SERVING_PREDICTOR", "{}"))
+
+    def remove():
+        kube.set_weights(0)
+        kube.delete(kube.INFERENCE, kube.CHALLENGER_NAME)
+        registry.retire(challenger)
+
+    try:
+        for percent in plan:
+            kube.set_weights(percent)
+            args = {"challengerVersion": challenger, "championVersion": champion, "window": window}
+            phase, message = kube.analysis_run(
+                f"{kube.INFERENCE_NAME}-{run_id[:8]}-{percent}",
+                "payment-risk-challenger",
+                args,
+                timeout,
+            )
+            if phase != "Successful":
+                raise RuntimeError(
+                    f"{challenger} failed its analysis at {percent} percent: {phase} {message}"
+                )
+    except Exception:
+        remove()
+        raise
+    kube.set_weights(0)
+    kube.inference_service(challenger, predictor)
+    try:
+        triton.probe(kube.wait_ready(kube.INFERENCE_NAME, challenger), challenger)
+    except Exception:
+        kube.inference_service(champion, predictor)
+        remove()
+        raise
+    registry.promote(challenger, run_id)
+    kube.delete(kube.INFERENCE, kube.CHALLENGER_NAME)
+    return {"promoted": challenger, "previous": champion}
 
 
 STEPS = {
@@ -445,6 +504,7 @@ STEPS = {
         gate,
         record_version,
         roll_out,
+        promote_challenger,
     )
 }
 

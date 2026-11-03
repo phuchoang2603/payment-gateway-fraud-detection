@@ -33,6 +33,9 @@ EXPERIMENT = ("kubeflow.org", "v1beta1", "experiments")
 INFERENCE = ("serving.kserve.io", "v1beta1", "inferenceservices")
 INFERENCE_NAME = MODEL_NAME
 CHALLENGER_NAME = f"{MODEL_NAME}-challenger"
+ROUTE = ("gateway.networking.k8s.io", "v1", "httproutes")
+ANALYSIS = ("argoproj.io", "v1alpha1", "analysisruns")
+USE_WAYPOINT = "istio.io/use-waypoint"
 SOURCE_URI = "internal.serving.kserve.io/storage-initializer-sourceuri"
 RUNTIME_NAME = "payment-risk-triton"
 AUTOSCALER_CLASS = "serving.kserve.io/autoscalerClass"
@@ -56,6 +59,11 @@ def objects():
 def apps():
     """Returns the API for Deployments."""
     return client.AppsV1Api(connect())
+
+
+def core():
+    """Returns the API for Services."""
+    return client.CoreV1Api(connect())
 
 
 def worker_env():
@@ -276,3 +284,59 @@ def wait_ready(name, version, timeout=1200):
 
     address, _ = wait(INFERENCE, name, done, timeout, interval=10, cleanup=False)
     return address
+
+
+def use_waypoint(name=INFERENCE_NAME):
+    """Labels the predictor Service of an InferenceService so the mesh sends its traffic through the waypoint.
+
+    KServe does not copy labels from the InferenceService to its Service, but keeps ones that are set on it.
+    Without a waypoint Gateway the label would break the Service, so the caller sets it only when one exists.
+    """
+    waypoint = os.environ["SERVING_WAYPOINT"]
+    core().patch_namespaced_service(
+        f"{name}-predictor", namespace(), {"metadata": {"labels": {USE_WAYPOINT: waypoint}}}
+    )
+
+
+def set_weights(percent, route=None):
+    """Sends `percent` of the champion's traffic to the challenger by patching the route's two weights."""
+    json_patch(
+        ROUTE,
+        route or os.environ["EXPERIMENT_ROUTE"],
+        [
+            {"op": "replace", "path": "/spec/rules/0/backendRefs/0/weight", "value": 100 - percent},
+            {"op": "replace", "path": "/spec/rules/0/backendRefs/1/weight", "value": percent},
+        ],
+    )
+
+
+def analysis_run(name, template, args, timeout):
+    """Runs an analysis from a template to its end and returns its phase and message.
+
+    The run is deleted afterwards. `args` maps the template's argument names to values.
+    """
+    body = {
+        "apiVersion": "argoproj.io/v1alpha1",
+        "kind": "AnalysisRun",
+        "metadata": {"name": name, "namespace": namespace()},
+        "spec": {
+            "templates": [{"templateName": template}],
+            "args": [{"name": key, "value": value} for key, value in args.items()],
+        },
+    }
+    create(ANALYSIS, body)
+
+    def done(resource):
+        status = resource.get("status", {})
+        phase = status.get("phase", "")
+        return (
+            (phase, status.get("message", ""))
+            if phase in ("Successful", "Failed", "Error", "Inconclusive")
+            else None
+        )
+
+    try:
+        result, _ = wait(ANALYSIS, name, done, timeout, interval=15)
+    finally:
+        delete(ANALYSIS, name)
+    return result

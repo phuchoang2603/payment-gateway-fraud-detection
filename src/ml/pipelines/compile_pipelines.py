@@ -7,12 +7,14 @@ from pathlib import Path
 from kfp import compiler
 
 from environments import ENVIRONMENTS
+from payment_risk_promote import payment_risk_promote
 from payment_risk_rollout import payment_risk_rollout
 from payment_risk_training import payment_risk_training
 
 PIPELINES = {
     "payment-risk-training": payment_risk_training,
     "payment-risk-rollout": payment_risk_rollout,
+    "payment-risk-promote": payment_risk_promote,
 }
 CHART_FILES = Path(__file__).resolve().parents[3] / "infra" / "charts" / "ml-training" / "files"
 

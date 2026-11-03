@@ -13,3 +13,5 @@ drift:
     trainDays: 36
     validationDays: 9
     testDays: 9
+experiment:
+  enabled: true
