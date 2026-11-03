@@ -8,12 +8,12 @@ The gateway owns hosted checkout, payment attempts, fraud decisions, simulated p
 |---|---|---|
 | Edge | Integration authentication, hosted checkout, tokenization and API translation | Checkout access; no payment database |
 | Payments | Payment/attempt lifecycle, idempotency and recovery | Postgres state, append-only event ledger and Redis idempotency |
-| Fraud | Rules, durable assessments and shadow Feast lookups | Assessment database and evidence |
+| Fraud | Rules, durable assessments, Feast lookups and model scoring | Assessment database and evidence |
 | Vault simulator | Allow-listed fictional cards, opaque tokens and restricted resolution | Encrypted fixtures and token mappings |
 | Processor simulator | Idempotent simulated sales and operation-status lookup | Operation results |
 | Notifier | Kafka consumption and signed webhook retries | Inbox and delivery state |
 
-Each service owns its database and migrations where needed. Internal calls use versioned gRPC contracts; Edge translates HTTP requests. Feast/Redis retrieval is shadow-only: rules decide today, and KServe scoring remains pending.
+Each service owns its database and migrations where needed. Internal calls use versioned gRPC contracts; Edge translates HTTP requests. Fraud reads Feast/Redis features and scores them with the Triton model; rules decide first, and a score at or above the threshold can add a decline when every feature view is available ([serving](../ml/serving.md)).
 
 ## Checkout flow
 
