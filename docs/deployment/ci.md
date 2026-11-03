@@ -48,9 +48,17 @@ Coverage from CI (`python-test-evidence-*` and `go-test-evidence-*` artifacts), 
 | processor-simulator | 100% | 37.2% | 6 killed, 0 lived, 40 not covered: 100%, 13.0% |
 | shared | | 42.1% | 64 killed, 0 lived, 25 not covered: 100%, 71.9% |
 
-The >90% line-coverage requirement applies to feature and knowledge APIs. Generator and Spark tests verify behavior; Go domain and whole-module figures describe other scopes. API results come from [knowledge run 41720339368](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/41720339368) and [feature run 41719434901](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/41719434901).
+The >90% line-coverage requirement applies to feature and knowledge APIs. Generator and Spark tests verify behavior; Go domain and whole-module figures describe other scopes. [Python CI run 41721055100](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/41721055100), commit `b36e09c`, passed all nine projects, including 71 Spark/batch tests, 34 simulator tests and 21 knowledge API tests.
 
-The knowledge API mutation baseline killed **98/107 mutants (91.6%)**: nine survived, none untested, skipped or timed out. Native reports are CI artifacts; the HTTP listener bootstrap lives in `__main__.py`, outside the API mutation scope. Captures of the CI test/coverage output remain missing.
+![Successful Python CI run on main, with all nine project jobs passing](images/python-ci-passed-2026-11-03.png)
+
+The screenshots below render the unmodified coverage.py reports from that run's `python-test-evidence-*` artifacts. The **Statements** column measures line coverage; the header combines statements and branches. Knowledge `app.py` and feature `server.py`/`request.py` each reach 100%; project totals include bootstrap and supporting modules.
+
+![Native knowledge API coverage report: 97.1% statements, 100% branches and app.py fully covered](images/knowledge-api-coverage-2026-11-03.png)
+
+![Native feature API coverage report: 92.3% statements, 87.5% branches and server.py and request.py fully covered](images/feature-api-coverage-2026-11-03.png)
+
+The knowledge API mutation baseline killed **98/107 mutants (91.6%)**: nine survived, none untested, skipped or timed out. Native mutation reports are CI artifacts; the HTTP listener bootstrap lives in `__main__.py`, outside the API mutation scope.
 
 ## Deployed verification
 
