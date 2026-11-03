@@ -250,14 +250,15 @@ def tune_params(
             "trialTemplate": {
                 "primaryContainerName": "node",
                 "trialParameters": [
-                    {"name": h.katib, "reference": h.katib} for h in HYPERPARAMETERS
+                    *({"name": h.katib, "reference": h.katib} for h in HYPERPARAMETERS),
+                    {"name": "trialName", "reference": "${trialSpec.Name}"},
                 ],
                 "trialSpec": kube.train_job_spec(
                     os.environ["ML_IMAGE"],
                     ["python", "-m", "risk_model.worker"],
                     arguments,
                     timeout_seconds,
-                    pod_labels={"katib.kubeflow.org/trial": "${trialSpec.Name}"},
+                    pod_labels={"katib.kubeflow.org/trial": "${trialParameters.trialName}"},
                 ),
             },
         },

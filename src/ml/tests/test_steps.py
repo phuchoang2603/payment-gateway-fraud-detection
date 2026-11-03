@@ -482,7 +482,8 @@ def test_the_experiment_searches_every_hyperparameter_and_runs_one_trial_job_per
     }
     template = spec["trialTemplate"]
     assert [p["reference"] for p in template["trialParameters"]] == [
-        p["name"] for p in spec["parameters"]
+        *(p["name"] for p in spec["parameters"]),
+        "${trialSpec.Name}",
     ]
     trial = template["trialSpec"]
     assert trial["kind"] == "TrainJob" and trial["spec"]["trainer"]["image"] == "ml:1"
@@ -494,7 +495,7 @@ def test_the_experiment_searches_every_hyperparameter_and_runs_one_trial_job_per
     pod = patch["trainingRuntimeSpec"]["template"]["spec"]["replicatedJobs"][0]["template"]["spec"][
         "template"
     ]
-    assert pod["metadata"]["labels"] == {"katib.kubeflow.org/trial": "${trialSpec.Name}"}
+    assert pod["metadata"]["labels"] == {"katib.kubeflow.org/trial": "${trialParameters.trialName}"}
     assert result == {
         "params": json.dumps({"eta": 0.1, "lambda": 1.5, "max_depth": 5}),
         "experiment": "payment-risk-abcdef12",
