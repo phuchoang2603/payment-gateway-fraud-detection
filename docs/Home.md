@@ -146,7 +146,8 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Versioning | Model registry and incremental data versions | [Training](ml/training.md#versions) | Done on dev; incremental rebuild and prod runs pending |
 | Serving | KServe inference from the registry, rollback | [Serving](ml/serving.md) | Done on dev; prod runs pending |
 | Scoring | Go Fraud calling the model under a missing-feature policy | [Serving](ml/serving.md) | Implemented |
-| Scoring, later | Autoscaling, A/B traffic split | [Serving](ml/serving.md) | Planned |
+| Autoscaling | KEDA on Triton queue time, scraped metrics and a Grafana dashboard | [Serving](ml/serving.md#autoscaling-and-dashboard) | Done on dev; prod runs pending |
+| Scoring, later | A/B traffic split | [Serving](ml/serving.md) | Planned |
 | Drift | Periodic drift comparison and retraining trigger | [Training](ml/training.md) | Planned |
 
 ### LLM and agent platform

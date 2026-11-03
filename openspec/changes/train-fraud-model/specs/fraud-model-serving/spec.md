@@ -47,3 +47,16 @@ The training pipeline's deploy step SHALL serve a version that passed the gate, 
 
 - **WHEN** the deploy pipeline deploys the previous version
 - **THEN** the InferenceService returns to it, and the registry marks it `production`
+
+### Requirement: Autoscaling and metrics
+The predictor SHALL scale between a minimum and a maximum number of replicas with KEDA, on Triton's mean request queue time read from the platform's metrics store, and every replica SHALL use the shared GPU claim. Triton's metrics SHALL be scraped, and a Grafana dashboard in the platform's Grafana SHALL show the request rate, queue and compute time, replicas, GPU utilization and the fraud service's model calls.
+
+#### Scenario: Requests start to queue
+
+- **WHEN** the mean queue time stays above the target
+- **THEN** KEDA adds a predictor replica, up to the maximum, and the new replica loads the same model version on the same GPU
+
+#### Scenario: Rollout with autoscaling
+
+- **WHEN** the deploy step replaces the predictor of an existing service
+- **THEN** the service keeps the KEDA autoscaler class and its scaling settings

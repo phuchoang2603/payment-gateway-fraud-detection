@@ -1,0 +1,14 @@
+{{- if .Values.enabled }}
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: payment-risk-triton
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      serving.kserve.io/inferenceservice: payment-risk
+  podMetricsEndpoints:
+    - portNumber: 8002
+      path: /metrics
+{{- end }}

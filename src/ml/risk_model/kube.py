@@ -34,6 +34,7 @@ INFERENCE = ("serving.kserve.io", "v1beta1", "inferenceservices")
 INFERENCE_NAME = MODEL_NAME
 SOURCE_URI = "internal.serving.kserve.io/storage-initializer-sourceuri"
 RUNTIME_NAME = "payment-risk-triton"
+AUTOSCALER_CLASS = "serving.kserve.io/autoscalerClass"
 
 
 @functools.cache
@@ -214,26 +215,35 @@ def inference_service(version, predictor):
             "storageUri": model_uri(version),
         },
     }
+    keda = bool(predictor.get("autoScaling"))
     try:
         get(INFERENCE, name)
     except ApiException as error:
         if error.status != 404:
             raise
+        annotations = {"serving.kserve.io/deploymentMode": "Standard"}
+        if keda:
+            annotations[AUTOSCALER_CLASS] = "keda"
         create(
             INFERENCE,
             {
                 "apiVersion": "serving.kserve.io/v1beta1",
                 "kind": "InferenceService",
-                "metadata": {
-                    "name": name,
-                    "namespace": namespace(),
-                    "annotations": {"serving.kserve.io/deploymentMode": "Standard"},
-                },
+                "metadata": {"name": name, "namespace": namespace(), "annotations": annotations},
                 "spec": {"predictor": spec},
             },
         )
         return
-    json_patch(INFERENCE, name, [{"op": "replace", "path": "/spec/predictor", "value": spec}])
+    operations = [{"op": "replace", "path": "/spec/predictor", "value": spec}]
+    if keda:
+        operations.append(
+            {
+                "op": "add",
+                "path": f"/metadata/annotations/{AUTOSCALER_CLASS.replace('/', '~1')}",
+                "value": "keda",
+            }
+        )
+    json_patch(INFERENCE, name, operations)
 
 
 def rolled_out(deployment, uri):

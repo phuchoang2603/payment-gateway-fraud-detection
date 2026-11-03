@@ -71,6 +71,14 @@
 - [x] 5c.5 Rewrite the Go adapter for the v2 protocol with binary tensors, a cached feature order and version-checked scores.
 - [x] 5c.6 On dev: roll `v1` out on Triton, check the fraud service's evidence, and run the gate, the model comparison and a 14-fold feature ablation through GPU jobs on the 54-day replay; the numbers are in `docs/ml/training.md`.
 
+## 5d. Autoscaling and dashboard
+
+- [x] 5d.1 Enable Triton's metrics on port 8002 with named container ports, and scrape them with a `VMPodScrape`.
+- [x] 5d.2 Set `autoScaling` and `maxReplicas` in the chart's predictor values (KEDA, Triton queue time), and have `kube.inference_service` set the KEDA autoscaler class on a new and an existing service.
+- [x] 5d.3 Add the ML serving dashboard to the platform's Grafana, and allow the `observability` namespace in the Argo CD project because the sidecar only watches fixed namespaces.
+- [x] 5d.4 On dev: scale a second predictor replica under load on the shared GPU, and load the dashboard's panels.
+- [ ] 5d.5 After merge: confirm the dashboard in Grafana and the ScaledObject on the real `payment-risk` service, and tune the 5 ms queue-time target against prod traffic.
+
 ## 6. Local checks and hand-off
 
 - [ ] 6.1 Run local non-test checks only: `ruff`, treefmt, `helm lint` and `helm template`, KFP compilation, `openspec validate train-fraud-model --strict`, and `git diff --check`. Commit locally on `feat/train-fraud-model`.

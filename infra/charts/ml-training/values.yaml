@@ -50,12 +50,31 @@ schedule:
   validationDays: 14
   testDays: 14
   lagDays: 1
+dashboards:
+  namespace: observability
+  folder: ML
 serving:
   resources:
     requests: {cpu: 500m, memory: 2Gi}
     limits: {memory: 4Gi}
   predictor:
     minReplicas: 1
+    maxReplicas: 2
+    # KServe turns this into a KEDA ScaledObject. The metric is Triton's mean time a request waits in the queue
+    # (microseconds); KEDA asks for one replica per 5000 of it, up to maxReplicas. Every replica shares the GPU claim.
+    autoScaling:
+      metrics:
+        - type: External
+          external:
+            metric:
+              backend: prometheus
+              serverAddress: http://vmsingle-vmks.observability.svc.cluster.local:8428
+              query: >-
+                sum(rate(nv_inference_queue_duration_us{model="payment-risk"}[2m]))
+                / clamp_min(sum(rate(nv_inference_request_success{model="payment-risk"}[2m])), 1)
+            target:
+              type: Value
+              value: "5000"
 notebook:
   storageClass: cloud-block
   storageSize: 20Gi

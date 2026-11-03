@@ -296,6 +296,26 @@ def test_an_existing_inference_service_has_its_whole_predictor_replaced(cluster)
     assert cluster.created == []
 
 
+def test_a_predictor_with_autoscaling_selects_the_keda_autoscaler_class(cluster):
+    """KServe only creates the KEDA ScaledObject from the annotation, on a new and on an existing service."""
+    settings = {"minReplicas": 1, "maxReplicas": 2, "autoScaling": {"metrics": []}}
+    kube.inference_service("v2", settings)
+    ((_, _, body),) = cluster.created
+    assert body["metadata"]["annotations"] == {
+        "serving.kserve.io/deploymentMode": "Standard",
+        "serving.kserve.io/autoscalerClass": "keda",
+    }
+    cluster.stored[("inferenceservices", "payment-risk")] = {"metadata": {"name": "payment-risk"}}
+    kube.inference_service("v3", settings)
+    ((_, _, (replace, annotate)),) = cluster.patched
+    assert replace["op"] == "replace" and replace["value"]["autoScaling"] == {"metrics": []}
+    assert annotate == {
+        "op": "add",
+        "path": "/metadata/annotations/serving.kserve.io~1autoscalerClass",
+        "value": "keda",
+    }
+
+
 def test_an_error_other_than_not_found_reading_the_inference_service_is_raised(monkeypatch):
     """Only a missing service is created; any other error propagates."""
 

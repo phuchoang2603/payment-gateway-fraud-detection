@@ -26,12 +26,18 @@ spec:
         - --strict-readiness=true
         - --http-port=8080
         - --allow-grpc=false
-        - --allow-metrics=false
+        - --allow-metrics=true
+        - --allow-gpu-metrics=false
+        - --metrics-port=8002
       env:
         - name: HOME
           value: /tmp
       ports:
         - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 8002
+          name: metrics
           protocol: TCP
       readinessProbe:
         httpGet:

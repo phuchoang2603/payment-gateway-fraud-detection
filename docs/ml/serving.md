@@ -29,12 +29,20 @@ On dev, `payment-risk-rollout` with `version=v1` served the earlier version agai
 
 ![KServe endpoint payment-risk: ready, Triton runtime, storage URI model-registry://payment-risk/v3](images/kserve-endpoint.png)
 
+## Autoscaling and dashboard
+
+KServe's KEDA autoscaler class turns the predictor's `autoScaling` section into a ScaledObject, so the chart's `serving.predictor` values set the range (1 to 2 replicas) and the trigger. `roll_out` puts the class annotation on a new service and adds it to an existing one when it replaces the predictor. The trigger reads Triton's own metrics (scraped from port 8002 by a `VMPodScrape`) from the platform's VictoriaMetrics: the mean time a request waits in the queue, `rate(nv_inference_queue_duration_us) / rate(nv_inference_request_success)`, with KEDA asking for one replica per 5 ms of it. A request queues only when the GPU is busy, so the metric rises with load and not with idle time, and a zero-traffic window reads 0. Every replica uses the shared `ml-gpu` claim, so extra replicas add Triton's host-side concurrency on the same GPU rather than a second GPU; the L4 node's single GPU is the ceiling. Scale-down waits 5 minutes (KEDA's default stabilisation).
+
+On dev a throwaway service with the chart's runtime and predictor values, and the target lowered to 20 µs so the demo needs no overload, scaled from 1 to 2 replicas about 80 seconds after 24 concurrent clients started sending up to 175 requests per second, and the second pod ran on the same GPU claim. With the target back at 5 ms the service returned to 1 replica about 5 minutes later. The mean queue time was 0.30 ms and the compute time 0.20 ms, well below the 5 ms target the chart sets, so real traffic of this size would not scale. The 5 ms target is untuned until prod traffic exists.
+
+The ML serving dashboard (`ml-serving` in the ML folder of the platform Grafana) shows Triton's request rate, queue and compute time per request, predictor replicas, GPU utilization, and the fraud service's `fraud.model.calls` by status and enforcement. The Grafana sidecar only watches a fixed list of namespaces, so the chart creates the dashboard ConfigMap in `observability`, which the Argo CD project allows for that reason.
+
 ## Planned
 
 | Capability | Plan |
 |---|---|
 | Feature-retrieval API | Typed, validated lookups by customer and method ID with health checks, deployed by Helm with rolling update and automatic rollback |
-| Autoscaling | Request-driven autoscaling for the retrieval API and inference |
+| Autoscaling of the retrieval API | Request-driven autoscaling for the Feast retrieval API; inference scales as above |
 | A/B testing | Two inference versions with a traffic split, deployed through CI/CD, with version-specific dashboards |
 | Load test | Locust run against the retrieval API, recording throughput, latency percentiles and errors as an HTML report |
 
