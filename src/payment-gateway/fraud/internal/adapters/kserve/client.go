@@ -3,6 +3,7 @@ package kserve
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,31 +12,53 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/fraud/internal/application"
 )
 
-const maxAnswer = 64 * 1024
+const (
+	maxAnswer    = 64 * 1024
+	inputName    = "input__0"
+	outputName   = "output__0"
+	headerLength = "Inference-Header-Content-Length"
+)
 
-var modelName = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+var (
+	modelName   = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	versionName = regexp.MustCompile(`^v[0-9]+$`)
+	digits      = regexp.MustCompile(`^[0-9]+$`)
+	errInvalid  = errors.New("the model server answered something unusable")
+)
 
-// Config is the predictor endpoint, the model name and the connection timeout. The request deadline
+// Config is the model server endpoint, the model name and the connection timeout. The request deadline
 // belongs to the caller's context, not to the client.
 type Config struct {
 	URL, Model  string
 	DialTimeout time.Duration
 }
 
-// Client calls a KServe predictor over its v1 JSON protocol.
+// served is what the client knows of the model Triton serves: the registry version it was packaged as and the
+// feature order that packaging recorded.
+type served struct {
+	version string
+	order   []string
+}
+
+// Client calls a Triton model over the Open Inference Protocol v2. Features travel as one binary FP32 row in the
+// order the served model was packaged with, because the binary extension is the only way to send a missing value as NaN.
 type Client struct {
 	config Config
 	http   *http.Client
 	now    func() time.Time
+	mu     sync.RWMutex
+	known  served
 }
 
-// New returns a client for an `http` predictor endpoint and a Kubernetes-style model name.
+// New returns a client for an `http` model server endpoint and a Kubernetes-style model name.
 func New(config Config) (*Client, error) {
 	endpoint, err := url.Parse(config.URL)
 	if err != nil || endpoint.Scheme != "http" || endpoint.Host == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || !modelName.MatchString(config.Model) || config.DialTimeout <= 0 {
@@ -48,75 +71,180 @@ func New(config Config) (*Client, error) {
 // Close releases the client's idle connections.
 func (c *Client) Close() { c.http.CloseIdleConnections() }
 
-// instance names every value of an available view `<view>__<feature>`, the names the model was trained on. Unknown values are null, and the other views are absent, which the predictor reads as missing.
-func instance(features application.FeatureObservation) map[string]any {
-	row := map[string]any{}
-	for view, observed := range features.Views {
+// row lays the features out in the model's order. A value is NaN, which the model reads as missing, when its view is
+// not available or the view holds no number for it; booleans are 0 or 1, as in training.
+func row(features application.FeatureObservation, order []string) []float32 {
+	values := make([]float32, len(order))
+	for index, name := range order {
+		values[index] = float32(math.NaN())
+		view, field, _ := strings.Cut(name, "__")
+		observed := features.Views[view]
 		if observed.Status != "available" {
 			continue
 		}
-		for field, value := range observed.Values {
-			switch {
-			case value.Integer != nil:
-				row[view+"__"+field] = *value.Integer
-			case value.Number != nil:
-				row[view+"__"+field] = *value.Number
-			case value.Boolean != nil:
-				row[view+"__"+field] = *value.Boolean
-			default:
-				row[view+"__"+field] = nil
-			}
+		switch value := observed.Values[field]; {
+		case value.Integer != nil:
+			values[index] = float32(*value.Integer)
+		case value.Number != nil:
+			values[index] = float32(*value.Number)
+		case value.Boolean != nil && *value.Boolean:
+			values[index] = 1
+		case value.Boolean != nil:
+			values[index] = 0
 		}
 	}
-	return row
+	return values
 }
 
-// Score sends one named-feature instance and returns the observation: the model's version and score,
-// or a timeout or error status. The caller's context is the only deadline.
+// Score sends one row and returns the observation: the model's version and score, or a timeout or error status.
+// The caller's context is the only deadline. A score from a model version other than the one the feature order
+// belongs to is discarded and the order is read again on the next call, so a rollout never scores a mismatched row.
 func (c *Client) Score(ctx context.Context, features application.FeatureObservation) (observation application.ModelObservation) {
 	observation = application.ModelObservation{Name: c.config.Model, Status: application.ModelError}
 	defer func() { observation.ReadAt = c.now().UTC() }()
-	body, err := json.Marshal(struct {
-		Instances []map[string]any `json:"instances"`
-	}{[]map[string]any{instance(features)}})
-	if err != nil {
-		return observation
-	}
-	call, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.config.URL, "/")+"/v1/models/"+c.config.Model+":predict", bytes.NewReader(body))
-	if err != nil {
-		return observation
-	}
-	call.Header.Set("Content-Type", "application/json")
-	result, err := c.http.Do(call)
+	layout, err := c.layout(ctx)
 	if err != nil {
 		observation.Status = failureStatus(ctx, err)
 		return observation
+	}
+	score, version, err := c.infer(ctx, row(features, layout.order))
+	if err != nil {
+		observation.Status = failureStatus(ctx, err)
+		return observation
+	}
+	if version != layout.version {
+		c.forget(layout)
+		return observation
+	}
+	observation.Status, observation.Version, observation.Score = application.ModelAvailable, version, &score
+	return observation
+}
+
+func (c *Client) layout(ctx context.Context) (served, error) {
+	c.mu.RLock()
+	known := c.known
+	c.mu.RUnlock()
+	if len(known.order) > 0 {
+		return known, nil
+	}
+	fetched, err := c.fetch(ctx)
+	if err != nil {
+		return served{}, err
+	}
+	c.mu.Lock()
+	c.known = fetched
+	c.mu.Unlock()
+	return fetched, nil
+}
+
+func (c *Client) forget(stale served) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.known.version == stale.version {
+		c.known = served{}
+	}
+}
+
+func (c *Client) address(path string) string {
+	return strings.TrimRight(c.config.URL, "/") + "/v2/models/" + c.config.Model + path
+}
+
+// fetch reads the feature order and registry version the model was packaged with from its Triton config.
+func (c *Client) fetch(ctx context.Context) (served, error) {
+	call, err := http.NewRequestWithContext(ctx, http.MethodGet, c.address("/config"), nil)
+	if err != nil {
+		return served{}, err
+	}
+	content, _, err := c.do(call)
+	if err != nil {
+		return served{}, err
+	}
+	var config struct {
+		Parameters map[string]struct {
+			StringValue string `json:"string_value"`
+		} `json:"parameters"`
+	}
+	var order []string
+	if json.Unmarshal(content, &config) != nil || json.Unmarshal([]byte(config.Parameters["feature_order"].StringValue), &order) != nil || len(order) == 0 {
+		return served{}, errInvalid
+	}
+	version := config.Parameters["registry_version"].StringValue
+	if !versionName.MatchString(version) {
+		return served{}, errInvalid
+	}
+	return served{version: version, order: order}, nil
+}
+
+// infer scores one row and returns the fraud probability and the registry version of the model that made it.
+func (c *Client) infer(ctx context.Context, values []float32) (float64, string, error) {
+	tensor := make([]byte, 0, 4*len(values))
+	for _, value := range values {
+		tensor = binary.LittleEndian.AppendUint32(tensor, math.Float32bits(value))
+	}
+	header, err := json.Marshal(map[string]any{
+		"inputs":  []any{map[string]any{"name": inputName, "shape": []int{1, len(values)}, "datatype": "FP32", "parameters": map[string]any{"binary_data_size": len(tensor)}}},
+		"outputs": []any{map[string]any{"name": outputName, "parameters": map[string]any{"binary_data": true}}},
+	})
+	if err != nil {
+		return 0, "", err
+	}
+	call, err := http.NewRequestWithContext(ctx, http.MethodPost, c.address("/infer"), bytes.NewReader(append(header, tensor...)))
+	if err != nil {
+		return 0, "", err
+	}
+	call.Header.Set("Content-Type", "application/octet-stream")
+	call.Header.Set(headerLength, strconv.Itoa(len(header)))
+	content, headers, err := c.do(call)
+	if err != nil {
+		return 0, "", err
+	}
+	size, err := strconv.Atoi(headers.Get(headerLength))
+	if err != nil || size <= 0 || size > len(content) {
+		return 0, "", errInvalid
+	}
+	var answer struct {
+		ModelVersion string `json:"model_version"`
+		Outputs      []struct {
+			Name       string `json:"name"`
+			Datatype   string `json:"datatype"`
+			Shape      []int  `json:"shape"`
+			Parameters struct {
+				BinaryDataSize int `json:"binary_data_size"`
+			} `json:"parameters"`
+		} `json:"outputs"`
+	}
+	data := content[size:]
+	if json.Unmarshal(content[:size], &answer) != nil || !digits.MatchString(answer.ModelVersion) || len(answer.Outputs) != 1 || len(data) != 8 {
+		return 0, "", errInvalid
+	}
+	if output := answer.Outputs[0]; output.Name != outputName || output.Datatype != "FP32" || len(output.Shape) != 2 || output.Shape[0] != 1 || output.Shape[1] != 2 || output.Parameters.BinaryDataSize != len(data) {
+		return 0, "", errInvalid
+	}
+	score := float64(math.Float32frombits(binary.LittleEndian.Uint32(data[4:])))
+	if math.IsNaN(score) || score < 0 || score > 1 {
+		return 0, "", errInvalid
+	}
+	return score, "v" + answer.ModelVersion, nil
+}
+
+// do sends a request and returns the bounded body and headers of a 200 answer.
+func (c *Client) do(call *http.Request) ([]byte, http.Header, error) {
+	result, err := c.http.Do(call)
+	if err != nil {
+		return nil, nil, err
 	}
 	defer func() { _ = result.Body.Close() }()
 	if result.StatusCode != http.StatusOK {
-		return observation
+		return nil, nil, errInvalid
 	}
 	content, err := io.ReadAll(io.LimitReader(result.Body, maxAnswer+1))
 	if err != nil {
-		observation.Status = failureStatus(ctx, err)
-		return observation
+		return nil, nil, err
 	}
 	if len(content) > maxAnswer {
-		return observation
+		return nil, nil, errInvalid
 	}
-	var answer struct {
-		Predictions  []float64 `json:"predictions"`
-		ModelVersion string    `json:"model_version"`
-	}
-	if json.Unmarshal(content, &answer) != nil || len(answer.Predictions) != 1 || answer.ModelVersion == "" {
-		return observation
-	}
-	score := answer.Predictions[0]
-	if math.IsNaN(score) || score < 0 || score > 1 {
-		return observation
-	}
-	observation.Status, observation.Version, observation.Score = application.ModelAvailable, answer.ModelVersion, &score
-	return observation
+	return content, result.Header, nil
 }
 
 func failureStatus(ctx context.Context, err error) string {
