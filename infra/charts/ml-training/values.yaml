@@ -18,7 +18,7 @@ gpu:
       effect: NoSchedule
 training:
   resources:
-    requests: {cpu: "1", memory: 2Gi}
+    requests: {cpu: 500m, memory: 2Gi}
     limits: {cpu: "3", memory: 8Gi}
 config:
   AWS_REGION: us-east-1

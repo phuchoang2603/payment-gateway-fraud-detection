@@ -110,3 +110,7 @@ platforms:
             - configMapKey: SERVING_PREDICTOR
               envVar: SERVING_PREDICTOR
             optional: false
+          nodeAffinity:
+          - matchExpressions:
+            - key: nvidia.com/gpu.present
+              operator: DoesNotExist

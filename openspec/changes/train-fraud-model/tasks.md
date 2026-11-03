@@ -76,13 +76,15 @@
 - [ ] 6.1 Run local non-test checks only: `ruff`, treefmt, `helm lint` and `helm template`, KFP compilation, `openspec validate train-fraud-model --strict`, and `git diff --check`. Commit locally on `feat/train-fraud-model`.
 - [ ] 6.2 Push and open the PR only with the user's agreement. Push with `git push origin HEAD:refs/heads/<branch>`, and confirm with `git ls-remote origin <branch>`. Report every CI check honestly.
 
-## 7. Prod runs and evidence (after the Feast deploy and replay, each with the user's approval)
+## 7. Dev runs and evidence (run directly on dev, with the user's approval)
 
-- [ ] 7.1 Sync and verify read-only: `ml-training` is healthy, the secrets are Ready, the PipelineVersions are listed, and the Notebook is stopped.
-- [ ] 7.2 Explore a training-set build in the Notebook. Record counts, the fraud rate, null shares, provenance and the dataset step's wall time. Run the derived-feature ablation on validation, fix the final `request_features` list with the Feast thread, and record the PR-AUC per candidate.
-- [ ] 7.3 Run `payment-risk-training` with `tune=true`. Record the KFP graph, the Katib trials, the single-GPU TrainJob (GPU, versions, wall time, exit 0), the test metrics against the baseline, the registry version (`production`, with the snapshot IDs of the daily, stream and label tables, and the feature service), and the InferenceService.
-- [ ] 7.4 Call the model with a JSON request directly, including null features, run a `payment-risk-rollout` rollback, then run a second training run. Record the incremental training-set snapshot summary.
-- [ ] 7.5 Write the evidence into `docs/ml/training.md` and `docs/ml/serving.md` as figures, screenshots and mermaid diagrams. Results that miss expectations are recorded as observed.
+- [x] 7.1 Sync and verify read-only on dev: `ml-training` is healthy, the secrets are Ready, the PipelineVersions are listed, and the Notebook is stopped.
+- [x] 7.2 Explore a training-set build in the notebook, run as a Job on the GPU. Record counts, the fraud rate, null shares and provenance. Score every feature set walk-forward and record the PR-AUC change per candidate.
+- [ ] 7.3 Run `payment-risk-training` with `tune_trials` above 0. Record the KFP graph, the Katib trials, the single-GPU TrainJob (GPU, versions, wall time, exit 0), the test metrics against the baseline and production, the registry version (`production`, with the snapshot IDs of the daily, stream and label tables, and the feature service), and the InferenceService.
+- [ ] 7.4 Call the model with a binary request directly, including missing features, run a `payment-risk-rollout` rollback, then run a second training run. Record the incremental training-set snapshot summary.
+- [ ] 7.5 Retire the first model: archive `v1` in the registry, which has no delete call, and remove its model files. Set the fraud service's model threshold from the new model's validated decline threshold.
+- [ ] 7.6 Write the evidence into `docs/ml/training.md` and `docs/ml/serving.md` as numbers and tables. Results that miss expectations are recorded as observed.
+- [ ] 7.7 Run the same steps on prod once its stream history is replayed, with the user's approval.
 
 ## 8. Archive
 
