@@ -17,13 +17,13 @@ Docs: [domain](https://github.com/phuchoang2603/payment-gateway-fraud-detection/
 
 ## Payment gateway, data pipeline and ML
 
-The [refurbished marketplace](https://github.com/phuchoang2603/refurbished-marketplace) prepares orders and reserves stock through its Checkout saga before opening the gateway's hosted checkout. The Go gateway owns attempts, fraud decisions, simulated processing and signed outcomes that drive stock settlement and order finalization.
+The [refurbished marketplace](https://github.com/phuchoang2603/refurbished-marketplace) creates payments and receives signed outcomes. This repo owns hosted checkout, payment attempts, fraud decisions, simulated processing and recovery, durable events and webhook delivery.
 
 Kafka events and synthetic history feed Spark's Bronze/Silver/Gold lakehouse and Flink's streaming features. Feast serves daily and streaming features from Redis to Go Fraud, which applies rules and the KServe model score. Kubeflow builds point-in-time training examples, trains and evaluates XGBoost, registers passing versions and rolls them out to KServe.
 
-![Payment gateway, data and ML flow: marketplace checkout, Go payment services, Kafka, Spark and Flink processing, Feast and Redis, and Kubeflow training and KServe rollout](docs/payment-gateway/images/payment-flow.png)
+[![Payment gateway, data and ML flow: Go services and state, Kafka topics and consumers, Spark and Flink, Feast and Redis, and Kubeflow training and KServe rollout](docs/payment-gateway/images/payment-flow.png)](docs/payment-gateway/images/payment-flow.png)
 
-Diagram source: [`payment-flow.excalidraw`](docs/payment-gateway/images/payment-flow.excalidraw) · model integration: [#112](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/112).
+[Full-size diagram](docs/payment-gateway/images/payment-flow.png) · editable source: [`payment-flow.excalidraw`](docs/payment-gateway/images/payment-flow.excalidraw) · model integration: [#112](https://github.com/phuchoang2603/payment-gateway-fraud-detection/pull/112).
 
 Gateway docs: [architecture](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/architecture) · [flows](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/flows) · [conventions](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/conventions)
 
