@@ -17,7 +17,11 @@ func Counter(name, unit string) metric.Int64Counter {
 }
 
 func Histogram(name, unit string) metric.Float64Histogram {
-	value, err := otel.Meter("payment-gateway").Float64Histogram(name, metric.WithUnit(unit))
+	options := []metric.Float64HistogramOption{metric.WithUnit(unit)}
+	if unit == "s" {
+		options = append(options, metric.WithExplicitBucketBoundaries(.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10))
+	}
+	value, err := otel.Meter("payment-gateway").Float64Histogram(name, options...)
 	if err != nil {
 		panic(err)
 	}
