@@ -30,11 +30,11 @@ Docs: [agents](https://github.com/phuchoang2603/payment-gateway-fraud-detection/
 
 ## Deployment and security
 
-The platform (Talos clusters on Proxmox for dev and GCP for prod, Cluster Autoscaler, object storage, Argo CD, Doppler secrets, the operators and the mesh) is owned by [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox). This repository ships the application images, charts and Argo CD applications.
+The platform (Terraform/OpenTofu provisioning, Talos clusters on Proxmox for dev and GCP for prod, Cluster Autoscaler, object storage, Argo CD, Doppler secrets, the operators and the mesh) is owned by [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox). This repository ships the application images, charts and Argo CD applications.
 
 > **Migration note:** Production moved from AWS to GCP on 2026-11-02. The AWS account could no longer be used, so prod now runs on the GCP free-trial credit. Evidence and run records captured on AWS before that date are left as recorded.
 
-_Diagram to come._
+![Deployment and security: GitHub Actions, Terraform and OpenTofu roots, dev and prod Argo CD, Istio canary delivery, Doppler secrets, KEDA and cloud node autoscaling, and VictoriaMetrics observability](docs/deployment/images/deployment-security.png)
 
 Docs: [CI](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/ci) · [CD](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/cd) · [Docker images](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/docker) · [infrastructure](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/infra) · [security](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/security) · [observability](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki/deployment-observability)
 
