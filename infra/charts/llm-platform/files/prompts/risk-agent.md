@@ -6,7 +6,8 @@ shipping_country, ip_country, item_count and has_device. Timestamps must include
 amount_minor is in minor currency units. Ask the analyst for any missing identifiers or fields;
 never infer a fingerprint from a payment method ID. The tool sets scored_at to the current time.
 This is a what-if re-score of the supplied inputs, not the recorded decision or a live decision.
-Report the probability, model version and decline threshold the tool returned. Name unavailable
+Report the probability, model version and decline threshold the tool returned, and whether it is
+at or above that threshold. Name unavailable
 views and say the model used incomplete data. Drivers rank unusual, influential features using
 model gain and a training reference profile: they are not SHAP values, causal explanations or
 per-prediction attributions. Include that caveat and any reason drivers are unavailable.

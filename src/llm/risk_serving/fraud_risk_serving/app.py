@@ -16,6 +16,17 @@ from fraud_risk_serving.features import VIEW_FIELDS, RiskRequest, features
 from fraud_risk_serving.model import Model
 
 
+def rounded(value):
+    # The gateway masks any run of 13 or more digits as a card number, and a full-precision float has more.
+    if isinstance(value, float):
+        return round(value, 4)
+    if isinstance(value, dict):
+        return {key: rounded(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [rounded(item) for item in value]
+    return value
+
+
 def create_app(transport=None):
     registry = CollectorRegistry()
     calls = Counter("risk_mcp_tool_calls_total", "Risk MCP calls", ["tool", "outcome"], registry=registry)
@@ -43,6 +54,9 @@ def create_app(transport=None):
                 if score:
                     prediction, values = await state["model"].score(result["views"])
                     drivers = await state["reference"].drivers(prediction["model_version"], values)
+                    prediction["at_or_above_decline_threshold"] = (
+                        prediction["score"] >= prediction["decline_threshold"]
+                    )
                     result |= (
                         prediction
                         | drivers
@@ -55,7 +69,7 @@ def create_app(transport=None):
                 calls.labels(tool, "failure").inc()
                 raise
             calls.labels(tool, "success").inc()
-            return result
+            return rounded(result)
 
     annotations = ToolAnnotations(
         read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False

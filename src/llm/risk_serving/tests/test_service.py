@@ -66,6 +66,9 @@ def test_mcp_reads_and_scores_with_observable_success_and_failure(request_input,
         assert not success.get("isError", False)
         assert success["structuredContent"]["drivers_notice"] == NOTICE
         assert success["structuredContent"]["model_version"] == "4"
+        assert success["structuredContent"]["score"] == 0.8
+        assert success["structuredContent"]["decline_threshold"] == 0.7
+        assert success["structuredContent"]["at_or_above_decline_threshold"] is True
         assert success["structuredContent"]["views"]["customer_daily"]["status"] == (
             "missing" if missing else "available"
         )
