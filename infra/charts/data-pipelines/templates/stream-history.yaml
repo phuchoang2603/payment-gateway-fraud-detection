@@ -158,6 +158,12 @@ spec:
             # One job, one TaskManager. A burst node has 4 vCPU, so two units fit on it: the JobManager only coordinates
             # checkpoints and the TaskManager uses about 1.5 cores.
             jobManager:
+              {{- with .Values.workflowNodeSelector }}
+              podTemplate:
+                spec:
+                  nodeSelector:
+                    {{- toYaml . | nindent 20 }}
+              {{- end }}
               resources:
                 requests: {cpu: 200m, memory: 1280Mi}
                 limits: {memory: 1280Mi}

@@ -138,10 +138,8 @@ features:
   historyStart: "2026-07-29"
   historyEnd: "2026-10-29"
   # A 4-day unit replays 5 days with its lead-in day, about 12M seeded events or 1.6 GB at 130 compressed bytes each.
-  # The training range is 23 units, so 24 run them all at once: about 37 GB of input on the 256Gi broker volume plus their journals, and two units
-  # per 4-vCPU spot node (1.4 CPU TaskManager, 0.2 CPU JobManager) within the pool's 48 vCPU.
   historyUnitDays: 4
-  historyParallelism: 24
+  historyParallelism: 6
   redis:
     storageClass: cloud-block
     storageSize: 10Gi
