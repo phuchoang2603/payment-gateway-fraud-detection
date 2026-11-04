@@ -19,6 +19,9 @@ from fraud_risk_serving.model import Model
 def create_app(transport=None):
     registry = CollectorRegistry()
     calls = Counter("risk_mcp_tool_calls_total", "Risk MCP calls", ["tool", "outcome"], registry=registry)
+    for tool in ("get_risk_features", "score_payment_risk"):
+        for outcome in ("success", "failure"):
+            calls.labels(tool, outcome)
     latency = Histogram("risk_tool_latency_seconds", "Risk tool call latency", ["tool"], registry=registry)
     statuses = Counter("risk_view_status_total", "Observed view statuses", ["view", "status"], registry=registry)
     mcp = MCPServer(name="risk", instructions="Read-only online features and what-if payment re-scoring.")

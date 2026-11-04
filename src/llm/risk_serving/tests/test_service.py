@@ -41,6 +41,10 @@ def test_mcp_reads_and_scores_with_observable_success_and_failure(request_input,
         return httpx.Response(200, json=reference())
 
     with TestClient(create_app(httpx.MockTransport(upstream))) as client:
+        assert (
+            'risk_mcp_tool_calls_total{outcome="success",tool="score_payment_risk"} 0.0'
+            in client.get("/metrics/").text
+        )
         rpc(
             client,
             "initialize",

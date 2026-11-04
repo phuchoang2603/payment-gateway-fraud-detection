@@ -66,8 +66,10 @@ class Reference:
                 self.cached = {"version": result["version"], "reference": {name: reference[name] for name in values}}
             except (KeyError, TypeError, ValueError) as error:
                 raise ValueError("reference profile returned malformed data") from error
+        reference = self.cached["reference"]
+        has_gains = any(entry["gain"] > 0 for entry in reference.values())
         return {
-            "drivers": rank(self.cached["reference"], values),
+            "drivers": rank(reference, values) if has_gains else [],
             "drivers_notice": NOTICE,
-            "drivers_unavailable_reason": None,
+            "drivers_unavailable_reason": None if has_gains else "reference profile has no positive feature gains",
         }

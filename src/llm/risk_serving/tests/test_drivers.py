@@ -42,3 +42,19 @@ def test_another_versions_reference_returns_no_drivers_and_is_not_cached():
     assert first["drivers"] == [] and "another model version" in first["drivers_unavailable_reason"]
     assert second["drivers"] and second["drivers_notice"] == NOTICE
     assert len(requests) == 2
+
+
+def test_reference_without_gains_keeps_the_score_without_inventing_drivers():
+    profile = reference()
+    for entry in profile["reference"].values():
+        entry["gain"] = 0
+
+    async def call():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json=profile))
+        ) as client:
+            return await Reference(client, "http://reference").drivers("4", dict.fromkeys(ORDER, 1.0))
+
+    result = asyncio.run(call())
+    assert result["drivers"] == []
+    assert result["drivers_unavailable_reason"] == "reference profile has no positive feature gains"
