@@ -26,4 +26,5 @@ catalog:
             - platform-dev
 features:
   riskAccess: true
+  healthProbeSources: [169.254.7.127/32]
   enabled: true

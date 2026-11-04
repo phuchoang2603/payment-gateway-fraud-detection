@@ -170,4 +170,25 @@ spec:
     - name: http
       port: 6566
       targetPort: http
+{{- with .Values.features.healthProbeSources }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: feast-server-health
+  namespace: {{ $.Values.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: feast-server
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - {port: 6566, protocol: TCP}
+{{- end }}
 {{- end }}
