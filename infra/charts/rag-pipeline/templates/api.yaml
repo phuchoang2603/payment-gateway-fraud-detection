@@ -24,6 +24,9 @@ spec:
     {{- end }}
   minReadySeconds: 10
   progressDeadlineSeconds: 300
+  {{- if $api.rollout.enabled }}
+  progressDeadlineAbort: true
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: rag-api

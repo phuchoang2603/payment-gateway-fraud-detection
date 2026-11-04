@@ -13,6 +13,9 @@ metadata:
 spec:
   minReadySeconds: 10
   progressDeadlineSeconds: 300
+  {{- if $risk.rollout.enabled }}
+  progressDeadlineAbort: true
+  {{- end }}
   strategy:
     {{- if $risk.rollout.enabled }}
     blueGreen:
