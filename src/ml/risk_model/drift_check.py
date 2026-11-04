@@ -2,7 +2,6 @@
 
 import json
 import os
-import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
@@ -31,12 +30,7 @@ def parameters(trigger):
 
 def check(base, pipelines, policy, now):
     """Decides once and starts a run if needed; returns what was decided and why."""
-    try:
-        short, long = fetch(base, "6h"), fetch(base, "24h")
-    except urllib.error.HTTPError as error:
-        if error.code == 404:
-            return {"start": False, "reason": "no-serving-reference"}
-        raise
+    short, long = fetch(base, "6h"), fetch(base, "24h")
     trained = datetime.fromisoformat(long["created"])
     start, reason = decide(
         short["assessment"],
