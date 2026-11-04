@@ -46,6 +46,12 @@ capabilities:
 {{- define "rag-pipeline.storageEnv" -}}
 - name: AWS_REGION
   value: {{ .Values.storage.region }}
+{{- if eq .Values.storage.endpoint "https://storage.googleapis.com" }}
+- name: AWS_REQUEST_CHECKSUM_CALCULATION
+  value: WHEN_REQUIRED
+- name: AWS_RESPONSE_CHECKSUM_VALIDATION
+  value: WHEN_REQUIRED
+{{- end }}
 - name: S3_ENDPOINT
   value: {{ .Values.storage.endpoint }}
 - name: S3_PATH_STYLE
