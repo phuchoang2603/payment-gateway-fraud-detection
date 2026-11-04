@@ -60,6 +60,12 @@ Native coverage.py reports from the run’s artifacts show 100% for knowledge `a
 
 The knowledge API mutation baseline killed **98/107 mutants (91.6%)**: nine survived, none untested, skipped or timed out. Native mutation reports are CI artifacts; the HTTP listener bootstrap lives in `__main__.py`, outside the API mutation scope.
 
+![Native CI mutation output: 98 killed and nine surviving mutants](images/knowledge-api-mutation-2026-11-04.png)
+
+The same passing run executes parameterized invalid/boundary searches and Hypothesis-generated repeated reads. The source below shows the actual partitions and idempotency assertion.
+
+![Knowledge API boundary partitions and property-based idempotency test](images/api-boundary-property-tests-2026-11-04.png)
+
 ## Deployed verification
 
 The 2026-10-23 acceptance run against prod is recorded in the [gateway verification evidence](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md): synthetic tokenization; approve, risk-decline, processor-decline, timeout-then-recovery and expiry paths; decline-then-approve through the hosted page with signed webhooks; Redis fallback; Connect restart and Kafka outage catch-up; byte-equal topic payloads; and the ledger lifecycle check. A short smoke run does not establish the monthly availability objective or the nominal load target.

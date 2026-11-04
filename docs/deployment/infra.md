@@ -35,4 +35,6 @@ Removing an application chart never removes shared services, buckets, catalog da
 | [`terraform/talos`](https://github.com/phuchoang2603/talos-proxmox/tree/main/terraform/talos) / [`terraform/cluster`](https://github.com/phuchoang2603/talos-proxmox/tree/main/terraform/cluster) | Talos bootstrap and environment configuration |
 | [`apps`](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps) | Shared operators and platform services through Argo CD |
 
-Talos machine configuration and GitOps replace the rubric's Ansible-on-VM configuration. The [platform provisioning workflow](https://github.com/phuchoang2603/talos-proxmox/blob/main/docs/architecture/terraform-ci.md) describes plan/apply; provisioning-run screenshots remain missing from this submission.
+Talos machine configuration and GitOps replace the rubric's Ansible-on-VM configuration. The [platform provisioning workflow](https://github.com/phuchoang2603/talos-proxmox/blob/main/docs/architecture/terraform-ci.md) describes plan/apply; the prod apply below succeeded on platform commit `a60bebc` (run `41733627525`). This records provisioning success; application convergence is verified separately.
+
+![Successful production OpenTofu provisioning run](images/prod-provisioning-2026-11-03.png)

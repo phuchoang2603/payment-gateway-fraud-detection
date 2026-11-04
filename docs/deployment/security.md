@@ -24,7 +24,13 @@ Card data is synthetic. The vault encrypts fictional fixtures and issues opaque 
 
 ## Secret-delivery verification
 
-Gateway acceptance on 2026-10-23 covers synthetic tokenization, authenticated checkout and signed webhook delivery. Central secret delivery is configured in the linked manifests; a sanitized ExternalSecret readiness capture is still needed for the rubric's visual proof.
+On 2026-11-04, all 20 gateway ExternalSecrets reported `SecretSynced`, `Ready=True`. Argo CD shows `edge-secrets` Synced/Healthy with “secret synced”; the capture displays metadata and readiness, without credential values.
+
+![Production ExternalSecret readiness in Argo CD](images/external-secret-ready-2026-11-04.png)
+
+Two temporary ambient-mesh pods called only Vault's gRPC health RPC on port 8000. The `edge` service account received `SERVING`; the `default` account failed. Istio's receiving proxy recorded “allow policies exist, but none allowed”, and its sending proxy recorded HTTP 401 with zero bytes exchanged. The allowed connection has both workload identities and response bytes. Both pods and their nonsecret protocol ConfigMap were removed.
+
+![Istio access logs comparing the allowed Edge identity and denied default identity](images/mesh-allowed-denied-2026-11-04.png)
 
 ## Gateway access controls
 

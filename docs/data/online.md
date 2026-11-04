@@ -69,7 +69,7 @@ Consider a covered entity at 12:10 UTC, with no other attempts:
 | Attempt time 11:59 on the previous day, delivered at 12:10 | It is beyond the 24-hour retained horizon | `Packet.too_late` is true; the operator increments `too_late` and omits the contribution |
 | Existing identity with different business content | Keeping an arbitrary copy hides a conflict | The reject sink records `conflicting_duplicate` |
 
-These are boundary examples, not newly captured live output. In live mode [`Timeline`](../../src/data-pipeline/streaming/fraud_streaming/operators.py) uses processing-time timers while `Entity` applies attempt-time membership. A watermark screenshot alone therefore cannot prove live late-arrival correctness. Too-late records are counted and logged; they do not have a dedicated too-late side-output topic. The rejects topic serves invalid or conflicting records.
+In live mode [`Timeline`](../../src/data-pipeline/streaming/fraud_streaming/operators.py) uses processing-time timers while `Entity` applies attempt-time membership. A watermark screenshot alone therefore cannot prove live late-arrival correctness. Too-late records are counted and logged; they do not have a dedicated too-late side-output topic. The rejects topic serves invalid or conflicting records.
 
 ### Metrics
 
@@ -111,7 +111,7 @@ The handled variant's counters equal the injected workload: `too_late` 8, event 
 
 ![Local replay correctness comparison: incorrect feature cells per variant](images/streaming-replay-correctness.png)
 
-The chart summarizes the module defaults; the command above reproduces its values. It measures local correctness, not Flink throughput. Live too-late proof still needs an input older than 24 hours, the counter delta and unchanged feature contributions.
+The chart summarizes the module defaults; the command above reproduces its values. It measures local correctness, not Flink throughput. The isolated runtime check below verifies the same operators inside Flink.
 
 <a id="evidence"></a>
 
@@ -137,7 +137,11 @@ Flink counters reset on restart and count only attempt starts; raw-topic duplica
 
 *Same dev run at about 12:12 UTC: event deduplication is 0% backpressured, 95% idle and 5% busy.*
 
-The counters above came from Flink's REST API (`/jobs/<id>/vertices/<id>/metrics`), using port 6125 allowed by the Cilium policy. A UI metrics-panel capture is still missing.
+The counters above came from Flink's REST API (`/jobs/<id>/vertices/<id>/metrics`), using port 6125 allowed by the Cilium policy.
+
+**Isolated runtime check, GCP, 2026-11-04.** Job `92ca836ab1f90cf315a367e05fb99215` ran the deployed `build_updates` operators in a temporary Flink 2.2.1 pod with a bounded collection and logical clock, without Kafka or feature-store writes. At anchor `2025-10-09T08:53:20Z`, inputs were a 10-minute-old attempt, its exact duplicate, an 8-minute-old distinct attempt and an attempt older than 24 hours by one microsecond. Customer and card 1-hour counts advanced **1 → 2**; neither duplicate nor too-late input added a contribution. Counters were **duplicates_dropped=1**, **too_late=1**, **lateness.5m_15m.attempts=2**. The job finished and the pod was removed. This validates the shared runtime operators; it does not inject poison data into the live Kafka pipeline.
+
+![Flink operator metrics: one too-late input, one duplicate and two late attempts](images/flink-late-duplicate-counters-2026-11-04.png)
 
 ### Restart
 

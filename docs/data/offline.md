@@ -21,17 +21,9 @@ The generator builds a synthetic world first, then purchases, then valid payment
 | Lifecycle expansion | [`lifecycle.py`](../../src/data-pipeline/simulator/simulator/lifecycle.py) expands each purchase into creation, attempt, risk decision and processor/result events. It models declines, retries, unknown processor outcomes and expiry; aggregate versions preserve payment order. |
 | Deliberate data problems | Each event has a 2% chance of one republished copy with the same `event_id` and business content but `recorded_at` 1–300 seconds later. Chargebacks are reported 7–21 days after successful eligible attempts; absent chargebacks are unknown, not negative. |
 
-Configured entity-domain sizes are not observed distinct counts. Cardinality ratio means `count(DISTINCT key) / count(*)` for a named table/range, with nulls reported separately. For example:
+Observed Silver cardinality for **2026-10-16–28**: 6,816,149 attempts, 2,077,836 customers and all 20,000 merchants. Distinct-key/row ratios are **0.304840** (customer) and **0.002934** (merchant), with zero null keys. The hot merchant contributes 3,843,873 attempts (**56.39%**). These are measured counts, separate from configured population sizes.
 
-```sql
-SELECT count(*) AS attempts,
-       uniqExact(customer_id) / nullIf(count(*), 0) AS customer_cardinality_ratio,
-       uniqExact(merchant_id) / nullIf(count(*), 0) AS merchant_cardinality_ratio,
-       countIf(customer_id IS NULL) AS customer_nulls,
-       countIf(merchant_id IS NULL) AS merchant_nulls
-FROM lakehouse.`silver.attempts`
-WHERE payment_day BETWEEN '2026-09-01' AND '2026-09-30';
-```
+![Observed customer and merchant cardinality in ClickHouse](images/generator-cardinality-2026-11-03.png)
 
 ### Source schema and version change
 
@@ -109,20 +101,36 @@ Recorded AWS DP1 Spark stages show 15 completed stages, including event/label wr
 
 For example, nested `attempt_started.context.snapshot.total.minor_units` becomes `silver.attempts.amount_minor` (`bigint`), customer context becomes `customer_id`, and assessment outcome/ID become `risk_outcome`/`assessment_id`. `started_at` is server event time; `attempted_at` preserves client time. Terminal events produce `outcome`/`outcome_at`; pending/unknown attempts remain unresolved rather than becoming invented declines. v2 rows retain null assessment IDs after flattening. Raw evidence digests remain in canonical events rather than becoming attempt features.
 
-**Deduplication and schema checks.** Recorded SQL over v19 Bronze established:
+**Deduplication and schema checks.** Read-only checks against published tables on 2026-11-04 use identical occurrence-date/source predicates in both zones:
 
-| Input / problem | Transformation | Verified result |
-|---|---|---|
-| 514,342,841 v2 events; 101,943,941 decisions | Read absent physical fields as typed nulls | New decision fields absent in every v2 decision |
-| 469,384,242 v3 events; 93,028,261 decisions | Preserve the added nested fields | New decision fields present in every v3 decision |
-| Identical `evt-1` deliveries | Collapse by business hash; retain earliest `recorded_at` | One canonical event |
-| Conflicting `evt-2` amounts 100/999 | Quarantine the payment rather than selecting an arbitrary copy | All three deliveries of that payment rejected |
+| Historical events, 2026-10-20 | Deliveries | Distinct event IDs | Extra deliveries |
+|---|---:|---:|---:|
+| Bronze | 2,558,103 | 2,507,498 | 50,605 (1.98% of deliveries) |
+| Silver | 2,507,498 | 2,507,498 | 0 |
 
-The last two rows are [executable fixtures](../../src/data-pipeline/batch/tests/silver/test_silver.py), not full-history duplicate counts. A [Bronze-to-Silver integration test](../../src/data-pipeline/batch/tests/bronze/test_bronze.py) additionally writes physically different v2/v3 Parquet schemas plus one redelivery: Bronze retains 11 deliveries, Silver emits 10 events and two valid attempts, and only v3 has an assessment ID. Full-source and published Silver totals cover different lifecycle boundaries, so subtracting them does not establish an exact duplicate count. SQL checks establish correctness; controlled before/after Spark UI captures remain missing.
+![Same-day Bronze and Silver deduplication result](images/spark-dedup-2026-11-04.png)
+
+Across the April 30 cutover, Bronze has 480,421 v2 / 495,868 v3 risk decisions; Silver has 471,209 / 486,120 after deduplication. In both zones, every v2 assessment ID is null and every v3 assessment ID is present. This proves the added field survives schema merging and curation without inventing values for older records.
+
+![Schema evolution across the v2/v3 cutover in Bronze and Silver](images/spark-schema-evolution-2026-11-04.png)
+
+The [Bronze-to-Silver integration test](../../src/data-pipeline/batch/tests/bronze/test_bronze.py) writes physically different v2/v3 Parquet schemas plus a redelivery: 11 Bronze deliveries become 10 canonical events and two valid attempts. [Conflict tests](../../src/data-pipeline/batch/tests/silver/test_silver.py) also verify that differing business hashes quarantine the whole payment. SQL captures show published results; they do not measure the transformations' execution time.
 
 **Scale techniques.** A narrow event-ID/hash aggregation replaces a broadcast of about 20M duplicate IDs; attempt construction uses one grouped aggregation instead of separate payload windows and joins. Range overwrites avoid full-history recomputation. `persist(MEMORY_AND_DISK)` allows lost Spot blocks to be recomputed from lineage instead of relying on local checkpoints.
 
-**Controlled skew comparison.** [`silver/benchmark.py`](../../src/data-pipeline/batch/batch/silver/benchmark.py) compares a cached, pinned range with skew handling off, AQE skew handling on and 16-bucket salting. Both static and adaptive broadcast are disabled; salting hashes the retained `attempt_id`. Counts/checksums must agree and the AQE plan must show a real skew split. Run `dp2-benchmark start=2026-09-01 end=2026-09-30` after Silver publishes that range. Production timings remain unrecorded; AQE being enabled alone does not demonstrate an optimization.
+**Controlled skew comparison.** [`silver/benchmark.py`](../../src/data-pipeline/batch/batch/silver/benchmark.py) ran as `dp2-rubric-split-nqvm4` on GCP on 2026-11-04, using the same cached 6,816,149 attempts from October 16–28, pinned to Silver snapshot `306587680516707839`. Two one-core executors (2 GiB heap + 1 GiB overhead each), 64 shuffle partitions, no static/adaptive broadcast; coalescing disabled and skew/advisory thresholds 1 MiB so this bounded input exercises actual splitting.
+
+| Variant | Wall time | Tasks | Result |
+|---|---:|---:|---|
+| Skew handling off | 24.68 s | 174 | Ordinary sort-merge join |
+| AQE skew handling | 20.48 s | 417 | One skewed partition, 13 splits |
+| 16-bucket salting by attempt ID | 20.29 s | 381 | Salted join |
+
+All variants produced **202,070 rows** with checksum `-2964469759385603852493`. AQE reduced wall time 17.0%, salting 17.8%, while scheduling more tasks. This is one sequential warm-cache comparison, not a repeated throughput benchmark. The earlier 16 MiB/coalescing run failed the required skew-split assertion and is excluded.
+
+![Spark SQL UI comparing baseline, AQE and salted queries](images/spark-skew-comparison-2026-11-04.png)
+
+![AQE physical plan showing one skewed partition and 13 splits](images/spark-aqe-split-2026-11-04.png)
 
 ### DP3: Silver → Gold history features
 
