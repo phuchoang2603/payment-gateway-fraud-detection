@@ -127,6 +127,13 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 
   Record the Argo graphs, the Spark UI, row and sample counts, the history replay's rate, counts and gates, Redis keys and memory, the online check, lineage and the Flink connector outcome. Results that miss expectations are recorded as observed.
 
+  **Observed 2026-11-04:**
+  - The v19 `dp-backfill` for 2025-10-29 to 2026-10-29 succeeded; October ran as two halves, `oct-a` and `oct-b`, after the whole month lost executors.
+  - `feast-materialize` ran with `since` unset, so each daily view loaded its TTL window, 2026-10-03 to 2026-11-04: 24 m 54 s, an online check of 400 sampled rows that passed, and 5,697,609 Redis keys at 2.72 GB. `since=2025-10-29`, as this task words it, was stopped after 57 minutes still on its first view; serving ignores rows older than the TTL, so the default window is the one to use.
+  - `stream-history` for 2026-07-29 to 2026-10-29 first failed on the 400 GB `SSD_TOTAL_GB` quota, because each unit's 60 Gi sort volume sat on `cloud-block` (fixed by `features.scratchClass: cloud-standard`, 566949b), and then on `Response checksums mismatch` reading Bronze from GCS (fixed by the checksum variables on the seed and writer, a35961e). After that 20 of the 23 units got a TaskManager and ran; the other three had no room in the spot pool. The run was stopped about 4 hours in, at 15.6% of unit `20260729`'s input: each unit's Python operators held one core at 8,000 to 16,000 events per minute, which put the 23 units over 30 hours. Month-by-month rates, rows and gates are not recorded.
+  - Flink `live-v19` and the feature writer run. The prod simulator is on (04d0219) at one payment per second for one day (b3f8728).
+  - Not done: unsuspending `dp-daily` and `feast-materialize-daily`, `get_historical_features` over a cohort, and the training handoff.
+
 - [ ] 8.3 Write the prod evidence into the existing docs: figures in the text, PNG screenshots under `docs/ml/images/` and `docs/data/images/`, and mermaid diagrams. No `.txt` or `.json` evidence files, no GitHub Actions screenshots (the Argo runs show CI/CD), and no re-recording of evidence this change did not touch. Remove superseded images. Each rubric row gets its evidence and a link to its code:
   - **Materialize pipeline:**
     - the Argo graph of a successful `feast-materialize` run showing the stage order;
@@ -153,6 +160,10 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
   - **Flow:** the mermaid diagram on `docs/ml/feature-store.md`, matching decision 8 and the deployed state.
 
   Verify that every image link resolves, and that each rubric row above points to its section.
+
+  **Recorded 2026-11-04** in [Prod evidence](../../../docs/ml/feature-store.md#prod-evidence): the Argo graph and figures for `feast-materialize`, the online check, Redis keys and memory, a `get_online_features` sample per daily view, both Deployments in Argo CD, `gold.feat_stream_*` rows per epoch with `kafka.offsets.live-v19`, the `live-v19` job graph and checkpoints (the job graph also on [online](../../../docs/data/online.md)), and lineage for the journal → `feature-writer` → `gold.feat_stream_customer` and `gold.feat_customer_daily` → `feast-materialize`.
+
+  **Still missing:** the Spark UI of the materialize job (its UI was unreachable and the pod is gone); Redis key counts per view; `feast-materialize-daily` after `dp-daily`; the expired-view Fraud case; the `stream-history` graph, Flink UI and per-month figures; lineage from Bronze through `stream-history` (only a table-level edge exists) and from `payments.events.v1`; the Flink pipeline from the connector; and offline retrieval.
 
 ## 9. Archive
 
