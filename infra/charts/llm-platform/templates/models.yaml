@@ -1,20 +1,6 @@
 {{- $chat := .Values.models.chat }}
 {{- $embedding := .Values.models.embedding }}
 {{- $decision := .Values.models.decision }}
-apiVersion: resource.k8s.io/v1
-kind: ResourceClaim
-metadata:
-  annotations:
-    argocd.argoproj.io/sync-options: Prune=false,Delete=false
-  name: llm-gpu
-spec:
-  devices:
-    requests:
-      - name: gpu
-        exactly:
-          deviceClassName: {{ .Values.gpu.deviceClassName }}
-          allocationMode: ExactCount
-          count: 1
 {{- range $role, $model := dict "chat" $chat "embedding" $embedding "decision" $decision }}
 {{- $uri := printf "hf://%s:%s" $model.repo $model.revision }}
 ---
