@@ -161,9 +161,9 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 
   Verify that every image link resolves, and that each rubric row above points to its section.
 
-  **Recorded 2026-11-04** in [Prod evidence](../../../docs/ml/feature-store.md#prod-evidence): the Argo graph and figures for `feast-materialize`, the online check, Redis keys and memory, a `get_online_features` sample per daily view, both Deployments in Argo CD, `gold.feat_stream_*` rows per epoch with `kafka.offsets.live-v19`, the `live-v19` job graph and checkpoints, and lineage for the journal → `feature-writer` → `gold.feat_stream_customer` and `gold.feat_customer_daily` → `feast-materialize`.
+  **Recorded 2026-11-04** in [Prod evidence](../../../docs/ml/feature-store.md#prod-evidence): the Argo graph and figures for `feast-materialize`, the online check, the Spark UI of a materialize run, Redis keys and memory, a `get_online_features` sample per daily view, both Deployments in Argo CD, `gold.feat_stream_*` rows per epoch with `kafka.offsets.live-v19`, the `live-v19` job graph and checkpoints, and lineage for the journal → `feature-writer` → `gold.feat_stream_customer` and `gold.feat_customer_daily` → `feast-materialize`.
 
-  **Still missing:** the Spark UI of the materialize job (its UI was unreachable and the pod is gone); Redis key counts per view; `feast-materialize-daily` after `dp-daily`; the expired-view Fraud case; the `stream-history` graph, Flink UI and per-month figures; lineage from Bronze through `stream-history` (only a table-level edge exists) and from `payments.events.v1`; the Flink pipeline from the connector; and offline retrieval.
+  **Still missing:** Redis key counts per view; `feast-materialize-daily` after `dp-daily`; the expired-view Fraud case; the `stream-history` graph, Flink UI and per-month figures; lineage from Bronze through `stream-history` (only a table-level edge exists) and from `payments.events.v1`; the Flink pipeline from the connector; and offline retrieval.
 
 ## 9. Archive
 

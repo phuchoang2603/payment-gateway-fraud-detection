@@ -101,6 +101,10 @@ GCP prod, 2026-11-04. Times are UTC; the Argo CD and Flink UIs show UTC−5.
 
 `feast-materialize` runs `materialize`, then `verify`, and its exit handler publishes lineage. With `since` unset it loads each daily view's TTL window, here 2026-10-03 to 2026-11-04. `materialize` took 24 m 54 s; `verify` sampled 400 rows (200 per view) and passed in 42 s. Redis then held 5,697,609 keys, 2.72 GB of its 6 GB, with no evictions. A rerun starts a day before the registry's last end and took 5 m 07 s. Code: [materialize](../../src/data-pipeline/feast/fraud_feast/materialize.py), [online check](../../src/data-pipeline/feast/fraud_feast/verify_online.py), [workflow](../../infra/charts/data-pipelines/templates/feast.yaml).
 
+![Spark UI of a feast-materialize run](images/spark-ui-feast-materialize-2026-11-04.png)
+
+The Spark UI of a run with `since=2026-10-03`. Feast's Spark offline store reads one daily view per `toPandas` job: 49 s over 28 tasks, then 32 s over 40 tasks with 28 skipped. Spark was busy for 81 s of the 9.8 minutes the application had run; the rest is outside Spark.
+
 Read back with `get_online_features`, one verified entity per daily view:
 
 | View | Entity | `attempt_count_7d` | `declined_count_7d` | `amount_sum_minor_7d` | `decided_count_7d` |
