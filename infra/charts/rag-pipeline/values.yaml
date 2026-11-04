@@ -21,6 +21,9 @@ secretStore: gateway-doppler
 
 # The gateway storage identity, scoped to datasets/payment-gateway/, runs/payment-gateway/ and lakehouse/.
 storage:
+  checksums:
+    requestCalculation: WHEN_SUPPORTED
+    responseValidation: WHEN_SUPPORTED
   bucket: platform-dev
   endpoint: https://minio.home.phuchoang.sbs
   region: us-east-1

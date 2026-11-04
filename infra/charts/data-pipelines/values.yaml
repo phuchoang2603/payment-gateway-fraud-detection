@@ -41,6 +41,9 @@ config:
   S3_ENDPOINT: https://minio.home.phuchoang.sbs
   S3_PATH_STYLE: 'true'
 storage:
+  checksums:
+    requestCalculation: WHEN_SUPPORTED
+    responseValidation: WHEN_SUPPORTED
   externalSecret:
     name: gateway-storage
     store: gateway-doppler

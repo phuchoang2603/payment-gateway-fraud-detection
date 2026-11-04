@@ -1,5 +1,8 @@
 storageClass: cloud-block
 storage:
+  checksums:
+    requestCalculation: WHEN_REQUIRED
+    responseValidation: WHEN_REQUIRED
   bucket: talos-proxmox-prod-platform
   endpoint: https://storage.googleapis.com
   region: auto

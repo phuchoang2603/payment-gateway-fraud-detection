@@ -18,7 +18,7 @@ Three storage roles: immutable source files in object storage, an Iceberg lakeho
 | `artifacts/` | Kubeflow artifacts and `artifacts/langfuse/{events,media}/` |
 | `substrate/` | Agent snapshots, including `substrate/llm-agents/` |
 
-Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT`, `S3_PATH_STYLE`, `AWS_REGION` and an `output` or root URL. Prod uses the S3 subset that GCS supports: endpoint `https://storage.googleapis.com`, signing region `auto`, path-style addressing and no object tagging. The platform expires no run objects, so finished runs are cleaned up by the workload that owns them. Clients compute checksums only when an operation requires them, and the generator's create-only writes send `x-goog-if-generation-match: 0` where S3 takes `If-None-Match: *`.
+Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT`, `S3_PATH_STYLE`, `AWS_REGION` and an `output` or root URL. Prod uses the S3 subset that GCS supports: endpoint `https://storage.googleapis.com`, signing region `auto`, path-style addressing and no object tagging. The platform expires no run objects, so finished runs are cleaned up by the workload that owns them. The data-pipelines and rag-pipeline charts configure SDK checksum behavior through `storage.checksums.requestCalculation` and `storage.checksums.responseValidation`, independently of the endpoint URL; prod sets both to `WHEN_REQUIRED`. Clients with explicit SDK configuration compute checksums only when an operation requires them, and the generator's create-only writes send `x-goog-if-generation-match: 0` where S3 takes `If-None-Match: *`.
 
 ## Lakehouse
 

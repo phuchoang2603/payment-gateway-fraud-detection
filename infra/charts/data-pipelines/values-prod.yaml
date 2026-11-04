@@ -155,3 +155,8 @@ features:
         memory: 8Gi
   streaming:
     storageRoot: s3a://talos-proxmox-prod-platform/runs/payment-gateway/flink
+
+storage:
+  checksums:
+    requestCalculation: WHEN_REQUIRED
+    responseValidation: WHEN_REQUIRED

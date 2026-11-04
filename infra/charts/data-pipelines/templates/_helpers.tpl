@@ -500,23 +500,19 @@ spec:
               {{- include "data-pipelines.env" .root | nindent 14 }}
 {{- end -}}
 
-{{- define "data-pipelines.gcsChecksumEnv" -}}
-{{- if eq .Values.config.S3_ENDPOINT "https://storage.googleapis.com" }}
+{{- define "data-pipelines.checksumEnv" -}}
 - name: AWS_REQUEST_CHECKSUM_CALCULATION
-  value: WHEN_REQUIRED
+  value: {{ .Values.storage.checksums.requestCalculation | quote }}
 - name: AWS_RESPONSE_CHECKSUM_VALIDATION
-  value: WHEN_REQUIRED
-{{- end }}
+  value: {{ .Values.storage.checksums.responseValidation | quote }}
 {{- end -}}
 
 {{- define "data-pipelines.feastEnv" -}}
 - name: FEAST_S3_ENDPOINT_URL
   value: {{ .Values.config.S3_ENDPOINT | quote }}
-{{- include "data-pipelines.gcsChecksumEnv" . }}
-{{- if eq .Values.config.S3_ENDPOINT "https://storage.googleapis.com" }}
+{{ include "data-pipelines.checksumEnv" . }}
 - name: AWS_DEFAULT_REGION
   value: {{ .Values.config.AWS_REGION | quote }}
-{{- end }}
 - name: FEAST_REGISTRY
   value: {{ .Values.features.registry | quote }}
 - name: FEAST_STREAM_EPOCHS
