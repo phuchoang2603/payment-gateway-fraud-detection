@@ -4565,10 +4565,10 @@
     {
       "id": "registry",
       "type": "rectangle",
-      "x": 1350,
-      "y": 920,
+      "x": 1880,
+      "y": 905,
       "width": 460,
-      "height": 100,
+      "height": 115,
       "angle": 0,
       "backgroundColor": "#ffffff",
       "boundElements": null,
@@ -4589,14 +4589,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 4,
+      "version": 6,
       "versionNonce": 1
     },
     {
       "id": "registry-icon",
       "type": "image",
-      "x": 1365.0,
-      "y": 945.2148557397177,
+      "x": 1895,
+      "y": 937.5,
       "width": 50,
       "height": 49.570288520564766,
       "angle": 0,
@@ -4623,14 +4623,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 4,
+      "version": 6,
       "versionNonce": 1
     },
     {
       "id": "registry-text",
       "type": "text",
-      "x": 1430,
-      "y": 940.0,
+      "x": 1960,
+      "y": 932.5,
       "width": 368,
       "height": 60.0,
       "angle": 0,
@@ -4659,7 +4659,7 @@
       "text": "Kubeflow Model Registry\nVersion + artifact + provenance\nTraining reference bins + feature gain",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 6,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -4667,9 +4667,9 @@
       "id": "rollout",
       "type": "rectangle",
       "x": 1880,
-      "y": 920,
+      "y": 750,
       "width": 460,
-      "height": 100,
+      "height": 115,
       "angle": 0,
       "backgroundColor": "#ffffff",
       "boundElements": null,
@@ -4690,14 +4690,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 4,
+      "version": 6,
       "versionNonce": 1
     },
     {
       "id": "rollout-icon",
       "type": "image",
-      "x": 1895.0,
-      "y": 945.0,
+      "x": 1895,
+      "y": 782.5,
       "width": 50,
       "height": 50.0,
       "angle": 0,
@@ -4724,14 +4724,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 4,
+      "version": 6,
       "versionNonce": 1
     },
     {
       "id": "rollout-text",
       "type": "text",
       "x": 1960,
-      "y": 940.0,
+      "y": 777.5,
       "width": 368,
       "height": 60.0,
       "angle": 0,
@@ -4760,44 +4760,7 @@
       "text": "Rollout \u2192 challenger \u2192 promote\nIstio A/B split \u00b7 Argo analysis\nPass: champion; fail: rollback",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
-      "versionNonce": 1,
-      "verticalAlign": "top"
-    },
-    {
-      "id": "training-note",
-      "type": "text",
-      "x": 1350,
-      "y": 724,
-      "width": 970,
-      "height": 20,
-      "angle": 0,
-      "autoResize": true,
-      "backgroundColor": "transparent",
-      "boundElements": null,
-      "containerId": null,
-      "fillStyle": "solid",
-      "fontFamily": 3,
-      "fontSize": 16,
-      "frameId": null,
-      "groupIds": [],
-      "index": null,
-      "isDeleted": false,
-      "lineHeight": 1.25,
-      "link": null,
-      "locked": false,
-      "opacity": 100,
-      "originalText": "Kubeflow Pipelines \u00b7 model artifacts: artifacts/ \u00b7 reports: runs/",
-      "roughness": 0,
-      "roundness": null,
-      "seed": 34766760,
-      "strokeColor": "#212529",
-      "strokeStyle": "solid",
-      "strokeWidth": 2,
-      "text": "Kubeflow Pipelines \u00b7 model artifacts: artifacts/ \u00b7 reports: runs/",
-      "textAlign": "left",
-      "updated": 1793564691097,
-      "version": 2,
+      "version": 6,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -7752,8 +7715,8 @@
     {
       "id": "push-live",
       "type": "arrow",
-      "x": 2340,
-      "y": 1875,
+      "x": 2150,
+      "y": 1930,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -7775,16 +7738,20 @@
           0
         ],
         [
-          60,
-          0
-        ],
-        [
-          60,
-          -1595
-        ],
-        [
           0,
-          -1595
+          45
+        ],
+        [
+          250,
+          45
+        ],
+        [
+          250,
+          -1650
+        ],
+        [
+          190,
+          -1650
         ]
       ],
       "roughness": 0,
@@ -7796,17 +7763,17 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 3,
+      "version": 4,
       "versionNonce": 1,
-      "width": 60,
-      "height": 1595
+      "width": 250,
+      "height": 1695
     },
     {
       "id": "push-live-label",
       "type": "text",
-      "x": 2180,
-      "y": 1424,
-      "width": 240,
+      "x": 2162,
+      "y": 1941,
+      "width": 150,
       "height": 21.25,
       "angle": 0,
       "autoResize": true,
@@ -7834,7 +7801,7 @@
       "text": "(5a) live push",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 3,
+      "version": 4,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -7938,8 +7905,8 @@
     {
       "id": "pinned-features",
       "type": "arrow",
-      "x": 2180,
-      "y": 2010,
+      "x": 2340,
+      "y": 2065,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -7961,24 +7928,20 @@
           0
         ],
         [
-          0,
-          -30
+          20,
+          0
         ],
         [
-          180,
-          -30
+          20,
+          -675
         ],
         [
-          180,
-          -620
+          -230,
+          -675
         ],
         [
-          -70,
-          -620
-        ],
-        [
-          -70,
-          -710
+          -230,
+          -765
         ]
       ],
       "roughness": 0,
@@ -7990,10 +7953,10 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 5,
+      "version": 6,
       "versionNonce": 1,
       "width": 250,
-      "height": 710
+      "height": 765
     },
     {
       "id": "pinned-features-label",
@@ -8302,14 +8265,6 @@
         ],
         [
           0,
-          -20
-        ],
-        [
-          -530,
-          -20
-        ],
-        [
-          -530,
           -40
         ]
       ],
@@ -8322,17 +8277,17 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 5,
+      "version": 7,
       "versionNonce": 1,
-      "width": 530,
+      "width": 0,
       "height": 40
     },
     {
       "id": "register-run-label",
       "type": "text",
-      "x": 1640,
-      "y": 1018,
-      "width": 310,
+      "x": 2125,
+      "y": 1030,
+      "width": 180,
       "height": 21.25,
       "angle": 0,
       "autoResize": true,
@@ -8360,15 +8315,15 @@
       "text": "(5) passing model",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 5,
+      "version": 7,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "rollout-run",
       "type": "arrow",
-      "x": 1810,
-      "y": 970,
+      "x": 2000,
+      "y": 905,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -8390,8 +8345,8 @@
           0
         ],
         [
-          70,
-          0
+          0,
+          -40
         ]
       ],
       "roughness": 0,
@@ -8403,16 +8358,16 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 4,
+      "version": 6,
       "versionNonce": 1,
-      "width": 70,
-      "height": 0
+      "width": 0,
+      "height": 40
     },
     {
       "id": "rollout-run-label",
       "type": "text",
-      "x": 1825,
-      "y": 938,
+      "x": 2015,
+      "y": 875,
       "width": 60,
       "height": 21.25,
       "angle": 0,
@@ -8441,7 +8396,7 @@
       "text": "(6)",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 6,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -8449,7 +8404,7 @@
       "id": "deployed",
       "type": "arrow",
       "x": 2340,
-      "y": 970,
+      "y": 807.5,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -8476,11 +8431,11 @@
         ],
         [
           30,
-          -542.5
+          -380
         ],
         [
           0,
-          -542.5
+          -380
         ]
       ],
       "roughness": 0,
@@ -8492,10 +8447,10 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 4,
+      "version": 6,
       "versionNonce": 1,
       "width": 30,
-      "height": 542.5
+      "height": 380
     },
     {
       "id": "deployed-label",
@@ -9104,9 +9059,9 @@
       "id": "drift",
       "type": "rectangle",
       "x": 1350,
-      "y": 750,
+      "y": 905,
       "width": 460,
-      "height": 130,
+      "height": 115,
       "angle": 0,
       "backgroundColor": "#ffffff",
       "boundElements": null,
@@ -9127,14 +9082,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 2,
+      "version": 4,
       "versionNonce": 1
     },
     {
       "id": "drift-text",
       "type": "text",
       "x": 1430,
-      "y": 775.0,
+      "y": 922.5,
       "width": 368,
       "height": 80.0,
       "angle": 0,
@@ -9163,7 +9118,7 @@
       "text": "payment-risk-drift \u00b7 PSI API\nVictoriaMetrics scored-feature bins\nRegistry reference \u00b7 6 h + 24 h\nNo labels \u00b7 gauges \u2192 Grafana",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 2,
+      "version": 4,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -9171,7 +9126,7 @@
       "id": "drift-icon",
       "type": "image",
       "x": 1365,
-      "y": 790,
+      "y": 937.5,
       "width": 50,
       "height": 50,
       "angle": 0,
@@ -9198,16 +9153,16 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 2,
+      "version": 4,
       "versionNonce": 1
     },
     {
       "id": "drift-check",
       "type": "rectangle",
-      "x": 1880,
+      "x": 1350,
       "y": 750,
       "width": 460,
-      "height": 130,
+      "height": 115,
       "angle": 0,
       "backgroundColor": "#ffffff",
       "boundElements": null,
@@ -9228,14 +9183,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 2,
+      "version": 4,
       "versionNonce": 1
     },
     {
       "id": "drift-check-text",
       "type": "text",
-      "x": 1960,
-      "y": 775.0,
+      "x": 1430,
+      "y": 767.5,
       "width": 368,
       "height": 80.0,
       "angle": 0,
@@ -9264,15 +9219,15 @@
       "text": "Hourly drift check \u2192 KFP run\nBoth windows drift, or model >14 d\nSample / age / cooldown / run limits\nSkip training without newer data",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 2,
+      "version": 4,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "drift-check-icon",
       "type": "image",
-      "x": 1895,
-      "y": 790,
+      "x": 1365,
+      "y": 782.5,
       "width": 50,
       "height": 50,
       "angle": 0,
@@ -9299,14 +9254,14 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 3,
+      "version": 5,
       "versionNonce": 1
     },
     {
       "id": "drift-assessment",
       "type": "arrow",
-      "x": 1810,
-      "y": 815,
+      "x": 1880,
+      "y": 962.5,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -9328,7 +9283,7 @@
           0
         ],
         [
-          70,
+          -70,
           0
         ]
       ],
@@ -9341,7 +9296,7 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 2,
+      "version": 5,
       "versionNonce": 1,
       "width": 70,
       "height": 0
@@ -9350,7 +9305,7 @@
       "id": "reference-profile",
       "type": "arrow",
       "x": 1580,
-      "y": 920,
+      "y": 905,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -9385,53 +9340,16 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 3,
+      "version": 6,
       "versionNonce": 1,
       "width": 0,
       "height": 40
     },
     {
-      "id": "reference-profile-label",
-      "type": "text",
-      "x": 1595,
-      "y": 890,
-      "width": 220,
-      "height": 20,
-      "angle": 0,
-      "autoResize": true,
-      "backgroundColor": "transparent",
-      "boundElements": null,
-      "containerId": null,
-      "fillStyle": "solid",
-      "fontFamily": 3,
-      "fontSize": 16,
-      "frameId": null,
-      "groupIds": [],
-      "index": null,
-      "isDeleted": false,
-      "lineHeight": 1.25,
-      "link": null,
-      "locked": false,
-      "opacity": 100,
-      "originalText": "serving reference",
-      "roughness": 0,
-      "roundness": null,
-      "seed": 13353471,
-      "strokeColor": "#2b8a3e",
-      "strokeStyle": "solid",
-      "strokeWidth": 2,
-      "text": "serving reference",
-      "textAlign": "left",
-      "updated": 1793564691097,
-      "version": 3,
-      "versionNonce": 1,
-      "verticalAlign": "top"
-    },
-    {
-      "id": "drift-retrain",
+      "id": "promote-stage",
       "type": "arrow",
-      "x": 2340,
-      "y": 830,
+      "x": 2150,
+      "y": 865,
       "angle": 0,
       "backgroundColor": "transparent",
       "boundElements": null,
@@ -9453,20 +9371,101 @@
           0
         ],
         [
-          10,
+          0,
+          40
+        ]
+      ],
+      "roughness": 0,
+      "roundness": null,
+      "seed": 481920117,
+      "startArrowhead": null,
+      "startBinding": null,
+      "strokeColor": "#2b8a3e",
+      "strokeStyle": "solid",
+      "strokeWidth": 1.7,
+      "updated": 1793564691100,
+      "version": 3,
+      "versionNonce": 1,
+      "width": 0,
+      "height": 40
+    },
+    {
+      "id": "reference-profile-label",
+      "type": "text",
+      "x": 1595,
+      "y": 875,
+      "width": 130,
+      "height": 20,
+      "angle": 0,
+      "autoResize": true,
+      "backgroundColor": "transparent",
+      "boundElements": null,
+      "containerId": null,
+      "fillStyle": "solid",
+      "fontFamily": 3,
+      "fontSize": 16,
+      "frameId": null,
+      "groupIds": [],
+      "index": null,
+      "isDeleted": false,
+      "lineHeight": 1.25,
+      "link": null,
+      "locked": false,
+      "opacity": 100,
+      "originalText": "drift state",
+      "roughness": 0,
+      "roundness": null,
+      "seed": 13353471,
+      "strokeColor": "#2b8a3e",
+      "strokeStyle": "solid",
+      "strokeWidth": 2,
+      "text": "drift state",
+      "textAlign": "left",
+      "updated": 1793564691097,
+      "version": 5,
+      "versionNonce": 1,
+      "verticalAlign": "top"
+    },
+    {
+      "id": "drift-retrain",
+      "type": "arrow",
+      "x": 1350,
+      "y": 807.5,
+      "angle": 0,
+      "backgroundColor": "transparent",
+      "boundElements": null,
+      "elbowed": false,
+      "endArrowhead": "arrow",
+      "endBinding": null,
+      "fillStyle": "solid",
+      "frameId": null,
+      "groupIds": [],
+      "index": null,
+      "isDeleted": false,
+      "lastCommittedPoint": null,
+      "link": null,
+      "locked": false,
+      "opacity": 100,
+      "points": [
+        [
+          0,
           0
         ],
         [
-          10,
-          510
+          -15,
+          0
         ],
         [
-          -90,
-          510
+          -15,
+          532.5
         ],
         [
-          -90,
-          470
+          640,
+          532.5
+        ],
+        [
+          640,
+          492.5
         ]
       ],
       "roughness": 0,
@@ -9478,15 +9477,15 @@
       "strokeStyle": "dashed",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 4,
+      "version": 6,
       "versionNonce": 1,
-      "width": 100,
-      "height": 510
+      "width": 655,
+      "height": 532.5
     },
     {
       "id": "drift-retrain-label",
       "type": "text",
-      "x": 1460,
+      "x": 1400,
       "y": 1310,
       "width": 850,
       "height": 20,
@@ -9516,7 +9515,7 @@
       "text": "Automatic retraining \u2192 same data checks + evaluation gate",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -9563,11 +9562,15 @@
         ],
         [
           -255,
-          625
+          850
         ],
         [
-          -210,
-          625
+          -160,
+          850
+        ],
+        [
+          -160,
+          830
         ]
       ],
       "roughness": 0,
@@ -9579,10 +9582,10 @@
       "strokeStyle": "dashed",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 2,
+      "version": 4,
       "versionNonce": 1,
       "width": 340,
-      "height": 625
+      "height": 850
     },
     {
       "id": "drift-telemetry-label",
@@ -9760,6 +9763,43 @@
       "textAlign": "left",
       "updated": 1793564691097,
       "version": 2,
+      "versionNonce": 1,
+      "verticalAlign": "top"
+    },
+    {
+      "id": "promote-stage-label",
+      "type": "text",
+      "x": 2165,
+      "y": 875,
+      "width": 170,
+      "height": 21.25,
+      "angle": 0,
+      "autoResize": true,
+      "backgroundColor": "transparent",
+      "boundElements": null,
+      "containerId": null,
+      "fillStyle": "solid",
+      "fontFamily": 3,
+      "fontSize": 17,
+      "frameId": null,
+      "groupIds": [],
+      "index": null,
+      "isDeleted": false,
+      "lineHeight": 1.25,
+      "link": null,
+      "locked": false,
+      "opacity": 100,
+      "originalText": "production stage",
+      "roughness": 0,
+      "roundness": null,
+      "seed": 722051883,
+      "strokeColor": "#2b8a3e",
+      "strokeStyle": "solid",
+      "strokeWidth": 2,
+      "text": "production stage",
+      "textAlign": "left",
+      "updated": 1793564691097,
+      "version": 1,
       "versionNonce": 1,
       "verticalAlign": "top"
     }
