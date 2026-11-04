@@ -70,6 +70,7 @@ type Evidence struct {
 	Features                      FeatureObservation
 	HistoricalShadowOnly          bool
 	EvaluatedAt                   time.Time
+	Model                         *ModelObservation `json:",omitempty"`
 }
 type Result struct {
 	Replayed     bool `json:"-"`
@@ -85,6 +86,7 @@ type (
 		store   Store
 		history HistoryReader
 		config  Config
+		model   ModelConfig
 		now     func() time.Time
 	}
 )
@@ -146,6 +148,9 @@ func (s *Service) Decide(ctx context.Context, request Request) (Result, error) {
 		return Result{}, ctx.Err()
 	}
 	result.Evidence.Decision = domain.Evaluate(request.Input)
+	if s.model.Scorer != nil {
+		s.scoreModel(ctx, &result.Evidence)
+	}
 	result.Evidence.EvaluatedAt = request.ScoredAt
 	encoded, err := json.Marshal(result.Evidence)
 	if err != nil {

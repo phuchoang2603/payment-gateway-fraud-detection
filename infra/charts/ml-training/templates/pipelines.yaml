@@ -1,0 +1,30 @@
+{{- if .Values.enabled }}
+{{- $placeholder := printf "%s:chart" .Values.image.repository }}
+{{- $image := include "ml-training.image" . }}
+{{- range $name := list "payment-risk-training" "payment-risk-rollout" "payment-risk-promote" }}
+{{- $text := $.Files.Get (printf "files/%s/%s.yaml" $.Values.environment $name) | replace $placeholder $image }}
+{{- $documents := regexSplit "\n---\n" $text -1 }}
+apiVersion: pipelines.kubeflow.org/v2beta1
+kind: Pipeline
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  displayName: {{ $name }}
+---
+apiVersion: pipelines.kubeflow.org/v2beta1
+kind: PipelineVersion
+metadata:
+  name: {{ printf "%s-%s" $name (sha256sum $text | trunc 10) }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  pipelineName: {{ $name }}
+  pipelineSpec:
+    {{- index $documents 0 | nindent 4 }}
+  {{- if gt (len $documents) 1 }}
+  platformSpec:
+    {{- index $documents 1 | nindent 4 }}
+  {{- end }}
+---
+{{- end }}
+{{- end }}

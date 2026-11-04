@@ -1,0 +1,93 @@
+{{- if and .Values.enabled .Values.experiment.enabled }}
+{{- $analysis := .Values.experiment.analysis }}
+{{- $window := "{{args.window}}" }}
+{{- $challenger := "{{args.challenger}}" }}
+{{- $champion := "{{args.champion}}" }}
+{{- $challengerVersion := "{{args.challengerVersion}}" }}
+{{- $championVersion := "{{args.championVersion}}" }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.experiment.waypoint }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    istio.io/waypoint-for: service
+spec:
+  gatewayClassName: istio-waypoint
+  listeners:
+    - name: mesh
+      port: 15008
+      protocol: HBONE
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Values.experiment.route }}
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+    - group: ""
+      kind: Service
+      name: payment-risk-predictor
+      port: 80
+  rules:
+    - backendRefs:
+        - name: payment-risk-predictor
+          port: 80
+          weight: 100
+        - name: payment-risk-challenger-predictor
+          port: 80
+          weight: 0
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: payment-risk-challenger
+  namespace: {{ .Values.namespace }}
+spec:
+  args:
+    - name: challenger
+      value: payment-risk-challenger
+    - name: champion
+      value: payment-risk
+    - name: challengerVersion
+    - name: championVersion
+    - name: window
+      value: {{ $analysis.window | quote }}
+  metrics:
+    {{- $increase := "sum(increase(%s{serving_kserve_io_inferenceservice=\"%s\"}[%s]))" }}
+    {{- $total := printf "(%s + (%s or vector(0)))" (printf $increase "nv_inference_request_success" $challenger $window) (printf $increase "nv_inference_request_failure" $challenger $window) }}
+    {{- $mean := "((%s + %s) / clamp_min(%s, 1))" }}
+    {{- $latency := printf "(%s / clamp_min(%s, 1000))"
+          (printf $mean (printf $increase "nv_inference_queue_duration_us" $challenger $window) (printf $increase "nv_inference_compute_infer_duration_us" $challenger $window) (printf $increase "nv_inference_request_success" $challenger $window))
+          (printf $mean (printf $increase "nv_inference_queue_duration_us" $champion $window) (printf $increase "nv_inference_compute_infer_duration_us" $champion $window) (printf $increase "nv_inference_request_success" $champion $window)) }}
+    {{- $calls := "sum(increase({__name__=\"fraud.model.calls\",\"model_version\"=\"%s\",\"deployment.environment\"=\"%s\"%s}[%s]))" }}
+    {{- $share := "(%s / clamp_min(%s, 1))" }}
+    {{- $environment := .Values.environment }}
+    {{- $declined := ",\"declined\"=\"true\"" }}
+    {{- $shift := printf "abs(%s - %s)"
+          (printf $share (printf $calls $challengerVersion $environment $declined $window) (printf $calls $challengerVersion $environment "" $window))
+          (printf $share (printf $calls $championVersion $environment $declined $window) (printf $calls $championVersion $environment "" $window)) }}
+    {{- $metrics := list
+          (dict "name" "requests" "condition" (printf "result[0] >= %v" $analysis.minimumRequests) "query" $total)
+          (dict "name" "error-rate" "condition" (printf "result[0] <= %v" $analysis.maximumErrorRate) "query" (printf "((%s or vector(0)) / clamp_min(%s, 1))" (printf $increase "nv_inference_request_failure" $challenger $window) $total))
+          (dict "name" "latency-ratio" "condition" (printf "result[0] <= %v" $analysis.latencyRatio) "query" $latency)
+          (dict "name" "decline-shift" "condition" (printf "result[0] <= %v" $analysis.declineShift) "query" $shift) }}
+    {{- range $metrics }}
+    - name: {{ .name }}
+      initialDelay: {{ $analysis.window }}
+      interval: {{ $analysis.interval }}
+      count: {{ $analysis.count }}
+      failureLimit: 0
+      consecutiveErrorLimit: 2
+      successCondition: {{ printf "len(result) == 1 && !isNaN(result[0]) && !isInf(result[0]) && result[0] >= 0 && %s" .condition | quote }}
+      provider:
+        prometheus:
+          address: {{ $.Values.drift.metrics }}
+          timeout: 10
+          query: {{ .query | quote }}
+    {{- end }}
+{{- end }}

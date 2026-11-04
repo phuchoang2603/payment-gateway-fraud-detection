@@ -1,0 +1,24 @@
+[project]
+name = "risk-pipelines"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "kfp==2.18.0",
+    "kfp-kubernetes==2.18.0",
+]
+
+[dependency-groups]
+dev = ["pytest==9.0.2", "ruff==0.14.14"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "D100", "D101", "D102", "D103", "D104"]

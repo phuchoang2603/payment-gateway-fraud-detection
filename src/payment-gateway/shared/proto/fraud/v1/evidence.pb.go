@@ -86,6 +86,58 @@ func (FeatureViewStatus) EnumDescriptor() ([]byte, []int) {
 	return file_fraud_v1_evidence_proto_rawDescGZIP(), []int{0}
 }
 
+type ModelStatus int32
+
+const (
+	ModelStatus_MODEL_STATUS_UNSPECIFIED ModelStatus = 0
+	ModelStatus_MODEL_STATUS_AVAILABLE   ModelStatus = 1
+	ModelStatus_MODEL_STATUS_TIMEOUT     ModelStatus = 2
+	ModelStatus_MODEL_STATUS_ERROR       ModelStatus = 3
+)
+
+// Enum value maps for ModelStatus.
+var (
+	ModelStatus_name = map[int32]string{
+		0: "MODEL_STATUS_UNSPECIFIED",
+		1: "MODEL_STATUS_AVAILABLE",
+		2: "MODEL_STATUS_TIMEOUT",
+		3: "MODEL_STATUS_ERROR",
+	}
+	ModelStatus_value = map[string]int32{
+		"MODEL_STATUS_UNSPECIFIED": 0,
+		"MODEL_STATUS_AVAILABLE":   1,
+		"MODEL_STATUS_TIMEOUT":     2,
+		"MODEL_STATUS_ERROR":       3,
+	}
+)
+
+func (x ModelStatus) Enum() *ModelStatus {
+	p := new(ModelStatus)
+	*p = x
+	return p
+}
+
+func (x ModelStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ModelStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_fraud_v1_evidence_proto_enumTypes[1].Descriptor()
+}
+
+func (ModelStatus) Type() protoreflect.EnumType {
+	return &file_fraud_v1_evidence_proto_enumTypes[1]
+}
+
+func (x ModelStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ModelStatus.Descriptor instead.
+func (ModelStatus) EnumDescriptor() ([]byte, []int) {
+	return file_fraud_v1_evidence_proto_rawDescGZIP(), []int{1}
+}
+
 type FeatureValue struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Value:
@@ -260,6 +312,108 @@ func (x *FeatureViewEvidence) GetValues() map[string]*FeatureValue {
 	return nil
 }
 
+type ModelEvidence struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Name      string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Version   string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Status    ModelStatus            `protobuf:"varint,3,opt,name=status,proto3,enum=fraud.v1.ModelStatus" json:"status,omitempty"`
+	Score     *float64               `protobuf:"fixed64,4,opt,name=score,proto3,oneof" json:"score,omitempty"`
+	ReadAt    *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=read_at,json=readAt,proto3" json:"read_at,omitempty"`
+	Threshold float64                `protobuf:"fixed64,7,opt,name=threshold,proto3" json:"threshold,omitempty"`
+	// The score met the missing-feature policy and could affect the decision.
+	Enforced bool `protobuf:"varint,8,opt,name=enforced,proto3" json:"enforced,omitempty"`
+	// The score changed an approval into a decline.
+	Declined      bool `protobuf:"varint,9,opt,name=declined,proto3" json:"declined,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ModelEvidence) Reset() {
+	*x = ModelEvidence{}
+	mi := &file_fraud_v1_evidence_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ModelEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ModelEvidence) ProtoMessage() {}
+
+func (x *ModelEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_fraud_v1_evidence_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ModelEvidence.ProtoReflect.Descriptor instead.
+func (*ModelEvidence) Descriptor() ([]byte, []int) {
+	return file_fraud_v1_evidence_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ModelEvidence) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ModelEvidence) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *ModelEvidence) GetStatus() ModelStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ModelStatus_MODEL_STATUS_UNSPECIFIED
+}
+
+func (x *ModelEvidence) GetScore() float64 {
+	if x != nil && x.Score != nil {
+		return *x.Score
+	}
+	return 0
+}
+
+func (x *ModelEvidence) GetReadAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ReadAt
+	}
+	return nil
+}
+
+func (x *ModelEvidence) GetThreshold() float64 {
+	if x != nil {
+		return x.Threshold
+	}
+	return 0
+}
+
+func (x *ModelEvidence) GetEnforced() bool {
+	if x != nil {
+		return x.Enforced
+	}
+	return false
+}
+
+func (x *ModelEvidence) GetDeclined() bool {
+	if x != nil {
+		return x.Declined
+	}
+	return false
+}
+
 type AssessmentEvidence struct {
 	state                        protoimpl.MessageState `protogen:"open.v1"`
 	SchemaVersion                uint32                 `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
@@ -278,13 +432,14 @@ type AssessmentEvidence struct {
 	UsedShippingCountry          string                 `protobuf:"bytes,17,opt,name=used_shipping_country,json=usedShippingCountry,proto3" json:"used_shipping_country,omitempty"`
 	UsedIpCountry                *string                `protobuf:"bytes,18,opt,name=used_ip_country,json=usedIpCountry,proto3,oneof" json:"used_ip_country,omitempty"`
 	HistoricalFeaturesShadowOnly bool                   `protobuf:"varint,19,opt,name=historical_features_shadow_only,json=historicalFeaturesShadowOnly,proto3" json:"historical_features_shadow_only,omitempty"`
+	Model                        *ModelEvidence         `protobuf:"bytes,20,opt,name=model,proto3,oneof" json:"model,omitempty"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *AssessmentEvidence) Reset() {
 	*x = AssessmentEvidence{}
-	mi := &file_fraud_v1_evidence_proto_msgTypes[2]
+	mi := &file_fraud_v1_evidence_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -296,7 +451,7 @@ func (x *AssessmentEvidence) String() string {
 func (*AssessmentEvidence) ProtoMessage() {}
 
 func (x *AssessmentEvidence) ProtoReflect() protoreflect.Message {
-	mi := &file_fraud_v1_evidence_proto_msgTypes[2]
+	mi := &file_fraud_v1_evidence_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -309,7 +464,7 @@ func (x *AssessmentEvidence) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssessmentEvidence.ProtoReflect.Descriptor instead.
 func (*AssessmentEvidence) Descriptor() ([]byte, []int) {
-	return file_fraud_v1_evidence_proto_rawDescGZIP(), []int{2}
+	return file_fraud_v1_evidence_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AssessmentEvidence) GetSchemaVersion() uint32 {
@@ -424,6 +579,13 @@ func (x *AssessmentEvidence) GetHistoricalFeaturesShadowOnly() bool {
 	return false
 }
 
+func (x *AssessmentEvidence) GetModel() *ModelEvidence {
+	if x != nil {
+		return x.Model
+	}
+	return nil
+}
+
 var File_fraud_v1_evidence_proto protoreflect.FileDescriptor
 
 const file_fraud_v1_evidence_proto_rawDesc = "" +
@@ -442,7 +604,17 @@ const file_fraud_v1_evidence_proto_rawDesc = "" +
 	"\x06values\x18\x05 \x03(\v2).fraud.v1.FeatureViewEvidence.ValuesEntryR\x06values\x1aQ\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12,\n" +
-	"\x05value\x18\x02 \x01(\v2\x16.fraud.v1.FeatureValueR\x05value:\x028\x01\"\xc7\x06\n" +
+	"\x05value\x18\x02 \x01(\v2\x16.fraud.v1.FeatureValueR\x05value:\x028\x01\"\xa8\x02\n" +
+	"\rModelEvidence\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12-\n" +
+	"\x06status\x18\x03 \x01(\x0e2\x15.fraud.v1.ModelStatusR\x06status\x12\x19\n" +
+	"\x05score\x18\x04 \x01(\x01H\x00R\x05score\x88\x01\x01\x123\n" +
+	"\aread_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x06readAt\x12\x1c\n" +
+	"\tthreshold\x18\a \x01(\x01R\tthreshold\x12\x1a\n" +
+	"\benforced\x18\b \x01(\bR\benforced\x12\x1a\n" +
+	"\bdeclined\x18\t \x01(\bR\bdeclinedB\b\n" +
+	"\x06_scoreJ\x04\b\x06\x10\aR\x04mode\"\x85\a\n" +
 	"\x12AssessmentEvidence\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12#\n" +
 	"\rassessment_id\x18\x02 \x01(\tR\fassessmentId\x12%\n" +
@@ -461,8 +633,10 @@ const file_fraud_v1_evidence_proto_rawDesc = "" +
 	"\x11used_attempted_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\x0fusedAttemptedAt\x122\n" +
 	"\x15used_shipping_country\x18\x11 \x01(\tR\x13usedShippingCountry\x12+\n" +
 	"\x0fused_ip_country\x18\x12 \x01(\tH\x00R\rusedIpCountry\x88\x01\x01\x12E\n" +
-	"\x1fhistorical_features_shadow_only\x18\x13 \x01(\bR\x1chistoricalFeaturesShadowOnlyB\x12\n" +
-	"\x10_used_ip_countryJ\x04\b\n" +
+	"\x1fhistorical_features_shadow_only\x18\x13 \x01(\bR\x1chistoricalFeaturesShadowOnly\x122\n" +
+	"\x05model\x18\x14 \x01(\v2\x17.fraud.v1.ModelEvidenceH\x01R\x05model\x88\x01\x01B\x12\n" +
+	"\x10_used_ip_countryB\b\n" +
+	"\x06_modelJ\x04\b\n" +
 	"\x10\vJ\x04\b\v\x10\fJ\x04\b\f\x10\r*\x9f\x02\n" +
 	"\x11FeatureViewStatus\x12#\n" +
 	"\x1fFEATURE_VIEW_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
@@ -472,7 +646,12 @@ const file_fraud_v1_evidence_proto_rawDesc = "" +
 	"\x1aFEATURE_VIEW_STATUS_FUTURE\x10\x04\x12\x1f\n" +
 	"\x1bFEATURE_VIEW_STATUS_TIMEOUT\x10\x05\x12\x1d\n" +
 	"\x19FEATURE_VIEW_STATUS_ERROR\x10\x06\x12 \n" +
-	"\x1cFEATURE_VIEW_STATUS_DISABLED\x10\aBXZVgithub.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/fraud/v1;fraudv1b\x06proto3"
+	"\x1cFEATURE_VIEW_STATUS_DISABLED\x10\a*y\n" +
+	"\vModelStatus\x12\x1c\n" +
+	"\x18MODEL_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16MODEL_STATUS_AVAILABLE\x10\x01\x12\x18\n" +
+	"\x14MODEL_STATUS_TIMEOUT\x10\x02\x12\x16\n" +
+	"\x12MODEL_STATUS_ERROR\x10\x03BXZVgithub.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/fraud/v1;fraudv1b\x06proto3"
 
 var (
 	file_fraud_v1_evidence_proto_rawDescOnce sync.Once
@@ -486,31 +665,36 @@ func file_fraud_v1_evidence_proto_rawDescGZIP() []byte {
 	return file_fraud_v1_evidence_proto_rawDescData
 }
 
-var file_fraud_v1_evidence_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_fraud_v1_evidence_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_fraud_v1_evidence_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_fraud_v1_evidence_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_fraud_v1_evidence_proto_goTypes = []any{
 	(FeatureViewStatus)(0),        // 0: fraud.v1.FeatureViewStatus
-	(*FeatureValue)(nil),          // 1: fraud.v1.FeatureValue
-	(*FeatureViewEvidence)(nil),   // 2: fraud.v1.FeatureViewEvidence
-	(*AssessmentEvidence)(nil),    // 3: fraud.v1.AssessmentEvidence
-	nil,                           // 4: fraud.v1.FeatureViewEvidence.ValuesEntry
-	(*timestamppb.Timestamp)(nil), // 5: google.protobuf.Timestamp
+	(ModelStatus)(0),              // 1: fraud.v1.ModelStatus
+	(*FeatureValue)(nil),          // 2: fraud.v1.FeatureValue
+	(*FeatureViewEvidence)(nil),   // 3: fraud.v1.FeatureViewEvidence
+	(*ModelEvidence)(nil),         // 4: fraud.v1.ModelEvidence
+	(*AssessmentEvidence)(nil),    // 5: fraud.v1.AssessmentEvidence
+	nil,                           // 6: fraud.v1.FeatureViewEvidence.ValuesEntry
+	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
 }
 var file_fraud_v1_evidence_proto_depIdxs = []int32{
-	0, // 0: fraud.v1.FeatureViewEvidence.status:type_name -> fraud.v1.FeatureViewStatus
-	5, // 1: fraud.v1.FeatureViewEvidence.event_timestamp:type_name -> google.protobuf.Timestamp
-	5, // 2: fraud.v1.FeatureViewEvidence.read_at:type_name -> google.protobuf.Timestamp
-	4, // 3: fraud.v1.FeatureViewEvidence.values:type_name -> fraud.v1.FeatureViewEvidence.ValuesEntry
-	2, // 4: fraud.v1.AssessmentEvidence.views:type_name -> fraud.v1.FeatureViewEvidence
-	5, // 5: fraud.v1.AssessmentEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
-	5, // 6: fraud.v1.AssessmentEvidence.used_customer_created_at:type_name -> google.protobuf.Timestamp
-	5, // 7: fraud.v1.AssessmentEvidence.used_attempted_at:type_name -> google.protobuf.Timestamp
-	1, // 8: fraud.v1.FeatureViewEvidence.ValuesEntry.value:type_name -> fraud.v1.FeatureValue
-	9, // [9:9] is the sub-list for method output_type
-	9, // [9:9] is the sub-list for method input_type
-	9, // [9:9] is the sub-list for extension type_name
-	9, // [9:9] is the sub-list for extension extendee
-	0, // [0:9] is the sub-list for field type_name
+	0,  // 0: fraud.v1.FeatureViewEvidence.status:type_name -> fraud.v1.FeatureViewStatus
+	7,  // 1: fraud.v1.FeatureViewEvidence.event_timestamp:type_name -> google.protobuf.Timestamp
+	7,  // 2: fraud.v1.FeatureViewEvidence.read_at:type_name -> google.protobuf.Timestamp
+	6,  // 3: fraud.v1.FeatureViewEvidence.values:type_name -> fraud.v1.FeatureViewEvidence.ValuesEntry
+	1,  // 4: fraud.v1.ModelEvidence.status:type_name -> fraud.v1.ModelStatus
+	7,  // 5: fraud.v1.ModelEvidence.read_at:type_name -> google.protobuf.Timestamp
+	3,  // 6: fraud.v1.AssessmentEvidence.views:type_name -> fraud.v1.FeatureViewEvidence
+	7,  // 7: fraud.v1.AssessmentEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
+	7,  // 8: fraud.v1.AssessmentEvidence.used_customer_created_at:type_name -> google.protobuf.Timestamp
+	7,  // 9: fraud.v1.AssessmentEvidence.used_attempted_at:type_name -> google.protobuf.Timestamp
+	4,  // 10: fraud.v1.AssessmentEvidence.model:type_name -> fraud.v1.ModelEvidence
+	2,  // 11: fraud.v1.FeatureViewEvidence.ValuesEntry.value:type_name -> fraud.v1.FeatureValue
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_fraud_v1_evidence_proto_init() }
@@ -524,13 +708,14 @@ func file_fraud_v1_evidence_proto_init() {
 		(*FeatureValue_Boolean)(nil),
 	}
 	file_fraud_v1_evidence_proto_msgTypes[2].OneofWrappers = []any{}
+	file_fraud_v1_evidence_proto_msgTypes[3].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_fraud_v1_evidence_proto_rawDesc), len(file_fraud_v1_evidence_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   4,
+			NumEnums:      2,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

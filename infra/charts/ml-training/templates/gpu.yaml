@@ -1,0 +1,15 @@
+{{- if .Values.enabled }}
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: {{ .Values.gpu.claim }}
+  namespace: {{ .Values.namespace }}
+spec:
+  devices:
+    requests:
+      - name: gpu
+        exactly:
+          deviceClassName: gpu.nvidia.com
+          allocationMode: ExactCount
+          count: 1
+{{- end }}

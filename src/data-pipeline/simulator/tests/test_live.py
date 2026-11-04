@@ -12,12 +12,12 @@ import yaml
 
 from simulator.contracts.payments.v1.labels_pb2 import LABEL_SOURCE_SIMULATION_TRUTH, FraudLabel
 from simulator.historical import GeneratorConfig, generate
-from simulator.live.config import LiveConfig, Redelivery
+from simulator.live.config import DriftStep, LiveConfig, Redelivery, drift_at
 from simulator.live.model import HistoricalModel, card_number
 from simulator.live.redelivery import selected
 from simulator.live.runtime import Gateway, Labels, hold_seconds, run_live, traffic
 from simulator.live.source import load_model
-from simulator.world import entity_id
+from simulator.world import HOME_COUNTRY, entity_id
 
 CONTRACTS = Path(__file__).resolve().parents[4] / "contracts/data-products/historical-payments"
 
@@ -242,7 +242,7 @@ def test_store_and_forward_sends_original_click_time(capsys):
         config = SimpleNamespace(integration_id="integration")
         world = SimpleNamespace(digest="world", payment_method_fingerprint=lambda index: "expected")
 
-        def purchase(self, seed, ordinal, now):
+        def purchase(self, seed, ordinal, now, drift=None):
             order = {"seller": {"external_id": "seller"}, "buyer": {"external_id": "buyer"}}
             return order, {"simulated_client": {"ip_country": "US"}}, 0, "ok", 0, False, False, 0
 
@@ -287,3 +287,41 @@ def test_store_and_forward_sends_original_click_time(capsys):
     assert sorted(labels.occurred) == sorted(clicks)
     stopped = next(json.loads(line) for line in capsys.readouterr().out.splitlines() if "traffic_stop" in line)
     assert stopped["late_sent"] == len(bodies) and stopped["late_unsent"] == 0
+
+
+def test_drift_steps_must_override_something_and_run_in_strictly_increasing_order():
+    with pytest.raises(ValueError, match="at least one"):
+        DriftStep(after_seconds=10)
+    with pytest.raises(ValueError):
+        DriftStep(after_seconds=10, unknown=1)
+    with pytest.raises(ValueError, match="increasing"):
+        live_config(drift=[{"after_seconds": 60, "amount_scale": 2}, {"after_seconds": 60, "amount_scale": 3}])
+    with pytest.raises(ValueError, match="increasing"):
+        live_config(drift=[{"after_seconds": 60, "amount_scale": 2}, {"after_seconds": 10, "amount_scale": 3}])
+    assert live_config().drift == []
+    assert live_config(drift=[{"after_seconds": 0, "foreign_ip_probability": 0.5}]).drift[0].behavior() == {
+        "foreign_ip_probability": 0.5
+    }
+
+
+def test_the_latest_started_step_is_in_force():
+    steps = [DriftStep(after_seconds=60, amount_scale=2), DriftStep(after_seconds=600, amount_scale=3)]
+    assert drift_at(steps, 59) is None and drift_at([], 100) is None
+    assert drift_at(steps, 60).amount_scale == 2 and drift_at(steps, 599).amount_scale == 2
+    assert drift_at(steps, 600).amount_scale == 3
+
+
+def test_a_drift_step_changes_the_drawn_values_and_no_step_changes_nothing(tmp_path):
+    model = HistoricalModel(real_manifest(tmp_path))
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    plain = [model.purchase(2603, number, now) for number in range(30)]
+    assert plain == [model.purchase(2603, number, now, None) for number in range(30)]
+    foreign = DriftStep(after_seconds=0, foreign_ip_probability=1.0)
+    assert all(
+        model.purchase(2603, number, now, foreign)[1]["simulated_client"]["ip_country"] != HOME_COUNTRY
+        for number in range(30)
+    )
+    scale = DriftStep(after_seconds=0, amount_scale=2)
+    for number, drawn in enumerate(plain):
+        scaled = model.purchase(2603, number, now, scale)
+        assert scaled[0]["amount"]["minor_units"] == 2 * drawn[0]["amount"]["minor_units"]

@@ -471,9 +471,11 @@ class World:
         """Isolate one attempt's random stream within a card-testing burst."""
         return self._rng(BURST_PURCHASE_STAGE, self._offset(day), burst, number)
 
-    def purchase(self, rng: np.random.Generator, day: date, customer: int) -> Purchase:
+    def purchase(self, rng: np.random.Generator, day: date, customer: int, drift=None) -> Purchase:
         """Sample a correlated checkout from familiar context, merchant skew and fraud campaigns."""
         counts, behavior, scenarios = self.config.counts, self.config.behavior, self.config.scenarios
+        if drift is not None:
+            behavior = behavior.model_copy(update=drift.behavior())
         offset = self._offset(day)
         customer = self.customer(customer)
         scenario, window_start = self._scenario(rng, offset, customer.index)
@@ -496,6 +498,8 @@ class World:
             unit_price = int(round(unit_price * scenarios.obvious_high_value.amount_multiplier))
         elif compromised:
             unit_price = int(round(unit_price * self._compromise_settings(scenario).amount_multiplier))
+        if drift is not None and drift.amount_scale is not None:
+            unit_price = max(50, int(round(unit_price * drift.amount_scale)))
 
         new_device = rng.random() >= behavior.familiar_context_probability
         if compromised:

@@ -1,0 +1,109 @@
+global:
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/drift: dev
+enabled: true
+namespace: ml
+image:
+  repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml
+triton:
+  image: nvcr.io/nvidia/tritonserver:26.10-py3@sha256:b404f7de5dbeeefe0b17d7d149745a50d0989a25d0d831433b5ba63c716c2fcd
+gpu:
+  claim: ml-gpu
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
+  tolerations:
+    - key: burst.talos.dev/gpu-training
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+training:
+  resources:
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {cpu: "3", memory: 8Gi}
+config:
+  AWS_REGION: us-east-1
+  S3_ENDPOINT: https://minio.home.phuchoang.sbs
+  S3_PATH_STYLE: 'true'
+  ICEBERG_REST_URI: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog
+  ICEBERG_WAREHOUSE: lakehouse
+  ICEBERG_CLIENT_ID: platform
+  ICEBERG_OAUTH2_URI: http://iceberg-catalog.data.svc.cluster.local:8181/api/catalog/v1/oauth/tokens
+  FEAST_REGISTRY: s3://platform-dev/runs/payment-gateway/feast/registry.pb
+  FEAST_STREAM_EPOCHS: history-v18,live-v18
+  MODEL_REGISTRY_URL: http://model-registry-service.ml.svc.cluster.local:8080
+  RUN_ROOT: s3://platform-dev/runs/payment-gateway/ml
+environment: dev
+storage:
+  store: gateway-doppler
+  data:
+    AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
+iceberg:
+  store: gateway-doppler
+  data:
+    ICEBERG_CLIENT_SECRET: ICEBERG_CLIENT_SECRET
+drift:
+  enabled: true
+  image:
+    repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/drift
+  metrics: http://vmsingle-vmks.observability.svc.cluster.local:8428
+  # Hourly, at minute 17. The check starts at most one retraining run, and only when the policy allows it.
+  cron: "17 * * * *"
+  policy:
+    samples: 2000
+  windows:
+    trainDays: 56
+    validationDays: 14
+    testDays: 14
+    lagDays: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    requestsPerSecond: "5"
+experiment:
+  # A challenger model behind a waypoint route, with weights only the promotion pipeline changes.
+  enabled: false
+  waypoint: ml-waypoint
+  route: payment-risk-ab
+  maxPercent: 20
+  steps: "5,20"
+  analysis:
+    window: 10m
+    interval: 2m
+    count: 3
+    minimumRequests: 100
+    maximumErrorRate: 0.01
+    latencyRatio: 2
+    declineShift: 0.02
+dashboards:
+  namespace: observability
+  folder: ML
+serving:
+  resources:
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {memory: 4Gi}
+  predictor:
+    minReplicas: 1
+    maxReplicas: 2
+    # KServe turns this into a KEDA ScaledObject. The metric is Triton's mean time a request waits in the queue
+    # (microseconds); KEDA asks for one replica per 5000 of it, up to maxReplicas. Every replica shares the GPU claim.
+    autoScaling:
+      metrics:
+        - type: External
+          external:
+            metric:
+              backend: prometheus
+              serverAddress: http://vmsingle-vmks.observability.svc.cluster.local:8428
+              query: >-
+                sum(rate(nv_inference_queue_duration_us{model="payment-risk"}[2m]))
+                / clamp_min(sum(rate(nv_inference_request_success{model="payment-risk"}[2m])), 1)
+            target:
+              type: Value
+              value: "5000"
+notebook:
+  storageClass: cloud-block
+  storageSize: 20Gi
+  resources:
+    requests: {cpu: '1', memory: 4Gi}
+    limits: {memory: 8Gi}

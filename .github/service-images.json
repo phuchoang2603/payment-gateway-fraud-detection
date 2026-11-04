@@ -187,6 +187,32 @@
         "infra/docker/agent-runtime.Dockerfile",
         "src/llm/agent_runtime"
       ]
+    },
+    {
+      "service": "ml",
+      "image-suffix": "/ml",
+      "context": ".",
+      "dockerfile": "infra/docker/ml.Dockerfile",
+      "paths": [
+        "infra/docker/ml.Dockerfile",
+        "src/ml/pyproject.toml",
+        "src/ml/uv.lock",
+        "src/ml/risk_model",
+        "src/ml/notebooks",
+        "src/data-pipeline/feast"
+      ]
+    },
+    {
+      "service": "drift",
+      "image-suffix": "/drift",
+      "context": ".",
+      "dockerfile": "infra/docker/drift.Dockerfile",
+      "paths": [
+        "infra/docker/drift.Dockerfile",
+        "src/ml/risk_model/__init__.py",
+        "src/ml/risk_model/drift.py",
+        "src/ml/risk_model/drift_service.py"
+      ]
     }
   ]
 }

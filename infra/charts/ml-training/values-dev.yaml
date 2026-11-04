@@ -1,0 +1,21 @@
+global:
+  imageTags:
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/drift: dev
+environment: dev
+notebook:
+  storageClass: local-path
+drift:
+  # Dev replays 2026-09-02 to 2026-10-27, so the windows are shorter than prod's, and traffic is small.
+  policy:
+    samples: 200
+  windows:
+    trainDays: 36
+    validationDays: 9
+    testDays: 9
+experiment:
+  enabled: true
+  analysis:
+    window: 5m
+    interval: 1m
+    minimumRequests: 50

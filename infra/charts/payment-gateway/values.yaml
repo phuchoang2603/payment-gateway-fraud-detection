@@ -340,6 +340,8 @@ features:
   enabled: false
   url: http://feast-server.data.svc.cluster.local:6566
   service: payment_risk_v1
+  # A read took 60 to 116 ms with four requests at once on dev, so the 100 ms default cut off about half of them.
+  timeout: 250ms
   ttlDaily: 756h
   ttlStream: 24h5m
 
@@ -361,3 +363,9 @@ rollout:
     maximumErrorRate: 0.01
     maximumP95Seconds: 1
     maximumSampleAgeSeconds: 120
+# Read with the features. A score at or above the threshold adds a decline when every feature view is available.
+model:
+  url: http://payment-risk-predictor.ml.svc.cluster.local
+  name: payment-risk
+  timeout: 150ms
+  threshold: 0.512

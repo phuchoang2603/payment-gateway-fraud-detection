@@ -33,12 +33,13 @@ type Server struct {
 	service   *application.Service
 	decisions metric.Int64Counter
 	reasons   metric.Int64Counter
+	models    metric.Int64Counter
 	latency   metric.Float64Histogram
 	active    chan struct{}
 }
 
 func NewServer(service *application.Service) *Server {
-	return &Server{service: service, active: make(chan struct{}, 64), decisions: observe.Counter("fraud.decisions", "{decision}"), reasons: observe.Counter("fraud.reason.matches", "{match}"), latency: observe.Histogram("fraud.policy.duration", "s")}
+	return &Server{service: service, active: make(chan struct{}, 64), decisions: observe.Counter("fraud.decisions", "{decision}"), reasons: observe.Counter("fraud.reason.matches", "{match}"), models: observe.Counter("fraud.model.calls", "{call}"), latency: observe.Histogram("fraud.policy.duration", "s")}
 }
 
 func (s *Server) Decide(ctx context.Context, req *fraudv1.DecideRequest) (*fraudv1.DecideResponse, error) {
@@ -89,6 +90,10 @@ func (s *Server) Decide(ctx context.Context, req *fraudv1.DecideRequest) (*fraud
 	if !result.Replayed {
 		s.decisions.Add(ctx, 1, attrs)
 	}
+	if model := result.Evidence.Model; model != nil && !result.Replayed {
+		s.models.Add(ctx, 1, metric.WithAttributes(attribute.String("status", model.Status), attribute.Bool("enforced", model.Enforced), attribute.String("model_version", model.Version), attribute.Bool("declined", model.Declined)))
+		span.SetAttributes(attribute.String("fraud.model.status", model.Status), attribute.Bool("fraud.model.enforced", model.Enforced))
+	}
 	for _, reason := range decision.Reasons {
 		if result.Replayed {
 			break
@@ -97,7 +102,7 @@ func (s *Server) Decide(ctx context.Context, req *fraudv1.DecideRequest) (*fraud
 	}
 	span.SetAttributes(attribute.String("fraud.outcome", label), attribute.String("fraud.policy.version", decision.PolicyVersion), attribute.StringSlice("fraud.reasons", decision.Reasons))
 	slog.InfoContext(ctx, "fraud decision", "request_id", observe.RequestID(ctx), "outcome", label, "policy_version", decision.PolicyVersion, "reasons", decision.Reasons)
-	return &fraudv1.DecideResponse{Assessment: &paymentsv1.RiskAssessment{Outcome: outcome, ReasonCodes: decision.Reasons, PolicyVersion: decision.PolicyVersion, AssessmentId: result.Evidence.AssessmentID, EvidenceSha256: result.EvidenceHash}, EvaluatedAt: timestamppb.New(result.Evidence.EvaluatedAt), Evidence: evidenceProto(result.Evidence)}, nil
+	return &fraudv1.DecideResponse{Assessment: riskAssessment(result, outcome), EvaluatedAt: timestamppb.New(result.Evidence.EvaluatedAt), Evidence: evidenceProto(result.Evidence)}, nil
 }
 
 func validate(req *fraudv1.DecideRequest) (domain.Input, error) {

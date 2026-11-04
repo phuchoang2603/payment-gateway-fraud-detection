@@ -1,0 +1,128 @@
+# PIPELINE DEFINITION
+# Name: payment-risk-promote
+# Description: Shift traffic to the challenger in steps, check each with an analysis, then promote or remove it.
+# Inputs:
+#    steps_percent: str [Default: '']
+components:
+  comp-promote-challenger:
+    executorLabel: exec-promote-challenger
+    inputDefinitions:
+      parameters:
+        run_id:
+          parameterType: STRING
+        steps_percent:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        promoted:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-promote-challenger:
+      container:
+        args:
+        - promote_challenger
+        - --run-id
+        - '{{$.inputs.parameters[''run_id'']}}'
+        - --steps-percent
+        - '{{$.inputs.parameters[''steps_percent'']}}'
+        - --out
+        - promoted
+        - '{{$.outputs.parameters[''promoted''].output_file}}'
+        command:
+        - python
+        - -m
+        - risk_model.steps
+        image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
+        resources:
+          cpuRequest: 0.25
+          memoryLimit: 1.0
+          memoryRequest: 1.0
+          resourceCpuRequest: 250m
+          resourceMemoryLimit: 1G
+          resourceMemoryRequest: 1G
+pipelineInfo:
+  description: Shift traffic to the challenger in steps, check each with an analysis,
+    then promote or remove it.
+  name: payment-risk-promote
+root:
+  dag:
+    tasks:
+      promote-challenger:
+        cachingOptions: {}
+        componentRef:
+          name: comp-promote-challenger
+        inputs:
+          parameters:
+            run_id:
+              runtimeValue:
+                constant: '{{$.pipeline_job_uuid}}'
+            steps_percent:
+              componentInputParameter: steps_percent
+        taskInfo:
+          name: promote-challenger
+  inputDefinitions:
+    parameters:
+      steps_percent:
+        defaultValue: ''
+        isOptional: true
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.18.0
+---
+platforms:
+  kubernetes:
+    deploymentSpec:
+      executors:
+        exec-promote-challenger:
+          configMapAsEnv:
+          - configMapName: ml-training-config
+            configMapNameParameter:
+              runtimeValue:
+                constant: ml-training-config
+            keyToEnv:
+            - configMapKey: AWS_REGION
+              envVar: AWS_REGION
+            - configMapKey: S3_ENDPOINT
+              envVar: S3_ENDPOINT
+            - configMapKey: S3_PATH_STYLE
+              envVar: S3_PATH_STYLE
+            - configMapKey: ICEBERG_REST_URI
+              envVar: ICEBERG_REST_URI
+            - configMapKey: ICEBERG_WAREHOUSE
+              envVar: ICEBERG_WAREHOUSE
+            - configMapKey: ICEBERG_CLIENT_ID
+              envVar: ICEBERG_CLIENT_ID
+            - configMapKey: ICEBERG_OAUTH2_URI
+              envVar: ICEBERG_OAUTH2_URI
+            - configMapKey: FEAST_REGISTRY
+              envVar: FEAST_REGISTRY
+            - configMapKey: FEAST_STREAM_EPOCHS
+              envVar: FEAST_STREAM_EPOCHS
+            - configMapKey: FEAST_S3_ENDPOINT_URL
+              envVar: FEAST_S3_ENDPOINT_URL
+            - configMapKey: MODEL_REGISTRY_URL
+              envVar: MODEL_REGISTRY_URL
+            - configMapKey: RUN_ROOT
+              envVar: RUN_ROOT
+            - configMapKey: ML_IMAGE
+              envVar: ML_IMAGE
+            - configMapKey: ML_NAMESPACE
+              envVar: ML_NAMESPACE
+            - configMapKey: SERVING_PREDICTOR
+              envVar: SERVING_PREDICTOR
+            - configMapKey: SERVING_WAYPOINT
+              envVar: SERVING_WAYPOINT
+            - configMapKey: EXPERIMENT_ROUTE
+              envVar: EXPERIMENT_ROUTE
+            - configMapKey: EXPERIMENT_MAX_PERCENT
+              envVar: EXPERIMENT_MAX_PERCENT
+            - configMapKey: EXPERIMENT_STEPS
+              envVar: EXPERIMENT_STEPS
+            - configMapKey: EXPERIMENT_WINDOW
+              envVar: EXPERIMENT_WINDOW
+            optional: false
+          nodeAffinity:
+          - matchExpressions:
+            - key: nvidia.com/gpu.present
+              operator: DoesNotExist

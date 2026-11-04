@@ -19,11 +19,11 @@ class HistoricalModel:
         self.config = self.world.config
         self.anchor = datetime.combine(self.config.start_date, time.min, timezone.utc)
 
-    def purchase(self, seed, ordinal, now):
+    def purchase(self, seed, ordinal, now, drift=None):
         """Return correlated checkout context, processor behavior and independently delayed truth."""
         rng = stage_rng(seed, LIVE_STAGE, now.date().toordinal(), ordinal)
         customer = int(rng.integers(self.config.counts.customers))
-        purchase = self.world.purchase(rng, now.date(), customer)
+        purchase = self.world.purchase(rng, now.date(), customer, drift)
         behavior = BEHAVIOR_BY_OUTCOME[purchase.processor_outcome]
         order = {
             "seller": {

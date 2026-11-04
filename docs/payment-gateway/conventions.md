@@ -16,7 +16,7 @@ Edge, Payments, Fraud, Notifier, Vault simulator and Processor simulator are ind
 
 Transport calls application code; application code coordinates domain rules and adapter interfaces. Composition roots provide concrete adapters. Keep only layers the service uses, and never import a sibling service's `internal` packages or read its database.
 
-The [Fraud application](../../src/payment-gateway/fraud/internal/application/assessment.go) coordinates durable assessments and its [Feast adapter](../../src/payment-gateway/fraud/internal/adapters/feast/client.go) calls the feature server directly. KServe scoring remains pending.
+The [Fraud application](../../src/payment-gateway/fraud/internal/application/assessment.go) coordinates durable assessments and its [Feast adapter](../../src/payment-gateway/fraud/internal/adapters/feast/client.go) calls the feature server directly; its model adapter calls Triton with the Open Inference Protocol v2.
 
 ## Contracts and persistence
 

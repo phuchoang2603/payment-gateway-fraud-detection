@@ -1,0 +1,15 @@
+{{- if .Values.enabled }}
+# Picked up by the platform Grafana's dashboard sidecar, which watches only a fixed list of namespaces.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-serving-dashboard
+  namespace: {{ .Values.dashboards.namespace }}
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: {{ .Values.dashboards.folder | quote }}
+data:
+  ml-serving.json: |
+    {{- .Files.Get "files/dashboards/ml-serving.json" | nindent 4 }}
+{{- end }}

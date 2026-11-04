@@ -103,10 +103,20 @@ spec:
               value: {{ $.Values.features.url | quote }}
             - name: FRAUD_FEATURE_SERVICE
               value: {{ $.Values.features.service | quote }}
+            - name: FRAUD_FEAST_TIMEOUT
+              value: {{ $.Values.features.timeout | quote }}
             - name: FRAUD_FEATURE_TTL_DAILY
               value: {{ $.Values.features.ttlDaily | quote }}
             - name: FRAUD_FEATURE_TTL_STREAM
               value: {{ $.Values.features.ttlStream | quote }}
+            - name: FRAUD_MODEL_URL
+              value: {{ $.Values.model.url | quote }}
+            - name: FRAUD_MODEL_NAME
+              value: {{ $.Values.model.name | quote }}
+            - name: FRAUD_MODEL_TIMEOUT
+              value: {{ $.Values.model.timeout | quote }}
+            - name: FRAUD_MODEL_THRESHOLD
+              value: {{ $.Values.model.threshold | quote }}
             {{- end }}
             {{- range $svc.externalSecrets }}
             {{- $secretName := .name }}

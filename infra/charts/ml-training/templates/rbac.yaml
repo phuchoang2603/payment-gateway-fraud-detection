@@ -1,0 +1,72 @@
+{{- if .Values.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fraud-training
+  namespace: {{ .Values.namespace }}
+secrets:
+  - name: ml-training-storage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fraud-training
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [workflowtaskresults]
+    verbs: [create, patch]
+  - apiGroups: [trainer.kubeflow.org]
+    resources: [trainjobs]
+    verbs: [create, get, delete]
+  - apiGroups: [kubeflow.org]
+    resources: [experiments]
+    verbs: [create, get, delete]
+  - apiGroups: [serving.kserve.io]
+    resources: [inferenceservices]
+    verbs: [create, get, patch, delete]
+  - apiGroups: [""]
+    resources: [services]
+    resourceNames: [payment-risk-predictor]
+    verbs: [get, patch]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [httproutes]
+    verbs: [get, patch]
+  - apiGroups: [argoproj.io]
+    resources: [analysisruns]
+    verbs: [create, get, delete]
+  - apiGroups: [argoproj.io]
+    resources: [analysistemplates]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [delete]
+  - apiGroups: [""]
+    resources: [pods, pods/log]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [mlpipeline-minio-artifact]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [kfp-launcher]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fraud-training
+  namespace: {{ .Values.namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: fraud-training
+    namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: fraud-training
+{{- end }}

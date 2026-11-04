@@ -19,8 +19,11 @@ check_python() (
   uv run --locked ruff check .
   uv run --locked ruff format --check .
   if [[ -d tests ]]; then
+    # A project sets a minimum total coverage in [tool.ci] coverage-fail-under; the default of 0 reports only.
+    local floor
+    floor="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb")).get("tool", {}).get("ci", {}).get("coverage-fail-under", 0))')"
     COVERAGE_FILE="$reports/.coverage" uv run --locked --with "pytest-cov==$PYTEST_COV" pytest -q --durations=10 \
-      --cov=. --cov-config="$coverage_config" --cov-report=term \
+      --cov=. --cov-config="$coverage_config" --cov-fail-under="$floor" --cov-report=term \
       --cov-report="xml:$reports/coverage.xml" --cov-report="html:$reports/coverage-html"
     # A project whose code runs in a second, incompatible environment names it in [tool.ci] test-groups; the tests
     # that need it skip in the default environment and run here.

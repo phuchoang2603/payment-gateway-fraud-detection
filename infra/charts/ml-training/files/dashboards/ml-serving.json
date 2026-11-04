@@ -1,0 +1,529 @@
+{
+  "uid": "ml-serving",
+  "title": "ML model serving",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "tags": [
+    "ml",
+    "serving"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Triton request rate",
+      "description": "Requests the payment-risk model answered or failed, from Triton's own metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(nv_inference_request_success{model=\"payment-risk\"}[5m]))",
+          "legendFormat": "success"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(nv_inference_request_failure{model=\"payment-risk\"}[5m]))",
+          "legendFormat": "failure"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Triton time per request",
+      "description": "Mean time a request waits in the queue and runs on the GPU. The autoscaler adds a replica when the queue time stays above its 5 ms target.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(nv_inference_queue_duration_us{model=\"payment-risk\"}[5m])) / clamp_min(sum(rate(nv_inference_request_success{model=\"payment-risk\"}[5m])), 1) / 1000",
+          "legendFormat": "queue"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(nv_inference_compute_infer_duration_us{model=\"payment-risk\"}[5m])) / clamp_min(sum(rate(nv_inference_request_success{model=\"payment-risk\"}[5m])), 1) / 1000",
+          "legendFormat": "compute"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Predictor replicas",
+      "description": "Replicas of the payment-risk predictor Deployment. KEDA scales it between the chart's minimum and maximum.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kube_deployment_status_replicas{namespace=\"ml\",deployment=\"payment-risk-predictor\"}",
+          "legendFormat": "desired"
+        },
+        {
+          "refId": "B",
+          "expr": "kube_deployment_status_replicas_available{namespace=\"ml\",deployment=\"payment-risk-predictor\"}",
+          "legendFormat": "available"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "GPU utilization",
+      "description": "Shared by Triton and the training and scoring jobs.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg by (gpu, Hostname) (DCGM_FI_DEV_GPU_UTIL)",
+          "legendFormat": "{{Hostname}} gpu {{gpu}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Model calls from the fraud service",
+      "description": "Calls by outcome and whether the score was enforced, from the fraud service's OTLP counter. No data means no observed assessments.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status, enforced) (rate({__name__=\"fraud.model.calls\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"payment-gateway\"}[5m]))",
+          "legendFormat": "{{status}} enforced={{enforced}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Feature drift (PSI, top 10)",
+      "description": "Population stability index of each scored feature against the serving version's reference profile over 24 hours. 0.1 is moderate and 0.2 is significant. No labels are needed.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, ml_feature_drift_psi)",
+          "legendFormat": "{{feature}} {{model_version}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Drift state and features over the threshold",
+      "description": "State: 0 insufficient samples, 1 ok, 2 drifting. The check starts a retraining run only when the 6 hour and the 24 hour windows both drift.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ml_drift_state",
+          "legendFormat": "state {{model_version}}"
+        },
+        {
+          "refId": "B",
+          "expr": "ml_drift_features_over",
+          "legendFormat": "features over {{model_version}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Scored requests counted and model age",
+      "description": "Requests counted into the reference bins over 24 hours, and the days since the serving version was registered.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ml_drift_samples",
+          "legendFormat": "requests {{model_version}}"
+        },
+        {
+          "refId": "B",
+          "expr": "(time() - ml_model_created_seconds) / 86400",
+          "legendFormat": "age in days {{model_version}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Triton requests by service",
+      "description": "Champion and challenger side by side while an experiment runs. The route's weights are set by the promotion pipeline.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (serving_kserve_io_inferenceservice) (rate(nv_inference_request_success[5m]))",
+          "legendFormat": "{{serving_kserve_io_inferenceservice}} success"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (serving_kserve_io_inferenceservice) (rate(nv_inference_request_failure[5m]))",
+          "legendFormat": "{{serving_kserve_io_inferenceservice}} failure"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Triton time per request by service",
+      "description": "Mean queue plus compute time in milliseconds. The promotion analysis compares the challenger's with the champion's.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (serving_kserve_io_inferenceservice) (rate(nv_inference_queue_duration_us[5m])) + sum by (serving_kserve_io_inferenceservice) (rate(nv_inference_compute_infer_duration_us[5m]))) / clamp_min(sum by (serving_kserve_io_inferenceservice) (rate(nv_inference_request_success[5m])), 1) / 1000",
+          "legendFormat": "{{serving_kserve_io_inferenceservice}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Model calls and declines by version",
+      "description": "Calls the fraud service scored under each model version, and how many of them added a decline.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model_version) (rate({__name__=\"fraud.model.calls\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"payment-gateway\"}[5m]))",
+          "legendFormat": "calls {{model_version}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (model_version) (rate({__name__=\"fraud.model.calls\",\"deployment.environment\"=\"$environment\",\"k8s.namespace.name\"=\"payment-gateway\",\"declined\"=\"true\"}[5m]))",
+          "legendFormat": "declined {{model_version}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "type": "custom",
+        "query": "dev,prod",
+        "current": {
+          "text": "dev",
+          "value": "dev"
+        }
+      }
+    ]
+  }
+}

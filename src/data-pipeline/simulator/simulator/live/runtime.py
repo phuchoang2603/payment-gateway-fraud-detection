@@ -20,6 +20,7 @@ from simulator.contracts.payments.v1.labels_pb2 import (
     LABEL_SOURCE_SIMULATION_TRUTH,
     FraudLabel,
 )
+from simulator.live.config import drift_at
 from simulator.live.model import card_number
 from simulator.live.redelivery import run_redelivery
 from simulator.live.source import load_model
@@ -172,7 +173,7 @@ async def traffic(config, model, gateway, labels, stop):
             if clicked is None:
                 max_lag = max(max_lag, time.monotonic() - due)
             order, signals, index, behavior, scenario, fraud, friendly, delay = model.purchase(
-                config.seed, number, now
+                config.seed, number, now, drift_at(config.drift, time.monotonic() - started)
             )
             if clicked is not None:
                 signals = {
