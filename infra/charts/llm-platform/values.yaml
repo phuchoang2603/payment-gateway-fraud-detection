@@ -119,9 +119,14 @@ gateway:
     requestsPerMinute: 120
     burst: 20
     tokensPerMinute: 60000
-  # Card numbers with spaces or dashes that the CreditCard built-in does not match.
+  # Card numbers with spaces or dashes that the CreditCard built-in does not match, and phone numbers. The PhoneNumber
+  # built-in is not used: it masks any run of seven digits, including those inside the hex payment-method fingerprints
+  # and UUIDs that the risk tool needs unchanged. These match a phone only at word boundaries.
   piiPatterns:
     - '\b(?:\d[ -]?){12,18}\d\b'
+    - '(?:\+\d{1,3}[ .-]?)?(?:\(\d{3}\)\s?|\b\d{3}[ .-])\d{3}[ .-]\d{4}\b'
+    - '\+\d{1,3}(?:[ .-]?\d{2,4}){2,5}\b'
+    - '\b\d{10,11}\b'
   # The LLM route asks the decision model (models.decision) one question about the latest user turn and rejects it
   # when "action" or "jailbreak" reaches the threshold.
   screening:

@@ -52,7 +52,7 @@ No screening service runs; the question, threshold and refusal are values.
 
 | Guard | Phase | Setting | Why |
 |---|---|---|---|
-| PII masking | request and response | agentgateway's built-in `CreditCard`, `Email` and `PhoneNumber` recognisers, plus `gateway.piiPatterns` for card numbers with spaces or dashes | Analysts can paste payment data; the model never sees full card numbers, and answers cannot echo them |
+| PII masking | request and response | agentgateway's built-in `CreditCard` and `Email` recognisers, plus `gateway.piiPatterns` for card numbers with spaces or dashes and for phone numbers at word boundaries (the `PhoneNumber` built-in masked digit runs inside hex identifiers) | Analysts can paste payment data; the model never sees full card numbers, and answers cannot echo them |
 | Request screen | request, after masking | the Jev decision model, above | A request to act or to break the rules is refused before it reaches the chat model |
 
 The guards apply on the LLM route (`/v1`); MCP, REST and A2A calls carry no prompts of their own, and every model call an agent makes goes through `/v1`.
