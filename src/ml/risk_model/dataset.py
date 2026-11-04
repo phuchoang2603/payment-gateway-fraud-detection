@@ -188,22 +188,24 @@ def stage(spark, store, first, last, cutoff, sample_buckets=SAMPLE_BUCKETS):
     )
     rows = rows.where(F.col("label") | (F.col("bucket") < sample_buckets))
     schema = stage_schema(store)
-    days = []
-    with tempfile.TemporaryDirectory(dir=os.environ.get("SPARK_LOCAL_DIR")) as staging:
-        store.config.offline_store.staging_location = staging
-        for number in range((last - first).days):
-            table = day_rows(store, rows, first + timedelta(days=number))
-            if table.num_rows:
-                days.append(table.select(schema.names).cast(schema))
     start = datetime.combine(first, time.min, UTC).isoformat()
     end = datetime.combine(last, time.min, UTC).isoformat()
     spark.sql(
         f"DELETE FROM lake.{STAGE} WHERE started_at >= TIMESTAMP '{start}' "
         f"AND started_at < TIMESTAMP '{end}'"
     )
-    if days:
-        spark.createDataFrame(pa.concat_tables(days)).writeTo(f"lake.{STAGE}").append()
-    return sum(table.num_rows for table in days)
+    staged = 0
+    with tempfile.TemporaryDirectory(dir=os.environ.get("SPARK_LOCAL_DIR")) as staging:
+        store.config.offline_store.staging_location = staging
+        for number in range((last - first).days):
+            table = day_rows(store, rows, first + timedelta(days=number))
+            if table.num_rows:
+                spark.createDataFrame(table.select(schema.names).cast(schema)).writeTo(
+                    f"lake.{STAGE}"
+                ).append()
+                staged += table.num_rows
+            del table
+    return staged
 
 
 def merge_examples(spark, store, first, last, cutoff, before, sample_buckets=SAMPLE_BUCKETS):

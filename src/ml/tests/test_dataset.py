@@ -190,6 +190,30 @@ def test_restaging_a_chunk_replaces_its_rows(prepared):
     assert first == second == staged > 0
 
 
+def test_retry_after_a_partial_stage_replaces_the_whole_chunk(prepared, monkeypatch):
+    """An interrupted append followed by a retry leaves every attempt exactly once."""
+    spark, store = prepared
+    dataset.prepare(spark, store, FIRST.date(), LAST)
+    day_rows = dataset.day_rows
+
+    def interrupted(*args):
+        if args[-1] == FIRST.date() + timedelta(days=1):
+            raise RuntimeError("interrupted staging")
+        return day_rows(*args)
+
+    monkeypatch.setattr(dataset, "day_rows", interrupted)
+    with pytest.raises(RuntimeError, match="interrupted staging"):
+        dataset.stage(spark, store, FIRST.date(), LAST, CUTOFF)
+    partial = spark.table(f"lake.{dataset.STAGE}").count()
+    assert partial > 0
+    monkeypatch.setattr(dataset, "day_rows", day_rows)
+    total = dataset.stage(spark, store, FIRST.date(), LAST, CUTOFF)
+    staged = spark.table(f"lake.{dataset.STAGE}")
+    assert total > partial
+    assert staged.count() == staged.select("attempt_id").distinct().count() == total
+    dataset.drop_stage(spark)
+
+
 def test_a_finished_build_drops_its_staging_table(prepared):
     """The staging table is gone once the rows are merged, and dropping it again is harmless."""
     spark, store = prepared
