@@ -2,6 +2,8 @@
 
 Go Fraud owns the decision. It validates the attempt, applies the versioned rules policy, retrieves features from the Feast feature server, and, where a model endpoint is configured, calls the Triton model server directly with the features and applies policy to the score. There is no Python coordinator between Go, Feast and Triton. Code: [`src/payment-gateway/fraud`](../../src/payment-gateway/fraud).
 
+The read-only [risk agent tool](../llm/agents.md#risk-scoring) uses the same online features and binary inference protocol for what-if re-scoring.
+
 ## Today
 
 - Rules decide, and the model can add a decline. Where the online store is enabled, Go Fraud reads the features and calls the model. A score at or above `FRAUD_MODEL_THRESHOLD` adds a decline (reason `MODEL_RISK_HIGH`, policy `rules-v1+model`), but only when the predictor answered and all five feature views were available; otherwise the rules decision stands. The score never approves what the rules decline. The feature read has a 250 ms deadline and the model call its own 150 ms, both inside the 1 s assessment deadline, and a predictor failure is recorded as `timeout` or `error`.

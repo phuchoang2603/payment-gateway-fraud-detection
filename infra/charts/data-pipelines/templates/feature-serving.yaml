@@ -103,6 +103,14 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: fraud-service
+        {{- if $.Values.features.riskAccess }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: llm
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: risk-serving
+        {{- end }}
       ports:
         - port: 6566
           protocol: TCP

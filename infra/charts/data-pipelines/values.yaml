@@ -282,6 +282,7 @@ checks:
   # Limit for each table's `metadata test` run; each contract rule is a ClickHouse scan over the lakehouse table.
   nativeTimeoutSeconds: 1500
 features:
+  riskAccess: false
   enabled: false
   suspend: true
   driverMemory: 6g

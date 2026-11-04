@@ -1,6 +1,7 @@
 global:
   imageTags:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/agent-runtime: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/risk-serving: dev
   # Release digests; kagent runs only digest-pinned runtime images.
   imageDigests: {}
 
@@ -235,6 +236,7 @@ agents:
         addendum: Answer in at most five sentences, then list the passages you cited.
     - name: risk-agent
       version: 0.1.0
+      promptFile: files/prompts/risk-agent-unavailable.md
       title: Risk agent
       description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, and explains what drives it.
       abTest:
@@ -397,3 +399,22 @@ langfuse:
     mediaUpload:
       enabled: false
       prefix: artifacts/langfuse/media/
+
+risk:
+  enabled: false
+  image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/risk-serving
+  port: 8080
+  feastUrl: http://feast-server.data.svc.cluster.local:6566
+  modelUrl: http://payment-risk-predictor.ml.svc.cluster.local
+  referenceUrl: http://payment-risk-drift.ml.svc.cluster.local
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 4
+    callsPerSecondPerReplica: "5"
+    prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
+  rollout:
+    enabled: false
+    arguments: {}
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}

@@ -25,4 +25,5 @@ catalog:
             bucketNames:
             - platform-dev
 features:
+  riskAccess: true
   enabled: true

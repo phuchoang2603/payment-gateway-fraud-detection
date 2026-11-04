@@ -118,6 +118,10 @@ KEDA scales `rag-api` from 2 to 4 replicas on its combined REST and MCP request 
 19:39:11  metric 0/10       ready replicas 2   # HPA: "New size: 2; reason: All metrics below target" after the 5-minute stabilisation window
 ```
 
+### Dev releases
+
+On dev, `rag-api` is a blue-green Rollout and KEDA targets its scale subresource. The active Service keeps its name; `rag-api-preview` selects the candidate. A bounded pre-promotion Job lists MCP tools and reads a configured versioned knowledge chunk, using its dedicated analysis identity. A tool error, missing passage or timeout blocks promotion and keeps the active revision serving. The preview starts at one replica, then grows to KEDA's desired count before the Service switches; promotion can briefly require both revisions at full capacity. Argo CD leaves replica counts and revision hash selectors to their controllers. Production retains the Deployment. The existing Locust workload above is retained.
+
 ### Tests
 
 [`src/llm/rag_serving/tests/test_service.py`](../../src/llm/rag_serving/tests/test_service.py) uses pytest fixtures and mocks for the store and the embedding client (a fake embedder counts gateway calls, the store functions are monkeypatched), and covers the REST paths (200, 404, 422), the MCP tools, validation before any gateway call, readiness, lazy loading, metrics and the app lifespan. The serving member enforces `--cov-fail-under=90`; in CI (Python CI run 41112821278, job `src/llm/rag_serving`, commit 724831f): 14 passed, 98.52% coverage.

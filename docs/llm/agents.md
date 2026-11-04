@@ -2,7 +2,7 @@
 
 Fraud analysts ask an agent about decline codes, risk decisions and payment behaviour; it answers from the knowledge base and cites the passages it used. Agents are read-only: they cannot change risk decisions, retry payments, issue refunds or promote models, and they never sit in the payment decision path.
 
-**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route, prompts and A/B tests in Langfuse, and request screening. Prod configuration targets the GCP GPU pool.
+**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route, prompts and A/B tests in Langfuse, and request screening, shown in the historical captures below. The new dev risk-scoring deployment is pending verification. Production is enabled on the GCP GPU pool; the dev captures below do not establish production readiness.
 
 - Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform): [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) (model config, MCP servers, templates, the entry agent, worker pool and its autoscaler), [`a2a.yaml`](../../infra/charts/llm-platform/templates/a2a.yaml) (the A2A route), [`catalog.yaml`](../../infra/charts/llm-platform/templates/catalog.yaml) and [`files/catalog.py`](../../infra/charts/llm-platform/files/catalog.py) (registry, prompt seeds), prompt seeds in [`files/prompts/`](../../infra/charts/llm-platform/files/prompts).
 - Runtime: kagent 1.0.0-rc1 with Agent Substrate 1.0.0-rc1, installed by the platform; the agent runtime image is [`src/llm/agent_runtime`](../../src/llm/agent_runtime).
@@ -16,6 +16,7 @@ Fraud analysts ask an agent about decline codes, risk decisions and payment beha
 | Agent runtime (ours) | kagent's Go ADK runtime plus a Langfuse plugin: each model call's system prompt and A/B variant from Langfuse, linked to the trace |
 | agentgateway | Every A2A, model and tool call: per-client keys, request/token limits, action/jailbreak screening and PII masking |
 | `rag-api` | `search_knowledge` and `get_knowledge_chunk`, discovered through MCP `tools/list` |
+| `risk-serving` | `get_risk_features` and `score_payment_risk`, reading Feast and calling Triton |
 | Langfuse | The prompts, their versions and A/B tests, and the agents' traces |
 | agentregistry | The catalog of agents and MCP servers |
 
@@ -30,6 +31,10 @@ flowchart LR
   end
   actor -->|/v1, injected key| gw
   actor -->|/mcp/knowledge, injected key| gw
+  actor -->|/mcp/risk, injected key| gw
+  gw --> risktool[risk-serving]
+  risktool --> feast[Feast online features]
+  risktool --> triton[payment-risk Triton]
   gw -->|screen, /v1/systemone| d3[d3-edge on vLLM]
   gw --> vllm[qwen35-4b on vLLM]
   gw --> rag[rag-api]
@@ -50,7 +55,7 @@ One kagent `ModelConfig`, `default-model-config`, used by every agent: provider 
 |---|---|---|---|
 | `coordinator` 0.2.0 | kagent `Agent` behind `/a2a/coordinator` | sub-agents `evidence_agent`, `risk_agent` | Entry agent: hands each question to the specialist that owns it |
 | `evidence-agent` 0.3.0 | `AgentTemplate`, compiled into the coordinator | `knowledge` MCP server | Explains declines, policy and payment behaviour from the knowledge base, citing chunk ids |
-| `risk-agent` 0.1.0 | `AgentTemplate`, compiled into the coordinator | none yet | Assesses the risk of one payment, card or customer; the scoring tool is a later change |
+| `risk-agent` 0.2.0 | `AgentTemplate`, compiled into the coordinator | `risk` MCP server | Reads online features and re-scores supplied payment inputs with the served fraud model; drivers are not attributions |
 
 The specialists are kagent Shared sub-agents: `subAgent` bindings compile their templates into the coordinator's runtime, and the coordinator transfers the conversation to one of them, which answers the analyst. A conversation is one actor and one trace, with no second network hop. Callers reach agents only through the gateway's `/a2a/coordinator` route.
 
@@ -107,7 +112,25 @@ The release catalog job publishes the entry agents and the MCP servers from the 
 
 Langfuse is the source of each agent's system prompt and A/B test. [`files/prompts/<agent>.md`](../../infra/charts/llm-platform/files/prompts) and the agent's `abTest` in the values only seed a prompt that Langfuse does not have yet; after that, prompts are edited, versioned and tested in Langfuse, and the next conversation uses the new version without a release.
 
-The [knowledge API](rag.md#load-test-and-autoscaling) scales separately from the worker pool; [model replicas](inference.md#autoscaling) are limited by GPU capacity.
+## Autoscaling
+
+| Workload | Mechanism | Why |
+|---|---|---|
+| Agent conversations | Substrate actors: created on demand, suspended to zero when idle, resumed on any worker | Idle conversations cost nothing; any number wait in snapshots |
+| Agent worker pool (`llm-agents`) | KEDA, 2 to 6 workers on Substrate's busy-worker metric | Workers follow the conversations that hold them |
+| Knowledge API (`rag-api`) | KEDA, 2 to 4 replicas on its combined REST and MCP request rate | Target 10 req/s per replica; a dev Locust run scaled 2 → 4 → 2 |
+| Risk MCP (`risk-serving`) | KEDA, 2 to 4 replicas on tool-call rate | Initial target 5 calls/s per replica; provisional, without a risk Locust benchmark |
+| Model servers | One replica per model | GPU capacity is separate from tool-server scaling |
+
+## Risk scoring
+
+Dev enables the `risk` server and `risk-agent` 0.2.0; production retains the toolless 0.1.0 agent and has no risk server. The `risk` server accepts a `request` object with `integration_id`, `customer_id`, `payment_method_fingerprint`, `amount_minor`, both account-creation timestamps, `shipping_country`, `ip_country`, `item_count` and `has_device`. The tool sets the scoring time. It returns five view statuses, a probability, model version and decline threshold. Missing, expired, future or invalid views contribute NaN to Triton, including ratios derived from unavailable daily views. An upstream error returns no score. The result is a what-if re-score, not a stored decision.
+
+Drivers rank feature gain times distance from the training reference distribution; they are not per-prediction attributions. If the reference belongs to another version, the score carries no drivers and explains why. There is no step-up threshold in the served model configuration.
+
+On dev, risk and knowledge use blue-green Rollouts. A dedicated analysis Job initializes MCP, lists tools and calls the preview before promotion; tool errors or timeouts block promotion. KEDA owns replicas and Rollouts own active/preview revision selectors. An existing Langfuse prompt and its A/B variant both need new tool-aware versions; the catalog seeds only missing prompts.
+
+Verification pending: a dev gateway score with counters and latency, coordinator-to-risk chat screenshots, one trace, and passing/failed rollout analyses for both servers.
 
 ## Known limits
 
