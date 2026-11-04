@@ -4161,7 +4161,7 @@
     {
       "id": "examples",
       "type": "rectangle",
-      "x": 1350,
+      "x": 1880,
       "y": 1200,
       "width": 460,
       "height": 100,
@@ -4185,13 +4185,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1
     },
     {
       "id": "examples-icon",
       "type": "image",
-      "x": 1365.0,
+      "x": 1895.0,
       "y": 1225.0,
       "width": 50,
       "height": 50.0,
@@ -4219,13 +4219,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1
     },
     {
       "id": "examples-text",
       "type": "text",
-      "x": 1430,
+      "x": 1960,
       "y": 1207.5,
       "width": 368,
       "height": 85.0,
@@ -4255,14 +4255,14 @@
       "text": "Feast historical retrieval\nPinned Iceberg snapshots + PIT\njoins\nTemporal split / label cutoff",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "tune",
       "type": "rectangle",
-      "x": 1880,
+      "x": 1350,
       "y": 1200,
       "width": 460,
       "height": 100,
@@ -4286,13 +4286,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1
     },
     {
       "id": "tune-icon",
       "type": "image",
-      "x": 1895.0,
+      "x": 1365.0,
       "y": 1225.0,
       "width": 50,
       "height": 50.0,
@@ -4320,13 +4320,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1
     },
     {
       "id": "tune-text",
       "type": "text",
-      "x": 1960,
+      "x": 1430,
       "y": 1218.125,
       "width": 368,
       "height": 63.75,
@@ -4356,14 +4356,14 @@
       "text": "Katib tuning\nParallel trials \u2192 best parameters\nRecorded with the training run",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "fit",
       "type": "rectangle",
-      "x": 1880,
+      "x": 1350,
       "y": 1060,
       "width": 460,
       "height": 100,
@@ -4387,13 +4387,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1
     },
     {
       "id": "fit-icon",
       "type": "image",
-      "x": 1895.0,
+      "x": 1365.0,
       "y": 1085.2148557397177,
       "width": 50,
       "height": 49.570288520564766,
@@ -4421,13 +4421,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1
     },
     {
       "id": "fit-text",
       "type": "text",
-      "x": 1960,
+      "x": 1430,
       "y": 1088.75,
       "width": 368,
       "height": 42.5,
@@ -4457,14 +4457,14 @@
       "text": "Kubeflow Trainer\nXGBoost fit + reference profile",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "gate",
       "type": "rectangle",
-      "x": 1350,
+      "x": 1880,
       "y": 1060,
       "width": 460,
       "height": 100,
@@ -4488,13 +4488,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 1,
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1
     },
     {
       "id": "gate-icon",
       "type": "image",
-      "x": 1365.0,
+      "x": 1895.0,
       "y": 1085.2148557397177,
       "width": 50,
       "height": 49.570288520564766,
@@ -4522,13 +4522,13 @@
       "strokeStyle": "solid",
       "strokeWidth": 2,
       "updated": 1793564694298,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1
     },
     {
       "id": "gate-text",
       "type": "text",
-      "x": 1430,
+      "x": 1960,
       "y": 1078.125,
       "width": 368,
       "height": 63.75,
@@ -4558,7 +4558,7 @@
       "text": "Evaluation gate\nTemporal holdout + metric\nthresholds",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -7973,11 +7973,11 @@
           -620
         ],
         [
-          -600,
+          -70,
           -620
         ],
         [
-          -600,
+          -70,
           -710
         ]
       ],
@@ -7990,17 +7990,17 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
-      "width": 780,
+      "width": 250,
       "height": 710
     },
     {
       "id": "pinned-features-label",
       "type": "text",
-      "x": 1610,
+      "x": 1690,
       "y": 1360,
-      "width": 420,
+      "width": 600,
       "height": 21.25,
       "angle": 0,
       "autoResize": true,
@@ -8028,14 +8028,14 @@
       "text": "(1) pinned features + labels",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "tune-run",
       "type": "arrow",
-      "x": 1810,
+      "x": 1880,
       "y": 1250,
       "angle": 0,
       "backgroundColor": "transparent",
@@ -8058,7 +8058,7 @@
           0
         ],
         [
-          70,
+          -70,
           0
         ]
       ],
@@ -8071,7 +8071,7 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "width": 70,
       "height": 0
@@ -8109,14 +8109,14 @@
       "text": "(2)",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "fit-run",
       "type": "arrow",
-      "x": 2110,
+      "x": 1580,
       "y": 1200,
       "angle": 0,
       "backgroundColor": "transparent",
@@ -8152,7 +8152,7 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "width": 0,
       "height": 40
@@ -8160,9 +8160,9 @@
     {
       "id": "fit-run-label",
       "type": "text",
-      "x": 2130,
+      "x": 1600,
       "y": 1170,
-      "width": 200,
+      "width": 240,
       "height": 21.25,
       "angle": 0,
       "autoResize": true,
@@ -8190,14 +8190,14 @@
       "text": "(3) best parameters",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "gate-run",
       "type": "arrow",
-      "x": 1880,
+      "x": 1810,
       "y": 1110,
       "angle": 0,
       "backgroundColor": "transparent",
@@ -8220,7 +8220,7 @@
           0
         ],
         [
-          -70,
+          70,
           0
         ]
       ],
@@ -8233,7 +8233,7 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "width": 70,
       "height": 0
@@ -8271,14 +8271,14 @@
       "text": "(4)",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
     {
       "id": "register-run",
       "type": "arrow",
-      "x": 1580,
+      "x": 2110,
       "y": 1060,
       "angle": 0,
       "backgroundColor": "transparent",
@@ -8302,6 +8302,14 @@
         ],
         [
           0,
+          -20
+        ],
+        [
+          -530,
+          -20
+        ],
+        [
+          -530,
           -40
         ]
       ],
@@ -8314,17 +8322,17 @@
       "strokeStyle": "solid",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
-      "width": 0,
+      "width": 530,
       "height": 40
     },
     {
       "id": "register-run-label",
       "type": "text",
-      "x": 1600,
-      "y": 1030,
-      "width": 300,
+      "x": 1640,
+      "y": 1018,
+      "width": 310,
       "height": 21.25,
       "angle": 0,
       "autoResize": true,
@@ -8352,7 +8360,7 @@
       "text": "(5) passing model",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 4,
+      "version": 5,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
@@ -9453,11 +9461,11 @@
           510
         ],
         [
-          -940,
+          -90,
           510
         ],
         [
-          -940,
+          -90,
           470
         ]
       ],
@@ -9470,17 +9478,17 @@
       "strokeStyle": "dashed",
       "strokeWidth": 1.7,
       "updated": 1793564691100,
-      "version": 3,
+      "version": 4,
       "versionNonce": 1,
-      "width": 950,
+      "width": 100,
       "height": 510
     },
     {
       "id": "drift-retrain-label",
       "type": "text",
-      "x": 1690,
+      "x": 1460,
       "y": 1310,
-      "width": 640,
+      "width": 850,
       "height": 20,
       "angle": 0,
       "autoResize": true,
@@ -9508,7 +9516,7 @@
       "text": "Automatic retraining \u2192 same data checks + evaluation gate",
       "textAlign": "left",
       "updated": 1793564691097,
-      "version": 3,
+      "version": 4,
       "versionNonce": 1,
       "verticalAlign": "top"
     },
