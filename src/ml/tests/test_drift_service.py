@@ -1,9 +1,12 @@
 """Tests for the drift API: the registry and metrics reads, the endpoints and the gauges."""
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from risk_model import drift_service
 from risk_model.drift import Policy
+from risk_model.drift_schemas import Assessment, DriftReport, FeatureProfile, Serving
 from risk_model.drift_service import Source, create
 
 REFERENCE = {
@@ -63,6 +66,58 @@ def test_a_bad_window_or_a_missing_reference_is_refused():
     )
     assert client(Fixed(serving=None)).get("/v1/reference").status_code == 404
     assert client(Fixed()).get("/v1/reference").json()["reference"] == REFERENCE
+
+
+@pytest.mark.parametrize("window", ["1m", "30m", "6h", "24h", "7d", "10d"])
+def test_a_window_of_a_positive_count_and_one_unit_is_accepted(window):
+    """A window of a positive count of minutes, hours or days is answered and passed on unchanged."""
+    source = Fixed()
+    assert client(source).get(f"/v1/drift?window={window}").status_code == 200
+    assert source.windows == [("v3", window)]
+
+
+@pytest.mark.parametrize("window", ["", "0h", "00m", "01h", "6", "h", "6w", "-1h", "1.5h", "6h6h"])
+def test_a_window_without_a_positive_count_or_a_known_unit_is_refused_before_any_read(window):
+    """Zero, a leading zero, a missing count or unit, another unit and a fraction are all 422 and read nothing."""
+    source = Fixed()
+    assert client(source).get("/v1/drift", params={"window": window}).status_code == 422
+    assert source.windows == []
+
+
+def test_the_answers_validate_against_the_response_models():
+    """The drift answer and the reference answer parse back into their models."""
+    api = client(Fixed(counts=MOVED))
+    report = DriftReport.model_validate(api.get("/v1/drift?window=6h").json())
+    assert report.version == "v3" and report.assessment.state == "drifting"
+    assert report.assessment.over and set(report.assessment.psi) == {"a", "b"}
+    assert Serving.model_validate(api.get("/v1/reference").json()).reference["b"].edges == [
+        1.0,
+        2.0,
+    ]
+
+
+def test_a_malformed_profile_from_the_registry_is_a_server_error_and_not_a_wrong_answer():
+    """A profile without a feature's bin shares cannot be answered, so the call fails instead of guessing."""
+    broken = {**SERVING, "reference": {"a": {"edges": [0.0]}}}
+    api = TestClient(
+        create(Fixed(serving=broken), Policy(samples=100)), raise_server_exceptions=False
+    )
+    assert api.get("/v1/reference").status_code == 500
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: Assessment(window="6h", samples=-1, state="ok", psi={}, missing={}, over=[]),
+        lambda: Assessment(window="6h", samples=1, state="bogus", psi={}, missing={}, over=[]),
+        lambda: FeatureProfile(edges=[0.0], share=[1.0]),
+        lambda: Serving(version="", created="2026-11-01T00:00:00+00:00", reference={}),
+    ],
+)
+def test_the_models_refuse_negative_counts_unknown_states_short_profiles_and_empty_versions(build):
+    """Each model rejects the value just outside what it allows."""
+    with pytest.raises(ValidationError):
+        build()
 
 
 def test_the_gauges_carry_the_state_and_each_features_index():

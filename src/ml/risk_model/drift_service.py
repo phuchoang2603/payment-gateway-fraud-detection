@@ -2,17 +2,17 @@
 
 import json
 import os
-import re
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Query, Response
 
 from risk_model.drift import assess, load_policy
+from risk_model.drift_schemas import DriftReport, Serving, Status
 
 STATES = {"insufficient": 0, "ok": 1, "drifting": 2}
-WINDOW = re.compile(r"^[1-9][0-9]*[mhd]$")
+WINDOW = r"^[1-9][0-9]*[mhd]$"
 REGISTRY_API = "/api/model_registry/v1alpha3"
 
 
@@ -85,25 +85,23 @@ def create(source, policy):
         return await call_next(request)
 
     def current(window):
-        if not WINDOW.match(window):
-            raise HTTPException(422, "window must look like 30m, 6h or 1d")
         serving = source.serving()
         if serving is None or serving["reference"] is None:
             raise HTTPException(404, "no serving version with a reference profile")
         counts = source.counts(serving["version"], serving["reference"], window)
         return serving, {"window": window, **assess(serving["reference"], counts, policy)}
 
-    @app.get("/healthz")
+    @app.get("/healthz", response_model=Status)
     def healthz():
         """Reports that the process is up."""
         return {"status": "ok"}
 
-    @app.get("/readyz")
+    @app.get("/readyz", response_model=Status)
     def readyz():
         """Reports that the process can serve requests."""
         return {"status": "ready"}
 
-    @app.get("/v1/reference")
+    @app.get("/v1/reference", response_model=Serving)
     def reference():
         """Returns the serving version and the profile its requests are compared with."""
         serving = source.serving()
@@ -111,8 +109,10 @@ def create(source, policy):
             raise HTTPException(404, "no serving version with a reference profile")
         return serving
 
-    @app.get("/v1/drift")
-    def drift(window: str = "24h"):
+    @app.get("/v1/drift", response_model=DriftReport)
+    def drift(
+        window: str = Query("24h", pattern=WINDOW, description="A duration such as 30m, 6h or 1d."),
+    ):
         """Returns the drift of the serving version's scored features over a window."""
         serving, assessment = current(window)
         return {
