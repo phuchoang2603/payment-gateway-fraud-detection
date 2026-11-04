@@ -155,6 +155,7 @@ def gate(
     validation: str,
     test: str,
     model_uri: str,
+    margin: float,
     passed: dsl.OutputPath(str),
     report: dsl.OutputPath(str),
     summary: dsl.OutputPath(str),

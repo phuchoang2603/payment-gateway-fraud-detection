@@ -41,6 +41,7 @@ def payment_risk_training(environment):
         force: bool = False,
         trigger: str = "",
         role: str = "champion",
+        gate_margin: float = 0.005,
     ):
         run_id = dsl.PIPELINE_JOB_ID_PLACEHOLDER
 
@@ -144,6 +145,7 @@ def payment_risk_training(environment):
                     snapshot=snapshot,
                     **span,
                     model_uri=fitted.outputs["model_uri"],
+                    margin=gate_margin,
                 )
             )
             configure(

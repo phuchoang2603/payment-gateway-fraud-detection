@@ -4,6 +4,7 @@
 # Inputs:
 #    cutoff: str [Default: '']
 #    force: bool [Default: False]
+#    gate_margin: float [Default: 0.005]
 #    lag_days: int [Default: 1.0]
 #    role: str [Default: 'champion']
 #    test: str [Default: '']
@@ -210,6 +211,8 @@ components:
           - fit-on-gpu
           inputs:
             parameters:
+              margin:
+                componentInputParameter: pipelinechannel--gate_margin
               model_uri:
                 taskOutputParameter:
                   outputParameterKey: model_uri
@@ -329,6 +332,8 @@ components:
             name: tune-params
     inputDefinitions:
       parameters:
+        pipelinechannel--gate_margin:
+          parameterType: NUMBER_DOUBLE
         pipelinechannel--plan-windows-cutoff:
           parameterType: STRING
         pipelinechannel--plan-windows-run:
@@ -472,6 +477,8 @@ components:
     executorLabel: exec-gate
     inputDefinitions:
       parameters:
+        margin:
+          parameterType: NUMBER_DOUBLE
         model_uri:
           parameterType: STRING
         run_id:
@@ -770,6 +777,8 @@ deploymentSpec:
         - '{{$.inputs.parameters[''test'']}}'
         - --model-uri
         - '{{$.inputs.parameters[''model_uri'']}}'
+        - --margin
+        - '{{$.inputs.parameters[''margin'']}}'
         - --out
         - passed
         - '{{$.outputs.parameters[''passed''].output_file}}'
@@ -1094,6 +1103,8 @@ root:
         - plan-windows
         inputs:
           parameters:
+            pipelinechannel--gate_margin:
+              componentInputParameter: gate_margin
             pipelinechannel--plan-windows-cutoff:
               taskOutputParameter:
                 outputParameterKey: cutoff
@@ -1177,6 +1188,10 @@ root:
         defaultValue: false
         isOptional: true
         parameterType: BOOLEAN
+      gate_margin:
+        defaultValue: 0.005
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
       lag_days:
         defaultValue: 1.0
         isOptional: true
