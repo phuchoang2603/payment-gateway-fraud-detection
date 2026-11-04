@@ -56,9 +56,9 @@ Pending inputs enter one microsecond after their attempt time; expiry heaps avoi
 
 <a id="flink-ui"></a>
 
-![Job graph](images/online-job-graph.png)
+![Job graph](images/flink-live-v19-job-graph-2026-11-04.png)
 
-*Dev run, 2026-10-29 at about 11:51 UTC: source/progress observation → event dedup → attempt dedup → customer/method aggregation → journal/reject sinks. All operators run at parallelism 1 with 0% backpressure. The capture predates operator names (`KEYED PROCESS`); the UI shows UTC−4, so 07:51 is 11:51 UTC.*
+*Prod `fraud-features-live-v19`, 2026-11-04 at about 04:55 UTC (the UI shows UTC−5): source/progress observation → event dedup → attempt dedup → customer/method aggregation → journal/reject sinks. All operators run at parallelism 1; with 6,333 records received they are 6–8% busy with 0% backpressure.*
 
 Consider a covered entity at 12:10 UTC, with no other attempts:
 
