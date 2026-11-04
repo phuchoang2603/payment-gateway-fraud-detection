@@ -19,7 +19,7 @@ spec:
       provider:
         job:
           spec:
-            activeDeadlineSeconds: 180
+            activeDeadlineSeconds: 300
             backoffLimit: 0
             ttlSecondsAfterFinished: 86400
             template:

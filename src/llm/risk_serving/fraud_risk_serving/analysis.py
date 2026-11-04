@@ -37,7 +37,7 @@ def validate(tool, result):
         raise ValueError("unsupported analysis tool")
 
 
-REACHABLE_SECONDS = 30
+REACHABLE_SECONDS = 150
 RETRY_SECONDS = 2
 
 
@@ -49,7 +49,7 @@ def unreachable(error):
 
 async def analyze(url, tool, arguments):
     headers = {"Accept": "application/json, text/event-stream"}
-    async with asyncio.timeout(55), httpx.AsyncClient(timeout=30, trust_env=False) as client:
+    async with asyncio.timeout(200), httpx.AsyncClient(timeout=30, trust_env=False) as client:
 
         async def rpc(method, params):
             response = await client.post(
