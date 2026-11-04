@@ -9,6 +9,7 @@ kafkaBrokers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092
 simulator:
   enabled: false
   runAsJob: false
+  ignoreDisruptions: true
   resources:
     requests:
       cpu: 100m

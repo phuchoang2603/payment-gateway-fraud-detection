@@ -13,11 +13,14 @@ metadata:
 spec:
   {{- if .Values.simulator.runAsJob }}
   backoffLimit: 0
+  {{- if .Values.simulator.ignoreDisruptions }}
+  podReplacementPolicy: Failed
   podFailurePolicy:
     rules:
       - action: Ignore
         onPodConditions:
           - type: DisruptionTarget
+  {{- end }}
   activeDeadlineSeconds: {{ add (int64 .Values.simulator.config.duration_seconds) 120 }}
   {{- else }}
   replicas: 1
