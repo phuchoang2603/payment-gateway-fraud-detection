@@ -27,7 +27,7 @@ COPY --from=build /opt/python /opt/python
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /opt/flink/plugins/s3-fs-presto /opt/flink/plugins/s3-fs-presto
 WORKDIR /app
-COPY src/data-pipeline/streaming/fraud_streaming ./fraud_streaming
+COPY src/data-pipeline/streaming/fraud_streaming/__init__.py src/data-pipeline/streaming/fraud_streaming/history.py src/data-pipeline/streaming/fraud_streaming/contracts.py src/data-pipeline/streaming/fraud_streaming/contracts.pb ./fraud_streaming/
 COPY contracts/features/fraud-snapshot-v2.yaml /contracts/features/
 ENV FEATURE_DEFINITION=/contracts/features/fraud-snapshot-v2.yaml
 ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH=/app PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
