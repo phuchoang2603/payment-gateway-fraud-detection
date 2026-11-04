@@ -65,8 +65,10 @@ class RiskTrainer:
     def fit(self, train, validation):
         """Returns a booster trained with early stopping on validation PR-AUC, ordered by key."""
         train, validation = train.ordered(), validation.ordered()
-        dtrain = xgb.DMatrix(train.x, label=train.y, weight=train.w)
-        dvalidation = xgb.DMatrix(validation.x, label=validation.y, weight=validation.w)
+        dtrain = xgb.DMatrix(train.x, label=train.y, weight=train.w, feature_names=train.features)
+        dvalidation = xgb.DMatrix(
+            validation.x, label=validation.y, weight=validation.w, feature_names=validation.features
+        )
         booster = xgb.train(
             self.params,
             dtrain,

@@ -5,6 +5,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from risk_model.data import Split
+from risk_model.drift import profile
 from risk_model.train import (
     BASELINE_PARAMS,
     HYPERPARAMETERS,
@@ -82,6 +83,10 @@ def test_a_model_survives_saving_and_loading_with_its_feature_order(tmp_path):
     booster.save_model(tmp_path / "model.json")
     loaded, order = load_booster(tmp_path / "model.json")
     assert order == FEATURES
+    gains = loaded.get_score(importance_type="gain")
+    reference = profile(train, gains)
+    assert gains and set(gains) <= set(FEATURES)
+    assert sum(entry["gain"] for entry in reference.values()) > 0
     probe = make(5, 20).x
     assert np.array_equal(score(booster, probe, CPU), score(loaded, probe, CPU))
 
