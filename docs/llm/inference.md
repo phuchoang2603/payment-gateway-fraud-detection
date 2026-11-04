@@ -2,12 +2,12 @@
 
 Self-hosted chat, embedding and decision models for the agents, the RAG pipeline and the gateway's request screen, and how fast the chat model serves agent traffic. Every caller reaches them through agentgateway with per-client API keys, request/token limits and mesh authorization; nothing calls a model server directly.
 
-- Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform) (`models.yaml`, values `models`). Application `llm-platform` in namespace `llm`, on dev and prod. On prod the three servers are meant to share one GPU node labelled `talos.dev/nodepool: gpu`; the platform has no cloud GPU pool yet, so the application stays disabled there.
+- Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform) (`models.yaml`, values `models`). Application `llm-platform` in namespace `llm`, on dev and prod. On prod the three servers are meant to share one GPU node labelled `talos.dev/nodepool: gpu`; the application is enabled on the GCP GPU pool.
 - Platform prerequisites (KServe 0.21 `LLMInferenceService` presets, the GPU DRA driver, the `llm-gpu` node group for the local model cache, agentgateway) come from the platform repository.
 
 ## Setup and verify
 
-1. Enter `devenv shell`; select `~/.kube/talos-dev.yaml`. Verify the GPU claim/DRA driver, KServe presets, agentgateway, kagent/Substrate and local model cache. Prod remains disabled until a GPU pool exists.
+1. Enter `devenv shell`; select `~/.kube/talos-dev.yaml`. Verify the GPU claim/DRA driver, KServe presets, agentgateway, kagent/Substrate and local model cache. Prod uses the GCP GPU pool and `~/.kube/talos-prod.yaml`.
 2. Inspect `models`, `gpu`, `gateway` and `agents` in the chart values. Run `helm template llm-platform infra/charts/llm-platform -n llm -f infra/charts/llm-platform/values-dev.yaml` and `helm lint`, then push the change through GitHub Actions to `deploy/dev`; Argo CD reconciles the chart and pinned runtime image.
 3. Check `kubectl --kubeconfig ~/.kube/talos-dev.yaml get llminferenceservices -n llm`, ready endpoints and Gateway Accepted/Programmed conditions. Port-forward `svc/agentgateway` in `llm` to `18080:80`.
 4. Call through the gateway with the dev benchmark identity:
