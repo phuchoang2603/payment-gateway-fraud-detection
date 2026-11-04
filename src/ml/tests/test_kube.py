@@ -474,25 +474,42 @@ def test_the_champions_service_is_labelled_with_the_waypoint(monkeypatch):
     ]
 
 
+TEMPLATE = {
+    "spec": {
+        "args": [{"name": "window", "value": "10m"}, {"name": "challengerVersion"}],
+        "metrics": [{"name": "error-rate"}],
+    }
+}
+
+
 @pytest.mark.parametrize("phase", ["Successful", "Failed"])
-def test_an_analysis_run_is_created_waited_for_and_deleted(cluster, phase):
-    """The run is created from the template with its arguments, its end phase is returned, and it is deleted."""
+def test_an_analysis_run_copies_the_template_fills_its_arguments_and_is_deleted(cluster, phase):
+    """The run carries the template's metrics and arguments, returns its end phase and is deleted."""
+    cluster.stored[("analysistemplates", "payment-risk-challenger")] = TEMPLATE
     cluster.status = {"phase": phase, "message": "done"}
-    assert kube.analysis_run("run-1", "payment-risk-challenger", {"window": "10m"}, 60) == (
-        phase,
-        "done",
-    )
+    args = {"challengerVersion": "v4", "window": "5m"}
+    assert kube.analysis_run("run-1", "payment-risk-challenger", args, 60) == (phase, "done")
     ((plural, _, body),) = cluster.created
-    assert plural == "analysisruns" and body["spec"]["templates"] == [
-        {"templateName": "payment-risk-challenger"}
+    assert plural == "analysisruns" and body["spec"]["metrics"] == [{"name": "error-rate"}]
+    assert body["spec"]["args"] == [
+        {"name": "window", "value": "5m"},
+        {"name": "challengerVersion", "value": "v4"},
     ]
-    assert body["spec"]["args"] == [{"name": "window", "value": "10m"}]
     assert cluster.deleted == [("analysisruns", "run-1")]
+
+
+def test_an_analysis_argument_without_a_value_is_refused_before_anything_is_created(cluster):
+    """A template argument with no default and no value stops the run, and the defaults apply otherwise."""
+    cluster.stored[("analysistemplates", "payment-risk-challenger")] = TEMPLATE
+    with pytest.raises(ValueError, match="challengerVersion"):
+        kube.analysis_run("run-3", "payment-risk-challenger", {}, 60)
+    assert cluster.created == []
 
 
 def test_an_analysis_that_never_ends_times_out_and_is_still_deleted(cluster):
     """A run still running at the timeout raises and is cleaned up."""
+    cluster.stored[("analysistemplates", "payment-risk-challenger")] = TEMPLATE
     cluster.status = {"phase": "Running"}
     with pytest.raises(TimeoutError):
-        kube.analysis_run("run-2", "payment-risk-challenger", {}, 0)
+        kube.analysis_run("run-2", "payment-risk-challenger", {"challengerVersion": "v4"}, 0)
     assert ("analysisruns", "run-2") in cluster.deleted

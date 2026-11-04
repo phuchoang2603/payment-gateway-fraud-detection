@@ -35,6 +35,7 @@ INFERENCE_NAME = MODEL_NAME
 CHALLENGER_NAME = f"{MODEL_NAME}-challenger"
 ROUTE = ("gateway.networking.k8s.io", "v1", "httproutes")
 ANALYSIS = ("argoproj.io", "v1alpha1", "analysisruns")
+ANALYSIS_TEMPLATE = ("argoproj.io", "v1alpha1", "analysistemplates")
 USE_WAYPOINT = "istio.io/use-waypoint"
 SOURCE_URI = "internal.serving.kserve.io/storage-initializer-sourceuri"
 RUNTIME_NAME = "payment-risk-triton"
@@ -313,16 +314,21 @@ def set_weights(percent, route=None):
 def analysis_run(name, template, args, timeout):
     """Runs an analysis from a template to its end and returns its phase and message.
 
-    The run is deleted afterwards. `args` maps the template's argument names to values.
+    An AnalysisRun carries its own metrics, so they are copied from the template with each argument
+    filled from `args` or the template's default. The run is deleted afterwards.
     """
+    source = get(ANALYSIS_TEMPLATE, template)["spec"]
+    values = []
+    for argument in source.get("args", []):
+        value = args.get(argument["name"], argument.get("value"))
+        if value is None:
+            raise ValueError(f"the analysis {template} needs a value for {argument['name']}")
+        values.append({"name": argument["name"], "value": value})
     body = {
         "apiVersion": "argoproj.io/v1alpha1",
         "kind": "AnalysisRun",
         "metadata": {"name": name, "namespace": namespace()},
-        "spec": {
-            "templates": [{"templateName": template}],
-            "args": [{"name": key, "value": value} for key, value in args.items()],
-        },
+        "spec": {"metrics": source["metrics"], "args": values},
     }
     create(ANALYSIS, body)
 
