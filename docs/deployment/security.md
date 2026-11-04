@@ -14,23 +14,21 @@ Bootstrap `payment-gateway/doppler-token` (`dopplerToken`) from a read-only toke
 
 One storage identity per environment serves the generator, Flink, lakehouse and metadata jobs. Prod uses GCS HMAC keys for the shared bucket; `datasets/`, `runs/` and `lakehouse/` prefixes are conventions, not authorization boundaries.
 
+On 2026-11-04, all 20 gateway ExternalSecrets reported `SecretSynced`, `Ready=True`. Argo CD shows `edge-secrets` Synced/Healthy with “secret synced”; the capture displays metadata and readiness, without credential values.
+
+![Production ExternalSecret readiness in Argo CD](images/external-secret-ready-2026-11-04.png)
+
 ## Access boundaries
 
 - [Istio policies](../../infra/charts/payment-gateway/templates/mesh.yaml) enforce strict mTLS and service-account authorization. Vault admits Edge on port 8000 and processor resolution on 8001.
 - [Network policies](../../infra/charts/payment-gateway/templates/network-policy.yaml) restrict pod traffic; [database policies](../../infra/charts/payment-gateway/templates/database-network-policy.yaml) isolate database access.
 - Each service owns a database with separate migration/runtime roles; Payments CDC has a replication identity.
 
-Card data is synthetic. The vault encrypts fictional fixtures and issues opaque tokens; raw card data stays out of logs, events, Fraud, Redis and the lake. This demonstrates PCI DSS-oriented isolation, not compliance.
-
-## Secret-delivery verification
-
-On 2026-11-04, all 20 gateway ExternalSecrets reported `SecretSynced`, `Ready=True`. Argo CD shows `edge-secrets` Synced/Healthy with “secret synced”; the capture displays metadata and readiness, without credential values.
-
-![Production ExternalSecret readiness in Argo CD](images/external-secret-ready-2026-11-04.png)
-
 Two temporary ambient-mesh pods called only Vault's gRPC health RPC on port 8000. The `edge` service account received `SERVING`; the `default` account failed. Istio's receiving proxy recorded “allow policies exist, but none allowed”, and its sending proxy recorded HTTP 401 with zero bytes exchanged. The allowed connection has both workload identities and response bytes. Both pods and their nonsecret protocol ConfigMap were removed.
 
 ![Istio access logs comparing the allowed Edge identity and denied default identity](images/mesh-allowed-denied-2026-11-04.png)
+
+Card data is synthetic. The vault encrypts fictional fixtures and issues opaque tokens; raw card data stays out of logs, events, Fraud, Redis and the lake. This demonstrates PCI DSS-oriented isolation, not compliance.
 
 ## Gateway access controls
 
