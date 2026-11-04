@@ -24,6 +24,24 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ $redis.name }}
 spec:
+  livenessProbe:
+    exec:
+      command:
+        - sh
+        - -ec
+        - |
+          if [ -n "${REDISCLI_AUTH:-}" ]; then
+            REDISCLI_AUTH="$(printf %s "$REDISCLI_AUTH" | tr -d '\r\n')"
+            export REDISCLI_AUTH
+          fi
+          response="$(redis-cli -h 127.0.0.1 -p "${REDIS_PORT:-6379}" ping)"
+          case "$response" in
+            PONG|LOADING\ *) exit 0 ;;
+            *) exit 1 ;;
+          esac
+    timeoutSeconds: 5
+    periodSeconds: 10
+    failureThreshold: 6
   podSecurityContext:
     fsGroup: 1000
     fsGroupChangePolicy: OnRootMismatch
