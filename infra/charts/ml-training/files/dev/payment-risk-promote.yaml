@@ -111,6 +111,16 @@ platforms:
               envVar: ML_NAMESPACE
             - configMapKey: SERVING_PREDICTOR
               envVar: SERVING_PREDICTOR
+            - configMapKey: SERVING_WAYPOINT
+              envVar: SERVING_WAYPOINT
+            - configMapKey: EXPERIMENT_ROUTE
+              envVar: EXPERIMENT_ROUTE
+            - configMapKey: EXPERIMENT_MAX_PERCENT
+              envVar: EXPERIMENT_MAX_PERCENT
+            - configMapKey: EXPERIMENT_STEPS
+              envVar: EXPERIMENT_STEPS
+            - configMapKey: EXPERIMENT_WINDOW
+              envVar: EXPERIMENT_WINDOW
             optional: false
           nodeAffinity:
           - matchExpressions:

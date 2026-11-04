@@ -12,11 +12,9 @@ data:
   ML_IMAGE: {{ include "ml-training.image" . | quote }}
   ML_NAMESPACE: {{ .Values.namespace | quote }}
   SERVING_PREDICTOR: {{ .Values.serving.predictor | toJson | quote }}
-  {{- if .Values.experiment.enabled }}
-  SERVING_WAYPOINT: {{ .Values.experiment.waypoint | quote }}
+  SERVING_WAYPOINT: {{ ternary .Values.experiment.waypoint "" .Values.experiment.enabled | quote }}
   EXPERIMENT_ROUTE: {{ .Values.experiment.route | quote }}
   EXPERIMENT_MAX_PERCENT: {{ .Values.experiment.maxPercent | quote }}
   EXPERIMENT_STEPS: {{ .Values.experiment.steps | quote }}
   EXPERIMENT_WINDOW: {{ .Values.experiment.analysis.window | quote }}
-  {{- end }}
 {{- end }}
