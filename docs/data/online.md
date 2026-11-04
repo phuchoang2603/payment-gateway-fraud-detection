@@ -19,7 +19,7 @@ flowchart LR
 
 - Tokenizes synthetic cards, creates payments and submits attempts through Edge with run-scoped idempotency keys; retries reuse the same key and content.
 - Publishes simulation-truth labels after each attempt and schedules chargebacks for successful fraud on `fraud.labels.v1`. Label availability is the actual publication time. The schedule is held in memory, so an interrupted run reports unfinished labels instead of claiming them.
-- Configuration comes from `SIMULATOR_CONFIG`, rendered by the `live-traffic` chart.
+- Configuration comes from `SIMULATOR_CONFIG`, rendered by the `live-traffic` chart. Job mode retries Kubernetes disruptions such as Spot preemption within its overall deadline; application failures still fail the Job.
 - Store-and-forward lateness: `late_rate` (default 0) selects attempts held for `late_min_seconds`–`late_max_seconds` (300–600) and bounded by `max_held_attempts`. Edge accepts `simulated_client.attempted_at` only from synthetic integrations and rejects times after server time. Attempts still held at shutdown are reported as unsent.
 - Redelivery: `redelivery.enabled` (default off) and `redelivery.rate` (0.015). Copies carry an `x-simulator-redelivery` header and are never copied again. Offsets commit after the copy is acknowledged, so a restart can add copies.
 
