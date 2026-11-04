@@ -44,13 +44,15 @@ models:
     replicas: 1
     # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
     stopped: false
-    # 0.76 leaves room on the shared GPU for the decision model (vLLM needs its whole 0.10 free at start, whichever
-    # server starts first). Only 8 of its 32 layers keep a KV cache (16 KiB a token in FP8), so a 32k context is cheap;
-    # the other 24 keep about 50 MiB of fp32 state per sequence, which caps concurrent sequences at 32 (1.55 GiB).
+    # The fraction of the GPU the server may use. 0.76 leaves room on the shared GPU for the other two servers (vLLM
+    # needs its whole fraction free at start, whichever server starts first, and each server also holds a CUDA context
+    # outside its fraction, so the fractions must sum to less than 1 by that overhead). Only 8 of its 32 layers keep a
+    # KV cache (16 KiB a token in FP8), so a 32k context is cheap; the other 24 keep about 50 MiB of fp32 state per
+    # sequence, which caps concurrent sequences at 32 (1.55 GiB).
+    gpuMemoryUtilization: "0.76"
     args:
       - --language-model-only
       - --max-model-len=32768
-      - --gpu-memory-utilization=0.76
       - --kv-cache-dtype=fp8
       - --max-num-seqs=32
       - --reasoning-parser=qwen3
@@ -73,10 +75,10 @@ models:
     replicas: 1
     # 0.12 of the 16 GB GPU leaves about 0.3 GiB of KV cache after the weights: enough for 2048 tokens, which covers
     # knowledge chunks (at most about 400 tokens) and queries.
+    gpuMemoryUtilization: "0.12"
     args:
       - --runner=pooling
       - --max-model-len=2048
-      - --gpu-memory-utilization=0.12
     resources:
       requests: {cpu: 250m, memory: 2Gi}
       limits: {memory: 4Gi}
@@ -91,10 +93,10 @@ models:
     cacheSize: 2Gi
     image: vllm/vllm-openai:nightly-2b009fc6d1493a9a1ad19f4d0c7230b7e6b7e63a@sha256:1b7aee4c157c2c8f48aaf34de137d1eebfb2eea8445549789188c2280883f8d7
     replicas: 1
+    gpuMemoryUtilization: "0.10"
     args:
       - --language-model-only
       - --max-model-len=2048
-      - --gpu-memory-utilization=0.10
       # Its linear-attention layers keep fp32 state per sequence; at vLLM's default sequence count that state alone
       # (1.59 GiB) outgrew the share on dev. Screening sends a handful of requests at a time.
       - --max-num-seqs=16

@@ -17,7 +17,7 @@ All three are KServe `LLMInferenceService`s. The chat model runs behind llm-d's 
 
 ## One GPU, three models
 
-Each environment has one GPU, so the three models share it through a single DRA `ResourceClaim` (`llm-gpu`), each vLLM process with a fixed memory fraction: 0.76 for chat, 0.12 for embeddings and 0.10 for `d3-edge`. The chat server keeps its KV cache in FP8, which the [benchmark](#benchmark) kept for throughput and cache room. The embedding and decision servers cap their context at 2 048 tokens so their caches fit the small shares; knowledge chunks are at most about 400 tokens, and a screen is one short question.
+Each environment has one GPU, so the three models share it through a single DRA `ResourceClaim` (`llm-gpu`), each vLLM process with a fixed memory fraction: 0.76 for chat, 0.12 for embeddings and 0.10 for `d3-edge` (each is the model's `gpuMemoryUtilization` value). On dev's 15.48 GiB card the chat fraction is 0.72: with the other two servers resident, with their CUDA contexts, 11.6 GiB are free when the chat server starts, less than the 11.76 GiB that 0.76 asks for, and it crash-looped on 2026-11-04 until the fraction was lowered. The chat server keeps its KV cache in FP8, which the [benchmark](#benchmark) kept for throughput and cache room. The embedding and decision servers cap their context at 2 048 tokens so their caches fit the small shares; knowledge chunks are at most about 400 tokens, and a screen is one short question.
 
 ## Weights and start-up
 

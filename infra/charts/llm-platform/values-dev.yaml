@@ -1,6 +1,9 @@
 
 models:
   chat:
+    # The dev card is 15.48 GiB, and with the other two servers resident (CUDA contexts included) 11.6 GiB are free
+    # when the chat server starts, less than the 0.76 of the base values (11.76 GiB).
+    gpuMemoryUtilization: "0.72"
     schedulerResources:
       requests: {cpu: 250m, memory: 128Mi}
       limits: {memory: 512Mi}

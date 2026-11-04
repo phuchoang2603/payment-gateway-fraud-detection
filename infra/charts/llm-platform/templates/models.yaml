@@ -75,6 +75,7 @@ spec:
           - --port=8000
           - --load-format=instanttensor
         args:
+          - --gpu-memory-utilization={{ $model.gpuMemoryUtilization }}
           {{- toYaml $model.args | nindent 10 }}
         env:
           - name: USER
