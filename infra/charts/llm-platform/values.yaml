@@ -19,6 +19,10 @@ objectStore:
     accesskey: OBJECT_ARTIFACTS_ACCESS_KEY_ID
     secretkey: OBJECT_ARTIFACTS_SECRET_ACCESS_KEY
 
+# The Grafana folder of the dashboard, as in the other components' charts.
+dashboards:
+  folder: LLM
+
 vllm:
   image: vllm/vllm-openai:v0.32.0
   uid: 1000
