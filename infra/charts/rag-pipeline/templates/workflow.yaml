@@ -96,7 +96,7 @@ spec:
         retryPolicy: OnError
       container:
         image: {{ $metadata | quote }}
-        command: [python, -m, openmetadata_jobs.checks]
+        command: [python, -m, openmetadata.checks]
         env:
           - name: CHECK_PRODUCT
             value: knowledge-base
