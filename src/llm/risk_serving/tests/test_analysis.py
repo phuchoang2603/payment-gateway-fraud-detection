@@ -26,6 +26,24 @@ def test_analysis_rejects_missing_knowledge_data():
         validate("get_knowledge_chunk", {"structuredContent": {"chunk_id": "known"}})
 
 
+@pytest.mark.parametrize("missing", [None, "customer_daily", "payment_method_daily", "request_features"])
+def test_analysis_requires_existing_risk_fixture_features(missing):
+    data = {
+        "score": 0.5,
+        "model_version": "4",
+        "decline_threshold": 0.7,
+        "views": {
+            view: {"status": "available"} for view in ("customer_daily", "payment_method_daily", "request_features")
+        },
+    }
+    if missing:
+        data["views"][missing]["status"] = "missing"
+        with pytest.raises(ValueError, match="fixture"):
+            validate("score_payment_risk", {"structuredContent": data})
+    else:
+        validate("score_payment_risk", {"structuredContent": data})
+
+
 def test_analysis_initializes_lists_and_calls_preview_before_passing(monkeypatch):
     methods = []
     original = httpx.AsyncClient

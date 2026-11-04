@@ -24,6 +24,12 @@ def validate(tool, result):
             or not data.get("model_version")
         ):
             raise ValueError("preview returned an invalid score contract")
+        views = data.get("views")
+        if not isinstance(views, dict) or not all(
+            isinstance(views.get(view), dict) and views[view].get("status") == "available"
+            for view in ("customer_daily", "payment_method_daily", "request_features")
+        ):
+            raise ValueError("preview fixture lacks available daily or request features")
     elif tool == "get_knowledge_chunk":
         if not all(data.get(field) for field in ("chunk_id", "text", "knowledge_version")):
             raise ValueError("preview returned no versioned knowledge passage")
