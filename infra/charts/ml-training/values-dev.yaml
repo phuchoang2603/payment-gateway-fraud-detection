@@ -15,3 +15,7 @@ drift:
     testDays: 9
 experiment:
   enabled: true
+  analysis:
+    window: 5m
+    interval: 1m
+    minimumRequests: 50

@@ -78,6 +78,7 @@ spec:
           (dict "name" "decline-ratio" "condition" (printf "result[0] >= %v && result[0] <= %v" (index $analysis.declineRatio 0) (index $analysis.declineRatio 1)) "query" $ratio) }}
     {{- range $metrics }}
     - name: {{ .name }}
+      initialDelay: {{ $analysis.window }}
       interval: {{ $analysis.interval }}
       count: {{ $analysis.count }}
       failureLimit: 0
