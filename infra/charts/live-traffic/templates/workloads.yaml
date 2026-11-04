@@ -1,4 +1,6 @@
 {{- if .Values.simulator.enabled }}
+{{- $image := include "live-traffic.image" (dict "image" .Values.image "global" .Values.global) }}
+{{- $revision := dict "config" (omit .Values "global") "image" $image | toJson | sha256sum }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -9,7 +11,7 @@ automountServiceAccountToken: false
 apiVersion: {{ if .Values.simulator.runAsJob }}batch/v1{{ else }}apps/v1{{ end }}
 kind: {{ if .Values.simulator.runAsJob }}Job{{ else }}Deployment{{ end }}
 metadata:
-  name: live-simulator{{ if .Values.simulator.runAsJob }}-{{ omit .Values "global" | toJson | sha256sum | trunc 10 }}{{ end }}
+  name: live-simulator{{ if .Values.simulator.runAsJob }}-{{ $revision | trunc 10 }}{{ end }}
 spec:
   {{- if .Values.simulator.runAsJob }}
   backoffLimit: 0
@@ -36,7 +38,7 @@ spec:
         app.kubernetes.io/name: live-simulator
         istio.io/dataplane-mode: ambient
       annotations:
-        checksum/config: {{ omit .Values "global" | toJson | sha256sum }}
+        checksum/config: {{ $revision }}
     spec:
       {{- if .Values.simulator.runAsJob }}
       restartPolicy: Never
@@ -53,7 +55,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: live-simulator
-          image: {{ include "live-traffic.image" (dict "image" .Values.image "global" .Values.global) | quote }}
+          image: {{ $image | quote }}
           imagePullPolicy: Always
           command: [python, -m, simulator.live.runtime]
           securityContext:
