@@ -17,7 +17,7 @@ See proposal.md for the motivation. What shapes the design, checked against the 
 
 **Non-Goals:**
 
-- Reading the stored decision, any new Go endpoint or database role, SHAP, a step-up threshold, caching features, or GPU or model-server capacity for the LLM stack.
+- Reading the stored decision, any new Go endpoint or database role, SHAP, a step-up threshold, or caching features.
 
 ## Decisions
 
@@ -74,6 +74,12 @@ Each Rollout has `activeService`, `previewService`, `previewReplicaCount: 1`, au
 Each server has an `AnalysisTemplate` with a bounded Job that initializes MCP, lists tools, and calls a real read-only tool through its preview Service. Risk scores a configured dev customer and fingerprint, asserting no MCP tool error, a finite probability in [0, 1], model version and threshold. Knowledge calls its retrieval tool against the seeded corpus and checks the expected result contract. Health checks, a successful HTTP status with `isError`, missing fixture data, and dependency failures are not a passing analysis. Set Job and analysis deadlines and failure limits; any failure or timeout keeps active traffic on the previous revision. These are deployment gates, separate from throughput testing. Use the service's existing image for its analysis client where practical, with fixtures supplied as dev chart values and the dedicated analysis identity admitted by mesh.
 
 Argo CD ignores only the Rollouts' replica counts and the active/preview Services' controller-added revision hash selectors, with `RespectIgnoreDifferences=true`; it still reconciles base selectors, identities and security. Retarget knowledge's existing KEDA object and remove the superseded Deployment after a controlled adoption with ready active endpoints. Sequence adoption so two controllers never own the same pods, using Rollouts' workload adoption support where appropriate. Verify the initial-install analysis behavior separately: pre-promotion analysis on an update cannot serve as proof that an initial deployment was gated. Failed candidate analysis and a successful update are distinct dev proof items for both servers.
+
+### 12. Dev GPU assignment
+
+Dev claim selectors match NVIDIA's DRA `productName`: `llm/llm-gpu` selects `NVIDIA GeForce RTX 5060 Ti`, and `ml/ml-gpu` selects `NVIDIA GeForce GTX 1650`. Production renders retain their existing requests. Match published device attributes rather than `gpu-0` ordinals or host PCI addresses, which may change when passthrough devices are added. Infrastructure discovery and VM operations belong to the platform work; application migration waits for verified discovery of both devices.
+
+Before replacing an immutable claim, stop its consumers through their owning controllers and wait for reservations and device use to clear. Recreate the ML claim with its selector and restore ML consumers before admitting the LLM claim. Never remove claim-protection finalizers to force allocation. Validate allocation against ResourceSlice UUIDs and validate the actual training and FIL/vLLM runtimes; declared compute capability support alone does not prove driver compatibility or that workloads fit the GTX 1650's 4 GiB.
 
 ## Risks / Trade-offs
 
