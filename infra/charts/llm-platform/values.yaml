@@ -8,11 +8,8 @@ global:
 storageClass: local-path
 
 gpu:
-  deviceClassName: gpu.nvidia.com
   # The platform's KServe LocalModelNodeGroup on the GPU nodes.
   localModelNodeGroup: llm-gpu
-  nodeSelector: {}
-  tolerations: []
 
 # The platform's Kubeflow artifacts identity (scoped to artifacts/, datasets/ and runs/), synced into this namespace for
 # Langfuse's event uploads.

@@ -59,7 +59,6 @@ spec:
     {{- end }}
   {{- end }}
   template:
-    {{- include "llm-platform.gpuPlacement" $ | nindent 4 }}
     securityContext:
       {{- include "llm-platform.podSecurity" $.Values.vllm | nindent 6 }}
     resourceClaims:
