@@ -1,3 +1,10 @@
+FROM maven:3.9.11-eclipse-temurin-17 AS jvm-build
+WORKDIR /workspace
+COPY contracts ./contracts
+COPY src/data-pipeline/streaming/jvm/pom.xml ./src/data-pipeline/streaming/jvm/pom.xml
+COPY src/data-pipeline/streaming/jvm/src ./src/data-pipeline/streaming/jvm/src
+RUN mvn -B -f src/data-pipeline/streaming/jvm/pom.xml -Dmaven.test.skip=true package
+
 FROM ghcr.io/astral-sh/uv:0.13.1 AS uv
 FROM flink:2.2.1-java17 AS build
 USER root
@@ -9,24 +16,16 @@ RUN apt-get update \
     && uv python install 3.11.16
 WORKDIR /app
 COPY src/data-pipeline/streaming/pyproject.toml src/data-pipeline/streaming/uv.lock ./
-RUN uv sync --locked --no-dev --no-install-project --no-install-package apache-flink-libraries \
+RUN uv sync --locked --no-dev --no-install-project \
     && mkdir -p /opt/flink/plugins/s3-fs-presto \
-    && cp /opt/flink/opt/flink-s3-fs-presto-2.2.1.jar /opt/flink/plugins/s3-fs-presto/ \
-    && wget -q -O /opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar \
-       https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/5.0.0-2.2/flink-sql-connector-kafka-5.0.0-2.2.jar \
-    && echo '5605c691d11a501382c383fecba37a7a552467da5ab7ba904ef5d6f3d62c5616  /opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar' | sha256sum -c - \
-    && wget -q -O /opt/flink/lib/zstd-jni-1.5.6-10.jar \
-       https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.6-10/zstd-jni-1.5.6-10.jar \
-    && echo 'b6c3237e24b8252a5a9c3a0e1ae30ef8f323412e74bd358548b7a9e527d676df  /opt/flink/lib/zstd-jni-1.5.6-10.jar' | sha256sum -c -
+    && cp /opt/flink/opt/flink-s3-fs-presto-2.2.1.jar /opt/flink/plugins/s3-fs-presto/
 
-RUN UV_PROJECT_ENVIRONMENT=/app/history-venv uv sync --locked --no-default-groups --group history --no-install-project
 
 FROM flink:2.2.1-java17
+COPY --from=jvm-build /workspace/src/data-pipeline/streaming/jvm/target/fraud-streaming-1.0.0.jar /opt/flink/opt/fraud-streaming.jar
 COPY --from=build /opt/python /opt/python
 COPY --from=build /app/.venv /app/.venv
-COPY --from=build /app/history-venv /app/history-venv
 COPY --from=build /opt/flink/plugins/s3-fs-presto /opt/flink/plugins/s3-fs-presto
-COPY --from=build /opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar /opt/flink/lib/zstd-jni-1.5.6-10.jar /opt/flink/lib/
 WORKDIR /app
 COPY src/data-pipeline/streaming/fraud_streaming ./fraud_streaming
 COPY contracts/features/fraud-snapshot-v2.yaml /contracts/features/

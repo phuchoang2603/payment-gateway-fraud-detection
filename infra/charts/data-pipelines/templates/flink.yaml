@@ -61,8 +61,9 @@ spec:
     metrics.internal.query-service.port: '6125'
     metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
     metrics.reporter.prom.port: '9249'
-    python.executable: /app/.venv/bin/python
-    python.client.executable: /app/.venv/bin/python
+    state.backend.type: rocksdb
+    execution.checkpointing.incremental: 'true'
+    taskmanager.memory.managed.fraction: '0.5'
     execution.checkpointing.interval: 10s
     execution.checkpointing.storage: filesystem
     execution.checkpointing.dir: {{ printf "%s/checkpoints/%s" .Values.features.streaming.storageRoot .Values.features.epoch | quote }}
@@ -138,9 +139,8 @@ spec:
             capabilities:
               drop: [ALL]
   job:
-    jarURI: local:///opt/flink/opt/flink-python-2.2.1.jar
-    entryClass: org.apache.flink.client.python.PythonDriver
-    args: [-pym, fraud_streaming.job]
+    jarURI: local:///opt/flink/opt/fraud-streaming.jar
+    entryClass: dev.fraud.stream.StreamJob
     parallelism: 1
     upgradeMode: last-state
     state: running

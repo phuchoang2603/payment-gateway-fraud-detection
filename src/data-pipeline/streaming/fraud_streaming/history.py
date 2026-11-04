@@ -12,7 +12,7 @@ from confluent_kafka import KafkaException, Producer, TopicPartition
 from confluent_kafka.admin import AdminClient, NewTopic, OffsetSpec
 from google.protobuf.json_format import ParseDict
 
-from fraud_streaming.wire import PaymentEvent
+from fraud_streaming.contracts import PaymentEvent
 
 
 def encode(row):

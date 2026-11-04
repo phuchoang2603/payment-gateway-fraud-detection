@@ -119,7 +119,7 @@ catalog:
       source:
         serviceConnection:
           config:
-            hostPort: http://fraud-streaming-live-v19-rest.data.svc.cluster.local:8081
+            hostPort: http://fraud-streaming-live-v20-rest.data.svc.cluster.local:8081
 checks:
   # The v19 Bronze event suite took about 1490 s against the 1500 s default; Silver has more rules on similar volume.
   nativeTimeoutSeconds: 4800
@@ -128,8 +128,8 @@ features:
   suspend: false
   registry: s3://talos-proxmox-prod-platform/runs/payment-gateway/feast/registry.pb
   reportRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/feast
-  epochs: history-v19,live-v19
-  epoch: live-v19
+  epochs: history-v19,live-v20
+  epoch: live-v20
   historyEpoch: history-v19
   checkpointRoot: s3a://talos-proxmox-prod-platform/runs/payment-gateway/flink/history
   # Burst nodes have 40Gi root disks, too small for Spark spill or a week's DuckDB sort.

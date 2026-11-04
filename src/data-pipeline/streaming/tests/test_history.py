@@ -4,12 +4,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from features.reference_v2 import compute
 
+from fraud_streaming.contracts import PaymentEvent
 from fraud_streaming.history import encode
-from fraud_streaming.model import DAY, Entity, Packet
-from fraud_streaming.replay import OffsetBarrier
-from fraud_streaming.wire import decode
 
 FIXTURES = json.loads(
     (
@@ -31,65 +28,19 @@ def bronze():
 
 def test_bronze_round_trip_normalizes_envelope_and_preserves_attempt():
     raw = encode(bronze())
-    fact, recorded = decode(raw)
-    assert fact.integration == "i"
-    assert fact.customer == "c"
-    assert fact.method == "card"
-    assert recorded == int(datetime(2025, 9, 1, 11, 59, tzinfo=UTC).timestamp() * 1_000_000)
-    assert fact.device == "prior-device"
+    event = PaymentEvent.FromString(raw)
+    assert event.schema_version == 3
+    assert event.integration_id == "i"
+    assert event.attempt_started.context.customer.customer_id == "c"
+    assert event.attempt_started.signals.payment_method.fingerprint == "card"
+    assert event.recorded_at.ToMicroseconds() == int(
+        datetime(2025, 9, 1, 11, 59, tzinfo=UTC).timestamp() * 1_000_000
+    )
+    assert event.attempt_started.signals.device_fingerprint == "prior-device"
     invalid = bronze()
     invalid["schema_version"] = 1
     with pytest.raises(ValueError, match="unsupported"):
         encode(invalid)
-
-
-def test_clock_overtaking_replay_matches_reference():
-    row = bronze()
-    raw = encode(row)
-    fact, now = decode(raw)
-    barrier = OffsetBarrier("input", "clock")
-    end = now + 60_000_000
-    controls = [
-        {"sequence": 0, "clock_us": now - 2 * DAY, "input_offsets": {"0": 0}},
-        {"sequence": 1, "clock_us": end, "input_offsets": {"0": 1}},
-    ]
-    packets = []
-    for index, control in enumerate(controls):
-        packets.extend(
-            barrier.accept((json.dumps(control).encode(), "clock", 0, index, 0), control)
-        )
-    packets.extend(barrier.accept((raw, "input", 0, 0, 0)))
-    state = Entity("customer", fact.integration, fact.customer, now - 2 * DAY)
-    quantities = None
-    for payload, topic, *_ in packets:
-        if topic == "input":
-            value, instant = decode(payload)
-            state.add(Packet(value, instant, now - 2 * DAY, ()))
-        else:
-            instant = json.loads(payload)["clock_us"]
-        while state.next_timer is not None and state.next_timer <= instant:
-            emitted = state.advance(state.next_timer)
-            if emitted is not None:
-                quantities = emitted
-        emitted = state.advance(instant)
-        if emitted is not None:
-            quantities = emitted
-    assert quantities is not None
-    expected = compute(
-        current=FIXTURES["defaults"]["current"],
-        events=[row],
-        cutoff=datetime.fromtimestamp(end / 1_000_000, UTC).isoformat(),
-        views=FIXTURES["defaults"]["views"],
-    )
-    assert quantities[1] == {
-        field: expected["values"][f"customer_snapshot_{field}"]
-        for field in (
-            "attempt_count_5m",
-            "attempt_count_1h",
-            "attempt_count_24h",
-            "distinct_devices_24h",
-        )
-    }
 
 
 def test_units_split_the_range_into_week_runs():

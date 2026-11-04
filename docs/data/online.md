@@ -1,6 +1,6 @@
 # Online data
 
-Live gateway events and bounded historical replay use the same PyFlink feature operators. Both publish an epoch-scoped feature journal and persist stream features to Iceberg; the live feature writer also pushes updates to Feast/Redis.
+Live gateway events and bounded historical replay use the same Java Flink feature operators. Both publish an epoch-scoped feature journal and persist stream features to Iceberg; the live feature writer also pushes updates to Feast/Redis.
 
 ## Live simulator
 
@@ -29,7 +29,7 @@ The simulator continues the historical entity world: it rebuilds the world from 
 
 ### Flink processing
 
-- Flink and PyFlink 2.2.1 on the platform's Flink operator, Kubernetes HA, checkpoints and savepoints in object storage under `runs/payment-gateway/flink/`.
+- Flink 2.2.1 with Java 17 on the platform's Flink operator, Kubernetes HA, checkpoints and savepoints in object storage under `runs/payment-gateway/flink/`.
 - Parallelism one; each manager requests one CPU, the TaskManager 2 GiB.
 - Each epoch has its own feature journal topic and state; a state layout change starts a fresh epoch instead of restoring incompatible state.
 - Per-record data errors go to `fraud.feature-rejects.v1.<epoch>`. This is the real-time triage path, not the durable copy: Bronze Kafka mode independently keeps every raw delivery, in `bronze.rejected_records` or the Bronze tables.
@@ -38,21 +38,11 @@ The simulator continues the historical entity world: it rebuilds the world from 
 
 The job reads only `attempt_started` events, keyed on the client `attempted_at`; risk decisions do not gate contributions. Per-customer and per-method attempt counts over 5 minutes, 1 hour and 24 hours, plus distinct customer devices over 24 hours, cover `[t − window, t)`. Per-window coverage stays unknown until the job has run for that window's length, and missing history is null, never zero. An attempt time after its observed availability fails the job. Long 7- and 30-day windows are computed offline by DP3, not by Flink; there is no HybridSource bootstrap.
 
-Each keyed customer/method [`Entity`](../../src/data-pipeline/streaming/fraud_streaming/model.py) expires old entries before admitting pending ones. The admission loop is:
-
-```python
-for window in WINDOWS:
-    if entry.started_at < now - window:
-        continue
-    self.counts[window] += 1
-    heapq.heappush(self.expirations[window], (entry.started_at + window + 1, identity))
-```
-
-Pending inputs enter one microsecond after their attempt time; expiry heaps avoid rescanning history and drive timers even for quiet entities. Changed values/progress produce a new revision; prior served snapshots remain immutable.
+Each keyed customer/method [`Aggregate`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/Aggregate.java) expires old entries before admitting pending ones. Pending inputs enter one microsecond after their attempt time. An indexed deadline queue drives timers without rescanning history or rewriting the whole collection; contribution and device state update incrementally in RocksDB. Changed values/progress produce a new revision; prior served snapshots remain immutable.
 
 ### Late, too-late and duplicate trace
 
-[`job.build_updates`](../../src/data-pipeline/streaming/fraud_streaming/job.py) wires source validation → event-ID dedup → attempt-identity dedup → customer/method windows → journal, with invalid/conflicting records sent to rejects.
+[`StreamJob`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/StreamJob.java) wires source validation → event-ID dedup → attempt-identity dedup → customer/method windows → journal, with invalid/conflicting records sent to rejects. Live and replay use this single JVM implementation with typed Flink serialization and checkpointed singleton source progress. Generic/Kryo fallback is disabled. Python remains only for historical planning/seeding and independent reference tests. The JVM state layout requires fresh epochs and checkpoint paths; legacy Python checkpoints cannot be restored.
 
 <a id="flink-ui"></a>
 
@@ -64,52 +54,32 @@ Consider a covered entity at 12:10 UTC, with no other attempts:
 |---|---|---|
 | Attempt time 12:00, delivered at 12:10 | An arrival-time baseline incorrectly includes it in the 5-minute count | Attempt-time handling excludes it from 5 minutes and includes it in 1 hour and 24 hours |
 | Identical redelivery of that event | A no-dedup baseline counts it twice | Event dedup drops it; there is no second contribution |
-| Attempt time 11:59 on the previous day, delivered at 12:10 | It is beyond the 24-hour retained horizon | `Packet.too_late` is true; the operator increments `too_late` and omits the contribution |
+| Attempt time 11:59 on the previous day, delivered at 12:10 | It is beyond the 24-hour retained horizon | The deduplication operator increments `too_late` and omits the contribution |
 | Existing identity with different business content | Keeping an arbitrary copy hides a conflict | The reject sink records `conflicting_duplicate` |
 
-In live mode [`Timeline`](../../src/data-pipeline/streaming/fraud_streaming/operators.py) uses processing-time timers while `Entity` applies attempt-time membership. A watermark screenshot alone therefore cannot prove live late-arrival correctness. Too-late records are counted and logged; they do not have a dedicated too-late side-output topic. The rejects topic serves invalid or conflicting records.
+In live mode `Aggregate` uses processing-time timers and applies attempt-time membership. A watermark screenshot alone therefore cannot prove live late-arrival correctness. Too-late records are counted; they do not have a dedicated too-late side-output topic. The rejects topic serves invalid or conflicting records.
 
 ### Metrics
 
 | Metric | Meaning |
 |---|---|
-| `too_late` | Attempts older than the 24-hour horizon when processed; dropped and logged |
+| `too_late` | Attempts older than the 24-hour horizon when processed; dropped |
 | `scope=event` / `scope=attempt`, `duplicates_dropped` | Identical redeliveries dropped by each dedup stage |
 | `lateness=lt_1m`, `1m_5m`, `5m_15m`, `15m_24h`, `too_late`, `attempts` | Processing time minus `attempted_at` for each new attempt, so configured and observed lateness can be compared |
 | `reject_class=<class>`, `rejected` | Dead-lettered records per class: `undecodable`, `invalid_event`, `invalid_context`, `conflicting_duplicate` |
 
 ### Local correctness comparison
 
-[`fraud_streaming/benchmark.py`](../../src/data-pipeline/streaming/fraud_streaming/benchmark.py) replays a seeded workload with known shares through the job's own window, deduplication and horizon logic:
-- late attempts (5–15 minutes);
-- too-late attempts (beyond 24 hours);
-- byte-identical duplicates (1.5%);
-- conflicting copies.
+The JVM tests compare 2,498 serialized snapshots from 503 deliveries against the independent [v2 reference](../../src/data-pipeline/features/reference_v2.py), including late inputs, duplicates, conflicts and coverage boundaries. They also verify processing-time timers, RocksDB checkpoint/restore, source-clock recovery, typed serializers, bounded load and transactional Kafka output. A packaged-job test runs the application JAR in the production Flink base image.
 
-It compares each variant with the v2 reference at hourly anchors:
-- **handled:** the job's logic.
-- **no dedup:** every delivery counts.
-- **arrival time:** windows keyed on arrival instead of `attempted_at`.
-- **baseline:** neither dedup nor attempt-time windows.
+```sh
+cd src/data-pipeline/streaming
+mkdir -p jvm/target
+PYTHONPATH=.:.. uv run --locked python jvm/parity_fixture.py jvm/target/parity.json
+mvn -B -f jvm/pom.xml fmt:check verify
+```
 
-For each variant it reports mismatched cells, over- and under-counts, and the `too_late`, `duplicates_dropped`, `rejected` and lateness counters. The replay runs outside the Flink runtime; Flink itself is checked by the dev `stream-history` run.
-
-Run: `cd src/data-pipeline/streaming && PYTHONPATH=.. uv run --locked python -m fraud_streaming.benchmark`.
-
-Results with the module defaults: seed 2603, 1,200 attempts and 1,221 deliveries. CI pins these exact figures in `tests/test_benchmark.py`, so a change to the window or dedup logic that alters them fails the build. Injected: 58 late, 8 too late, 17 duplicates, 4 conflicting copies.
-
-| Variant | Mismatched cells (of 3,234) | Over-count | Under-count |
-|---|---|---|---|
-| handled | 0 | 0 | 0 |
-| no dedup | 541 | 850 | 0 |
-| arrival time | 274 | 349 | 0 |
-| baseline | 683 | 1,199 | 0 |
-
-The handled variant's counters equal the injected workload: `too_late` 8, event `duplicates_dropped` 17, `rejected` (conflicting) 4, and lateness 5–15 minutes 58.
-
-![Local replay correctness comparison: incorrect feature cells per variant](images/streaming-replay-correctness.png)
-
-The chart summarizes the module defaults; the command above reproduces its values. It measures local correctness, not Flink throughput. The isolated runtime check below verifies the same operators inside Flink.
+These checks validate correctness and recovery; they do not establish production throughput.
 
 <a id="evidence"></a>
 
@@ -137,7 +107,7 @@ Flink counters reset on restart and count only attempt starts; raw-topic duplica
 
 The counters above came from Flink's REST API (`/jobs/<id>/vertices/<id>/metrics`), using port 6125 allowed by the Cilium policy.
 
-**Isolated runtime check, GCP, 2026-11-04.** Job `92ca836ab1f90cf315a367e05fb99215` ran the deployed `build_updates` operators in a temporary Flink 2.2.1 pod with a bounded collection and logical clock, without Kafka or feature-store writes. At anchor `2025-10-09T08:53:20Z`, inputs were a 10-minute-old attempt, its exact duplicate, an 8-minute-old distinct attempt and an attempt older than 24 hours by one microsecond. Customer and card 1-hour counts advanced **1 → 2**; neither duplicate nor too-late input added a contribution. Counters were **duplicates_dropped=1**, **too_late=1**, **lateness.5m_15m.attempts=2**. The job finished and the pod was removed. This validates the shared runtime operators; it does not inject poison data into the live Kafka pipeline.
+**Isolated runtime check, GCP, 2026-11-04.** Job `92ca836ab1f90cf315a367e05fb99215` ran the deployed `build_updates` operators in a temporary Flink 2.2.1 pod with a bounded collection and logical clock, without Kafka or feature-store writes. At anchor `2025-10-09T08:53:20Z`, inputs were a 10-minute-old attempt, its exact duplicate, an 8-minute-old distinct attempt and an attempt older than 24 hours by one microsecond. Customer and card 1-hour counts advanced **1 → 2**; neither duplicate nor too-late input added a contribution. Counters were **duplicates_dropped=1**, **too_late=1**, **lateness.5m_15m.attempts=2**. The job finished and the pod was removed. This validates the legacy Python runtime operators; it does not inject poison data into the live Kafka pipeline.
 
 ![Flink operator metrics: one too-late input, one duplicate and two late attempts](images/flink-late-duplicate-counters-2026-11-04.png)
 
@@ -156,7 +126,7 @@ The counters above came from Flink's REST API (`/jobs/<id>/vertices/<id>/metrics
 
 ## Historical replay
 
-[`stream-history`](../../infra/charts/data-pipelines/templates/stream-history.yaml) plans bounded date units, seeds isolated Kafka topics from Bronze, runs Flink to `FINISHED`, writes history features, then cleans up and publishes lineage. [`history.py`](../../src/data-pipeline/streaming/fraud_streaming/history.py) owns planning/seeding; [`job.py`](../../src/data-pipeline/streaming/fraud_streaming/job.py) runs the shared operators with a logical seed clock. Historical topics and epoch `history-v19` are isolated from live `payments.events.v1` and `live-v19`; replay never overwrites live features.
+[`stream-history`](../../infra/charts/data-pipelines/templates/stream-history.yaml) plans bounded date units, seeds isolated Kafka topics from Bronze, runs Flink to `FINISHED`, writes history features, then cleans up and publishes lineage. [`history.py`](../../src/data-pipeline/streaming/fraud_streaming/history.py) owns planning/seeding; [`StreamJob`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/StreamJob.java) runs the shared operators with a logical seed clock. Historical topics and the configured history epoch are isolated from live `payments.events.v1` and the live epoch; replay never overwrites live features.
 
 Run `stream-history` with `start`/`end` only after Bronze is published. Unit size and parallelism come from `features.historyUnitDays` and `features.historyParallelism` in the environment's values. Redis stream recovery is a separate `feast-materialize stream-recovery` run over the last 24 hours 5 minutes.
 

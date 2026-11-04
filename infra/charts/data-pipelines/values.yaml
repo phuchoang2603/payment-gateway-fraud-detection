@@ -272,7 +272,7 @@ catalog:
         serviceConnection:
           config:
             type: Flink
-            hostPort: http://fraud-streaming-live-v18-rest.data.svc.cluster.local:8081
+            hostPort: http://fraud-streaming-live-v20-rest.data.svc.cluster.local:8081
         sourceConfig:
           config:
             type: PipelineMetadata
@@ -293,9 +293,9 @@ features:
     limits: {memory: 12Gi, ephemeral-storage: 4Gi}
   registry: s3://platform-dev/runs/payment-gateway/feast/registry.pb
   reportRoot: s3://platform-dev/runs/payment-gateway/feast
-  epochs: history-v18,live-v18
-  epoch: live-v18
-  historyEpoch: history-v18
+  epochs: history-v20,live-v20
+  epoch: live-v20
+  historyEpoch: history-v20
   schedule: 47 6 * * *
   checkpointRoot: s3://platform-dev/runs/payment-gateway/flink/history
   replicationFactor: 1

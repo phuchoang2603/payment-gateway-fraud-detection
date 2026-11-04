@@ -12,7 +12,7 @@ from pyiceberg.catalog import load_catalog  # noqa: E402
 from test_history import bronze  # noqa: E402
 
 from fraud_streaming import history  # noqa: E402
-from fraud_streaming.wire import decode  # noqa: E402
+from fraud_streaming.contracts import PaymentEvent  # noqa: E402
 
 FIRST = datetime(2025, 9, 1, tzinfo=UTC)
 
@@ -110,12 +110,17 @@ def test_seed_writes_the_unit_in_replay_order_between_bootstrap_and_final_clocks
     clocks = [json.loads(m.value()) for m in consume(kafka, "fraud.clock.history-ci-seed")]
     # pay-late is past the exclusive end; the lead-in day (pay-0) is included.
     assert [m.key() for m in events] == [b"pay-0", b"pay-1", b"pay-1", b"pay-2", b"pay-3"]
-    facts = [decode(m.value()) for m in events]
-    recorded = [instant for _, instant in facts]
+    facts = [PaymentEvent.FromString(m.value()) for m in events]
+    recorded = [fact.recorded_at.ToMicroseconds() for fact in facts]
     # The decoded facts are the live job's input: same attempt and keys as the Bronze row they came from.
-    assert {(fact.integration, fact.customer, fact.method) for fact, _ in facts} == {
-        ("i", "c", "card")
-    }
+    assert {
+        (
+            fact.integration_id,
+            fact.attempt_started.context.customer.customer_id,
+            fact.attempt_started.signals.payment_method.fingerprint,
+        )
+        for fact in facts
+    } == {("i", "c", "card")}
     assert recorded == sorted(recorded)
     assert [m.offset() for m in events] == list(range(5))
     assert [c["sequence"] for c in clocks] == [0, 1]

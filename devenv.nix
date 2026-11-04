@@ -1,10 +1,13 @@
 { pkgs, config, ... }:
 {
+  env.JAVA_HOME = "${pkgs.jdk17}/lib/openjdk";
   env.LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc pkgs.zlib ];
 
   packages = with pkgs; [
     kubernetes-helm
     kubectl
+    jdk17
+    maven
 
     ruff
     gofumpt

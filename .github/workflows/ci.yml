@@ -38,4 +38,31 @@ jobs:
         with:
           version: v4.3.1
       - name: Lint and render all charts
-        run: bash scripts/ci-checks.sh helm
+        run: |
+          bash scripts/ci-checks.sh helm
+
+  streaming-jvm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: src/data-pipeline/streaming/jvm/pom.xml
+      - uses: astral-sh/setup-uv@v10.1.0
+      - name: Generate Python reference and verify JVM operators
+        run: |
+          cd src/data-pipeline/streaming
+          mkdir -p jvm/target
+          PYTHONPATH=.:.. uv run --locked --no-default-groups --group dev python jvm/parity_fixture.py jvm/target/parity.json
+          mvn -B -f jvm/pom.xml fmt:check verify
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: streaming-jvm-tests
+          path: |
+            src/data-pipeline/streaming/jvm/target/surefire-reports
+            src/data-pipeline/streaming/jvm/target/failsafe-reports

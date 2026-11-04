@@ -54,7 +54,7 @@ spec:
             valueFrom: {path: /tmp/units}
       container:
         image: {{ include "data-pipelines.image" (dict "image" .Values.images.streaming "global" .Values.global) | quote }}
-        command: [/app/history-venv/bin/python, -m, fraud_streaming.history]
+        command: [/app/.venv/bin/python, -m, fraud_streaming.history]
         args: [units, --start, {{ "{{workflow.parameters.start}}" | quote }}, --end, {{ "{{workflow.parameters.end}}" | quote }}, --days, {{ .Values.features.historyUnitDays | quote }}]
         env:
           - {name: HISTORY_RANGE_START, value: {{ .Values.features.historyStart | quote }}}
@@ -116,19 +116,9 @@ spec:
               metrics.internal.query-service.port: '6125'
               metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
               metrics.reporter.prom.port: '9249'
-              python.executable: /app/.venv/bin/python
-              python.client.executable: /app/.venv/bin/python
-              # Every state read and write of a keyed Python operator crosses to the JVM. The default cache holds 1000
-              # states, far fewer than the active entities. Keep the default bundle: a larger one makes each Python stage
-              # finish a whole bundle before the next gets input, so the stages stop overlapping.
-              python.state.cache-size: '20000'
-              # Keyed state lives in RocksDB on local disk, not the JVM heap: the dedup horizon alone outgrew a 1 GB heap
-              # at about 1M events. Incremental checkpoints upload only what changed. The managed memory is split between
-              # RocksDB and the Python workers.
               state.backend.type: rocksdb
               execution.checkpointing.incremental: 'true'
               taskmanager.memory.managed.fraction: '0.5'
-              taskmanager.memory.managed.consumer-weights: STATE_BACKEND:50,PYTHON:50
               execution.shutdown-on-application-finish: "false"
               execution.checkpointing.interval: 10s
               execution.checkpointing.storage: filesystem
@@ -229,9 +219,8 @@ spec:
                       capabilities:
                         drop: [ALL]
             job:
-              jarURI: local:///opt/flink/opt/flink-python-2.2.1.jar
-              entryClass: org.apache.flink.client.python.PythonDriver
-              args: [-pym, fraud_streaming.job]
+              jarURI: local:///opt/flink/opt/fraud-streaming.jar
+              entryClass: dev.fraud.stream.StreamJob
               parallelism: 1
               upgradeMode: stateless
               state: running
@@ -269,7 +258,7 @@ spec:
       container:
         {{- if has $mode (list "seed" "delete-topics") }}
         image: {{ include "data-pipelines.image" (dict "image" $.Values.images.streaming "global" $.Values.global) | quote }}
-        command: [/app/history-venv/bin/python, -m, fraud_streaming.history]
+        command: [/app/.venv/bin/python, -m, fraud_streaming.history]
         {{- if eq $mode "seed" }}
         args: [seed, --start, {{ "{{inputs.parameters.start}}" | quote }}, --end, {{ "{{inputs.parameters.end}}" | quote }}]
         {{- else }}

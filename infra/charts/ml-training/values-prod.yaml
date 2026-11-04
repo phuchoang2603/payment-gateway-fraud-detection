@@ -4,7 +4,7 @@ config:
   AWS_REGION: auto
   S3_PATH_STYLE: 'true'
   FEAST_REGISTRY: s3://talos-proxmox-prod-platform/runs/payment-gateway/feast/registry.pb
-  FEAST_STREAM_EPOCHS: history-v19,live-v19
+  FEAST_STREAM_EPOCHS: history-v19,live-v20
   RUN_ROOT: s3://talos-proxmox-prod-platform/runs/payment-gateway/ml
 drift:
   enabled: true
