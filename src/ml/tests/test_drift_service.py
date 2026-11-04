@@ -209,3 +209,24 @@ def test_the_api_is_built_from_the_environment(monkeypatch):
     monkeypatch.setenv("DRIFT_POLICY", '{"samples": 10}')
     monkeypatch.setenv("ENVIRONMENT", "prod")
     assert drift_service.app().title == "payment-risk drift"
+
+
+@pytest.mark.parametrize("status", [404, 403, 500])
+def test_registry_not_found_is_unregistered_but_other_errors_propagate(monkeypatch, status):
+    """A missing registration must not hide registry authorization or availability failures."""
+    from urllib.error import HTTPError
+
+    def missing(url):
+        raise HTTPError(url, status, "registry response", None, None)
+
+    monkeypatch.setattr(drift_service, "get", missing)
+    source = Source("http://registry", "http://metrics", "prod", "payment-gateway", "payment-risk")
+    if status == 404:
+        assert source.serving() is None
+        api = client(source)
+        assert api.get("/v1/drift").status_code == 404
+        assert api.get("/metrics").status_code == 200
+    else:
+        with pytest.raises(HTTPError) as error:
+            source.serving()
+        assert error.value.code == status

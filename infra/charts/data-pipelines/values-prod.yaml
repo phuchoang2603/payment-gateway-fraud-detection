@@ -133,7 +133,7 @@ features:
   historyEpoch: history-v19
   checkpointRoot: s3a://talos-proxmox-prod-platform/runs/payment-gateway/flink/history
   # Burst nodes have 40Gi root disks, too small for Spark spill or a week's DuckDB sort.
-  scratchClass: cloud-standard
+  scratchClass: cloud-standard-scratch
   replicationFactor: 1
   historyStart: "2026-07-29"
   historyEnd: "2026-10-29"

@@ -27,7 +27,7 @@ spec:
     - name: revision
   metrics:
     {{- $revision := "{{args.revision}}" }}
-    {{- $selector := printf "\"service.name\"=\"edge\",\"deployment.environment\"=%s,\"k8s.namespace.name\"=%s,\"rollout.revision\"=\"%s\",\"http.route\"=~\"(GET|POST) /checkout/.*\"" (.Values.telemetry.environment | quote) (.Release.Namespace | quote) $revision }}
+    {{- $selector := printf "\"service.name\"=\"edge\",\"deployment.environment\"=%s,\"k8s.namespace.name\"=%s,\"rollout.revision\"=\"%s\",\"http.route\"=~\"(GET|POST) /v1/checkout/.*\"" (.Values.telemetry.environment | quote) (.Release.Namespace | quote) $revision }}
     {{- $count := printf "{__name__=\"http.server.request.duration_count\",%s}" $selector }}
     {{- $buckets := printf "{__name__=\"http.server.request.duration_bucket\",%s}" $selector }}
     {{- $errors := printf "{__name__=\"http.server.request.duration_count\",%s,\"http.response.status_code\"=~\"5..\"}" $selector }}

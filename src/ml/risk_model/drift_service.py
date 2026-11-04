@@ -2,6 +2,7 @@
 
 import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -37,7 +38,12 @@ class Source:
     def serving(self):
         """Returns the production version's name, registration time and reference profile, or None before one exists."""
         base = f"{self.registry}{REGISTRY_API}"
-        found = get(f"{base}/registered_model?name={urllib.parse.quote(self.model)}")
+        try:
+            found = get(f"{base}/registered_model?name={urllib.parse.quote(self.model)}")
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                return None
+            raise
         versions = get(f"{base}/registered_models/{found['id']}/versions?pageSize=100")
         for version in versions.get("items", []):
             properties = version.get("customProperties", {})

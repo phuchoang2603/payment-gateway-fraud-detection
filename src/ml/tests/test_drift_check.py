@@ -97,3 +97,31 @@ def test_main_prints_the_outcome(monkeypatch, capsys):
     monkeypatch.setattr(drift_check, "Pipelines", lambda: Runs())
     drift_check.main()
     assert '"reason": "none"' in capsys.readouterr().out
+
+
+def test_missing_serving_reference_skips_without_reading_or_starting_runs(monkeypatch):
+    """Training requires a serving reference before drift can be assessed."""
+    from urllib.error import HTTPError
+
+    def missing(base, window):
+        raise HTTPError(base, 404, "no serving reference", None, None)
+
+    monkeypatch.setattr(drift_check, "fetch", missing)
+    assert drift_check.check("http://drift", None, Policy(), NOW) == {
+        "start": False,
+        "reason": "no-serving-reference",
+    }
+
+
+def test_drift_server_errors_still_fail_the_check(monkeypatch):
+    """An unavailable assessment must not be reported as a successful skip."""
+    from urllib.error import HTTPError
+
+    import pytest
+
+    def unavailable(base, window):
+        raise HTTPError(base, 500, "unavailable", None, None)
+
+    monkeypatch.setattr(drift_check, "fetch", unavailable)
+    with pytest.raises(HTTPError):
+        drift_check.check("http://drift", None, Policy(), NOW)

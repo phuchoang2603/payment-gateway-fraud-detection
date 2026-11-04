@@ -19,7 +19,14 @@ dependencies = [
 notebook = ["jupyterlab>=4.4,<5", "matplotlib>=3.9,<4"]
 
 [dependency-groups]
-dev = ["httpx>=0.28,<1", "hypothesis>=6.170,<7", "pyspark==4.1.3", "pytest==9.0.2", "ruff==0.14.14"]
+dev = [
+    "httpx>=0.28,<1",
+    "httpx2>=2.16,<3",
+    "hypothesis>=6.170,<7",
+    "pyspark==4.1.3",
+    "pytest==9.0.2",
+    "ruff==0.14.14",
+]
 
 [tool.uv.sources]
 fraud-feast = { path = "../data-pipeline/feast", editable = true }

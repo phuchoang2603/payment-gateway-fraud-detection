@@ -21,6 +21,8 @@ flowchart LR
 
 ## Trigger
 
+Before a serving version with a reference profile exists, the drift API returns 404 and the hourly check succeeds with `reason: no-serving-reference`, without starting training. Other upstream errors still fail the check.
+
 The hourly `payment-risk-drift-check` job reads the 6 h and 24 h states and starts one `payment-risk-training` run through the Kubeflow API when both drift, or when the serving version was registered more than 14 days ago. A `drift-` run in progress, a 24 h cooldown, 3 runs in 7 days and a serving version under 2 days old each stop it. The run takes the normal path: `plan_windows` stops it when there is no newer history, and the gate decides whether the retrained model replaces production ([pipeline](pipeline.md)).
 
 ## Proof on dev
