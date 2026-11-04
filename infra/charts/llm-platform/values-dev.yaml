@@ -2,6 +2,12 @@ gpu:
   nodeSelector:
     nvidia.com/gpu.present: "true"
 
+models:
+  chat:
+    schedulerResources:
+      requests: {cpu: 250m, memory: 128Mi}
+      limits: {memory: 512Mi}
+
 risk:
   enabled: true
   rollout:

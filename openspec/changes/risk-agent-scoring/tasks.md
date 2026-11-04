@@ -36,7 +36,7 @@
 - [x] 6.6 Add risk KEDA scaling between two and four replicas on its tool-call counter, with an initial configurable target of 5 calls/s per replica, a `PodDisruptionBudget` (`minAvailable: 1`) and no chart-owned replicas; retain knowledge's existing combined-rate target and existing Locust test, and add no risk Locust file or Job
 - [x] 6.7 Add dev-enabled blue-green Rollouts for risk and knowledge with active/preview Services, one preview replica, pre-promotion analysis and delayed old-revision scale-down; retain production's existing workload behavior, remove superseded dev Deployment configuration and verify dev and prod render differences with `helm template`
 - [x] 6.8 Retarget knowledge's existing KEDA object and risk's new object to `argoproj.io/v1alpha1` `Rollout` on dev, and add dev-scoped Argo CD ignores for `/spec/replicas` and controller-owned Service revision hash selectors with `RespectIgnoreDifferences=true`; verify base selectors and security fields remain reconciled
-- [ ] 6.9 Add bounded `AnalysisTemplate` Jobs for both preview Services using dedicated identities and configured dev fixtures; initialize MCP, list tools and call scoring or retrieval, failing on MCP errors, malformed results, missing fixtures and deadlines; leave `autoPromotionSeconds` unset so it cannot bypass analysis, and let CI run behavioral coverage for the analysis clients
+- [x] 6.9 Add bounded `AnalysisTemplate` Jobs for both preview Services using dedicated identities and configured dev fixtures; initialize MCP, list tools and call scoring or retrieval, failing on MCP errors, malformed results, missing fixtures and deadlines; leave `autoPromotionSeconds` unset so it cannot bypass analysis, and let CI run behavioral coverage for the analysis clients
 - [ ] 6.10 Plan and verify knowledge Deployment adoption with ready active endpoints and no competing pod controllers; check AppProject permissions, sync ordering and cleanup so the completed dev migration has no superseded Deployment
 
 ## 7. Docs and spec
@@ -59,3 +59,5 @@
 - [x] 9.1 Add application-owned dev-only DRA selectors assigning `llm-gpu` to the RTX 5060 Ti and `ml-gpu` to the GTX 1650; verify Helm lint/render and unchanged production manifests
 - [ ] 9.2 After platform verification of both DRA devices, safely replace immutable claims as needed with no live consumers or reservations, migrating ML before LLM allocation; verify both allocations against published GPU UUIDs
 - [ ] 9.3 Verify actual FIL serving, XGBoost training and LLM runtime compatibility and report any driver, architecture or 4 GiB memory blockers separately from infrastructure discovery
+
+- [ ] 9.4 Set dev chat-router requests to fit the shared node, preserve production renders, and verify the router and ML predictor are both Ready

@@ -47,7 +47,16 @@ spec:
       http:
         refs:
           - name: llm
+    {{- with $chat.schedulerResources }}
+    scheduler:
+      template:
+        containers:
+          - name: main
+            resources:
+              {{- toYaml . | nindent 14 }}
+    {{- else }}
     scheduler: {}
+    {{- end }}
   {{- end }}
   template:
     {{- include "llm-platform.gpuPlacement" $ | nindent 4 }}
