@@ -151,6 +151,11 @@ disks are too small for it, so the scratch is a claim on features.scratchClass w
   {{- if .root.Values.features.scratchClass }}
   ephemeral:
     volumeClaimTemplate:
+      metadata:
+        labels:
+          app.kubernetes.io/part-of: data-pipelines
+          data-pipelines.fraud-detection.dev/scratch: "true"
+          data-pipelines.fraud-detection.dev/scratch-role: {{ .name }}
       spec:
         accessModes: [ReadWriteOnce]
         storageClassName: {{ .root.Values.features.scratchClass }}

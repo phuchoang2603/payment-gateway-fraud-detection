@@ -17,6 +17,12 @@ spec:
   podMetadata:
     labels:
       app.kubernetes.io/name: data-pipelines
+  podGC:
+    strategy: OnPodCompletion
+    deleteDelayDuration: 5m
+    labelSelector:
+      matchLabels:
+        data-pipelines.fraud-detection.dev/scratch: "true"
   templates:
     - name: run
       synchronization:
@@ -26,6 +32,9 @@ spec:
         - - {name: materialize, template: materialize}
         - - {name: verify, template: verify}
     - name: materialize
+      metadata:
+        labels:
+          data-pipelines.fraud-detection.dev/scratch: "true"
       {{- include "data-pipelines.placement" $ | nindent 6 }}
       # A fresh spill volume is owned by root; the Spark image runs as group 185.
       securityContext: {fsGroup: 185}

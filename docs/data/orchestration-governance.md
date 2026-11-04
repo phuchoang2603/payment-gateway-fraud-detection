@@ -17,6 +17,8 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 | `stream-history` (`start`/`end` days) | Plan `historyUnitDays` units → per unit, in parallel up to `historyParallelism`: topics → seed from Bronze → bounded Flink until FINISHED → history writer → cleanup and OpenMetadata publish | On demand |
 | `warehouse-benchmark`, `dp2-benchmark` (skewed join) | Single on-demand stage | Tools only; the evidence comes from the backfill |
 
+Seed and materialization scratch pods and PVCs carry a scratch label. Argo deletes these pods five minutes after completion, including failed retry attempts, so their generic ephemeral PVCs can be reclaimed.
+
 Every writer publishes its audit branch to `main` only after all native tests pass. Failed runs keep their branches until nightly maintenance drops branches older than seven days; the exit handler records pipeline status in OpenMetadata. Bronze holds `dp1-bronze-writer`; the `dp-pipeline` template holds `dp-writer`, so the daily run, each backfill month and maintenance serialize. Checks retry execution errors, not failed data rules. The diagram shows Silver and Gold; the marts audit staging tables instead of a branch.
 
 ```mermaid

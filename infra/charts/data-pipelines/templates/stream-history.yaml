@@ -19,6 +19,12 @@ spec:
   podMetadata:
     labels:
       app.kubernetes.io/name: data-pipelines
+  podGC:
+    strategy: OnPodCompletion
+    deleteDelayDuration: 5m
+    labelSelector:
+      matchLabels:
+        data-pipelines.fraud-detection.dev/scratch: "true"
   templates:
     - name: months
       # Caps concurrent units only; a workflow-level cap would also count each unit's own steps.
@@ -235,6 +241,9 @@ spec:
       {{- include "data-pipelines.placement" $ | nindent 6 }}
       {{- end }}
       {{- if eq $mode "seed" }}
+      metadata:
+        labels:
+          data-pipelines.fraud-detection.dev/scratch: "true"
       # A fresh sort volume is owned by root; the streaming image runs as the flink group.
       securityContext: {fsGroup: 9999}
       {{- end }}
