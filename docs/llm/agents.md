@@ -2,7 +2,7 @@
 
 Fraud analysts ask an agent about decline codes, risk decisions and payment behaviour; it answers from the knowledge base and cites the passages it used. Agents are read-only: they cannot change risk decisions, retry payments, issue refunds or promote models, and they never sit in the payment decision path.
 
-**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route, prompts and A/B tests in Langfuse, and request screening, shown in the historical captures below. The new dev risk-scoring deployment is pending verification. Production is enabled on the GCP GPU pool; the dev captures below do not establish production readiness.
+**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route, prompts and A/B tests in Langfuse, and request screening, shown in the historical captures below. The dev risk-scoring tool is verified in the chat below; what is not yet shown is listed at the end of Risk scoring. Production is enabled on the GCP GPU pool; the dev captures below do not establish production readiness.
 
 - Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform): [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) (model config, MCP servers, templates, the entry agent, worker pool and its autoscaler), [`a2a.yaml`](../../infra/charts/llm-platform/templates/a2a.yaml) (the A2A route), [`catalog.yaml`](../../infra/charts/llm-platform/templates/catalog.yaml) and [`files/catalog.py`](../../infra/charts/llm-platform/files/catalog.py) (registry, prompt seeds), prompt seeds in [`files/prompts/`](../../infra/charts/llm-platform/files/prompts).
 - Runtime: kagent 1.0.0-rc1 with Agent Substrate 1.0.0-rc1, installed by the platform; the agent runtime image is [`src/llm/agent_runtime`](../../src/llm/agent_runtime).
@@ -130,7 +130,40 @@ Drivers rank feature gain times distance from the training reference distributio
 
 On dev, risk and knowledge use blue-green Rollouts. A dedicated analysis Job initializes MCP, lists tools and calls the preview before promotion; tool errors or timeouts block promotion. KEDA owns replicas and Rollouts own active/preview revision selectors. An existing Langfuse prompt and its A/B variant both need new tool-aware versions; the catalog seeds only missing prompts.
 
-Verification pending: a dev gateway score with counters and latency, coordinator-to-risk chat screenshots, one trace, and passing/failed rollout analyses for both servers.
+Every number in a tool result carries at most four decimals, because the gateway masks any run of 13 or more digits as a card number and a full-precision probability has more. The result also says whether the probability is at or above the decline threshold, computed before rounding.
+
+### Proof on dev, 2026-11-04
+
+A call to `/mcp/risk` through the gateway with the benchmark key returned 401 without a key, listed `get_risk_features` and `score_payment_risk`, and scored a dev customer at 0.1967 from model v4 against the decline threshold 0.5122, with all five views `available` (748 ms cold, 256 ms warm, three calls).
+
+In a kagent chat the coordinator transferred to `risk_agent`, which called `get_risk_features` and `score_payment_risk` with the payment-method fingerprint unchanged and answered with that score and the reason it had no drivers:
+
+![kagent chat: transfer_to_agent risk_agent, then get_risk_features with the analyst's identifiers](images/risk-chat-transfer.png)
+
+![The score_payment_risk result: score 0.1967, decline threshold 0.5122, at_or_above_decline_threshold false, drivers empty with a reason](images/risk-chat-tool-result.png)
+
+![The answer: probability, model version, decline threshold, the customer's view and the drivers caveat](images/risk-chat-answer.png)
+
+One Langfuse trace covers the conversation: 1 min 18 s end to end with 16k tokens, tagged `risk-agent:production`. The coordinator took 16.0 s, `get_risk_features` 0.14 s and `score_payment_risk` 0.67 s; its four `qwen35-4b` calls took 1.2 to 4.6 s.
+
+![Langfuse trace: invoke_agent coordinator, generate_content, transfer_to_agent, invoke_agent risk_agent](images/risk-trace-agents.png)
+
+![The same trace further down: the get_risk_features and score_payment_risk tool spans between the model calls](images/risk-trace-tools.png)
+
+On the promoted revision's two pods, after two chats and one analysis call: `get_risk_features` 2 successes, `score_payment_risk` 3 successes, no failures, 0.22 s and 1.32 s of tool time in total, and every view `available` on every call.
+
+| Release | Pre-promotion analysis | Outcome |
+|---|---|---|
+| `risk-serving` 785f66cfc5, first run | Failed: the Job's 60 s deadline, which counts the image pull | Previous revision stayed active |
+| `risk-serving` 785f66cfc5, retry at 180 s | Successful in 26 s | Promoted |
+| `risk-serving` 756dbb8686 | Successful | Promoted |
+| `rag-api` 7fcf4cbc | Successful in 73 s, waiting for a cold pod | Promoted; one Rollout owns every ReplicaSet and no Deployment remains |
+
+Two causes were found and fixed on the way. A new preview pod becomes an endpoint of its Service in the mesh a moment after it is Ready, and the Rollout starts the analysis in the same second it scales the preview up, so the analysis client waits up to 150 s for the MCP handshake and retries only connection failures. The Job's deadline is 300 s, because it counts the image pull. The first chat also failed: the gateway's `PhoneNumber` masking replaced a 7-digit run inside the fingerprint, so phone numbers are now matched by `gateway.piiPatterns` at word boundaries.
+
+### Not yet shown
+
+The drivers are empty because the served v4 reference has no feature gains; the fix to the training code is on main, and drivers appear once a model trained from it is served. A deliberately faulty candidate was not run, so failed-candidate behaviour was seen only through the deadline failures above. KEDA scale-out under load was not observed: the HPA read 0 of 5 calls/s per replica at two replicas, and the 5 calls/s target is untested. The Langfuse `risk-agent` prompt is still version 1, which has the tool wording but not the line about the threshold flag, and the answer calls the comparison a "Decision". The phone masking change is deployed on dev only.
 
 ## Known limits
 

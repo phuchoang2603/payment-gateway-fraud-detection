@@ -37,7 +37,7 @@
 - [x] 6.7 Add dev-enabled blue-green Rollouts for risk and knowledge with active/preview Services, one preview replica, pre-promotion analysis and delayed old-revision scale-down; retain production's existing workload behavior, remove superseded dev Deployment configuration and verify dev and prod render differences with `helm template`
 - [x] 6.8 Retarget knowledge's existing KEDA object and risk's new object to `argoproj.io/v1alpha1` `Rollout` on dev, and add dev-scoped Argo CD ignores for `/spec/replicas` and controller-owned Service revision hash selectors with `RespectIgnoreDifferences=true`; verify base selectors and security fields remain reconciled
 - [x] 6.9 Add bounded `AnalysisTemplate` Jobs for both preview Services using dedicated identities and configured dev fixtures; initialize MCP, list tools and call scoring or retrieval, failing on MCP errors, malformed results, missing fixtures and deadlines; leave `autoPromotionSeconds` unset so it cannot bypass analysis, wait up to 150 seconds for the preview to answer the MCP handshake and fail at once on any later error, and let CI run behavioral coverage for the analysis clients
-- [ ] 6.10 Plan and verify knowledge Deployment adoption with ready active endpoints and no competing pod controllers; check AppProject permissions, sync ordering and cleanup so the completed dev migration has no superseded Deployment
+- [x] 6.10 Plan and verify knowledge Deployment adoption with ready active endpoints and no competing pod controllers; check AppProject permissions, sync ordering and cleanup so the completed dev migration has no superseded Deployment
 
 ## 7. Docs and spec
 
@@ -47,12 +47,12 @@
 ## 8. Checks and dev proof
 
 - [x] 8.1 Run `treefmt` and the non-test linters through `devenv shell`, push with an explicit refspec, open the PR, and verify the CI jobs (Python tests, Helm lint, image build) pass, reporting any failure honestly
-- [ ] 8.2 With the `llm-platform` application on dev and the model servers running, call `score_payment_risk` through `/mcp/risk` with a dev customer and fingerprint, and record the score, model version, decline threshold, call counters and latency in `docs/llm/agents.md` as numbers
-- [ ] 8.3 Run a kagent chat where the coordinator transfers to `risk_agent`, which calls the tool through the gateway; capture screenshots of the transfer, the tool call and the answer, and one trace, and record proof and pending items in separate sentences
+- [x] 8.2 With the `llm-platform` application on dev and the model servers running, call `score_payment_risk` through `/mcp/risk` with a dev customer and fingerprint, and record the score, model version, decline threshold, call counters and latency in `docs/llm/agents.md` as numbers
+- [x] 8.3 Run a kagent chat where the coordinator transfers to `risk_agent`, which calls the tool through the gateway; capture screenshots of the transfer, the tool call and the answer, and one trace, and record proof and pending items in separate sentences
 - [ ] 8.4 If the Langfuse prompt for `risk-agent` already exists on dev, publish the new `production` version and verify the next conversation uses it
 
 - [ ] 8.5 On dev, record each server's successful pre-promotion AnalysisRun and active revision switch, then demonstrate a failed candidate analysis retaining the previous active revision; record the bounded Job result, active/preview revisions and replica counts as numbers or screenshots, verify Argo CD reconciliation preserves controller-owned fields, and distinguish first-install behavior from an analyzed update
-- [ ] 8.6 Record risk's observed tool-call rate, KEDA desired/current replica counts and latency alongside the chat proof; report scaling that was not observed as pending rather than claiming a load-test result, retain the existing knowledge Locust test without adding a risk benchmark, and do not run tests locally
+- [x] 8.6 Record risk's observed tool-call rate, KEDA desired/current replica counts and latency alongside the chat proof; report scaling that was not observed as pending rather than claiming a load-test result, retain the existing knowledge Locust test without adding a risk benchmark, and do not run tests locally
 
 ## 9. GPU claims and dev placement
 
@@ -61,7 +61,7 @@
 
 ## 10. PII masking and identifiers
 
-- [ ] 10.1 Replace the gateway's `PhoneNumber` built-in with word-boundary phone patterns in `gateway.piiPatterns`, in both masking rules, and verify `helm template` renders them and no `PhoneNumber` for dev and prod
-- [ ] 10.2 Round every float in the risk tool's result to four decimals and return `at_or_above_decline_threshold` from the unrounded values; verify the CI service test asserts the rounded score and threshold and the flag
-- [ ] 10.3 On dev, after the release, send the chat question again with the real fingerprint and verify the tool receives it unchanged and the answer carries a score
+- [x] 10.1 Replace the gateway's `PhoneNumber` built-in with word-boundary phone patterns in `gateway.piiPatterns`, in both masking rules, and verify `helm template` renders them and no `PhoneNumber` for dev and prod
+- [x] 10.2 Round every float in the risk tool's result to four decimals and return `at_or_above_decline_threshold` from the unrounded values; verify the CI service test asserts the rounded score and threshold and the flag
+- [x] 10.3 On dev, after the release, send the chat question again with the real fingerprint and verify the tool receives it unchanged and the answer carries a score
 
