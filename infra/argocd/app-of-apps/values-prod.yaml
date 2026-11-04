@@ -2,7 +2,7 @@ environment: prod
 namePrefix: payment-gateway-prod
 applications:
   live-traffic:
-    enabled: false
+    enabled: true
   data-pipelines:
     enabled: true
   # Off for the stream-history replay; the project does not yet allow the llm namespace in prod.
