@@ -54,10 +54,7 @@
 - [ ] 8.5 On dev, record each server's successful pre-promotion AnalysisRun and active revision switch, then demonstrate a failed candidate analysis retaining the previous active revision; record the bounded Job result, active/preview revisions and replica counts as numbers or screenshots, verify Argo CD reconciliation preserves controller-owned fields, and distinguish first-install behavior from an analyzed update
 - [ ] 8.6 Record risk's observed tool-call rate, KEDA desired/current replica counts and latency alongside the chat proof; report scaling that was not observed as pending rather than claiming a load-test result, retain the existing knowledge Locust test without adding a risk benchmark, and do not run tests locally
 
-## 9. Dev GPU assignment
+## 9. GPU claims and dev placement
 
-- [x] 9.1 Add application-owned dev-only DRA selectors assigning `llm-gpu` to the RTX 5060 Ti and `ml-gpu` to the GTX 1650; verify Helm lint/render and unchanged production manifests
-- [ ] 9.2 After platform verification of both DRA devices, safely replace immutable claims as needed with no live consumers or reservations, migrating ML before LLM allocation; verify both allocations against published GPU UUIDs
-- [ ] 9.3 Verify actual FIL serving, XGBoost training and LLM runtime compatibility and report any driver, architecture or 4 GiB memory blockers separately from infrastructure discovery
-
-- [ ] 9.4 Set dev chat-router requests to fit the shared node, preserve production renders, and verify the router and ML predictor are both Ready
+- [x] 9.1 Render no `ResourceClaim` and no claim selector from `llm-platform` or `ml-training` in dev or prod while workloads still reference `ml-gpu` and `llm-gpu` by name; verify with `helm template` that no claim renders and that production workload placement is unchanged
+- [x] 9.2 Set dev chat-router requests to fit the shared node and preserve production renders; verify on dev that the router scheduler and the ML predictor are both Ready
