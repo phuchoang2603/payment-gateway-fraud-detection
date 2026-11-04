@@ -16,6 +16,8 @@
 
 - [Feature store](ml/feature-store.md)
 - [Training](ml/training.md)
+- [Pipeline](ml/pipeline.md)
+- [Drift](ml/drift.md)
 - [Serving](ml/serving.md)
 - [Background](ml/background.md)
 

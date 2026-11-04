@@ -438,8 +438,8 @@ def promote_challenger(*, run_id, steps_percent: str = "", timeout: int = 3600):
 
     `steps_percent` lists the weights, at most the experiment's cap, and defaults to the chart's steps. A failed
     or erroring analysis puts the weights back to zero, removes the challenger service, archives its version and
-    raises. After the last step the champion service is updated to the challenger's version and the challenger
-    is removed.
+    raises. After the last step the challenger is removed and then the champion service is updated to its
+    version, so the single GPU node never holds three model servers at once.
     """
     registry = RegistryClient()
     challenger, champion = registry.challenger(), registry.production()
@@ -478,15 +478,15 @@ def promote_challenger(*, run_id, steps_percent: str = "", timeout: int = 3600):
         remove()
         raise
     kube.set_weights(0)
+    kube.delete(kube.INFERENCE, kube.CHALLENGER_NAME)
     kube.inference_service(challenger, predictor)
     try:
         triton.probe(kube.wait_ready(kube.INFERENCE_NAME, challenger), challenger)
     except Exception:
         kube.inference_service(champion, predictor)
-        remove()
+        registry.retire(challenger)
         raise
     registry.promote(challenger, run_id)
-    kube.delete(kube.INFERENCE, kube.CHALLENGER_NAME)
     return {"promoted": challenger, "previous": champion}
 
 

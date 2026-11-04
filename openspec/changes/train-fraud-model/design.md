@@ -259,6 +259,6 @@ API checks against released sources (task 0.4). Each deviation from the decision
    4. a direct JSON call, including null features;
    5. a `payment-risk-rollout` rollback;
    6. a second run that shows an incremental training-set version.
-3. Record the evidence (figures, screenshots, mermaid) in `docs/ml/training.md` and `docs/ml/serving.md`.
+3. Record the evidence (figures, screenshots, mermaid) in `docs/ml/{training,pipeline,drift,serving}.md`.
 
 **Rollback:** `payment-risk-rollout` the previous version; disable `ml-training`; revert the PR; drop `ml.payment_risk_v1_examples`.

@@ -1,6 +1,8 @@
 # Training
 
-**Status: dev pipeline runs done; production runs pending.** The code and the prod chart are under review. Production runs wait for `stream-history` to cover `[2026-07-29, 2026-10-29)`. Code: [`src/ml`](../../src/ml); chart: [`infra/charts/ml-training`](../../infra/charts/ml-training). Dev runs the same chart on the RTX 5060 Ti of `dev-server1`: `files/dev` holds the pipelines compiled without node selectors and with smaller Spark sizes, and the platform's `xgboost-gpu-distributed` runtime selects the local GPU there.
+**Status: dev runs done; production runs pending** until `stream-history` covers `[2026-07-29, 2026-10-29)`. Code: [`src/ml`](../../src/ml); chart: [`infra/charts/ml-training`](../../infra/charts/ml-training). The pipeline that runs this is on [pipeline](pipeline.md), the retraining trigger on [drift](drift.md), the served model on [serving](serving.md).
+
+Everything measured below ran on dev (RTX 5060 Ti of `dev-server1`) against training-set snapshot `7781420152380000469`: the replayed history 2026-09-02 to 2026-10-27 at a 10% negative sample.
 
 ## Training data
 
@@ -20,44 +22,8 @@
 
 These are the windows planned for the first prod run. A later run rolls them: contiguous test, validation and train windows of 14, 14 and 56 days ending on the start date minus one day, or on the latest earlier day for which every day of the three windows has rows in the stream tables (`risk_model.windows.rolling`, `latest_covered`), so a gap between replayed and live history is never spanned. Passing all four of `train`, `validation`, `test` and `cutoff` overrides the rule. `WindowSplitter` rejects overlapping, gapped or misordered windows, and rows outside every window.
 
-No Kubeflow recurring run starts training: the hourly drift check starts a run when the served features drift, or when the serving version was registered more than 14 days ago ([Drift](#drift)). The first step, `plan_windows`, stops the run when its cutoff is not later than the cutoff of the highest registered version, so a check that fires without new replayed history costs one small pod. On dev the windows are 36, 9 and 9 days, because 2026-09-02 to 2026-10-27 is replayed.
 
-## Pipeline
-
-`payment-risk-training` is a Kubeflow pipeline deployed from Git as a `Pipeline` and `PipelineVersion`. Every step runs `python -m risk_model.steps <step>` in the `ml` image, so the [notebook](../../src/ml/notebooks/payment_risk_exploration.ipynb) calls the same functions.
-
-| Step | Does |
-|---|---|
-| `plan_windows` | Rolling windows from the run's start time, and the skip when there is no new data; every step below runs only when it says so |
-| `plan_examples`, `stage_examples`, `assemble_examples` | Plan the chunks and fence the source tables, stage each chunk in parallel, then merge into a new training-set version; a given `training_set_snapshot` skips all three |
-| `check_examples` | Missing or mistyped columns, duplicate keys, null labels, per-day fraud rate bounds; writes the null share per feature and day |
-| `split_windows` | Window checks, counts and sample fraud rate per split |
-| `tune_params` | Optional (`tune_trials` above 0). A Katib experiment: `tpe`, 8 trials, 2 in parallel, each a single-GPU TrainJob printing validation PR-AUC on a 5% negative sample, reading the pinned snapshot read-only |
-| `fit_on_gpu` | A Trainer `TrainJob` on the chart's `payment-risk-xgboost` runtime with one node, which holds the shared GPU claim. It trains XGBoost on `device=cuda` over rows sorted by key and early-stops on validation `aucpr`, then the depth-1 additive baseline the gate compares against; it never falls back to CPU |
-| `gate` | A GPU `TrainJob` scores the new model, the additive baseline and the current production version; thresholds from validation, metrics on test; KFP metrics and a PR-curve artifact. The step only launches the job and reads its report |
-| `record_version` | Registers a passing model |
-| `roll_out` | Serves the registered version, see [serving](serving.md) |
-
-- **Decision thresholds** come from validation: decline where 0.1% of legitimate payments are flagged, step-up at 1%.
-- **Gate:** the model must beat the baseline's test PR-AUC. With a production version it must also gain 0.005 PR-AUC without a lower recall at 1% FPR, a margin above the spread between retrains on the same data. A manual run can lower it with `gate_margin`, which dev uses to register a retrain that only matches production; the drift check never sets it.
-- **Single GPU.** The trainer uses one L4 and no collective, so NCCL is not involved. Distributed training and a model-inside-image deployment are not used.
-- **Registry.** A passing model is a new version of `payment-risk` in the Kubeflow Model Registry. The artifact URI is the model directory; the properties hold hyperparameters, test metrics, thresholds, ordered feature list, feature service, training-set snapshot and the source snapshot IDs, windows, cutoff, GPU and library versions, and the pipeline run. `production` and `archived` are properties; a replaced version is also set to the native `ARCHIVED` state.
-- **Run files** are written to `s3://<bucket>/runs/payment-gateway/ml/<run-id>/`.
-- All scoring runs on the GPU. Notebooks cannot take GPU claims, so the notebook submits the same kind of TrainJob (`steps.fit_on_gpu`, `steps.gate`, `steps.experiments`) and reads the results; it avoids GPU nodes so it cannot starve them. The baseline is a depth-1 XGBoost model, an additive model stronger than the earlier logistic regression, so the gate rejects more candidates.
-
-## Evidence on dev
-
-Everything below ran on dev (RTX 5060 Ti) against training-set snapshot `7781420152380000469`, which holds the replayed history 2026-09-02 to 2026-10-27 at a 10% negative sample. The Kubeflow screenshots come from `kubeflow-dev.phuchoang.sbs`. Prod runs wait for its stream history ([tasks](../../openspec/changes/train-fraud-model/tasks.md), 7.7).
-
-| Rubric item | Evidence |
-|---|---|
-| Notebook: offline store and labels, split, train, evaluate, save | [Notebook](#notebook) |
-| Kubeflow pipeline with load, split, train and evaluate | [Pipeline runs](#pipeline-runs) |
-| Model and incremental data versions | [Versions](#versions) |
-| KServe | [Serving](serving.md#model-service) |
-| Five key classes, property-based tests | [Code](#code) |
-
-### Notebook
+## Notebook
 
 [`payment_risk_exploration.ipynb`](../../src/ml/notebooks/payment_risk_exploration.ipynb) is committed without outputs. It was executed top to bottom with `jupyter nbconvert --execute` in a one-off Job, because the Notebook server avoids GPU nodes while its volume sits on one, and the figures below are that execution's outputs, saved as PNG. Its fits and scores run in GPU TrainJobs (`steps.fit_on_gpu`, `steps.gate`, `steps.experiments`) while Triton holds the same GPU. Environment overrides: `NOTEBOOK_END_DAY`, `NOTEBOOK_TRAIN_DAYS`, `NOTEBOOK_VALIDATION_DAYS`, `NOTEBOOK_TEST_DAYS`, `NOTEBOOK_COMPARE_RATE`, `NOTEBOOK_ABLATION_RATE`, `NOTEBOOK_FOLDS` and `NOTEBOOK_SNAPSHOT`; an unset snapshot builds a new dataset version.
 
@@ -112,25 +78,7 @@ Only the first four hurt consistently when removed. The four that help on averag
 
 The pipeline's fit took 4.0 s and stopped at round 45. The notebook's last cell runs `steps.gate` against production, which by then was this same model, so it reports "did not pass": the gate requires a 0.005 PR-AUC margin over production. Saving writes `model.json` and `baseline.json` to the run directory.
 
-### Pipeline runs
-
-Two `payment-risk-training` runs and one `payment-risk-rollout` run went through Kubeflow Pipelines. The first run searched hyperparameters with Katib, the second reused the snapshot with the default settings.
-
-| Run | Pipeline | Steps | Wall time | Result |
-|---|---|---:|---:|---|
-| `caef6f06` | training, `tune_trials=4` | 26 of 26 | 19 min 16 s | registered `v2`, rolled out |
-| `f3060333` | rollout, `version=v1` | 3 of 3 | 1 min 47 s | Triton served `v1` again |
-| `6cb31a0e` | training, `tune_trials=0`, `force=true` | 26 of 26 | 20 min 30 s | registered `v3`, rolled out, now live |
-
-![Run caef6f06: plan_examples, the staging loop, assemble, check, split, tune_params, fit_on_gpu, gate, publish_metrics and the record_version and roll_out branch, all green](images/kfp-training-run.png)
-
-Katib ran four trials, two at a time, in 1 min 52 s. Each trial is a single-GPU TrainJob that prints validation PR-AUC on the 5% negative sample, and `rfvwf8jq` was selected:
-
-![Katib experiment payment-risk-caef6f06: four succeeded trials with their parameters and PR-AUC](images/katib-trials.png)
-
-The fit TrainJob took 24 s with the tuned settings and 44 s with the defaults, the gate TrainJob 21 s and 28 s, all while Triton held the same GPU.
-
-### Versions
+## Versions
 
 | Version | Settings | Test PR-AUC | ROC-AUC | Recall at 1% FPR | Precision at decline | Decline / step-up threshold |
 |---|---|---:|---:|---:|---:|---|
@@ -143,7 +91,7 @@ Four trials did not beat the defaults, so `v3` was gated against `v2` and replac
 
 Every version records its data version: the training-set snapshot (`7781420152380000469` for `v2` and `v3`), the snapshot IDs of the daily, stream, label, attempt and payment-event tables, the windows, the cutoff, the feature service and the ordered feature list. The training set is one Iceberg table with one `MERGE` per run, so each version reads back by snapshot ID. The second run reused the snapshot: a run without one waited 16 minutes for the 8 GB staging pod, which the two small dev workers could not place (dev-server3 had about 6.8 GiB of memory requests free), and was terminated. An incremental rebuild is task 7.8.
 
-### Code
+## Code
 
 The five key classes, each with its own tests in [`src/ml/tests`](../../src/ml/tests):
 
@@ -156,7 +104,3 @@ The five key classes, each with its own tests in [`src/ml/tests`](../../src/ml/t
 | `RegistryClient` | `registry.py` | Versions, properties, registration, the passed-gate check and promotion in the Model Registry |
 
 Property-based tests (Hypothesis): rolling windows are contiguous, sized and end on the end day, and shift by the same days when the end day moves (`test_windows.py`); the same rows in any order train the same model (`test_train.py`).
-
-## Drift
-
-Code and chart are written and unit tests are in CI; nothing has run on dev yet. Go Fraud counts each scored feature into the bins of the served version's reference profile (`fraud.model.feature_bin`). The fit step computes the profile from the training split, and `record_version` stores it on the registry version and in the served model's config. The `payment-risk-drift` service (FastAPI, KEDA-scaled, own image) compares the last 6 h and 24 h counts from VictoriaMetrics with that profile: PSI per feature, a minimum sample count, no labels. It exports gauges for the Grafana ML dashboard. The hourly `payment-risk-drift-check` job starts at most one `payment-risk-training` run through the Kubeflow API when both windows drift (3 features at PSI 0.2, or a top-5 feature by gain at 0.25), or when the serving version is over 14 days old. A drift-named run in progress, a 24 h cooldown, 3 runs in 7 days and a serving version under 2 days old each stop it, and the run passes the normal gate. The live simulator takes `drift` steps (`foreign_ip_probability`, `familiar_context_probability`, `amount_scale` from an offset in the run). Pending verification on dev: the counters in VictoriaMetrics, the drift state under injected drift, one triggered run and no second, the gate outcome, the per-request cost of the counters, and a Locust run of the API.

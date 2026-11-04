@@ -47,7 +47,7 @@ The system has three layers on one shared Kubernetes platform: the payment gatew
 | Live simulator | Python; current-time gateway traffic and labels | None | Deployed, disabled |
 | Data pipelines (DP1, `dp-pipeline`) | Spark on the Spark Operator: Bronze, then Silver, Gold features and ClickHouse marts; checks and lineage in OpenMetadata | Iceberg tables, ClickHouse marts, run reports | Running on prod (v19 backfill) |
 | Flink streaming features, Feast writer and server | Python; window features to Redis and `gold.feat_stream_*`, stream history replay, materialization | Checkpoints, Feast Redis, stream tables | Deployed in dev; enabled in prod |
-| Training and model serving | Kubeflow Pipelines, Katib, Trainer, Model Registry, Triton on the GPU ([training](ml/training.md), [serving](ml/serving.md)) | Training-set versions, registered models | Done on dev, prod runs pending; drift and A/B written, dev proof pending |
+| Training and model serving | Kubeflow Pipelines, Katib, Trainer, Model Registry, Triton on the GPU ([training](ml/training.md), [pipeline](ml/pipeline.md), [drift](ml/drift.md), [serving](ml/serving.md)) | Training-set versions, registered models | Done on dev, prod runs pending; drift and A/B written, dev proof pending |
 | LLM and agent platform | vLLM on KServe, agentgateway, kagent agents on Agent Substrate, RAG pipeline and knowledge API ([LLM agents](llm/agents.md)) | Feast pgvector and Iceberg knowledge chunks, Langfuse | Deployed in dev; further agents planned |
 
 ### Deployment view
@@ -142,13 +142,13 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 |---|---|---|---|
 | Feature store | Streaming features to online and offline stores, incremental materialization, TTL | [Feature store](ml/feature-store.md) | In progress: implemented, prod runs pending |
 | Generator | Data drift and a label table joinable with features | [Offline data](data/offline.md) | Labels done; the live simulator takes drift steps, dev proof pending |
-| Model | Notebook baseline from the offline store, training pipeline, single-GPU training | [Training](ml/training.md#evidence-on-dev) | Done on dev; prod runs pending |
+| Model | Notebook baseline from the offline store, training pipeline, single-GPU training | [Training](ml/training.md#notebook), [pipeline](ml/pipeline.md#runs-on-dev) | Done on dev; prod runs pending |
 | Versioning | Model registry and incremental data versions | [Training](ml/training.md#versions) | Done on dev; incremental rebuild and prod runs pending |
 | Serving | KServe inference from the registry, rollback | [Serving](ml/serving.md) | Done on dev; prod runs pending |
 | Scoring | Go Fraud calling the model under a missing-feature policy | [Serving](ml/serving.md) | Implemented |
 | Autoscaling | KEDA on Triton queue time, scraped metrics and a Grafana dashboard | [Serving](ml/serving.md#autoscaling-and-dashboard) | Done on dev; prod runs pending |
 | A/B | Challenger model behind a waypoint route, stepwise weights gated by Argo Rollouts analysis, per-version panels | [Serving](ml/serving.md#ab-experiment) | Written, dev proof pending |
-| Drift | Periodic drift comparison and retraining trigger | [Training](ml/training.md#drift) | Written, dev proof pending |
+| Drift | Periodic drift comparison and retraining trigger | [Drift](ml/drift.md) | Written, dev proof pending |
 
 ### LLM and agent platform
 

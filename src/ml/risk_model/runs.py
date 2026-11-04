@@ -77,7 +77,7 @@ class Pipelines:
                 {
                     "key": "created_at",
                     "operation": "GREATER_THAN",
-                    "timestamp_value": since.isoformat(),
+                    "timestamp_value": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 },
             ]
         }

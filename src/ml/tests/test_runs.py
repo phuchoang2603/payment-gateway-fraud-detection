@@ -80,6 +80,7 @@ def test_listing_runs_keeps_those_with_the_prefix_and_reads_their_state_and_star
 
     def responses(method, path, count):
         assert method == "GET" and "namespace=ml" in path and "display_name" in path
+        assert "Z%22%7D" in path and "%2B" not in path
         return {
             "runs": [
                 {
