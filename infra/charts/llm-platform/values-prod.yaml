@@ -1,6 +1,11 @@
 gpu:
   nodeSelector:
     talos.dev/nodepool: gpu
+  tolerations:
+    - key: burst.talos.dev/gpu-training
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
 
 storageClass: cloud-block
 
