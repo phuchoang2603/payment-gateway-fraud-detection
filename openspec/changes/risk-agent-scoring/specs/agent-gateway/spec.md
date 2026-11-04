@@ -15,3 +15,16 @@ Mesh authorization SHALL admit the gateway to the `risk` server, with narrowly s
 #### Scenario: Direct call
 - **WHEN** a pod without an explicitly admitted gateway, metrics or rollout-analysis identity calls the `risk` server directly
 - **THEN** the mesh refuses the connection
+
+## MODIFIED Requirements
+
+### Requirement: PII masking on prompts and responses
+The LLM route SHALL mask payment card numbers, e-mail addresses and phone numbers in request messages before they reach the model, and in model responses before they reach the client. Requests SHALL continue with masked values instead of being rejected.
+
+#### Scenario: Card number in a prompt
+- **WHEN** a prompt contains a 16-digit card number with or without separators
+- **THEN** the model receives a masked placeholder and the answer is still returned
+
+#### Scenario: Opaque identifier in a prompt
+- **WHEN** a prompt contains a payment-method fingerprint or a UUID, which can hold runs of digits
+- **THEN** the model receives it unchanged, and a phone number written with separators or a leading plus is still masked

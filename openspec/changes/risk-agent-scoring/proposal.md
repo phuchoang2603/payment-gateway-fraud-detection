@@ -25,7 +25,7 @@
 ### Modified Capabilities
 
 - `agent-runtime`: the Risk agent requirement, autoscaling for both MCP servers, and their blue-green promotion behavior. The agent now has the scoring and feature tools and reports what they return.
-- `agent-gateway`: a `/mcp/risk` route with the same key, rate limit and tool-call metrics as the knowledge route, and mesh authorization for gateway calls, metrics scraping and bounded rollout analysis.
+- `agent-gateway`: a `/mcp/risk` route with the same key, rate limit and tool-call metrics as the knowledge route, and mesh authorization for gateway calls, metrics scraping and bounded rollout analysis. Phone masking uses word-boundary patterns instead of the `PhoneNumber` built-in, which altered digit runs inside payment-method fingerprints; it applies in every environment.
 
 ## Impact
 

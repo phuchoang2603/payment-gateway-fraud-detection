@@ -27,7 +27,7 @@ For a customer and a payment-method fingerprint, the tools SHALL read the `payme
 - **THEN** the tool returns an error naming the feature store, and no features or score
 
 ### Requirement: Score from the served model
-`score_payment_risk` SHALL lay the features out in the feature order the served model was packaged with, send one row to the model server over the Open Inference Protocol v2 with binary tensor data, and return the fraud probability, the model version that answered, the decline threshold the version carries, and each view's status. A feature of a view that is not `available`, or that the view holds no number for, SHALL be sent as missing. The tool SHALL NOT invent a value for a missing feature or a score when the model did not answer.
+`score_payment_risk` SHALL lay the features out in the feature order the served model was packaged with, send one row to the model server over the Open Inference Protocol v2 with binary tensor data, and return the fraud probability, the model version that answered, the decline threshold the version carries, whether the probability is at or above that threshold, and each view's status. Numbers in a result SHALL carry at most four decimals, so that a gateway that masks long digit runs as card numbers does not alter them; the comparison with the threshold SHALL use the unrounded values. A feature of a view that is not `available`, or that the view holds no number for, SHALL be sent as missing. The tool SHALL NOT invent a value for a missing feature or a score when the model did not answer.
 
 #### Scenario: All views available
 - **WHEN** an agent scores a customer and method whose five views are available

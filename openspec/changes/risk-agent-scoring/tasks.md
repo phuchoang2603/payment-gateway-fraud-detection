@@ -58,3 +58,10 @@
 
 - [x] 9.1 Render no `ResourceClaim` and no claim selector from `llm-platform` or `ml-training` in dev or prod while workloads still reference `ml-gpu` and `llm-gpu` by name; verify with `helm template` that no claim renders and that production workload placement is unchanged
 - [x] 9.2 Set dev chat-router requests to fit the shared node and preserve production renders; verify on dev that the router scheduler and the ML predictor are both Ready
+
+## 10. PII masking and identifiers
+
+- [ ] 10.1 Replace the gateway's `PhoneNumber` built-in with word-boundary phone patterns in `gateway.piiPatterns`, in both masking rules, and verify `helm template` renders them and no `PhoneNumber` for dev and prod
+- [ ] 10.2 Round every float in the risk tool's result to four decimals and return `at_or_above_decline_threshold` from the unrounded values; verify the CI service test asserts the rounded score and threshold and the flag
+- [ ] 10.3 On dev, after the release, send the chat question again with the real fingerprint and verify the tool receives it unchanged and the answer carries a score
+
