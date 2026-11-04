@@ -11,6 +11,7 @@ class Environment:
     nodes: dict = field(default_factory=dict)
     spark_cpu: str = "3"
     parallelism: int = 4
+    chunk_days: int = 16
     plan: tuple = ("4g", "8G")
     stage: tuple = ("22g", "26G")
     assemble: tuple = ("12g", "16G")
@@ -20,6 +21,9 @@ class Environment:
 PROD = Environment(
     name="prod",
     nodes={"talos.dev/nodepool": "spot"},
+    chunk_days=4,
+    stage=("6g", "10G"),
+    assemble=("6g", "10G"),
 )
 DEV = Environment(
     name="dev",

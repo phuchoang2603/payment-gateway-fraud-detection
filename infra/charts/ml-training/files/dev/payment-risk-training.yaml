@@ -243,6 +243,9 @@ components:
             name: comp-plan-examples
           inputs:
             parameters:
+              chunk_days:
+                runtimeValue:
+                  constant: 16.0
               existing_snapshot:
                 componentInputParameter: pipelinechannel--training_set_snapshot
               run_id:
@@ -508,6 +511,8 @@ components:
     executorLabel: exec-plan-examples
     inputDefinitions:
       parameters:
+        chunk_days:
+          parameterType: NUMBER_INTEGER
         existing_snapshot:
           parameterType: STRING
         run_id:
@@ -815,6 +820,8 @@ deploymentSpec:
         - '{{$.inputs.parameters[''test'']}}'
         - --existing-snapshot
         - '{{$.inputs.parameters[''existing_snapshot'']}}'
+        - --chunk-days
+        - '{{$.inputs.parameters[''chunk_days'']}}'
         - --out
         - chunks
         - '{{$.outputs.parameters[''chunks''].output_file}}'

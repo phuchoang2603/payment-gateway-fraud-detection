@@ -76,6 +76,7 @@ def plan_examples(
     validation: str,
     test: str,
     existing_snapshot: str,
+    chunk_days: int,
     chunks: dsl.OutputPath(list),
 ):
     """Fences the sources and lists the day chunks to stage."""

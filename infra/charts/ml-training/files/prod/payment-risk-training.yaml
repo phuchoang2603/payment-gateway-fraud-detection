@@ -243,6 +243,9 @@ components:
             name: comp-plan-examples
           inputs:
             parameters:
+              chunk_days:
+                runtimeValue:
+                  constant: 4.0
               existing_snapshot:
                 componentInputParameter: pipelinechannel--training_set_snapshot
               run_id:
@@ -508,6 +511,8 @@ components:
     executorLabel: exec-plan-examples
     inputDefinitions:
       parameters:
+        chunk_days:
+          parameterType: NUMBER_INTEGER
         existing_snapshot:
           parameterType: STRING
         run_id:
@@ -691,17 +696,17 @@ deploymentSpec:
         - name: SPARK_MASTER
           value: local[3]
         - name: PYSPARK_SUBMIT_ARGS
-          value: --driver-memory 12g pyspark-shell
+          value: --driver-memory 6g pyspark-shell
         - name: SPARK_LOCAL_DIR
           value: /tmp/spark
         image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
         resources:
           cpuRequest: 3.0
-          memoryLimit: 16.0
-          memoryRequest: 16.0
+          memoryLimit: 10.0
+          memoryRequest: 10.0
           resourceCpuRequest: '3'
-          resourceMemoryLimit: 16G
-          resourceMemoryRequest: 16G
+          resourceMemoryLimit: 10G
+          resourceMemoryRequest: 10G
     exec-check-examples:
       container:
         args:
@@ -815,6 +820,8 @@ deploymentSpec:
         - '{{$.inputs.parameters[''test'']}}'
         - --existing-snapshot
         - '{{$.inputs.parameters[''existing_snapshot'']}}'
+        - --chunk-days
+        - '{{$.inputs.parameters[''chunk_days'']}}'
         - --out
         - chunks
         - '{{$.outputs.parameters[''chunks''].output_file}}'
@@ -1040,17 +1047,17 @@ deploymentSpec:
         - name: SPARK_MASTER
           value: local[3]
         - name: PYSPARK_SUBMIT_ARGS
-          value: --driver-memory 22g pyspark-shell
+          value: --driver-memory 6g pyspark-shell
         - name: SPARK_LOCAL_DIR
           value: /tmp/spark
         image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml:chart
         resources:
           cpuRequest: 3.0
-          memoryLimit: 26.0
-          memoryRequest: 26.0
+          memoryLimit: 10.0
+          memoryRequest: 10.0
           resourceCpuRequest: '3'
-          resourceMemoryLimit: 26G
-          resourceMemoryRequest: 26G
+          resourceMemoryLimit: 10G
+          resourceMemoryRequest: 10G
     exec-tune-params:
       container:
         args:

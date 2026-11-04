@@ -87,6 +87,7 @@ def payment_risk_training(environment):
                     run_id=run_id,
                     **span,
                     existing_snapshot=training_set_snapshot,
+                    chunk_days=environment.chunk_days,
                 ),
                 **spark(environment.plan),
             )
