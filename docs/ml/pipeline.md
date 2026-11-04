@@ -36,7 +36,7 @@ No Kubeflow recurring run starts training: the hourly drift check starts a run w
 
 ## Runs on dev
 
-Two `payment-risk-training` runs and one `payment-risk-rollout` run went through Kubeflow Pipelines. The first run searched hyperparameters with Katib, the second reused the snapshot with the default settings.
+Two `payment-risk-training` runs and one `payment-risk-rollout` run went through Kubeflow Pipelines for `v2` and `v3`. The runs for `v4`, the drift trigger and the promotion are in the list further down. The first run searched hyperparameters with Katib, the second reused the snapshot with the default settings.
 
 | Run | Pipeline | Steps | Wall time | Result |
 |---|---|---:|---:|---|
@@ -51,3 +51,7 @@ Katib ran four trials, two at a time, in 1 min 52 s. Each trial is a single-GPU 
 ![Katib experiment payment-risk-caef6f06: four succeeded trials with their parameters and PR-AUC](images/katib-trials.png)
 
 The fit TrainJob took 24 s with the tuned settings and 44 s with the defaults, the gate TrainJob 21 s and 28 s, all while Triton held the same GPU.
+
+The runs that followed, on the same dev cluster, are in the Kubeflow list below (browser time, UTC-5): `dev-challenger-v4-margin` trained and registered `v4` with a lowered `gate_margin`, three `dev-challenger-v4-*` rollouts served it as a challenger, four `dev-promote-v4*` runs moved traffic to it (three aborted by their analysis, the last promoted it, 31 min 53 s), and `drift-v4-2026110404` was started by the drift check. The aborts and the promotion are explained on [serving](serving.md#ab-experiment), the drift run on [drift](drift.md#proof-on-dev).
+
+![Kubeflow runs list: the failed and aborted promote runs, the successful dev-promote-v4-d, the challenger rollouts and the drift-triggered run](images/kfp-runs.png)

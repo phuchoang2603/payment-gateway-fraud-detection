@@ -1,6 +1,6 @@
 # Drift
 
-**Status: written, unit-tested in CI, dev proof running.** Drift is the only automatic trigger of retraining, with an age ceiling as backstop. No labels are needed: the signal is the scored requests' feature distribution against the training split of the serving version. Code: [`src/ml/risk_model`](../../src/ml/risk_model) (`drift.py`, `drift_service.py`, `drift_check.py`); chart: [`templates/drift.yaml`](../../infra/charts/ml-training/templates/drift.yaml).
+**Status: running on dev; thresholds not yet calibrated.** Drift is the only automatic trigger of retraining, with an age ceiling as backstop. No labels are needed: the signal is the scored requests' feature distribution against the training split of the serving version. Code: [`src/ml/risk_model`](../../src/ml/risk_model) (`drift.py`, `drift_service.py`, `drift_check.py`); chart: [`templates/drift.yaml`](../../infra/charts/ml-training/templates/drift.yaml).
 
 ```mermaid
 flowchart LR
@@ -25,4 +25,26 @@ The hourly `payment-risk-drift-check` job reads the 6 h and 24 h states and star
 
 ## Proof on dev
 
-Written but not yet run: the counters in VictoriaMetrics, the drift state under injected drift, one triggered run and no second, the gate outcome, the per-request cost of the counters and a Locust run of the API. The live simulator takes `drift` steps (`foreign_ip_probability`, `familiar_context_probability`, `amount_scale` from an offset in the run) to inject the shift.
+v4 carries a reference profile of 50 features, so it was the first version the drift API could judge. The live simulator sent about 4 payments per second through Go Fraud for 45 minutes, with its `drift` step (`foreign_ip_probability` 0.25, `amount_scale` 1.8) switched on after the first 10.
+
+**Counters and API.** `fraud.model.feature_bin` reached VictoriaMetrics for v4: 936 requests counted by 03:54, 6,886 in the 6 h window at 04:14 and 14,729 when the check ran at 04:42. `/v1/drift` answered for 10 min, 6 h and 24 h windows, and the Grafana ML dashboard shows the per-feature PSI and the drift state.
+
+![Feature drift (PSI, top 10) for v4 from the moment it served: the hour of day and the stream counts sit far above 0.2 throughout](images/drift-psi.png)
+
+**The dev baseline is already drifting.** Before the injected step both windows read `drifting`, with 43 of 50 features over their threshold, because the live traffic differs from the replayed history the model trained on. The largest PSIs are `scored_hour_utc` (7.3; a 6 h window covers a quarter of the day, so any time-of-day feature breaches), `merchant_account_age_days` (4.3) and the 1 h and 24 h stream attempt counts (1.2 to 2.5; the live rate is not the replay's). A feature the reference never saw missing also breaches on a small share: 21 of 936 requests (2.2%) arrived without `item_count`, which the 0.0001 floor turns into a PSI of 0.12. The thresholds are therefore not calibrated for dev, and a clean `ok` to `drifting` transition is not shown. On prod, where training and serving see the same stream, the state would be the thing to calibrate first.
+
+**The injected shift is visible.** On the 10 minute window `amount_minor` rose from a PSI of 0.116 before the step to 0.468 eleven minutes after it. The 6 hour window dilutes it (0.131 to 0.111), which is why the rule needs the short window to see a recent shift. The `foreign_ip_probability` part of the step did not move `ip_shipping_country_mismatch` (0.001 afterwards).
+
+**The check and the trigger.** The first hourly checks on dev failed: the Kubeflow run listing rejected the `+00:00` timestamp the check sent (HTTP 400), so no drift check had worked before this run. After the fix:
+
+| Check | Policy | Outcome |
+|---|---|---|
+| As deployed | `min_age_days` 2 | `drifting` in both windows, no run: `young`, because v4 was registered three hours earlier |
+| Same job with `min_age_days` 0 (dev-only override, to reach the trigger) | | Started `drift-v4-2026110404` (reason `drift`, 43 features over 14,729 requests) |
+| Same job again | | No second run: `active` |
+
+![Kubeflow run drift-v4-2026110404: plan_windows succeeded and the branch after it was skipped](images/kfp-drift-run.png)
+
+The started run finished in 3 min 25 s. `plan_windows` stopped it because v4's cutoff, 2026-10-28, is already the newest replayed day, so no training set was built, nothing was registered and v4 stayed production. This is the designed cost of a check that fires without new data: one small pod. The recurring run that an earlier version of this change created on dev (daily at 03:17 UTC) was still enabled and had fired the same way that morning; it was deleted, so the drift check is the only trigger.
+
+Not yet shown: a drift-triggered run that trains and reaches the gate (it needs replayed days newer than 2026-10-28), the per-request cost of the bin counters, and a Locust run of the drift API.

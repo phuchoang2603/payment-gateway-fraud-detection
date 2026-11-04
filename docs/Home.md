@@ -147,8 +147,8 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Serving | KServe inference from the registry, rollback | [Serving](ml/serving.md) | Done on dev; prod runs pending |
 | Scoring | Go Fraud calling the model under a missing-feature policy | [Serving](ml/serving.md) | Implemented |
 | Autoscaling | KEDA on Triton queue time, scraped metrics and a Grafana dashboard | [Serving](ml/serving.md#autoscaling-and-dashboard) | Done on dev; prod runs pending |
-| A/B | Challenger model behind a waypoint route, stepwise weights gated by Argo Rollouts analysis, per-version panels | [Serving](ml/serving.md#ab-experiment) | Written, dev proof pending |
-| Drift | Periodic drift comparison and retraining trigger | [Drift](ml/drift.md) | Written, dev proof pending |
+| A/B | Challenger model behind a waypoint route, stepwise weights gated by Argo Rollouts analysis, per-version panels | [Serving](ml/serving.md#ab-experiment) | Done on dev; prod runs pending |
+| Drift | Periodic drift comparison and retraining trigger | [Drift](ml/drift.md) | Running on dev; thresholds, gate outcome and load test pending |
 
 ### LLM and agent platform
 
