@@ -36,7 +36,7 @@ Labels, scenario and oracle fields, and anything that happens after the attempt 
 
 ## Build order
 
-Steps 2–8 are implemented. [Prod evidence](#prod-evidence) records the runs so far; the stream-history replay and offline retrieval are still pending.
+Steps 2–8 are implemented; [Prod evidence](#prod-evidence) holds the runs recorded so far.
 
 1. **DP3 offline features.** A daily Spark job over Silver writes `feat_customer_daily` and `feat_payment_method_daily` with `event_timestamp` and `created`, for the 7- and 30-day windows.
 2. **Offline store.** Feast's Spark offline store reads the `feat_` tables through `SparkSource(table=…)` on the Iceberg catalog. Training builds its dataset with `get_historical_features(payment_risk_v1)` from `label_attempt`.
@@ -93,45 +93,43 @@ Feast applies TTLs offline, and Go Fraud applies the same TTLs at its server dec
 
 ## Prod evidence
 
-GCP prod, 2026-11-04. Argo times are UTC; the Flink and Argo CD UIs show UTC−5.
+GCP prod, 2026-11-04. Times are UTC; the Argo CD and Flink UIs show UTC−5.
 
 ### Materialize pipeline
 
-![Argo graph of feast-materialize: materialize, verify, exit handler](images/argo-feast-materialize-2026-11-04.png)
+![Argo graph of feast-materialize](images/argo-feast-materialize-2026-11-04.png)
 
-`feast-materialize-gcp-nz2mg` ran `materialize` (24 m 54 s), `verify` (42 s) and the exit-handler publish. With `since` unset, each daily view loaded the TTL window, 2026-10-03 17:11 to 2026-11-04 05:11 UTC (31 days 12 hours). The online check sampled 400 rows, 200 per view, and passed. Redis then held 5,697,609 keys at 2.72 GB of its 6 GB `maxmemory`, with no evictions. A first run with `since=2025-10-29` was stopped after 57 minutes, still on its first view: a year of daily rows is far more than serving can use. Code: [materialize](../../src/data-pipeline/feast/fraud_feast/materialize.py), [online check](../../src/data-pipeline/feast/fraud_feast/verify_online.py) and [workflow](../../infra/charts/data-pipelines/templates/feast.yaml).
+`feast-materialize` runs `materialize`, then `verify`, and its exit handler publishes lineage. With `since` unset it loads each daily view's TTL window, here 2026-10-03 to 2026-11-04. `materialize` took 24 m 54 s; `verify` sampled 400 rows (200 per view) and passed in 42 s. Redis then held 5,697,609 keys, 2.72 GB of its 6 GB, with no evictions. A rerun starts a day before the registry's last end and took 5 m 07 s. Code: [materialize](../../src/data-pipeline/feast/fraud_feast/materialize.py), [online check](../../src/data-pipeline/feast/fraud_feast/verify_online.py), [workflow](../../infra/charts/data-pipelines/templates/feast.yaml).
 
-One verified entity per daily view, read with `get_online_features` from the Redis store:
+Read back with `get_online_features`, one verified entity per daily view:
 
 | View | Entity | `attempt_count_7d` | `declined_count_7d` | `amount_sum_minor_7d` | `decided_count_7d` |
 |---|---|---|---|---|---|
 | `customer_daily` | customer `000562c9-8289-58dc-bf47-67427790e788` | 2 | 0 | 38568 | 2 |
 | `payment_method_daily` | fingerprint `0003c554b83950f4…5dc04a` | 1 | 0 | 23637 | 1 |
 
-### Stream writer, online and offline
+### Stream writer
 
-![Argo CD: feast-server and feature-writer Healthy and Synced, beside the live Flink Deployment](images/argocd-feature-deployments-2026-11-04.png)
+![Argo CD: feast-server and feature-writer](images/argocd-feature-deployments-2026-11-04.png)
 
-`feast-server` and `feature-writer` are Healthy and Synced in the data-pipelines application, with the live Flink Deployment Healthy beside them. With the simulator at one payment per second, `gold.feat_stream_customer` and `gold.feat_stream_payment_method` each held 7,257 rows, all in epoch `live-v19`, and the table property `kafka.offsets.live-v19` was `{"0": 5125, "1": 5187, "2": 5361}`. Code: [stream writer](../../src/data-pipeline/feast/fraud_feast/stream_writer.py) and [serving chart](../../infra/charts/data-pipelines/templates/feature-serving.yaml).
+`feast-server` and `feature-writer` are Healthy and Synced, with the live Flink Deployment Healthy beside them. At one simulated payment per second, `gold.feat_stream_customer` and `gold.feat_stream_payment_method` each held 7,257 rows, all in epoch `live-v19`, and the table property `kafka.offsets.live-v19` was `{"0": 5125, "1": 5187, "2": 5361}`. Code: [stream writer](../../src/data-pipeline/feast/fraud_feast/stream_writer.py), [serving chart](../../infra/charts/data-pipelines/templates/feature-serving.yaml).
 
 ### Live Flink job
 
-![Flink UI: fraud-features-live-v19 job graph](../data/images/flink-live-v19-job-graph-2026-11-04.png)
+![Flink job graph of fraud-features-live-v19](images/flink-live-v19-job-graph-2026-11-04.png)
 
-![Flink UI: fraud-features-live-v19 checkpoints](../data/images/flink-live-v19-checkpoints-2026-11-04.png)
+The graph is the deployed [`build_updates`](../../src/data-pipeline/streaming/fraud_streaming/job.py): source and progress observation, two dedup steps, customer and method aggregation, then the journal and reject sinks. After 4 h 29 m at parallelism 1 it had received 6,333 records, with every operator 6–8% busy and 0% backpressured.
 
-`fraud-features-live-v19` had run 4 h 29 m at parallelism 1 and received 6,333 records, with every operator 6–8% busy and 0% backpressured. 1,277 of 1,287 checkpoints completed, 10 failed and the job was restored once; the latest checkpoint was 19.1 KB and took 237 ms. Code: [job](../../src/data-pipeline/streaming/fraud_streaming/job.py).
+![Flink checkpoints of fraud-features-live-v19](images/flink-live-v19-checkpoints-2026-11-04.png)
+
+1,277 of 1,287 checkpoints completed, 10 failed and the job restored once. The latest took 237 ms at 19.1 KB.
 
 ### Lineage
 
-![OpenMetadata lineage: journal topic to feature-writer to gold.feat_stream_customer](images/openmetadata-lineage-feature-writer-2026-11-04.png)
+![OpenMetadata lineage of gold.feat_stream_customer](images/openmetadata-lineage-feature-writer-2026-11-04.png)
 
-![OpenMetadata lineage: silver.attempts to gold.feat_customer_daily to feast-materialize](images/openmetadata-lineage-feast-materialize-2026-11-04.png)
+The journal topic `fraud.feature-updates.v2.live-v19` feeds `feature-writer`, which writes `gold.feat_stream_customer`; a table-level edge also comes from `bronze.payment_events`.
 
-OpenMetadata shows `fraud.feature-updates.v2.live-v19` → `feature-writer` → `gold.feat_stream_customer`, a table-level edge from `bronze.payment_events`, and `silver.attempts` → `gold.feat_customer_daily` → `feast-materialize`. The writer and materialize edges appeared after the materialize run's publish step.
+![OpenMetadata lineage of gold.feat_customer_daily](images/openmetadata-lineage-feast-materialize-2026-11-04.png)
 
-### Still pending
-
-- **Stream history.** The replay over 2026-07-29 to 2026-10-29 was stopped after about 4 hours. Unit `20260729` had consumed 15.6% of its 12,763,329 input events at roughly 8,000 to 16,000 events per minute, and each unit's Python operators kept one core saturated, so the 23 units would have needed over 30 hours.
-- **Offline retrieval** of `payment_risk_v1` over a v19 cohort waits on that replay.
-- **`feast-materialize-daily` after `dp-daily`** and the expired-view Fraud case have not run.
+`silver.attempts` → `gold.feat_customer_daily` → `feast-materialize`. Both graphs appeared after the metadata-discovery and materialize runs.
