@@ -53,16 +53,4 @@ The started run finished in 3 min 25 s. `plan_windows` stopped it because v4's c
 
 **Cost of the counters.** A Go benchmark ([`count_bench_test.go`](../../src/payment-gateway/fraud/internal/adapters/kserve/count_bench_test.go)) counts one request of 50 features, 10 bins each, through the OpenTelemetry SDK counter: 25 µs, 50 allocations and 802 bytes per request (the run-to-run range is 25 to 28 µs). Without a profile the path costs 7 to 10 ns. Against a model call of about 1.2 ms median (loopback, [serving](serving.md#model-service)) and a feature read of 60 to 116 ms, the counters add under 2% to the model call. The benchmark does not include the exporter, which batches.
 
-**Load on the drift API.** [`loadtest/drift_api.py`](../../src/ml/loadtest/drift_api.py) with 30 users ramped at 5 per second for 7 minutes, through a `kubectl port-forward` to one pod, against the two drift windows, the reference and `/metrics`:
-
-| Requests | Failures | Throughput | Median | p95 | p99 | Max |
-|---:|---:|---:|---:|---:|---:|---:|
-| 4,507 | 0 | 10.7 per second | 2.2 s | 4.6 s | 5.6 s | 7.6 s |
-
-A call took 0.2 to 0.3 s when the API was idle, so the latencies above are queueing at about 10 requests per second per pod: each `/v1/drift` call makes a registry call and a metrics query. The KEDA trigger (rate of `ml_drift_requests_total` over 2 minutes, 5 per second per replica) took the deployment from 1 to 2 replicas about 2 minutes after the load began, and it held 2 for the rest of the run. The tunnel sent all requests to the first pod, so the second pod's effect on latency is not measured.
-
-![Locust report for the drift API: 4,507 requests, no failures, 10.7 requests per second](images/drift-locust.png)
-
-The full report is [`loadtest/drift-api-locust.html`](loadtest/drift-api-locust.html).
-
 Not shown: a drift-started run on newer replayed days that passes the gate, and a clean `ok` state on dev (the baseline above is already drifting).
