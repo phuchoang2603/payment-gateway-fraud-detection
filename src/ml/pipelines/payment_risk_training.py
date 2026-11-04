@@ -57,7 +57,6 @@ def payment_risk_training(environment):
         windows = light(
             plan_windows(
                 run_id=run_id,
-                schedule_time=dsl.PIPELINE_JOB_SCHEDULE_TIME_UTC_PLACEHOLDER,
                 create_time=dsl.PIPELINE_JOB_CREATE_TIME_UTC_PLACEHOLDER,
                 train_days=train_days,
                 validation_days=validation_days,

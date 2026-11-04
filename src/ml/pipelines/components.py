@@ -49,7 +49,6 @@ def step(name, values, outputs=()):
 @dsl.container_component
 def plan_windows(
     run_id: str,
-    schedule_time: str,
     create_time: str,
     train_days: int,
     validation_days: int,

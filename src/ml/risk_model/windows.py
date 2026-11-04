@@ -1,4 +1,4 @@
-"""Rolling train, validation and test windows for scheduled retraining, and the data coverage they need."""
+"""Rolling train, validation and test windows for retraining, and the data coverage they need."""
 
 import functools
 from dataclasses import dataclass
@@ -42,15 +42,14 @@ def instant(text):
         return None
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
-    # KFP passes a 1970 placeholder as the schedule time on manual runs, so any year up to 2000 means "no time".
-    return value.astimezone(UTC) if value.year > 2000 else None
+    return value.astimezone(UTC)
 
 
-def reference_day(schedule_time, create_time):
-    """Returns the UTC day of the schedule time, or of the creation time when there is no schedule time."""
-    moment = instant(schedule_time) or instant(create_time)
+def reference_day(create_time):
+    """Returns the UTC day a run was created."""
+    moment = instant(create_time)
     if moment is None:
-        raise ValueError("neither the schedule time nor the creation time is a timestamp")
+        raise ValueError("the creation time is not a timestamp")
     return moment.date()
 
 

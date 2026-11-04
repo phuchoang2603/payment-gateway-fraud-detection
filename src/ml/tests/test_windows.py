@@ -86,19 +86,18 @@ def test_instants_are_read_as_utc(text, expected):
     assert instant(text).date() == expected
 
 
-@pytest.mark.parametrize("text", ["", "garbage", "1970-01-01T00:00:00Z", None])
-def test_placeholders_that_are_not_real_times_are_ignored(text):
-    """Placeholders that are not real times are ignored."""
+@pytest.mark.parametrize("text", ["", "garbage", None])
+def test_text_that_is_not_a_time_is_not_an_instant(text):
+    """Empty, unparseable and missing values are not instants."""
     assert instant(text) is None
 
 
-def test_the_reference_day_prefers_the_schedule_time():
-    """The reference day prefers the schedule time."""
-    assert reference_day("2026-11-02T03:17:00Z", "2026-11-05T00:00:00Z") == date(2026, 11, 2)
-    assert reference_day("1970-01-01T00:00:00Z", "2026-11-05T09:00:00Z") == date(2026, 11, 5)
-    assert reference_day("", "2026-11-05T09:00:00Z") == date(2026, 11, 5)
-    with pytest.raises(ValueError, match="neither"):
-        reference_day("", "")
+def test_the_reference_day_is_the_utc_day_the_run_was_created():
+    """The reference day is the UTC day of the creation time, and a non-time is refused."""
+    assert reference_day("2026-11-05T09:00:00Z") == date(2026, 11, 5)
+    assert reference_day("2026-11-05T23:30:00-05:00") == date(2026, 11, 6)
+    with pytest.raises(ValueError, match="creation time"):
+        reference_day("")
 
 
 def test_a_cutoff_is_new_only_when_it_is_later_than_the_registered_one():

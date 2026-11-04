@@ -21,7 +21,7 @@ GitHub Actions validates pull requests and `main`; successful checks gate image 
 | Mutation testing, >80% on changed code | Go CI uses changed-code mutations on PRs. Python CI caches native mutmut results for the knowledge API; source-only changes retest changed functions, while test/dependency changes start a new baseline. |
 | Generator and Spark behavior | Physical v2/v3 Parquet cutover, deterministic generation across workers/shards, delayed chargebacks and redelivery; mixed-schema Bronze-to-Silver ingestion, deduplication and equivalent skew-join outputs |
 | Property-based idempotency | [Knowledge API](../../src/llm/rag_serving/tests/test_service.py): arbitrary repeated chunk reads; [Gold ranges](../../src/data-pipeline/batch/tests/gold/test_gold_ranges.py): reruns and range splits; [payment lifecycle](../../src/payment-gateway/payments/internal/domain/payment_property_test.go): arbitrary command sequences preserve state invariants |
-| API throughput and latency | [Knowledge API Locust report](../llm/loadtest/knowledge-api-locust.html): 140.31 req/s, p95 310 ms, zero failures (2026-10-30); Feast retrieval load-test evidence pending |
+| API throughput and latency | [Knowledge API Locust report](../llm/loadtest/knowledge-api-locust.html): 140.31 req/s, p95 310 ms, zero failures (2026-10-30); [drift API Locust report](../ml/loadtest/drift-api-locust.html): 10.7 req/s at 30 users, p95 4.6 s, zero failures (2026-11-04); Feast retrieval load-test evidence pending |
 
 A Python project can set a minimum total coverage with `coverage-fail-under` under `[tool.ci]` in its `pyproject.toml`; `scripts/ci-checks.sh` passes it to pytest-cov. `src/ml` sets 90 (97.9% line and branch combined when set).
 

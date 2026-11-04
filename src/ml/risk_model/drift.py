@@ -54,11 +54,6 @@ def weighted_edges(values, weights):
     return np.unique(ordered[np.minimum(picked, len(ordered) - 1)])
 
 
-def bin_of(edges, value):
-    """Returns the bin of a value: the number of edges at or below it, so values on an edge go up."""
-    return int(np.searchsorted(edges, value, side="right"))
-
-
 def profile(split, gain=None):
     """Returns the reference profile of a weighted split, keyed by feature.
 

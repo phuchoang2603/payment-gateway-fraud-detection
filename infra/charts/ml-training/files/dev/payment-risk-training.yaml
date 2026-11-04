@@ -542,8 +542,6 @@ components:
           parameterType: NUMBER_INTEGER
         run_id:
           parameterType: STRING
-        schedule_time:
-          parameterType: STRING
         test_days:
           parameterType: NUMBER_INTEGER
         train_days:
@@ -845,8 +843,6 @@ deploymentSpec:
         - plan_windows
         - --run-id
         - '{{$.inputs.parameters[''run_id'']}}'
-        - --schedule-time
-        - '{{$.inputs.parameters[''schedule_time'']}}'
         - --create-time
         - '{{$.inputs.parameters[''create_time'']}}'
         - --train-days
@@ -1162,9 +1158,6 @@ root:
             run_id:
               runtimeValue:
                 constant: '{{$.pipeline_job_uuid}}'
-            schedule_time:
-              runtimeValue:
-                constant: '{{$.pipeline_job_schedule_time_utc}}'
             test_days:
               componentInputParameter: test_days
             train_days:

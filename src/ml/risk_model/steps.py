@@ -40,7 +40,6 @@ def flags(**values):
 def plan_windows(
     *,
     run_id,
-    schedule_time="",
     create_time="",
     train_days: int = 56,
     validation_days: int = 14,
@@ -55,7 +54,7 @@ def plan_windows(
     """Chooses the windows and cutoff of a run, and whether it has new data to train on.
 
     All four `fixed_*` values override the rule. Otherwise the windows end on the latest day, at or
-    before the schedule time minus `lag_days`, whose whole span the stream tables cover. The run
+    before the creation time minus `lag_days`, whose whole span the stream tables cover. The run
     proceeds unless that cutoff is not newer than the newest registered model's, or `force` is set.
     """
     if fixed_train and fixed_validation and fixed_test and fixed_cutoff:
@@ -67,7 +66,7 @@ def plan_windows(
             "cutoff": fixed_cutoff,
             "run": True,
         }
-    reference = reference_day(schedule_time, create_time)
+    reference = reference_day(create_time)
     span = train_days + validation_days + test_days
     covered = covered_end(catalog(), span, reference - timedelta(days=lag_days))
     plan = rolling(

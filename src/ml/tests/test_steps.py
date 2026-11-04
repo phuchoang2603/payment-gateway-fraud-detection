@@ -201,7 +201,7 @@ def test_explicit_windows_skip_planning_and_always_run(monkeypatch, files):
 
 
 def planned(monkeypatch, covered, registered, **options):
-    """Runs plan_windows for the schedule time 2026-11-02 with a fake coverage and registry."""
+    """Runs plan_windows for a run created on 2026-11-02 with a fake coverage and registry."""
     seen = []
     monkeypatch.setattr(steps, "catalog", lambda: "catalog")
     monkeypatch.setattr(steps, "covered_end", lambda *a: seen.append(a) or covered)
@@ -210,8 +210,7 @@ def planned(monkeypatch, covered, registered, **options):
     )
     result = steps.plan_windows(
         run_id="r1",
-        schedule_time="2026-11-02T03:17:00Z",
-        create_time="",
+        create_time="2026-11-02T03:17:00Z",
         train_days=4,
         validation_days=1,
         test_days=1,
@@ -221,7 +220,7 @@ def planned(monkeypatch, covered, registered, **options):
     return result, seen
 
 
-def test_a_scheduled_run_with_newer_data_trains_on_the_latest_covered_windows(monkeypatch, files):
+def test_a_run_with_newer_data_trains_on_the_latest_covered_windows(monkeypatch, files):
     """The windows end on the covered day, the run proceeds, and the decision is recorded."""
     result, seen = planned(monkeypatch, date(2026, 10, 20), "2026-10-20T00:00:00Z")
     assert seen == [("catalog", 6, date(2026, 11, 1))]

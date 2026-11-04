@@ -63,4 +63,6 @@ A call took 0.2 to 0.3 s when the API was idle, so the latencies above are queue
 
 ![Locust report for the drift API: 4,507 requests, no failures, 10.7 requests per second](images/drift-locust.png)
 
+The full report is [`loadtest/drift-api-locust.html`](loadtest/drift-api-locust.html).
+
 Not shown: a drift-started run on newer replayed days that passes the gate, and a clean `ok` state on dev (the baseline above is already drifting).

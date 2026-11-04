@@ -10,7 +10,6 @@ from risk_model.data import Split
 from risk_model.drift import (
     Policy,
     assess,
-    bin_of,
     decide,
     edges_of,
     index,
@@ -41,7 +40,9 @@ def counts(reference, split):
         edges = reference[name]["edges"]
         values = np.zeros(len(edges) + 2)
         for value in split.x[:, index_]:
-            values[len(edges) + 1 if np.isnan(value) else bin_of(edges, float(value))] += 1
+            values[
+                len(edges) + 1 if np.isnan(value) else np.searchsorted(edges, value, side="right")
+            ] += 1
         result[name] = values.tolist()
     return result
 
@@ -83,14 +84,11 @@ def test_raising_the_threshold_never_adds_a_breaching_feature(seed, step):
     assert set(high["over"]) <= set(low["over"])
 
 
-def test_edges_split_the_values_into_bins_and_values_on_an_edge_go_up():
-    """Edges split the values into bins and a value on an edge goes to the upper bin."""
-    edges = weighted_edges(
-        np.array([1, 2, 3, 4, 5], dtype=np.float32), np.ones(5, dtype=np.float32)
-    )
-    assert bin_of(edges, edges[0] - 1) == 0
-    assert bin_of(edges, edges[0]) == 1
-    assert bin_of(edges, edges[-1] + 1) == len(edges)
+def test_edges_are_distinct_values_of_the_feature_and_no_values_give_no_edges():
+    """The edges are sorted, distinct values taken from the feature, and an empty feature has none."""
+    values = np.array([1, 2, 3, 4, 5], dtype=np.float32)
+    edges = weighted_edges(values, np.ones(5, dtype=np.float32))
+    assert list(edges) == sorted(set(edges)) and set(edges) <= set(values.astype(np.float64))
     assert len(weighted_edges(np.array([], dtype=np.float32), np.array([], dtype=np.float32))) == 0
 
 
