@@ -87,6 +87,12 @@ spec:
                 - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
                 - {name: end, value: {{ "{{inputs.parameters.end}}" | quote }}}
                 - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
+        - - name: delete-topics
+            template: delete-topics
+            arguments:
+              parameters:
+                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
+            continueOn: {failed: true, error: true}
     - name: flink
       inputs:
         parameters:
@@ -340,12 +346,6 @@ spec:
       steps:
         - - name: stop
             template: stop
-            arguments:
-              parameters:
-                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
-            continueOn: {failed: true, error: true}
-        - - name: delete-topics
-            template: delete-topics
             arguments:
               parameters:
                 - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
