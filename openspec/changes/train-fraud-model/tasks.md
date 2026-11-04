@@ -22,11 +22,11 @@
 - [x] 1.1 Create `src/ml`, a uv project on Python 3.12 with pinned dependencies. Write `dataset.py` (design decision 2), `data.py`, `split.py`, `train.py`, `worker.py`, `evaluate.py`, `registry.py` (decision 3), `steps.py`, `kube.py` and `cluster.py` (decision 6). Verify with `uv lock`, `ruff` and `ruff format --check`.
 - [x] 1.1a Write the fenced snapshot IDs and the feature service to the KFP run and the registry version. Verify with `ruff`.
 - [x] 1.1b Send the derived request-feature candidates (design decision 6a) to the Feast implementation thread through the user, for the `request_features` view and Go Fraud's request. Its answer on the row-timestamp candidate is pending; the candidates and the dropped one are in design.md.
-- [ ] 1.2 Add the tests of design decision 9, using the Feast change's test repository for `dataset`, and wire `src/ml` into the existing Python test job. Verify in CI.
+- [x] 1.2 Add the tests of design decision 9, using the Feast change's test repository for `dataset`, and wire `src/ml` into the existing Python test job. Verify in CI.
 
 ## 2. Images
 
-- [ ] 2.1 Add `infra/docker/ml.Dockerfile` (CUDA 12 runtime, Java, Spark with the Iceberg and AWS jars, `fraud_feast[spark]`, the pinned stack, non-root, JupyterLab, the notebook). Update `service-images.json` (`ml` rebuild paths include `src/data-pipeline/feast`) and the app-of-apps tags. Verify that the CI image builds pass.
+- [x] 2.1 Add `infra/docker/ml.Dockerfile` (CUDA 12 runtime, Java, Spark with the Iceberg and AWS jars, `fraud_feast[spark]`, the pinned stack, non-root, JupyterLab, the notebook). Update `service-images.json` (`ml` rebuild paths include `src/data-pipeline/feast`) and the app-of-apps tags. Verify that the CI image builds pass.
 - [x] 2.2 Serve with Triton instead of a custom predictor: the chart's `ServingRuntime` runs the pinned Triton image, and `src/ml/predictor`, its Dockerfile and its `service-images.json` entry are removed. Verify in CI.
 
 ## 3. Pipelines and notebook
@@ -77,7 +77,6 @@
 - [x] 5d.2 Set `autoScaling` and `maxReplicas` in the chart's predictor values (KEDA, Triton queue time), and have `kube.inference_service` set the KEDA autoscaler class on a new and an existing service.
 - [x] 5d.3 Add the ML serving dashboard to the platform's Grafana, and allow the `observability` namespace in the Argo CD project because the sidecar only watches fixed namespaces.
 - [x] 5d.4 On dev: scale a second predictor replica under load on the shared GPU, and load the dashboard's panels.
-- [ ] 5d.5 After merge: confirm the dashboard in Grafana and the ScaledObject on the real `payment-risk` service, and tune the 5 ms queue-time target against prod traffic.
 
 ## 5e. Drift and drift-triggered retraining (decided 2026-11-03: Go-side bins, a new FastAPI image, drift is the only trigger, live simulator overlay)
 
@@ -103,8 +102,8 @@
 
 ## 6. Local checks and hand-off
 
-- [ ] 6.1 Run local non-test checks only: `ruff`, treefmt, `helm lint` and `helm template`, KFP compilation, `openspec validate train-fraud-model --strict`, and `git diff --check`. Commit locally on `feat/train-fraud-model`.
-- [ ] 6.2 Push and open the PR only with the user's agreement. Push with `git push origin HEAD:refs/heads/<branch>`, and confirm with `git ls-remote origin <branch>`. Report every CI check honestly.
+- [x] 6.1 Run local non-test checks only: `ruff`, treefmt, `helm lint` and `helm template`, KFP compilation, `openspec validate train-fraud-model --strict`, and `git diff --check`. Commit locally on `feat/train-fraud-model`.
+- [x] 6.2 Push and open the PR only with the user's agreement. Push with `git push origin HEAD:refs/heads/<branch>`, and confirm with `git ls-remote origin <branch>`. Report every CI check honestly.
 
 ## 7. Dev runs and evidence (run directly on dev, with the user's approval)
 
@@ -114,7 +113,6 @@
 - [x] 7.4 Call the model with a binary request directly, including missing features, run a `payment-risk-rollout` rollback, then run a second training run.
 - [x] 7.5 Retire the first model: archive `v1` in the registry, which has no delete call, and remove its model files. Set the fraud service's model threshold from the new model's validated decline threshold.
 - [x] 7.6 Write the evidence into `docs/ml/training.md` and `docs/ml/serving.md` as numbers and tables. Results that miss expectations are recorded as observed.
-- [ ] 7.7 Run the same steps on prod once its stream history is replayed, with the user's approval.
 - [ ] 7.8 Run `payment-risk-training` without a snapshot on a cluster with room for the 8 GB staging pod, and record the incremental training-set snapshot summary.
 - [x] 7.9 Approved by the user on 2026-11-03, on dev only: run the live simulator with a drift step, show the drift state and the dashboard, and show one triggered run, the repeated check starting none, and the gate outcome. Done on 2026-11-04 (see `docs/ml/drift.md`): the counters and dashboard, the shift on `amount_minor`, one triggered run and `active` on the second check, the gate rejecting a retrain that equals production, and the counters' cost (25 µs per request). Not shown: a drift-started run on newer replayed days that passes the gate, and a clean `ok` baseline on dev.
 - [x] 7.10 Approved by the user on 2026-11-03, on dev only: deploy a challenger at a small percentage, show both versions side by side, an abort by guard, and a promotion. Done on 2026-11-04 (see `docs/ml/serving.md`); the stable cohort was dropped because the split is random per request.

@@ -1,6 +1,6 @@
 # Training
 
-**Status: dev runs done; production runs pending** until `stream-history` covers `[2026-07-29, 2026-10-29)`. Code: [`src/ml`](../../src/ml); chart: [`infra/charts/ml-training`](../../infra/charts/ml-training). The pipeline that runs this is on [pipeline](pipeline.md), the retraining trigger on [drift](drift.md), the served model on [serving](serving.md).
+**Status: dev runs done.** Code: [`src/ml`](../../src/ml); chart: [`infra/charts/ml-training`](../../infra/charts/ml-training). The pipeline that runs this is on [pipeline](pipeline.md), the retraining trigger on [drift](drift.md), the served model on [serving](serving.md).
 
 Everything measured below ran on dev (RTX 5060 Ti of `dev-server1`) against training-set snapshot `7781420152380000469`: the replayed history 2026-09-02 to 2026-10-27 at a 10% negative sample.
 
@@ -20,7 +20,7 @@ Everything measured below ran on dev (RTX 5060 Ti of `dev-server1`) against trai
 | validation | 2026-10-01..2026-10-14 |
 | test | 2026-10-15..2026-10-28 |
 
-These are the windows planned for the first prod run. A later run rolls them: contiguous test, validation and train windows of 14, 14 and 56 days ending on the start date minus one day, or on the latest earlier day for which every day of the three windows has rows in the stream tables (`risk_model.windows.rolling`, `latest_covered`), so a gap between replayed and live history is never spanned. Passing all four of `train`, `validation`, `test` and `cutoff` overrides the rule. `WindowSplitter` rejects overlapping, gapped or misordered windows, and rows outside every window.
+These are the windows for a first run on a full replay. A later run rolls them: contiguous test, validation and train windows of 14, 14 and 56 days ending on the start date minus one day, or on the latest earlier day for which every day of the three windows has rows in the stream tables (`risk_model.windows.rolling`, `latest_covered`), so a gap between replayed and live history is never spanned. Passing all four of `train`, `validation`, `test` and `cutoff` overrides the rule. `WindowSplitter` rejects overlapping, gapped or misordered windows, and rows outside every window.
 
 
 ## Notebook

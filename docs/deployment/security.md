@@ -39,4 +39,4 @@ Hosted checkout uses session-bound credentials; internal merchant calls use inte
 | Models, MCP tools and agents | agentgateway: per-client API keys, rate/token limits and mesh-only backend access; dev checks returned 401 without a key and 20 × 429 in a 160-request burst |
 | Grafana and other platform UIs | Platform-owned access configuration in [`talos-proxmox/apps`](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps) |
 
-UI access-control screenshots and a dedicated feature-API gateway rate-limit acceptance remain missing.
+A dedicated feature-API gateway rate-limit acceptance remains missing.

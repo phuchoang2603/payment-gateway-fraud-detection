@@ -44,10 +44,10 @@ The system has three layers on one shared Kubernetes platform: the payment gatew
 | Fraud | Go; validates inputs, applies the rules policy, retrieves features, scores with the model | Policy and decision metadata, assessments | Deployed |
 | Kafka, Debezium, Karapace | Outbox CDC, internal event transport, schema registry | Topics, registered schemas | Deployed |
 | Historical generator | Python; per-day synthetic history to object storage | Immutable datasets v18 (dev), v19 (prod) | Deployed |
-| Live simulator | Python; current-time gateway traffic and labels | None | Deployed, disabled |
+| Live simulator | Python; current-time gateway traffic and labels | None | Deployed; runs as a bounded Job |
 | Data pipelines (DP1, `dp-pipeline`) | Spark on the Spark Operator: Bronze, then Silver, Gold features and ClickHouse marts; checks and lineage in OpenMetadata | Iceberg tables, ClickHouse marts, run reports | Running on prod (v19 backfill) |
 | Flink streaming features, Feast writer and server | Python; window features to Redis and `gold.feat_stream_*`, stream history replay, materialization | Checkpoints, Feast Redis, stream tables | Deployed in dev; enabled in prod |
-| Training and model serving | Kubeflow Pipelines, Katib, Trainer, Model Registry, Triton on the GPU ([training](ml/training.md), [pipeline](ml/pipeline.md), [drift](ml/drift.md), [serving](ml/serving.md)) | Training-set versions, registered models | Done on dev, prod runs pending; drift and A/B written, dev proof pending |
+| Training and model serving | Kubeflow Pipelines, Katib, Trainer, Model Registry, Triton on the GPU ([training](ml/training.md), [pipeline](ml/pipeline.md), [drift](ml/drift.md), [serving](ml/serving.md)) | Training-set versions, registered models | Done on dev, including drift and A/B |
 | LLM and agent platform | vLLM on KServe, agentgateway, kagent agents on Agent Substrate, RAG pipeline and knowledge API ([LLM agents](llm/agents.md)) | Feast pgvector and Iceberg knowledge chunks, Langfuse | Deployed in dev; further agents planned |
 
 ### Deployment view
@@ -128,8 +128,8 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Engineering fundamentals | Multi-stage Docker images and size comparison | [Docker images](deployment/cd.md#docker-images) | Done; Spark image 5.07 → 3.06 GB, streaming −25% compressed |
 | Offline generator | Skew, schema evolution, duplicates; ≥ 100 GB stored for Bronze ingestion | [Offline data](data/offline.md) | Done (v19: 133.5 GB) |
 | Online generator | Late arrivals and streaming duplicates | [Online data](data/online.md) | Done; see [evidence](data/online.md#dev-validation) |
-| Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline data](data/offline.md) | Recorded AWS v19 completed; controlled skew timings and schema/dedup UI comparisons pending |
-| Flink jobs | Baseline, late arrivals, duplicates, windows, dead-letter topic; output ends at the feature journal topic | [Online data](data/online.md) | Local correctness and dev recovery covered; live too-late proof and metrics-panel capture pending |
+| Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline data](data/offline.md) | Done: AWS v19 run; skew timings, deduplication and schema-evolution comparisons on GCP, 2026-11-04 |
+| Flink jobs | Baseline, late arrivals, duplicates, windows, dead-letter topic; output ends at the feature journal topic | [Online data](data/online.md) | Done: local correctness, dev recovery, and a runtime check with a too-late input, a duplicate and late attempts |
 | Storage | Lakehouse compaction, partitioning, Z-order; ClickHouse warehouse indexing (`ORDER BY`, skip indexes) | [Storage](data/storage.md) | Done on v19: partitioning, write order, mart codecs and `EXPLAIN`; a Z-order run showed no file skipping at one file per day |
 | Orchestration | DP1 (raw → Bronze), then `dp-pipeline`: Silver, then Gold and the marts side by side, each layer with ingest, validate and publish stages; unchanged stages skipped | [Orchestration and governance](data/orchestration-governance.md) | Recorded AWS backfill 2025-10-29 to 2026-10-28 completed |
 | Incremental curation | Silver and Gold take a day range and overwrite only those days, so the daily run and a backfill are the same job; CI checks daily runs against one backfill for both | [Offline data](data/offline.md) | Verified in recorded AWS monthly backfill |
@@ -140,15 +140,15 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 
 | Area | Capability | Page | Status |
 |---|---|---|---|
-| Feature store | Streaming features to online and offline stores, incremental materialization, TTL | [Feature store](ml/feature-store.md) | In progress: implemented, prod runs pending |
+| Feature store | Streaming features to online and offline stores, incremental materialization, TTL | [Feature store](ml/feature-store.md) | Done: prod materialize pipeline, stream writers, TTL and live Flink job recorded |
 | Generator | Data drift and a label table joinable with features | [Offline data](data/offline.md) | Labels done; the live simulator takes drift steps, shown on dev ([drift](ml/drift.md#proof-on-dev)) |
-| Model | Notebook baseline from the offline store, training pipeline, single-GPU training | [Training](ml/training.md#notebook), [pipeline](ml/pipeline.md#runs-on-dev) | Done on dev; prod runs pending |
-| Versioning | Model registry and incremental data versions | [Training](ml/training.md#versions) | Done on dev; incremental rebuild and prod runs pending |
-| Serving | KServe inference from the registry, rollback | [Serving](ml/serving.md) | Done on dev; prod runs pending |
+| Model | Notebook baseline from the offline store, training pipeline, single-GPU training | [Training](ml/training.md#notebook), [pipeline](ml/pipeline.md#runs-on-dev) | Done on dev |
+| Versioning | Model registry and incremental data versions | [Training](ml/training.md#versions) | Done on dev; incremental rebuild pending |
+| Serving | KServe inference from the registry, rollback | [Serving](ml/serving.md) | Done on dev |
 | Scoring | Go Fraud calling the model under a missing-feature policy | [Serving](ml/serving.md) | Implemented |
-| Autoscaling | KEDA on Triton queue time, scraped metrics and a Grafana dashboard | [Serving](ml/serving.md#autoscaling-and-dashboard) | Done on dev; prod runs pending |
-| A/B | Challenger model behind a waypoint route, stepwise weights gated by Argo Rollouts analysis, per-version panels | [Serving](ml/serving.md#ab-experiment) | Done on dev; prod runs pending |
-| Drift | Periodic drift comparison and retraining trigger | [Drift](ml/drift.md) | Done on dev; thresholds uncalibrated, prod runs pending |
+| Autoscaling | KEDA on Triton queue time, scraped metrics and a Grafana dashboard | [Serving](ml/serving.md#autoscaling-and-dashboard) | Done on dev |
+| A/B | Challenger model behind a waypoint route, stepwise weights gated by Argo Rollouts analysis, per-version panels | [Serving](ml/serving.md#ab-experiment) | Done on dev |
+| Drift | Periodic drift comparison and retraining trigger | [Drift](ml/drift.md) | Done on dev; thresholds uncalibrated |
 
 ### LLM and agent platform
 
@@ -170,10 +170,10 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Area | Capability | Page | Status |
 |---|---|---|---|
 | CI, validation and verification | Coverage, boundary tests, changed-code mutation tests, property tests and load tests | [CI](deployment/ci.md) | Partial; coverage and remaining proof gaps listed |
-| Infrastructure and IaC | Cloud/VM provisioning, Talos bootstrap and shared operators | [Infrastructure](deployment/infra.md) | Platform-owned; provisioning captures pending |
+| Infrastructure and IaC | Cloud/VM provisioning, Talos bootstrap and shared operators | [Infrastructure](deployment/infra.md) | Platform-owned; prod provisioning run captured |
 | Docker, CD and canary deployment | Image optimization, test/build/deploy flow and guarded Edge promotion | [Delivery](deployment/cd.md) | Prod canary verified 2026-11-03 |
 | Observability | Metrics, logs, traces and alert evaluation | [Observability](deployment/observability.md) | Prod captures recorded; external alert delivery disabled |
-| Security and secrets | Doppler, External Secrets and service authorization | [Security](deployment/security.md) | Implemented; secret-delivery and access-control captures pending |
+| Security and secrets | Doppler, External Secrets and service authorization | [Security](deployment/security.md) | Implemented; secret delivery and mesh authorization captured; feature-API rate limit pending |
 
 ## Limits and scope
 

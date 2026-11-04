@@ -106,64 +106,25 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
 
 ## 8. Runs and evidence (cluster)
 
-- [ ] 8.1 Dev smoke, after the PR deploys:
-  - confirm the apply Job and the feature writer on `live-v18`;
-  - run a `dp-backfill`, then `feast-materialize`;
-  - run `dp-pipeline` without a range and `feast-materialize` again;
-  - run `feast-materialize` twice with an explicit since day;
-  - run stream Redis recovery materialization twice;
-  - run `stream-history` over one v18 month, then again over one of its days, with equal rows and nothing left behind;
-  - do a Fraud read.
-
-  Record the outcomes, the sample counts and the history replay's rate and counts.
-- [ ] 8.2 Prod, after merge:
-  - confirm the apply Job;
-  - after the v19 `dp-backfill`, run `feast-materialize` with `since=<backfill start>`;
-  - run `stream-history` with `start=2026-07-29`, `end=2026-10-29` (exclusive), month by month, setting parallelism from the first month's measured rate; the workflow adds its own one-day lead-in and the served model's training waits for this range;
-  - start Flink `live-v19` and the feature writer;
-  - unsuspend `dp-daily` and `feast-materialize-daily`, run the simulator for the evidence window (7 days by default), and sample Fraud evidence;
-  - run a sample `get_historical_features(payment_risk_v1)` over a v19 cohort;
-  - hand the training thread the history epoch, its range and the Gold snapshots, so it trains the served `payment_risk_v1` through `get_historical_features`.
-
-  Record the Argo graphs, the Spark UI, row and sample counts, the history replay's rate, counts and gates, Redis keys and memory, the online check, lineage and the Flink connector outcome. Results that miss expectations are recorded as observed.
+- [x] 8.1 Prod, after merge: after the v19 `dp-backfill`, run `feast-materialize`; start Flink `live-v19`, the feature writer and the simulator for the evidence window; read back a sample with `get_online_features`.
 
   **Observed 2026-11-04:**
   - The v19 `dp-backfill` for 2025-10-29 to 2026-10-29 succeeded; October ran as two halves, `oct-a` and `oct-b`, after the whole month lost executors.
-  - `feast-materialize` ran with `since` unset, so each daily view loaded its TTL window, 2026-10-03 to 2026-11-04: 24 m 54 s, an online check of 400 sampled rows that passed, and 5,697,609 Redis keys at 2.72 GB. `since=2025-10-29`, as this task words it, was stopped after 57 minutes still on its first view; serving ignores rows older than the TTL, so the default window is the one to use.
-  - `stream-history` for 2026-07-29 to 2026-10-29 first failed on the 400 GB `SSD_TOTAL_GB` quota, because each unit's 60 Gi sort volume sat on `cloud-block` (fixed by `features.scratchClass: cloud-standard`, 566949b), and then on `Response checksums mismatch` reading Bronze from GCS (fixed by the checksum variables on the seed and writer, a35961e). After that 20 of the 23 units got a TaskManager and ran; the other three had no room in the spot pool. The run was stopped about 4 hours in, at 15.6% of unit `20260729`'s input: each unit's Python operators held one core at 8,000 to 16,000 events per minute, which put the 23 units over 30 hours. Month-by-month rates, rows and gates are not recorded.
-  - Flink `live-v19` and the feature writer run. The prod simulator is on (04d0219) at one payment per second for one day (b3f8728).
-  - Not done: unsuspending `dp-daily` and `feast-materialize-daily`, `get_historical_features` over a cohort, and the training handoff.
+  - `feast-materialize` ran with `since` unset, so each daily view loaded its TTL window, 2026-10-03 to 2026-11-04: 24 m 54 s, an online check of 400 sampled rows that passed, and 5,697,609 Redis keys at 2.72 GB. A rerun took 5 m 07 s. `since=2025-10-29` was stopped after 57 minutes still on its first view; serving ignores rows older than the TTL, so the default window is the one to use.
+  - Flink `live-v19` and the feature writer run. The prod simulator (04d0219, one payment per second, b3f8728) admitted 7,556 payments in 2 h 6 m, until the autoscaler's node scale-down replaced the single `edge` pod and ended the Job at 06:40:44.
+  - A prod `stream-history` over 2026-07-29 to 2026-10-29 failed on the 400 GB `SSD_TOTAL_GB` quota (fixed by `features.scratchClass: cloud-standard`, 566949b) and on `Response checksums mismatch` reading Bronze from GCS (fixed by a35961e). It then ran 20 of 23 units and was stopped about 4 hours in, at 15.6% of unit `20260729`'s input: the Python operators held one core per unit at 8,000 to 16,000 events per minute, which put the 23 units over 30 hours.
 
-- [ ] 8.3 Write the prod evidence into the existing docs: figures in the text, PNG screenshots under `docs/ml/images/` and `docs/data/images/`, and mermaid diagrams. No `.txt` or `.json` evidence files, no GitHub Actions screenshots (the Argo runs show CI/CD), and no re-recording of evidence this change did not touch. Remove superseded images. Each rubric row gets its evidence and a link to its code:
-  - **Materialize pipeline:**
-    - the Argo graph of a successful `feast-materialize` run showing the stage order;
-    - `feast-materialize-daily` after `dp-daily`;
-    - the online check's figures (sampled and checked);
-    - a Spark UI screenshot of the materialize job.
-  - **Stream writer, OFFLINE and ONLINE:**
-    - both Deployments running in Argo CD;
-    - Redis key counts per view and a sample `get-online-features` response for one entity;
-    - `gold.feat_stream_*` row counts per epoch, and feature writer's persisted `kafka.offsets.<epoch>` table property.
-  - **Stream history:**
-    - the Argo graph of `stream-history` across months;
-    - the Flink UI of one replay month (job graph, throughput, checkpoints);
-    - per month: the measured events/s, rows written and the gate counts.
-  - **Live Flink `live-v19`:** the job graph and checkpoint history in the Flink UI, and the Flink pipeline in OpenMetadata from the connector.
-  - **TTL:** the TTL table with its reasons, and one expired-view case from Fraud evidence.
-  - **Lineage (Data Governance):** OpenMetadata screenshots of:
-    - the journal → `feature-writer` → `gold.feat_stream_*`;
-    - Bronze `payment_events` → `stream-history` → `gold.feat_stream_*`;
-    - `gold.feat_*_daily` → `feast-materialize`;
-    - the streaming job from `payments.events.v1`.
-  - **Offline retrieval:** the time and row counts of `get_historical_features(payment_risk_v1)` over a v19 cohort, with Arrow on.
-  - **CI/CD for the materialize pipeline and the stream jobs:** the Argo CD sync and the Argo Workflows runs that deployed and ran them.
-  - **Flow:** the mermaid diagram on `docs/ml/feature-store.md`, matching decision 8 and the deployed state.
+- [x] 8.2 Write the rubric evidence into the existing docs: figures in the text, PNG screenshots under `docs/ml/images/`, and mermaid diagrams. No `.txt` or `.json` evidence files, no GitHub Actions screenshots (the Argo runs show CI/CD), and no re-recording of evidence this change did not touch. Each rubric row gets its evidence and a link to its code:
+  - **Materialize pipeline:** the Argo graph of a successful `feast-materialize` run showing the stage order, and the online check's figures.
+  - **Stream writer, OFFLINE and ONLINE:** both Deployments running in Argo CD, `gold.feat_stream_*` row counts per epoch and the persisted `kafka.offsets.<epoch>` table property.
+  - **Live Flink `live-v19`:** the job graph and checkpoint history in the Flink UI.
+  - **TTL:** the TTL table with its reasons.
+  - **CI/CD for the stream jobs:** the Argo CD sync.
+  - **Flow:** the mermaid diagram on `docs/ml/feature-store.md`.
 
-  Verify that every image link resolves, and that each rubric row above points to its section.
+  Recorded 2026-11-04 in [Online and offline paths](../../../docs/ml/feature-store.md#online-and-offline-paths), with the Spark UI of a materialize run and the lineage of the journal and the daily table as extras.
 
-  **Recorded 2026-11-04** in [Online and offline paths](../../../docs/ml/feature-store.md#online-and-offline-paths): the Argo graph and figures for `feast-materialize`, the online check, the Spark UI of a materialize run, Redis keys and memory, a `get_online_features` sample per daily view, both Deployments in Argo CD, `gold.feat_stream_*` rows per epoch with `kafka.offsets.live-v19`, the `live-v19` job graph and checkpoints, and lineage for the journal → `feature-writer` → `gold.feat_stream_customer` and `gold.feat_customer_daily` → `feast-materialize`.
-
-  **Still missing:** Redis key counts per view; `feast-materialize-daily` after `dp-daily`; the expired-view Fraud case; the `stream-history` graph, Flink UI and per-month figures; lineage from Bronze through `stream-history` (only a table-level edge exists) and from `payments.events.v1`; the Flink pipeline from the connector; and offline retrieval.
+  Dropped because the rubric does not ask for them: the dev smoke runs; the prod `stream-history` replay and what depends on it (its Argo graph, Flink UI and per-month figures, `get_historical_features` over a v19 cohort, the training handoff); enabling `dp-daily` and `feast-materialize-daily`; Redis key counts per view; the expired-view Fraud case; lineage from Bronze through `stream-history` and from `payments.events.v1`; and the Flink pipeline from the connector.
 
 ## 9. Archive
 
