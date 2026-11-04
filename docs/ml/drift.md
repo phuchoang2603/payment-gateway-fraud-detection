@@ -1,6 +1,6 @@
 # Drift
 
-**Status: running on dev; thresholds not yet calibrated.** Drift is the only automatic trigger of retraining, with an age ceiling as backstop. No labels are needed: the signal is the scored requests' feature distribution against the training split of the serving version. Code: [`src/ml/risk_model`](../../src/ml/risk_model) (`drift.py`, `drift_service.py`, `drift_check.py`); chart: [`templates/drift.yaml`](../../infra/charts/ml-training/templates/drift.yaml).
+**Status: done on dev; thresholds not yet calibrated, prod runs pending.** Drift is the only automatic trigger of retraining, with an age ceiling as backstop. No labels are needed: the signal is the scored requests' feature distribution against the training split of the serving version. Code: [`src/ml/risk_model`](../../src/ml/risk_model) (`drift.py`, `drift_service.py`, `drift_check.py`); chart: [`templates/drift.yaml`](../../infra/charts/ml-training/templates/drift.yaml).
 
 ```mermaid
 flowchart LR
@@ -43,8 +43,24 @@ v4 carries a reference profile of 50 features, so it was the first version the d
 | Same job with `min_age_days` 0 (dev-only override, to reach the trigger) | | Started `drift-v4-2026110404` (reason `drift`, 43 features over 14,729 requests) |
 | Same job again | | No second run: `active` |
 
-![Kubeflow run drift-v4-2026110404: plan_windows succeeded and the branch after it was skipped](images/kfp-drift-run.png)
-
 The started run finished in 3 min 25 s. `plan_windows` stopped it because v4's cutoff, 2026-10-28, is already the newest replayed day, so no training set was built, nothing was registered and v4 stayed production. This is the designed cost of a check that fires without new data: one small pod. The recurring run that an earlier version of this change created on dev (daily at 03:17 UTC) was still enabled and had fired the same way that morning; it was deleted, so the drift check is the only trigger.
 
-Not yet shown: a drift-triggered run that trains and reaches the gate (it needs replayed days newer than 2026-10-28), the per-request cost of the bin counters, and a Locust run of the drift API.
+![Kubeflow run drift-v4-2026110404: plan_windows succeeded and the branch after it was skipped](images/kfp-drift-run.png)
+
+**The gate on a drift-started run.** To see the retraining path through the gate, a second run used the drift trigger with `force=true` on v4's training-set snapshot and windows (the drift check passes neither, since it relies on new replayed days). It built the model, scored it on the GPU and ran the normal gate in 17 min 26 s: test PR-AUC 0.9370 against production v4's 0.9370, which is under the 0.005 margin, so the gate failed (`test PR-AUC 0.9370 is under production 0.9370 plus the 0.005 margin`) and `record_version` and `roll_out` were skipped. The same data and settings give the same model, so a retrain without new data does not replace production; the registry still holds v4 as the only production version.
+
+![Kubeflow run drift-v4-gate-proof-b: every step through gate and publish_metrics succeeded, and the register and roll-out branch was skipped](images/kfp-drift-gate-run.png)
+
+**Cost of the counters.** A Go benchmark ([`count_bench_test.go`](../../src/payment-gateway/fraud/internal/adapters/kserve/count_bench_test.go)) counts one request of 50 features, 10 bins each, through the OpenTelemetry SDK counter: 25 µs, 50 allocations and 802 bytes per request (the run-to-run range is 25 to 28 µs). Without a profile the path costs 7 to 10 ns. Against a model call of about 1.2 ms median (loopback, [serving](serving.md#model-service)) and a feature read of 60 to 116 ms, the counters add under 2% to the model call. The benchmark does not include the exporter, which batches.
+
+**Load on the drift API.** [`loadtest/drift_api.py`](../../src/ml/loadtest/drift_api.py) with 30 users ramped at 5 per second for 7 minutes, through a `kubectl port-forward` to one pod, against the two drift windows, the reference and `/metrics`:
+
+| Requests | Failures | Throughput | Median | p95 | p99 | Max |
+|---:|---:|---:|---:|---:|---:|---:|
+| 4,507 | 0 | 10.7 per second | 2.2 s | 4.6 s | 5.6 s | 7.6 s |
+
+A call took 0.2 to 0.3 s when the API was idle, so the latencies above are queueing at about 10 requests per second per pod: each `/v1/drift` call makes a registry call and a metrics query. The KEDA trigger (rate of `ml_drift_requests_total` over 2 minutes, 5 per second per replica) took the deployment from 1 to 2 replicas about 2 minutes after the load began, and it held 2 for the rest of the run. The tunnel sent all requests to the first pod, so the second pod's effect on latency is not measured.
+
+![Locust report for the drift API: 4,507 requests, no failures, 10.7 requests per second](images/drift-locust.png)
+
+Not shown: a drift-started run on newer replayed days that passes the gate, and a clean `ok` state on dev (the baseline above is already drifting).

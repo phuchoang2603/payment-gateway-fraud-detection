@@ -88,7 +88,7 @@
 - [x] 5e.5 Add the hourly `payment-risk-drift-check` CronJob: the policy, the KFP run creation through `risk_model.schedule.Pipelines`, deduplication, cooldown, the weekly bound and the age ceiling.
 - [x] 5e.6 Remove the recurring run: the `ensure_schedule` step and `Pipelines.ensure_schedule`, the PostSync hook Job, the `schedule` values and their tests; keep the `Pipelines` REST client (now `risk_model.runs`) and `plan_windows`; add the 14-day age ceiling to the check's policy. Update `docs/ml/training.md`.
 - [x] 5e.7 Add the live simulator `drift` steps (validated, deterministic, world digest unchanged) with tests, and an example step in the chart values. A step overrides `foreign_ip_probability`, `familiar_context_probability` or `amount_scale`.
-- [x] 5e.8 Add the drift panels to the `ml-serving` dashboard. The Locust run of the drift API for the rubric's load row is pending (task 7.9).
+- [x] 5e.8 Add the drift panels to the `ml-serving` dashboard. The Locust run of the drift API is in `docs/ml/drift.md`.
 - [x] 5e.9 Update `docs/ml/drift.md` and the roadmap rows; proof and pending verification stay in separate sentences.
 
 ## 5f. Model A/B experiment (decided 2026-11-03: enforced, no shadow, KEDA and Standard mode stay; a waypoint HTTPRoute splits, Argo Rollouts analysis gates; the InferenceGraph and Knative were tried and dropped)
@@ -116,7 +116,7 @@
 - [x] 7.6 Write the evidence into `docs/ml/training.md` and `docs/ml/serving.md` as numbers and tables. Results that miss expectations are recorded as observed.
 - [ ] 7.7 Run the same steps on prod once its stream history is replayed, with the user's approval.
 - [ ] 7.8 Run `payment-risk-training` without a snapshot on a cluster with room for the 8 GB staging pod, and record the incremental training-set snapshot summary.
-- [ ] 7.9 Approved by the user on 2026-11-03, on dev only: run the live simulator with a drift step, show the drift state and the dashboard, and show one triggered run, the repeated check starting none, and the gate outcome. Done on 2026-11-04: the counters, the dashboard, the shift on `amount_minor`, one triggered run and `active` on the second check (see `docs/ml/drift.md`). Open: the gate outcome (needs replayed days newer than the cutoff), a clean `ok` baseline, the counters' per-request cost and the Locust run.
+- [x] 7.9 Approved by the user on 2026-11-03, on dev only: run the live simulator with a drift step, show the drift state and the dashboard, and show one triggered run, the repeated check starting none, and the gate outcome. Done on 2026-11-04 (see `docs/ml/drift.md`): the counters and dashboard, the shift on `amount_minor`, one triggered run and `active` on the second check, the gate rejecting a retrain that equals production, the counters' cost (25 µs per request) and a Locust run of the drift API with its scale-out to two replicas. Not shown: a drift-started run on newer replayed days that passes the gate, and a clean `ok` baseline on dev.
 - [x] 7.10 Approved by the user on 2026-11-03, on dev only: deploy a challenger at a small percentage, show both versions side by side, an abort by guard, and a promotion. Done on 2026-11-04 (see `docs/ml/serving.md`); the stable cohort was dropped because the split is random per request.
 
 ## 8. Archive

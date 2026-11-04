@@ -1,6 +1,6 @@
 [tool.coverage.run]
 branch = true
-omit = ["tests/*", ".venv/*"]
+omit = ["tests/*", ".venv/*", "loadtest/*"]
 
 [tool.coverage.report]
 skip_empty = true
