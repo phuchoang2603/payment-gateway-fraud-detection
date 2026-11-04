@@ -12,6 +12,8 @@ import urllib.request
 
 
 class Catalog:
+    """Authenticate to Polaris and resolve its warehouse-specific REST prefix."""
+
     def __init__(self):
         self.uri = os.environ["ICEBERG_REST_URI"].rstrip("/")
         form = urllib.parse.urlencode(
@@ -35,6 +37,7 @@ class Catalog:
         return json.loads(body) if body else {}
 
     def request(self, method, url, body=None):
+        """Send authenticated JSON requests without exposing credential values."""
         data = json.dumps(body).encode() if body is not None else None
         request = urllib.request.Request(url, data=data, method=method)
         if getattr(self, "token", None):
@@ -44,18 +47,22 @@ class Catalog:
         return self._send(request)
 
     def metadata(self, table):
+        """Fetch Iceberg metadata for one namespace-qualified table."""
         namespace, name = table.split(".")
         return self.request("GET", f"{self.base}/namespaces/{namespace}/tables/{name}")["metadata"]
 
     def commit(self, changes):
+        """Submit all table changes in one catalog transaction."""
         self.request("POST", f"{self.base}/transactions/commit", {"table-changes": changes})
 
 
 def ref_snapshot(metadata, ref):
+    """Resolve a branch or tag to its snapshot identity."""
     return ((metadata.get("refs") or {}).get(ref) or {}).get("snapshot-id")
 
 
 def is_ancestor(metadata, ancestor, head):
+    """Follow snapshot parents to establish safe fast-forward ancestry."""
     parents = {
         snapshot["snapshot-id"]: snapshot.get("parent-snapshot-id") for snapshot in metadata.get("snapshots", [])
     }
@@ -102,6 +109,7 @@ def publish_changes(catalog, tables, branch):
 
 
 def main():
+    """Atomically publish audited branch heads and remove their temporary refs."""
     from openmetadata.checks import checks, products
     from openmetadata.warehouse import LAKEHOUSE
 

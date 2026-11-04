@@ -1,3 +1,5 @@
+"""Execute range-scoped contract assertions and publish native OpenMetadata test results."""
+
 import os
 import re
 from dataclasses import dataclass
@@ -23,10 +25,12 @@ LABEL_LOOKBACK_DAYS = 45
 
 
 def instant(day: date) -> str:
+    """Render UTC midnight for a date-scoped SQL boundary."""
     return f"toDateTime64('{day} 00:00:00', 6, 'UTC')"
 
 
 def day_scope(column: str, start: date, end: date) -> str:
+    """Build a half-open timestamp predicate for an inclusive date range."""
     return f"{column} BETWEEN toDate('{start}') AND toDate('{end}')"
 
 
@@ -77,6 +81,8 @@ def scopes_for(catalog, snapshots):
 
 @dataclass(frozen=True)
 class Check:
+    """Carry a contract assertion and its catalog test identity."""
+
     table: str
     database: str
     name: str
@@ -85,10 +91,12 @@ class Check:
 
     @property
     def fqn(self):
+        """Scope an assertion identity to its catalog table."""
         return table_fqn(self.table, self.database)
 
 
 def checks(root=None, products=None):
+    """Load executable quality assertions from selected data-product contracts."""
     root = Path(root or os.environ["DATA_PRODUCTS_ROOT"])
     found = []
     for product in products or PRODUCTS:
@@ -102,6 +110,7 @@ def checks(root=None, products=None):
 
 
 def check(contract, table, database, rule):
+    """Reject unsupported assertions before constructing a native SQL test."""
     if rule.get("type") != "sql" or rule.get("mustBe") != 0 or not rule.get("query"):
         raise ValueError(f"{contract} rule {rule.get('id')} is not a scalar count that must be 0")
     return Check(
@@ -114,6 +123,7 @@ def check(contract, table, database, rule):
 
 
 def products():
+    """Resolve the selected contract products from the run environment."""
     return [product for product in os.environ["CHECK_PRODUCT"].split(",") if product]
 
 
@@ -162,6 +172,7 @@ def rendered(check, snapshot=None, staging=False, audited=None, scopes=None):
 
 
 def test_workflow(fqn, cases, snapshot=None, staging=False, audited=None, scopes=None):
+    """Build native test execution against the audited snapshots or staging tables."""
     return {
         "source": {
             "type": "testsuite",
@@ -208,6 +219,7 @@ def evaluate(expected, results):
 
 
 def readback(fqn):
+    """Collect paginated native test results for the named suite."""
     results, after = {}, None
     while True:
         query = {"entityLink": f"<#E::table::{fqn}>", "fields": "testCaseResult", "limit": PAGE}
@@ -222,6 +234,7 @@ def readback(fqn):
 
 
 def main():
+    """Audit the selected data products and fail the run on missing or failed results."""
     found = checks(products=products())
     branch = os.environ.get("WAP_BRANCH")
     iceberg = sorted({check.table for check in found if check.database == LAKEHOUSE})

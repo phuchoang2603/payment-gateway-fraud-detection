@@ -22,6 +22,7 @@ from fraud_streaming.operators import (
 
 
 def sql_literal(value):
+    """Escape a value for a Flink SQL string literal."""
     return "'" + value.replace("'", "''") + "'"
 
 
@@ -78,6 +79,7 @@ def build_updates(packets, *, epoch, logical, max_entries):
 
 
 def main():
+    """Run validated payment events through keyed operators into epoch-isolated transactional journals."""
     epoch = os.environ["FEATURE_EPOCH"]
     brokers = os.environ["KAFKA_BROKERS"]
     source = os.environ.get("SOURCE_TOPIC", "payments.events.v1")

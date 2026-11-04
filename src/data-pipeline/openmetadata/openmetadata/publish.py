@@ -1,3 +1,5 @@
+"""Publish pipeline execution status, datasets and lineage after data-product runs."""
+
 import json
 import os
 import time
@@ -19,10 +21,12 @@ STATUS = {"Succeeded": "Successful"}
 
 
 def status_for(argo_status: str) -> str:
+    """Map workflow completion to a native pipeline status, failing unknown states closed."""
     return STATUS.get(argo_status, "Failed")
 
 
 def entity_class(kind: str):
+    """Resolve a supported lineage kind to its native SDK entity class."""
     from metadata.generated.schema.entity.data.container import Container
     from metadata.generated.schema.entity.data.pipeline import Pipeline
     from metadata.generated.schema.entity.data.table import Table
@@ -32,6 +36,7 @@ def entity_class(kind: str):
 
 
 def ensure_pipeline(sdk, name: str):
+    """Create or update the pipeline entity before publishing execution metadata."""
     from metadata.generated.schema.api.data.createPipeline import CreatePipelineRequest
     from metadata.generated.schema.type.entityReference import EntityReference
 
@@ -40,6 +45,7 @@ def ensure_pipeline(sdk, name: str):
 
 
 def publish_status(sdk, name: str, argo_status: str, run_id: str, parameters=None) -> None:
+    """Record a workflow run and its parameters on the native pipeline timeline."""
     from metadata.generated.schema.entity.data.pipeline import PipelineStatus, StatusType
 
     sdk.add_pipeline_status(
@@ -102,6 +108,7 @@ def run_parameters(uri: str):
 
 
 def ensure_dataset(sdk, version: str) -> None:
+    """Register the immutable historical version and its object-storage location."""
     from metadata.generated.schema.api.data.createContainer import CreateContainerRequest
 
     sdk.create_or_update(
@@ -116,6 +123,7 @@ def ensure_dataset(sdk, version: str) -> None:
 
 
 def publish_lineage(sdk, name: str, pipeline_ref, dataset_version: str) -> int:
+    """Publish the exact relationships owned by one pipeline."""
     from metadata.generated.schema.api.lineage.addLineage import AddLineageRequest
     from metadata.generated.schema.type.entityLineage import EntitiesEdge, LineageDetails
     from metadata.generated.schema.type.entityReference import EntityReference
@@ -145,6 +153,7 @@ def publish_lineage(sdk, name: str, pipeline_ref, dataset_version: str) -> int:
 
 
 def main() -> int:
+    """Validate the requested pipeline and publish its status and lineage."""
     names = [name for name in os.environ["PIPELINES"].split(",") if name]
     unknown = [name for name in names if name not in PIPELINES]
     if unknown:

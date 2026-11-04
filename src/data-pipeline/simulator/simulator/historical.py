@@ -65,6 +65,7 @@ class SchemaChange(StrictModel):
     @field_validator("effective_at")
     @classmethod
     def require_timezone(cls, value: datetime) -> datetime:
+        """Require an absolute cutover instant rather than local wall time."""
         if value.tzinfo is None:
             raise ValueError("schema change effective_at must include a timezone")
         return value
@@ -83,6 +84,7 @@ class GeneratorConfig(StrictModel):
 
     @model_validator(mode="after")
     def validate_schedule(self) -> Self:
+        """Reject regressing schema schedules and ambiguous output locations."""
         changes = self.schema_changes
         if any(later.effective_at <= earlier.effective_at for earlier, later in zip(changes, changes[1:])):
             raise ValueError("schema_changes must be in ascending effective_at order")
@@ -102,12 +104,15 @@ class GeneratorConfig(StrictModel):
 
     @property
     def customer_chunks(self) -> int:
+        """Bound each worker partition by the configured customer chunk size."""
         return math.ceil(self.world.counts.customers / PART_CUSTOMERS)
 
     def day(self, offset: int) -> date:
+        """Resolve a generation offset from the world start date."""
         return self.world.start_date + timedelta(days=offset)
 
     def logical(self) -> dict:
+        """Exclude the destination from reproducible generation inputs."""
         return self.model_dump(mode="json", exclude={"output"})
 
     def identity(self, generator_digest: str) -> str:
@@ -138,6 +143,7 @@ def load_contract(directory: Path) -> tuple[tuple[tuple[tuple[str, ...], int], .
     declared: list[tuple[tuple[str, ...], int]] = []
 
     def walk(properties, prefix: tuple[str, ...]) -> None:
+        """Collect nested fields whose physical schema starts at a declared version."""
         for prop in properties or []:
             path = (*prefix, prop["name"])
             since = [
@@ -212,17 +218,20 @@ class _PartWriter:
         self.writer = pq.ParquetWriter(path, schema, compression="zstd")
 
     def extend(self, records: list[dict]) -> None:
+        """Buffer rows and flush at the row-group threshold."""
         self.pending.extend(records)
         self.rows += len(records)
         if len(self.pending) >= ROW_GROUP_ROWS:
             self.flush()
 
     def flush(self) -> None:
+        """Write buffered records with the part-specific physical schema."""
         if self.pending:
             self.writer.write_table(pa.Table.from_pylist(self.pending, schema=self.schema))
             self.pending = []
 
     def close(self) -> None:
+        """Flush the final row group before closing the Parquet footer."""
         self.flush()
         self.writer.close()
 

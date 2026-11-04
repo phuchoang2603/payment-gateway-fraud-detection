@@ -35,6 +35,7 @@ LAYERS = {
 
 
 def head_summary(metadata: dict) -> dict | None:
+    """Read the commit summary at the published main snapshot."""
     head = ref_snapshot(metadata, "main")
     return next(
         (
@@ -47,10 +48,12 @@ def head_summary(metadata: dict) -> dict | None:
 
 
 def main_snapshots(catalog, tables) -> dict:
+    """Pin each input table to its current published snapshot."""
     return {table: ref_snapshot(catalog.metadata(table), "main") for table in tables}
 
 
 def unchanged(catalog, layer: str, day_range: str, code: str) -> bool:
+    """Skip only outputs matching the range, code and current input snapshots."""
     spec = LAYERS[layer]
     if not code or not day_range:
         return False
@@ -68,6 +71,7 @@ def unchanged(catalog, layer: str, day_range: str, code: str) -> bool:
 
 
 def main() -> int:
+    """Write the run decision and pinned Silver inputs for downstream tasks."""
     layer = os.environ["PLAN_LAYER"]
     start, end = os.environ.get("DP_START", ""), os.environ.get("DP_END", "")
     day_range = f"{start}/{end}" if start and end else ""

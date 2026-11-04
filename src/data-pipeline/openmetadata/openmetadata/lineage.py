@@ -1,3 +1,5 @@
+"""Describe dataset, topic and pipeline identities and their data-flow relationships."""
+
 from dataclasses import dataclass
 
 from openmetadata.warehouse import LAKEHOUSE, MARTS, table_fqn
@@ -12,34 +14,43 @@ LABELS_TOPIC = "fraud.labels.v1"
 
 @dataclass(frozen=True)
 class Node:
+    """Identify a catalog entity by kind and fully qualified name."""
+
     kind: str
     fqn: str
 
 
 @dataclass(frozen=True)
 class Edge:
+    """Assign an upstream/downstream relationship to its publishing pipeline."""
+
     source: Node
     target: Node
     pipeline: str
 
 
 def table(name, database=LAKEHOUSE):
+    """Identify an Iceberg or warehouse table in the shared catalog."""
     return Node("table", table_fqn(name, database))
 
 
 def topic(name):
+    """Quote a Kafka topic identity without treating dots as hierarchy separators."""
     return Node("topic", f'{KAFKA_SERVICE}."{name}"')
 
 
 def dataset_container(version):
+    """Name the immutable historical version container."""
     return f"historical-payments-{version}"
 
 
 def dataset(version):
+    """Identify the historical source version as a storage entity."""
     return Node("container", f"{STORAGE_SERVICE}.{dataset_container(version)}")
 
 
 def pipeline_fqn(name):
+    """Scope a pipeline identity to the configured orchestration service."""
     return f"{SERVICE}.{name}"
 
 
@@ -73,6 +84,7 @@ DP3 = ("dp3-features", "dp3-marts")
 
 
 def edges(dataset_version: str) -> list[Edge]:
+    """Build the owned pipeline relationships for a historical dataset version."""
     historical = dataset(dataset_version)
     historical_edges = [
         Edge(historical, BRONZE_EVENTS, "dp1-bronze-historical"),

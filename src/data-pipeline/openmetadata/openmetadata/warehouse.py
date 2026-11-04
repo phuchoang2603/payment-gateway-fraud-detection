@@ -1,3 +1,5 @@
+"""Map catalog table identities to correctly quoted ClickHouse SQL names."""
+
 SERVICE = "clickhouse"
 OPENMETADATA_DATABASE = "default"
 LAKEHOUSE = "lakehouse"
@@ -11,4 +13,5 @@ def table_fqn(table, database=LAKEHOUSE):
 
 
 def sql_table(table, database=LAKEHOUSE):
+    """Quote database and table identifiers for ClickHouse queries."""
     return f"{database}.`{table}`"

@@ -37,6 +37,7 @@ def _create_only(params, **_):
 
 
 def client():
+    """Create the endpoint-specific S3 client with static credentials and compatible transfer settings."""
     endpoint = os.environ.get("S3_ENDPOINT")
     s3 = boto3.client(
         "s3",

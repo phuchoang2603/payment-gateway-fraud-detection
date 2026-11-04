@@ -33,6 +33,7 @@ def lateness_bucket(lateness):
 
 
 def dedup_content(scope, fact):
+    """Select the immutable attempt content used to detect conflicting identity reuse."""
     return fact.digest if scope == "event" else f"{fact.event_id}:{fact.digest}"
 
 
@@ -54,6 +55,8 @@ class Rejected(ValueError):
 
 @dataclass(frozen=True)
 class Source:
+    """Retain the original Kafka record coordinates for quarantine and progress tracking."""
+
     topic: str
     partition: int
     offset: int
@@ -63,6 +66,8 @@ class Source:
 
 @dataclass(frozen=True)
 class Fact:
+    """Represent one validated attempt start with immutable business and availability times."""
+
     event_id: str
     digest: str
     integration: str
@@ -76,11 +81,14 @@ class Fact:
 
     @property
     def identity(self):
+        """Scope an attempt identity to its integration and payment."""
         return self.integration, self.payment, self.attempt
 
 
 @dataclass(frozen=True)
 class Progress:
+    """Track consumed and observed source offsets at a specific observation time."""
+
     topic: str
     partition: int
     consumed: int
@@ -90,6 +98,8 @@ class Progress:
 
 @dataclass(frozen=True)
 class Packet:
+    """Carry a validated fact with source progress, coverage bootstrap and processing clock."""
+
     fact: Fact | None
     now: int
     bootstrap: int
@@ -98,6 +108,7 @@ class Packet:
 
     @property
     def too_late(self):
+        """Identify attempts strictly older than the retained 24-hour contribution horizon."""
         return self.fact.started_at < self.now - HORIZON
 
 
@@ -128,6 +139,7 @@ class Entity:
     coverage_timers: bool = True
 
     def add(self, packet):
+        """Queue a new identity and advance source progress without double-counting a known attempt."""
         start = packet.fact
         expected = start.customer if self.view == "customer" else start.method
         if start.integration != self.integration or expected != self.entity:
@@ -215,6 +227,7 @@ class Entity:
 
 
 def entity_key(epoch, view, integration, entity):
+    """Hash length-delimited epoch, view and entity components into a stable journal key."""
     digest = hashlib.sha256()
     for component in (epoch, view, integration, entity):
         value = component.encode()

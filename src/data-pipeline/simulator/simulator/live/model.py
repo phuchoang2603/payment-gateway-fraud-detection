@@ -1,3 +1,5 @@
+"""Reuse the historical entity world to construct live checkout requests and synthetic cards."""
+
 from datetime import datetime, time, timezone
 
 from simulator.world import World, WorldConfig, stage_rng
@@ -7,6 +9,8 @@ BEHAVIOR_BY_OUTCOME = {"succeeded": "ok", "issuer_declined": "issuer", "insuffic
 
 
 class HistoricalModel:
+    """Bind live purchase sampling to the manifest-pinned historical world."""
+
     def __init__(self, manifest):
         self.manifest = manifest
         self.world = World.build(WorldConfig.model_validate(manifest["configuration"]["world"]))
@@ -16,6 +20,7 @@ class HistoricalModel:
         self.anchor = datetime.combine(self.config.start_date, time.min, timezone.utc)
 
     def purchase(self, seed, ordinal, now):
+        """Return correlated checkout context, processor behavior and independently delayed truth."""
         rng = stage_rng(seed, LIVE_STAGE, now.date().toordinal(), ordinal)
         customer = int(rng.integers(self.config.counts.customers))
         purchase = self.world.purchase(rng, now.date(), customer)
@@ -69,6 +74,7 @@ class HistoricalModel:
 
 
 def card_number(index, behavior):
+    """Encode a fictional card index and processor behavior with a valid Luhn check digit."""
     if not 0 <= index < 10**11:
         raise ValueError("card index outside synthetic encoding")
     prefix = {"ok": "4111", "nsf": "4112", "issuer": "4113", "invalid": "4114"}[behavior]

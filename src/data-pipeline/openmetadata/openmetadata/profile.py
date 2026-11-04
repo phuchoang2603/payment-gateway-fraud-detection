@@ -8,6 +8,7 @@ PROFILED = ("fact_payment_attempt", "fact_merchant_day")
 
 
 def workflow():
+    """Restrict native profiling to the two published analytics marts."""
     source = connectors()[SERVICE]["source"]
     return {
         "source": {
@@ -35,6 +36,7 @@ def workflow():
 
 
 def main():
+    """Run the native profiler against the configured marts connection."""
     native("profile", workflow())
     return 0
 

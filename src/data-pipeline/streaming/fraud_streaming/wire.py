@@ -34,6 +34,7 @@ DEFINITION_HASH = hashlib.sha256(
 
 
 def decode(raw):
+    """Validate a v3 payment envelope and return its attempt fact or progress-only timestamp."""
     try:
         event = PaymentEvent.FromString(bytes(raw))
     except DecodeError:
@@ -89,6 +90,7 @@ def decode(raw):
 
 
 def snapshot(entity, quantities, *, epoch, now):
+    """Serialize a revision with coverage, source offsets and a content-derived snapshot identity."""
     coverage, values = quantities
     update = SnapshotUpdate(
         schema_version=1,

@@ -1,7 +1,11 @@
+"""Order replay records against explicit clock barriers without losing partition progress."""
+
 from collections import deque
 
 
 class OffsetBarrier:
+    """Release replay inputs only after their bootstrap and preceding clock boundaries."""
+
     def __init__(self, input_topic, clock_topic, max_buffer=20000):
         self.input_topic = input_topic
         self.clock_topic = clock_topic
@@ -15,6 +19,7 @@ class OffsetBarrier:
         self.clock = None
 
     def accept(self, row, control=None):
+        """Validate contiguous offsets and monotonic controls, then release causally ordered rows."""
         _, topic, partition, offset, _ = row
         if partition != 0:
             raise ValueError("logical replay requires single-partition topics")

@@ -1,3 +1,5 @@
+"""Load a digest-pinned historical manifest before admitting live traffic."""
+
 import json
 from hashlib import sha256
 from urllib.parse import urlsplit
@@ -7,6 +9,7 @@ from simulator.s3 import client
 
 
 def load_model(config):
+    """Validate the manifest URI and SHA-256 before rebuilding its entity world."""
     parsed = urlsplit(config.manifest)
     if (
         parsed.scheme != "s3"

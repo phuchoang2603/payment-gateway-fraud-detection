@@ -12,6 +12,7 @@ DEFAULT_CONTRACTS = "/app/contracts/historical-payments"
 
 
 def main() -> int:
+    """Dispatch historical generation and publication commands from the CLI."""
     mode = os.environ.get("GENERATOR_MODE", "generate")
     if mode not in MODES:
         print(f"unknown GENERATOR_MODE: {mode}", file=sys.stderr)

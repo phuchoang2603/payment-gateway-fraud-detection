@@ -45,17 +45,20 @@ REJECTS = OutputTag("feature-rejects-v1", REJECT_TYPE)
 
 
 def micros():
+    """Read wall-clock time at the feature contract microsecond resolution."""
     return time.time_ns() // 1000
 
 
 def epoch_millis(timestamp):
     # PyFlink surfaces Kafka TIMESTAMP_LTZ metadata as Instant or as a local datetime.
+    """Normalize the two timestamp representations returned by PyFlink."""
     if hasattr(timestamp, "to_epoch_milli"):
         return timestamp.to_epoch_milli()
     return int(timestamp.timestamp() * 1000)
 
 
 def reject_counters(runtime_context):
+    """Register independent per-class quarantine counters."""
     metrics = runtime_context.get_metrics_group()
     return {
         kind: metrics.add_group("reject_class", kind).counter("rejected") for kind in REJECT_CLASSES
@@ -93,6 +96,7 @@ def reject(counters, error, source, event_id=None):
 
 
 def timer_at(timestamp):
+    """Round a microsecond deadline upward to Flink millisecond resolution."""
     return (timestamp + 999) // 1000
 
 
@@ -107,9 +111,11 @@ class Timeline:
         self.coverage_timers = not logical
 
     def now(self, packet):
+        """Select the logical replay clock or the live wall clock."""
         return packet.now if self.logical else micros()
 
     def register(self, ctx, timestamp):
+        """Register a deadline in the clock domain selected for this job."""
         service = ctx.timer_service()
         if self.logical:
             service.register_event_time_timer(timer_at(timestamp))
@@ -117,6 +123,7 @@ class Timeline:
             service.register_processing_time_timer(timer_at(timestamp))
 
     def delete(self, ctx, timestamp):
+        """Remove a deadline from the same clock domain used to register it."""
         service = ctx.timer_service()
         if self.logical:
             service.delete_event_time_timer(timer_at(timestamp))
@@ -134,7 +141,10 @@ class Timeline:
 
 
 class Clock(TimestampAssigner):
+    """Assign replay watermark timestamps from the validated logical clock."""
+
     def extract_timestamp(self, value, record_timestamp):
+        """Convert packet clock microseconds to Flink milliseconds."""
         return value.now // 1000
 
 

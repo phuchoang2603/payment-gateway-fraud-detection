@@ -1,3 +1,5 @@
+"""Register shared service connections and their ingestion workflows in OpenMetadata."""
+
 import json
 import os
 from pathlib import Path
@@ -6,14 +8,17 @@ from openmetadata.catalog import client, expand, native, server
 
 
 def connectors():
+    """Load the configured native service-connection templates."""
     return json.loads(Path(os.environ["METADATA_CONNECTORS_FILE"]).read_text())
 
 
 def connection(name):
+    """Select one connector connection definition."""
     return connectors()[name]["source"]["serviceConnection"]["config"]
 
 
 def workflow(name):
+    """Require discovery to be enabled before building an ingestion workflow."""
     config = connectors()[name]
     if not config["discover"]:
         raise ValueError("connector does not enable native discovery")
@@ -25,6 +30,7 @@ def workflow(name):
 
 
 def register(sdk, configured):
+    """Create or update the configured service entities before discovery."""
     from metadata.generated.schema.api.services.createDatabaseService import CreateDatabaseServiceRequest
     from metadata.generated.schema.api.services.createMessagingService import CreateMessagingServiceRequest
     from metadata.generated.schema.api.services.createPipelineService import CreatePipelineServiceRequest
@@ -51,6 +57,7 @@ def register(sdk, configured):
 
 
 def main():
+    """Register services and execute the requested native discovery workflows."""
     stage = os.environ["METADATA_STAGE"]
     if stage not in ("register", "discover"):
         raise ValueError("METADATA_STAGE must be register or discover")

@@ -1,3 +1,5 @@
+"""Drive bounded checkout traffic, delayed attempts and asynchronously available fraud labels."""
+
 import asyncio
 import heapq
 import json
@@ -25,14 +27,18 @@ from simulator.world import entity_id
 
 
 def report(event, **fields):
+    """Emit one structured traffic-progress record."""
     print(json.dumps({"event": event, **fields}), flush=True)
 
 
 class Gateway:
+    """Retry authenticated gateway requests within the configured request budget."""
+
     def __init__(self, config, client, api_key):
         self.config, self.client, self.api_key = config, client, api_key
 
     async def request(self, method, path, key, body=None, bearer=None):
+        """Retry transport and server failures while preserving the caller request identity."""
         headers = {"Authorization": f"Bearer {bearer or self.api_key}", "Idempotency-Key": key}
         for attempt in range(self.config.request_retries + 1):
             try:
@@ -49,6 +55,8 @@ class Gateway:
 
 
 class Labels:
+    """Schedule truth and chargeback publication independently of checkout completion."""
+
     def __init__(self, config, gateway, integration_id, producer):
         self.config, self.gateway, self.integration_id, self.producer = config, gateway, integration_id, producer
         self.publish_lock = asyncio.Lock()
@@ -57,6 +65,7 @@ class Labels:
         self.truth_published = self.chargebacks_published = self.unfinished_chargebacks = 0
 
     async def publish(self, payment_id, attempt_id, occurred_at, fraud, source, scenario=None):
+        """Publish off the event loop and record availability at send time."""
         async with self.publish_lock:
             label = FraudLabel(
                 integration_id=self.integration_id,
@@ -70,6 +79,7 @@ class Labels:
                 label.scenario = scenario
 
             def send():
+                """Timestamp and synchronously acknowledge one label publication."""
                 label.label_available_at.FromDatetime(datetime.now(timezone.utc))
                 body = label.SerializeToString()
                 failures = []
@@ -89,6 +99,7 @@ class Labels:
                 self.chargebacks_published += 1
 
     async def schedule(self, payment_id, attempt_id, occurred_at, fraud, friendly, delay):
+        """Bound the pending label queue and preserve each observation availability time."""
         if not (fraud or friendly):
             return
         if len(self.heap) >= self.config.max_pending_labels:
@@ -106,6 +117,7 @@ class Labels:
         )
 
     async def run(self, stop):
+        """Publish due observations until traffic and the pending queue have drained."""
         while not stop.is_set():
             while self.heap and self.heap[0][0] <= time.monotonic():
                 _, _, payment_id, attempt_id, occurred_at = self.heap[0]
@@ -121,6 +133,7 @@ class Labels:
 
 
 def hold_seconds(config, run_id, ordinal):
+    """Choose a store-and-forward delay from the configured interval."""
     digest = sha256(f"{config.seed}:late:{run_id}:{ordinal}".encode()).digest()
     selection, position = (int.from_bytes(digest[i : i + 8], "big") / 2**64 for i in (0, 8))
     if selection >= config.late_rate:
@@ -129,6 +142,7 @@ def hold_seconds(config, run_id, ordinal):
 
 
 async def traffic(config, model, gateway, labels, stop):
+    """Admit purchases at the configured rate while bounding concurrent and held attempts."""
     run_id = uuid4().hex
     report(
         "traffic_start",
@@ -151,6 +165,7 @@ async def traffic(config, model, gateway, labels, stop):
     late_delays = []
 
     async def purchase(number, due, clicked=None):
+        """Execute a sampled checkout and schedule its independent label observations."""
         nonlocal completed, max_lag, late_sent
         try:
             now = clicked or datetime.now(timezone.utc)
@@ -203,6 +218,7 @@ async def traffic(config, model, gateway, labels, stop):
             slots.release()
 
     async def hold(number, due, seconds):
+        """Delay submission while preserving the original client attempt timestamp."""
         nonlocal held, late_unsent
         clicked = datetime.now(timezone.utc)
         held += 1
@@ -268,6 +284,7 @@ async def traffic(config, model, gateway, labels, stop):
 
 
 async def run_live(config):
+    """Run traffic and label delivery with coordinated cancellation and final progress reporting."""
     api_key = os.environ.get("GATEWAY_API_KEY")
     if not api_key:
         raise ValueError("GATEWAY_API_KEY is required")
@@ -315,6 +332,7 @@ async def run_live(config):
 
 
 def main():
+    """Load the pinned source and run the configured live simulation."""
     from simulator.live.config import load_live_config
 
     path = Path(os.environ.get("SIMULATOR_CONFIG", "/etc/simulator/live.yaml"))

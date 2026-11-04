@@ -1,3 +1,5 @@
+"""Validate live traffic rates, delay bounds and committed-event redelivery settings."""
+
 from pathlib import Path
 
 import yaml
@@ -7,6 +9,8 @@ from simulator.world import StrictModel
 
 
 class Redelivery(StrictModel):
+    """Configure deterministic duplicate injection from committed Kafka events."""
+
     enabled: bool = False
     group: str = "simulator-redelivery-v1"
     topic: str = "payments.events.v1"
@@ -14,6 +18,8 @@ class Redelivery(StrictModel):
 
 
 class LiveConfig(StrictModel):
+    """Bound checkout concurrency, label queues and store-and-forward delays."""
+
     manifest: str
     manifest_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     gateway_url: str = "http://edge.payment-gateway.svc:8080"
@@ -36,10 +42,12 @@ class LiveConfig(StrictModel):
 
     @model_validator(mode="after")
     def late_range(self):
+        """Reject an inverted store-and-forward delay interval."""
         if self.late_min_seconds > self.late_max_seconds:
             raise ValueError("invalid store-and-forward delay range")
         return self
 
 
 def load_live_config(path: Path) -> LiveConfig:
+    """Parse YAML into the strict live-traffic configuration."""
     return LiveConfig.model_validate(yaml.safe_load(path.read_text()))

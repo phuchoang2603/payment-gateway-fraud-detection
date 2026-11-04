@@ -1,3 +1,5 @@
+"""Republish deterministically selected committed events without changing their business payload."""
+
 import json
 import time
 from hashlib import sha256
@@ -10,15 +12,18 @@ MARKER = "x-simulator-redelivery"
 
 
 def selected(seed, event_id, rate):
+    """Choose events reproducibly from their seed and stable identity."""
     digest = sha256(f"{seed}:redelivery:{event_id}".encode()).digest()
     return int.from_bytes(digest[:8], "big") / 2**64 < rate
 
 
 def report(event, **fields):
+    """Emit a structured redelivery progress record without event payloads."""
     print(json.dumps({"event": event, **fields}), flush=True)
 
 
 def run_redelivery(config, stop):
+    """Republish selected records once per observation and commit offsets after acknowledgement."""
     settings = config.redelivery
     consumer = Consumer(
         {
