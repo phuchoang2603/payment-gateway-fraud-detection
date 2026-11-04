@@ -75,7 +75,7 @@ experiment:
     minimumRequests: 100
     maximumErrorRate: 0.01
     latencyRatio: 2
-    declineRatio: [0.5, 2]
+    declineShift: 0.02
 dashboards:
   namespace: observability
   folder: ML

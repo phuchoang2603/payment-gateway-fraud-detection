@@ -65,17 +65,17 @@ spec:
           (printf $mean (printf $increase "nv_inference_queue_duration_us" $challenger $window) (printf $increase "nv_inference_compute_infer_duration_us" $challenger $window) (printf $increase "nv_inference_request_success" $challenger $window))
           (printf $mean (printf $increase "nv_inference_queue_duration_us" $champion $window) (printf $increase "nv_inference_compute_infer_duration_us" $champion $window) (printf $increase "nv_inference_request_success" $champion $window)) }}
     {{- $calls := "sum(increase({__name__=\"fraud.model.calls\",\"model_version\"=\"%s\",\"deployment.environment\"=\"%s\"%s}[%s]))" }}
-    {{- $share := "((%s + 0.001) / (clamp_min(%s, 1) + 0.001))" }}
+    {{- $share := "(%s / clamp_min(%s, 1))" }}
     {{- $environment := .Values.environment }}
     {{- $declined := ",\"declined\"=\"true\"" }}
-    {{- $ratio := printf "(%s / %s)"
+    {{- $shift := printf "abs(%s - %s)"
           (printf $share (printf $calls $challengerVersion $environment $declined $window) (printf $calls $challengerVersion $environment "" $window))
           (printf $share (printf $calls $championVersion $environment $declined $window) (printf $calls $championVersion $environment "" $window)) }}
     {{- $metrics := list
           (dict "name" "requests" "condition" (printf "result[0] >= %v" $analysis.minimumRequests) "query" $total)
           (dict "name" "error-rate" "condition" (printf "result[0] <= %v" $analysis.maximumErrorRate) "query" (printf "((%s or vector(0)) / clamp_min(%s, 1))" (printf $increase "nv_inference_request_failure" $challenger $window) $total))
           (dict "name" "latency-ratio" "condition" (printf "result[0] <= %v" $analysis.latencyRatio) "query" $latency)
-          (dict "name" "decline-ratio" "condition" (printf "result[0] >= %v && result[0] <= %v" (index $analysis.declineRatio 0) (index $analysis.declineRatio 1)) "query" $ratio) }}
+          (dict "name" "decline-shift" "condition" (printf "result[0] <= %v" $analysis.declineShift) "query" $shift) }}
     {{- range $metrics }}
     - name: {{ .name }}
       initialDelay: {{ $analysis.window }}

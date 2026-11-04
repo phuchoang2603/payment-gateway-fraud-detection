@@ -790,9 +790,9 @@ def test_a_challenger_that_passes_every_step_replaces_the_champion(promoting):
 
 def test_a_failed_analysis_removes_the_challenger_and_leaves_the_champion(promoting):
     """The weights return to zero, the challenger service goes, its version is archived and the run fails."""
-    promoting.fail_at, promoting.verdict = 2, ("Failed", "decline-ratio")
+    promoting.fail_at, promoting.verdict = 2, ("Failed", "decline-shift")
     with pytest.raises(
-        RuntimeError, match="v2 failed its analysis at 20 percent: Failed decline-ratio"
+        RuntimeError, match="v2 failed its analysis at 20 percent: Failed decline-shift"
     ):
         steps.promote_challenger(run_id="abcdef0123", steps_percent="5,20")
     assert promoting.weights == [5, 20, 0]
