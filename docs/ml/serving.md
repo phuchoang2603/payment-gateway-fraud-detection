@@ -39,9 +39,34 @@ The ML serving dashboard (`ml-serving` in the ML folder of the platform Grafana)
 
 ## A/B experiment
 
-A gate-passed version can run as a challenger next to the champion. `roll_out` with `role=challenger` (or a training run started with `role=challenger`) serves it as the InferenceService `payment-risk-challenger` on the same runtime, GPU claim and KEDA scaling, and the registry marks it `challenger`. An Istio waypoint in `ml` and a Gateway API route split the champion's Service between the two services at 100/0 until the `payment-risk-promote` pipeline raises the weights: stepwise, never above 20 percent, with an Argo Rollouts analysis at each step (the challenger's failure rate, its queue plus compute time against the champion's, and the difference between its decline share and the champion's, which may not exceed 2 percentage points, from the shared VictoriaMetrics). A failed analysis returns the weights to 0, removes the challenger and archives its version. After the last step the champion service is updated to the challenger's version and the challenger is removed. Argo CD ignores the route's weights, as it does for Edge. The split is random per request. Go Fraud scores each answer under the version that produced it. The `ml-serving` dashboard shows Triton requests and time per request by service and the fraud service's calls and declines by model version.
+A gate-passed version can run as a challenger next to the champion, and traffic moves to it in bounded steps that an analysis must approve.
 
-Tried and dropped on dev, 2026-11-03: KServe's Knative canary (Knative Serving 1.23.0 and 1.24.0 reject DRA `resourceClaims`) and its InferenceGraph (the router discards response headers, so binary answers fail). A waypoint route split 400 binary requests 309 to 91 at 80/20, at +2.4 ms median and +9.8 ms p99. Written but not yet run on dev: the chart's waypoint, route and analysis template, `role=challenger`, the promote pipeline and the per-version panels. Pending verification: a challenger served on dev with KEDA beside the champion, the Service label surviving a rollout, a promotion and an aborted step, and the platform's seccomp policy for the waypoint pod (running on dev and applied to prod; no waypoint has been created on prod).
+- **Challenger service.** `roll_out` with `role=challenger` serves the version as the InferenceService `payment-risk-challenger` on the same runtime, GPU claim and KEDA scaling, and the registry marks it `challenger`.
+- **Split.** An Istio waypoint in `ml` and a Gateway API route split the champion's Service between the two services, 100/0 until the `payment-risk-promote` pipeline changes the weights. Only that pipeline changes them, never above 20 percent, and Argo CD ignores them as it does for Edge. The split is random per request, and `roll_out` labels the champion Service for the waypoint.
+- **Analysis.** Each step runs an Argo Rollouts `AnalysisRun` built from the `payment-risk-challenger` template, over a 10 minute window on the chart's values and 5 minutes on dev. It needs a minimum number of challenger requests, a failure rate of at most 1%, a queue plus compute time per request of at most twice the champion's, and a decline share within 2 percentage points of the champion's (a ratio of two shares near 0.3% is noise at these volumes).
+- **Outcome.** A failed analysis returns the weights to 0, deletes the challenger and archives its version. After the last step the challenger is deleted, then the champion service is updated to its version and probed, so the single GPU node never holds three model servers; a failed probe redeploys the old version.
+- **Scoring.** Go Fraud scores each answer under the layout and threshold of the version that produced it, and `fraud.model.calls` carries `model_version` and `declined`.
+
+On dev, v4 (the same data and settings as v3, registered by a manual run with a lowered `gate_margin`, so the two score identically) ran as the challenger next to v3 under about 4 payments per second from the live simulator. Three `payment-risk-promote` runs, in order:
+
+| Run | Steps | Result |
+|---|---|---|
+| `dev-promote-v4-b` | 10, 20 | Aborted at 10%: the decline ratio was 3.7 on 1 decline in 94 calls. Weights back to 0, challenger deleted, v4 archived. The check became the difference in decline share |
+| `dev-promote-v4-c` | 10, 20 | Aborted at 10%: 46 to 57 challenger requests against a minimum of 50, because the simulator then sent 1.7 payments per second. Same cleanup |
+| `dev-promote-v4-d` | 10, 20 | Both steps passed and v4 replaced v3 as production; v3 is `archived` |
+
+| Step | Challenger calls | Decline share, challenger / champion | Queue plus compute per request, challenger / champion |
+|---|---:|---|---|
+| 10% | 171 of 1,834 | 1.17% / 1.20% | 381 µs / 376 µs |
+| 20% | 370 of 1,873 | 1.08% / 1.00% | 416 µs / 418 µs |
+
+Between the runs, the swap itself found a limit: with the challenger, the old champion and the new champion's surge pod on the one GPU node, the new pod sat Pending on CPU for 11 minutes until the challenger was deleted by hand, which is why the step now deletes it first. The Service kept its waypoint label through the swap, and the KEDA scaler stayed in place.
+
+![Triton requests per second by service over the promotion: the challenger at 0.2 per second in the aborted run, then at 10% and 20% of the champion's traffic, then the champion's pod replaced](images/ab-triton-by-service.png)
+
+![Model calls per second by version: v4 takes a share from v3 in the two steps, and at 03:54 v4 becomes the only version](images/ab-calls-by-version.png)
+
+Tried and dropped on dev, 2026-11-03: KServe's Knative canary (Knative Serving 1.23.0 and 1.24.0 reject DRA `resourceClaims`) and its InferenceGraph (the router discards response headers, so binary answers fail). A waypoint route split 400 binary requests 309 to 91 at 80/20, at +2.4 ms median and +9.8 ms p99. Not verified: the platform's seccomp policy for the waypoint pod runs on dev and is applied to prod, but no waypoint has been created on prod.
 
 ## Planned
 
