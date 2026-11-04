@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 from fastapi import FastAPI
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from prometheus_client import CollectorRegistry, Counter, Histogram, make_asgi_app
@@ -44,6 +45,9 @@ def create_app(transport=None):
                         | drivers
                         | {"score_kind": "what-if re-score of supplied inputs; not the recorded decision"}
                     )
+            except ValueError as error:
+                calls.labels(tool, "failure").inc()
+                raise ToolError(str(error)) from error
             except Exception:
                 calls.labels(tool, "failure").inc()
                 raise
