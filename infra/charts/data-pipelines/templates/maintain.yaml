@@ -52,7 +52,7 @@ metadata:
 spec:
   schedules:
     - {{ .Values.maintenance.schedule | quote }}
-  suspend: true
+  suspend: {{ .Values.maintenance.suspend }}
   concurrencyPolicy: Forbid
   workflowSpec:
     serviceAccountName: data-pipelines

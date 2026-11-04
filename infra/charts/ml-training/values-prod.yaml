@@ -7,4 +7,6 @@ config:
   FEAST_STREAM_EPOCHS: history-v19,live-v19
   RUN_ROOT: s3://talos-proxmox-prod-platform/runs/payment-gateway/ml
 drift:
-  enabled: false
+  enabled: true
+experiment:
+  enabled: true

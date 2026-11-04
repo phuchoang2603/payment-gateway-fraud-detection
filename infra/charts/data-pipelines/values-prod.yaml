@@ -90,10 +90,12 @@ analytics:
   reportRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/analytics
 maintenance:
   enabled: true
+  suspend: false
   profile: large
   reportRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/maintenance
 pipeline:
   enabled: true
+  suspend: false
   profile: gold
   reportRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/pipeline
 warehouseBenchmark:
@@ -123,6 +125,7 @@ checks:
   nativeTimeoutSeconds: 4800
 features:
   enabled: true
+  suspend: false
   registry: s3://talos-proxmox-prod-platform/runs/payment-gateway/feast/registry.pb
   reportRoot: s3://talos-proxmox-prod-platform/runs/payment-gateway/feast
   epochs: history-v19,live-v19

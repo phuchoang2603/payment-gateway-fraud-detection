@@ -115,16 +115,18 @@ analytics:
   activeDeadlineSeconds: 14400
 maintenance:
   enabled: false
+  suspend: true
   profile: dev
   reportRoot: s3://platform-dev/runs/payment-gateway/maintenance
   activeDeadlineSeconds: 7200
   schedule: 43 3 * * *
 pipeline:
   enabled: false
+  suspend: true
   profile: dev
   reportRoot: s3://platform-dev/runs/payment-gateway/pipeline
   activeDeadlineSeconds: 14400
-  # dp-daily at 04:17 UTC, after the 03:43 maintenance; suspended. Without start and end a run covers yesterday and
+  # dp-daily at 04:17 UTC, after the 03:43 maintenance; suspended unless pipeline.suspend is false. Without start and end a run covers yesterday and
   # the lookback days before it, which catches late outcomes.
   schedule: 17 4 * * *
   lookbackDays: 2
@@ -278,6 +280,7 @@ checks:
   nativeTimeoutSeconds: 1500
 features:
   enabled: false
+  suspend: true
   driverMemory: 6g
   spillSize: 100Gi
   # Storage class for the spill volume of materialization and the history seed; empty uses node disk.

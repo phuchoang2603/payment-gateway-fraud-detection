@@ -190,7 +190,7 @@ metadata:
 spec:
   schedules:
     - {{ .Values.pipeline.schedule | quote }}
-  suspend: true
+  suspend: {{ .Values.pipeline.suspend }}
   concurrencyPolicy: Forbid
   workflowSpec:
     serviceAccountName: data-pipelines

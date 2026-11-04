@@ -73,7 +73,7 @@ metadata:
 spec:
   schedules: [{{ .Values.features.schedule | quote }}]
   timezone: UTC
-  suspend: true
+  suspend: {{ .Values.features.suspend }}
   concurrencyPolicy: Forbid
   workflowSpec:
     workflowTemplateRef:
