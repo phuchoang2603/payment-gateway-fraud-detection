@@ -311,6 +311,7 @@ spec:
           {{- end }}
           {{- if has $mode (list "seed" "writer") }}
           {{- include "data-pipelines.lakeEnv" $ | nindent 10 }}
+          {{- include "data-pipelines.gcsChecksumEnv" $ | nindent 10 }}
           {{- end }}
         resources:
           {{- if eq $mode "seed" }}
