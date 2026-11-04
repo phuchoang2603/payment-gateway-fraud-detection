@@ -30,6 +30,10 @@ On dev, the risk server and knowledge API SHALL use blue-green Rollouts with sep
 - **WHEN** Argo CD reconciles while KEDA scales or a Rollout changes Service revision selectors
 - **THEN** replica counts and revision hash selectors remain controller-owned while base selectors and security configuration remain reconciled
 
+#### Scenario: Candidate never becomes ready
+- **WHEN** a candidate's pods fail their readiness probe, so its analysis never starts
+- **THEN** the Rollout aborts at its progress deadline, the preview receives no traffic and the active Service keeps selecting the previous revision
+
 #### Scenario: Adopt the knowledge workload
 - **WHEN** the knowledge API migrates from its Deployment to a Rollout
 - **THEN** ready active endpoints remain available during handover and the completed migration leaves one workload controller and no superseded Deployment
@@ -50,6 +54,17 @@ The agents' Substrate `WorkerPool` SHALL be autoscaled by KEDA between a minimum
 #### Scenario: Risk tool demand rises
 - **WHEN** the risk server's tool-call rate exceeds its configured per-replica target
 - **THEN** KEDA increases its desired replica count up to four and returns toward two after demand falls and the stabilisation window expires
+
+### Requirement: Agent dashboard
+The chart SHALL ship a Grafana dashboard, picked up by the platform's dashboard sidecar and placed in the `LLM` folder like the other components' dashboards, that shows the A2A calls and failures per entry agent, MCP tool calls and failures per tool for the knowledge and risk servers, the risk tool's latency and feature view statuses, the replicas of both MCP servers, screening decisions and the decision model's latency, tokens, time to first token and generation latency.
+
+#### Scenario: Agent called
+- **WHEN** an entry agent is called through the gateway
+- **THEN** the dashboard's calls-per-agent panel counts it under the agent's route
+
+#### Scenario: Risk tool called
+- **WHEN** an agent calls a risk tool
+- **THEN** the dashboard counts it by tool and outcome and shows its latency and the status of each feature view it read
 
 ## REMOVED Requirements
 

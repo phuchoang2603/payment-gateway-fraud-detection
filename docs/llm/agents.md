@@ -158,12 +158,16 @@ On the promoted revision's two pods, after two chats and one analysis call: `get
 | `risk-serving` 785f66cfc5, retry at 180 s | Successful in 26 s | Promoted |
 | `risk-serving` 756dbb8686 | Successful | Promoted |
 | `rag-api` 7fcf4cbc | Successful in 73 s, waiting for a cold pod | Promoted; one Rollout owns every ReplicaSet and no Deployment remains |
+| `risk-serving` 5dcd89f99f, faulty: `MODEL_URL` points at a model server that does not exist | Failed in 27 s (19:40:22 to 19:40:49): `preview returned an MCP tool error` | Rollout aborted; the active Service kept selecting 756dbb8686, and the gateway scored 0.1967 at 19:40:05 during the rollout and at 19:41:09 after it |
+| `rag-api` 69f45b78c4, faulty: `RAG_DB_HOST` points at a missing database | No analysis: the preview pod failed readiness with 503 for more than 5 min | Never promoted; the active Service kept selecting 7fcf4cbc. The Rollout stayed `Progressing` until the spec was restored, which is why both Rollouts now set `progressDeadlineAbort` |
+
+The faulty candidates were made by pausing Argo CD's reconcile of the app with the `argocd.argoproj.io/skip-reconcile` annotation, patching one environment variable on the Rollout, and restoring it afterwards; both Rollouts returned to Healthy on their original revisions. Argo Rollouts skips the analysis on a first install, which has no previous revision to protect; that case was not run here.
 
 Two causes were found and fixed on the way. A new preview pod becomes an endpoint of its Service in the mesh a moment after it is Ready, and the Rollout starts the analysis in the same second it scales the preview up, so the analysis client waits up to 150 s for the MCP handshake and retries only connection failures. The Job's deadline is 300 s, because it counts the image pull. The first chat also failed: the gateway's `PhoneNumber` masking replaced a 7-digit run inside the fingerprint, so phone numbers are now matched by `gateway.piiPatterns` at word boundaries.
 
 ### Not yet shown
 
-The drivers are empty because the served v4 reference has no feature gains; the fix to the training code is on main, and drivers appear once a model trained from it is served. A deliberately faulty candidate was not run, so failed-candidate behaviour was seen only through the deadline failures above. KEDA scale-out under load was not observed: the HPA read 0 of 5 calls/s per replica at two replicas, and the 5 calls/s target is untested. The Langfuse `risk-agent` prompt is still version 1, which has the tool wording but not the line about the threshold flag, and the answer calls the comparison a "Decision". The phone masking change is deployed on dev only.
+The drivers are empty because the served v4 reference has no feature gains; the fix to the training code is on main, and drivers appear once a model trained from it is served. KEDA scale-out under load was not observed: the HPA read 0 of 5 calls/s per replica at two replicas, and the 5 calls/s target is untested. The Langfuse `risk-agent` prompt is still version 1, which has the tool wording but not the line about the threshold flag, and the answer calls the comparison a "Decision". The phone masking change is deployed on dev only, and the removal of the charts' GPU placement has not been deployed anywhere.
 
 ## Known limits
 

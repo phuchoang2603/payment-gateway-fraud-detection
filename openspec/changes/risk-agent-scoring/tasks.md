@@ -65,3 +65,10 @@
 - [x] 10.2 Round every float in the risk tool's result to four decimals and return `at_or_above_decline_threshold` from the unrounded values; verify the CI service test asserts the rounded score and threshold and the flag
 - [x] 10.3 On dev, after the release, send the chat question again with the real fingerprint and verify the tool receives it unchanged and the answer carries a score
 
+## 11. Review follow-ups
+
+- [x] 11.1 Run a faulty candidate for each server on dev with Argo CD's reconcile paused for the app, record the analysis result and that the active revision kept serving, then restore the spec; verify the Rollouts return to Healthy with the original template
+- [x] 11.2 Set `progressDeadlineAbort: true` on both Rollouts only where blue-green is enabled; verify `helm template` renders it in dev and not in prod
+- [x] 11.3 Move the agents dashboard to the `LLM` folder through `dashboards.folder`, cover both MCP servers in its tool panels and add the Risk tool row; verify the rendered ConfigMap carries the annotation and valid JSON
+- [x] 11.4 Remove the GPU `nodeSelector` and tolerations from the `llm-platform` and `ml-training` charts and the benchmark manifests; verify no claim, selector or toleration renders and that workloads still reference their claims by name
+
