@@ -37,9 +37,19 @@ def validate(tool, result):
         raise ValueError("unsupported analysis tool")
 
 
+REACHABLE_SECONDS = 30
+RETRY_SECONDS = 2
+
+
+def unreachable(error):
+    return isinstance(error, httpx.TransportError) or (
+        isinstance(error, httpx.HTTPStatusError) and error.response.status_code >= 500
+    )
+
+
 async def analyze(url, tool, arguments):
     headers = {"Accept": "application/json, text/event-stream"}
-    async with asyncio.timeout(45), httpx.AsyncClient(timeout=30, trust_env=False) as client:
+    async with asyncio.timeout(55), httpx.AsyncClient(timeout=30, trust_env=False) as client:
 
         async def rpc(method, params):
             response = await client.post(
@@ -51,14 +61,21 @@ async def analyze(url, tool, arguments):
                 raise ValueError("preview returned a JSON-RPC error")
             return answer["result"]
 
-        initialized = await rpc(
-            "initialize",
-            {
-                "protocolVersion": "2025-06-18",
-                "capabilities": {},
-                "clientInfo": {"name": "rollout-analysis", "version": "1"},
-            },
-        )
+        handshake = {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "rollout-analysis", "version": "1"},
+        }
+        deadline = asyncio.get_running_loop().time() + REACHABLE_SECONDS
+        # A new preview pod becomes an endpoint of its Service in the mesh a moment after it is Ready.
+        while True:
+            try:
+                initialized = await rpc("initialize", handshake)
+                break
+            except httpx.HTTPError as error:
+                if not unreachable(error) or asyncio.get_running_loop().time() >= deadline:
+                    raise
+                await asyncio.sleep(RETRY_SECONDS)
         headers["MCP-Protocol-Version"] = initialized["protocolVersion"]
         tools = await rpc("tools/list", {})
         if tool not in {entry["name"] for entry in tools["tools"]}:

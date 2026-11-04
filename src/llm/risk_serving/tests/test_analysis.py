@@ -4,6 +4,7 @@ import math
 import httpx
 import pytest
 
+from fraud_risk_serving import analysis
 from fraud_risk_serving.analysis import analyze, validate
 
 
@@ -69,3 +70,58 @@ def test_analysis_initializes_lists_and_calls_preview_before_passing(monkeypatch
     )
     asyncio.run(analyze("http://preview/mcp", "get_knowledge_chunk", {"chunk_id": "known"}))
     assert methods == ["initialize", "tools/list", "tools/call"]
+
+
+def serve(monkeypatch, upstream):
+    original = httpx.AsyncClient
+    monkeypatch.setattr(analysis, "RETRY_SECONDS", 0)
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda **kwargs: original(transport=httpx.MockTransport(upstream), **kwargs)
+    )
+
+
+def test_analysis_waits_for_a_preview_that_is_not_yet_an_endpoint(monkeypatch):
+    attempts = []
+
+    def upstream(request):
+        import json
+
+        body = json.loads(request.content)
+        if body["method"] == "initialize":
+            attempts.append(1)
+            if len(attempts) < 3:
+                raise httpx.ReadError("connection reset", request=request)
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-06-18"}})
+        if body["method"] == "tools/list":
+            result = {"tools": [{"name": "get_knowledge_chunk"}]}
+        else:
+            result = {"structuredContent": {"chunk_id": "known", "text": "passage", "knowledge_version": "v1"}}
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": result})
+
+    serve(monkeypatch, upstream)
+    asyncio.run(analyze("http://preview/mcp", "get_knowledge_chunk", {"chunk_id": "known"}))
+    assert len(attempts) == 3
+
+
+def test_analysis_fails_when_the_preview_never_answers(monkeypatch):
+    monkeypatch.setattr(analysis, "REACHABLE_SECONDS", 0)
+
+    def upstream(request):
+        raise httpx.ReadError("connection reset", request=request)
+
+    serve(monkeypatch, upstream)
+    with pytest.raises(httpx.ReadError):
+        asyncio.run(analyze("http://preview/mcp", "get_knowledge_chunk", {"chunk_id": "known"}))
+
+
+def test_analysis_does_not_retry_a_preview_that_answers_with_an_error(monkeypatch):
+    calls = []
+
+    def upstream(request):
+        calls.append(1)
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "error": {"code": -32603, "message": "boom"}})
+
+    serve(monkeypatch, upstream)
+    with pytest.raises(ValueError, match="JSON-RPC"):
+        asyncio.run(analyze("http://preview/mcp", "get_knowledge_chunk", {"chunk_id": "known"}))
+    assert len(calls) == 1
