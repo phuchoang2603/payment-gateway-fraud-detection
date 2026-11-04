@@ -296,8 +296,13 @@ def test_an_existing_inference_service_has_its_whole_predictor_replaced(cluster)
     assert cluster.created == []
 
 
-def test_a_predictor_with_autoscaling_selects_the_keda_autoscaler_class(cluster):
+def test_a_predictor_with_autoscaling_selects_the_keda_autoscaler_class(cluster, monkeypatch):
     """KServe only creates the KEDA ScaledObject from the annotation, on a new and on an existing service."""
+    monkeypatch.setattr(
+        kube,
+        "autoscaling",
+        lambda: SimpleNamespace(delete_namespaced_horizontal_pod_autoscaler=lambda *args: None),
+    )
     settings = {"minReplicas": 1, "maxReplicas": 2, "autoScaling": {"metrics": []}}
     kube.inference_service("v2", settings)
     ((_, _, body),) = cluster.created
@@ -513,3 +518,50 @@ def test_an_analysis_that_never_ends_times_out_and_is_still_deleted(cluster):
     with pytest.raises(TimeoutError):
         kube.analysis_run("run-2", "payment-risk-challenger", {"challengerVersion": "v4"}, 0)
     assert ("analysisruns", "run-2") in cluster.deleted
+
+
+def hpa_calls(cluster, monkeypatch, annotations, settings, error=None):
+    """Updates an existing service and returns the names of the autoscalers that were deleted."""
+    dropped = []
+
+    def delete(name, namespace):
+        dropped.append(name)
+        if error:
+            raise error
+
+    monkeypatch.setattr(
+        kube,
+        "autoscaling",
+        lambda: SimpleNamespace(delete_namespaced_horizontal_pod_autoscaler=delete),
+    )
+    cluster.stored[("inferenceservices", "payment-risk")] = {
+        "metadata": {"annotations": annotations}
+    }
+    kube.inference_service("v3", settings)
+    return dropped
+
+
+KEDA = {"autoScaling": {"metrics": []}}
+
+
+def test_a_service_that_gains_keda_loses_the_autoscaler_kserve_made_before(cluster, monkeypatch):
+    """The old HorizontalPodAutoscaler would make KEDA's webhook refuse the ScaledObject, so it goes first."""
+    assert hpa_calls(cluster, monkeypatch, {}, KEDA) == ["payment-risk-predictor"]
+
+
+def test_a_service_that_already_uses_keda_or_never_will_keeps_its_autoscaler(cluster, monkeypatch):
+    """Nothing is deleted once the class is set, or while the predictor has no autoscaling section."""
+    keda = {"serving.kserve.io/autoscalerClass": "keda"}
+    assert hpa_calls(cluster, monkeypatch, keda, KEDA) == []
+    assert hpa_calls(cluster, monkeypatch, {}, {"minReplicas": 1}) == []
+
+
+def test_an_autoscaler_that_is_already_gone_is_not_an_error_but_another_failure_is(
+    cluster, monkeypatch
+):
+    """A 404 is ignored, and any other API error is raised."""
+    assert hpa_calls(cluster, monkeypatch, {}, KEDA, ApiException(status=404)) == [
+        "payment-risk-predictor"
+    ]
+    with pytest.raises(ApiException):
+        hpa_calls(cluster, monkeypatch, {}, KEDA, ApiException(status=500))

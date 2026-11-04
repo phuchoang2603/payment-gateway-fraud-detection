@@ -67,6 +67,11 @@ def core():
     return client.CoreV1Api(connect())
 
 
+def autoscaling():
+    """Returns the API for HorizontalPodAutoscalers."""
+    return client.AutoscalingV2Api(connect())
+
+
 def worker_env():
     """Returns the environment of a training pod: plain settings and the secret-backed credentials."""
     env = [{"name": name, "value": os.environ[name]} for name in PASSTHROUGH if name in os.environ]
@@ -227,7 +232,7 @@ def inference_service(version, predictor, name=INFERENCE_NAME):
     }
     keda = bool(predictor.get("autoScaling"))
     try:
-        get(INFERENCE, name)
+        existing = get(INFERENCE, name)
     except ApiException as error:
         if error.status != 404:
             raise
@@ -245,6 +250,8 @@ def inference_service(version, predictor, name=INFERENCE_NAME):
         )
         return
     operations = [{"op": "replace", "path": "/spec/predictor", "value": spec}]
+    if keda and existing["metadata"].get("annotations", {}).get(AUTOSCALER_CLASS) != "keda":
+        _drop_hpa(name)
     if keda:
         operations.append(
             {
@@ -254,6 +261,15 @@ def inference_service(version, predictor, name=INFERENCE_NAME):
             }
         )
     json_patch(INFERENCE, name, operations)
+
+
+def _drop_hpa(name):
+    """Deletes the HorizontalPodAutoscaler KServe made before the service used KEDA, which would refuse a ScaledObject."""
+    try:
+        autoscaling().delete_namespaced_horizontal_pod_autoscaler(f"{name}-predictor", namespace())
+    except ApiException as error:
+        if error.status != 404:
+            raise
 
 
 def rolled_out(deployment, uri):
