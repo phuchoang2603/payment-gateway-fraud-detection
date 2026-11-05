@@ -102,7 +102,7 @@ One Langfuse trace covers the conversation, tagged `risk-agent:production`, with
 
 ![The same trace further down: the get_risk_features and score_payment_risk tool spans](images/risk-trace-tools.png)
 
-A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
+Its releases and scaling are in [MCP servers](mcp-servers.md). A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
 
 The Langfuse prompt `risk-agent-system-prompt` was published as `production` version 3 and `variant-b` as version 4; the catalog seeds only missing prompts, so an existing prompt needs new versions in Langfuse. Not verified: a fresh conversation on version 3 (the kagent controller was in `CreateContainerError` and the A2A route answered 503, so the chat above predates the publish).
 
@@ -142,39 +142,6 @@ The release catalog job publishes the entry agents and the MCP servers from the 
 ## Prompts and A/B tests
 
 Langfuse is the source of each agent's system prompt and A/B test. [`files/prompts/<agent>.md`](../../infra/charts/llm-platform/files/prompts) and the agent's `abTest` in the values only seed a prompt that Langfuse does not have yet; after that, prompts are edited, versioned and tested in Langfuse, and the next conversation uses the new version without a release.
-
-## Autoscaling
-
-| Workload | Mechanism | Why |
-|---|---|---|
-| Agent conversations | Substrate actors: created on demand, suspended to zero when idle, resumed on any worker | Idle conversations cost nothing; any number wait in snapshots |
-| Agent worker pool (`llm-agents`) | KEDA, 2 to 6 workers on Substrate's busy-worker metric | Workers follow the conversations that hold them |
-| Knowledge API (`rag-api`) | KEDA, 2 to 4 replicas on its combined REST and MCP request rate | Target 10 req/s per replica; a dev Locust run scaled 2 → 4 → 2 ([RAG](rag.md#load-test-and-autoscaling)) |
-| Risk MCP (`risk-serving`) | KEDA, 2 to 4 replicas on tool-call rate | Initial target 5 calls/s per replica; scale-out observed on dev (below) |
-| Model servers | One replica per model | GPU capacity is separate from tool-server scaling |
-
-### MCP server releases
-
-On dev, `rag-api` and `risk-serving` are blue-green Rollouts and KEDA targets their scale subresources; production retains the Deployment. The active Service keeps its name and a `-preview` Service selects the candidate. A bounded pre-promotion Job with its own identity initializes MCP, lists the tools and makes one call (`rag-api`: a configured knowledge chunk; `risk-serving`: a scoring call). A tool error, missing result or timeout blocks promotion and keeps the active revision serving. The preview starts at one replica and grows to KEDA's desired count before the Service switches; Argo CD leaves replica counts and revision hash selectors to their controllers. `progressDeadlineAbort` aborts a candidate that never becomes ready.
-
-| Release | Pre-promotion analysis | Outcome |
-|---|---|---|
-| `rag-api` 7fcf4cbc | Successful in 73 s, waiting for a cold pod | Promoted; one Rollout owns every ReplicaSet and no Deployment remains |
-| `risk-serving` 756dbb8686 | Successful | Promoted |
-| `rag-api` 69f45b78c4, faulty: `RAG_DB_HOST` points at a missing database | None: the preview pod failed readiness with 503 for more than 5 min | Never promoted; the active Service kept selecting 7fcf4cbc. The Rollout stayed `Progressing` until the spec was restored, which is why `progressDeadlineAbort` is set |
-| `risk-serving` 5dcd89f99f, faulty: `MODEL_URL` points at a model server that does not exist | Failed in 27 s: `preview returned an MCP tool error` | Rollout aborted; the active Service kept selecting 756dbb8686, and the gateway scored 0.1967 during the rollout and after it |
-
-Each faulty candidate was made by pausing Argo CD's reconcile of the app with the `argocd.argoproj.io/skip-reconcile` annotation, patching one environment variable on the Rollout, and restoring it afterwards; both Rollouts returned to Healthy on their original revisions. Argo Rollouts skips the analysis on a first install, which has no previous revision to protect; that case was not run.
-
-Risk's 5 calls/s target is above what one dev client generates, so the target was lowered to 0.5 calls/s per replica for one run and set back to 5 afterwards. A client sent 240 tool calls through the gateway at an average of 0.97 calls/s (233 succeeded, 7 failed, none rate-limited; the failures were not investigated):
-
-| Time (UTC) | Metric / target | Replicas (desired) |
-|---|---|---|
-| 02:17:40 | 0 / 0.5 | 2 (2) |
-| 02:19:15 | 0.725 / 0.5 | 2 (3) |
-| 02:20:01 | 0.430 / 0.5 | 4 (4) |
-
-Scale-down, the 5 calls/s target itself and why the fourth replica did not become ready were not observed.
 
 ## Known limits
 

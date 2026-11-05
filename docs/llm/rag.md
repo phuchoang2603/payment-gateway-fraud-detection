@@ -120,7 +120,7 @@ KEDA scales `rag-api` from 2 to 4 replicas on its combined REST and MCP request 
 
 ### Dev releases
 
-On dev `rag-api` is a blue-green Rollout with a pre-promotion analysis; the mechanism, a promoted release and a faulty one that was never promoted are in [Agents](agents.md#mcp-server-releases). The Locust workload above is retained.
+On dev `rag-api` is a blue-green Rollout with a pre-promotion analysis; the mechanism, a promoted release and a faulty one that was never promoted are in [MCP servers](mcp-servers.md). The Locust workload above is retained.
 
 ### Tests
 
