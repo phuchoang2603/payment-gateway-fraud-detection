@@ -46,7 +46,7 @@ Each keyed customer/method [`Aggregate`](../../src/data-pipeline/streaming/jvm/s
 
 <a id="flink-ui"></a>
 
-The prod job graph and checkpoints are on the [feature store page](../ml/feature-store.md#live-flink-job).
+The prod job graph and checkpoints are on the [feature store page](../ml/feature-store.md#streaming-writer-and-live-job).
 
 Consider a covered entity at 12:10 UTC, with no other attempts:
 
@@ -71,15 +71,6 @@ In live mode `Aggregate` uses processing-time timers and applies attempt-time me
 ### Local correctness comparison
 
 The JVM tests compare 2,498 serialized snapshots from 503 deliveries against the independent [v2 reference](../../src/data-pipeline/features/reference_v2.py), including late inputs, duplicates, conflicts and coverage boundaries. They also verify processing-time timers, RocksDB checkpoint/restore, source-clock recovery, typed serializers, bounded load and transactional Kafka output. A packaged-job test runs the application JAR in the production Flink base image.
-
-```sh
-cd src/data-pipeline/streaming
-mkdir -p jvm/target
-PYTHONPATH=.:.. uv run --locked python jvm/parity_fixture.py jvm/target/parity.json
-mvn -B -f jvm/pom.xml fmt:check verify
-```
-
-These checks validate correctness and recovery; they do not establish production throughput.
 
 <a id="evidence"></a>
 

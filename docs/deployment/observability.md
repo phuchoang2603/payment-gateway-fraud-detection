@@ -40,7 +40,7 @@ Select the environment before comparing results. VictoriaMetrics preserves dotte
 
 Namespace-local rules cover sustained errors/latency, notification age, lag, failed jobs, checkpoint failures and missing signals. Shared Alertmanager currently routes to `blackhole`: alerts evaluate and are visible, but no external notifications are delivered. LLM routes also export request/token metrics; agent traces and prompt versions go to Langfuse.
 
-Grafana Explore retains firing samples for `EdgeRolloutDegraded` during the aborted attempts (16:55–18:05 UTC; this Explore capture displays UTC−05:00). Gaps mean no firing series, not a measured zero. The rollout completed at 18:13 UTC; external notifications remain disabled.
+Grafana Explore retains firing samples for `EdgeRolloutDegraded` during the aborted attempts (16:55–18:05 UTC; this Explore capture displays UTC−05:00). Gaps mean no firing series, not a measured zero. The rollout completed at 18:13 UTC.
 
 ![Historical firing samples for the Edge rollout failure alert](images/edge-rollout-alert-2026-11-03.png)
 
@@ -49,5 +49,3 @@ Grafana Explore retains firing samples for `EdgeRolloutDegraded` during the abor
 Deployed acceptance on 2026-10-24 (change [`go-service-observability`](../../openspec/changes/archive/2026-10-24-go-service-observability/proposal.md)): a sampled approved and declined flow produced connected traces across all six service identities, including fraud spans under Payments and notifier delivery spans in the same trace. With the exporter unreachable, payments still succeeded and every pod exited within 3 s of termination. Application pods used 1–4 mCPU and 3–5 MiB at idle.
 
 Fraud retrieves online features directly through its [Feast adapter](../../src/payment-gateway/fraud/internal/adapters/feast/client.go) and calls the Triton model server directly. The model call records a `fraud.model.calls` counter by status and enforcement, and the span attributes `fraud.model.status` and `fraud.model.enforced`; the assessment evidence records the model version and score. Feature/model diagnostics, serving deadlines and cold starts require separate verification from Edge checkout canary analysis.
-
-Prod verification on 2026-11-03 confirmed Kafka and Flink scrape targets, both operational dashboards in Grafana, native Workflow/Spark signals, candidate-specific OTLP series, a connected Edge/Payments trace and matching request logs. The rollout failure alert fired after an aborted candidate and resolved on retry. External alert delivery remains disabled by the shared `blackhole` receiver.

@@ -5,24 +5,6 @@ Self-hosted chat, embedding and decision models for the agents, the RAG pipeline
 - Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform) (`models.yaml`, values `models`). Application `llm-platform` in namespace `llm`, on dev and prod. On prod the three servers are meant to share one GPU node labelled `talos.dev/nodepool: gpu`; the application is enabled on the GCP GPU pool.
 - Platform prerequisites (KServe 0.21 `LLMInferenceService` presets, the GPU DRA driver, the `llm-gpu` node group for the local model cache, agentgateway) come from the platform repository.
 
-## Setup and verify
-
-1. Enter `devenv shell`; select `~/.kube/talos-dev.yaml`. Verify the GPU claim/DRA driver, KServe presets, agentgateway, kagent/Substrate and local model cache. Prod uses the GCP GPU pool and `~/.kube/talos-prod.yaml`.
-2. Inspect `models`, `gpu`, `gateway` and `agents` in the chart values. Run `helm template llm-platform infra/charts/llm-platform -n llm -f infra/charts/llm-platform/values-dev.yaml` and `helm lint`, then push the change through GitHub Actions to `deploy/dev`; Argo CD reconciles the chart and pinned runtime image.
-3. Check `kubectl --kubeconfig ~/.kube/talos-dev.yaml get llminferenceservices -n llm`, ready endpoints and Gateway Accepted/Programmed conditions. Port-forward `svc/agentgateway` in `llm` to `18080:80`.
-4. Call through the gateway with the dev benchmark identity:
-
-```sh
-doppler run --project payment-gateway-fraud-detection --config dev -- sh -c '
-  curl --fail-with-body http://127.0.0.1:18080/v1/chat/completions \
-    -H "Authorization: Bearer $LLM_GATEWAY_BENCHMARK_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d "{\"model\":\"qwen35-4b\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain a payment gateway briefly.\"}],\"max_tokens\":80}"
-'
-```
-
-Record the response with timestamp, environment and image. Repeat for `/v1/embeddings` (`qwen3-embedding`, 1024 dimensions). Dev checks returned 401 without/with an invalid key, 20 × 429 in a 160-request burst, and a connection reset when bypassing the gateway.
-
 ## Models
 
 | Model | Served name | Weights (pinned revision) | Runtime | Role |

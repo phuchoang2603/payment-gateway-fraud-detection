@@ -1,6 +1,6 @@
 # Novel 2: point-in-time data that excludes future knowledge
 
-A fraud dataset can have valid schemas and still leak the answer. This project combines customer version history, feature availability timestamps and label availability cutoffs so a training row represents what was knowable when the attempt was scored. These are established data techniques; the project-specific contribution is enforcing them together across batch features, stream snapshots and labels.
+A fraud dataset can have valid schemas and still leak the answer. This project combines customer version history, feature availability timestamps and label availability cutoffs so a training row represents what was knowable when the attempt was scored. The same time rules apply across batch features, stream snapshots and labels.
 
 ## Three time boundaries
 
@@ -27,12 +27,12 @@ flowchart LR
 
 ## Evidence and evaluation
 
-This recorded GCP temporal join selects version 4 at `2026-10-16 23:49:08`, exactly where version 3 closes and version 4 opens. The capture demonstrates the half-open validity boundary, not model accuracy.
+This recorded GCP temporal join selects version 4 at `2026-10-16 23:49:08`, exactly where version 3 closes and version 4 opens.
 
 ![Customer temporal join selects the new version at the validity boundary](images/customer-scd2-join-2026-11-03.png)
 
-[`test_training.py`](../../src/data-pipeline/feast/tests/test_training.py) covers valid truth labels, unavailable labels, excluded label sources, invalid lifecycle rows and range/cutoff boundaries. [`test_stream_writer.py`](../../src/data-pipeline/feast/tests/test_stream_writer.py) exercises stream timestamp and coverage validation. These tests support correctness claims; they do not establish a model-quality gain.
+[`test_training.py`](../../src/data-pipeline/feast/tests/test_training.py) covers valid truth labels, unavailable labels, excluded label sources, invalid lifecycle rows and range/cutoff boundaries. [`test_stream_writer.py`](../../src/data-pipeline/feast/tests/test_stream_writer.py) exercises stream timestamp and coverage validation.
 
-A useful controlled evaluation would compare a deliberately naïve latest-row join with the point-in-time join on the same attempts, then count profile-version mismatches, features unavailable at scoring time and labels unavailable at cutoff. That experiment is proposed, not executed here; no fabricated leakage percentage or accuracy uplift is reported.
+Leakage reduction and model-quality gains have not been measured against a latest-row join baseline.
 
 The [feature-store note](../ml/feature-store.md) owns feature lists, TTLs, retrieval and materialization. [Storage](storage.md#schemas-and-naming) owns the SCD2 schema and logical join reference.

@@ -1,6 +1,6 @@
 # Novel 1: write–audit–publish across the lakehouse
 
-A Spark job succeeding does not establish that its data is safe to expose. This pipeline writes candidate Iceberg snapshots, validates those exact snapshots through ClickHouse, and publishes the affected table references together through the catalog. The contribution here is the integration of these established techniques into a reproducible release gate, not a new database algorithm.
+This pipeline writes candidate Iceberg snapshots, validates those exact snapshots through ClickHouse, and publishes the affected table references together through the catalog. It combines established techniques into a reproducible release gate.
 
 ## Release protocol
 
@@ -30,14 +30,14 @@ sequenceDiagram
 
 ## Evidence and limits
 
-The recorded GCP backfill `dp-backfill-v19-gcp-oct-b-6wrsz` passed all 15 tasks for October 16–28, 2026, with checks before each publication. This is evidence of the successful release path. It is not a measured latency improvement or a live failed-publication experiment.
+The recorded GCP backfill `dp-backfill-v19-gcp-oct-b-6wrsz` passed all 15 tasks for October 16–28, 2026, with checks before each publication.
 
 ![GCP backfill with checks before publication and parallel Gold/marts stages](images/argo-gcp-backfill-2026-11-03.png)
 
-[`test_checks.py`](../../src/data-pipeline/openmetadata/tests/test_checks.py) exercises missing/failed results, successful fast-forward preparation and refusal when main has diverged. These are automated tests, distinct from the workflow capture above.
+[`test_checks.py`](../../src/data-pipeline/openmetadata/tests/test_checks.py) exercises missing/failed results, successful fast-forward preparation and refusal when main has diverged.
 
 The atomic boundary is the set of Iceberg table changes in that catalog transaction. It requires the catalog's optional multi-table commit support; it is not a sequence of independent Spark `fast_forward` calls. ClickHouse marts use separate staging tables, checks and partition replacement in [`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py). Their publication and OpenMetadata reporting are not part of the Iceberg transaction, so this does not establish one atomic release across the entire lakehouse, warehouse and catalog UI. The stream-history writer also has its own replay gates and does not use this branch protocol.
 
-The outcome to measure is publication safety: a rejected candidate must leave every affected main reference unchanged, and a concurrent-reference conflict must publish none of the candidate changes. No percentage reduction in bad production rows is claimed without a controlled failure-injection run.
+A live failure-injection run has not yet verified that rejected candidates and concurrent-reference conflicts leave all main references unchanged.
 
 Workflow inventory, contracts and lineage remain in [Orchestration and governance](orchestration-governance.md). Iceberg's [branching guide](https://iceberg.apache.org/docs/latest/branching/) and [REST specification](https://iceberg.apache.org/rest-catalog-spec/) describe the underlying capabilities.

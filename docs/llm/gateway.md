@@ -41,35 +41,14 @@ A2A and MCP, run on 2026-10-31 through a port-forward to the gateway (keys read 
 | `/mcp/knowledge` without a key | 401 |
 | `/mcp/knowledge` with the agents' key as `x-api-key` | A session, then `tools/list`: `search_knowledge`, `get_knowledge_chunk` |
 
-Model route and mesh, run on 2026-10-30:
+Model-route and mesh results from 2026-10-30:
 
-```text
-# LLM route: no key, then an unknown key
-401
-401
-
-# Chat and embedding with the agents key
-{"model": "qwen35-4b", "answer": "A payment gateway processes and secures the payment information between a customer's bank and a merchant's bank during an online transaction.", ...}
-{"model": "qwen3-embedding", "dimensions": 1024, ...}
-
-# Rate limit: 160 requests at once with one client's key (120 per minute, burst 20)
-    140 200
-     20 429
-
-# Mesh: a pod without a gateway identity calls vLLM directly
-http 000 curl exit 56      # connection reset by the mesh
-
-# MCP gateway: tools/list and a search_knowledge call through /mcp/knowledge with the agents key
-[{"name": "search_knowledge", ...}, {"name": "get_knowledge_chunk", ...}]
-[{"distance": 0.298, "chunk_id": "decline-codes#new-account-geo-mismatch"}, {"distance": 0.422, "chunk_id": "fraud-features#feature-ip-shipping-country-mismatch"}, ...]
-# the same route without a key, then a pod calling rag-api directly
-401
-http 000 curl exit 56
-
-# Knowledge Web API through /knowledge/v1: no key, then a 160-request burst with one client's key
-401
-    140 200
-     20 429
-```
+| Check | Result |
+|---|---|
+| Model route without a key / with an unknown key | 401 / 401 |
+| Chat / embedding with the agents key | Chat answer / 1024-dimensional embedding |
+| 160 concurrent requests with one client key | 140 × 200, 20 × 429 |
+| Unauthorised pod calling vLLM or `rag-api` directly | Connection reset by the mesh |
+| Knowledge search through MCP | Returned ranked chunks |
 
 The same counts appear in `agentgateway_requests_total{route, status}` on the Grafana "LLM agents" dashboard.

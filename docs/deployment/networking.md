@@ -25,7 +25,7 @@ Dev uses `pay-gateway-dev.phuchoang.sbs`; prod uses `pay-gateway.phuchoang.sbs`,
 
 ## Public endpoints beyond checkout
 
-The following prod hostnames have live `TunnelBinding` resources as of 2026-11-05. Dev uses the corresponding `-dev` hostname shown below. A binding is route inventory, not proof that its application is healthy or that a particular user can sign in.
+The following prod hostnames have live `TunnelBinding` resources as of 2026-11-05. Dev uses the corresponding `-dev` hostname shown below.
 
 | Endpoint | Prod | Dev | Origin / access path |
 |---|---|---|---|
@@ -44,11 +44,11 @@ The platform owns the bindings for [Grafana](https://github.com/phuchoang2603/ta
 
 These routes use three different paths. Grafana, Argo CD, Workflows, OpenMetadata and Dex target their own Services directly. The shared UI domains target the HTTP port of `istio-ingressgateway`, then use the Istio `ml/kubeflow-gateway` and `VirtualService` resources; `/oauth2/` goes to `oauth2-proxy.auth:80`. Checkout uses the separate Kubernetes Gateway API resources described above. The shared UI routes have not all been migrated to Gateway API.
 
-The desired tunnel origin for both Istio ingress Services is **port 80**, not their first Service port, **15021**, which is the status listener. During this inventory, `TunnelBinding.status.services` listed 15021 for the Gateway-backed bindings despite the desired target being 80. That status alone must not be used as proof of the active Cloudflare origin; inspect the reconciled route when diagnosing those hosts. No tunnel route was changed for this documentation update.
+The desired tunnel origin for both Istio ingress Services is **port 80**, not their first Service port, **15021**, which is the status listener. During this inventory, `TunnelBinding.status.services` listed 15021 for the Gateway-backed bindings despite the desired target being 80. The reconciled Cloudflare origin needs separate verification.
 
 ## Internal API and data endpoints
 
-The `llm/agentgateway` is a separate ClusterIP Gateway with class `agentgateway`; it has no public `TunnelBinding` in this inventory. Its HTTPRoutes are internal and do not inherit the checkout hostname. The following are route contracts, not a statement that model serving is healthy.
+The `llm/agentgateway` is a separate ClusterIP Gateway with class `agentgateway`; it has no public `TunnelBinding` in this inventory. Its HTTPRoutes are internal and do not inherit the checkout hostname.
 
 | Internal entry point | Routing | Access boundary |
 |---|---|---|
@@ -81,22 +81,8 @@ Public `/v1/payments` has no matching route and returned HTTP 404 during the rec
 
 ## Recorded verification
 
-On 2026-11-04, two temporary ambient-mesh pods called only Vault's gRPC health RPC on port 8000. The `edge` service account received `SERVING`; `default` was denied. The receiving proxy recorded “allow policies exist, but none allowed”; the sending proxy recorded HTTP 401 with zero bytes exchanged. The allowed call recorded both workload identities and response bytes. The temporary pods and nonsecret protocol ConfigMap were removed.
+On 2026-11-04, two temporary ambient-mesh pods called only Vault's gRPC health RPC on port 8000. The `edge` service account received `SERVING`; `default` was denied. The receiving proxy recorded “allow policies exist, but none allowed”; the sending proxy recorded HTTP 401 with zero bytes exchanged. The allowed call recorded both workload identities and response bytes.
 
 ![Istio access logs: allowed Edge identity and denied default identity](images/mesh-allowed-denied-2026-11-04.png)
 
-This proves the tested identity/port boundary, not every route or every mesh policy. The [delivery note](cd.md#edge-progressive-delivery) owns the separate 10/25/50% canary, abort and promotion evidence. [Security and secrets](security.md) owns secret delivery and application access controls.
-
-## Read-only checks
-
-Select the environment's kubeconfig explicitly; for prod:
-
-```bash
-kubectl --kubeconfig ~/.kube/talos-prod.yaml get tunnelbinding -A
-kubectl --kubeconfig ~/.kube/talos-prod.yaml get gateway,httproute -A
-kubectl --kubeconfig ~/.kube/talos-prod.yaml get virtualservice -A
-kubectl --kubeconfig ~/.kube/talos-prod.yaml -n payment-gateway get peerauthentication,authorizationpolicy,networkpolicy
-curl -sS -o /dev/null -w '%{http_code}\n' https://pay-gateway.phuchoang.sbs/checkout/
-```
-
-Inspect Gateway `Accepted`/`Programmed` and route `Accepted`/`ResolvedRefs` conditions, then connector health and backend endpoints. A checkout request without session context may be rejected by the application; an HTTP status alone does not verify checkout behavior or mesh authorization. Reuse the identity-based acceptance method above to test private access without sending payment data.
+See [Delivery](cd.md#edge-progressive-delivery) for canary results and [Security and secrets](security.md) for secret delivery and application access controls.

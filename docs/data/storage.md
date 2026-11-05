@@ -60,7 +60,7 @@ The later successful run shows `write payment_events` reading **105.9 GiB** with
 
 ![Spark UI after local fanout: successful payment-event write without a shuffle](images/spark-dp1-stages.png)
 
-The partition-pruning and Z-order values above are historical report results. Their original report UI was not captured, so no reconstructed screenshot is presented. No paired screenshot is available for compaction or local ordering.
+The historical partition-pruning and Z-order reports have no retained UI captures; compaction and local ordering have no paired measurements.
 
 ## Warehouse
 
@@ -129,20 +129,13 @@ The on-demand `warehouse-benchmark` can additionally compare raw Iceberg and an 
 
 ### Current GCP index comparison in Grafana
 
-This is an actual browser capture from [Grafana Explore](https://grafana.phuchoang.sbs/explore) on 2026-11-05, using the read-only `ClickHouse marts` datasource. Both panes plan the same card predicate on the same current `marts.fact_payment_attempt` table. The left query disables skip indexes; the right enables them. Both disable the query-condition cache.
+[Grafana Explore](https://grafana.phuchoang.sbs/explore), 2026-11-05: the same card predicate on `marts.fact_payment_attempt`, with skip indexes disabled (left) and enabled (right). Both disable the query-condition cache.
 
 ![Grafana Explore: identical card query with skip indexes disabled and enabled](images/grafana-card-index-before-after-2026-11-05.png)
 
-The plans select **5,541 → 156 granules (97.18% fewer)** and **577 → 42 parts (92.72% fewer)**. This is a current query-plan comparison, not a timed execution or a repeat of the historical AWS card benchmark. `EXPLAIN` does not run the aggregate query or rewrite data.
+The plans select **5,541 → 156 granules (97.18% fewer)** and **577 → 42 parts (92.72% fewer)**. `EXPLAIN` measures pruning, not query latency.
 
-```sql
-EXPLAIN indexes = 1
-SELECT count() FROM marts.fact_payment_attempt
-WHERE payment_method_fingerprint = '9679a37e1d03c4e92e6ed935b42b943fc8fb320a98520512bc71c7a22b54fc3d'
-SETTINGS use_skip_indexes = 0, use_query_condition_cache = 0;
-```
-
-Repeat with `use_skip_indexes = 1` for the right pane. The fingerprint was selected from an existing row, not chosen by ranking benchmark outcomes. Planning results can change as the table changes. The older timing and codec results remain in the historical table/text above; no original paired screenshots of those measurements were retained. No unsorted table copy, cache flush or production rewrite was performed for this capture.
+The fingerprint was selected from an existing row. These are planning results; the historical timing and codec measurements above have no retained paired screenshots.
 
 ### Mart dashboards
 

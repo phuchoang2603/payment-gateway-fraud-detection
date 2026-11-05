@@ -107,14 +107,7 @@ The release catalog job publishes the entry agents and the MCP servers from the 
 
 Langfuse is the source of each agent's system prompt and A/B test. [`files/prompts/<agent>.md`](../../infra/charts/llm-platform/files/prompts) and the agent's `abTest` in the values only seed a prompt that Langfuse does not have yet; after that, prompts are edited, versioned and tested in Langfuse, and the next conversation uses the new version without a release.
 
-## Autoscaling
-
-| Workload | Mechanism | Why |
-|---|---|---|
-| Agent conversations | Substrate actors: created on demand, suspended to zero when idle, resumed on any worker | Idle conversations cost nothing; any number wait in snapshots |
-| Agent worker pool (`llm-agents`) | KEDA, 2 to 6 workers on Substrate's busy-worker metric | Workers follow the conversations that hold them |
-| Knowledge API (`rag-api`) | KEDA, 2 to 4 replicas on its combined REST and MCP request rate | Target 10 req/s per replica; a dev Locust run scaled 2 → 4 → 2 |
-| Model servers | One replica per model | One GPU per environment |
+The [knowledge API](rag.md#load-test-and-autoscaling) scales separately from the worker pool; [model replicas](inference.md#autoscaling) are limited by GPU capacity.
 
 ## Known limits
 

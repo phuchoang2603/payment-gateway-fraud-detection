@@ -91,7 +91,7 @@ no key                                                             →  401
 160 requests at once with one client's key                         →  140 × 200, 20 × 429
 ```
 
-Dev MCP checks on 2026-10-30 discovered `search_knowledge` and `get_knowledge_chunk`, returned search results with the agents key, rejected calls without a key (401), and reset direct backend connections that bypassed the gateway.
+MCP discovery, authentication and mesh results are in the [gateway checks](gateway.md#checks-on-dev).
 
 ### Load test and autoscaling
 
@@ -122,16 +122,6 @@ KEDA scales `rag-api` from 2 to 4 replicas on its combined REST and MCP request 
 
 [`src/llm/rag_serving/tests/test_service.py`](../../src/llm/rag_serving/tests/test_service.py) uses pytest fixtures and mocks for the store and the embedding client (a fake embedder counts gateway calls, the store functions are monkeypatched), and covers the REST paths (200, 404, 422), the MCP tools, validation before any gateway call, readiness, lazy loading, metrics and the app lifespan. The serving member enforces `--cov-fail-under=90`; in CI (Python CI run 41112821278, job `src/llm/rag_serving`, commit 724831f): 14 passed, 98.52% coverage.
 
-```text
-Name                            Stmts   Miss  Cover   Missing
-fraud_rag_serving/__init__.py       0      0   100%
-fraud_rag_serving/app.py          135      2    99%   177-178
-TOTAL                             135      2    99%
-Required test coverage of 90% reached. Total coverage: 98.52%
-14 passed in 7.53s
-```
-
 ## CI/CD
 
-- CI runs lint, format and tests for each workspace member and builds the `rag-pipeline` and `rag-serving` images when their sources change (including the corpus sources the image copies in).
-- The release publishes `deploy/dev`; Argo CD syncs the chart, and the new pipeline image starts its run in Argo Workflows ([a complete run](#a-complete-run-on-dev)).
+The `rag-pipeline` and `rag-serving` images use the shared [CI](../deployment/ci.md) and [release flow](../deployment/cd.md#release-flow). Argo CD reconciles the chart; Argo Workflows runs the knowledge pipeline ([recorded run](#a-complete-run-on-dev)).

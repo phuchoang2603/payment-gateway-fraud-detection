@@ -82,9 +82,7 @@ flowchart LR
 
 For the Kafka input mode, the same tables also hold decoded records with topic/partition/offset/timestamp provenance. Invalid records go to `bronze.rejected_records`; committed row offsets determine restart progress even after compaction.
 
-**Technique and tradeoff.** Historical files already touch few day partitions, so Bronze uses local fanout writes instead of a redundant hash redistribution. Recorded AWS DP1 hash distribution wrote about 202 GB of shuffle; this is write-layout evidence, not proof of a skew-join speedup.
-
-Recorded AWS DP1 Spark stages show 15 completed stages, including event/label writes and row-count checks. The capture is maintained with the [before/after write-distribution screenshots](storage.md#write-distribution-screenshots).
+Historical files already touch few day partitions, so Bronze uses local fanout writes instead of hash redistribution; see the [write-distribution results](storage.md#write-distribution-screenshots).
 
 ### DP2: Bronze → canonical Silver
 
@@ -99,7 +97,7 @@ Recorded AWS DP1 Spark stages show 15 completed stages, including event/label wr
 
 For example, nested `attempt_started.context.snapshot.total.minor_units` becomes `silver.attempts.amount_minor` (`bigint`), customer context becomes `customer_id`, and assessment outcome/ID become `risk_outcome`/`assessment_id`. `started_at` is server event time; `attempted_at` preserves client time. Terminal events produce `outcome`/`outcome_at`; pending/unknown attempts remain unresolved rather than becoming invented declines. v2 rows retain null assessment IDs after flattening. Raw evidence digests remain in canonical events rather than becoming attempt features.
 
-**Deduplication and schema checks.** Read-only checks against published tables on 2026-11-04 use identical occurrence-date/source predicates in both zones:
+**Deduplication and schema evolution.** Published-table results on 2026-11-04 use identical occurrence-date/source predicates in both zones:
 
 | Historical events, 2026-10-20 | Deliveries | Distinct event IDs | Extra deliveries |
 |---|---:|---:|---:|
@@ -210,5 +208,3 @@ Every Silver, Gold and mart rule passed in OpenMetadata: 58 tests on 15 tables. 
 | On-demand drivers, Spot executors | Losing a driver restarts an application; executor loss costs retries. Drivers stay on on-demand nodes and executors recompute lost work. |
 
 These month-to-month results describe operational changes, not controlled same-input benchmarks.
-
-Spark event logs live under `runs/payment-gateway/spark-events/`. A temporary History Server from the deployed Spark image, with the environment's storage credentials and S3A settings, exposes stages/plans through a port-forward on 18080; remove it after capture.

@@ -35,7 +35,7 @@ These are browser captures of the actual GitHub Actions jobs on 2026-11-05. The 
 
 Sources: [baseline job](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40566181024/job/122408013040) and [optimized job](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40592235496/job/122499209418). GitHub reports total job durations of **7m20s → 2m52s** and build/push steps of **6m49s → 2m28s**. These are observed CI runs with different cache states, not a controlled build-time benchmark. They predate the JVM migration.
 
-The image-size comparison above is separate: GHCR platform manifests rechecked on 2026-11-05 contain **1,221,394,562 → 908,755,934 compressed layer bytes (−25.6%)**. Inspect the `linux/amd64` child manifests for tags `main-6cec4a964d76ffd6348229317fea51d50f468e6a` and `main-52219c087a38d084261157c20241703207f9b270`, then sum `layers[].size`, excluding image config and attestations. The screenshots establish successful builds; their UI does not display those byte counts.
+GHCR platform manifests rechecked on 2026-11-05 contain **1,221,394,562 → 908,755,934 compressed layer bytes (−25.6%)** for the two streaming tags. This size measurement is separate from the CI timings shown above.
 
 The Spark `1e090ee → opt` size comparison remains an archived local experiment. Its old baseline image is no longer available in GHCR, and no paired screenshot of the original size commands was retained. The later Spark image contains newer dependencies, so it cannot substitute for that experiment's after-image.
 
@@ -51,7 +51,7 @@ The Spark `1e090ee → opt` size comparison remains an archived local experiment
 3. Publication waits for every other workflow on that commit/event to succeed and skips superseded revisions. It records the chart revision and image tags in [`release.yaml`](../../infra/argocd/app-of-apps/release.yaml) on the release branch.
 4. The [dev](../../infra/argocd/dev/root.yaml) or [prod](../../infra/argocd/prod/root.yaml) root reconciles the release. Bootstrap requires the namespace, Doppler token, AppProject and root once.
 
-The same flow delivers services and pipeline WorkflowTemplates; Argo Workflows runs their plan, build, validation and publish stages. Prod enables the gateway, Kafka, data pipelines with Flink/Feast, ClickHouse and lakehouse. The current prod root also enables live traffic, ML training, LLM and RAG Applications; enabled desired configuration does not establish that every workload is healthy. Nonsecret settings are in [chart values](../../infra/charts); Doppler credentials reach workloads through External Secrets.
+The same flow delivers services and pipeline WorkflowTemplates; Argo Workflows runs their plan, build, validation and publish stages. Prod enables the gateway, Kafka, data pipelines with Flink/Feast, ClickHouse and lakehouse. The prod root also enables live traffic, ML training, LLM and RAG Applications. Nonsecret settings are in [chart values](../../infra/charts); Doppler credentials reach workloads through External Secrets.
 
 ## Edge progressive delivery
 
