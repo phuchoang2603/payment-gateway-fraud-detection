@@ -10,6 +10,13 @@ triton:
   image: nvcr.io/nvidia/tritonserver:26.10-py3@sha256:b404f7de5dbeeefe0b17d7d149745a50d0989a25d0d831433b5ba63c716c2fcd
 gpu:
   claim: ml-gpu
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
+  tolerations:
+    - key: burst.talos.dev/gpu-training
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
 training:
   resources:
     requests: {cpu: 500m, memory: 2Gi}

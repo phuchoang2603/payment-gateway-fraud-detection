@@ -2,7 +2,7 @@
 
 Fraud analysts ask an agent about decline codes, risk decisions and payment behaviour; it answers from the knowledge base and cites the passages it used. Agents are read-only: they cannot change risk decisions, retry payments, issue refunds or promote models, and they never sit in the payment decision path.
 
-**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route and request screening. Prod configuration targets the GCP GPU pool; the dev captures below do not establish production readiness.
+**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route, prompts and A/B tests in Langfuse, and request screening. Prod configuration targets the GCP GPU pool.
 
 - Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform): [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) (model config, MCP servers, templates, the entry agent, worker pool and its autoscaler), [`a2a.yaml`](../../infra/charts/llm-platform/templates/a2a.yaml) (the A2A route), [`catalog.yaml`](../../infra/charts/llm-platform/templates/catalog.yaml) and [`files/catalog.py`](../../infra/charts/llm-platform/files/catalog.py) (registry, prompt seeds), prompt seeds in [`files/prompts/`](../../infra/charts/llm-platform/files/prompts).
 - Runtime: kagent 1.0.0-rc1 with Agent Substrate 1.0.0-rc1, installed by the platform; the agent runtime image is [`src/llm/agent_runtime`](../../src/llm/agent_runtime).
@@ -16,8 +16,7 @@ Fraud analysts ask an agent about decline codes, risk decisions and payment beha
 | Agent runtime (ours) | kagent's Go ADK runtime plus a Langfuse plugin: each model call's system prompt and A/B variant from Langfuse, linked to the trace |
 | agentgateway | Every A2A, model and tool call: per-client keys, request/token limits, action/jailbreak screening and PII masking |
 | `rag-api` | `search_knowledge` and `get_knowledge_chunk`, discovered through MCP `tools/list` |
-| `risk-serving` | `get_risk_features` and `score_payment_risk`, reading Feast and calling Triton |
-| [Langfuse](langfuse.md) | Prompt management and agent traces |
+| Langfuse | The prompts, their versions and A/B tests, and the agents' traces |
 | agentregistry | The catalog of agents and MCP servers |
 
 ```mermaid
@@ -31,10 +30,6 @@ flowchart LR
   end
   actor -->|/v1, injected key| gw
   actor -->|/mcp/knowledge, injected key| gw
-  actor -->|/mcp/risk, injected key| gw
-  gw --> risktool[risk-serving]
-  risktool --> feast[Feast online features]
-  risktool --> triton[payment-risk Triton]
   gw -->|screen, /v1/systemone| d3[d3-edge on vLLM]
   gw --> vllm[qwen35-4b on vLLM]
   gw --> rag[rag-api]
@@ -43,9 +38,9 @@ flowchart LR
 
 ## Global model config
 
-One kagent `ModelConfig`, `default-model-config`, used by every agent: provider OpenAI, model `qwen35-4b` with the model card's non-thinking sampling, the agents' gateway key, and the gateway's `/v1` route as base URL. Changing the model, the gateway or the key for all agents is one edit. Its sampling settings are the ones every agent uses; kagent's Go runtime takes them only from here.
+One kagent `ModelConfig`, `default-model-config`, used by every agent: provider OpenAI, model `qwen35-4b` with the model card's non-thinking sampling, the agents' gateway key, and the gateway's `/v1` route as base URL. Changing the model, the gateway or the key for all agents is one edit. Its sampling settings are the ones every agent uses; kagent's Go runtime takes them only from here, so A/B variants differ by prompt text.
 
-The [gateway note](gateway.md#routes) shows the shared base URL and credential Secret in the kagent model configuration.
+![kagent model config: default-model-config in llm-agents, key from the Secret llm-gateway-agents, base URL http://agentgateway.llm.svc.cluster.local/v1](images/agents-modelconfig.png)
 
 [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) generates this shared base URL and binds the ModelConfig to every template. Dev calls through this gateway returned chat completions and 1024-dimensional embeddings; direct model access from an unapproved pod was reset. A new end-to-end proof still needs one trace matched to gateway route counters.
 
@@ -55,11 +50,9 @@ The [gateway note](gateway.md#routes) shows the shared base URL and credential S
 |---|---|---|---|
 | `coordinator` 0.2.0 | kagent `Agent` behind `/a2a/coordinator` | sub-agents `evidence_agent`, `risk_agent` | Entry agent: hands each question to the specialist that owns it |
 | `evidence-agent` 0.3.0 | `AgentTemplate`, compiled into the coordinator | `knowledge` MCP server | Explains declines, policy and payment behaviour from the knowledge base, citing chunk ids |
-| `risk-agent` 0.2.0 | `AgentTemplate`, compiled into the coordinator | `risk` MCP server | Reads online features and re-scores supplied payment inputs with the served fraud model; drivers are not attributions |
+| `risk-agent` 0.1.0 | `AgentTemplate`, compiled into the coordinator | none yet | Assesses the risk of one payment, card or customer; the scoring tool is a later change |
 
 The specialists are kagent Shared sub-agents: `subAgent` bindings compile their templates into the coordinator's runtime, and the coordinator transfers the conversation to one of them, which answers the analyst. A conversation is one actor and one trace, with no second network hop. Callers reach agents only through the gateway's `/a2a/coordinator` route.
-
-### Evidence agent
 
 The `evidence-agent` template references the `knowledge` server without a tool list, so it gets every tool the server lists; kagent discovers them:
 
@@ -77,42 +70,11 @@ The kagent UI is published by the platform behind its Dex login:
 
 ![The kagent UI redirects to the platform's Dex login](images/agents-ui-dex-login.png)
 
-### Risk agent
-
-`risk-agent` 0.2.0 re-scores a payment with the served fraud model through the `risk` MCP server at `/mcp/risk`; dev only, production keeps the toolless 0.1.0 agent. The tool takes a `request` object (`integration_id`, `customer_id`, `payment_method_fingerprint`, `amount_minor`, both account-creation timestamps, `shipping_country`, `ip_country`, `item_count`, `has_device`) and sets the scoring time itself, so the result is a what-if re-score, not a stored decision.
-
-- `get_risk_features` returns the five `payment_risk_v1` views, each with a status (`available`, `missing`, `future`, `expired`, `error`, `timeout`) and values only when `available`.
-- `score_payment_risk` returns the probability, model version, decline threshold, `at_or_above_decline_threshold`, the view statuses and the drivers. Unavailable views contribute NaN to Triton, and an upstream error returns no score.
-- Drivers rank feature gain times distance from the training reference distribution. They are not per-prediction attributions, and a reference from another model version yields none.
-- Results carry at most four decimals, because the gateway masks any run of 13 or more digits as a card number.
-
-At 02:12 UTC on 2026-11-05 a dev chat sent the coordinator an analyst question with a customer and fingerprint. It transferred to `risk_agent`, which called both tools with the fingerprint unchanged:
-
-![kagent chat: transfer_to_agent risk_agent, then get_risk_features with the analyst's identifiers](images/risk-chat-transfer.png)
-
-The result is model v5, a score of 0.0006 against the decline threshold 0.8597, `at_or_above_decline_threshold` false, and five drivers led by `customer_snapshot_attempt_count_1h` (34.57% of the ranking) and `amount_minor` (31.92%). The v4 reference had recorded no feature gains because the trainer did not name its features; a dev retrain after the fix registered v5 with gains for 48 of its 50 features.
-
-![The score_payment_risk result: model v5, score, decline threshold, at_or_above_decline_threshold false and the drivers](images/risk-chat-tool-result.png)
-
-![The answer: probability 0.0006, model version 5, decline threshold 0.8597, drivers and the caveat that they are not per-prediction explanations](images/risk-chat-answer.png)
-
-The [Langfuse trace evidence](langfuse.md#traces) records both tools between model calls; the [runtime note](novel-2-go-adk-runtime.md#evidence-and-limits) shows the retry’s transfer and prompt-version linkage.
-
-Its releases and scaling are in [Scaling](scaling.md). A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
-
-A retry on 2026-11-05 at 06:04 UTC returned score 0.0006 from model v5 against threshold 0.8597, with both stream views correctly marked `expired`. In the same conversation, a later policy question transferred to `evidence_agent`, which retrieved `decline-codes#new-account-geo-mismatch` and `risk-decision#requirements-requirement-rules-baseline-policy` and cited them:
-
-![Retry: risk agent reports the model score and threshold](images/risk-retry-score.png)
-
-![Same conversation: evidence agent retrieves and cites the baseline policy](images/risk-retry-evidence.png)
-
-Pending: answer quality still needs evaluation; the risk answer rendered 347677 minor units as dollars, described expired stream values as uncaptured and explained the policy before retrieving evidence. The first explicit transfer follow-up was rejected by the gateway's request-screening webhook with HTTP 403; a plain policy question succeeded.
-
-Prompt-version evidence for the retry is in [Langfuse](langfuse.md#prompts).
-
 ## Runtime
 
-Every agent runs the project's [custom Go ADK runtime (novel idea 2)](novel-2-go-adk-runtime.md): kagent's pinned Go entrypoint with a Langfuse prompt plugin and prompt-version trace linkage. That note covers prompt selection, credential delivery, evidence and limits.
+Every agent runs one image, [`src/llm/agent_runtime`](../../src/llm/agent_runtime): kagent's own Go ADK entrypoint, pinned to the kagent v1.0.0-rc1 commit, with one ADK plugin added. Before each model call the plugin reads the calling agent's prompt, `<agent>-system-prompt`, from Langfuse (cached for 60 s, the last version kept if Langfuse is unreachable), picks the A/B variant for the conversation and puts the prompt first in the system instruction. It also links the model call's span to that prompt version and tags the trace with the agent's side of its test.
+
+The runtime holds no credentials. The model key, the MCP key and the Langfuse key are placeholders that Substrate's egress gateway replaces on the way out, from Secrets named in each agent's `EgressPolicy` and `ModelConfig`; the gateway admits the egress gateway by its mesh identity.
 
 ## Sandbox, warm start and autoscaling
 
@@ -123,7 +85,15 @@ Agents run on Agent Substrate in their own namespace, `llm-agents` (Pod Security
 - **Isolation.** Each conversation is its own gVisor actor. Its only way out is Substrate's egress gateway, which carries every connection and injects the credentials.
 - **Warm start.** Each agent revision has a golden snapshot. A new conversation is restored from it in about 1 s and its runtime is ready 2 to 7 s later (fresh process start; 4.6 s on average over six cold conversations). Substrate's router waits up to 30 s for a waking conversation, so the first message is accepted: 6 of 6 cold conversations on 2026-10-31. An idle conversation is snapshotted and suspended, taking no worker, and resumes on any worker with its context.
 - **Reservation.** kagent books 250m CPU and 256Mi per actor (platform `runtimeDefaults`), plus Substrate's overhead, against a worker's 2Gi limit, so a worker holds several conversations.
-- **Autoscaling.** KEDA scales the WorkerPool from 2 to 6 workers; the metric, target and a run are in [Scaling](scaling.md#agent-worker-pool).
+- **Autoscaling.** KEDA scales the WorkerPool from 2 to 6 workers on Substrate's own metric, the number of workers that are partly or fully booked (`ate_workerpool_workers{ate_worker_state=~"partial|at_capacity"}`), 0.7 per worker. Argo CD leaves the pool's `replicas` to KEDA.
+
+Twelve conversations sent at once to the two-worker pool (2026-10-31):
+
+| | |
+|---|---|
+| Workers | 2 → KEDA asked for 3 at 56 s, Ready at 78 s |
+| Conversations accepted on the first message | 12 of 12 |
+| Time to the full answer | 79 to 123 s, median 112 s (the shared GPU is the limit) |
 
 ## Registry
 
@@ -133,7 +103,11 @@ The release catalog job publishes the entry agents and the MCP servers from the 
 
 ![agentregistry: coordinator 0.2.0 with its sub-agents](images/agents-registry-agent.png)
 
-Prompt management, A/B comparisons and trace details are documented in [Langfuse](langfuse.md).
+## Prompts and A/B tests
+
+Langfuse is the source of each agent's system prompt and A/B test. [`files/prompts/<agent>.md`](../../infra/charts/llm-platform/files/prompts) and the agent's `abTest` in the values only seed a prompt that Langfuse does not have yet; after that, prompts are edited, versioned and tested in Langfuse, and the next conversation uses the new version without a release.
+
+The [knowledge API](rag.md#load-test-and-autoscaling) scales separately from the worker pool; [model replicas](inference.md#autoscaling) are limited by GPU capacity.
 
 ## Known limits
 

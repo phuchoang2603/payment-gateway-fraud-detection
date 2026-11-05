@@ -77,9 +77,9 @@ One FastAPI process serves both, so there is one deployment, one reader identity
 
 ### Deployment, rollout and fallback
 
-In production a Deployment, not a Knative Service: its callers are admitted by mesh identity, which Knative's cluster-local gateway cannot carry. Rollouts use `maxUnavailable: 0`, `maxSurge: 1`, readiness gating and a progress deadline, so a revision that never becomes ready stalls while the previous pods keep serving. A PodDisruptionBudget keeps one ready. KEDA scales it (below).
+A Deployment, not a Knative Service: its callers are admitted by mesh identity, which Knative's cluster-local gateway cannot carry. Rollouts use `maxUnavailable: 0`, `maxSurge: 1`, readiness gating and a progress deadline, so a revision that never becomes ready stalls while the previous pods keep serving. A PodDisruptionBudget keeps one ready. KEDA scales it (below).
 
-[`app.py`](../../src/llm/rag_serving/fraud_rag_serving/app.py) implements async MCP tools with a shared `httpx.AsyncClient`, thread-offloaded Feast calls and locked lazy initialization. [`api.yaml`](../../infra/charts/rag-pipeline/templates/api.yaml) owns RollingUpdate/readiness; [`mcp.yaml`](../../infra/charts/llm-platform/templates/mcp.yaml) owns gateway routing. A failed rollout retains ready old pods and stalls; automatic rollback and alternate-backend failover are not implemented, and dev's blue-green gate is in [MCP servers](scaling.md#blue-green-releases). The load test below measures request handling/scaling, not failed-rollout recovery.
+[`app.py`](../../src/llm/rag_serving/fraud_rag_serving/app.py) implements async MCP tools with a shared `httpx.AsyncClient`, thread-offloaded Feast calls and locked lazy initialization. [`api.yaml`](../../infra/charts/rag-pipeline/templates/api.yaml) owns RollingUpdate/readiness; [`mcp.yaml`](../../infra/charts/llm-platform/templates/mcp.yaml) owns gateway routing. A failed rollout retains ready old pods and stalls; automatic rollback and alternate-backend failover are not implemented. The load test below measures request handling/scaling, not failed-rollout recovery.
 
 ### Checks through the gateway
 
@@ -93,9 +93,30 @@ no key                                                             →  401
 
 MCP discovery, authentication and mesh results are in the [gateway checks](gateway.md#checks-on-dev).
 
-### Load test, scaling and releases
+### Load test and autoscaling
 
-The Locust run and its service level, the KEDA scale-out and the dev blue-green releases of `rag-api` are in [Scaling](scaling.md).
+[`src/llm/rag_serving/loadtest/locustfile.py`](../../src/llm/rag_serving/loadtest/locustfile.py) requests chunks by id (19 of 20 requests real ids, 1 an unknown id that must return 404). It runs in the cluster as an on-demand Job, [`infra/charts/rag-pipeline/loadtest/job.yaml`](../../infra/charts/rag-pipeline/loadtest/job.yaml), against `rag-api` directly as the `llm-benchmark` identity, so it measures the API rather than the gateway's per-client rate limit. Run on 2026-10-30 with 60 users for 5 minutes; the full report is [`loadtest/knowledge-api-locust.html`](loadtest/knowledge-api-locust.html).
+
+```text
+Name                     # reqs   # fails |  Avg  Min   Max  Med |  req/s
+GET /v1/chunks/{chunk_id}  39822   0 (0%) |  116   11  2520   84 | 133.21
+GET /v1/chunks/{unknown}    2123   0 (0%) |  113   12  1751   81 |   7.10
+Aggregated                 41945   0 (0%) |  116   11  2520   84 | 140.31
+
+Percentiles (ms)   50%  75%  90%  95%  99%  99.9%  100%
+Aggregated          84  140  230  310  560   1300  2500
+```
+
+KEDA scales `rag-api` from 2 to 4 replicas on its combined REST and MCP request rate (`knowledge_api_requests_total` plus `knowledge_mcp_tool_calls_total` in VictoriaMetrics, target 10 req/s per replica); the chart leaves `replicas` to KEDA. During the run:
+
+```text
+19:26:53  metric 0/10       ready replicas 2
+19:29:25  metric 41/10      ready replicas 2   # HPA: "New size: 4; reason: external metric s0-prometheus above target"
+19:30:11  metric 41/10      ready replicas 3
+19:30:55  metric 41/10      ready replicas 4
+19:34:21  metric 0/10       ready replicas 4   # load finished
+19:39:11  metric 0/10       ready replicas 2   # HPA: "New size: 2; reason: All metrics below target" after the 5-minute stabilisation window
+```
 
 ### Tests
 

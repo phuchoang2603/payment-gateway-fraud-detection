@@ -63,14 +63,14 @@ spec:
               containerPort: 6566
           # Loading the registry and the Spark source module takes over a minute on a cold start.
           startupProbe:
-            {{- toYaml $.Values.features.healthProbe | nindent 12 }}
+            httpGet: {path: /health, port: http}
             periodSeconds: 10
             failureThreshold: 30
           readinessProbe:
-            {{- toYaml $.Values.features.healthProbe | nindent 12 }}
+            httpGet: {path: /health, port: http}
             periodSeconds: 5
           livenessProbe:
-            {{- toYaml $.Values.features.healthProbe | nindent 12 }}
+            httpGet: {path: /health, port: http}
             periodSeconds: 10
           {{- end }}
           volumeMounts:
@@ -103,14 +103,6 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: fraud-service
-        {{- if $.Values.features.riskAccess }}
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: llm
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: risk-serving
-        {{- end }}
       ports:
         - port: 6566
           protocol: TCP

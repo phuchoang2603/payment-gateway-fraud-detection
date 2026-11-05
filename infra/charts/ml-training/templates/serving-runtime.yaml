@@ -9,6 +9,10 @@ spec:
     - name: payment-risk
       autoSelect: true
   protocolVersions: [v2]
+  nodeSelector:
+    {{- toYaml .Values.gpu.nodeSelector | nindent 4 }}
+  tolerations:
+    {{- toYaml .Values.gpu.tolerations | nindent 4 }}
   resourceClaims:
     - name: gpu
       resourceClaimName: {{ .Values.gpu.claim }}

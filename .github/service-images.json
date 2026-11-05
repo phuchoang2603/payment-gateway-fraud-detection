@@ -175,8 +175,7 @@
         "src/llm/pyproject.toml",
         "src/llm/uv.lock",
         "src/llm/common",
-        "src/llm/rag_serving",
-        "src/llm/mcp_analysis.py"
+        "src/llm/rag_serving"
       ]
     },
     {
@@ -213,19 +212,6 @@
         "src/ml/risk_model/__init__.py",
         "src/ml/risk_model/drift.py",
         "src/ml/risk_model/drift_service.py"
-      ]
-    },
-    {
-      "service": "risk-serving",
-      "image-suffix": "/risk-serving",
-      "context": ".",
-      "dockerfile": "infra/docker/risk-serving.Dockerfile",
-      "paths": [
-        "infra/docker/risk-serving.Dockerfile",
-        "src/llm/pyproject.toml",
-        "src/llm/uv.lock",
-        "src/llm/risk_serving",
-        "src/llm/mcp_analysis.py"
       ]
     }
   ]

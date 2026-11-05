@@ -12,16 +12,10 @@ One agentgateway `Gateway` in `llm` is the only entry to the agents (A2A), the m
 | `/a2a/<agent>` | kagent's A2A endpoint for an entry agent (today `coordinator`), `/agents/llm-agents/<agent>` on the kagent controller | analysts' clients, the benchmark |
 | `/v1/chat/completions`, `/v1/embeddings` | `qwen35-4b` InferencePool (through the endpoint picker), `qwen3-embedding` | agents, the RAG pipeline, `rag-api`, the benchmark |
 | `/v1/systemone` | `d3-edge`, the Jev decision model (agentgateway's `SystemOne` format), on its own route without the prompt guard | clients with a key, and the LLM route's request screen |
-| `/mcp/<server>` | MCP server `<server>` (`knowledge` → `rag-api` `/mcp`, `risk` → `risk-serving` `/mcp`) | agents, kagent's tool discovery |
+| `/mcp/<server>` | MCP server `<server>` (today `knowledge` → `rag-api` `/mcp`) | agents, kagent's tool discovery |
 | `/<api>/v1/...` | REST API `<api>` (today `knowledge` → `rag-api` `/v1`) | API clients |
 
 An MCP server or REST API is one entry under `gateway.mcpServers` or `gateway.apiRoutes` in the values, and an A2A route one entry agent under `agents.list`; the chart renders its route, backend and policy. The A2A backend rewrites the agent card's URLs to the gateway's address and signs a short-lived token (ES256, 300 s) for each call to the kagent controller, which admits only the gateway. The OpenAI-compatible `/v1` route uses `backend.ai.routes` so chat completions, embeddings and model listing each get the right request shape.
-
-The risk route uses the same strict `x-api-key` authentication and per-client limits as knowledge. On dev, dedicated rollout-analysis identities may call the two preview Services at their tool ports; agent calls still pass through the gateway. Feast separately admits the dev risk pod through its NetworkPolicy.
-
-The shared kagent model configuration sends model calls to the gateway’s `/v1` route and references the agents’ credential Secret:
-
-![kagent model configuration: gateway base URL and agents credential Secret](images/gateway-model-route.png)
 
 ## Security and policy
 
@@ -30,7 +24,7 @@ The shared kagent model configuration sends model calls to the gateway’s `/v1`
 | API key per client | `apiKeyAuthentication: Strict` on every route; one key per client (`agents`, `benchmark`, `ragingest`, `ragapi`) from Doppler, labelled for the gateway's key store. A2A, model and REST routes take it as a bearer token, MCP routes as `x-api-key` | Every call is attributable to a client, and one client's key can be rotated without touching others |
 | Rate limit per client | 120 requests per minute with a burst of 20, keyed on `apiKey.client`, on the A2A, LLM, MCP and REST routes; a token budget of 60 000 tokens per minute on the LLM route | A runaway agent or script exhausts its own budget, not the GPU |
 | Request screen and PII masking | Mask request/response PII; reject actions/jailbreaks with 403 when the decision model probability reaches 0.5 | Agents are read-only, and the model never sees full card numbers |
-| Mesh authorization | Istio ambient `AuthorizationPolicy`: only the gateway (and the endpoint picker, benchmark and metrics agent where needed) may reach vLLM, `rag-api` and `risk-serving`; only listed identities may reach the gateway | A pod that skips the gateway is refused at the connection, before any key check |
+| Mesh authorization | Istio ambient `AuthorizationPolicy`: only the gateway (and the endpoint picker, benchmark and metrics agent where needed) may reach vLLM and `rag-api`; only listed identities may reach the gateway | A pod that skips the gateway is refused at the connection, before any key check |
 | Agent egress | Agents run in Substrate actors outside the mesh; their only way out is Substrate's egress gateway, which injects the agents' key and is admitted by its own identity | Credentials stay outside the actor; the egress gateway injects them from Secrets |
 
 Gateway clients admitted by identity: Substrate's egress gateway (agents), `rag-api`, the RAG workflow (`data/rag-pipeline`), the kagent controller (MCP tool discovery) and the benchmark.
