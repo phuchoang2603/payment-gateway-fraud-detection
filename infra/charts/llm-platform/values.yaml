@@ -1,17 +1,15 @@
 global:
   imageTags:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/agent-runtime: dev
+    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/risk-serving: dev
   # Release digests; kagent runs only digest-pinned runtime images.
   imageDigests: {}
 
 storageClass: local-path
 
 gpu:
-  deviceClassName: gpu.nvidia.com
   # The platform's KServe LocalModelNodeGroup on the GPU nodes.
   localModelNodeGroup: llm-gpu
-  nodeSelector: {}
-  tolerations: []
 
 # The platform's Kubeflow artifacts identity (scoped to artifacts/, datasets/ and runs/), synced into this namespace for
 # Langfuse's event uploads.
@@ -20,6 +18,10 @@ objectStore:
   credentialsKeys:
     accesskey: OBJECT_ARTIFACTS_ACCESS_KEY_ID
     secretkey: OBJECT_ARTIFACTS_SECRET_ACCESS_KEY
+
+# The Grafana folder of the dashboard, as in the other components' charts.
+dashboards:
+  folder: LLM
 
 vllm:
   image: vllm/vllm-openai:v0.32.0
@@ -42,13 +44,15 @@ models:
     replicas: 1
     # Frees the GPU for the standalone benchmark server (benchmark/server.yaml).
     stopped: false
-    # 0.76 leaves room on the shared GPU for the decision model (vLLM needs its whole 0.10 free at start, whichever
-    # server starts first). Only 8 of its 32 layers keep a KV cache (16 KiB a token in FP8), so a 32k context is cheap;
-    # the other 24 keep about 50 MiB of fp32 state per sequence, which caps concurrent sequences at 32 (1.55 GiB).
+    # The fraction of the GPU the server may use. 0.76 leaves room on the shared GPU for the other two servers (vLLM
+    # needs its whole fraction free at start, whichever server starts first, and each server also holds a CUDA context
+    # outside its fraction, so the fractions must sum to less than 1 by that overhead). Only 8 of its 32 layers keep a
+    # KV cache (16 KiB a token in FP8), so a 32k context is cheap; the other 24 keep about 50 MiB of fp32 state per
+    # sequence, which caps concurrent sequences at 32 (1.55 GiB).
+    gpuMemoryUtilization: "0.76"
     args:
       - --language-model-only
       - --max-model-len=32768
-      - --gpu-memory-utilization=0.76
       - --kv-cache-dtype=fp8
       - --max-num-seqs=32
       - --reasoning-parser=qwen3
@@ -71,10 +75,10 @@ models:
     replicas: 1
     # 0.12 of the 16 GB GPU leaves about 0.3 GiB of KV cache after the weights: enough for 2048 tokens, which covers
     # knowledge chunks (at most about 400 tokens) and queries.
+    gpuMemoryUtilization: "0.12"
     args:
       - --runner=pooling
       - --max-model-len=2048
-      - --gpu-memory-utilization=0.12
     resources:
       requests: {cpu: 250m, memory: 2Gi}
       limits: {memory: 4Gi}
@@ -89,10 +93,10 @@ models:
     cacheSize: 2Gi
     image: vllm/vllm-openai:nightly-2b009fc6d1493a9a1ad19f4d0c7230b7e6b7e63a@sha256:1b7aee4c157c2c8f48aaf34de137d1eebfb2eea8445549789188c2280883f8d7
     replicas: 1
+    gpuMemoryUtilization: "0.10"
     args:
       - --language-model-only
       - --max-model-len=2048
-      - --gpu-memory-utilization=0.10
       # Its linear-attention layers keep fp32 state per sequence; at vLLM's default sequence count that state alone
       # (1.59 GiB) outgrew the share on dev. Screening sends a handful of requests at a time.
       - --max-num-seqs=16
@@ -118,9 +122,14 @@ gateway:
     requestsPerMinute: 120
     burst: 20
     tokensPerMinute: 60000
-  # Card numbers with spaces or dashes that the CreditCard built-in does not match.
+  # Card numbers with spaces or dashes that the CreditCard built-in does not match, and phone numbers. The PhoneNumber
+  # built-in is not used: it masks any run of seven digits, including those inside the hex payment-method fingerprints
+  # and UUIDs that the risk tool needs unchanged. These match a phone only at word boundaries.
   piiPatterns:
     - '\b(?:\d[ -]?){12,18}\d\b'
+    - '(?:\+\d{1,3}[ .-]?)?(?:\(\d{3}\)\s?|\b\d{3}[ .-])\d{3}[ .-]\d{4}\b'
+    - '\+\d{1,3}(?:[ .-]?\d{2,4}){2,5}\b'
+    - '\b\d{10,11}\b'
   # The LLM route asks the decision model (models.decision) one question about the latest user turn and rejects it
   # when "action" or "jailbreak" reaches the threshold.
   screening:
@@ -162,6 +171,14 @@ gateway:
       version: 0.1.0
       title: Payment-gateway knowledge base
       description: Search and read passages about decline codes, risk policy, the payment lifecycle, the checkout API and fraud features.
+    risk:
+      service: risk-serving
+      port: 8080
+      path: /mcp
+      version: 0.1.0
+      title: Payment risk scoring
+      description: Read-only online features and what-if scoring with the served fraud model; drivers are not attributions.
+
   # REST APIs behind /<name>/v1, each a Service in this namespace, with client keys and limits like the LLM route.
   apiRoutes:
     knowledge:
@@ -234,13 +251,14 @@ agents:
         # The variant is the seed prompt followed by this instruction.
         addendum: Answer in at most five sentences, then list the passages you cited.
     - name: risk-agent
-      version: 0.1.0
+      version: 0.2.0
+      mcpServers: [risk]
       title: Risk agent
       description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, and explains what drives it.
       abTest:
         label: variant-b
         share: 0.5
-        addendum: Start with the risk level in one word, then give the three strongest drivers.
+        addendum: Start with the returned probability and model version, then give up to three drivers with the attribution caveat; if scoring failed, report the error without a risk level.
     - name: coordinator
       version: 0.2.0
       title: Coordinator
@@ -397,3 +415,31 @@ langfuse:
     mediaUpload:
       enabled: false
       prefix: artifacts/langfuse/media/
+
+risk:
+  image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/risk-serving
+  port: 8080
+  feastUrl: http://feast-server.data.svc.cluster.local:6566
+  modelUrl: http://payment-risk-predictor.ml.svc.cluster.local
+  referenceUrl: http://payment-risk-drift.ml.svc.cluster.local
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 4
+    callsPerSecondPerReplica: "5"
+    prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
+  rollout:
+    arguments:
+      request:
+        integration_id: rollout-analysis
+        customer_id: rollout-analysis
+        payment_method_fingerprint: rollout-analysis
+        amount_minor: 12000
+        customer_account_created_at: "2025-01-01T00:00:00Z"
+        merchant_account_created_at: "2024-01-01T00:00:00Z"
+        shipping_country: US
+        ip_country: US
+        item_count: 2
+        has_device: true
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}

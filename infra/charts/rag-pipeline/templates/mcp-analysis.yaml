@@ -1,0 +1,48 @@
+{{- $server := .Values.api }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rag-api-analysis
+automountServiceAccountToken: false
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: rag-api-preview
+spec:
+  metrics:
+    - name: mcp-preview
+      count: 1
+      failureLimit: 0
+      consecutiveErrorLimit: 1
+      provider:
+        job:
+          spec:
+            activeDeadlineSeconds: 300
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 86400
+            template:
+              spec:
+                serviceAccountName: rag-api-analysis
+                automountServiceAccountToken: false
+                restartPolicy: Never
+                securityContext:
+                  {{- include "rag-pipeline.podSecurity" . | nindent 18 }}
+                containers:
+                  - name: mcp-check
+                    image: {{ include "rag-pipeline.image" (dict "image" .Values.images.serving "global" .Values.global) | quote }}
+                    command: [python, /app/mcp_analysis.py]
+                    env:
+                      - name: MCP_URL
+                        value: http://rag-api-preview.{{ .Release.Namespace }}.svc.cluster.local:{{ $server.port }}/mcp
+                      - name: MCP_TOOL
+                        value: get_knowledge_chunk
+                      - name: MCP_ARGUMENTS
+                        value: {{ toJson $server.rollout.arguments | quote }}
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities: {drop: [ALL]}
+                    resources:
+                      requests: {cpu: 10m, memory: 64Mi}
+                      limits: {memory: 128Mi}
