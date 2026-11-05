@@ -26,7 +26,8 @@
 
 - [Agents](llm/agents.md)
 - [Inference](llm/inference.md)
-- [Policy](llm/policy.md)
+- [Policy (novel idea 1)](llm/policy.md)
+- [Custom Go ADK runtime (novel idea 2)](llm/novel-2-go-adk-runtime.md)
 - [Agent gateway](llm/gateway.md)
 - [RAG](llm/rag.md)
 - [Scaling](llm/scaling.md)

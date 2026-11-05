@@ -1,4 +1,4 @@
-# LLM policy
+# LLM policy (novel idea 1)
 
 What the gateway checks in the content of a model call before and after the chat model sees it: a request screen by a Jev decision model, and PII guardrails. Per-client keys and rate limits authenticate callers; mesh policies block direct backend access.
 
