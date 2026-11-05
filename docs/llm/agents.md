@@ -112,7 +112,7 @@ A retry on 2026-11-05 at 06:04 UTC returned score 0.0006 from model v5 against t
 
 Pending: answer quality still needs evaluation; the risk answer rendered 347677 minor units as dollars, described expired stream values as uncaptured and explained the policy before retrieving evidence. The first explicit transfer follow-up was rejected by the gateway's request-screening webhook with HTTP 403; a plain policy question succeeded. The LLM-version A/B remains on hold.
 
-The Langfuse prompt `risk-agent-system-prompt` was published as `production` version 3 and `variant-b` as version 4; the catalog seeds only missing prompts, so an existing prompt needs new versions in Langfuse. Not verified: a fresh conversation on version 3 (the kagent controller was in `CreateContainerError` and the A2A route answered 503, so the chat above predates the publish).
+The Langfuse prompt `risk-agent-system-prompt` was published as `production` version 3 and `variant-b` as version 4; the catalog seeds only missing prompts, so an existing prompt needs new versions in Langfuse. The 06:04 UTC retry used version 3: trace `4b62897784005dc59bf0c00aced8cdcf` links all three risk model calls to that prompt version.
 
 ## Runtime
 
