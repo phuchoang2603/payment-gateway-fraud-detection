@@ -25,7 +25,6 @@
 **LLM**
 
 - [Agents](llm/agents.md)
-- [Risk agent](llm/risk-agent.md)
 - [Inference](llm/inference.md)
 - [Policy](llm/policy.md)
 - [Agent gateway](llm/gateway.md)

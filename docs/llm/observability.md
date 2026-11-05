@@ -47,11 +47,13 @@ PII guardrail                     request: allow 14, mask 12 · response: allow 
 
 The two MCP 500s are the cold-start timeout that loading the Feast store at start-up fixed.
 
-The risk server exports `risk_mcp_tool_calls_total{tool,outcome}`, `risk_tool_latency_seconds{tool}` and `risk_view_status_total{view,status}`. Tool failures are counted even when MCP transports the error with HTTP 200. KEDA scales 2–4 risk replicas on the one-minute tool-call rate, initially at 5 calls/s per replica; this target has no load-test capacity claim.
+The risk server exports `risk_mcp_tool_calls_total{tool,outcome}`, `risk_tool_latency_seconds{tool}` and `risk_view_status_total{view,status}`. Tool failures are counted even when MCP transports the error with HTTP 200.
 
 ## Grafana dashboard
 
-The "LLM agents" dashboard ([`files/dashboards/llm-agents.json`](../../infra/charts/llm-platform/files/dashboards/llm-agents.json)) shows A2A calls and failures per agent route, MCP tool calls by outcome, screen route calls, guard checks and screen latency, and the model's tokens, time to first token and round-trip. Over the evidence runs on 2026-10-31 (16:15 to 17:00 UTC): 32 calls to `/a2a/coordinator`, 15 `search_knowledge` calls, all successful: Its MCP panels count the knowledge and risk servers, and a Risk tool row shows the tool's mean and p95 latency, the feature view statuses and the KEDA replicas of both MCP servers. The ConfigMap carries the `grafana_folder` annotation from `dashboards.folder`, so the dashboard lands in the `LLM` folder like the other components' dashboards.
+The "LLM agents" dashboard ([`files/dashboards/llm-agents.json`](../../infra/charts/llm-platform/files/dashboards/llm-agents.json)) shows A2A calls and failures per agent route, MCP tool calls by outcome, screen route calls, guard checks and screen latency, and the model's tokens, time to first token and round-trip. Over the evidence runs on 2026-10-31 (16:15 to 17:00 UTC): 32 calls to `/a2a/coordinator`, 15 `search_knowledge` calls, all successful: Its MCP panels count the knowledge and risk servers, and a Risk tool row shows the tool's mean and p95 latency, the feature view statuses and the KEDA replicas of both MCP servers. The ConfigMap carries the `grafana_folder` annotation from `dashboards.folder`, so the dashboard lands in the `LLM` folder like the other components' dashboards. On dev, `score_payment_risk` read 1.04 s mean and 4.63 s p95 over the 3 hours shown, every feature view `available`, and 2 replicas for both MCP servers:
+
+![Grafana, LLM folder: LLM agents with the Risk tool row, latency, feature views by status and MCP server replicas](images/risk-dashboard.png)
 
 ![Grafana LLM agents dashboard: A2A calls per agent, MCP tool calls by outcome, screening](images/observability-agents-dashboard.png)
 

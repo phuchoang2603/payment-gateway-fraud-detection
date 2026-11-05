@@ -2,7 +2,7 @@
 
 Fraud analysts ask an agent about decline codes, risk decisions and payment behaviour; it answers from the knowledge base and cites the passages it used. Agents are read-only: they cannot change risk decisions, retry payments, issue refunds or promote models, and they never sit in the payment decision path.
 
-**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route, prompts and A/B tests in Langfuse, and request screening, shown in the historical captures below. The dev risk-scoring tool is verified in the chat below; what is not yet shown is listed at the end of Risk scoring. Production is enabled on the GCP GPU pool; the dev captures below do not establish production readiness.
+**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route, prompts and A/B tests in Langfuse, and request screening, shown in the historical captures below. The dev risk-scoring tool is verified in a chat below; what is not yet shown is listed at the end of Risk agent. Production is enabled on the GCP GPU pool; the dev captures below do not establish production readiness.
 
 - Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform): [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) (model config, MCP servers, templates, the entry agent, worker pool and its autoscaler), [`a2a.yaml`](../../infra/charts/llm-platform/templates/a2a.yaml) (the A2A route), [`catalog.yaml`](../../infra/charts/llm-platform/templates/catalog.yaml) and [`files/catalog.py`](../../infra/charts/llm-platform/files/catalog.py) (registry, prompt seeds), prompt seeds in [`files/prompts/`](../../infra/charts/llm-platform/files/prompts).
 - Runtime: kagent 1.0.0-rc1 with Agent Substrate 1.0.0-rc1, installed by the platform; the agent runtime image is [`src/llm/agent_runtime`](../../src/llm/agent_runtime).
@@ -59,6 +59,8 @@ One kagent `ModelConfig`, `default-model-config`, used by every agent: provider 
 
 The specialists are kagent Shared sub-agents: `subAgent` bindings compile their templates into the coordinator's runtime, and the coordinator transfers the conversation to one of them, which answers the analyst. A conversation is one actor and one trace, with no second network hop. Callers reach agents only through the gateway's `/a2a/coordinator` route.
 
+### Evidence agent
+
 The `evidence-agent` template references the `knowledge` server without a tool list, so it gets every tool the server lists; kagent discovers them:
 
 ![kagent MCP servers: llm-agents/knowledge with get_knowledge_chunk and search_knowledge](images/agents-mcp-tools.png)
@@ -74,6 +76,35 @@ and answers from the passage it found, citing its chunk id:
 The kagent UI is published by the platform behind its Dex login:
 
 ![The kagent UI redirects to the platform's Dex login](images/agents-ui-dex-login.png)
+
+### Risk agent
+
+`risk-agent` 0.2.0 re-scores a payment with the served fraud model through the `risk` MCP server at `/mcp/risk`; dev only, production keeps the toolless 0.1.0 agent. The tool takes a `request` object (`integration_id`, `customer_id`, `payment_method_fingerprint`, `amount_minor`, both account-creation timestamps, `shipping_country`, `ip_country`, `item_count`, `has_device`) and sets the scoring time itself, so the result is a what-if re-score, not a stored decision.
+
+- `get_risk_features` returns the five `payment_risk_v1` views, each with a status (`available`, `missing`, `future`, `expired`, `error`, `timeout`) and values only when `available`.
+- `score_payment_risk` returns the probability, model version, decline threshold, `at_or_above_decline_threshold`, the view statuses and the drivers. Unavailable views contribute NaN to Triton, and an upstream error returns no score.
+- Drivers rank feature gain times distance from the training reference distribution. They are not per-prediction attributions, and a reference from another model version yields none.
+- Results carry at most four decimals, because the gateway masks any run of 13 or more digits as a card number.
+
+At 02:12 UTC on 2026-11-05 a dev chat sent the coordinator an analyst question with a customer and fingerprint. It transferred to `risk_agent`, which called both tools with the fingerprint unchanged:
+
+![kagent chat: transfer_to_agent risk_agent, then get_risk_features with the analyst's identifiers](images/risk-chat-transfer.png)
+
+The result is model v5, a score of 0.0006 against the decline threshold 0.8597, `at_or_above_decline_threshold` false, and five drivers led by `customer_snapshot_attempt_count_1h` (34.57% of the ranking) and `amount_minor` (31.92%). The v4 reference had recorded no feature gains because the trainer did not name its features; a dev retrain after the fix registered v5 with gains for 48 of its 50 features.
+
+![The score_payment_risk result: model v5, score, decline threshold, at_or_above_decline_threshold false and the drivers](images/risk-chat-tool-result.png)
+
+![The answer: probability 0.0006, model version 5, decline threshold 0.8597, drivers and the caveat that they are not per-prediction explanations](images/risk-chat-answer.png)
+
+One Langfuse trace covers the conversation, tagged `risk-agent:production`, with both tool spans between the model calls:
+
+![Langfuse trace: invoke_agent coordinator, generate_content, transfer_to_agent, invoke_agent risk_agent](images/risk-trace-agents.png)
+
+![The same trace further down: the get_risk_features and score_payment_risk tool spans](images/risk-trace-tools.png)
+
+A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
+
+The Langfuse prompt `risk-agent-system-prompt` was published as `production` version 3 and `variant-b` as version 4; the catalog seeds only missing prompts, so an existing prompt needs new versions in Langfuse. Not verified: a fresh conversation on version 3 (the kagent controller was in `CreateContainerError` and the A2A route answered 503, so the chat above predates the publish).
 
 ## Runtime
 
@@ -118,13 +149,32 @@ Langfuse is the source of each agent's system prompt and A/B test. [`files/promp
 |---|---|---|
 | Agent conversations | Substrate actors: created on demand, suspended to zero when idle, resumed on any worker | Idle conversations cost nothing; any number wait in snapshots |
 | Agent worker pool (`llm-agents`) | KEDA, 2 to 6 workers on Substrate's busy-worker metric | Workers follow the conversations that hold them |
-| Knowledge API (`rag-api`) | KEDA, 2 to 4 replicas on its combined REST and MCP request rate | Target 10 req/s per replica; a dev Locust run scaled 2 → 4 → 2 |
-| Risk MCP (`risk-serving`) | KEDA, 2 to 4 replicas on tool-call rate | Initial target 5 calls/s per replica; scale-out observed on dev ([Risk agent](risk-agent.md)) |
+| Knowledge API (`rag-api`) | KEDA, 2 to 4 replicas on its combined REST and MCP request rate | Target 10 req/s per replica; a dev Locust run scaled 2 → 4 → 2 ([RAG](rag.md#load-test-and-autoscaling)) |
+| Risk MCP (`risk-serving`) | KEDA, 2 to 4 replicas on tool-call rate | Initial target 5 calls/s per replica; scale-out observed on dev (below) |
 | Model servers | One replica per model | GPU capacity is separate from tool-server scaling |
 
-## Risk scoring
+### MCP server releases
 
-The `risk` MCP server, its Rollouts, drivers, dev proof and open items are in [Risk agent](risk-agent.md).
+On dev, `rag-api` and `risk-serving` are blue-green Rollouts and KEDA targets their scale subresources; production retains the Deployment. The active Service keeps its name and a `-preview` Service selects the candidate. A bounded pre-promotion Job with its own identity initializes MCP, lists the tools and makes one call (`rag-api`: a configured knowledge chunk; `risk-serving`: a scoring call). A tool error, missing result or timeout blocks promotion and keeps the active revision serving. The preview starts at one replica and grows to KEDA's desired count before the Service switches; Argo CD leaves replica counts and revision hash selectors to their controllers. `progressDeadlineAbort` aborts a candidate that never becomes ready.
+
+| Release | Pre-promotion analysis | Outcome |
+|---|---|---|
+| `rag-api` 7fcf4cbc | Successful in 73 s, waiting for a cold pod | Promoted; one Rollout owns every ReplicaSet and no Deployment remains |
+| `risk-serving` 756dbb8686 | Successful | Promoted |
+| `rag-api` 69f45b78c4, faulty: `RAG_DB_HOST` points at a missing database | None: the preview pod failed readiness with 503 for more than 5 min | Never promoted; the active Service kept selecting 7fcf4cbc. The Rollout stayed `Progressing` until the spec was restored, which is why `progressDeadlineAbort` is set |
+| `risk-serving` 5dcd89f99f, faulty: `MODEL_URL` points at a model server that does not exist | Failed in 27 s: `preview returned an MCP tool error` | Rollout aborted; the active Service kept selecting 756dbb8686, and the gateway scored 0.1967 during the rollout and after it |
+
+Each faulty candidate was made by pausing Argo CD's reconcile of the app with the `argocd.argoproj.io/skip-reconcile` annotation, patching one environment variable on the Rollout, and restoring it afterwards; both Rollouts returned to Healthy on their original revisions. Argo Rollouts skips the analysis on a first install, which has no previous revision to protect; that case was not run.
+
+Risk's 5 calls/s target is above what one dev client generates, so the target was lowered to 0.5 calls/s per replica for one run and set back to 5 afterwards. A client sent 240 tool calls through the gateway at an average of 0.97 calls/s (233 succeeded, 7 failed, none rate-limited; the failures were not investigated):
+
+| Time (UTC) | Metric / target | Replicas (desired) |
+|---|---|---|
+| 02:17:40 | 0 / 0.5 | 2 (2) |
+| 02:19:15 | 0.725 / 0.5 | 2 (3) |
+| 02:20:01 | 0.430 / 0.5 | 4 (4) |
+
+Scale-down, the 5 calls/s target itself and why the fourth replica did not become ready were not observed.
 
 ## Known limits
 

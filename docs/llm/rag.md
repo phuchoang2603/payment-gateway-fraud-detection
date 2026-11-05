@@ -120,14 +120,7 @@ KEDA scales `rag-api` from 2 to 4 replicas on its combined REST and MCP request 
 
 ### Dev releases
 
-On dev, `rag-api` is a blue-green Rollout and KEDA targets its scale subresource. The active Service keeps its name; `rag-api-preview` selects the candidate. A bounded pre-promotion Job lists MCP tools and reads a configured versioned knowledge chunk, using its dedicated analysis identity. A tool error, missing passage or timeout blocks promotion and keeps the active revision serving. The preview starts at one replica, then grows to KEDA's desired count before the Service switches; promotion can briefly require both revisions at full capacity. Argo CD leaves replica counts and revision hash selectors to their controllers. Production retains the Deployment. The existing Locust workload above is retained.
-
-| Release | Pre-promotion analysis | Outcome |
-|---|---|---|
-| `rag-api` 7fcf4cbc | Successful in 73 s, waiting for a cold pod | Promoted; one Rollout owns every ReplicaSet and no Deployment remains |
-| `rag-api` 69f45b78c4, faulty: `RAG_DB_HOST` points at a missing database | No analysis: the preview pod failed readiness with 503 for more than 5 min | Never promoted; the active Service kept selecting 7fcf4cbc. The Rollout stayed `Progressing` until the spec was restored, which is why `progressDeadlineAbort` is set on dev |
-
-The faulty candidate was made by pausing Argo CD's reconcile of the app with the `argocd.argoproj.io/skip-reconcile` annotation, patching one environment variable on the Rollout, and restoring it afterwards; the Rollout returned to Healthy on its original revision.
+On dev `rag-api` is a blue-green Rollout with a pre-promotion analysis; the mechanism, a promoted release and a faulty one that was never promoted are in [Agents](agents.md#mcp-server-releases). The Locust workload above is retained.
 
 ### Tests
 
