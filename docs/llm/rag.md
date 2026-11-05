@@ -77,9 +77,9 @@ One FastAPI process serves both, so there is one deployment, one reader identity
 
 ### Deployment, rollout and fallback
 
-A Deployment, not a Knative Service: its callers are admitted by mesh identity, which Knative's cluster-local gateway cannot carry. Rollouts use `maxUnavailable: 0`, `maxSurge: 1`, readiness gating and a progress deadline, so a revision that never becomes ready stalls while the previous pods keep serving. A PodDisruptionBudget keeps one ready. KEDA scales it (below).
+In production a Deployment, not a Knative Service: its callers are admitted by mesh identity, which Knative's cluster-local gateway cannot carry. Rollouts use `maxUnavailable: 0`, `maxSurge: 1`, readiness gating and a progress deadline, so a revision that never becomes ready stalls while the previous pods keep serving. A PodDisruptionBudget keeps one ready. KEDA scales it (below).
 
-[`app.py`](../../src/llm/rag_serving/fraud_rag_serving/app.py) implements async MCP tools with a shared `httpx.AsyncClient`, thread-offloaded Feast calls and locked lazy initialization. [`api.yaml`](../../infra/charts/rag-pipeline/templates/api.yaml) owns RollingUpdate/readiness; [`mcp.yaml`](../../infra/charts/llm-platform/templates/mcp.yaml) owns gateway routing. A failed rollout retains ready old pods and stalls; automatic rollback and alternate-backend failover are not implemented. The load test below measures request handling/scaling, not failed-rollout recovery.
+[`app.py`](../../src/llm/rag_serving/fraud_rag_serving/app.py) implements async MCP tools with a shared `httpx.AsyncClient`, thread-offloaded Feast calls and locked lazy initialization. [`api.yaml`](../../infra/charts/rag-pipeline/templates/api.yaml) owns RollingUpdate/readiness; [`mcp.yaml`](../../infra/charts/llm-platform/templates/mcp.yaml) owns gateway routing. A failed rollout retains ready old pods and stalls; automatic rollback and alternate-backend failover are not implemented, and dev's blue-green gate is in [MCP servers](mcp-servers.md). The load test below measures request handling/scaling, not failed-rollout recovery.
 
 ### Checks through the gateway
 
