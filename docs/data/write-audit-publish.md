@@ -1,4 +1,4 @@
-# Novel 1: write–audit–publish across the lakehouse
+# Write–audit–publish (novel)
 
 This pipeline writes candidate Iceberg snapshots, validates those exact snapshots through ClickHouse, and publishes the affected table references together through the catalog.
 

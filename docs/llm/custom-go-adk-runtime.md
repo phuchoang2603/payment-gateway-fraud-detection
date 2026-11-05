@@ -1,4 +1,4 @@
-# Custom Go ADK runtime (novel idea 2)
+# Custom Go ADK runtime (novel)
 
 The agents need centrally managed prompts without rebuilding their images, a consistent prompt variant throughout a conversation, and traces that identify the prompt used for each model call. The project's runtime integrates these with kagent's Go ADK and Agent Substrate.
 

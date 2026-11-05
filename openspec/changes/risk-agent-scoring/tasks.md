@@ -41,7 +41,7 @@
 
 ## 7. Docs and spec
 
-- [x] 7.1 Update `docs/llm/agents.md` (agents table: `risk-agent` 0.2.0 with the `risk` server, status line), `docs/llm/gateway.md` (the `/mcp/risk` route and its mesh rule), `docs/deployment/observability.md` (the three metrics), `docs/llm/scaling.md` (risk scaling target), `docs/llm/rag.md` (knowledge blue-green release and KEDA target), and add a one-line pointer in `docs/ml/serving.md`; keep edits to the affected sections and identify the risk scaling target as provisional without a load-test claim
+- [x] 7.1 Update `docs/llm/agents.md` (agents table: `risk-agent` 0.2.0 with the `risk` server, status line), `docs/llm/gateway-and-jev-policy.md` (the `/mcp/risk` route and its mesh rule), `docs/deployment/observability.md` (the three metrics), `docs/llm/scaling.md` (risk scaling target), `docs/llm/rag.md` (knowledge blue-green release and KEDA target), and add a one-line pointer in `docs/ml/serving.md`; keep edits to the affected sections and identify the risk scaling target as provisional without a load-test claim
 - [x] 7.2 Run `openspec validate risk-agent-scoring --strict` in `devenv shell` and verify it passes
 
 ## 8. Checks and dev proof

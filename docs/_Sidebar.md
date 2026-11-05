@@ -11,7 +11,7 @@
 - [Online data](data/online.md)
 - [Storage](data/storage.md)
 - [Orchestration and governance](data/orchestration-governance.md)
-- [Novel 1: write–audit–publish](data/novel-1-write-audit-publish.md)
+- [Write–audit–publish (novel)](data/write-audit-publish.md)
 
 **ML**
 
@@ -26,9 +26,8 @@
 
 - [Agents](llm/agents.md)
 - [Inference](llm/inference.md)
-- [Policy (novel idea 1)](llm/novel-1-jev-policy.md)
-- [Custom Go ADK runtime (novel idea 2)](llm/novel-2-go-adk-runtime.md)
-- [Agent gateway](llm/gateway.md)
+- [Gateway and Jev policy (novel)](llm/gateway-and-jev-policy.md)
+- [Custom Go ADK runtime (novel)](llm/custom-go-adk-runtime.md)
 - [RAG](llm/rag.md)
 - [Scaling](llm/scaling.md)
 - [Langfuse](llm/langfuse.md)

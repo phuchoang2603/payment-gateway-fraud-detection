@@ -91,7 +91,7 @@ no key                                                             →  401
 160 requests at once with one client's key                         →  140 × 200, 20 × 429
 ```
 
-MCP discovery, authentication and mesh results are in the [gateway checks](gateway.md#checks-on-dev).
+MCP discovery, authentication and mesh results are in the [gateway checks](gateway-and-jev-policy.md#checks-on-dev).
 
 ### Load test, scaling and releases
 

@@ -45,7 +45,7 @@ flowchart LR
 
 One kagent `ModelConfig`, `default-model-config`, used by every agent: provider OpenAI, model `qwen35-4b` with the model card's non-thinking sampling, the agents' gateway key, and the gateway's `/v1` route as base URL. Changing the model, the gateway or the key for all agents is one edit. Its sampling settings are the ones every agent uses; kagent's Go runtime takes them only from here.
 
-The [gateway note](gateway.md#routes) shows the shared base URL and credential Secret in the kagent model configuration.
+The [gateway note](gateway-and-jev-policy.md#routes) shows the shared base URL and credential Secret in the kagent model configuration.
 
 [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) generates this shared base URL and binds the ModelConfig to every template. Dev calls through this gateway returned chat completions and 1024-dimensional embeddings; direct model access from an unapproved pod was reset. A new end-to-end proof still needs one trace matched to gateway route counters.
 
@@ -96,7 +96,7 @@ The result is model v5, a score of 0.0006 against the decline threshold 0.8597, 
 
 ![The answer: probability 0.0006, model version 5, decline threshold 0.8597, drivers and the caveat that they are not per-prediction explanations](images/risk-chat-answer.png)
 
-The [Langfuse trace evidence](langfuse.md#traces) records both tools between model calls; the [runtime note](novel-2-go-adk-runtime.md#evidence-and-limits) shows the retry’s transfer and prompt-version linkage.
+The [Langfuse trace evidence](langfuse.md#traces) records both tools between model calls; the [runtime note](custom-go-adk-runtime.md#evidence-and-limits) shows the retry’s transfer and prompt-version linkage.
 
 Its releases and scaling are in [Scaling](scaling.md). A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
 
@@ -112,7 +112,7 @@ Prompt-version evidence for the retry is in [Langfuse](langfuse.md#prompts).
 
 ## Runtime
 
-Every agent runs the project's [custom Go ADK runtime (novel idea 2)](novel-2-go-adk-runtime.md): kagent's pinned Go entrypoint with a Langfuse prompt plugin and prompt-version trace linkage. That note covers prompt selection, credential delivery, evidence and limits.
+Every agent runs the project's [custom Go ADK runtime (novel)](custom-go-adk-runtime.md): kagent's pinned Go entrypoint with a Langfuse prompt plugin and prompt-version trace linkage. That note covers prompt selection, credential delivery, evidence and limits.
 
 ## Sandbox, warm start and autoscaling
 

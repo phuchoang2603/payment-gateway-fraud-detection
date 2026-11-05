@@ -48,7 +48,7 @@ Grafana Explore retains firing samples for `EdgeRolloutDegraded` during the abor
 
 ## LLM metrics
 
-vLLM, the endpoint picker, agentgateway, `rag-api` and `risk-serving` expose metrics scraped by the platform's vmagent into VictoriaMetrics. Agent traces and prompt versions go directly to [Langfuse](../llm/langfuse.md); the [custom runtime](../llm/novel-2-go-adk-runtime.md) implements prompt selection and trace linkage. Agentgateway exports metrics but no traces. These LLM sources export natively without an OpenTelemetry Collector.
+vLLM, the endpoint picker, agentgateway, `rag-api` and `risk-serving` expose metrics scraped by the platform's vmagent into VictoriaMetrics. Agent traces and prompt versions go directly to [Langfuse](../llm/langfuse.md); the [custom runtime](../llm/custom-go-adk-runtime.md) implements prompt selection and trace linkage. Agentgateway exports metrics but no traces. These LLM sources export natively without an OpenTelemetry Collector.
 
 Scrape configuration: [`infra/charts/llm-platform/templates/scrape.yaml`](../../infra/charts/llm-platform/templates/scrape.yaml) and the `VMPodScrape` in [`infra/charts/rag-pipeline/templates/api.yaml`](../../infra/charts/rag-pipeline/templates/api.yaml). The queries below run in Explore; the agent-facing ones are also on the [LLM dashboard](#llm-dashboard).
 
@@ -62,7 +62,7 @@ Scrape configuration: [`infra/charts/llm-platform/templates/scrape.yaml`](../../
 | Time to first token, inter-token latency, queue, KV cache | `vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`, `vllm:num_requests_waiting`, `vllm:kv_cache_usage_perc` |
 | Prompts caught by PII masking | `agentgateway_guardrail_checks_total{action, phase}` |
 
-Current dev captures are kept with the components they describe: [gateway routing](../llm/gateway.md#routes), [Jev screening and PII guard decisions](../llm/novel-1-jev-policy.md#checks-on-dev), and [model time to first token](../llm/inference.md#checks-on-dev).
+Current dev captures are kept with the components they describe: [gateway routing](../llm/gateway-and-jev-policy.md#routes), [Jev screening and PII guard decisions](../llm/gateway-and-jev-policy.md#screening-and-pii), and [model time to first token](../llm/inference.md#checks-on-dev).
 
 The risk server exports `risk_mcp_tool_calls_total{tool,outcome}`, `risk_tool_latency_seconds{tool}` and `risk_view_status_total{view,status}`. Tool failures are counted even when MCP transports the error with HTTP 200.
 
