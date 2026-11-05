@@ -41,7 +41,7 @@
 
 ## 7. Docs and spec
 
-- [x] 7.1 Update `docs/llm/agents.md` (agents table: `risk-agent` 0.2.0 with the `risk` server, status line), `docs/llm/gateway.md` (the `/mcp/risk` route and its mesh rule), `docs/llm/observability.md` (the three metrics and risk scaling target), `docs/llm/rag.md` (knowledge blue-green release and KEDA target), and add a one-line pointer in `docs/ml/serving.md`; keep edits to the affected sections and identify the risk scaling target as provisional without a load-test claim
+- [x] 7.1 Update `docs/llm/agents.md` (agents table: `risk-agent` 0.2.0 with the `risk` server, status line), `docs/llm/gateway.md` (the `/mcp/risk` route and its mesh rule), `docs/deployment/observability.md` (the three metrics), `docs/llm/scaling.md` (risk scaling target), `docs/llm/rag.md` (knowledge blue-green release and KEDA target), and add a one-line pointer in `docs/ml/serving.md`; keep edits to the affected sections and identify the risk scaling target as provisional without a load-test claim
 - [x] 7.2 Run `openspec validate risk-agent-scoring --strict` in `devenv shell` and verify it passes
 
 ## 8. Checks and dev proof
@@ -68,7 +68,7 @@
 ## 11. Review follow-ups
 
 - [x] 11.1 Run a faulty candidate for each server on dev with Argo CD's reconcile paused for the app, record the analysis result and that the active revision kept serving, then restore the spec; verify the Rollouts return to Healthy with the original template
-- [x] 11.2 Set `progressDeadlineAbort: true` on both Rollouts only where blue-green is enabled; verify `helm template` renders it in both environments
+- [x] 11.2 Set `progressDeadlineAbort: true` on both Rollouts; verify `helm template` renders it in both environments
 - [x] 11.3 Move the agents dashboard to the `LLM` folder through `dashboards.folder`, cover both MCP servers in its tool panels and add the Risk tool row; verify the rendered ConfigMap carries the annotation and valid JSON
 - [x] 11.4 Remove the GPU `nodeSelector` and tolerations from the `llm-platform` and `ml-training` charts and the benchmark manifests; verify no claim, selector or toleration renders and that workloads still reference their claims by name
 
@@ -89,6 +89,6 @@
 
 - [x] 14.1 Use the same risk tools, prompt, blue-green workloads, preview identities, Feast callers and Argo controller ownership in dev/prod; remove alternate paths and render both environments
 - [x] 14.2 Move analysis and behavior tests into common, update image change detection and copies without adding Feast to the risk image
-- [ ] 14.3 Make the scoring gate independent of a seeded dev customer, while rejecting malformed results, missing request features and upstream failures; let CI run behavior tests
-- [ ] 14.4 Remove the Feast exec probe override, render native HTTP probes for both environments, and diagnose dev probe connectivity after deployment without adding source-IP exceptions
-- [ ] 14.5 Update affected docs and validate lint, formatting, lock consistency, chart rendering and OpenSpec; record CI and deployment results separately
+- [x] 14.3 Make the scoring gate independent of a seeded dev customer, while rejecting malformed results, missing request features and upstream failures; let CI run behavior tests
+- [x] 14.4 Remove the Feast exec probe override, render native HTTP probes for both environments, and diagnose dev probe connectivity after deployment without adding source-IP exceptions
+- [x] 14.5 Update affected docs and validate lint, formatting, lock consistency, chart rendering and OpenSpec; record CI and deployment results separately
