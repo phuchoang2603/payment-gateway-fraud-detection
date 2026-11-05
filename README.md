@@ -1,7 +1,6 @@
 # Payment Gateway and Real-Time Fraud Detection
 
-- Hosted checkout, fraud scoring, lakehouse pipelines and analyst agents for a refurbished-electronics marketplace.
-- Synthetic cards and fraud labels. [Project wiki](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki).
+A payment gateway for a refurbished-electronics marketplace, built to connect reliable checkout with real-time fraud decisions and explainable investigations. Payment events feed streaming and historical data pipelines for model training, scoring and analyst agents, using synthetic cards and fraud labels. See the [project wiki](https://github.com/phuchoang2603/payment-gateway-fraud-detection/wiki) for the architecture and implementation.
 
 ## Payment gateway, data pipeline and ML
 
