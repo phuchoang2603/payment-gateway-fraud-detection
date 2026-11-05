@@ -46,23 +46,21 @@ Kafka offsets are derived from the Bronze rows themselves, not from snapshot met
 
 `maintain-lakehouse` (task `nightly`) runs from a daily 03:43 UTC CronWorkflow (enabled in prod, suspended in dev) and holds `dp-writer` and `dp1-bronze-writer`, so it never commits alongside a pipeline run. It reports before/after files and bytes per table and the branches it dropped; task `zorder` is the on-demand storage evidence.
 
-### Before/after lakehouse proof
-
-![Lakehouse partition pruning and Z-order before/after comparison](images/lakehouse-optimization-before-after.png)
-
-This figure is redrawn from the retained [maintenance report](evidence/zorder-2026-11-01.json), not a new GCP run. A one-day predicate reduces planned files **2,904 → 4 (−99.86%)** and planned bytes **113,729,774,392 → 282,390,283 (−99.75%)**. This is partition pruning over different selected ranges, not a timed before/after rewrite of the same query. Z-order is a genuine layout before/after comparison: **30 → 30 files**, with planned bytes **2,496,773,377 → 2,521,119,685 (+0.98%)** after a 69.57-second rewrite. It did not improve file-level pruning.
-
-No paired numerical result is retained here for compaction, local write ordering or removal of the historical hash redistribution. The write-stage capture below records the old shuffle cost; it cannot establish a percentage speedup without a matching after-run. These techniques remain implementation choices with stated purposes, not measured wins. The [renderer](../evidence/render-optimization.py) preserves the plotted values and units.
-
 ### Implementation references
 
 Catalog/session setup: [`spark.py`](../../src/data-pipeline/batch/batch/spark.py). Table properties and branch writes: [`lakehouse.py`](../../src/data-pipeline/batch/batch/lakehouse.py). Maintenance: [`maintenance.py`](../../src/data-pipeline/batch/batch/maintenance.py). Mart DDL/build: [`gold/sql/marts`](../../src/data-pipeline/batch/batch/gold/sql/marts), [`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py). Spark merges evolving Parquet schemas and deduplicates canonical events by `event_id` before writing Silver.
 
-### Write distribution results
+### Write distribution screenshots
 
-Recorded AWS DP1 hash distribution wrote 202 GB of shuffle. Historical Bronze/Silver input already touches few day partitions, so local fanout writes remove that redistribution. This is write-layout evidence, not a skew-join comparison.
+These retained Spark UI captures are from the actual AWS `dp1-bronze-historical` attempts on 2026-10-30. Before the fanout change, the `write payment_events` stage shows **202.3 GiB of shuffle write**, followed by retry attempts.
 
-![DP1 historical hash-distribution shuffle before local fanout](images/spark-dp1-hash-write-stages.png)
+![Spark UI before local fanout: payment-event write creates 202.3 GiB of shuffle](images/spark-dp1-hash-write-stages.png)
+
+The later successful run shows `write payment_events` reading **105.9 GiB** with no shuffle read/write recorded for that stage; all 1,428 tasks completed. This supports removal of the write redistribution. It does not establish an end-to-end percentage speedup: the earlier attempt retried, and the displayed stage timings and byte categories differ.
+
+![Spark UI after local fanout: successful payment-event write without a shuffle](images/spark-dp1-stages.png)
+
+The partition-pruning and Z-order values above are historical report results. Their original report UI was not captured, so no reconstructed screenshot is presented. No paired screenshot is available for compaction or local ordering.
 
 ## Warehouse
 
@@ -129,21 +127,22 @@ What it shows:
 
 The on-demand `warehouse-benchmark` can additionally compare raw Iceberg and an unsorted copy, but it makes a second 6 GiB copy of the fact on the shared 30 GiB volume, so it was not run on prod.
 
-### Before/after warehouse proof
+### Current GCP index comparison in Grafana
 
-![ClickHouse index-disabled versus index-enabled query timings and granules](images/warehouse-index-before-after.png)
+This is an actual browser capture from [Grafana Explore](https://grafana.phuchoang.sbs/explore) on 2026-11-05, using the read-only `ClickHouse marts` datasource. Both panes plan the same card predicate on the same current `marts.fact_payment_attempt` table. The left query disables skip indexes; the right enables them. Both disable the query-condition cache.
 
-![ClickHouse string codec size and daily-mart query comparisons](images/warehouse-codec-mart-before-after.png)
+![Grafana Explore: identical card query with skip indexes disabled and enabled](images/grafana-card-index-before-after-2026-11-05.png)
 
-The [machine-readable comparison](evidence/warehouse-comparison.json) transcribes the recorded AWS values in [storage.md at fc197dbc5c9c](https://github.com/phuchoang2603/payment-gateway-fraud-detection/blob/fc197dbc5c9c/docs/data/storage.md). These are historical single-run comparisons, not fresh GCP screenshots; the original `query_log` export was not retained. PNGs were generated from those records.
+The plans select **5,541 → 156 granules (97.18% fewer)** and **577 → 42 parts (92.72% fewer)**. This is a current query-plan comparison, not a timed execution or a repeat of the historical AWS card benchmark. `EXPLAIN` does not run the aggregate query or rewrite data.
 
-- Card bloom filter: **1,905 → 158 ms (12.06× faster)**; **5,732 → 296 granules (94.84% fewer)**.
-- Customer bloom filter: **827 → 745 ms (9.92% lower latency)**; the busiest customer remains broadly scattered.
-- Outcome set index: **278 → 352 ms (26.62% slower)**, with no granules skipped. This is a negative result.
-- ZSTD on a 2M-row sample: UUID strings **35.5 → 18.5 bytes/row (47.89% smaller)**; fingerprints **63.4 → 32.2 (49.21% smaller)**.
-- Daily KPI mart: **340 → 12 ms (28.33× faster)** for the recorded hot merchant/month. This compares two query shapes; it does not isolate a skip-index effect.
+```sql
+EXPLAIN indexes = 1
+SELECT count() FROM marts.fact_payment_attempt
+WHERE payment_method_fingerprint = '9679a37e1d03c4e92e6ed935b42b943fc8fb320a98520512bc71c7a22b54fc3d'
+SETTINGS use_skip_indexes = 0, use_query_condition_cache = 0;
+```
 
-The raw-Iceberg/unsorted-copy benchmark was not executed on prod, and there is no measured percentage here for bucketed joins, spill tuning or the unmeasured risk-score index. Re-running the warehouse benchmark while replay is using the cluster would alter the resource contention; no production benchmark was submitted for this documentation update.
+Repeat with `use_skip_indexes = 1` for the right pane. The fingerprint was selected from an existing row, not chosen by ranking benchmark outcomes. Planning results can change as the table changes. The older timing and codec results remain in the historical table/text above; no original paired screenshots of those measurements were retained. No unsorted table copy, cache flush or production rewrite was performed for this capture.
 
 ### Mart dashboards
 

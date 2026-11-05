@@ -84,9 +84,7 @@ For the Kafka input mode, the same tables also hold decoded records with topic/p
 
 **Technique and tradeoff.** Historical files already touch few day partitions, so Bronze uses local fanout writes instead of a redundant hash redistribution. Recorded AWS DP1 hash distribution wrote about 202 GB of shuffle; this is write-layout evidence, not proof of a skew-join speedup.
 
-Recorded AWS DP1 Spark stages show 15 completed stages, including event/label writes and row-count checks.
-
-![DP1 Spark stages: reads, writes, checks and shuffle metrics](images/spark-dp1-stages.png)
+Recorded AWS DP1 Spark stages show 15 completed stages, including event/label writes and row-count checks. The capture is maintained with the [before/after write-distribution screenshots](storage.md#write-distribution-screenshots).
 
 ### DP2: Bronze → canonical Silver
 

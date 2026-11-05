@@ -25,27 +25,19 @@ Measured image optimization (`linux/amd64`); compressed size is registry layer b
 | Spark, `main-eb98307`, 2026-11-01 | Separate connector/build stages; copy only Spark runtime; remove pip/cache | 1.35 GB compressed, 1.89 GB unpacked; −33% compressed against `1e090ee`, with newer Spark and more connectors |
 | Streaming, `6cec4a9` → `52219c0`, 2026-10-27 | Avoid installing a second copy of Flink libraries | Compressed 1.22 → 0.91 GB (−25%); unpacked 1.82 → 1.49 GB |
 
-### Before/after image and build proof
+### GitHub build screenshots
 
-The figures distinguish three evidence levels. PNGs are rendered from the linked records, not screenshots of a new build. Image sizes do not establish faster build times or faster data processing.
+These are browser captures of the actual GitHub Actions jobs on 2026-11-05. The historical streaming baseline at `6cec4a9` and optimized version at `52219c0` both built and published successfully.
 
-![Streaming image: verified registry layer bytes before and after optimization](images/docker-streaming-before-after.png)
+![GitHub Actions: streaming build before the packaging optimization](images/github-streaming-build-before-2026-11-05.png)
 
-The historical streaming packaging change is independently reproducible from the retained GHCR `linux/amd64` manifests: **1,221,394,562 → 908,755,934 compressed layer bytes (−25.6%)**. The [measurement and immutable digests](evidence/image-size-proof.json) and [before](evidence/streaming-before-manifest.json)/[after](evidence/streaming-after-manifest.json) platform manifests were checked on 2026-11-05. This predates the JVM migration and is not a current JVM image-size benchmark. To reproduce, inspect each recorded digest and sum `layers[].size`; exclude the image config and provenance/attestation manifests.
+![GitHub Actions: streaming build after the packaging optimization](images/github-streaming-build-after-2026-11-05.png)
 
-![Historical Spark image sizes before and after cache/runtime optimization](images/docker-spark-before-after.png)
+Sources: [baseline job](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40566181024/job/122408013040) and [optimized job](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40592235496/job/122499209418). GitHub reports total job durations of **7m20s → 2m52s** and build/push steps of **6m49s → 2m28s**. These are observed CI runs with different cache states, not a controlled build-time benchmark. They predate the JVM migration.
 
-The [Spark size record](evidence/spark-historical-sizes.json) preserves the archived, rounded 2026-10-22 measurements. Its old baseline image was unavailable in GHCR during this check, so these values were not independently remeasured. The later `main-eb98307` Spark manifest is retained in the [registry evidence](evidence/image-size-proof.json), but it also contains newer dependencies and is not a controlled build comparison.
+The image-size comparison above is separate: GHCR platform manifests rechecked on 2026-11-05 contain **1,221,394,562 → 908,755,934 compressed layer bytes (−25.6%)**. Inspect the `linux/amd64` child manifests for tags `main-6cec4a964d76ffd6348229317fea51d50f468e6a` and `main-52219c087a38d084261157c20241703207f9b270`, then sum `layers[].size`, excluding image config and attestations. The screenshots establish successful builds; their UI does not display those byte counts.
 
-![Successful before and after Spark build export excerpts](images/docker-spark-build-proof.png)
-
-The retained [before](evidence/spark-build-before.txt) and [after](evidence/spark-build-after.txt) BuildKit excerpts show both local Spark builds exporting and unpacking successfully. They retain output tags, manifest digests and hashes of their original logs. They do not establish a mapping to the archived size experiment's commits or comparable cache states, so no build-duration reduction is claimed. Regenerate these PNGs with the [evidence renderer](../evidence/render-optimization.py) from the repository root:
-
-```bash
-devenv shell -- env UV_PYTHON_PREFERENCE=managed UV_PYTHON_DOWNLOADS=automatic \
-  uv run --no-project --python 3.11 --with matplotlib --with pillow \
-  python docs/evidence/render-optimization.py
-```
+The Spark `1e090ee → opt` size comparison remains an archived local experiment. Its old baseline image is no longer available in GHCR, and no paired screenshot of the original size commands was retained. The later Spark image contains newer dependencies, so it cannot substitute for that experiment's after-image.
 
 ## Release flow
 
