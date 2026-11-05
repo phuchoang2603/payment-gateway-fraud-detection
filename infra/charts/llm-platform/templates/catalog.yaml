@@ -53,7 +53,7 @@
   "agents.json" (toJson $agentList)
   "publish.py" (.Files.Get "files/catalog.py") }}
 {{- range $agent := .Values.agents.list }}
-{{- $_ := set $data (printf "prompt-%s.md" $agent.name) ($.Files.Get ($agent.promptFile | default (printf "files/prompts/%s.md" $agent.name))) }}
+{{- $_ := set $data (printf "prompt-%s.md" $agent.name) ($.Files.Get (printf "files/prompts/%s.md" $agent.name)) }}
 {{- end }}
 {{- $hash := $data | toJson | sha256sum | trunc 10 }}
 apiVersion: v1

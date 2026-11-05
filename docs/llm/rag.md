@@ -77,9 +77,9 @@ One FastAPI process serves both, so there is one deployment, one reader identity
 
 ### Deployment, rollout and fallback
 
-In production a Deployment, not a Knative Service: its callers are admitted by mesh identity, which Knative's cluster-local gateway cannot carry. Rollouts use `maxUnavailable: 0`, `maxSurge: 1`, readiness gating and a progress deadline, so a revision that never becomes ready stalls while the previous pods keep serving. A PodDisruptionBudget keeps one ready. KEDA scales it (below).
+Both environments render an Argo Rollout with active and preview Services, readiness gating and a bounded pre-promotion MCP check. A PodDisruptionBudget keeps one replica available, and KEDA owns the desired count. Callers retain mesh identity through the fixed active Service.
 
-[`app.py`](../../src/llm/rag_serving/fraud_rag_serving/app.py) implements async MCP tools with a shared `httpx.AsyncClient`, thread-offloaded Feast calls and locked lazy initialization. [`api.yaml`](../../infra/charts/rag-pipeline/templates/api.yaml) owns RollingUpdate/readiness; [`mcp.yaml`](../../infra/charts/llm-platform/templates/mcp.yaml) owns gateway routing. A failed rollout retains ready old pods and stalls; automatic rollback and alternate-backend failover are not implemented, and dev's blue-green gate is in [MCP servers](scaling.md#blue-green-releases). The load test below measures request handling/scaling, not failed-rollout recovery.
+[`app.py`](../../src/llm/rag_serving/fraud_rag_serving/app.py) implements async MCP tools with a shared `httpx.AsyncClient`, thread-offloaded Feast calls and locked lazy initialization. [`api.yaml`](../../infra/charts/rag-pipeline/templates/api.yaml) owns blue-green release/readiness; [`mcp.yaml`](../../infra/charts/llm-platform/templates/mcp.yaml) owns gateway routing. A failed candidate analysis retains the active revision; the shared blue-green gate and dev results are in [MCP servers](scaling.md#blue-green-releases). Alternate-backend failover is not implemented. The load test below measures request handling/scaling, not failed-rollout recovery.
 
 ### Checks through the gateway
 
@@ -95,7 +95,7 @@ MCP discovery, authentication and mesh results are in the [gateway checks](gatew
 
 ### Load test, scaling and releases
 
-The Locust run and its service level, the KEDA scale-out and the dev blue-green releases of `rag-api` are in [Scaling](scaling.md).
+The Locust run, its service level, KEDA scale-out and blue-green dev captures of `rag-api` are in [Scaling](scaling.md).
 
 ### Tests
 

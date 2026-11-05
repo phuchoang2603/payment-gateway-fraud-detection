@@ -84,7 +84,6 @@ workflow:
 
 api:
   rollout:
-    enabled: false
     arguments: {chunk_id: "decline-codes#high-amount"}
   port: 8080
   # Identity of the on-demand load test Job; the llm-platform chart creates it for the benchmark.

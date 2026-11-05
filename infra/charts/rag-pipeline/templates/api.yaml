@@ -1,12 +1,11 @@
 {{- $api := .Values.api }}
-apiVersion: {{ ternary "argoproj.io/v1alpha1" "apps/v1" $api.rollout.enabled }}
-kind: {{ ternary "Rollout" "Deployment" $api.rollout.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: rag-api
 spec:
   # KEDA owns the replica count (ScaledObject below), so the chart leaves it unset.
   strategy:
-    {{- if $api.rollout.enabled }}
     blueGreen:
       activeService: rag-api
       previewService: rag-api-preview
@@ -16,17 +15,9 @@ spec:
       prePromotionAnalysis:
         templates:
           - templateName: rag-api-preview
-    {{- else }}
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
-    {{- end }}
   minReadySeconds: 10
   progressDeadlineSeconds: 300
-  {{- if $api.rollout.enabled }}
   progressDeadlineAbort: true
-  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: rag-api
@@ -75,7 +66,6 @@ spec:
     app.kubernetes.io/name: rag-api
   ports:
     - {name: http, port: {{ $api.port }}, targetPort: http}
-{{- if $api.rollout.enabled }}
 ---
 apiVersion: v1
 kind: Service
@@ -86,7 +76,6 @@ spec:
     app.kubernetes.io/name: rag-api
   ports:
     - {name: http, port: {{ $api.port }}, targetPort: http}
-{{- end }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -105,10 +94,8 @@ metadata:
   name: rag-api
 spec:
   scaleTargetRef:
-    {{- if $api.rollout.enabled }}
     apiVersion: argoproj.io/v1alpha1
     kind: Rollout
-    {{- end }}
     name: rag-api
   minReplicaCount: {{ $api.autoscaling.minReplicas }}
   maxReplicaCount: {{ $api.autoscaling.maxReplicas }}
@@ -137,9 +124,7 @@ spec:
               - {{ .Values.metricsAgent }}
               # The on-demand load test (loadtest/job.yaml) measures the API itself, behind the gateway's rate limit.
               - cluster.local/ns/{{ .Release.Namespace }}/sa/{{ .Values.api.loadTestServiceAccount }}
-              {{- if $api.rollout.enabled }}
               - cluster.local/ns/{{ .Release.Namespace }}/sa/rag-api-analysis
-              {{- end }}
 ---
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMPodScrape

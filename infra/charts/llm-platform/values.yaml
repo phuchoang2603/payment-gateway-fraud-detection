@@ -171,6 +171,14 @@ gateway:
       version: 0.1.0
       title: Payment-gateway knowledge base
       description: Search and read passages about decline codes, risk policy, the payment lifecycle, the checkout API and fraud features.
+    risk:
+      service: risk-serving
+      port: 8080
+      path: /mcp
+      version: 0.1.0
+      title: Payment risk scoring
+      description: Read-only online features and what-if scoring with the served fraud model; drivers are not attributions.
+
   # REST APIs behind /<name>/v1, each a Service in this namespace, with client keys and limits like the LLM route.
   apiRoutes:
     knowledge:
@@ -243,14 +251,14 @@ agents:
         # The variant is the seed prompt followed by this instruction.
         addendum: Answer in at most five sentences, then list the passages you cited.
     - name: risk-agent
-      version: 0.1.0
-      promptFile: files/prompts/risk-agent-unavailable.md
+      version: 0.2.0
+      mcpServers: [risk]
       title: Risk agent
       description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, and explains what drives it.
       abTest:
         label: variant-b
         share: 0.5
-        addendum: Start with the risk level in one word, then give the three strongest drivers.
+        addendum: Start with the returned probability and model version, then give up to three drivers with the attribution caveat; if scoring failed, report the error without a risk level.
     - name: coordinator
       version: 0.2.0
       title: Coordinator
@@ -409,7 +417,6 @@ langfuse:
       prefix: artifacts/langfuse/media/
 
 risk:
-  enabled: false
   image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/risk-serving
   port: 8080
   feastUrl: http://feast-server.data.svc.cluster.local:6566
@@ -421,8 +428,18 @@ risk:
     callsPerSecondPerReplica: "5"
     prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
   rollout:
-    enabled: false
-    arguments: {}
+    arguments:
+      request:
+        integration_id: rollout-analysis
+        customer_id: rollout-analysis
+        payment_method_fingerprint: rollout-analysis
+        amount_minor: 12000
+        customer_account_created_at: "2025-01-01T00:00:00Z"
+        merchant_account_created_at: "2024-01-01T00:00:00Z"
+        shipping_country: US
+        ip_country: US
+        item_count: 2
+        has_device: true
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {memory: 256Mi}

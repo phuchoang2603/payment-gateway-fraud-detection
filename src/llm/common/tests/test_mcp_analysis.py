@@ -4,8 +4,8 @@ import math
 import httpx
 import pytest
 
-import mcp_analysis as analysis
-from mcp_analysis import analyze, validate
+from fraud_rag_common import mcp_analysis as analysis
+from fraud_rag_common.mcp_analysis import analyze, validate
 
 
 @pytest.mark.parametrize(
@@ -27,21 +27,48 @@ def test_analysis_rejects_missing_knowledge_data():
         validate("get_knowledge_chunk", {"structuredContent": {"chunk_id": "known"}})
 
 
-@pytest.mark.parametrize("missing", [None, "customer_daily", "payment_method_daily", "request_features"])
-def test_analysis_requires_existing_risk_fixture_features(missing):
+@pytest.mark.parametrize("status", ["available", "missing", "expired", "future", "error", "timeout"])
+def test_analysis_accepts_missing_history_but_rejects_failed_feature_reads(status):
     data = {
         "score": 0.5,
         "model_version": "4",
         "decline_threshold": 0.7,
         "views": {
-            view: {"status": "available"} for view in ("customer_daily", "payment_method_daily", "request_features")
+            view: {"status": "available"}
+            for view in (
+                "customer_daily",
+                "payment_method_daily",
+                "customer_stream",
+                "payment_method_stream",
+                "request_features",
+            )
         },
     }
-    if missing:
-        data["views"][missing]["status"] = "missing"
-        with pytest.raises(ValueError, match="fixture"):
+    data["views"]["customer_daily"]["status"] = status
+    if status in {"error", "timeout"}:
+        with pytest.raises(ValueError, match="feature views"):
             validate("score_payment_risk", {"structuredContent": data})
     else:
+        validate("score_payment_risk", {"structuredContent": data})
+
+
+def test_analysis_rejects_missing_request_features():
+    data = {
+        "score": 0.5,
+        "model_version": "4",
+        "decline_threshold": 0.7,
+        "views": {
+            view: {"status": "missing"}
+            for view in (
+                "customer_daily",
+                "payment_method_daily",
+                "customer_stream",
+                "payment_method_stream",
+                "request_features",
+            )
+        },
+    }
+    with pytest.raises(ValueError, match="request features"):
         validate("score_payment_risk", {"structuredContent": data})
 
 

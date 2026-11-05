@@ -1,4 +1,3 @@
-{{- if .Values.risk.enabled }}
 {{- $risk := .Values.risk }}
 apiVersion: v1
 kind: ServiceAccount
@@ -6,18 +5,15 @@ metadata:
   name: risk-serving
 automountServiceAccountToken: false
 ---
-apiVersion: {{ ternary "argoproj.io/v1alpha1" "apps/v1" $risk.rollout.enabled }}
-kind: {{ ternary "Rollout" "Deployment" $risk.rollout.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: risk-serving
 spec:
   minReadySeconds: 10
   progressDeadlineSeconds: 300
-  {{- if $risk.rollout.enabled }}
   progressDeadlineAbort: true
-  {{- end }}
   strategy:
-    {{- if $risk.rollout.enabled }}
     blueGreen:
       activeService: risk-serving
       previewService: risk-serving-preview
@@ -27,10 +23,6 @@ spec:
       prePromotionAnalysis:
         templates:
           - templateName: risk-serving-preview
-    {{- else }}
-    type: RollingUpdate
-    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
-    {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: risk-serving
@@ -79,7 +71,6 @@ spec:
     app.kubernetes.io/name: risk-serving
   ports:
     - {name: http, port: {{ $risk.port }}, targetPort: http}
-{{- if $risk.rollout.enabled }}
 ---
 apiVersion: v1
 kind: Service
@@ -90,7 +81,6 @@ spec:
     app.kubernetes.io/name: risk-serving
   ports:
     - {name: http, port: {{ $risk.port }}, targetPort: http}
-{{- end }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -108,10 +98,8 @@ metadata:
   name: risk-serving
 spec:
   scaleTargetRef:
-    {{- if $risk.rollout.enabled }}
     apiVersion: argoproj.io/v1alpha1
     kind: Rollout
-    {{- end }}
     name: risk-serving
   minReplicaCount: {{ $risk.autoscaling.minReplicas }}
   maxReplicaCount: {{ $risk.autoscaling.maxReplicas }}
@@ -138,9 +126,7 @@ spec:
             principals:
               - cluster.local/ns/{{ .Release.Namespace }}/sa/{{ .Values.gateway.name }}
               - {{ .Values.metricsAgent }}
-              {{- if $risk.rollout.enabled }}
               - cluster.local/ns/{{ .Release.Namespace }}/sa/risk-serving-analysis
-              {{- end }}
       to:
         - operation:
             ports: [{{ $risk.port | quote }}]
@@ -156,5 +142,3 @@ spec:
   podMetricsEndpoints:
     - port: http
       path: /metrics/
-
-{{- end }}

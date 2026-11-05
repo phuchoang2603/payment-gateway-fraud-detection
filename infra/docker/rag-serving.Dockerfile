@@ -13,7 +13,7 @@ FROM python:3.12.16-slim-bookworm
 WORKDIR /app
 COPY --from=build /workspace/.venv /app/.venv
 COPY src/llm/rag_serving/fraud_rag_serving ./fraud_rag_serving
-COPY src/llm/mcp_analysis.py ./mcp_analysis.py
+COPY src/llm/common/fraud_rag_common/mcp_analysis.py ./mcp_analysis.py
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HOME=/tmp
 USER 65532:65532
 EXPOSE 8080

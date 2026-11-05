@@ -1,6 +1,6 @@
 # Autoscaling, load test and releases
 
-Three workloads scale on KEDA and two of them release blue-green on dev:
+Three workloads scale on KEDA and two of them use the same blue-green release strategy in both environments:
 
 | Workload | Range | Metric and target | Evidence |
 |---|---|---|---|
@@ -81,7 +81,7 @@ The 2026-10-31 run has no Grafana capture. On 2026-11-05 the pool again read 667
 
 ## Blue-green releases
 
-The knowledge server (`rag-api`, [RAG](rag.md)) and the risk server (`risk-serving`, [Agents](agents.md#risk-agent)) sit behind the agent gateway. On dev both are blue-green Rollouts and KEDA targets their scale subresources; production retains the Deployment. The active Service keeps its name and a `-preview` Service selects the candidate. A bounded pre-promotion Job with its own identity initializes MCP, lists the tools and makes one call (`rag-api`: a configured knowledge chunk; `risk-serving`: a scoring call). A tool error, missing result or timeout blocks promotion and keeps the active revision serving. The preview starts at one replica and grows to KEDA's desired count before the Service switches; Argo CD leaves replica counts and revision hash selectors to their controllers. `progressDeadlineAbort` aborts a candidate that never becomes ready.
+The knowledge server (`rag-api`, [RAG](rag.md)) and the risk server (`risk-serving`, [Agents](agents.md#risk-agent)) sit behind the agent gateway. Both environments render blue-green Rollouts and KEDA targets their scale subresources. The captures below establish dev behavior only. The active Service keeps its name and a `-preview` Service selects the candidate. A bounded pre-promotion Job with its own identity initializes MCP, lists the tools and makes one call (`rag-api`: a configured knowledge chunk; `risk-serving`: a synthetic scoring call that allows normal missing-history statuses, without requiring a seeded customer). A tool error, missing result or timeout blocks promotion and keeps the active revision serving. The preview starts at one replica and grows to KEDA's desired count before the Service switches; Argo CD leaves replica counts and revision hash selectors to their controllers. `progressDeadlineAbort` aborts a candidate that never becomes ready.
 
 | Release | Pre-promotion analysis | Outcome |
 |---|---|---|
@@ -101,3 +101,5 @@ The retry `risk-serving-5fc6996776-14-pre.1` passed, and revision 14 became acti
 ![Argo Rollouts: successful pre-promotion analysis for revision 14, now stable and active with two Ready pods](images/risk-blue-green-analysis.png)
 
 Cleanup verification on 2026-11-05: risk revision 15 (`664d9f6f46`) passed `risk-serving-664d9f6f46-15-pre` in 45 s; knowledge revision 14 (`65c7648dd6`) passed `rag-api-65c7648dd6-14-pre.2` in 64 s after earlier connection timeouts. Both finished Healthy with two Ready pods. Dev Feast was Ready with container-local probes and no probe-IP NetworkPolicy after replacing its restarting pod; the loopback health request returned 200 in 104 ms. Production Feast rendered identically to the pre-cleanup version.
+
+Both environment configurations now use the same scoring gate and native Feast HTTP probes. The gate uses synthetic identifiers and accepts normal missing history, while requiring request features and a valid model response. The earlier loopback-probe result above is historical; readiness after this probe change is pending.

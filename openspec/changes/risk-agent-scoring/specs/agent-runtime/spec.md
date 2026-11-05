@@ -16,11 +16,15 @@ The repository SHALL define `risk-agent` as an `AgentTemplate` using the global 
 - **THEN** the agent says it could not score the payment and why, and gives no score
 
 ### Requirement: Blue-green releases for both MCP servers
-On dev, the risk server and knowledge API SHALL use blue-green Rollouts with separate active and preview Services. The gateway SHALL keep addressing the active Services. A candidate SHALL become active only after it is ready at the desired replica count and a bounded pre-promotion analysis has successfully listed its MCP tools and called its scoring or retrieval tool against configured dev data. Tool errors and missing data SHALL fail the analysis. Failed or timed-out analysis SHALL keep the previous revision active; no automatic promotion timer SHALL bypass analysis. A dedicated analysis identity SHALL be admitted only to the servers' tool ports. Production workload behavior SHALL remain unchanged.
+In both dev and production configuration, the risk server and knowledge API SHALL use blue-green Rollouts with separate active and preview Services. The gateway SHALL keep addressing the active Services. A candidate SHALL become active only after it is ready at the desired replica count and a bounded pre-promotion analysis has successfully listed its MCP tools and called its scoring or retrieval tool against shared synthetic scoring inputs or a configured knowledge passage. Tool errors, missing request features and missing knowledge passages SHALL fail the analysis. Missing, expired or future history views SHALL be allowed under the scoring contract; invalid views and upstream failures SHALL fail analysis. Failed or timed-out analysis SHALL keep the previous revision active; no automatic promotion timer SHALL bypass analysis. A dedicated analysis identity SHALL be admitted only to the servers' tool ports. Both environments SHALL use the same workload strategy; live production deployment is outside this change.
 
 #### Scenario: Candidate passes analysis
 - **WHEN** either MCP server's candidate is ready and its preview tool call passes analysis
 - **THEN** the active Service switches to that revision after it reaches the desired ready capacity, and the gateway's backend address stays the same
+
+#### Scenario: Scoring candidate has no stored history
+- **WHEN** the scoring candidate reads the shared synthetic identifiers and Feast reports missing history with available request features
+- **THEN** analysis accepts a valid model score under the normal missing-feature contract without requiring a seeded dev customer
 
 #### Scenario: Candidate fails analysis
 - **WHEN** either server's preview tool call fails, returns a tool error or exceeds the analysis deadline
@@ -41,7 +45,7 @@ On dev, the risk server and knowledge API SHALL use blue-green Rollouts with sep
 ## MODIFIED Requirements
 
 ### Requirement: Autoscaling mechanism per workload
-The agents' Substrate `WorkerPool` SHALL be autoscaled by KEDA between a minimum and a maximum on Substrate's own metric of partly or fully booked workers, and Argo CD SHALL leave its replica count to KEDA. The knowledge API and risk server SHALL be autoscaled by KEDA between two and four replicas, on the knowledge API's combined REST and MCP request rate and the risk server's tool-call rate respectively. On dev KEDA SHALL target their Rollouts through the scale subresource, and Argo CD SHALL leave replica counts to KEDA. The knowledge API SHALL retain its existing workload behavior outside dev. The model servers SHALL NOT be autoscaled while each environment has one GPU.
+The agents' Substrate `WorkerPool` SHALL be autoscaled by KEDA between a minimum and a maximum on Substrate's own metric of partly or fully booked workers, and Argo CD SHALL leave its replica count to KEDA. The knowledge API and risk server SHALL be autoscaled by KEDA between two and four replicas, on the knowledge API's combined REST and MCP request rate and the risk server's tool-call rate respectively. KEDA SHALL target their Rollouts through the scale subresource, and Argo CD SHALL leave replica counts to KEDA. The model servers SHALL NOT be autoscaled while all three models share one claimed GPU.
 
 #### Scenario: Knowledge API under load
 - **WHEN** the knowledge API's request rate exceeds the per-replica target during a load test

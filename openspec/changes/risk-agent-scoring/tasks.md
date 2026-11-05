@@ -34,9 +34,9 @@
 - [x] 6.5 Verify every chart renders under `helm lint` in CI, and that the dev and prod values render
 
 - [x] 6.6 Add risk KEDA scaling between two and four replicas on its tool-call counter, with an initial configurable target of 5 calls/s per replica, a `PodDisruptionBudget` (`minAvailable: 1`) and no chart-owned replicas; retain knowledge's existing combined-rate target and existing Locust test, and add no risk Locust file or Job
-- [x] 6.7 Add dev-enabled blue-green Rollouts for risk and knowledge with active/preview Services, one preview replica, pre-promotion analysis and delayed old-revision scale-down; retain production's existing workload behavior, remove superseded dev Deployment configuration and verify dev and prod render differences with `helm template`
-- [x] 6.8 Retarget knowledge's existing KEDA object and risk's new object to `argoproj.io/v1alpha1` `Rollout` on dev, and add dev-scoped Argo CD ignores for `/spec/replicas` and controller-owned Service revision hash selectors with `RespectIgnoreDifferences=true`; verify base selectors and security fields remain reconciled
-- [x] 6.9 Add bounded `AnalysisTemplate` Jobs for both preview Services using dedicated identities and configured dev fixtures; initialize MCP, list tools and call scoring or retrieval, failing on MCP errors, malformed results, missing fixtures and deadlines; leave `autoPromotionSeconds` unset so it cannot bypass analysis, wait up to 150 seconds for the preview to answer the MCP handshake and fail at once on any later error, and let CI run behavioral coverage for the analysis clients
+- [x] 6.7 Add blue-green Rollouts shared by both environments for risk and knowledge with active/preview Services, one preview replica, pre-promotion analysis and delayed old-revision scale-down; remove alternate Deployment configuration and verify dev and prod render the same strategy with `helm template`
+- [x] 6.8 Retarget knowledge's existing KEDA object and risk's new object to `argoproj.io/v1alpha1` `Rollout` in both environments, and add shared Argo CD ignores for `/spec/replicas` and controller-owned Service revision hash selectors with `RespectIgnoreDifferences=true`; verify base selectors and security fields remain reconciled
+- [x] 6.9 Add bounded `AnalysisTemplate` Jobs for both preview Services using dedicated identities and configured shared arguments; initialize MCP, list tools and call scoring or retrieval, failing on MCP errors, malformed results, missing request features or knowledge passages and deadlines; leave `autoPromotionSeconds` unset so it cannot bypass analysis, wait up to 150 seconds for the preview to answer the MCP handshake and fail at once on any later error, and let CI run behavioral coverage for the analysis clients
 - [x] 6.10 Plan and verify knowledge Deployment adoption with ready active endpoints and no competing pod controllers; check AppProject permissions, sync ordering and cleanup so the completed dev migration has no superseded Deployment
 
 ## 7. Docs and spec
@@ -57,7 +57,7 @@
 ## 9. GPU claims and dev placement
 
 - [x] 9.1 Render no `ResourceClaim` and no claim selector from `llm-platform` or `ml-training` in dev or prod while workloads still reference `ml-gpu` and `llm-gpu` by name; verify with `helm template` that no claim renders and that production workload placement is unchanged
-- [x] 9.2 Set dev chat-router requests to fit the shared node and preserve production renders; verify on dev that the router scheduler and the ML predictor are both Ready
+- [x] 9.2 Set dev chat-router requests to fit the shared node and retain capacity-specific production sizing; verify on dev that the router scheduler and the ML predictor are both Ready
 
 ## 10. PII masking and identifiers
 
@@ -68,7 +68,7 @@
 ## 11. Review follow-ups
 
 - [x] 11.1 Run a faulty candidate for each server on dev with Argo CD's reconcile paused for the app, record the analysis result and that the active revision kept serving, then restore the spec; verify the Rollouts return to Healthy with the original template
-- [x] 11.2 Set `progressDeadlineAbort: true` on both Rollouts only where blue-green is enabled; verify `helm template` renders it in dev and not in prod
+- [x] 11.2 Set `progressDeadlineAbort: true` on both Rollouts only where blue-green is enabled; verify `helm template` renders it in both environments
 - [x] 11.3 Move the agents dashboard to the `LLM` folder through `dashboards.folder`, cover both MCP servers in its tool panels and add the Risk tool row; verify the rendered ConfigMap carries the annotation and valid JSON
 - [x] 11.4 Remove the GPU `nodeSelector` and tolerations from the `llm-platform` and `ml-training` charts and the benchmark manifests; verify no claim, selector or toleration renders and that workloads still reference their claims by name
 
@@ -80,7 +80,15 @@
 
 ## 13. Merge preparation
 
-- [x] 13.1 Move the shared MCP release-analysis client and its tests to the LLM workspace root; have both serving images copy it and remove service-specific coupling from image selection
-- [x] 13.2 Replace the dev Feast probe-IP ingress exception with container-local health probes, verify dev readiness and preserve production's existing probes
+- [x] 13.1 Move the shared MCP release-analysis client and its tests under LLM common; have both serving images copy it and remove service-specific coupling from image selection
+- [x] 13.2 Replace the original dev Feast probe-IP ingress exception with container-local health probes, verify dev readiness and preserve production's existing probes (superseded by task 14.4)
 - [x] 13.3 Capture the blue-green preview, retained active revision and successful analysis in the Rollouts dashboard
 - [x] 13.4 Rebase on current main, refresh the PR description with verified proof and remaining limits, and pass formatting, lint, Helm renders, strict OpenSpec validation and CI
+
+## 14. Shared environment behavior
+
+- [x] 14.1 Use the same risk tools, prompt, blue-green workloads, preview identities, Feast callers and Argo controller ownership in dev/prod; remove alternate paths and render both environments
+- [x] 14.2 Move analysis and behavior tests into common, update image change detection and copies without adding Feast to the risk image
+- [ ] 14.3 Make the scoring gate independent of a seeded dev customer, while rejecting malformed results, missing request features and upstream failures; let CI run behavior tests
+- [ ] 14.4 Remove the Feast exec probe override, render native HTTP probes for both environments, and diagnose dev probe connectivity after deployment without adding source-IP exceptions
+- [ ] 14.5 Update affected docs and validate lint, formatting, lock consistency, chart rendering and OpenSpec; record CI and deployment results separately

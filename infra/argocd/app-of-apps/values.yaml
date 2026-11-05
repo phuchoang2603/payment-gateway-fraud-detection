@@ -70,10 +70,41 @@ applications:
       - group: ate.dev
         kind: WorkerPool
         jsonPointers: [/spec/replicas]
+      - group: argoproj.io
+        kind: Rollout
+        name: risk-serving
+        namespace: llm
+        jsonPointers: [/spec/replicas]
+      - group: ""
+        kind: Service
+        name: risk-serving
+        namespace: llm
+        jsonPointers: [/spec/selector/rollouts-pod-template-hash]
+      - group: ""
+        kind: Service
+        name: risk-serving-preview
+        namespace: llm
+        jsonPointers: [/spec/selector/rollouts-pod-template-hash]
   rag-pipeline:
     enabled: false
     destinationNamespace: llm
     path: infra/charts/rag-pipeline
+    ignoreDifferences:
+      - group: argoproj.io
+        kind: Rollout
+        name: rag-api
+        namespace: llm
+        jsonPointers: [/spec/replicas]
+      - group: ""
+        kind: Service
+        name: rag-api
+        namespace: llm
+        jsonPointers: [/spec/selector/rollouts-pod-template-hash]
+      - group: ""
+        kind: Service
+        name: rag-api-preview
+        namespace: llm
+        jsonPointers: [/spec/selector/rollouts-pod-template-hash]
   ml-training:
     enabled: false
     destinationNamespace: ml
