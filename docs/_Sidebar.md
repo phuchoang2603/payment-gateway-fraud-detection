@@ -29,7 +29,7 @@
 - [Policy](llm/policy.md)
 - [Agent gateway](llm/gateway.md)
 - [RAG](llm/rag.md)
-- [MCP servers](llm/mcp-servers.md)
+- [Scaling](llm/scaling.md)
 - [Observability](llm/observability.md)
 
 **Deployment**

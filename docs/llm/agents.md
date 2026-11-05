@@ -102,7 +102,7 @@ One Langfuse trace covers the conversation, tagged `risk-agent:production`, with
 
 ![The same trace further down: the get_risk_features and score_payment_risk tool spans](images/risk-trace-tools.png)
 
-Its releases and scaling are in [MCP servers](mcp-servers.md). A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
+Its releases and scaling are in [Scaling](scaling.md). A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
 
 The Langfuse prompt `risk-agent-system-prompt` was published as `production` version 3 and `variant-b` as version 4; the catalog seeds only missing prompts, so an existing prompt needs new versions in Langfuse. Not verified: a fresh conversation on version 3 (the kagent controller was in `CreateContainerError` and the A2A route answered 503, so the chat above predates the publish).
 
@@ -121,15 +121,7 @@ Agents run on Agent Substrate in their own namespace, `llm-agents` (Pod Security
 - **Isolation.** Each conversation is its own gVisor actor. Its only way out is Substrate's egress gateway, which carries every connection and injects the credentials.
 - **Warm start.** Each agent revision has a golden snapshot. A new conversation is restored from it in about 1 s and its runtime is ready 2 to 7 s later (fresh process start; 4.6 s on average over six cold conversations). Substrate's router waits up to 30 s for a waking conversation, so the first message is accepted: 6 of 6 cold conversations on 2026-10-31. An idle conversation is snapshotted and suspended, taking no worker, and resumes on any worker with its context.
 - **Reservation.** kagent books 250m CPU and 256Mi per actor (platform `runtimeDefaults`), plus Substrate's overhead, against a worker's 2Gi limit, so a worker holds several conversations.
-- **Autoscaling.** KEDA scales the WorkerPool from 2 to 6 workers on Substrate's own metric, the number of workers that are partly or fully booked (`ate_workerpool_workers{ate_worker_state=~"partial|at_capacity"}`), 0.7 per worker. Argo CD leaves the pool's `replicas` to KEDA.
-
-Twelve conversations sent at once to the two-worker pool (2026-10-31):
-
-| | |
-|---|---|
-| Workers | 2 → KEDA asked for 3 at 56 s, Ready at 78 s |
-| Conversations accepted on the first message | 12 of 12 |
-| Time to the full answer | 79 to 123 s, median 112 s (the shared GPU is the limit) |
+- **Autoscaling.** KEDA scales the WorkerPool from 2 to 6 workers; the metric, target and a run are in [Scaling](scaling.md#agent-worker-pool).
 
 ## Registry
 
