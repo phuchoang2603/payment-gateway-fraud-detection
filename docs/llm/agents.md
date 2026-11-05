@@ -2,7 +2,7 @@
 
 Fraud analysts ask an agent about decline codes, risk decisions and payment behaviour; it answers from the knowledge base and cites the passages it used. Agents are read-only: they cannot change risk decisions, retry payments, issue refunds or promote models, and they never sit in the payment decision path.
 
-**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route, prompts and A/B tests in Langfuse, and request screening. Production is enabled on the GCP GPU pool; the dev captures below do not establish production readiness.
+**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route and request screening. Production is enabled on the GCP GPU pool; the dev captures below do not establish production readiness.
 
 - Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform): [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) (model config, MCP servers, templates, the entry agent, worker pool and its autoscaler), [`a2a.yaml`](../../infra/charts/llm-platform/templates/a2a.yaml) (the A2A route), [`catalog.yaml`](../../infra/charts/llm-platform/templates/catalog.yaml) and [`files/catalog.py`](../../infra/charts/llm-platform/files/catalog.py) (registry, prompt seeds), prompt seeds in [`files/prompts/`](../../infra/charts/llm-platform/files/prompts).
 - Runtime: kagent 1.0.0-rc1 with Agent Substrate 1.0.0-rc1, installed by the platform; the agent runtime image is [`src/llm/agent_runtime`](../../src/llm/agent_runtime).
@@ -17,7 +17,7 @@ Fraud analysts ask an agent about decline codes, risk decisions and payment beha
 | agentgateway | Every A2A, model and tool call: per-client keys, request/token limits, action/jailbreak screening and PII masking |
 | `rag-api` | `search_knowledge` and `get_knowledge_chunk`, discovered through MCP `tools/list` |
 | `risk-serving` | `get_risk_features` and `score_payment_risk`, reading Feast and calling Triton |
-| Langfuse | The prompts, their versions and A/B tests, and the agents' traces |
+| [Langfuse](langfuse.md) | Prompt management and agent traces |
 | agentregistry | The catalog of agents and MCP servers |
 
 ```mermaid
@@ -43,7 +43,7 @@ flowchart LR
 
 ## Global model config
 
-One kagent `ModelConfig`, `default-model-config`, used by every agent: provider OpenAI, model `qwen35-4b` with the model card's non-thinking sampling, the agents' gateway key, and the gateway's `/v1` route as base URL. Changing the model, the gateway or the key for all agents is one edit. Its sampling settings are the ones every agent uses; kagent's Go runtime takes them only from here, so A/B variants differ by prompt text.
+One kagent `ModelConfig`, `default-model-config`, used by every agent: provider OpenAI, model `qwen35-4b` with the model card's non-thinking sampling, the agents' gateway key, and the gateway's `/v1` route as base URL. Changing the model, the gateway or the key for all agents is one edit. Its sampling settings are the ones every agent uses; kagent's Go runtime takes them only from here.
 
 The [gateway note](gateway.md#routes) shows the shared base URL and credential Secret in the kagent model configuration.
 
@@ -96,9 +96,7 @@ The result is model v5, a score of 0.0006 against the decline threshold 0.8597, 
 
 ![The answer: probability 0.0006, model version 5, decline threshold 0.8597, drivers and the caveat that they are not per-prediction explanations](images/risk-chat-answer.png)
 
-One Langfuse trace covers the conversation, tagged `risk-agent:production`, with both tool spans between the model calls. The [runtime note](novel-2-go-adk-runtime.md#evidence-and-limits) shows the later retry’s transfer and prompt-version linkage.
-
-![Langfuse: the get_risk_features and score_payment_risk tool spans](images/risk-trace-tools.png)
+The [Langfuse trace evidence](langfuse.md#traces) records both tools between model calls; the [runtime note](novel-2-go-adk-runtime.md#evidence-and-limits) shows the retry’s transfer and prompt-version linkage.
 
 Its releases and scaling are in [Scaling](scaling.md). A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
 
@@ -108,9 +106,9 @@ A retry on 2026-11-05 at 06:04 UTC returned score 0.0006 from model v5 against t
 
 ![Same conversation: evidence agent retrieves and cites the baseline policy](images/risk-retry-evidence.png)
 
-Pending: answer quality still needs evaluation; the risk answer rendered 347677 minor units as dollars, described expired stream values as uncaptured and explained the policy before retrieving evidence. The first explicit transfer follow-up was rejected by the gateway's request-screening webhook with HTTP 403; a plain policy question succeeded. The LLM-version A/B remains on hold.
+Pending: answer quality still needs evaluation; the risk answer rendered 347677 minor units as dollars, described expired stream values as uncaptured and explained the policy before retrieving evidence. The first explicit transfer follow-up was rejected by the gateway's request-screening webhook with HTTP 403; a plain policy question succeeded.
 
-The Langfuse prompt `risk-agent-system-prompt` was published as `production` version 3 and `variant-b` as version 4; the catalog seeds only missing prompts, so an existing prompt needs new versions in Langfuse. The 06:04 UTC retry used version 3: trace `4b62897784005dc59bf0c00aced8cdcf` links all three risk model calls to that prompt version.
+Prompt-version evidence for the retry is in [Langfuse](langfuse.md#prompts).
 
 ## Runtime
 
@@ -135,9 +133,7 @@ The release catalog job publishes the entry agents and the MCP servers from the 
 
 ![agentregistry: coordinator 0.2.0 with its sub-agents](images/agents-registry-agent.png)
 
-## Prompts and A/B tests
-
-Langfuse is the source of each agent's system prompt and A/B test. [`files/prompts/<agent>.md`](../../infra/charts/llm-platform/files/prompts) and the agent's `abTest` in the values only seed a prompt that Langfuse does not have yet; after that, prompts are edited, versioned and tested in Langfuse, and the next conversation uses the new version without a release.
+Prompt management, A/B comparisons and trace details are documented in [Langfuse](langfuse.md).
 
 ## Known limits
 
