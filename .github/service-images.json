@@ -213,6 +213,19 @@
         "src/ml/risk_model/drift.py",
         "src/ml/risk_model/drift_service.py"
       ]
+    },
+    {
+      "service": "risk-serving",
+      "image-suffix": "/risk-serving",
+      "context": ".",
+      "dockerfile": "infra/docker/risk-serving.Dockerfile",
+      "paths": [
+        "infra/docker/risk-serving.Dockerfile",
+        "src/llm/pyproject.toml",
+        "src/llm/uv.lock",
+        "src/llm/risk_serving",
+        "src/llm/common/fraud_rag_common/mcp_analysis.py"
+      ]
     }
   ]
 }

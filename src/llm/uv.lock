@@ -12,6 +12,7 @@ members = [
     "fraud-rag-common",
     "fraud-rag-pipeline",
     "fraud-rag-serving",
+    "fraud-risk-serving",
 ]
 
 [[package]]
@@ -496,6 +497,41 @@ dev = [
     { name = "hypothesis", specifier = "==6.170.14" },
     { name = "pytest", specifier = "==9.2.0" },
     { name = "pytest-cov", specifier = "==7.1.0" },
+    { name = "ruff", specifier = "==0.17.3" },
+]
+
+[[package]]
+name = "fraud-risk-serving"
+version = "0.1.0"
+source = { virtual = "risk_serving" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "mcp" },
+    { name = "prometheus-client" },
+    { name = "uvicorn" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "hypothesis" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = "==0.162.0" },
+    { name = "httpx", specifier = "==0.28.1" },
+    { name = "mcp", specifier = "==2.3.0" },
+    { name = "prometheus-client", specifier = "==0.24.1" },
+    { name = "uvicorn", specifier = "==0.54.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "hypothesis", specifier = "==6.170.14" },
+    { name = "pytest", specifier = "==9.2.0" },
     { name = "ruff", specifier = "==0.17.3" },
 ]
 

@@ -5,3 +5,7 @@ applications:
     enabled: true
   ml-training:
     enabled: true
+  llm-platform:
+    enabled: true
+  rag-pipeline:
+    enabled: true

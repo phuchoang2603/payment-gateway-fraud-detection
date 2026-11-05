@@ -1,4 +1,4 @@
-# LLM policy
+# LLM policy (novel idea 1)
 
 What the gateway checks in the content of a model call before and after the chat model sees it: a request screen by a Jev decision model, and PII guardrails. Per-client keys and rate limits authenticate callers; mesh policies block direct backend access.
 
@@ -52,7 +52,7 @@ No screening service runs; the question, threshold and refusal are values.
 
 | Guard | Phase | Setting | Why |
 |---|---|---|---|
-| PII masking | request and response | agentgateway's built-in `CreditCard`, `Email` and `PhoneNumber` recognisers, plus `gateway.piiPatterns` for card numbers with spaces or dashes | Analysts can paste payment data; the model never sees full card numbers, and answers cannot echo them |
+| PII masking | request and response | agentgateway's built-in `CreditCard` and `Email` recognisers, plus `gateway.piiPatterns` for card numbers with spaces or dashes and for phone numbers at word boundaries (the `PhoneNumber` built-in masked digit runs inside hex identifiers) | Analysts can paste payment data; the model never sees full card numbers, and answers cannot echo them |
 | Request screen | request, after masking | the Jev decision model, above | A request to act or to break the rules is refused before it reaches the chat model |
 
 The guards apply on the LLM route (`/v1`); MCP, REST and A2A calls carry no prompts of their own, and every model call an agent makes goes through `/v1`.
@@ -69,3 +69,7 @@ Run through the gateway with the agents' key, the screen on 2026-11-01 and PII m
 | A prompt that asks the model to repeat a card number, an e-mail and a phone number | `card <masked>, email <EMAIL_ADDRESS>, phone <PHONE_NUMBER>` |
 
 Guard checks and screen-route calls are on the Grafana "LLM agents" dashboard, using agentgateway route/status and guard metrics.
+
+The dev window on 2026-11-05, 05:50–06:15 UTC, shows screen calls and request allow, mask and reject decisions. These are guard activity counts, not a measure of classifier accuracy.
+
+![Grafana: Jev screen calls and request guard decisions on dev](images/jev-policy-screening.png)

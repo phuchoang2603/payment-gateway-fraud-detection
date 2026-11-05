@@ -1,0 +1,144 @@
+{{- $risk := .Values.risk }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: risk-serving
+automountServiceAccountToken: false
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: risk-serving
+spec:
+  minReadySeconds: 10
+  progressDeadlineSeconds: 300
+  progressDeadlineAbort: true
+  strategy:
+    blueGreen:
+      activeService: risk-serving
+      previewService: risk-serving-preview
+      previewReplicaCount: 1
+      autoPromotionEnabled: true
+      scaleDownDelaySeconds: 30
+      prePromotionAnalysis:
+        templates:
+          - templateName: risk-serving-preview
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: risk-serving
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: risk-serving
+        app.kubernetes.io/part-of: llm-platform
+    spec:
+      serviceAccountName: risk-serving
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "llm-platform.podSecurity" (dict "uid" 65532) | nindent 8 }}
+      containers:
+        - name: risk
+          image: {{ printf "%s:%s" $risk.image (required "risk image tag missing" (index .Values.global.imageTags $risk.image)) | quote }}
+          ports:
+            - {name: http, containerPort: {{ $risk.port }}}
+          env:
+            - {name: PORT, value: {{ $risk.port | quote }}}
+            - {name: FEAST_URL, value: {{ $risk.feastUrl | quote }}}
+            - {name: MODEL_URL, value: {{ $risk.modelUrl | quote }}}
+            - {name: REFERENCE_URL, value: {{ $risk.referenceUrl | quote }}}
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 20
+          securityContext:
+            readOnlyRootFilesystem: true
+            {{- include "llm-platform.containerSecurity" . | nindent 12 }}
+          resources:
+            {{- toYaml $risk.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: risk-serving
+spec:
+  selector:
+    app.kubernetes.io/name: risk-serving
+  ports:
+    - {name: http, port: {{ $risk.port }}, targetPort: http}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: risk-serving-preview
+spec:
+  selector:
+    app.kubernetes.io/name: risk-serving
+  ports:
+    - {name: http, port: {{ $risk.port }}, targetPort: http}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: risk-serving
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: risk-serving
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: risk-serving
+spec:
+  scaleTargetRef:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    name: risk-serving
+  minReplicaCount: {{ $risk.autoscaling.minReplicas }}
+  maxReplicaCount: {{ $risk.autoscaling.maxReplicas }}
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: {{ $risk.autoscaling.prometheus | quote }}
+        query: {{ printf "sum(rate(risk_mcp_tool_calls_total{namespace=\"%s\",job=\"%s/risk-serving\"}[1m]))" .Release.Namespace .Release.Namespace | quote }}
+        threshold: {{ $risk.autoscaling.callsPerSecondPerReplica | quote }}
+        ignoreNullValues: "false"
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: risk-serving
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: risk-serving
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/{{ .Values.gateway.name }}
+              - {{ .Values.metricsAgent }}
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/risk-serving-analysis
+      to:
+        - operation:
+            ports: [{{ $risk.port | quote }}]
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: risk-serving
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: risk-serving
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics/

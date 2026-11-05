@@ -1,7 +1,7 @@
 [project]
 name = "fraud-rag-common"
 version = "0.1.0"
-description = "Feast knowledge-store definitions and the embedding client shared by the RAG pipeline and serving"
+description = "Shared knowledge-store definitions, embedding client and MCP release analysis"
 requires-python = ">=3.12,<3.13"
 dependencies = ["feast[postgres]==0.67.0", "httpx==0.28.1"]
 

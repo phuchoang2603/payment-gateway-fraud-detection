@@ -1,4 +1,8 @@
-gpu:
-  nodeSelector:
-    nvidia.com/gpu.present: "true"
-
+models:
+  chat:
+    gpuMemoryUtilization: "0.72"
+    resources:
+      requests: {cpu: 500m}
+    schedulerResources:
+      requests: {cpu: 250m, memory: 128Mi}
+      limits: {memory: 512Mi}
