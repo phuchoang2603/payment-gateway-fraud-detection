@@ -77,3 +77,10 @@
 - [x] 12.1 Give the risk pod a startup probe like `rag-api`'s, so replicas started by KEDA on a busy node are not killed by the liveness probe; verify with `helm template` that the probe renders and `helm lint` passes
 - [x] 12.2 Lower the Locust Job's CPU request so it schedules on the dev nodes, rerun it against `rag-api`, and record the report, the service level it checks and KEDA's 2 to 4 scale-out
 - [x] 12.3 Record the risk scale-out and scale-down on the dashboard's replicas panel, which also charts the agent worker pool, and gather the load test, KEDA runs and blue-green releases in `docs/llm/scaling.md`; record that the worker pool's third worker stayed not Ready
+
+## 13. Merge preparation
+
+- [x] 13.1 Move the shared MCP release-analysis client and its tests to the LLM workspace root; have both serving images copy it and remove service-specific coupling from image selection
+- [ ] 13.2 Replace the dev Feast probe-IP ingress exception with container-local health probes, verify dev readiness and preserve production's existing probes
+- [x] 13.3 Capture the blue-green preview, retained active revision and successful analysis in the Rollouts dashboard
+- [ ] 13.4 Rebase on current main, refresh the PR description with verified proof and remaining limits, and pass formatting, lint, Helm renders, strict OpenSpec validation and CI

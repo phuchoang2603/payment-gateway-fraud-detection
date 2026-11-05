@@ -26,5 +26,9 @@ catalog:
             - platform-dev
 features:
   riskAccess: true
-  healthProbeSources: [169.254.7.127/32]
+  healthProbe:
+    httpGet: null
+    exec:
+      command: [python, -c, 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:6566/health", timeout=2).close()']
+    timeoutSeconds: 3
   enabled: true

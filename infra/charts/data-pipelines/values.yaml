@@ -283,6 +283,8 @@ checks:
   nativeTimeoutSeconds: 1500
 features:
   riskAccess: false
+  healthProbe:
+    httpGet: {path: /health, port: http}
   enabled: false
   suspend: true
   driverMemory: 6g

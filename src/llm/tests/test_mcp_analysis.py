@@ -4,8 +4,8 @@ import math
 import httpx
 import pytest
 
-from fraud_risk_serving import analysis
-from fraud_risk_serving.analysis import analyze, validate
+import mcp_analysis as analysis
+from mcp_analysis import analyze, validate
 
 
 @pytest.mark.parametrize(

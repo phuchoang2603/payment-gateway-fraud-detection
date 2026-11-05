@@ -1,7 +1,6 @@
 storageClass: cloud-block
 
-# The three servers share one 4 vCPU / 16 GiB GPU node, which leaves about 3.1 CPU and 12 GiB for pods. The platform
-# has no cloud GPU pool, so no node carries this label until one exists.
+# The three servers share one 4 vCPU / 16 GiB GPU node, which leaves about 3.1 CPU and 12 GiB for pods.
 models:
   chat:
     resources:

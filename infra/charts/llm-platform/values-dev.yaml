@@ -1,4 +1,3 @@
-
 models:
   chat:
     # The dev card is 15.48 GiB, and with the other two servers resident (CUDA contexts included) 11.6 GiB are free

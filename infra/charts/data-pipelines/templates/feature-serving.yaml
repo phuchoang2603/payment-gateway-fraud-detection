@@ -63,14 +63,14 @@ spec:
               containerPort: 6566
           # Loading the registry and the Spark source module takes over a minute on a cold start.
           startupProbe:
-            httpGet: {path: /health, port: http}
+            {{- toYaml $.Values.features.healthProbe | nindent 12 }}
             periodSeconds: 10
             failureThreshold: 30
           readinessProbe:
-            httpGet: {path: /health, port: http}
+            {{- toYaml $.Values.features.healthProbe | nindent 12 }}
             periodSeconds: 5
           livenessProbe:
-            httpGet: {path: /health, port: http}
+            {{- toYaml $.Values.features.healthProbe | nindent 12 }}
             periodSeconds: 10
           {{- end }}
           volumeMounts:
@@ -170,25 +170,4 @@ spec:
     - name: http
       port: 6566
       targetPort: http
-{{- with .Values.features.healthProbeSources }}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: feast-server-health
-  namespace: {{ $.Values.namespace }}
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: feast-server
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        {{- range . }}
-        - ipBlock:
-            cidr: {{ . | quote }}
-        {{- end }}
-      ports:
-        - {port: 6566, protocol: TCP}
-{{- end }}
 {{- end }}

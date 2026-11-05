@@ -176,7 +176,7 @@
         "src/llm/uv.lock",
         "src/llm/common",
         "src/llm/rag_serving",
-        "src/llm/risk_serving/fraud_risk_serving/analysis.py"
+        "src/llm/mcp_analysis.py"
       ]
     },
     {
@@ -225,7 +225,7 @@
         "src/llm/pyproject.toml",
         "src/llm/uv.lock",
         "src/llm/risk_serving",
-        "src/llm/risk_serving/fraud_risk_serving/analysis.py"
+        "src/llm/mcp_analysis.py"
       ]
     }
   ]

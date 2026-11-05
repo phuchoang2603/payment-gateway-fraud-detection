@@ -91,3 +91,11 @@ The knowledge server (`rag-api`, [RAG](rag.md)) and the risk server (`risk-servi
 | `risk-serving` 5dcd89f99f, faulty: `MODEL_URL` points at a model server that does not exist | Failed in 27 s: `preview returned an MCP tool error` | Rollout aborted; the active Service kept selecting 756dbb8686, and the gateway scored 0.1967 during the rollout and after it |
 
 Each faulty candidate was made by pausing Argo CD's reconcile of the app with the `argocd.argoproj.io/skip-reconcile` annotation, patching one environment variable on the Rollout, and restoring it afterwards; both Rollouts returned to Healthy on their original revisions. Argo Rollouts skips the analysis on a first install, which has no previous revision to protect; that case was not run.
+
+On 2026-11-05 at 06:43 UTC, risk revision 14 (`5fc6996776`) retried its failed analysis while revision 13 (`699f4684f4`) retained two Ready active pods:
+
+![Argo Rollouts: revision 14 in preview with a failed analysis and a running retry; revision 13 remains active with two Ready pods](images/risk-blue-green-preview.png)
+
+The retry `risk-serving-5fc6996776-14-pre.1` passed, and revision 14 became active with two Ready pods at 06:44 UTC:
+
+![Argo Rollouts: successful pre-promotion analysis for revision 14, now stable and active with two Ready pods](images/risk-blue-green-analysis.png)
