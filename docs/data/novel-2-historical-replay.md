@@ -27,6 +27,12 @@ The seed writes ordered Bronze deliveries and clock controls to separate topics.
 
 The [JVM correctness comparison](online.md#local-correctness-comparison) checks 2,498 serialized snapshots from 503 deliveries against an independent reference, including late events, duplicates, conflicts and coverage boundaries. [`SourceRecoveryTest`](../../src/data-pipeline/streaming/jvm/src/test/java/dev/fraud/stream/SourceRecoveryTest.java) covers source-clock recovery; [`OperatorsTest`](../../src/data-pipeline/streaming/jvm/src/test/java/dev/fraud/stream/OperatorsTest.java) covers state and timer behavior; [`KafkaPipelineTest`](../../src/data-pipeline/streaming/jvm/src/test/java/dev/fraud/stream/KafkaPipelineTest.java) exercises Kafka integration.
 
-Recorded platform screenshots and historical optimization measurements remain in [Historical replay](online.md#historical-replay). Those measurements describe the earlier runtime and do not establish a JVM speedup. The current full replay-to-training run has not yet completed.
+### Current JVM replay capture
+
+Captured from the prod Flink UI on 2026-11-05 at 18:12 UTC, unit `20260907`, job `82d7a134c1751c946a09e45abb886e31`. The UI displays UTC−05:00.
+
+![GCP JVM historical replay: running source, deduplication, customer/method windows and journal sinks](images/flink-jvm-history-20260907-2026-11-05.png)
+
+The graph and counters show the JVM replay executing all seven vertices, with backpressure upstream of the window aggregates. This is a running-unit capture; it does not establish completed history publication, downstream training or a speedup. Earlier runtime captures and tuning results remain in [Historical replay](online.md#backpressure-and-optimization).
 
 The remaining evaluation is to compare live-style and replay outputs on identical deliveries, measure replay throughput and resource use on a fixed input, and compare recovery with retained seeds against reseeding. No end-to-end feature agreement, recovery speedup or model-quality improvement is claimed from the operator tests alone.

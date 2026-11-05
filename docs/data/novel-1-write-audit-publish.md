@@ -16,9 +16,9 @@ sequenceDiagram
     C->>O: record native test results
     alt every expected rule succeeds
         C->>P: one transactions/commit request
-        Note over P: assert main snapshot IDs; advance refs; remove audit refs
+        Note over P: assert main snapshot IDs, advance refs, remove audit refs
     else a rule fails or a result is missing
-        Note over I: retain branch for diagnosis; main stays unchanged
+        Note over I: retain branch for diagnosis, main stays unchanged
     end
 ```
 
