@@ -14,9 +14,11 @@ Six Go services export metrics and traces through [`shared/observe`](../../src/p
 | Kafka / Flink | Broker replication, consumer lag, running jobs and checkpoint failures through native exporters |
 | Workflow / Spark / Rollout | Shared controller signals and pod state; no executor-level Spark instrumentation |
 
+Fraud's [Feast adapter](../../src/payment-gateway/fraud/internal/adapters/feast/client.go) retrieves features; Triton calls record `fraud.model.calls`, `fraud.model.status` and `fraud.model.enforced`, with the model version and score attached to the assessment.
+
 Trace context crosses gRPC and the Debezium event header into notifier retries. Bounded export queues/timeouts keep payment readiness and processing independent of telemetry availability. Spans exclude bodies, query strings, token-bearing paths and sensitive headers; metric labels exclude payment/customer/event IDs.
 
-A sampled checkout GET at 18:15:21 UTC connects the Edge HTTP span, Edge gRPC client span and Payments server span in trace `ff6be5d585c2a57c11a65627699f03ec` (9.25 ms, HTTP 200). Explore displays UTC−05:00. This read-only checkout trace covers two services, not the full payment and notifier lifecycle.
+A sampled checkout GET at 18:15:21 UTC connects the Edge HTTP span, Edge gRPC client span and Payments server span in trace `ff6be5d585c2a57c11a65627699f03ec` (9.25 ms, HTTP 200). Explore displays UTC−05:00.
 
 ![Connected Edge and Payments checkout trace in Grafana](images/checkout-trace-2026-11-03.png)
 
@@ -28,24 +30,18 @@ Filtering VictoriaLogs by that exact trace ID returns two request log entries. T
 
 [Gateway dashboards](../../infra/charts/payment-gateway/dashboards) and [monitoring rules](../../infra/charts/payment-gateway/templates/monitoring.yaml) cover service operations and canary health. [Data dashboards](../../infra/charts/data-pipelines/dashboards) cover Kafka/Flink and job state. Grafana discovers their labelled ConfigMaps; VMAgent/VMAlert select application namespaces.
 
-The gateway dashboard captures the fault spike and healthy retry over 16:45–18:20 UTC on 2026-11-03. Repeated `edge` legends represent separate series; candidate `787688ff9d` was rejected at 7.2% errors, then passed all three canary stages on retry. Checkout GET load verifies this route and its Payments dependency; it does not verify fraud decisions or webhook delivery.
+The gateway dashboard captures the fault spike and healthy retry over 16:45–18:20 UTC on 2026-11-03. Repeated `edge` legends represent separate series; candidate `787688ff9d` was rejected at 7.2% errors, then passed all three canary stages on retry.
 
 ![Gateway request rate, errors and HTTP/RPC latency during acceptance](images/gateway-operations-2026-11-03.png)
 
-Over the same window, Kafka reports zero under-replicated partitions and Flink reports one running job. The cumulative failed-checkpoint counter remains at six, with no increase in this window. Negative consumer-lag values at the start reflect uncommitted offsets; they are not evidence of a healthy backlog.
+Over the same window, Kafka reports zero under-replicated partitions and Flink reports one running job. The cumulative failed-checkpoint counter remains at six, with no increase in this window. Negative consumer-lag values at the start reflect uncommitted offsets.
 
 ![Kafka and Flink metrics during the acceptance window](images/data-operations-2026-11-03.png)
 
-Select the environment before comparing results. VictoriaMetrics preserves dotted OTLP names and resource labels; canary queries also select `rollout.revision`. Missing series remain **No data**, never a healthy zero. The canary thresholds are acceptance settings, not measured SLOs.
+Select the environment before comparing results. VictoriaMetrics preserves dotted OTLP names and resource labels; canary queries also select `rollout.revision`. Missing series remain **No data**, never a healthy zero.
 
 Namespace-local rules cover sustained errors/latency, notification age, lag, failed jobs, checkpoint failures and missing signals. Shared Alertmanager currently routes to `blackhole`: alerts evaluate and are visible, but no external notifications are delivered. LLM routes also export request/token metrics; agent traces and prompt versions go to Langfuse.
 
 Grafana Explore retains firing samples for `EdgeRolloutDegraded` during the aborted attempts (16:55–18:05 UTC; this Explore capture displays UTC−05:00). Gaps mean no firing series, not a measured zero. The rollout completed at 18:13 UTC.
 
 ![Historical firing samples for the Edge rollout failure alert](images/edge-rollout-alert-2026-11-03.png)
-
-## Verification
-
-Deployed acceptance on 2026-10-24 (change [`go-service-observability`](../../openspec/changes/archive/2026-10-24-go-service-observability/proposal.md)): a sampled approved and declined flow produced connected traces across all six service identities, including fraud spans under Payments and notifier delivery spans in the same trace. With the exporter unreachable, payments still succeeded and every pod exited within 3 s of termination. Application pods used 1–4 mCPU and 3–5 MiB at idle.
-
-Fraud retrieves online features directly through its [Feast adapter](../../src/payment-gateway/fraud/internal/adapters/feast/client.go) and calls the Triton model server directly. The model call records a `fraud.model.calls` counter by status and enforcement, and the span attributes `fraud.model.status` and `fraud.model.enforced`; the assessment evidence records the model version and score. Feature/model diagnostics, serving deadlines and cold starts require separate verification from Edge checkout canary analysis.

@@ -92,8 +92,6 @@ A processor timeout means an unknown outcome. Recovery queries by the original o
 
 Notifier consumes `payments.events.v1`, deduplicates by event ID and retries signed `attempt.declined`, `payment.succeeded` and `payment.expired` deliveries. Receivers validate the HMAC-SHA256 signature and timestamp and deduplicate event IDs. Kafka or webhook outages do not block payment commits.
 
-## Verification and limits
-
 [Prod acceptance on 2026-10-23](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md) exercised tokenization, approvals/declines, timeout recovery, signed webhooks, Redis fallback and CDC outage catch-up. That record predates the GCP migration.
 
-The implementation has a synthetic `Sale`/status-query contract. Real bank connectivity, ISO 8583, settlement/reconciliation, refunds, a financial journal and database sharding are outside the current implementation. Synthetic isolation does not establish PCI DSS compliance.
+Implementation scope is listed on the [overview](../Home.md#limits-and-scope).

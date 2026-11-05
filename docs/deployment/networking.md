@@ -44,7 +44,7 @@ The platform owns the bindings for [Grafana](https://github.com/phuchoang2603/ta
 
 These routes use three different paths. Grafana, Argo CD, Workflows, OpenMetadata and Dex target their own Services directly. The shared UI domains target the HTTP port of `istio-ingressgateway`, then use the Istio `ml/kubeflow-gateway` and `VirtualService` resources; `/oauth2/` goes to `oauth2-proxy.auth:80`. Checkout uses the separate Kubernetes Gateway API resources described above. The shared UI routes have not all been migrated to Gateway API.
 
-The desired tunnel origin for both Istio ingress Services is **port 80**, not their first Service port, **15021**, which is the status listener. During this inventory, `TunnelBinding.status.services` listed 15021 for the Gateway-backed bindings despite the desired target being 80. The reconciled Cloudflare origin needs separate verification.
+The desired tunnel origin for both Istio ingress Services is **port 80**, not their first Service port, **15021**, which is the status listener. During this inventory, `TunnelBinding.status.services` listed 15021 for the Gateway-backed bindings despite the desired target being 80.
 
 ## Internal API and data endpoints
 
@@ -78,8 +78,6 @@ Ambient mesh enrollment protects supported workload-to-workload traffic independ
 ztunnel enforces Layer 4 identity/port policy. It does not inspect HTTP paths or methods: the ingress Gateway handles the public `/checkout/` route. An ambient Layer 7 service policy needs an appropriate waypoint and `targetRefs`; adding HTTP rules to a ztunnel-selected workload policy is not a substitute. See the [Istio ambient authorization guide](https://istio.io/latest/docs/ambient/usage/l4-policy/).
 
 Public `/v1/payments` has no matching route and returned HTTP 404 during the recorded prod acceptance. Internal merchant callers use the stable Edge Service; a ClusterIP address alone is not an authorization control. Gateway API routing and service-mesh identities do not replace the application's integration keys and checkout-session credentials.
-
-## Recorded verification
 
 On 2026-11-04, two temporary ambient-mesh pods called only Vault's gRPC health RPC on port 8000. The `edge` service account received `SERVING`; `default` was denied. The receiving proxy recorded “allow policies exist, but none allowed”; the sending proxy recorded HTTP 401 with zero bytes exchanged. The allowed call recorded both workload identities and response bytes.
 

@@ -19,11 +19,11 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 
 Seed and materialization scratch pods and PVCs carry a scratch label. Argo deletes these pods five minutes after completion, including failed retry attempts, so their generic ephemeral PVCs can be reclaimed.
 
-Batch lakehouse publication uses [write–audit–publish](novel-1-write-audit-publish.md): candidate snapshots pass native checks before catalog publication. That note owns the release protocol, conflict handling and atomicity limits; ClickHouse marts use their own staging publication. Bronze holds `dp1-bronze-writer`; `dp-pipeline` holds `dp-writer`, serializing competing pipeline runs and maintenance. Checks retry execution errors, not failed data rules.
+Batch lakehouse publication uses [write–audit–publish](novel-1-write-audit-publish.md): candidate snapshots pass native checks before catalog publication. ClickHouse marts use staged partition replacement. Bronze holds `dp1-bronze-writer`; `dp-pipeline` holds `dp-writer`, serializing competing pipeline runs and maintenance. Checks retry execution errors, not failed data rules.
 
 A platform admission policy rejects deleting or terminating an active workflow in `data`; stop runs with `shutdown: Stop`.
 
-The recorded GCP backfill and its checks-before-publish capture are in [Novel 1](novel-1-write-audit-publish.md#evidence-and-limits). The second data design note covers [historical replay through the live feature engine](novel-2-historical-replay.md), including logical time, isolated outputs and seed reuse.
+The recorded GCP backfill and its checks-before-publish capture are in [Novel 1](novel-1-write-audit-publish.md#release-protocol). The second data design note covers [historical replay through the live feature engine](novel-2-historical-replay.md), including logical time, isolated outputs and seed reuse.
 
 ### Spark sizing and placement
 

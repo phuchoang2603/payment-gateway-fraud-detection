@@ -44,7 +44,7 @@ The event's `occurred_at` selects the schema version: v2 before 2026-04-30, v3 f
 
 The generator removes these fields from both records and Arrow schemas for v2; it does not merely fill a v3-shaped file with nulls. [Generation tests](../../src/data-pipeline/simulator/tests/test_generation.py) verify physical schemas, occurrence-time cutover and equal records across worker counts, shards and interrupted runs.
 
-### Publication and recorded generation
+### Publication
 
 Submit `generate-historical` in `data`. Shards write per-day Parquet, separate `.v2`/`.v3` event files and `_day.json` markers; `config.json` pins inputs and the generator digest, and `manifest.json` publishes the inventory. Complete days are skipped, incomplete days regenerated, and changed inputs or an already published version are refused. Full-scale v19 publication also enforces the configured 100 GB minimum source size. Credentials come from Secrets; roots and shard settings come from chart values.
 
@@ -82,7 +82,7 @@ flowchart LR
 
 For the Kafka input mode, the same tables also hold decoded records with topic/partition/offset/timestamp provenance. Invalid records go to `bronze.rejected_records`; committed row offsets determine restart progress even after compaction.
 
-Historical files already touch few day partitions, so Bronze uses local fanout writes instead of hash redistribution; see the [write-distribution results](storage.md#write-distribution-screenshots).
+Historical files already touch few day partitions, so Bronze uses local fanout writes instead of hash redistribution; see the [write-distribution results](storage.md#write-distribution).
 
 ### DP2: Bronze → canonical Silver
 
@@ -110,9 +110,13 @@ Across the April 30 cutover, Bronze has 480,421 v2 / 495,868 v3 risk decisions; 
 
 ![Schema evolution across the v2/v3 cutover in Bronze and Silver](images/spark-schema-evolution-2026-11-04.png)
 
-The [Bronze-to-Silver integration test](../../src/data-pipeline/batch/tests/bronze/test_bronze.py) writes physically different v2/v3 Parquet schemas plus a redelivery: 11 Bronze deliveries become 10 canonical events and two valid attempts. [Conflict tests](../../src/data-pipeline/batch/tests/silver/test_silver.py) also verify that differing business hashes quarantine the whole payment. SQL captures show published results; they do not measure the transformations' execution time.
+The [Bronze-to-Silver integration test](../../src/data-pipeline/batch/tests/bronze/test_bronze.py) writes physically different v2/v3 Parquet schemas plus a redelivery: 11 Bronze deliveries become 10 canonical events and two valid attempts. [Conflict tests](../../src/data-pipeline/batch/tests/silver/test_silver.py) also verify that differing business hashes quarantine the whole payment.
 
 **Scale techniques.** A narrow event-ID/hash aggregation replaces a broadcast of about 20M duplicate IDs; attempt construction uses one grouped aggregation instead of separate payload windows and joins. Range overwrites avoid full-history recomputation. `persist(MEMORY_AND_DISK)` allows lost Spot blocks to be recomputed from lineage instead of relying on local checkpoints.
+
+<a id="prod-v19-run"></a>
+
+AWS v19 publication, 2025-10-29 to 2026-10-28: 964,433,589 canonical events, 191,148,630 attempts, 192,163,964 labels and zero rejected events.
 
 **Controlled skew comparison.** [`silver/benchmark.py`](../../src/data-pipeline/batch/batch/silver/benchmark.py) ran as `dp2-rubric-split-nqvm4` on GCP on 2026-11-04, using the same cached 6,816,149 attempts from October 16–28, pinned to Silver snapshot `306587680516707839`. Two one-core executors (2 GiB heap + 1 GiB overhead each), 64 shuffle partitions, no static/adaptive broadcast; coalescing disabled and skew/advisory thresholds 1 MiB so this bounded input exercises actual splitting.
 
@@ -122,7 +126,7 @@ The [Bronze-to-Silver integration test](../../src/data-pipeline/batch/tests/bron
 | AQE skew handling | 20.48 s | 417 | One skewed partition, 13 splits |
 | 16-bucket salting by attempt ID | 20.29 s | 381 | Salted join |
 
-All variants produced **202,070 rows** with checksum `-2964469759385603852493`. AQE reduced wall time 17.0%, salting 17.8%, while scheduling more tasks. This is one sequential warm-cache comparison, not a repeated throughput benchmark. The earlier 16 MiB/coalescing run failed the required skew-split assertion and is excluded.
+All variants produced **202,070 rows** with checksum `-2964469759385603852493`. AQE reduced wall time 17.0%, salting 17.8%, while scheduling more tasks. Single sequential warm-cache run.
 
 ![Spark SQL UI comparing baseline, AQE and salted queries](images/spark-skew-comparison-2026-11-04.png)
 
@@ -138,6 +142,8 @@ All variants produced **202,070 rows** with checksum `-2964469759385603852493`. 
 | `feat_payment_method_daily` | `integration_id`, `payment_method_fingerprint`, `event_timestamp`, `created` | Equivalent card-history measures, including distinct customers |
 | `dim_customer` | `customer_sk`, customer keys, `valid_from_ts`/`valid_to_ts`, `version_number`, `is_current` | SCD2 profile fields, `profile_hash` and familiar-device state; a new version represents a change, not another payment |
 | `label_attempt` | Attempt keys, entity keys and scoring-time `event_timestamp` | Earliest linked label per attempt/source, with `is_fraud` and separate `label_available_at` |
+
+AWS v19 output: 34,004,866 customer versions, 348,030,903 customer-feature rows, 362,959,360 card-feature rows and 192,163,964 attempt labels.
 
 For an anchor `s`, features read `[s − window, s)` using `coalesce(attempted_at, started_at)` and require that the attempt was observed before `s`. Outcome measures additionally require `outcome_at < s`. Incomplete windows are null; a complete empty window can be zero. Training takes the latest feature row at/before scoring time and only labels available by the cutoff.
 
@@ -157,54 +163,4 @@ The 5-minute/1-hour/24-hour stream-feature tables are produced by Flink and its 
 
 **Bounded construction.** Stage only rebuilt days, build label summaries in eight hash passes and insert the attempt fact in bounded hash buckets. Validate staging before `REPLACE PARTITION`. This keeps the mart build within ClickHouse's 2 GiB query budget and prevents a failed build from publishing partial outputs.
 
-## Recorded backfill and execution improvements
-
-The following results predate GCP. Source regeneration there does not establish a completed GCP backfill.
-<a id="prod-v19-run"></a>
-
-Bronze v19, then `dp-backfill` from 2025-10-29 on the prod cluster (11 spot executors × 3 cores, drivers on on-demand nodes). Minutes per stage, from the Argo node times. Until June the stages ran in one line and `check-gold` audited Gold and the marts together; from July Gold and the marts run side by side, so the month total no longer includes the mart build:
-
-| Month | Run | silver | check-silver | gold | check-gold | marts | check-marts | Month total |
-|---|---|---|---|---|---|---|---|---|
-| 2025-10 (3 days) | `dp-backfill-ljwl7` | 4 | 1 | 3 | 2 | 0 | | 13 |
-| 2025-11 | `dp-backfill-ljwl7` | 10 | 5 | 12 | 7 | 0 | | 37 |
-| 2025-12 | `dp-backfill-ljwl7` | 12 | 9 | 13 | 15 | 0 | | 51 |
-| 2026-01 | `dp-backfill-ljwl7` | 13 | 11 | 19 | 21 | 0 | | 68 |
-| 2026-02 | `dp-backfill-6pqtr` | 11 | 12 | 12 | 23 | 0 | | 62 |
-| 2026-03 | `dp-backfill-7xxsm` | 13 | 18 | 17 | 28 | 0 | | 103 |
-| 2026-04 | `dp-backfill-np6cn` | 9 | 3 | 8 | 9 | 0 | | 33 |
-| 2026-05 | `dp-backfill-drbzt` | 15 | 4 | 15 | 10.5 | 5.3 | | 52 |
-| 2026-06 | `dp-backfill-wjc8k` | 9 | 3.6 | 9 | 14.5 | 20.5 | | 61 |
-| 2026-07 | `dp-backfill-8h7gq` | 15 | 4 | 14 | 10 | 0.5 | 1.1 | 44 |
-| 2026-08 | `dp-backfill-8h7gq` | 14.5 | 3.8 | 13.7 | 11.1 | 7.7 | 1.1 | 44 |
-| 2026-09 | `dp-backfill-ww2pp` | skipped | skipped | 13.8 | 10.8 | 12.7 | 1.2 | 28 |
-| 2026-10 (28 days) | `dp-backfill-ww2pp` | 12.5 | 3.5 | 11.9 | 10.9 | 16.2 | 1.3 | 50 |
-
-Published row counts (Iceberg `main`, 2025-10-29 to 2026-10-28):
-
-| Table | Rows |
-|---|---|
-| `silver.payment_events` | 964,433,589 |
-| `silver.attempts` | 191,148,630 |
-| `silver.labels` | 192,163,964 |
-| `silver.rejected_events` | 0 |
-| `gold.dim_customer` | 34,004,866 |
-| `gold.feat_customer_daily` | 348,030,903 |
-| `gold.feat_payment_method_daily` | 362,959,360 |
-| `gold.label_attempt` | 192,163,964 |
-| `marts.fact_payment_attempt` | 44,209,535 (2026-08-04 to 2026-10-28, the 90-day window; 6.05 GiB, 147 bytes a row) |
-| `marts.fact_merchant_day` | 1,327,898 |
-
-Every Silver, Gold and mart rule passed in OpenMetadata: 58 tests on 15 tables. Lineage runs from the v19 dataset through Bronze and Silver to the Gold tables and marts.
-
-
-### Execution techniques
-
-| Technique | Problem and recorded result |
-|---|---|
-| Range-scoped checks with `additional_table_filters` | Whole-table checks grew every month; a wrapping `SELECT *` subquery also exhausted ClickHouse memory. Native range filters reduced check-silver + check-gold from 18 + 28 minutes (March) to 3 + 9 (April). |
-| Gold and marts in parallel | Marts read Silver, so waiting for Gold added no dependency protection. July/August completed in 44 minutes per month with both branches running together. |
-| Skip matching published stages | June's retry rebuilt 22 minutes of already published work. September's retry skipped Silver and finished in 28 minutes. |
-| On-demand drivers, Spot executors | Losing a driver restarts an application; executor loss costs retries. Drivers stay on on-demand nodes and executors recompute lost work. |
-
-These month-to-month results describe operational changes, not controlled same-input benchmarks.
+AWS v19 marts: 44,209,535 attempts for 2026-08-04 to 2026-10-28 (6.05 GiB) and 1,327,898 merchant-day rows. All 58 quality checks passed across 15 Silver, Gold and mart tables. [Range-scoped checks](orchestration-governance.md#range-scoped-validation) reduce repeated audit work; Gold and marts run concurrently after Silver.

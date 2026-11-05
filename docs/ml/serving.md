@@ -7,7 +7,6 @@ Go Fraud owns the decision. It validates the attempt, applies the versioned rule
 - Rules decide, and the model can add a decline. Where the online store is enabled, Go Fraud reads the features and calls the model. A score at or above `FRAUD_MODEL_THRESHOLD` adds a decline (reason `MODEL_RISK_HIGH`, policy `rules-v1+model`), but only when the predictor answered and all five feature views were available; otherwise the rules decision stands. The score never approves what the rules decline. The feature read has a 250 ms deadline and the model call its own 150 ms, both inside the 1 s assessment deadline, and a predictor failure is recorded as `timeout` or `error`.
 - Dev and prod run the same configuration: the decline threshold (0.1% FPR on validation) of the served version is packaged into its Triton config and read by Go Fraud, with 0.512 in the chart as the fallback for a version whose config has none. Where the stream views have no fresh rows the rules decision stands, and the evidence records why.
 - Payments records the decision before any processor effect; fraud errors fail closed.
-- No feature-read latency or freshness evidence exists for the v2 features yet, so no ML latency guarantee is claimed.
 
 ## Model service
 

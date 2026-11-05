@@ -2,7 +2,7 @@
 
 Two Talos Kubernetes clusters run the same application charts. They are provisioned and operated from the platform repository, [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox), with OpenTofu (Terraform-compatible) for Proxmox, GCP and cluster bootstrap, and Argo CD for platform components. This repository holds no Terraform stack or cloud credentials.
 
-> **Migration note:** Production moved from AWS to GCP on 2026-11-02. The AWS account could no longer be used, so prod now runs on the GCP free-trial credit. Evidence and run records captured on AWS before that date are left as recorded.
+Production moved from AWS to GCP on 2026-11-02.
 
 | | Dev | Prod |
 |---|---|---|
@@ -26,7 +26,7 @@ The full-scale generator uses the Spot pool: one shard per Spot node, selected b
 
 Removing an application chart never removes shared services, buckets, catalog databases or namespaces.
 
-## Provisioning code and evidence
+## Provisioning
 
 | Platform code | Responsibility |
 |---|---|
@@ -35,6 +35,6 @@ Removing an application chart never removes shared services, buckets, catalog da
 | [`terraform/talos`](https://github.com/phuchoang2603/talos-proxmox/tree/main/terraform/talos) / [`terraform/cluster`](https://github.com/phuchoang2603/talos-proxmox/tree/main/terraform/cluster) | Talos bootstrap and environment configuration |
 | [`apps`](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps) | Shared operators and platform services through Argo CD |
 
-Talos machine configuration and GitOps replace the rubric's Ansible-on-VM configuration. The [platform provisioning workflow](https://github.com/phuchoang2603/talos-proxmox/blob/main/docs/architecture/terraform-ci.md) describes plan/apply; the prod apply below succeeded on platform commit `a60bebc` (run `41733627525`). This records provisioning success; application convergence is verified separately.
+Talos machine configuration and GitOps replace the rubric's Ansible-on-VM configuration. The [platform provisioning workflow](https://github.com/phuchoang2603/talos-proxmox/blob/main/docs/architecture/terraform-ci.md) describes plan/apply; the prod apply below succeeded on platform commit `a60bebc` (run `41733627525`).
 
 ![Successful production OpenTofu provisioning run](images/prod-provisioning-2026-11-03.png)

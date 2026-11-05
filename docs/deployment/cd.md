@@ -25,19 +25,15 @@ Measured image optimization (`linux/amd64`); compressed size is registry layer b
 | Spark, `main-eb98307`, 2026-11-01 | Separate connector/build stages; copy only Spark runtime; remove pip/cache | 1.35 GB compressed, 1.89 GB unpacked; −33% compressed against `1e090ee`, with newer Spark and more connectors |
 | Streaming, `6cec4a9` → `52219c0`, 2026-10-27 | Avoid installing a second copy of Flink libraries | Compressed 1.22 → 0.91 GB (−25%); unpacked 1.82 → 1.49 GB |
 
-### GitHub build screenshots
-
-These are browser captures of the actual GitHub Actions jobs on 2026-11-05. The historical streaming baseline at `6cec4a9` and optimized version at `52219c0` both built and published successfully.
+Streaming builds: `6cec4a9` before, `52219c0` after.
 
 ![GitHub Actions: streaming build before the packaging optimization](images/github-streaming-build-before-2026-11-05.png)
 
 ![GitHub Actions: streaming build after the packaging optimization](images/github-streaming-build-after-2026-11-05.png)
 
-Sources: [baseline job](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40566181024/job/122408013040) and [optimized job](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40592235496/job/122499209418). GitHub reports total job durations of **7m20s → 2m52s** and build/push steps of **6m49s → 2m28s**. These are observed CI runs with different cache states, not a controlled build-time benchmark. They predate the JVM migration.
+Sources: [baseline job](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40566181024/job/122408013040) and [optimized job](https://github.com/phuchoang2603/payment-gateway-fraud-detection/actions/runs/40592235496/job/122499209418). GitHub reports total job durations of **7m20s → 2m52s** and build/push steps of **6m49s → 2m28s**. Python-era builds with different cache states.
 
-GHCR platform manifests rechecked on 2026-11-05 contain **1,221,394,562 → 908,755,934 compressed layer bytes (−25.6%)** for the two streaming tags. This size measurement is separate from the CI timings shown above.
-
-The Spark `1e090ee → opt` size comparison remains an archived local experiment. Its old baseline image is no longer available in GHCR, and no paired screenshot of the original size commands was retained. The later Spark image contains newer dependencies, so it cannot substitute for that experiment's after-image.
+GHCR platform manifests rechecked on 2026-11-05 contain **1,221,394,562 → 908,755,934 compressed layer bytes (−25.6%)** for the two streaming tags.
 
 ## Release flow
 

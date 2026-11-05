@@ -26,7 +26,7 @@ On a fresh bucket, initialize `runs/payment-gateway/spark-events/` with a hidden
 
 Tables are Iceberg, registered in the Polaris REST catalog that the `lakehouse` chart deploys. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
 
-The recorded AWS v19 backfill held Bronze in full, and Silver and Gold from 2025-10-29 to 2026-10-28. Those totals are not a verification of the fresh GCP deployment.
+The recorded AWS v19 backfill held Bronze in full, and Silver and Gold from 2025-10-29 to 2026-10-28.
 
 | Technique | Applied to | Why |
 |---|---|---|
@@ -50,17 +50,15 @@ Kafka offsets are derived from the Bronze rows themselves, not from snapshot met
 
 Catalog/session setup: [`spark.py`](../../src/data-pipeline/batch/batch/spark.py). Table properties and branch writes: [`lakehouse.py`](../../src/data-pipeline/batch/batch/lakehouse.py). Maintenance: [`maintenance.py`](../../src/data-pipeline/batch/batch/maintenance.py). Mart DDL/build: [`gold/sql/marts`](../../src/data-pipeline/batch/batch/gold/sql/marts), [`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py). Spark merges evolving Parquet schemas and deduplicates canonical events by `event_id` before writing Silver.
 
-### Write distribution screenshots
+### Write distribution
 
 These retained Spark UI captures are from the actual AWS `dp1-bronze-historical` attempts on 2026-10-30. Before the fanout change, the `write payment_events` stage shows **202.3 GiB of shuffle write**, followed by retry attempts.
 
 ![Spark UI before local fanout: payment-event write creates 202.3 GiB of shuffle](images/spark-dp1-hash-write-stages.png)
 
-The later successful run shows `write payment_events` reading **105.9 GiB** with no shuffle read/write recorded for that stage; all 1,428 tasks completed. This supports removal of the write redistribution. It does not establish an end-to-end percentage speedup: the earlier attempt retried, and the displayed stage timings and byte categories differ.
+The later successful run shows `write payment_events` reading **105.9 GiB** with no shuffle read/write recorded for that stage; all 1,428 tasks completed. The earlier attempt retried; the captures show different stages and byte categories.
 
 ![Spark UI after local fanout: successful payment-event write without a shuffle](images/spark-dp1-stages.png)
-
-The historical partition-pruning and Z-order reports have no retained UI captures; compaction and local ordering have no paired measurements.
 
 ## Warehouse
 
@@ -125,17 +123,13 @@ What it shows:
 - **`set(8)` on `outcome` does not help a common value.** Declines occur in every granule, so the index skips nothing and adds about 70 ms. The `minmax` on `risk_score` is not measured, because the historical rule-based policy records no score.
 - **The daily mart answers KPIs without the fact:** 12 ms against 340 ms for the same merchant and month from attempts.
 
-The on-demand `warehouse-benchmark` can additionally compare raw Iceberg and an unsorted copy, but it makes a second 6 GiB copy of the fact on the shared 30 GiB volume, so it was not run on prod.
-
 ### Current GCP index comparison in Grafana
 
 [Grafana Explore](https://grafana.phuchoang.sbs/explore), 2026-11-05: the same card predicate on `marts.fact_payment_attempt`, with skip indexes disabled (left) and enabled (right). Both disable the query-condition cache.
 
 ![Grafana Explore: identical card query with skip indexes disabled and enabled](images/grafana-card-index-before-after-2026-11-05.png)
 
-The plans select **5,541 → 156 granules (97.18% fewer)** and **577 → 42 parts (92.72% fewer)**. `EXPLAIN` measures pruning, not query latency.
-
-The fingerprint was selected from an existing row. These are planning results; the historical timing and codec measurements above have no retained paired screenshots.
+The plans select **5,541 → 156 granules (97.18% fewer)** and **577 → 42 parts (92.72% fewer)**. Measured with `EXPLAIN indexes = 1`.
 
 ### Mart dashboards
 

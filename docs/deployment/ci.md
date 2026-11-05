@@ -25,7 +25,7 @@ GitHub Actions validates pull requests and `main`; successful checks gate image 
 
 A Python project can set a minimum total coverage with `coverage-fail-under` under `[tool.ci]` in its `pyproject.toml`; `scripts/ci-checks.sh` passes it to pytest-cov. `src/ml` sets 90 (97.9% line and branch combined when set).
 
-## Coverage and mutation results
+## Coverage and mutation testing
 
 Coverage from CI (`python-test-evidence-*` and `go-test-evidence-*` artifacts), 2026-11-01; API rows refreshed on 2026-11-03. Go counts only handwritten code; sqlc and protobuf output is excluded.
 
@@ -67,9 +67,3 @@ The knowledge API mutation baseline killed **98/107 mutants (91.6%)**: nine surv
 The same passing run executes parameterized invalid/boundary searches and Hypothesis-generated repeated reads. The source below shows the actual partitions and idempotency assertion.
 
 ![Knowledge API boundary partitions and property-based idempotency test](images/api-boundary-property-tests-2026-11-04.png)
-
-## Deployed verification
-
-The 2026-10-23 acceptance run against prod is recorded in the [gateway verification evidence](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md): synthetic tokenization; approve, risk-decline, processor-decline, timeout-then-recovery and expiry paths; decline-then-approve through the hosted page with signed webhooks; Redis fallback; Connect restart and Kafka outage catch-up; byte-equal topic payloads; and the ledger lifecycle check. A short smoke run does not establish the monthly availability objective or the nominal load target.
-
-On 2026-11-03, Edge canary acceptance covered no-data rejection, fault rejection and healthy promotion (10/25/50% stages, each requiring two passing observations). The healthy run returned 14,400/14,400 checkout GETs as HTTP 200 over 20 minutes at 12 requests/s, with client p95 105 ms. This measures checkout reads, not feature-retrieval capacity or payment processing.

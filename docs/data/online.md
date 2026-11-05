@@ -57,24 +57,7 @@ Consider a covered entity at 12:10 UTC, with no other attempts:
 | Attempt time 11:59 on the previous day, delivered at 12:10 | It is beyond the 24-hour retained horizon | The deduplication operator increments `too_late` and omits the contribution |
 | Existing identity with different business content | Keeping an arbitrary copy hides a conflict | The reject sink records `conflicting_duplicate` |
 
-In live mode `Aggregate` uses processing-time timers and applies attempt-time membership. A watermark screenshot alone therefore cannot prove live late-arrival correctness. Too-late records are counted; they do not have a dedicated too-late side-output topic. The rejects topic serves invalid or conflicting records.
-
-### Metrics
-
-| Metric | Meaning |
-|---|---|
-| `too_late` | Attempts older than the 24-hour horizon when processed; dropped |
-| `scope=event` / `scope=attempt`, `duplicates_dropped` | Identical redeliveries dropped by each dedup stage |
-| `lateness=lt_1m`, `1m_5m`, `5m_15m`, `15m_24h`, `too_late`, `attempts` | Processing time minus `attempted_at` for each new attempt, so configured and observed lateness can be compared |
-| `reject_class=<class>`, `rejected` | Dead-lettered records per class: `undecodable`, `invalid_event`, `invalid_context`, `conflicting_duplicate` |
-
-### Local correctness comparison
-
-The JVM tests compare 2,498 serialized snapshots from 503 deliveries against the independent [v2 reference](../../src/data-pipeline/features/reference_v2.py), including late inputs, duplicates, conflicts and coverage boundaries. They also verify processing-time timers, RocksDB checkpoint/restore, source-clock recovery, typed serializers, bounded load and transactional Kafka output. A packaged-job test runs the application JAR in the production Flink base image.
-
-<a id="evidence"></a>
-
-### Dev validation
+In live mode `Aggregate` uses processing-time timers and applies attempt-time membership. Too-late records are counted; they do not have a dedicated too-late side-output topic. The rejects topic serves invalid or conflicting records.
 
 One bounded dev run on 2026-10-29, from PR #101's dev releases. Prod was untouched.
 
@@ -98,9 +81,20 @@ Flink counters reset on restart and count only attempt starts; raw-topic duplica
 
 The counters above came from Flink's REST API (`/jobs/<id>/vertices/<id>/metrics`), using port 6125 allowed by the Cilium policy.
 
-**Isolated runtime check, GCP, 2026-11-04.** Job `92ca836ab1f90cf315a367e05fb99215` ran the deployed `build_updates` operators in a temporary Flink 2.2.1 pod with a bounded collection and logical clock, without Kafka or feature-store writes. At anchor `2025-10-09T08:53:20Z`, inputs were a 10-minute-old attempt, its exact duplicate, an 8-minute-old distinct attempt and an attempt older than 24 hours by one microsecond. Customer and card 1-hour counts advanced **1 → 2**; neither duplicate nor too-late input added a contribution. Counters were **duplicates_dropped=1**, **too_late=1**, **lateness.5m_15m.attempts=2**. The job finished and the pod was removed. This validates the legacy Python runtime operators; it does not inject poison data into the live Kafka pipeline.
+### Metrics
 
-![Flink operator metrics: one too-late input, one duplicate and two late attempts](images/flink-late-duplicate-counters-2026-11-04.png)
+| Metric | Meaning |
+|---|---|
+| `too_late` | Attempts older than the 24-hour horizon when processed; dropped |
+| `scope=event` / `scope=attempt`, `duplicates_dropped` | Identical redeliveries dropped by each dedup stage |
+| `lateness=lt_1m`, `1m_5m`, `5m_15m`, `15m_24h`, `too_late`, `attempts` | Processing time minus `attempted_at` for each new attempt, so configured and observed lateness can be compared |
+| `reject_class=<class>`, `rejected` | Dead-lettered records per class: `undecodable`, `invalid_event`, `invalid_context`, `conflicting_duplicate` |
+
+### Local correctness comparison
+
+The JVM tests compare 2,498 serialized snapshots from 503 deliveries against the independent [v2 reference](../../src/data-pipeline/features/reference_v2.py), including late inputs, duplicates, conflicts and coverage boundaries. They also verify processing-time timers, RocksDB checkpoint/restore, source-clock recovery, typed serializers, bounded load and transactional Kafka output. A packaged-job test runs the application JAR in the production Flink base image.
+
+<a id="evidence"></a>
 
 ### Restart
 
