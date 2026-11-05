@@ -165,9 +165,13 @@ The faulty candidates were made by pausing Argo CD's reconcile of the app with t
 
 Two causes were found and fixed on the way. A new preview pod becomes an endpoint of its Service in the mesh a moment after it is Ready, and the Rollout starts the analysis in the same second it scales the preview up, so the analysis client waits up to 150 s for the MCP handshake and retries only connection failures. The Job's deadline is 300 s, because it counts the image pull. The first chat also failed: the gateway's `PhoneNumber` masking replaced a 7-digit run inside the fingerprint, so phone numbers are now matched by `gateway.piiPatterns` at word boundaries.
 
+### Drivers after a retrain
+
+The v4 reference profile recorded no feature gains, because the trainer did not name its features. After the fix on main, a dev retrain (`dev-retrain-gains-v5-b`, v4's snapshot and windows, 14 min 11 s, GPU fit 4 min 54 s on the GTX 1650) registered v5 and rolled it out: 48 of its 50 features carry a gain, led by `customer_snapshot_attempt_count_1h` (34.4% of the total), `amount_minor` (26.5%) and `customer_snapshot_attempt_count_5m` (11.0%). The same gateway call then returned model v5, a score of 0.0006 against a decline threshold of 0.8597, and five drivers: `customer_snapshot_attempt_count_1h` (34.5% of the ranking), `amount_minor` (31.9%), `customer_snapshot_attempt_count_5m` (10.5%), `decided_count_7d` of the payment method (1.8%) and `payment_method_amount_to_30d_avg` (1.6%). A retrain that passes only the snapshot and `force` skips training on dev when the stream tables no longer cover the 84-day window, so this run passed v4's four windows and cutoff explicitly.
+
 ### Not yet shown
 
-The drivers are empty because the served v4 reference has no feature gains; the fix to the training code is on main, and drivers appear once a model trained from it is served. KEDA scale-out under load was not observed: the HPA read 0 of 5 calls/s per replica at two replicas, and the 5 calls/s target is untested. The Langfuse `risk-agent` prompt is still version 1, which has the tool wording but not the line about the threshold flag, and the answer calls the comparison a "Decision". The phone masking change is deployed on dev only, and the removal of the charts' GPU placement has not been deployed anywhere.
+The chat captures above were taken on v4, before the retrain, so they show empty drivers; the drivers below were read from a gateway call and have not been re-captured in a chat. KEDA scale-out under load was not observed: the HPA read 0 of 5 calls/s per replica at two replicas, and the 5 calls/s target is untested. The Langfuse `risk-agent` prompt is still version 1, which has the tool wording but not the line about the threshold flag, and the answer calls the comparison a "Decision". The phone masking change is deployed on dev only, and the removal of the charts' GPU placement has not been deployed anywhere.
 
 ## Known limits
 
