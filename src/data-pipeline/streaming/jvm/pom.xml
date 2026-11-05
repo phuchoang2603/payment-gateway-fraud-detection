@@ -200,6 +200,12 @@
               </relocations>
               <filters>
                 <filter>
+                  <artifact>org.apache.flink:flink-connector-kafka</artifact>
+                  <excludes>
+                    <exclude>org/apache/flink/connector/kafka/source/enumerator/KafkaSourceEnumerator*.class</exclude>
+                  </excludes>
+                </filter>
+                <filter>
                   <artifact>*:*</artifact>
                   <excludes>
                     <exclude>META-INF/*.SF</exclude>
