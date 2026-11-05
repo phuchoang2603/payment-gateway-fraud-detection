@@ -1,0 +1,11 @@
+Retained local Spark build export excerpt (after).
+Original log SHA-256: b2a94ecc8fc3d80c432f176dfca633e7eaaff6014de9fb6ded22a5f2605fb3ad
+This is build-success evidence; cache states and full build timing are not comparable.
+
+#26 exporting manifest list sha256:d675bdb4e98dd7a443d517592a37f4ec1264b57c327571fd2bc7ad397dda1017
+#26 exporting manifest list sha256:d675bdb4e98dd7a443d517592a37f4ec1264b57c327571fd2bc7ad397dda1017 0.2s done
+#26 naming to docker.io/library/dp1-spark:build-optimized
+#26 naming to docker.io/library/dp1-spark:build-optimized 0.0s done
+#26 unpacking to docker.io/library/dp1-spark:build-optimized
+#26 unpacking to docker.io/library/dp1-spark:build-optimized 176.6s done
+#26 DONE 1239.7s

@@ -80,18 +80,7 @@ Vault exposes metadata to Edge and fixture resolution only to the processor. Tok
 
 ## Routing and gateway
 
-Istio Gateway API is the platform equivalent of the rubric's NGINX ingress. The app owns its Gateway and HTTPRoute; the platform owns the controller and Cloudflare tunnel.
-
-`Client HTTPS → Cloudflare → tunnel → Istio Gateway → edge / edge-canary`
-
-| Setting | Configuration |
-|---|---|
-| Dev / prod hostname | `pay-gateway-dev.phuchoang.sbs` / `pay-gateway.phuchoang.sbs` in [environment values](../../infra/charts/payment-gateway) |
-| Tunnel and ClusterIP Gateway | [`ingress.yaml`](../../infra/charts/payment-gateway/templates/ingress.yaml) |
-| `/checkout/` prefix, hostname, HTTPS forwarding header and timeouts | [`http-route.yaml`](../../infra/charts/payment-gateway/templates/http-route.yaml) |
-| Stable/canary weights | [Rollouts strategy](../../infra/charts/payment-gateway/templates/_rollout.tpl); prod acceptance on 2026-11-03: 10/25/50% stages, then promotion |
-
-TLS terminates at Cloudflare; the tunnel targets the internal HTTP listener. Public `/v1/payments` has no route and returned HTTP 404 during prod acceptance. Internal callers use the stable Edge Service; service-account policies enforce strict mTLS for private service calls.
+The public checkout path uses Cloudflare Tunnel and an Istio Gateway API route; internal calls use the ambient service mesh. [Domains, HTTPS, gateways and the service mesh](../deployment/networking.md) owns hostname configuration, TLS boundaries, routing, identities and verification. [Delivery](../deployment/cd.md#edge-progressive-delivery) owns stable/canary rollout behavior.
 
 ## Consistency and recovery
 

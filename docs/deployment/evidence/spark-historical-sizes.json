@@ -1,0 +1,15 @@
+{
+  "source": "docs/deployment/cd.md at fc197dbc5c9c",
+  "date": "2026-10-22",
+  "baseline_commit": "1e090ee",
+  "optimized_tag": "opt",
+  "precision": "Rounded recorded decimal GB, original local images unavailable; not rerun or independently reverified. Baseline GHCR main tag not found on 2026-11-05.",
+  "compressed_GB": {
+    "before": 2.02,
+    "after": 1.06
+  },
+  "local_GB": {
+    "before": 5.07,
+    "after": 3.06
+  }
+}

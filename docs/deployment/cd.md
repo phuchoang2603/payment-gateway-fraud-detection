@@ -11,7 +11,7 @@ Application images are built from Dockerfiles in [`infra/docker`](../../infra/do
 | Six Go services | `go-service.Dockerfile`; distroless, no shell or package manager |
 | Live simulator and historical generator | `live-simulator.Dockerfile`; slim Python |
 | Feast | `feast.Dockerfile`; slim Python |
-| Streaming | `streaming.Dockerfile`; Flink, reusing its bundled JARs |
+| Streaming | `streaming.Dockerfile`; typed JVM Flink job and Python seed/orchestration tools, without PyFlink |
 | Schema registration | `schema-register.Dockerfile`; protoc build stage, slim Python runtime |
 | Debezium Connect | `connect-debezium.Dockerfile`; Strimzi with the Debezium plugin |
 | Spark jobs | `data-platform-spark.Dockerfile`; checksummed connectors, slim Python and headless JRE |
@@ -25,6 +25,28 @@ Measured image optimization (`linux/amd64`); compressed size is registry layer b
 | Spark, `main-eb98307`, 2026-11-01 | Separate connector/build stages; copy only Spark runtime; remove pip/cache | 1.35 GB compressed, 1.89 GB unpacked; −33% compressed against `1e090ee`, with newer Spark and more connectors |
 | Streaming, `6cec4a9` → `52219c0`, 2026-10-27 | Avoid installing a second copy of Flink libraries | Compressed 1.22 → 0.91 GB (−25%); unpacked 1.82 → 1.49 GB |
 
+### Before/after image and build proof
+
+The figures distinguish three evidence levels. PNGs are rendered from the linked records, not screenshots of a new build. Image sizes do not establish faster build times or faster data processing.
+
+![Streaming image: verified registry layer bytes before and after optimization](images/docker-streaming-before-after.png)
+
+The historical streaming packaging change is independently reproducible from the retained GHCR `linux/amd64` manifests: **1,221,394,562 → 908,755,934 compressed layer bytes (−25.6%)**. The [measurement and immutable digests](evidence/image-size-proof.json) and [before](evidence/streaming-before-manifest.json)/[after](evidence/streaming-after-manifest.json) platform manifests were checked on 2026-11-05. This predates the JVM migration and is not a current JVM image-size benchmark. To reproduce, inspect each recorded digest and sum `layers[].size`; exclude the image config and provenance/attestation manifests.
+
+![Historical Spark image sizes before and after cache/runtime optimization](images/docker-spark-before-after.png)
+
+The [Spark size record](evidence/spark-historical-sizes.json) preserves the archived, rounded 2026-10-22 measurements. Its old baseline image was unavailable in GHCR during this check, so these values were not independently remeasured. The later `main-eb98307` Spark manifest is retained in the [registry evidence](evidence/image-size-proof.json), but it also contains newer dependencies and is not a controlled build comparison.
+
+![Successful before and after Spark build export excerpts](images/docker-spark-build-proof.png)
+
+The retained [before](evidence/spark-build-before.txt) and [after](evidence/spark-build-after.txt) BuildKit excerpts show both local Spark builds exporting and unpacking successfully. They retain output tags, manifest digests and hashes of their original logs. They do not establish a mapping to the archived size experiment's commits or comparable cache states, so no build-duration reduction is claimed. Regenerate these PNGs with the [evidence renderer](../evidence/render-optimization.py) from the repository root:
+
+```bash
+devenv shell -- env UV_PYTHON_PREFERENCE=managed UV_PYTHON_DOWNLOADS=automatic \
+  uv run --no-project --python 3.11 --with matplotlib --with pillow \
+  python docs/evidence/render-optimization.py
+```
+
 ## Release flow
 
 | Source | Release branch | Argo CD target |
@@ -37,7 +59,7 @@ Measured image optimization (`linux/amd64`); compressed size is registry layer b
 3. Publication waits for every other workflow on that commit/event to succeed and skips superseded revisions. It records the chart revision and image tags in [`release.yaml`](../../infra/argocd/app-of-apps/release.yaml) on the release branch.
 4. The [dev](../../infra/argocd/dev/root.yaml) or [prod](../../infra/argocd/prod/root.yaml) root reconciles the release. Bootstrap requires the namespace, Doppler token, AppProject and root once.
 
-The same flow delivers services and pipeline WorkflowTemplates; Argo Workflows runs their plan, build, validation and publish stages. Prod enables the gateway, Kafka, data pipelines with Flink/Feast, ClickHouse and lakehouse. Live traffic, LLM and RAG applications are disabled there. Nonsecret settings are in [chart values](../../infra/charts); Doppler credentials reach workloads through External Secrets.
+The same flow delivers services and pipeline WorkflowTemplates; Argo Workflows runs their plan, build, validation and publish stages. Prod enables the gateway, Kafka, data pipelines with Flink/Feast, ClickHouse and lakehouse. The current prod root also enables live traffic, ML training, LLM and RAG Applications; enabled desired configuration does not establish that every workload is healthy. Nonsecret settings are in [chart values](../../infra/charts); Doppler credentials reach workloads through External Secrets.
 
 ## Edge progressive delivery
 

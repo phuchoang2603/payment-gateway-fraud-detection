@@ -44,7 +44,15 @@ The recorded AWS v19 backfill held Bronze in full, and Silver and Gold from 2025
 
 Kafka offsets are derived from the Bronze rows themselves, not from snapshot metadata, so compaction and snapshot expiry never lose ingestion progress.
 
-`maintain-lakehouse` (task `nightly`) runs from a suspended daily 03:43 UTC CronWorkflow and holds `dp-writer` and `dp1-bronze-writer`, so it never commits alongside a pipeline run. It reports before/after files and bytes per table and the branches it dropped; task `zorder` is the on-demand storage evidence.
+`maintain-lakehouse` (task `nightly`) runs from a daily 03:43 UTC CronWorkflow (enabled in prod, suspended in dev) and holds `dp-writer` and `dp1-bronze-writer`, so it never commits alongside a pipeline run. It reports before/after files and bytes per table and the branches it dropped; task `zorder` is the on-demand storage evidence.
+
+### Before/after lakehouse proof
+
+![Lakehouse partition pruning and Z-order before/after comparison](images/lakehouse-optimization-before-after.png)
+
+This figure is redrawn from the retained [maintenance report](evidence/zorder-2026-11-01.json), not a new GCP run. A one-day predicate reduces planned files **2,904 → 4 (−99.86%)** and planned bytes **113,729,774,392 → 282,390,283 (−99.75%)**. This is partition pruning over different selected ranges, not a timed before/after rewrite of the same query. Z-order is a genuine layout before/after comparison: **30 → 30 files**, with planned bytes **2,496,773,377 → 2,521,119,685 (+0.98%)** after a 69.57-second rewrite. It did not improve file-level pruning.
+
+No paired numerical result is retained here for compaction, local write ordering or removal of the historical hash redistribution. The write-stage capture below records the old shuffle cost; it cannot establish a percentage speedup without a matching after-run. These techniques remain implementation choices with stated purposes, not measured wins. The [renderer](../evidence/render-optimization.py) preserves the plotted values and units.
 
 ### Implementation references
 
@@ -120,6 +128,22 @@ What it shows:
 - **The daily mart answers KPIs without the fact:** 12 ms against 340 ms for the same merchant and month from attempts.
 
 The on-demand `warehouse-benchmark` can additionally compare raw Iceberg and an unsorted copy, but it makes a second 6 GiB copy of the fact on the shared 30 GiB volume, so it was not run on prod.
+
+### Before/after warehouse proof
+
+![ClickHouse index-disabled versus index-enabled query timings and granules](images/warehouse-index-before-after.png)
+
+![ClickHouse string codec size and daily-mart query comparisons](images/warehouse-codec-mart-before-after.png)
+
+The [machine-readable comparison](evidence/warehouse-comparison.json) transcribes the recorded AWS values in [storage.md at fc197dbc5c9c](https://github.com/phuchoang2603/payment-gateway-fraud-detection/blob/fc197dbc5c9c/docs/data/storage.md). These are historical single-run comparisons, not fresh GCP screenshots; the original `query_log` export was not retained. PNGs were generated from those records.
+
+- Card bloom filter: **1,905 → 158 ms (12.06× faster)**; **5,732 → 296 granules (94.84% fewer)**.
+- Customer bloom filter: **827 → 745 ms (9.92% lower latency)**; the busiest customer remains broadly scattered.
+- Outcome set index: **278 → 352 ms (26.62% slower)**, with no granules skipped. This is a negative result.
+- ZSTD on a 2M-row sample: UUID strings **35.5 → 18.5 bytes/row (47.89% smaller)**; fingerprints **63.4 → 32.2 (49.21% smaller)**.
+- Daily KPI mart: **340 → 12 ms (28.33× faster)** for the recorded hot merchant/month. This compares two query shapes; it does not isolate a skip-index effect.
+
+The raw-Iceberg/unsorted-copy benchmark was not executed on prod, and there is no measured percentage here for bucketed joins, spill tuning or the unmeasured risk-score index. Re-running the warehouse benchmark while replay is using the cluster would alter the resource contention; no production benchmark was submitted for this documentation update.
 
 ### Mart dashboards
 

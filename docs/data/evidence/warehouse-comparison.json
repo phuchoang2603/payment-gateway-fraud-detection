@@ -1,0 +1,54 @@
+{
+  "provenance": {
+    "source": "https://github.com/phuchoang2603/payment-gateway-fraud-detection/blob/fc197dbc5c9c/docs/data/storage.md",
+    "environment": "AWS v19, before GCP migration",
+    "method": "Historical documentation transcription; original query_log export not retained. Not a new benchmark.",
+    "window": "2026-08-04 to 2026-10-28",
+    "conditions": "44.2M rows, warm, query and query-condition caches disabled; times from system.query_log, granules from EXPLAIN indexes=1; rounded source values"
+  },
+  "queries": [
+    {
+      "name": "Q2 customer",
+      "before_ms": 827,
+      "after_ms": 745,
+      "before_granules": 2020,
+      "after_granules": 1451,
+      "before_million_rows": 15.7,
+      "after_million_rows": 11.4
+    },
+    {
+      "name": "Q3 card",
+      "before_ms": 1905,
+      "after_ms": 158,
+      "before_granules": 5732,
+      "after_granules": 296,
+      "before_million_rows": 44.2,
+      "after_million_rows": 2.3
+    },
+    {
+      "name": "Q4 outcome",
+      "before_ms": 278,
+      "after_ms": 352,
+      "before_granules": 5732,
+      "after_granules": 5732,
+      "before_million_rows": 44.2,
+      "after_million_rows": 44.2
+    }
+  ],
+  "codecs": {
+    "sample_rows": 2000000,
+    "uuid_string": {
+      "before_bytes_per_row": 35.5,
+      "after_bytes_per_row": 18.5
+    },
+    "fingerprint_string": {
+      "before_bytes_per_row": 63.4,
+      "after_bytes_per_row": 32.2
+    }
+  },
+  "daily_kpi": {
+    "fact_ms": 340,
+    "mart_ms": 12,
+    "note": "Recorded same hot merchant and month; query shapes differ."
+  }
+}

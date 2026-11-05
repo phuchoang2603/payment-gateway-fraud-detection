@@ -19,33 +19,11 @@ All templates live in the [`data-pipelines` chart](../../infra/charts/data-pipel
 
 Seed and materialization scratch pods and PVCs carry a scratch label. Argo deletes these pods five minutes after completion, including failed retry attempts, so their generic ephemeral PVCs can be reclaimed.
 
-Every writer publishes its audit branch to `main` only after all native tests pass. Failed runs keep their branches until nightly maintenance drops branches older than seven days; the exit handler records pipeline status in OpenMetadata. Bronze holds `dp1-bronze-writer`; the `dp-pipeline` template holds `dp-writer`, so the daily run, each backfill month and maintenance serialize. Checks retry execution errors, not failed data rules. The diagram shows Silver and Gold; the marts audit staging tables instead of a branch.
-
-```mermaid
-sequenceDiagram
-    participant W as Spark writer
-    participant I as Iceberg audit branch
-    participant C as Checks
-    participant CH as ClickHouse
-    participant OM as OpenMetadata
-    participant M as main
-    W->>I: overwrite the run's days, record range and input snapshots
-    C->>CH: contract rules on the audited snapshot, scoped to the range
-    CH-->>C: violation count per rule
-    C->>OM: native test results
-    alt every rule returns 0
-        C->>M: fast-forward main to the audited snapshot
-    else a rule fails
-        C--xM: main unchanged, branch kept for seven days
-    end
-    Note over OM: exit handler publishes run status and lineage
-```
+Batch lakehouse publication uses [write–audit–publish](novel-1-write-audit-publish.md): candidate snapshots pass native checks before catalog publication. That note owns the release protocol, conflict handling and atomicity limits; ClickHouse marts use their own staging publication. Bronze holds `dp1-bronze-writer`; `dp-pipeline` holds `dp-writer`, serializing competing pipeline runs and maintenance. Checks retry execution errors, not failed data rules.
 
 A platform admission policy rejects deleting or terminating an active workflow in `data`; stop runs with `shutdown: Stop`.
 
-GCP backfill `dp-backfill-v19-gcp-oct-b-6wrsz` passed all 15 tasks for October 16–28, 2026: Silver → parallel Gold/marts, with checks before each publication.
-
-![GCP backfill: checks before publication, Gold and marts in parallel](images/argo-gcp-backfill-2026-11-03.png)
+The recorded GCP backfill and its checks-before-publish capture are in [Novel 1](novel-1-write-audit-publish.md#evidence-and-limits). The second data design note covers [point-in-time correctness](novel-2-point-in-time-data.md) across customer versions, feature availability and labels.
 
 ### Spark sizing and placement
 

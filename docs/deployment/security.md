@@ -24,9 +24,7 @@ On 2026-11-04, all 20 gateway ExternalSecrets reported `SecretSynced`, `Ready=Tr
 - [Network policies](../../infra/charts/payment-gateway/templates/network-policy.yaml) restrict pod traffic; [database policies](../../infra/charts/payment-gateway/templates/database-network-policy.yaml) isolate database access.
 - Each service owns a database with separate migration/runtime roles; Payments CDC has a replication identity.
 
-Two temporary ambient-mesh pods called only Vault's gRPC health RPC on port 8000. The `edge` service account received `SERVING`; the `default` account failed. Istio's receiving proxy recorded “allow policies exist, but none allowed”, and its sending proxy recorded HTTP 401 with zero bytes exchanged. The allowed connection has both workload identities and response bytes. Both pods and their nonsecret protocol ConfigMap were removed.
-
-![Istio access logs comparing the allowed Edge identity and denied default identity](images/mesh-allowed-denied-2026-11-04.png)
+The allowed/denied service-account test and its access-log proof are maintained in [Networking](networking.md#recorded-verification), alongside the public TLS and ingress boundaries.
 
 Card data is synthetic. The vault encrypts fictional fixtures and issues opaque tokens; raw card data stays out of logs, events, Fraud, Redis and the lake. This demonstrates PCI DSS-oriented isolation, not compliance.
 

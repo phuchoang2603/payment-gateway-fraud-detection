@@ -1,0 +1,38 @@
+{
+  "after": {
+    "bytes_planned": 2521119685,
+    "files_planned": 30,
+    "plan_seconds": 0.153
+  },
+  "before": {
+    "bytes_planned": 2496773377,
+    "files_planned": 30,
+    "plan_seconds": 0.143
+  },
+  "bronze_one_day": {
+    "day": "2025-10-29",
+    "no_filter": {
+      "bytes_planned": 113729774392,
+      "files_planned": 2904,
+      "plan_seconds": 1.216
+    },
+    "one_day": {
+      "bytes_planned": 282390283,
+      "files_planned": 4,
+      "plan_seconds": 0.425
+    }
+  },
+  "customer_id": "e4db3e38-db85-535e-b1ff-4171684deb42",
+  "first": "2026-09-01",
+  "last": "2026-09-30",
+  "phases": {
+    "zorder": {
+      "job_ids": [],
+      "seconds": 69.57,
+      "stage_ids": [],
+      "tasks": 0
+    }
+  },
+  "run_id": "maintain-lakehouse-zorder-8z67x",
+  "task": "zorder"
+}

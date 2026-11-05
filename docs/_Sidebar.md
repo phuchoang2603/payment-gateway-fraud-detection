@@ -11,6 +11,8 @@
 - [Online data](data/online.md)
 - [Storage](data/storage.md)
 - [Orchestration and governance](data/orchestration-governance.md)
+- [Novel 1: write–audit–publish](data/novel-1-write-audit-publish.md)
+- [Novel 2: point-in-time data](data/novel-2-point-in-time-data.md)
 
 **ML**
 
@@ -37,3 +39,4 @@
 - [Docker, CD and canary deployment](deployment/cd.md)
 - [Observability](deployment/observability.md)
 - [Security and secrets](deployment/security.md)
+- [Domains, HTTPS, gateways and mesh](deployment/networking.md)
