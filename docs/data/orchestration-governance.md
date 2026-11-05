@@ -23,7 +23,7 @@ Batch lakehouse publication uses [write–audit–publish](novel-1-write-audit-p
 
 A platform admission policy rejects deleting or terminating an active workflow in `data`; stop runs with `shutdown: Stop`.
 
-The recorded GCP backfill and its checks-before-publish capture are in [Novel 1](novel-1-write-audit-publish.md#evidence-and-limits). The second data design note covers [point-in-time correctness](novel-2-point-in-time-data.md) across customer versions, feature availability and labels.
+The recorded GCP backfill and its checks-before-publish capture are in [Novel 1](novel-1-write-audit-publish.md#evidence-and-limits). The second data design note covers [historical replay through the live feature engine](novel-2-historical-replay.md), including logical time, isolated outputs and seed reuse.
 
 ### Spark sizing and placement
 

@@ -12,7 +12,7 @@
 - [Storage](data/storage.md)
 - [Orchestration and governance](data/orchestration-governance.md)
 - [Novel 1: write–audit–publish](data/novel-1-write-audit-publish.md)
-- [Novel 2: point-in-time data](data/novel-2-point-in-time-data.md)
+- [Novel 2: historical replay](data/novel-2-historical-replay.md)
 
 **ML**
 
