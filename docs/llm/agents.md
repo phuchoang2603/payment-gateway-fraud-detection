@@ -45,7 +45,7 @@ flowchart LR
 
 One kagent `ModelConfig`, `default-model-config`, used by every agent: provider OpenAI, model `qwen35-4b` with the model card's non-thinking sampling, the agents' gateway key, and the gateway's `/v1` route as base URL. Changing the model, the gateway or the key for all agents is one edit. Its sampling settings are the ones every agent uses; kagent's Go runtime takes them only from here, so A/B variants differ by prompt text.
 
-![kagent model config: default-model-config in llm-agents, key from the Secret llm-gateway-agents, base URL http://agentgateway.llm.svc.cluster.local/v1](images/agents-modelconfig.png)
+The [gateway note](gateway.md#routes) shows the shared base URL and credential Secret in the kagent model configuration.
 
 [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) generates this shared base URL and binds the ModelConfig to every template. Dev calls through this gateway returned chat completions and 1024-dimensional embeddings; direct model access from an unapproved pod was reset. A new end-to-end proof still needs one trace matched to gateway route counters.
 
@@ -96,11 +96,9 @@ The result is model v5, a score of 0.0006 against the decline threshold 0.8597, 
 
 ![The answer: probability 0.0006, model version 5, decline threshold 0.8597, drivers and the caveat that they are not per-prediction explanations](images/risk-chat-answer.png)
 
-One Langfuse trace covers the conversation, tagged `risk-agent:production`, with both tool spans between the model calls:
+One Langfuse trace covers the conversation, tagged `risk-agent:production`, with both tool spans between the model calls. The [runtime note](novel-2-go-adk-runtime.md#evidence-and-limits) shows the later retry’s transfer and prompt-version linkage.
 
-![Langfuse trace: invoke_agent coordinator, generate_content, transfer_to_agent, invoke_agent risk_agent](images/risk-trace-agents.png)
-
-![The same trace further down: the get_risk_features and score_payment_risk tool spans](images/risk-trace-tools.png)
+![Langfuse: the get_risk_features and score_payment_risk tool spans](images/risk-trace-tools.png)
 
 Its releases and scaling are in [Scaling](scaling.md). A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
 

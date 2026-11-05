@@ -23,4 +23,6 @@ The Go runtime replaced Python imports that exceeded the golden actor's 30 s wak
 
 On 2026-11-05, trace `4b62897784005dc59bf0c00aced8cdcf` linked all three risk-agent model calls to `risk-agent-system-prompt` version 3. The [conversation evidence](agents.md#risk-agent) records the score, tool calls and answer-quality limits. Existing [plugin tests](../../src/llm/agent_runtime/internal/langfuse/plugin_test.go) and [client tests](../../src/llm/agent_runtime/internal/langfuse/prompts_test.go) cover agent-specific selection, actor identity, trace linkage, caching and missing prompts.
 
+![Langfuse: coordinator transfers to risk_agent, whose model call links to risk-agent-system-prompt v3](images/runtime-prompt-trace.png)
+
 Prompt-version linkage establishes which instructions ran; it does not establish answer quality or an A/B winner. The LLM-version A/B remains on hold, and the third agent worker's readiness limit is recorded in [Scaling](scaling.md#agent-worker-pool).

@@ -25,37 +25,15 @@ Scrape configuration: [`infra/charts/llm-platform/templates/scrape.yaml`](../../
 | Time to first token, inter-token latency, queue, KV cache | `vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`, `vllm:num_requests_waiting`, `vllm:kv_cache_usage_perc` |
 | Prompts caught by PII masking | `agentgateway_guardrail_checks_total{action, phase}` |
 
-Web API, MCP and gateway traffic over the evidence runs (the 429s are the rate-limit check, the 501s are `GET /v1/models`, which the LLM route does not serve):
-
-![Grafana Explore: Web API requests by path and status, MCP tool calls by outcome, gateway requests by route and status](images/observability-api-mcp-gateway.png)
-
-Tokens, time to first token, generation round-trip and PII masking:
-
-![Grafana Explore: tokens per second by type, TTFT p95 per model, generation round-trip p95, PII guardrail checks by action](images/observability-tokens-ttft-pii.png)
-
-Values over the six hours of evidence runs on 2026-10-30:
-
-```text
-Web API /v1/chunks/{chunk_id}     200: 144   404: 3   422: 2
-MCP tool calls                    search_knowledge success: 12
-Gateway routes                    llm 200: 245, 401: 6, 429: 20 · mcp-knowledge 200: 726, 202: 661, 401: 4, 500: 2 · api-knowledge 200: 182, 401: 3
-Tokens per request (average)      input 301, output 112
-Generation round-trip p95         1.21 s
-vLLM time to first token p95      qwen35-4b 0.24 s, qwen3-embedding 0.41 s
-PII guardrail                     request: allow 14, mask 12 · response: allow 26
-```
-
-The two MCP 500s are the cold-start timeout that loading the Feast store at start-up fixed.
+Current dev captures are kept with the components they describe: [gateway routing](gateway.md#routes), [Jev screening and PII guard decisions](novel-1-jev-policy.md#checks-on-dev), and [model time to first token](inference.md#checks-on-dev).
 
 The risk server exports `risk_mcp_tool_calls_total{tool,outcome}`, `risk_tool_latency_seconds{tool}` and `risk_view_status_total{view,status}`. Tool failures are counted even when MCP transports the error with HTTP 200.
 
 ## Grafana dashboard
 
-The "LLM agents" dashboard ([`files/dashboards/llm-agents.json`](../../infra/charts/llm-platform/files/dashboards/llm-agents.json)) shows A2A calls and failures per agent route, MCP tool calls by outcome, screen route calls, guard checks and screen latency, and the model's tokens, time to first token and round-trip. Over the evidence runs on 2026-10-31 (16:15 to 17:00 UTC): 32 calls to `/a2a/coordinator`, 15 `search_knowledge` calls, all successful: Its MCP panels count the knowledge and risk servers, and a Risk tool row shows the tool's mean and p95 latency, the feature view statuses, and an Autoscaling row with the KEDA replicas of both MCP servers and the agent worker pool. The ConfigMap carries the `grafana_folder` annotation from `dashboards.folder`, so the dashboard lands in the `LLM` folder like the other components' dashboards. On dev, `score_payment_risk` read 1.04 s mean and 4.63 s p95 over the 3 hours shown, every feature view `available`, and 2 replicas for both MCP servers:
+The "LLM agents" dashboard ([`files/dashboards/llm-agents.json`](../../infra/charts/llm-platform/files/dashboards/llm-agents.json)) shows A2A calls and failures per agent route, MCP tool calls by outcome, screen route calls, guard checks and screen latency, and the model's tokens, time to first token and round-trip. Its MCP panels count the knowledge and risk servers, and a Risk tool row shows the tool's mean and p95 latency, the feature view statuses, and an Autoscaling row with the KEDA replicas of both MCP servers and the agent worker pool. The ConfigMap carries the `grafana_folder` annotation from `dashboards.folder`, so the dashboard lands in the `LLM` folder like the other components' dashboards. On dev, `score_payment_risk` read 1.04 s mean and 4.63 s p95 over the 3 hours shown, every feature view `available`, and 2 replicas for both MCP servers:
 
 ![Grafana, LLM folder: LLM agents with the Risk tool row, latency, feature views by status and MCP server replicas](images/risk-dashboard.png)
-
-![Grafana LLM agents dashboard: A2A calls per agent, MCP tool calls by outcome, screening](images/observability-agents-dashboard.png)
 
 ## Langfuse
 
@@ -63,17 +41,13 @@ Self-hosted Langfuse v4 (4.72.0, chart 2.2.0) in `llm`, on the shared ClickHouse
 
 ### Traces
 
-kagent's Go runtime exports each conversation's spans over OTLP to Langfuse; Substrate's egress gateway adds the project's basic-auth key. A conversation is one trace: the A2A request, the coordinator's `invoke_agent` span with its model call, `transfer_to_agent`, the sub-agent's `invoke_agent` span with its tool calls and model calls, and the task-store calls. Each model call (`generate_content qwen35-4b`) carries its tokens and is linked to the prompt version it used:
-
-![Langfuse trace: coordinator 1,864 → 24 tokens, transfer_to_agent, evidence_agent 2,234 → 86 tokens, the model call linked to evidence-agent-system-prompt v3](images/observability-langfuse-trace.png)
+kagent's Go runtime exports each conversation's spans over OTLP to Langfuse; Substrate's egress gateway adds the project's basic-auth key. A conversation is one trace: the A2A request, the coordinator's `invoke_agent` span with its model call, `transfer_to_agent`, the sub-agent's `invoke_agent` span with its tool calls and model calls, and the task-store calls. Each model call (`generate_content qwen35-4b`) carries its tokens and is linked to the prompt version it used; the [runtime capture](novel-2-go-adk-runtime.md#evidence-and-limits) shows a risk generation linked to production prompt v3.
 
 Each model call's messages are recorded on its span (`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY` on the agents), so Langfuse shows each generation's input and output. They stay in the self-hosted Langfuse in the cluster.
 
 ### Prompts
 
-Each agent's system prompt is the Langfuse prompt `<agent>-system-prompt`. Its `production` label is what agents use; the release catalog job only creates a prompt that does not exist yet, from [`files/prompts/<agent>.md`](../../infra/charts/llm-platform/files/prompts), so edits made in Langfuse are kept. On 2026-10-31 a new production version of the evidence prompt was published in Langfuse ("lead with the decline reason", v3); the next conversations used v3 without a release (3 model calls on v3 in the following 15 conversations, the rest on the variant):
-
-![Langfuse prompt evidence-agent-system-prompt: v3 production "Edited in Langfuse", v2 variant-b and v1 seeded from Git](images/observability-langfuse-prompt.png)
+Each agent's system prompt is the Langfuse prompt `<agent>-system-prompt`. Its `production` label is what agents use; the release catalog job only creates a prompt that does not exist yet, from [`files/prompts/<agent>.md`](../../infra/charts/llm-platform/files/prompts), so edits made in Langfuse are kept. The [runtime note](novel-2-go-adk-runtime.md) describes prompt caching and includes the dev prompt-version evidence.
 
 ### A/B tests
 
@@ -91,7 +65,5 @@ The seeds give every agent a variant that adds one instruction to its prompt. Pr
 | risk-agent | v2 variant-b ("risk level in one word first") | 0.97 s | 24 | 2 |
 
 The shorter-answer variants produce fewer output tokens; the risk variant has two calls, too few to judge.
-
-![Langfuse prompt metrics for evidence-agent-system-prompt: production and variant-b side by side](images/observability-langfuse-ab.png)
 
 RAG governance uses OpenMetadata: the workflow publishes corpus → `knowledge.chunks` lineage, run status and contract-derived quality results.

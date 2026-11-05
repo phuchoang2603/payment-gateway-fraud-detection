@@ -19,6 +19,10 @@ An MCP server or REST API is one entry under `gateway.mcpServers` or `gateway.ap
 
 The risk route uses the same strict `x-api-key` authentication and per-client limits as knowledge. On dev, dedicated rollout-analysis identities may call the two preview Services at their tool ports; agent calls still pass through the gateway. Feast separately admits the dev risk pod through its NetworkPolicy.
 
+The shared kagent model configuration sends model calls to the gateway’s `/v1` route and references the agents’ credential Secret:
+
+![kagent model configuration: gateway base URL and agents credential Secret](images/gateway-model-route.png)
+
 ## Security and policy
 
 | Control | Setting | Why |

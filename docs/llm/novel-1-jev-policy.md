@@ -69,3 +69,7 @@ Run through the gateway with the agents' key, the screen on 2026-11-01 and PII m
 | A prompt that asks the model to repeat a card number, an e-mail and a phone number | `card <masked>, email <EMAIL_ADDRESS>, phone <PHONE_NUMBER>` |
 
 Guard checks and screen-route calls are on the Grafana "LLM agents" dashboard, using agentgateway route/status and guard metrics.
+
+The dev window on 2026-11-05, 05:50–06:15 UTC, shows screen calls and request allow, mask and reject decisions. These are guard activity counts, not a measure of classifier accuracy.
+
+![Grafana: Jev screen calls and request guard decisions on dev](images/jev-policy-screening.png)
