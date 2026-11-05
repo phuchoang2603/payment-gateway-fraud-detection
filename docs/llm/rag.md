@@ -107,6 +107,10 @@ Percentiles (ms)   50%  75%  90%  95%  99%  99.9%  100%
 Aggregated          84  140  230  310  560   1300  2500
 ```
 
+Service level for the chunk endpoint: p95 at or below 500 ms and no failed requests at 60 users. The run met it, with a p95 of 310 ms, 0 failures in 41,945 requests and 140 req/s:
+
+![Locust report for rag-api: 41,945 requests, 0 failures, p95 310 ms, 140 req/s, 60 users](images/rag-locust-report.png)
+
 KEDA scales `rag-api` from 2 to 4 replicas on its combined REST and MCP request rate (`knowledge_api_requests_total` plus `knowledge_mcp_tool_calls_total` in VictoriaMetrics, target 10 req/s per replica); the chart leaves `replicas` to KEDA. During the run:
 
 ```text
