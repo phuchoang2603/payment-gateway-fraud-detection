@@ -31,7 +31,6 @@
 - [Agent gateway](llm/gateway.md)
 - [RAG](llm/rag.md)
 - [Scaling](llm/scaling.md)
-- [Observability](llm/observability.md)
 - [Langfuse](llm/langfuse.md)
 
 **Deployment**
