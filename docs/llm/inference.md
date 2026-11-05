@@ -2,7 +2,7 @@
 
 Self-hosted chat, embedding and decision models for the agents, the RAG pipeline and the gateway's request screen, and how fast the chat model serves agent traffic. Every caller reaches them through agentgateway with per-client API keys, request/token limits and mesh authorization; nothing calls a model server directly.
 
-- Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform) (`models.yaml`, values `models`). Application `llm-platform` in namespace `llm`, on dev and prod. On prod the three servers are meant to share one GPU node labelled `talos.dev/nodepool: gpu`; the application is enabled on the GCP GPU pool.
+- Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform) (`models.yaml`, values `models`). Application `llm-platform` in namespace `llm`, on dev and prod. GPU placement follows the platform-owned DRA `llm-gpu` claim; the application is enabled on the GCP GPU pool for prod.
 - Platform prerequisites (KServe 0.21 `LLMInferenceService` presets, the GPU DRA driver, the `llm-gpu` node group for the local model cache, agentgateway) come from the platform repository.
 
 ## Models
@@ -17,7 +17,7 @@ All three are KServe `LLMInferenceService`s. The chat model runs behind llm-d's 
 
 ## One GPU, three models
 
-Each environment has one GPU, so the three models share it through a single DRA `ResourceClaim` (`llm-gpu`), each vLLM process with a fixed memory fraction: 0.76 for chat, 0.12 for embeddings and 0.10 for `d3-edge`. The chat server keeps its KV cache in FP8, which the [benchmark](#benchmark) kept for throughput and cache room. The embedding and decision servers cap their context at 2 048 tokens so their caches fit the small shares; knowledge chunks are at most about 400 tokens, and a screen is one short question.
+The three models share one claimed GPU through a single DRA `ResourceClaim` (`llm-gpu`), each vLLM process with a fixed memory fraction: 0.76 for chat, 0.12 for embeddings and 0.10 for `d3-edge` (each is the model's `gpuMemoryUtilization` value). On dev's 15.48 GiB card the chat fraction is 0.72: with the other two servers resident, with their CUDA contexts, 11.6 GiB are free when the chat server starts, less than the 11.76 GiB that 0.76 asks for, and it crash-looped on 2026-11-04 until the fraction was lowered. The chat server keeps its KV cache in FP8, which the [benchmark](#benchmark) kept for throughput and cache room. The embedding and decision servers cap their context at 2 048 tokens so their caches fit the small shares; knowledge chunks are at most about 400 tokens, and a screen is one short question.
 
 ## Weights and start-up
 
@@ -28,11 +28,15 @@ Each environment has one GPU, so the three models share it through a single DRA 
 
 ## Autoscaling
 
-The model servers are not autoscaled: each environment has one GPU, so a second replica cannot start. Scaling out means a second GPU replica behind the same InferencePool. KEDA scales agent workers and the knowledge API independently of model replicas.
+The model servers are not autoscaled: the three servers use fixed shares of one claimed GPU, with no capacity reserved for a second replica. Scaling out means a second GPU replica behind the same InferencePool. KEDA scales agent workers and the knowledge API independently of model replicas.
 
 ## Checks on dev
 
 On 2026-11-01, after the move to the local model cache: all three `LLMInferenceService`s Ready from the cache on the one claimed GPU; a chat completion through the gateway answered 200 and an embedding returned 1024 dimensions.
+
+The Grafana sample for 2026-11-05, 05:50–06:15 UTC, shows vLLM p95 time to first token during dev conversations. This monitoring sample is separate from the controlled benchmark below.
+
+![Grafana: p95 time to first token for qwen35-4b, qwen3-embedding and d3-edge on dev](images/inference-ttft.png)
 
 ## Benchmark
 

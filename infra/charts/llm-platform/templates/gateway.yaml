@@ -244,7 +244,7 @@ spec:
         request:
           - regex:
               action: Mask
-              builtins: [CreditCard, Email, PhoneNumber]
+              builtins: [CreditCard, Email]
               matches:
                 {{- toYaml $gateway.piiPatterns | nindent 16 }}
           # Runs after masking, so the decision model never sees the masked values. The webhook calls the gateway's
@@ -262,6 +262,6 @@ spec:
         response:
           - regex:
               action: Mask
-              builtins: [CreditCard, Email, PhoneNumber]
+              builtins: [CreditCard, Email]
               matches:
                 {{- toYaml $gateway.piiPatterns | nindent 16 }}

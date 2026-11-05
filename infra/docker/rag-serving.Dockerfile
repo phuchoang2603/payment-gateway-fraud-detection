@@ -6,12 +6,14 @@ COPY src/llm/pyproject.toml src/llm/uv.lock ./
 COPY src/llm/common ./common
 COPY src/llm/rag_pipeline/pyproject.toml ./rag_pipeline/pyproject.toml
 COPY src/llm/rag_serving/pyproject.toml ./rag_serving/pyproject.toml
+COPY src/llm/risk_serving/pyproject.toml ./risk_serving/pyproject.toml
 RUN uv sync --locked --no-dev --no-editable --package fraud-rag-serving
 
 FROM python:3.12.16-slim-bookworm
 WORKDIR /app
 COPY --from=build /workspace/.venv /app/.venv
 COPY src/llm/rag_serving/fraud_rag_serving ./fraud_rag_serving
+COPY src/llm/mcp_analysis.py ./mcp_analysis.py
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HOME=/tmp
 USER 65532:65532
 EXPOSE 8080

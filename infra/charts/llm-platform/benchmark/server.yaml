@@ -11,8 +11,6 @@ spec:
   serviceAccountName: llm-benchmark
   automountServiceAccountToken: false
   restartPolicy: Never
-  nodeSelector:
-    nvidia.com/gpu.present: "true"
   securityContext:
     runAsNonRoot: true
     runAsUser: 1000
