@@ -156,7 +156,7 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Prompt management | Prompts managed and versioned in Langfuse (seeded from Git); agents read them at each model call | [Observability](llm/observability.md#prompts) | Done on dev |
 | A/B tests | Prompt A/B tests per agent in Langfuse, compared per version; LLM-version tests on prod | [Observability](llm/observability.md#ab-tests) | Prompt tests done on dev; LLM versions planned for prod |
 | Agent tracing | Agent traces from kagent to Langfuse, linked to prompt versions; LLM, gateway and API metrics in VictoriaMetrics with a Grafana dashboard | [Observability](llm/observability.md) | Done on dev |
-| Decision model | Self-hosted d3-edge Jev decision model on vLLM on the shared GPU screening requests at the gateway | [Policy (novel idea 1)](llm/policy.md) | Done on dev |
+| Decision model | Self-hosted d3-edge Jev decision model on vLLM on the shared GPU screening requests at the gateway | [Policy (novel idea 1)](llm/novel-1-jev-policy.md) | Done on dev |
 | Custom agent runtime | Go ADK runtime with per-agent Langfuse prompts, conversation-stable variants and prompt-version trace linkage | [Novel idea 2](llm/novel-2-go-adk-runtime.md) | Implemented on dev; startup and prompt-linkage evidence recorded, evaluation limits stated |
 | GPU scheduling | Kueue queueing for GPU training and serving workloads | [Agents](llm/agents.md) | Planned |
 | Model loading | Pinned revisions in the KServe local model cache, loaded with InstantTensor | [Inference](llm/inference.md) | Done on dev |
