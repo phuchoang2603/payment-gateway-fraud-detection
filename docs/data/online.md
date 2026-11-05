@@ -117,7 +117,15 @@ Run `stream-history` with `start`/`end` only after Bronze is published. Unit siz
 
 ### Flink processing and publication
 
+- Each unit adds a one-day lead-in for the 24-hour windows.
+- [`ObserveSource`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/ObserveSource.java) releases clock controls only after their input-offset boundary; progress and buffered records are checkpointed together.
+- Seed reuse requires matching date range, epoch, Bronze snapshot and Kafka topic end offsets.
+
 Replay uses the same [windows](#windows), [deduplication and rejects](#late-too-late-and-duplicate-trace) as live traffic. Instead of wall-clock processing-time timers, it advances event-time timers with the logical seed clock, so old attempts contribute at their historical availability time. Each unit runs at parallelism 1 to preserve ordering; separate units run concurrently. The history writer replaces only the unit's Iceberg rows and does not push to Redis.
+
+Prod Flink, 2026-11-05 at 18:12 UTC: unit `20260907` running all seven vertices, with backpressure upstream of the window aggregates. UI time: UTC−05:00.
+
+![GCP JVM historical replay: source, deduplication, windows and journal sinks](images/flink-jvm-history-20260907-2026-11-05.png)
 
 ```mermaid
 flowchart LR
