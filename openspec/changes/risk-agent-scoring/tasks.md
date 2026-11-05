@@ -83,4 +83,4 @@
 - [x] 13.1 Move the shared MCP release-analysis client and its tests to the LLM workspace root; have both serving images copy it and remove service-specific coupling from image selection
 - [x] 13.2 Replace the dev Feast probe-IP ingress exception with container-local health probes, verify dev readiness and preserve production's existing probes
 - [x] 13.3 Capture the blue-green preview, retained active revision and successful analysis in the Rollouts dashboard
-- [ ] 13.4 Rebase on current main, refresh the PR description with verified proof and remaining limits, and pass formatting, lint, Helm renders, strict OpenSpec validation and CI
+- [x] 13.4 Rebase on current main, refresh the PR description with verified proof and remaining limits, and pass formatting, lint, Helm renders, strict OpenSpec validation and CI
