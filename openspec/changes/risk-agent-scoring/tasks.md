@@ -72,3 +72,8 @@
 - [x] 11.3 Move the agents dashboard to the `LLM` folder through `dashboards.folder`, cover both MCP servers in its tool panels and add the Risk tool row; verify the rendered ConfigMap carries the annotation and valid JSON
 - [x] 11.4 Remove the GPU `nodeSelector` and tolerations from the `llm-platform` and `ml-training` charts and the benchmark manifests; verify no claim, selector or toleration renders and that workloads still reference their claims by name
 
+## 12. Scaling evidence
+
+- [x] 12.1 Give the risk pod a startup probe like `rag-api`'s, so replicas started by KEDA on a busy node are not killed by the liveness probe; verify with `helm template` that the probe renders and `helm lint` passes
+- [x] 12.2 Lower the Locust Job's CPU request so it schedules on the dev nodes, rerun it against `rag-api`, and record the report, the service level it checks and KEDA's 2 to 4 scale-out
+- [x] 12.3 Record the risk scale-out and scale-down on the dashboard's replicas panel, which also charts the agent worker pool, and gather the load test, KEDA runs and blue-green releases in `docs/llm/scaling.md`; record that the worker pool's third worker stayed not Ready

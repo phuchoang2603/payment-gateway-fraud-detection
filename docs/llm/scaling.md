@@ -12,48 +12,56 @@ Model servers are not autoscaled: each environment has one GPU ([Inference](infe
 
 ## Load test and service level
 
-[`src/llm/rag_serving/loadtest/locustfile.py`](../../src/llm/rag_serving/loadtest/locustfile.py) requests chunks by id (19 of 20 requests real ids, 1 an unknown id that must return 404). It runs in the cluster as an on-demand Job, [`infra/charts/rag-pipeline/loadtest/job.yaml`](../../infra/charts/rag-pipeline/loadtest/job.yaml), against `rag-api` directly as the `llm-benchmark` identity, so it measures the API rather than the gateway's per-client rate limit. Run on 2026-10-30 with 60 users for 5 minutes; the full report is [`loadtest/knowledge-api-locust.html`](loadtest/knowledge-api-locust.html).
+[`src/llm/rag_serving/loadtest/locustfile.py`](../../src/llm/rag_serving/loadtest/locustfile.py) requests chunks by id (19 of 20 requests real ids, 1 an unknown id that must return 404). It runs in the cluster as an on-demand Job, [`infra/charts/rag-pipeline/loadtest/job.yaml`](../../infra/charts/rag-pipeline/loadtest/job.yaml), against `rag-api` directly as the `llm-benchmark` identity, so it measures the API rather than the gateway's per-client rate limit. The Job asks for 250m CPU and may burst; at 1 CPU it did not schedule on the full dev nodes. Run on 2026-11-05 at 05:36 UTC with 60 users for 5 minutes against 40 chunk ids read through the gateway; the full report is [`loadtest/knowledge-api-locust.html`](loadtest/knowledge-api-locust.html).
 
 ```text
-Name                     # reqs   # fails |  Avg  Min   Max  Med |  req/s
-GET /v1/chunks/{chunk_id}  39822   0 (0%) |  116   11  2520   84 | 133.21
-GET /v1/chunks/{unknown}    2123   0 (0%) |  113   12  1751   81 |   7.10
-Aggregated                 41945   0 (0%) |  116   11  2520   84 | 140.31
+Name                       # reqs   # fails |  Avg  Min   Max  Med |  req/s
+GET /v1/chunks/{chunk_id}   51738   0 (0%) |   26    4  1463   14 | 172.64
+GET /v1/chunks/{unknown}     2715   0 (0%) |   25    5   801   13 |   9.06
+Aggregated                  54453   0 (0%) |   26    4  1463   14 | 181.70
 
 Percentiles (ms)   50%  75%  90%  95%  99%  99.9%  100%
-Aggregated          84  140  230  310  560   1300  2500
+Aggregated          14   24   47   86  240   600   1500
 ```
 
-Service level for the chunk endpoint: p95 at or below 500 ms and no failed requests at 60 users. The run met it, with a p95 of 310 ms, 0 failures in 41,945 requests and 140 req/s:
+Service level for the chunk endpoint: p95 at or below 500 ms and no failed requests at 60 users. The run met it, with a p95 of 86 ms, 0 failures in 54,453 requests and 181.7 req/s, while KEDA took `rag-api` from 2 to 4 replicas:
 
-![Locust report for rag-api: 41,945 requests, 0 failures, p95 310 ms, 140 req/s, 60 users](images/rag-locust-report.png)
+![Locust report for rag-api: 54,453 requests, 0 failures, p95 86 ms, 181.7 req/s, 60 users](images/rag-locust-report.png)
 
 ## KEDA scale-out
 
+The "Replicas: MCP servers and agent workers" panel in the LLM agents dashboard (Autoscaling row) shows desired and current replicas for `rag-api`, `risk-serving` and the agent worker pool. The risk run (05:29 to 05:35 UTC on 2026-11-05) and the Locust run (05:36 to 05:42) are on it; the gaps are scrape gaps of the metrics store:
+
+![Grafana, Autoscaling row: risk-serving rises from 2 to 4 replicas at 05:32 and falls back, rag-api rises from 2 to 4 at 05:39 and falls back at about 05:49, and the agent worker pool stays at 3](images/scale-keda-replicas.png)
+
 ### Knowledge API (`rag-api`)
 
-KEDA scales `rag-api` from 2 to 4 replicas on its combined REST and MCP request rate (`knowledge_api_requests_total` plus `knowledge_mcp_tool_calls_total` in VictoriaMetrics, target 10 req/s per replica); the chart leaves `replicas` to KEDA. During the run:
+KEDA scales `rag-api` from 2 to 4 replicas on its combined REST and MCP request rate (`knowledge_api_requests_total` plus `knowledge_mcp_tool_calls_total` in VictoriaMetrics, target 10 req/s per replica); the chart leaves `replicas` to KEDA. During the Locust run:
 
-```text
-19:26:53  metric 0/10       ready replicas 2
-19:29:25  metric 41/10      ready replicas 2   # HPA: "New size: 4; reason: external metric s0-prometheus above target"
-19:30:11  metric 41/10      ready replicas 3
-19:30:55  metric 41/10      ready replicas 4
-19:34:21  metric 0/10       ready replicas 4   # load finished
-19:39:11  metric 0/10       ready replicas 2   # HPA: "New size: 2; reason: All metrics below target" after the 5-minute stabilisation window
-```
+| Time (UTC) | Metric / target (req/s per replica) | Replicas desired (ready) |
+|---|---|---|
+| 05:36:16 | 0 / 10 | 2 (2) |
+| 05:39:21 | 20.4 / 10 | 4 (2) |
+| 05:39:52 | 46.3 / 10 | 4 (4) |
+| 05:41:52 | 46.3 / 10 | 4 (4), load finished |
 
 ### Risk MCP (`risk-serving`)
 
-Risk's 5 calls/s target is above what one dev client generates, so the target was lowered to 0.5 calls/s per replica for one run and set back to 5 afterwards. A client sent 240 tool calls through the gateway at an average of 0.97 calls/s (233 succeeded, 7 failed, none rate-limited; the failures were not investigated):
+Risk's 5 calls/s target is above what one dev client generates, so the target was lowered to 0.5 calls/s per replica for one run and set back to 5 afterwards. A client sent 528 tool calls through the gateway in 300 s at 1.76 calls/s (0 failed, none rate-limited):
 
-| Time (UTC) | Metric / target | Replicas (desired) |
+| Time (UTC) | Metric / target (calls/s per replica) | Replicas desired (ready) |
 |---|---|---|
-| 02:17:40 | 0 / 0.5 | 2 (2) |
-| 02:19:15 | 0.725 / 0.5 | 2 (3) |
-| 02:20:01 | 0.430 / 0.5 | 4 (4) |
+| 05:30:42 | 0.159 / 0.5 | 2 (2) |
+| 05:32:03 | 0.595 / 0.5 | 3 (2) |
+| 05:32:24 | 0.446 / 0.5 | 4 (2) |
+| 05:33:05 | 0.430 / 0.5 | 4 (3) |
+| 05:34:06 | 0.442 / 0.5 | 4 (4) |
 
-Scale-down, the 5 calls/s target itself and why the fourth replica did not become ready were not observed.
+It was back to 2 replicas by 05:43. The panel as it was before the worker pool was added, for this run alone:
+
+![Grafana: risk-serving desired and current replicas rise from 2 to 3 and 4 at 05:32 and stay at 4](images/scale-risk-serving.png)
+
+ While the new pods started on the full node, two of them failed their liveness probe, which had no startup grace, and were restarted; the chart now gives the pod a startup probe like `rag-api`'s. The 5 calls/s target itself was not reached.
 
 ### Agent worker pool
 
@@ -66,6 +74,8 @@ Twelve conversations sent at once to the two-worker pool (2026-10-31):
 | Workers | 2 → KEDA asked for 3 at 56 s, Ready at 78 s |
 | Conversations accepted on the first message | 12 of 12 |
 | Time to the full answer | 79 to 123 s, median 112 s (the shared GPU is the limit) |
+
+The 2026-10-31 run has no Grafana capture. On 2026-11-05 the pool again read 667m of its 700m target and asked for a third worker, but that worker (on `dev-server3`) stayed not Ready for 26 minutes: its credential bundle was issued late and its readiness probe timed out. The worker scale-out was not captured on a dashboard.
 
 ## Blue-green releases
 

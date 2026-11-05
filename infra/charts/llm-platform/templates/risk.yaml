@@ -54,6 +54,10 @@ spec:
             - {name: FEAST_URL, value: {{ $risk.feastUrl | quote }}}
             - {name: MODEL_URL, value: {{ $risk.modelUrl | quote }}}
             - {name: REFERENCE_URL, value: {{ $risk.referenceUrl | quote }}}
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 5
+            failureThreshold: 36
           readinessProbe:
             httpGet: {path: /readyz, port: http}
             periodSeconds: 5
