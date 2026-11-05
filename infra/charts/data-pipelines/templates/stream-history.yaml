@@ -238,6 +238,11 @@ spec:
               state: running
     {{- range $mode := list "seed" "writer" "delete-topics" }}
     - name: {{ $mode }}
+      {{- if eq $mode "writer" }}
+      synchronization:
+        mutexes:
+          - name: stream-history-writer
+      {{- end }}
       {{- if has $mode (list "seed" "writer") }}
       {{- include "data-pipelines.placement" $ | nindent 6 }}
       {{- end }}
