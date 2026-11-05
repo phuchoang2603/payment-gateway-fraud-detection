@@ -627,7 +627,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 12,
         "x": 0,
         "y": 45
       },
@@ -689,8 +689,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
+        "w": 12,
+        "x": 12,
         "y": 45
       },
       "targets": [
@@ -733,8 +733,20 @@
       }
     },
     {
+      "type": "row",
+      "title": "Autoscaling (KEDA)",
+      "id": 25,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      }
+    },
+    {
       "type": "timeseries",
-      "title": "MCP server replicas (KEDA)",
+      "title": "Replicas: MCP servers and agent workers",
       "id": 24,
       "datasource": {
         "type": "prometheus",
@@ -742,9 +754,9 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 45
+        "w": 24,
+        "x": 0,
+        "y": 54
       },
       "targets": [
         {
@@ -752,7 +764,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"llm\",horizontalpodautoscaler=~\"keda-hpa-(rag-api|risk-serving)\"}",
+          "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=~\"llm|llm-agents\",horizontalpodautoscaler=~\"keda-hpa-(rag-api|risk-serving|llm-agents)\"}",
           "legendFormat": "{{horizontalpodautoscaler}} current",
           "refId": "A"
         },
@@ -761,7 +773,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"llm\",horizontalpodautoscaler=~\"keda-hpa-(rag-api|risk-serving)\"}",
+          "expr": "kube_horizontalpodautoscaler_status_desired_replicas{namespace=~\"llm|llm-agents\",horizontalpodautoscaler=~\"keda-hpa-(rag-api|risk-serving|llm-agents)\"}",
           "legendFormat": "{{horizontalpodautoscaler}} desired",
           "refId": "B"
         }
