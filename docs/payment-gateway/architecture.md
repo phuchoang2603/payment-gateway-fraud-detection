@@ -94,4 +94,4 @@ Notifier consumes `payments.events.v1`, deduplicates by event ID and retries sig
 
 [Prod acceptance on 2026-10-23](../../openspec/changes/archive/2026-10-23-build-minimum-payment-gateway/verification.md) exercised tokenization, approvals/declines, timeout recovery, signed webhooks, Redis fallback and CDC outage catch-up. That record predates the GCP migration.
 
-Implementation scope is listed on the [overview](../Home.md#limits-and-scope).
+The domain boundary is summarized on the [overview](../Home.md#domain).
