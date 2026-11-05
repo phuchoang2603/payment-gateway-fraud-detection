@@ -2,7 +2,7 @@
 
 Go Fraud owns the decision. It validates the attempt, applies the versioned rules policy, retrieves features from the Feast feature server, and, where a model endpoint is configured, calls the Triton model server directly with the features and applies policy to the score. There is no Python coordinator between Go, Feast and Triton. Code: [`src/payment-gateway/fraud`](../../src/payment-gateway/fraud).
 
-The read-only [risk agent tool](../llm/agents.md#risk-scoring) uses the same online features and binary inference protocol for what-if re-scoring.
+The read-only [risk agent tool](../llm/risk-agent.md) uses the same online features and binary inference protocol for what-if re-scoring.
 
 ## Today
 

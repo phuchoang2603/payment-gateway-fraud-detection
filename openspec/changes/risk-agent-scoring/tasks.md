@@ -51,7 +51,7 @@
 - [x] 8.3 Run a kagent chat where the coordinator transfers to `risk_agent`, which calls the tool through the gateway; capture screenshots of the transfer, the tool call and the answer, and one trace, and record proof and pending items in separate sentences
 - [ ] 8.4 If the Langfuse prompt for `risk-agent` already exists on dev, publish the new `production` version and verify the next conversation uses it
 
-- [ ] 8.5 On dev, record each server's successful pre-promotion AnalysisRun and active revision switch, then demonstrate a failed candidate analysis retaining the previous active revision; record the bounded Job result, active/preview revisions and replica counts as numbers or screenshots, verify Argo CD reconciliation preserves controller-owned fields, and distinguish first-install behavior from an analyzed update
+- [x] 8.5 On dev, record each server's successful pre-promotion AnalysisRun and active revision switch, then demonstrate a failed candidate analysis retaining the previous active revision; record the bounded Job result, active/preview revisions and replica counts as numbers or screenshots, verify Argo CD reconciliation preserves controller-owned fields, and distinguish first-install behavior from an analyzed update
 - [x] 8.6 Record risk's observed tool-call rate, KEDA desired/current replica counts and latency alongside the chat proof; report scaling that was not observed as pending rather than claiming a load-test result, retain the existing knowledge Locust test without adding a risk benchmark, and do not run tests locally
 
 ## 9. GPU claims and dev placement

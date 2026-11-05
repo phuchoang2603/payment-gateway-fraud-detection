@@ -119,59 +119,12 @@ Langfuse is the source of each agent's system prompt and A/B test. [`files/promp
 | Agent conversations | Substrate actors: created on demand, suspended to zero when idle, resumed on any worker | Idle conversations cost nothing; any number wait in snapshots |
 | Agent worker pool (`llm-agents`) | KEDA, 2 to 6 workers on Substrate's busy-worker metric | Workers follow the conversations that hold them |
 | Knowledge API (`rag-api`) | KEDA, 2 to 4 replicas on its combined REST and MCP request rate | Target 10 req/s per replica; a dev Locust run scaled 2 → 4 → 2 |
-| Risk MCP (`risk-serving`) | KEDA, 2 to 4 replicas on tool-call rate | Initial target 5 calls/s per replica; provisional, without a risk Locust benchmark |
+| Risk MCP (`risk-serving`) | KEDA, 2 to 4 replicas on tool-call rate | Initial target 5 calls/s per replica; scale-out observed on dev ([Risk agent](risk-agent.md)) |
 | Model servers | One replica per model | GPU capacity is separate from tool-server scaling |
 
 ## Risk scoring
 
-Dev enables the `risk` server and `risk-agent` 0.2.0; production retains the toolless 0.1.0 agent and has no risk server. The `risk` server accepts a `request` object with `integration_id`, `customer_id`, `payment_method_fingerprint`, `amount_minor`, both account-creation timestamps, `shipping_country`, `ip_country`, `item_count` and `has_device`. The tool sets the scoring time. It returns five view statuses, a probability, model version and decline threshold. Missing, expired, future or invalid views contribute NaN to Triton, including ratios derived from unavailable daily views. An upstream error returns no score. The result is a what-if re-score, not a stored decision.
-
-Drivers rank feature gain times distance from the training reference distribution; they are not per-prediction attributions. If the reference belongs to another version, the score carries no drivers and explains why. There is no step-up threshold in the served model configuration.
-
-On dev, risk and knowledge use blue-green Rollouts. A dedicated analysis Job initializes MCP, lists tools and calls the preview before promotion; tool errors or timeouts block promotion. KEDA owns replicas and Rollouts own active/preview revision selectors. An existing Langfuse prompt and its A/B variant both need new tool-aware versions; the catalog seeds only missing prompts.
-
-Every number in a tool result carries at most four decimals, because the gateway masks any run of 13 or more digits as a card number and a full-precision probability has more. The result also says whether the probability is at or above the decline threshold, computed before rounding.
-
-### Proof on dev, 2026-11-04
-
-A call to `/mcp/risk` through the gateway with the benchmark key returned 401 without a key, listed `get_risk_features` and `score_payment_risk`, and scored a dev customer at 0.1967 from model v4 against the decline threshold 0.5122, with all five views `available` (748 ms cold, 256 ms warm, three calls).
-
-In a kagent chat the coordinator transferred to `risk_agent`, which called `get_risk_features` and `score_payment_risk` with the payment-method fingerprint unchanged and answered with that score and the reason it had no drivers:
-
-![kagent chat: transfer_to_agent risk_agent, then get_risk_features with the analyst's identifiers](images/risk-chat-transfer.png)
-
-![The score_payment_risk result: score 0.1967, decline threshold 0.5122, at_or_above_decline_threshold false, drivers empty with a reason](images/risk-chat-tool-result.png)
-
-![The answer: probability, model version, decline threshold, the customer's view and the drivers caveat](images/risk-chat-answer.png)
-
-One Langfuse trace covers the conversation: 1 min 18 s end to end with 16k tokens, tagged `risk-agent:production`. The coordinator took 16.0 s, `get_risk_features` 0.14 s and `score_payment_risk` 0.67 s; its four `qwen35-4b` calls took 1.2 to 4.6 s.
-
-![Langfuse trace: invoke_agent coordinator, generate_content, transfer_to_agent, invoke_agent risk_agent](images/risk-trace-agents.png)
-
-![The same trace further down: the get_risk_features and score_payment_risk tool spans between the model calls](images/risk-trace-tools.png)
-
-On the promoted revision's two pods, after two chats and one analysis call: `get_risk_features` 2 successes, `score_payment_risk` 3 successes, no failures, 0.22 s and 1.32 s of tool time in total, and every view `available` on every call.
-
-| Release | Pre-promotion analysis | Outcome |
-|---|---|---|
-| `risk-serving` 785f66cfc5, first run | Failed: the Job's 60 s deadline, which counts the image pull | Previous revision stayed active |
-| `risk-serving` 785f66cfc5, retry at 180 s | Successful in 26 s | Promoted |
-| `risk-serving` 756dbb8686 | Successful | Promoted |
-| `rag-api` 7fcf4cbc | Successful in 73 s, waiting for a cold pod | Promoted; one Rollout owns every ReplicaSet and no Deployment remains |
-| `risk-serving` 5dcd89f99f, faulty: `MODEL_URL` points at a model server that does not exist | Failed in 27 s (19:40:22 to 19:40:49): `preview returned an MCP tool error` | Rollout aborted; the active Service kept selecting 756dbb8686, and the gateway scored 0.1967 at 19:40:05 during the rollout and at 19:41:09 after it |
-| `rag-api` 69f45b78c4, faulty: `RAG_DB_HOST` points at a missing database | No analysis: the preview pod failed readiness with 503 for more than 5 min | Never promoted; the active Service kept selecting 7fcf4cbc. The Rollout stayed `Progressing` until the spec was restored, which is why both Rollouts now set `progressDeadlineAbort` |
-
-The faulty candidates were made by pausing Argo CD's reconcile of the app with the `argocd.argoproj.io/skip-reconcile` annotation, patching one environment variable on the Rollout, and restoring it afterwards; both Rollouts returned to Healthy on their original revisions. Argo Rollouts skips the analysis on a first install, which has no previous revision to protect; that case was not run here.
-
-Two causes were found and fixed on the way. A new preview pod becomes an endpoint of its Service in the mesh a moment after it is Ready, and the Rollout starts the analysis in the same second it scales the preview up, so the analysis client waits up to 150 s for the MCP handshake and retries only connection failures. The Job's deadline is 300 s, because it counts the image pull. The first chat also failed: the gateway's `PhoneNumber` masking replaced a 7-digit run inside the fingerprint, so phone numbers are now matched by `gateway.piiPatterns` at word boundaries.
-
-### Drivers after a retrain
-
-The v4 reference profile recorded no feature gains, because the trainer did not name its features. After the fix on main, a dev retrain (`dev-retrain-gains-v5-b`, v4's snapshot and windows, 14 min 11 s, GPU fit 4 min 54 s on the GTX 1650) registered v5 and rolled it out: 48 of its 50 features carry a gain, led by `customer_snapshot_attempt_count_1h` (34.4% of the total), `amount_minor` (26.5%) and `customer_snapshot_attempt_count_5m` (11.0%). The same gateway call then returned model v5, a score of 0.0006 against a decline threshold of 0.8597, and five drivers: `customer_snapshot_attempt_count_1h` (34.5% of the ranking), `amount_minor` (31.9%), `customer_snapshot_attempt_count_5m` (10.5%), `decided_count_7d` of the payment method (1.8%) and `payment_method_amount_to_30d_avg` (1.6%). A retrain that passes only the snapshot and `force` skips training on dev when the stream tables no longer cover the 84-day window, so this run passed v4's four windows and cutoff explicitly.
-
-### Not yet shown
-
-The chat captures above were taken on v4, before the retrain, so they show empty drivers; the drivers below were read from a gateway call and have not been re-captured in a chat. KEDA scale-out under load was not observed: the HPA read 0 of 5 calls/s per replica at two replicas, and the 5 calls/s target is untested. The Langfuse `risk-agent` prompt is still version 1, which has the tool wording but not the line about the threshold flag, and the answer calls the comparison a "Decision". The phone masking change is deployed on dev only, and the removal of the charts' GPU placement has not been deployed anywhere.
+The `risk` MCP server, its Rollouts, drivers, dev proof and open items are in [Risk agent](risk-agent.md).
 
 ## Known limits
 
