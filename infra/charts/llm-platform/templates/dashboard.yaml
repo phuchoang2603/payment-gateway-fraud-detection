@@ -5,8 +5,6 @@ metadata:
   name: llm-agents-dashboard
   labels:
     grafana_dashboard: "1"
-  annotations:
-    grafana_folder: {{ .Values.dashboards.folder | quote }}
 data:
   llm-agents.json: |
     {{- .Files.Get "files/dashboards/llm-agents.json" | nindent 4 }}

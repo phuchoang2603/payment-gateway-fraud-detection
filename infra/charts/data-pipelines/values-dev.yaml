@@ -25,10 +25,4 @@ catalog:
             bucketNames:
             - platform-dev
 features:
-  riskAccess: true
-  healthProbe:
-    httpGet: null
-    exec:
-      command: [python, -c, 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:6566/health", timeout=2).close()']
-    timeoutSeconds: 3
   enabled: true

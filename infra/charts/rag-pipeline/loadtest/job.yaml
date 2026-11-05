@@ -41,7 +41,7 @@ spec:
             capabilities:
               drop: [ALL]
           resources:
-            requests: {cpu: 250m, memory: 512Mi}
+            requests: {cpu: "1", memory: 512Mi}
             limits: {memory: 1Gi}
           volumeMounts:
             - {name: loadtest, mountPath: /loadtest}
