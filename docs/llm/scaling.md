@@ -47,7 +47,7 @@ KEDA scales `rag-api` from 2 to 4 replicas on its combined REST and MCP request 
 
 ### Risk MCP (`risk-serving`)
 
-Risk's 5 calls/s target is above what one dev client generates, so the target was lowered to 0.5 calls/s per replica for one run and set back to 5 afterwards. A client sent 528 tool calls through the gateway in 300 s at 1.76 calls/s (0 failed, none rate-limited):
+Risk's 5 calls/s target is above what one dev client generates, so the target was lowered to 0.5 calls/s per replica for one run and set back to 5 afterwards. A client sent 528 `get_risk_features` calls through the gateway in 300 s at 1.76 calls/s; all returned HTTP 200 and none was rate-limited. The server's own counters record 330 successes and 190 tool failures (`feature store read failed`), all between 05:31 and 05:33 while Feast was being rolled out by the same pull request's dev deploy. KEDA counts calls whatever their outcome, so the scale-out does not depend on them:
 
 | Time (UTC) | Metric / target (calls/s per replica) | Replicas desired (ready) |
 |---|---|---|
@@ -56,6 +56,8 @@ Risk's 5 calls/s target is above what one dev client generates, so the target wa
 | 05:32:24 | 0.446 / 0.5 | 4 (2) |
 | 05:33:05 | 0.430 / 0.5 | 4 (3) |
 | 05:34:06 | 0.442 / 0.5 | 4 (4) |
+
+Those counter samples account for 520 of the 528 client calls; the remaining eight outcomes were not reconciled. This run demonstrates scaling, not a failure-free service level.
 
 It was back to 2 replicas by 05:43. The panel as it was before the worker pool was added, for this run alone:
 

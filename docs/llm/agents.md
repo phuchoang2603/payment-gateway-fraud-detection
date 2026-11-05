@@ -104,6 +104,14 @@ One Langfuse trace covers the conversation, tagged `risk-agent:production`, with
 
 Its releases and scaling are in [Scaling](scaling.md). A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
 
+A retry on 2026-11-05 at 06:04 UTC returned score 0.0006 from model v5 against threshold 0.8597, with both stream views correctly marked `expired`. In the same conversation, a later policy question transferred to `evidence_agent`, which retrieved `decline-codes#new-account-geo-mismatch` and `risk-decision#requirements-requirement-rules-baseline-policy` and cited them:
+
+![Retry: risk agent reports the model score and threshold](images/risk-retry-score.png)
+
+![Same conversation: evidence agent retrieves and cites the baseline policy](images/risk-retry-evidence.png)
+
+Pending: answer quality still needs evaluation; the risk answer rendered 347677 minor units as dollars, described expired stream values as uncaptured and explained the policy before retrieving evidence. The first explicit transfer follow-up was rejected by the gateway's request-screening webhook with HTTP 403; a plain policy question succeeded. The LLM-version A/B remains on hold.
+
 The Langfuse prompt `risk-agent-system-prompt` was published as `production` version 3 and `variant-b` as version 4; the catalog seeds only missing prompts, so an existing prompt needs new versions in Langfuse. Not verified: a fresh conversation on version 3 (the kagent controller was in `CreateContainerError` and the A2A route answered 503, so the chat above predates the publish).
 
 ## Runtime
