@@ -99,3 +99,5 @@ On 2026-11-05 at 06:43 UTC, risk revision 14 (`5fc6996776`) retried its failed a
 The retry `risk-serving-5fc6996776-14-pre.1` passed, and revision 14 became active with two Ready pods at 06:44 UTC:
 
 ![Argo Rollouts: successful pre-promotion analysis for revision 14, now stable and active with two Ready pods](images/risk-blue-green-analysis.png)
+
+Cleanup verification on 2026-11-05: risk revision 15 (`664d9f6f46`) passed `risk-serving-664d9f6f46-15-pre` in 45 s; knowledge revision 14 (`65c7648dd6`) passed `rag-api-65c7648dd6-14-pre.2` in 64 s after earlier connection timeouts. Both finished Healthy with two Ready pods. Dev Feast was Ready with container-local probes and no probe-IP NetworkPolicy after replacing its restarting pod; the loopback health request returned 200 in 104 ms. Production Feast rendered identically to the pre-cleanup version.
