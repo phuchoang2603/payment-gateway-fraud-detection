@@ -1,1 +1,3 @@
-{}
+api:
+  rollout:
+    enabled: true

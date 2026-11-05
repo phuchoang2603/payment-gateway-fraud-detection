@@ -26,10 +26,12 @@
 
 - [Agents](llm/agents.md)
 - [Inference](llm/inference.md)
-- [Policy](llm/policy.md)
+- [Policy (novel idea 1)](llm/novel-1-jev-policy.md)
+- [Custom Go ADK runtime (novel idea 2)](llm/novel-2-go-adk-runtime.md)
 - [Agent gateway](llm/gateway.md)
 - [RAG](llm/rag.md)
-- [Observability](llm/observability.md)
+- [Scaling](llm/scaling.md)
+- [Langfuse](llm/langfuse.md)
 
 **Deployment**
 

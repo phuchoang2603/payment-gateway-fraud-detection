@@ -2,17 +2,6 @@
 {{- printf "cluster.local/ns/%s/sa/%s" .namespace .name -}}
 {{- end -}}
 
-{{- define "llm-platform.gpuPlacement" -}}
-{{- with .Values.gpu.nodeSelector }}
-nodeSelector:
-  {{- toYaml . | nindent 2 }}
-{{- end }}
-{{- with .Values.gpu.tolerations }}
-tolerations:
-  {{- toYaml . | nindent 2 }}
-{{- end }}
-{{- end -}}
-
 {{- define "llm-platform.podSecurity" -}}
 runAsNonRoot: true
 runAsUser: {{ .uid }}

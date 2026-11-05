@@ -31,10 +31,6 @@ spec:
                     runAsGroup: 1000
                     seccompProfile:
                       type: RuntimeDefault
-                  nodeSelector:
-                    {{- toYaml .Values.gpu.nodeSelector | nindent 20 }}
-                  tolerations:
-                    {{- toYaml .Values.gpu.tolerations | nindent 20 }}
                   resourceClaims:
                     - name: gpu
                       resourceClaimName: {{ .Values.gpu.claim }}
