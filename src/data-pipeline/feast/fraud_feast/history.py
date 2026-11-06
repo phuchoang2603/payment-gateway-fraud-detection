@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import urllib.request
@@ -64,8 +65,28 @@ class HistoryReplay:
 
     def check(self):
         seed = read_json(os.environ["HISTORY_SEED_REPORT"])
-        counts = counters(finished_job())
-        if not seed or not seed.get("done") or counts["decode_rejects"]:
+        if not seed or not seed.get("done"):
+            raise ValueError("history seed is incomplete or replay has decode rejects")
+        identity = {
+            "start": self.start,
+            "end": self.end,
+            "epoch": os.environ["FEATURE_EPOCH"],
+            "topic": os.environ["FEATURE_UPDATE_TOPIC"],
+            "seed": seed,
+        }
+        receipt_uri = os.environ["RUN_REPORT"] + ".verified.json"
+        receipt = read_json(receipt_uri)
+        if receipt is None:
+            job = finished_job()
+            counts = counters(job)
+            if counts["decode_rejects"]:
+                raise ValueError("history seed is incomplete or replay has decode rejects")
+            receipt = {**identity, "job_id": job, "counts": counts}
+            write_json(receipt_uri, receipt)
+        if any(receipt.get(key) != value for key, value in identity.items()):
+            raise ValueError("history verification does not match the replay unit")
+        counts = receipt["counts"]
+        if not receipt.get("job_id") or counts["decode_rejects"]:
             raise ValueError("history seed is incomplete or replay has decode rejects")
         self.seed, self.counts = seed, counts
 
@@ -81,3 +102,11 @@ class HistoryReplay:
                 "rows": rows,
             },
         )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--start", required=True)
+    parser.add_argument("--end", required=True)
+    args = parser.parse_args()
+    HistoryReplay(args.start, args.end).check()

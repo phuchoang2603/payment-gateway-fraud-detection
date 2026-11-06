@@ -160,6 +160,7 @@ def replay(monkeypatch, tmp_path, *, seed, rejects=0, state="FINISHED"):
     seed_path, report = tmp_path / "seed.json", tmp_path / "report.json"
     seed_path.write_text(json.dumps(seed))
     monkeypatch.setenv("FEATURE_EPOCH", "history-ci")
+    monkeypatch.setenv("FEATURE_UPDATE_TOPIC", "fraud.feature-updates.v2.history-ci")
     monkeypatch.setenv("HISTORY_SEED_REPORT", str(seed_path))
     monkeypatch.setenv("RUN_REPORT", str(report))
     monkeypatch.setattr(
@@ -177,6 +178,31 @@ def test_check_then_report_records_the_unit(monkeypatch, tmp_path):
     assert (
         result["rows"] == 12 and result["counts"]["job"] == "j" and result["seed"] == {"done": True}
     )
+
+
+def test_verified_unit_survives_flink_endpoint_loss(monkeypatch, tmp_path):
+    unit, report = replay(monkeypatch, tmp_path, seed={"done": True})
+    unit.check()
+    monkeypatch.setattr(history, "rest", lambda _: pytest.fail("verified replay queried Flink"))
+    unit.check()
+    unit.report(12)
+    assert json.loads(report.read_text())["rows"] == 12
+
+
+@pytest.mark.parametrize("changed", ["seed", "topic", "range", "epoch"])
+def test_verification_cannot_be_reused_for_different_inputs(monkeypatch, tmp_path, changed):
+    unit, _ = replay(monkeypatch, tmp_path, seed={"done": True})
+    unit.check()
+    if changed == "seed":
+        (tmp_path / "seed.json").write_text(json.dumps({"done": True, "snapshot": "new"}))
+    elif changed == "topic":
+        monkeypatch.setenv("FEATURE_UPDATE_TOPIC", "fraud.feature-updates.v2.other")
+    elif changed == "epoch":
+        monkeypatch.setenv("FEATURE_EPOCH", "history-other")
+    else:
+        unit = history.HistoryReplay("2026-08-02", "2026-08-08")
+    with pytest.raises(ValueError, match="does not match"):
+        unit.check()
 
 
 @pytest.mark.parametrize(

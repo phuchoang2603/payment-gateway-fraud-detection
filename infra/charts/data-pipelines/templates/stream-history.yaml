@@ -80,6 +80,13 @@ spec:
               parameters:
                 - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
                 - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
+        - - name: verify
+            template: verify
+            arguments:
+              parameters:
+                - {name: start, value: {{ "{{inputs.parameters.start}}" | quote }}}
+                - {name: end, value: {{ "{{inputs.parameters.end}}" | quote }}}
+                - {name: run, value: {{ "{{inputs.parameters.run}}" | quote }}}
         - - name: writer
             template: writer
             arguments:
@@ -236,14 +243,14 @@ spec:
               parallelism: 1
               upgradeMode: stateless
               state: running
-    {{- range $mode := list "seed" "writer" "delete-topics" }}
+    {{- range $mode := list "seed" "verify" "writer" "delete-topics" }}
     - name: {{ $mode }}
       {{- if eq $mode "writer" }}
       synchronization:
         mutexes:
           - name: stream-history-writer
       {{- end }}
-      {{- if has $mode (list "seed" "writer") }}
+      {{- if has $mode (list "seed" "verify" "writer") }}
       {{- include "data-pipelines.placement" $ | nindent 6 }}
       {{- end }}
       {{- if eq $mode "seed" }}
@@ -253,7 +260,7 @@ spec:
       # A fresh sort volume is owned by root; the streaming image runs as the flink group.
       securityContext: {fsGroup: 9999}
       {{- end }}
-      {{- if has $mode (list "seed" "writer") }}
+      {{- if has $mode (list "seed" "verify" "writer") }}
       # A spot reclaim or a transient catalog or broker error retries the step. The seed recreates its topics empty
       # before writing, and the writer replaces the unit's rows, so a retry leaves one copy.
       # Backoff without maxDuration: Argo measures maxDuration from the step's first start, so a seed reclaimed after
@@ -266,10 +273,10 @@ spec:
       inputs:
         parameters:
           - {name: run}
-          {{- if has $mode (list "seed" "writer") }}
+          {{- if has $mode (list "seed" "verify" "writer") }}
           - {name: start}
           {{- end }}
-          {{- if has $mode (list "seed" "writer") }}
+          {{- if has $mode (list "seed" "verify" "writer") }}
           - {name: end}
           {{- end }}
       container:
@@ -283,13 +290,18 @@ spec:
         {{- end }}
         {{- else }}
         image: {{ include "data-pipelines.image" (dict "image" $.Values.images.feast "global" $.Values.global) | quote }}
+        {{- if eq $mode "verify" }}
+        command: [python, -m, fraud_feast.history]
+        args: [--start, {{ "{{inputs.parameters.start}}" | quote }}, --end, {{ "{{inputs.parameters.end}}" | quote }}]
+        {{- else }}
         command: [python, -m, fraud_feast.stream_writer]
         args: [--history, --history-start, {{ "{{inputs.parameters.start}}" | quote }}, --history-end, {{ "{{inputs.parameters.end}}" | quote }}]
+        {{- end }}
         {{- end }}
         env:
           - name: FEATURE_EPOCH
             value: {{ $.Values.features.historyEpoch | quote }}
-          {{- if eq $mode "writer" }}
+          {{- if has $mode (list "verify" "writer") }}
           - name: FEATURE_UPDATE_TOPIC
             value: {{ "fraud.feature-updates.v2.{{inputs.parameters.run}}" | quote }}
           - name: FEATURE_KAFKA_BROKERS
@@ -316,15 +328,15 @@ spec:
           - {name: HISTORY_SORT_MEMORY, value: 3GB}
           - {name: PYICEBERG_MAX_WORKERS, value: "2"}
           {{- end }}
-          {{- if has $mode (list "seed" "writer") }}
+          {{- if has $mode (list "seed" "verify" "writer") }}
           - name: HISTORY_SEED_REPORT
             value: {{ printf "%s/history/seeds/{{inputs.parameters.run}}.json" $.Values.features.reportRoot | quote }}
           {{- end }}
-          {{- if eq $mode "writer" }}
+          {{- if has $mode (list "verify" "writer") }}
           - name: RUN_REPORT
             value: {{ printf "%s/history/{{workflow.name}}/{{inputs.parameters.start}}.json" $.Values.features.reportRoot | quote }}
           {{- end }}
-          {{- if has $mode (list "seed" "writer") }}
+          {{- if has $mode (list "seed" "verify" "writer") }}
           {{- include "data-pipelines.lakeEnv" $ | nindent 10 }}
           {{- include "data-pipelines.checksumEnv" $ | nindent 10 }}
           {{- end }}
@@ -334,6 +346,9 @@ spec:
           # batches and the producer queue need the headroom above it.
           requests: {cpu: "1", memory: 6Gi, ephemeral-storage: 2Gi}
           limits: {memory: 8Gi, ephemeral-storage: 4Gi}
+          {{- else if eq $mode "verify" }}
+          requests: {cpu: 100m, memory: 512Mi, ephemeral-storage: 256Mi}
+          limits: {memory: 1Gi, ephemeral-storage: 1Gi}
           {{- else if eq $mode "writer" }}
           requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 2Gi}
           limits: {memory: 4Gi, ephemeral-storage: 4Gi}
