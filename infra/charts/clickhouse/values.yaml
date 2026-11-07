@@ -8,8 +8,11 @@ resources:
   requests: {cpu: "2", memory: 8Gi}
   limits: {memory: 12Gi}
 externalSecretStore: gateway-doppler
-passwordStores:
-  grafana: doppler
+passwordStores: {}
+# The marts datasource definition for the platform Grafana (discovered by its sidecar). The
+# grafana user's password reaches Grafana through its own pod env, provisioned by the platform.
+grafanaDatasource:
+  enabled: true
 passwordKeys:
   admin: CLICKHOUSE_ADMIN_PASSWORD
   langfuse: CLICKHOUSE_LANGFUSE_PASSWORD
