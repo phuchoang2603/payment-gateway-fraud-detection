@@ -303,6 +303,7 @@ features:
   # Each unit is one single-partition logical-clock Flink job, so units in parallel are the only way to scale a replay.
   historyUnitDays: 7
   historyParallelism: 2
+  historyWriterParallelism: 2
   historyEnd: "2026-10-29"
   resources:
     requests:

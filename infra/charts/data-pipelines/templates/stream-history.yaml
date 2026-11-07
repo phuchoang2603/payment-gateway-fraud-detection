@@ -247,8 +247,10 @@ spec:
     - name: {{ $mode }}
       {{- if eq $mode "writer" }}
       synchronization:
-        mutexes:
-          - name: stream-history-writer
+        semaphores:
+          - configMapKeyRef:
+              name: stream-history-limits
+              key: writers
       {{- end }}
       {{- if has $mode (list "seed" "verify" "writer") }}
       {{- include "data-pipelines.placement" $ | nindent 6 }}

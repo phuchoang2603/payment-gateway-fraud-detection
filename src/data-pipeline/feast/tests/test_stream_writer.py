@@ -377,3 +377,29 @@ def test_live_main_writes_and_reports(lake, monkeypatch, tmp_path):
 def test_main_rejects_mismatched_modes(lake, monkeypatch, argv, epoch, failure):
     with pytest.raises(failure):
         run_main(lake, monkeypatch, argv, epoch, [])
+
+
+def test_history_main_publishes_staged_files_before_reporting(lake, monkeypatch, tmp_path):
+    import json
+
+    from fraud_feast.history import HistoryReplay
+
+    def check(replay):
+        replay.seed, replay.counts = {"done": True}, {"decode_rejects": 0}
+
+    monkeypatch.setattr(HistoryReplay, "check", check)
+    record = snapshot(apply=[lambda u: setattr(u, "epoch", "history-ci")])
+    report = tmp_path / "history.json"
+    run_main(
+        lake,
+        monkeypatch,
+        ["--history", "--history-start", "2025-09-01", "--history-end", "2025-09-02"],
+        "history-ci",
+        [message(record)],
+        {"RUN_REPORT": str(report)},
+    )
+    assert json.loads(report.read_text())["rows"] == 1
+    table = lake.load_table(TABLES["customer"])
+    assert table.scan().to_arrow().num_rows == 1
+    assert len(table.snapshots()) == 1
+    assert lake.load_table(TABLES["payment_method"]).current_snapshot() is None

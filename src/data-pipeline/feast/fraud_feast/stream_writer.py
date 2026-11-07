@@ -6,11 +6,15 @@ import random
 import signal
 import threading
 import time
+from contextlib import ExitStack
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.parquet as pq
 from confluent_kafka import Consumer, KafkaError, TopicPartition
 from feast.data_source import PushMode
 from pyiceberg.exceptions import CommitFailedException
@@ -131,10 +135,9 @@ def commit_with_retry(table, write, attempts=8):
 
 
 class IcebergWriter:
-    def __init__(self, tables, epoch, *, history=False):
+    def __init__(self, tables, epoch):
         self.tables = tables
         self.epoch = epoch
-        self.history = history
 
     def resume(self, partitions):
         marks = [watermarks(table.refresh(), self.epoch) for table in self.tables.values()]
@@ -144,14 +147,6 @@ class IcebergWriter:
         for scope, table in self.tables.items():
 
             def append_batch(transaction):
-                if self.history:
-                    if rows[scope]:
-                        transaction.append(
-                            pa.Table.from_pylist(
-                                rows[scope], schema=stream_schema(scope).as_arrow()
-                            )
-                        )
-                    return
                 prior = watermarks(table, self.epoch)
                 selected = [
                     row
@@ -170,13 +165,70 @@ class IcebergWriter:
 
             commit_with_retry(table, append_batch)
 
-    def delete_range(self, first, last):
+
+class HistoryWriter:
+    def __init__(self, tables, epoch, first, last):
+        self.tables = tables
+        self.epoch = epoch
+        self.first, self.last = first, last
+        self.files = {scope: [] for scope in tables}
+        self.writers = {}
+        self.streams = ExitStack()
+
+    def append(self, rows, offsets):
+        for scope, table in self.tables.items():
+            if not rows[scope]:
+                continue
+            # Iceberg add_files assigns IDs through name mapping; its input must omit field IDs.
+            schema = pa.schema([field.remove_metadata() for field in table.schema().as_arrow()])
+            batch = pa.Table.from_pylist(rows[scope], schema=schema)
+            if (
+                pc.any(pc.not_equal(batch["epoch"], self.epoch)).as_py()
+                or pc.any(pc.less(batch["event_timestamp"], self.first)).as_py()
+                or pc.any(pc.greater_equal(batch["event_timestamp"], self.last)).as_py()
+            ):
+                raise ValueError("staged history row is outside its replay range")
+            days = batch["event_timestamp"].cast(pa.timestamp("us")).cast(pa.date32())
+            for day in pc.unique(days):
+                key = scope, day.as_py()
+                if key not in self.writers:
+                    path = table.location_provider().new_data_location(f"history-{uuid4()}.parquet")
+                    output = self.streams.enter_context(table.io.new_output(path).create())
+                    parquet = self.streams.enter_context(
+                        pq.ParquetWriter(output, batch.schema, compression="zstd")
+                    )
+                    self.writers[key] = parquet, output
+                    self.files[scope].append(path)
+                parquet, output = self.writers[key]
+                parquet.write_table(batch.filter(pc.equal(days, day)))
+                if output.tell() >= int(
+                    table.properties.get("write.target-file-size-bytes", 268435456)
+                ):
+                    parquet.close()
+                    output.close()
+                    del self.writers[key]
+
+    def close(self):
+        self.streams.close()
+
+    def publish(self):
+        self.close()
         predicate = And(
             EqualTo("epoch", self.epoch),
-            And(GreaterThanOrEqual("event_timestamp", first), LessThan("event_timestamp", last)),
+            And(
+                GreaterThanOrEqual("event_timestamp", self.first),
+                LessThan("event_timestamp", self.last),
+            ),
         )
-        for table in self.tables.values():
-            commit_with_retry(table, lambda transaction: transaction.delete(predicate))
+        for scope, table in self.tables.items():
+
+            def replace_range(transaction):
+                transaction.delete(predicate)
+                if self.files[scope]:
+                    # UUID paths belong to this attempt; failed optimistic commits can reuse them.
+                    transaction.add_files(self.files[scope], check_duplicate_files=False)
+
+            commit_with_retry(table, replace_range)
 
 
 class StreamWriter:
@@ -283,14 +335,16 @@ def main():
     stopped = threading.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: stopped.set())
+    offline = None
     try:
         partitions = sorted(consumer.list_topics(topic, timeout=30).topics[topic].partitions)
         lake = catalog()
         tables = {scope: lake.load_table(name) for scope, name in TABLES.items()}
-        offline = IcebergWriter(tables, epoch, history=args.history)
         if history:
             history.check()
-            offline.delete_range(history.first, history.last)
+            offline = HistoryWriter(tables, epoch, history.first, history.last)
+        else:
+            offline = IcebergWriter(tables, epoch)
         writer = StreamWriter(
             offline,
             None if history else store(online=True),
@@ -299,6 +353,7 @@ def main():
         )
         starts = dict.fromkeys(partitions, 0) if history else offline.resume(partitions)
         written = 0
+        started = time.monotonic()
         offsets = starts
         for messages, offsets in batches(consumer, topic, starts, stopped, history=args.history):
             rows = {scope: [] for scope in KEYS}
@@ -306,13 +361,45 @@ def main():
                 scope, row, _ = decode(message, epoch)
                 if history is None or history.first <= row["event_timestamp"] < history.last:
                     rows[scope].append(row)
-            writer.write(rows, offsets)
             written += sum(map(len, rows.values()))
+            flushed = writer.write(rows, offsets)
+            if history and flushed:
+                print(
+                    json.dumps(
+                        {
+                            "stage": "staging",
+                            "rows": written,
+                            "seconds": round(time.monotonic() - started, 1),
+                        }
+                    ),
+                    flush=True,
+                )
         if stopped.is_set() and history:
             raise RuntimeError("history replay interrupted")
         writer.flush()
         if history:
+            print(
+                json.dumps(
+                    {
+                        "stage": "publishing",
+                        "rows": written,
+                        "files": {scope: len(files) for scope, files in offline.files.items()},
+                    }
+                ),
+                flush=True,
+            )
+            offline.publish()
             history.report(written)
+            print(
+                json.dumps(
+                    {
+                        "stage": "published",
+                        "rows": written,
+                        "seconds": round(time.monotonic() - started, 1),
+                    }
+                ),
+                flush=True,
+            )
         elif os.environ.get("RUN_REPORT"):
             write_json(
                 os.environ["RUN_REPORT"],
@@ -323,6 +410,8 @@ def main():
                 },
             )
     finally:
+        if isinstance(offline, HistoryWriter):
+            offline.close()
         consumer.close()
 
 
