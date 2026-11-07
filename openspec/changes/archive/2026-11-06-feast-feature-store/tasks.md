@@ -112,7 +112,7 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
   - The v19 `dp-backfill` for 2025-10-29 to 2026-10-29 succeeded; October ran as two halves, `oct-a` and `oct-b`, after the whole month lost executors.
   - `feast-materialize` ran with `since` unset, so each daily view loaded its TTL window, 2026-10-03 to 2026-11-04: 24 m 54 s, an online check of 400 sampled rows that passed, and 5,697,609 Redis keys at 2.72 GB. A rerun took 5 m 07 s. `since=2025-10-29` was stopped after 57 minutes still on its first view; serving ignores rows older than the TTL, so the default window is the one to use.
   - Flink `live-v19` and the feature writer run. The prod simulator (04d0219, one payment per second, b3f8728) admitted 7,556 payments in 2 h 6 m, until the autoscaler's node scale-down replaced the single `edge` pod and ended the Job at 06:40:44.
-  - A prod `stream-history` over 2026-07-29 to 2026-10-29 failed on the 400 GB `SSD_TOTAL_GB` quota (fixed by `features.scratchClass: cloud-standard`, 566949b) and on `Response checksums mismatch` reading Bronze from GCS (fixed by a35961e). It then ran 20 of 23 units and was stopped about 4 hours in, at 15.6% of unit `20260729`'s input: the Python operators held one core per unit at 8,000 to 16,000 events per minute, which put the 23 units over 30 hours.
+  - A first prod `stream-history` over 2026-07-29 to 2026-10-29 failed on the 400 GB `SSD_TOTAL_GB` quota (fixed by `features.scratchClass: cloud-standard`, 566949b) and on `Response checksums mismatch` reading Bronze from GCS (fixed by a35961e). The full replay then completed as `stream-history-jvm-v19-8trbp`: 2026-11-04 to 2026-11-07 (about 2 d 8 h), Succeeded, all 23 units FINISHED and published. `gold.feat_stream_customer` held 236,441,166 rows and `gold.feat_stream_payment_method` 236,453,680 under the `live-v19` epoch.
 
 - [x] 8.2 Write the rubric evidence into the existing docs: figures in the text, PNG screenshots under `docs/ml/images/`, and mermaid diagrams. No `.txt` or `.json` evidence files, no GitHub Actions screenshots (the Argo runs show CI/CD), and no re-recording of evidence this change did not touch. Each rubric row gets its evidence and a link to its code:
   - **Materialize pipeline:** the Argo graph of a successful `feast-materialize` run showing the stage order, and the online check's figures.
@@ -122,13 +122,13 @@ Implementation checkboxes record code and CI coverage written; test outcomes are
   - **CI/CD for the stream jobs:** the Argo CD sync.
   - **Flow:** the mermaid diagram on `docs/ml/feature-store.md`.
 
-  Recorded 2026-11-04 in [Online and offline paths](../../../docs/ml/feature-store.md#online-and-offline-paths), with the Spark UI of a materialize run and the lineage of the journal and the daily table as extras.
+  Recorded 2026-11-04 in [Online and offline paths](../../../docs/ml/feature-store.md#online-and-offline-paths), with the Spark UI of a materialize run and the lineage of the journal and the daily table as extras. The completed prod `stream-history` replay is recorded in [Stream history replay](../../../docs/ml/feature-store.md#stream-history-replay): the Argo summary, the 23/23 unit and publish counts, the gold row counts and the `writers` semaphore note.
 
-  Dropped because the rubric does not ask for them: the dev smoke runs; the prod `stream-history` replay and what depends on it (its Argo graph, Flink UI and per-month figures, `get_historical_features` over a v19 cohort, the training handoff); enabling `dp-daily` and `feast-materialize-daily`; Redis key counts per view; the expired-view Fraud case; lineage from Bronze through `stream-history` and from `payments.events.v1`; and the Flink pipeline from the connector.
+  Dropped because the rubric does not ask for them: the dev smoke runs; what depends on the replay (`get_historical_features` over a v19 cohort, the training handoff); enabling `dp-daily` and `feast-materialize-daily`; Redis key counts per view; the expired-view Fraud case; lineage from Bronze through `stream-history` and from `payments.events.v1`; and the Flink pipeline from the connector.
 
 ## 9. Archive
 
-- [ ] 9.1 After the evidence is recorded, archive the change. Verify with `openspec validate --strict --all`.
+- [x] 9.1 After the evidence is recorded, archive the change. Verify with `openspec validate --strict --all`.
 
 ## 10. Remove synchronous submission registration
 

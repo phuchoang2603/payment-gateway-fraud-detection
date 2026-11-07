@@ -30,7 +30,7 @@ Keys are integration-scoped customer and payment-method identities. Request feat
 |---|---|---|---|
 | Request | amount, customer and merchant account ages, nullable IP/shipping mismatch, item count, device presence, amount relative to the customer and payment-method 30-day averages, UTC hour of scoring | Feast pure Python request_features on-demand view | Shared by training and serving |
 | Short history | customer and method attempt counts over 5 minutes, 1 hour and 24 hours; distinct customer devices over 24 hours | Flink | Flink writes the v2 journal; the feature writer writes Redis and the offline stream tables |
-| Long history | 7- and 30-day attempt, amount, decided, declined and distinct counts and decline rates per customer and payment method, at daily anchors | DP3 Spark over Silver into `gold.feat_customer_daily` and `gold.feat_payment_method_daily` ([`fraud-history-batch-v1`](../../contracts/features/fraud-history-batch-v1.yaml)); Feast materialization | Implemented; cluster evidence pending |
+| Long history | 7- and 30-day attempt, amount, decided, declined and distinct counts and decline rates per customer and payment method, at daily anchors | DP3 Spark over Silver into `gold.feat_customer_daily` and `gold.feat_payment_method_daily` ([`fraud-history-batch-v1`](../../contracts/features/fraud-history-batch-v1.yaml)); Feast materialization | Implemented and materialized in prod |
 
 Labels, scenario and oracle fields, and anything that happens after the attempt (decision, outcome, payment status) are never features.
 
@@ -104,6 +104,12 @@ The journal topic `fraud.feature-updates.v2.live-v19` feeds `feature-writer`, wh
 ![OpenMetadata lineage of gold.feat_customer_daily](images/openmetadata-lineage-feast-materialize-2026-11-04.png)
 
 `silver.attempts` → `gold.feat_customer_daily` → `feast-materialize`. Both graphs appeared after the metadata-discovery and materialize runs.
+
+### Stream history replay
+
+![Argo summary of the stream-history replay](images/argo-stream-history-replay-2026-11-07.png)
+
+The full Kappa replay ran as `stream-history-jvm-v19-8trbp` over `start=2026-07-29`, `end=2026-10-29`: 23 units, all FINISHED and published, Succeeded in about 2 d 8 h (2026-11-04 to 2026-11-07). `gold.feat_stream_customer` then held 236,441,166 rows and `gold.feat_stream_payment_method` 236,453,680, under the `live-v19` epoch.
 
 ## Entities, views and service
 

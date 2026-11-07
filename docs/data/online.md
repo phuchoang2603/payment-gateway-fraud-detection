@@ -127,6 +127,8 @@ Prod Flink, 2026-11-05 at 18:12 UTC: unit `20260907` running all seven vertices,
 
 ![GCP JVM historical replay: source, deduplication, windows and journal sinks](images/flink-jvm-history-20260907-2026-11-05.png)
 
+The full 2026-07-29 to 2026-10-29 replay completed on 2026-11-07: all 23 units FINISHED and published, totalling about 236M rows per stream table. See the [feature store](../ml/feature-store.md#stream-history-replay) page.
+
 ```mermaid
 flowchart LR
     bronze[Published Bronze] --> seed[Seed isolated Kafka topics]
