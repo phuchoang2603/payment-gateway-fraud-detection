@@ -186,8 +186,8 @@ gateway:
       port: 8080
 
 secretStore: gateway-doppler
-# Platform-owned credentials this app consumes: the Kubeflow artifacts identity and the Dex client secret.
-platformSecretStore: doppler
+# Platform-owned credentials this app consumes: the Kubeflow artifacts identity.
+platformSecretStore: gateway-doppler
 
 # The platform's metrics agent, enrolled in the ambient mesh so it can be admitted by identity.
 metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
@@ -297,10 +297,7 @@ langfuseStores:
       requests: {cpu: 50m, memory: 128Mi}
       limits: {memory: 256Mi}
   clickhousePasswordKey: CLICKHOUSE_LANGFUSE_PASSWORD
-  # Langfuse signs users in through the platform's Dex (client `langfuse`), matched to existing users by e-mail.
-  oidc:
-    issuer: https://auth-dev.phuchoang.sbs/dex
-    clientSecretKey: LANGFUSE_OIDC_CLIENT_SECRET
+  clusterTunnel: talos-proxmox
   hostname: langfuse-dev.phuchoang.sbs
 
 langfuse:
@@ -342,15 +339,7 @@ langfuse:
       - {name: LANGFUSE_INIT_USER_NAME, value: Operator}
       - name: LANGFUSE_INIT_USER_PASSWORD
         valueFrom: {secretKeyRef: {name: langfuse, key: init-user-password}}
-      - {name: AUTH_CUSTOM_CLIENT_ID, value: langfuse}
-      - name: AUTH_CUSTOM_CLIENT_SECRET
-        valueFrom: {secretKeyRef: {name: langfuse-oidc, key: client-secret}}
-      - name: AUTH_CUSTOM_ISSUER
-        valueFrom: {secretKeyRef: {name: langfuse-oidc, key: issuer}}
-      - {name: AUTH_CUSTOM_NAME, value: Dex}
-      - {name: AUTH_CUSTOM_SCOPE, value: openid email profile}
-      - {name: AUTH_CUSTOM_ALLOW_ACCOUNT_LINKING, value: "true"}
-      - {name: AUTH_DISABLE_USERNAME_PASSWORD, value: "true"}
+      - {name: AUTH_DISABLE_USERNAME_PASSWORD, value: "false"}
     # Node sizes its heap from the cgroup limit; the web server runs out of heap at 1Gi during startup. Its
     # migrations and headless init run before it listens, so liveness waits for them: a fresh v4 database runs 463
     # Postgres migrations, which outlasted a 180 s wait on dev and left one half-applied.
