@@ -1,10 +1,20 @@
 environment: dev
 namePrefix: payment-gateway-dev
+# The gateway-doppler ClusterSecretStore is owned by the platform external-secrets app, so
+# this repo's secret-store app stays off to avoid two owners claiming the same object.
 applications:
+  secret-store:
+    enabled: false
   live-traffic:
-    enabled: true
+    enabled: false
+  data-pipelines:
+    enabled: false
+  lakehouse:
+    enabled: false
+  clickhouse:
+    enabled: false
   ml-training:
-    enabled: true
+    enabled: false
   llm-platform:
     enabled: true
   rag-pipeline:
