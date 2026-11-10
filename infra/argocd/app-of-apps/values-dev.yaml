@@ -4,9 +4,9 @@ applications:
   live-traffic:
     enabled: false
   data-pipelines:
-    enabled: false
+    enabled: true
   lakehouse:
-    enabled: false
+    enabled: true
   clickhouse:
     enabled: true
   ml-training:
