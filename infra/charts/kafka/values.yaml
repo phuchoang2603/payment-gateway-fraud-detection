@@ -127,6 +127,7 @@ monitoring:
   enabled: true
   namespace: observability
   serviceAccount: vmagent-vmks
+  meshProbeSource: 169.254.7.127/32
   topicRegex: '^(payments\.events\..*|fraud\.(labels|feature-updates|feature-rejects)\..*)$'
   groupRegex: '^(gateway-notifier|fraud-features-.*|feature-writer(-.*)?|dp1-bronze-watermarks|simulator-redelivery-v1)$'
   exporterResources:
