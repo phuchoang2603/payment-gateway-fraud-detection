@@ -6,6 +6,6 @@ database:
     storageClass: local-path
 ingress:
   tunnel:
-    hostname: pay-gateway-dev.phuchoang.sbs
+    hostname: pay-gateway.phuchoang.sbs
 features:
   enabled: true

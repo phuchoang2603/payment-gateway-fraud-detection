@@ -20,9 +20,6 @@ global:
 destinationServer: https://kubernetes.default.svc
 namePrefix: payment-gateway
 applications:
-  secret-store:
-    destinationNamespace: payment-gateway
-    path: infra/charts/secret-store
   kafka:
     destinationNamespace: payment-gateway
     path: infra/charts/kafka

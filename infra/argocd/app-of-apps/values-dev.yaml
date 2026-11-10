@@ -2,9 +2,15 @@ environment: dev
 namePrefix: payment-gateway-dev
 applications:
   live-traffic:
-    enabled: true
+    enabled: false
+  data-pipelines:
+    enabled: false
+  lakehouse:
+    enabled: false
+  clickhouse:
+    enabled: false
   ml-training:
-    enabled: true
+    enabled: false
   llm-platform:
     enabled: true
   rag-pipeline:

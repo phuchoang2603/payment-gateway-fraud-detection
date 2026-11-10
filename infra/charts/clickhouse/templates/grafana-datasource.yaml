@@ -1,0 +1,27 @@
+{{- if .Values.grafanaDatasource.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-marts-datasource
+  namespace: {{ .Values.namespace }}
+  labels:
+    grafana_datasource: "1"
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+data:
+  clickhouse-marts.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: ClickHouse marts
+        uid: clickhouse-marts
+        type: grafana-clickhouse-datasource
+        access: proxy
+        jsonData:
+          host: clickhouse.{{ .Values.namespace }}.svc.cluster.local
+          port: 9000
+          protocol: native
+          username: grafana
+          defaultDatabase: marts
+        secureJsonData:
+          password: ${{ .Values.passwordKeys.grafana }}
+{{- end }}

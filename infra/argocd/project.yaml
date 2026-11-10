@@ -22,6 +22,8 @@ spec:
     namespace: llm-agents
   - server: https://kubernetes.default.svc
     namespace: observability
+  - server: https://kubernetes.default.svc
+    namespace: istio-system
   clusterResourceWhitelist:
   - group: external-secrets.io
     kind: ClusterSecretStore

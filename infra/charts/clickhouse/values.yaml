@@ -8,8 +8,9 @@ resources:
   requests: {cpu: "2", memory: 8Gi}
   limits: {memory: 12Gi}
 externalSecretStore: gateway-doppler
-passwordStores:
-  grafana: doppler
+passwordStores: {}
+grafanaDatasource:
+  enabled: true
 passwordKeys:
   admin: CLICKHOUSE_ADMIN_PASSWORD
   langfuse: CLICKHOUSE_LANGFUSE_PASSWORD

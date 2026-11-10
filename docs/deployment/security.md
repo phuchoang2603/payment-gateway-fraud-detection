@@ -6,11 +6,11 @@ Doppler → External Secrets → Kubernetes Secret → workload `secretKeyRef`. 
 
 | Configuration | Source |
 |---|---|
-| `gateway-doppler` store, project `payment-gateway-fraud-detection`, configs `dev` / `prd` | [SecretStore template](../../infra/charts/secret-store/templates/secret-store.yaml), [prod values](../../infra/charts/secret-store/values-prod.yaml) |
+| `gateway-doppler` store, project `payment-gateway-fraud-detection`, configs `dev` / `prd` | Platform-owned `ClusterSecretStore` in [`talos-proxmox` external-secrets](https://github.com/phuchoang2603/talos-proxmox/tree/main/terraform/platform), authenticating with `kube-system/gateway-doppler-token` |
 | Database, Redis, encryption, integration and object-storage key mappings | [Gateway ExternalSecrets](../../infra/charts/payment-gateway/templates/external-secrets.yaml), [database secrets](../../infra/charts/payment-gateway/templates/database-external-secrets.yaml), [service values](../../infra/charts/payment-gateway/values.yaml) |
 | LLM/RAG client keys and backing-service credentials | [LLM chart](../../infra/charts/llm-platform), [RAG chart](../../infra/charts/rag-pipeline) |
 
-Bootstrap `payment-gateway/doppler-token` (`dopplerToken`) from a read-only token for the environment. The store restricts eligible namespaces. After rotation, restart affected workloads so environment variables refresh, using a new Edge Rollout revision when its environment changes.
+The platform provisions the `gateway-doppler` store and its `kube-system/gateway-doppler-token` from a read-only token for the environment; this repo consumes the store and no longer bootstraps a token. The store restricts eligible namespaces. After rotation, restart affected workloads so environment variables refresh, using a new Edge Rollout revision when its environment changes.
 
 One storage identity per environment serves the generator, Flink, lakehouse and metadata jobs. Prod uses GCS HMAC keys for the shared bucket; `datasets/`, `runs/` and `lakehouse/` prefixes are conventions, not authorization boundaries.
 
