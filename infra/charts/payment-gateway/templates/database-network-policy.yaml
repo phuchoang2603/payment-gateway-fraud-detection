@@ -10,6 +10,20 @@ spec:
   policyTypes:
     - Ingress
   ingress:
+    # The database pods are in the Istio ambient mesh, so in-mesh peers (including the CNPG
+    # operator's instance-manager calls) arrive over the ztunnel HBONE tunnel on 15008, and the
+    # kubelet health probes on 8000 are rewritten to the ztunnel link-local source. Neither matches
+    # the peer selectors below, so admit both explicitly or the instance never reports a system ID
+    # and the cluster never becomes ready.
+    - ports:
+        - port: 15008
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: {{ .Values.database.meshProbeSource }}
+      ports:
+        - port: 8000
+          protocol: TCP
     - from:
         - podSelector:
             matchLabels:
