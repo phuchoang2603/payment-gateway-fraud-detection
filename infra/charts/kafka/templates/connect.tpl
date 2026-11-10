@@ -11,11 +11,6 @@ spec:
   image: {{ include "kafka.image" (dict "image" .Values.connect.image "global" $.Values.global) }}
   replicas: 1
   bootstrapServers: {{ printf "%s-kafka-bootstrap:9092" .Values.kafka.clusterName }}
-  template:
-    pod:
-      metadata:
-        labels:
-          istio.io/dataplane-mode: none
   groupId: {{ .Values.connect.clusterName }}
   offsetStorageTopic: {{ printf "%s-offsets" .Values.connect.clusterName }}
   configStorageTopic: {{ printf "%s-configs" .Values.connect.clusterName }}

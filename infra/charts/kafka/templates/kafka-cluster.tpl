@@ -40,11 +40,6 @@ spec:
   kafka:
     version: {{ .Values.kafka.version }}
     metadataVersion: {{ .Values.kafka.metadataVersion }}
-    template:
-      pod:
-        metadata:
-          labels:
-            istio.io/dataplane-mode: none
     listeners:
       - name: plain
         port: 9092
@@ -105,11 +100,6 @@ spec:
       {{- toYaml .Values.monitoring.exporterResources | nindent 6 }}
   {{- end }}
   entityOperator:
-    template:
-      pod:
-        metadata:
-          labels:
-            istio.io/dataplane-mode: none
     topicOperator:
       reconciliationIntervalMs: 120000
 {{- with .Values.entityOperator.topicOperator.jvmOptions }}

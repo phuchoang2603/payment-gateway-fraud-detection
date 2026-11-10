@@ -31,7 +31,6 @@ spec:
       labels:
         app.kubernetes.io/name: karapace
         app.kubernetes.io/instance: {{ .Release.Name }}
-        istio.io/dataplane-mode: none
     spec:
       automountServiceAccountToken: false
       securityContext:
