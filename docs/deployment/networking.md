@@ -21,24 +21,24 @@ flowchart LR
 | Public canary weights | [Rollouts strategy](../../infra/charts/payment-gateway/templates/_rollout.tpl) | Rollouts changes route weights; Argo CD ignores those controller-owned fields |
 | Private service access | [`mesh.yaml`](../../infra/charts/payment-gateway/templates/mesh.yaml), [NetworkPolicy](../../infra/charts/payment-gateway/templates/network-policy.yaml) | Strict mTLS, allowed service-account identities and permitted pod connections |
 
-Dev uses `pay-gateway-dev.phuchoang.sbs`; prod uses `pay-gateway.phuchoang.sbs`, from the [environment values](../../infra/charts/payment-gateway). A `TunnelBinding` expresses the desired route to the platform controller; application delivery does not hand-edit Cloudflare routes. The Gateway accepts HTTPRoutes only from its own namespace.
+Both environments use `pay-gateway.phuchoang.sbs`, from the [environment values](../../infra/charts/payment-gateway). A `TunnelBinding` expresses the desired route to the platform controller; application delivery does not hand-edit Cloudflare routes. The Gateway accepts HTTPRoutes only from its own namespace.
 
 ## Public endpoints beyond checkout
 
-The following prod hostnames have live `TunnelBinding` resources as of 2026-11-05. Dev uses the corresponding `-dev` hostname shown below.
+The following hostnames have live `TunnelBinding` resources as of 2026-11-05. Both environments use the same bare `<service>.phuchoang.sbs` hostname.
 
-| Endpoint | Prod | Dev | Origin / access path |
-|---|---|---|---|
-| Checkout | `pay-gateway.phuchoang.sbs` | `pay-gateway-dev.phuchoang.sbs` | App-owned Istio Gateway API listener → `/checkout/` → Edge; checkout-session credentials |
-| Grafana | `grafana.phuchoang.sbs` | `grafana-dev.phuchoang.sbs` | Tunnel → `grafana.observability:80`; Grafana's Dex/OIDC login |
-| Argo CD | `argocd.phuchoang.sbs` | `argocd-dev.phuchoang.sbs` | Tunnel → `argo-cd-argocd-server.argo-cd:80`; native Argo CD SSO/RBAC |
-| Argo Workflows | `workflows.phuchoang.sbs` | `workflows-dev.phuchoang.sbs` | Tunnel → `argo-workflows-server.operators:2746`; Workflows SSO/RBAC |
-| OpenMetadata | `openmetadata.phuchoang.sbs` | `openmetadata-dev.phuchoang.sbs` | Tunnel → `openmetadata.data:8585`; application OIDC login |
-| Dex | `auth.phuchoang.sbs` | `auth-dev.phuchoang.sbs` | Tunnel → `dex.auth:5556`; `/dex` issuer, authorization and token endpoints |
-| Kubeflow | `kubeflow.phuchoang.sbs` | `kubeflow-dev.phuchoang.sbs` | Shared Istio ingress → Kubeflow UI and `/pipeline/`, `/jupyter/`, `/volumes/` routes; OAuth2 proxy/JWT policy |
-| Kagent | `kagent.phuchoang.sbs` | `kagent-dev.phuchoang.sbs` | Shared Istio ingress → `kagent-ui.kagent:8080`; OAuth2 proxy |
-| Agent Registry | `agentregistry.phuchoang.sbs` | `agentregistry-dev.phuchoang.sbs` | Shared Istio ingress → `agentregistry.agentregistry:12121`; OAuth2 proxy |
-| Langfuse | `langfuse.phuchoang.sbs` | `langfuse-dev.phuchoang.sbs` | Shared Istio ingress → `langfuse-web.llm:3000`; OAuth2 proxy and application login |
+| Endpoint | Hostname | Origin / access path |
+|---|---|---|
+| Checkout | `pay-gateway.phuchoang.sbs` | App-owned Istio Gateway API listener → `/checkout/` → Edge; checkout-session credentials |
+| Grafana | `grafana.phuchoang.sbs` | Tunnel → `grafana.observability:80`; Grafana's Dex/OIDC login |
+| Argo CD | `argocd.phuchoang.sbs` | Tunnel → `argo-cd-argocd-server.argo-cd:80`; native Argo CD SSO/RBAC |
+| Argo Workflows | `workflows.phuchoang.sbs` | Tunnel → `argo-workflows-server.operators:2746`; Workflows SSO/RBAC |
+| OpenMetadata | `openmetadata.phuchoang.sbs` | Tunnel → `openmetadata.data:8585`; application OIDC login |
+| Dex | `auth.phuchoang.sbs` | Tunnel → `dex.auth:5556`; `/dex` issuer, authorization and token endpoints |
+| Kubeflow | `kubeflow.phuchoang.sbs` | Shared Istio ingress → Kubeflow UI and `/pipeline/`, `/jupyter/`, `/volumes/` routes; OAuth2 proxy/JWT policy |
+| Kagent | `kagent.phuchoang.sbs` | Shared Istio ingress → `kagent-ui.kagent:8080`; OAuth2 proxy |
+| Agent Registry | `agentregistry.phuchoang.sbs` | Shared Istio ingress → `agentregistry.agentregistry:12121`; OAuth2 proxy |
+| Langfuse | `langfuse.phuchoang.sbs` | App-owned `TunnelBinding` → `langfuse-web.llm:3000`; built-in email/password login |
 
 The platform owns the bindings for [Grafana](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/observability), [Argo CD](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/argocd-post), [Workflows](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/argo-workflows), [OpenMetadata](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/openmetadata), [Dex/shared UI authentication](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/auth), [Kubeflow](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/kubeflow), [Kagent](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/kagent) and [Agent Registry](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/agentregistry). The application owns [Langfuse's VirtualService](../../infra/charts/llm-platform/templates/langfuse.yaml); its tunnel binding and shared authentication are platform-owned.
 

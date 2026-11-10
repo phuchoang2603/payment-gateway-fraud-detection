@@ -298,7 +298,7 @@ langfuseStores:
       limits: {memory: 256Mi}
   clickhousePasswordKey: CLICKHOUSE_LANGFUSE_PASSWORD
   clusterTunnel: talos-proxmox
-  hostname: langfuse-dev.phuchoang.sbs
+  hostname: langfuse.phuchoang.sbs
 
 langfuse:
   fullnameOverride: langfuse
@@ -308,7 +308,7 @@ langfuse:
     encryptionKey:
       secretKeyRef: {name: langfuse, key: encryption-key}
     nextauth:
-      url: https://langfuse-dev.phuchoang.sbs
+      url: https://langfuse.phuchoang.sbs
       secret:
         secretKeyRef: {name: langfuse, key: nextauth-secret}
     features:
