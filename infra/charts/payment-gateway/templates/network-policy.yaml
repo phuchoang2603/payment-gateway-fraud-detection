@@ -26,14 +26,6 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    {{- if $svc.mesh.enabled }}
-    - ports:
-        - port: 15008
-          protocol: TCP
-    - from:
-        - ipBlock:
-            cidr: 169.254.7.127/32
-    {{- end }}
     {{- if $from }}
     - from:
         {{- toYaml $from | nindent 8 }}

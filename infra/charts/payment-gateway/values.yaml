@@ -280,9 +280,6 @@ services:
     database: vault
 database:
   name: payment-gateway-pg
-  # The ambient mesh rewrites kubelet health probes to this ztunnel link-local source; the database
-  # NetworkPolicy admits it on the instance-manager status port so the probe is not dropped.
-  meshProbeSource: 169.254.7.127/32
   instances: 1
   imageName: ghcr.io/cloudnative-pg/postgresql:18.3-system-trixie
   storage:

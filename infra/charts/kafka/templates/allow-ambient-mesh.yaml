@@ -1,0 +1,27 @@
+{{- /*
+Every pod in this namespace is enrolled in the Istio ambient mesh, so in-mesh peers (including
+the unmeshed CNPG and Strimzi operators) reach workloads over the ztunnel HBONE tunnel on 15008,
+and kubelet health probes are rewritten to the ztunnel link-local source. Cilium enforces
+NetworkPolicy below Istio, so any per-workload policy that selects a meshed pod is deny-by-default
+for that traffic before ztunnel's mTLS/authorization runs. This single additive policy admits the
+mesh transport for the whole namespace once; per-workload policies then only describe their own
+application-level rules. Keep it on an early sync-wave so it exists before the workloads it admits.
+*/ -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ambient-mesh
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 15008
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: {{ .Values.monitoring.meshProbeSource }}
