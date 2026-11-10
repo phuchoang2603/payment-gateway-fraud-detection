@@ -8,7 +8,7 @@ applications:
   lakehouse:
     enabled: false
   clickhouse:
-    enabled: false
+    enabled: true
   ml-training:
     enabled: false
   llm-platform:
