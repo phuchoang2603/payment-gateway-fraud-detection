@@ -31,8 +31,8 @@ spec:
       labels:
         app.kubernetes.io/name: karapace
         app.kubernetes.io/instance: {{ .Release.Name }}
-        # Off the ambient dataplane like the broker: ztunnel's DNS proxy will not
-        # resolve the broker's advertised `.svc` short name for an off-mesh peer.
+        # Off-mesh like the broker: ztunnel won't route an ambient client to the
+        # off-mesh broker's advertised address, so resolve via CoreDNS instead.
         istio.io/dataplane-mode: none
     spec:
       automountServiceAccountToken: false

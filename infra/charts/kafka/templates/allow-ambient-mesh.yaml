@@ -1,6 +1,7 @@
 {{- /*
 Every pod in this namespace is enrolled in the Istio ambient mesh except those that opt out with
-`istio.io/dataplane-mode: none` (the Kafka broker, whose KRaft controller DNS breaks under ztunnel),
+`istio.io/dataplane-mode: none` (the Kafka broker, whose KRaft controller DNS breaks under ztunnel,
+and its clients, which must reach the off-mesh broker by CoreDNS rather than through ztunnel),
 so in-mesh peers (including the unmeshed CNPG and Strimzi operators) reach workloads over the ztunnel
 HBONE tunnel on 15008, and kubelet health probes are rewritten to the ztunnel link-local source.
 Cilium enforces NetworkPolicy below Istio, so any per-workload policy that selects a meshed pod is
