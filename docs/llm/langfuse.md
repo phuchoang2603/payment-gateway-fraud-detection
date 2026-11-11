@@ -31,6 +31,11 @@ The seeds give every agent a variant that adds one instruction to its prompt. Th
 | v3 | production | 6.824 s | 271 | 5 |
 | v4 | variant-b | 1 min 13 s | 337 | 2 |
 
-A version's config may also carry model settings, `{"model": {"temperature": 0.1, "topP": 0.5, "maxTokens": 160}}`, so a variant can differ by sampling as well as by text; a setting left out keeps the `ModelConfig`'s value. kagent's OpenAI path sends only the `ModelConfig`'s settings and ignores the request's generation config, so the runtime writes the chosen version's values through the pointers the model reads, for the settings the `ModelConfig` sets (temperature, topP and maxTokens). The runtime's tests check this against kagent's own model constructor. No conversation has run with a model-settings variant on dev, for the reason in [Agents](agents.md#known-limits).
+A version's config may also carry model settings, `{"model": {"temperature": 0.1, "topP": 0.5, "maxTokens": 160}}`, so a variant can differ by sampling as well as by text; a setting left out keeps the `ModelConfig`'s value. kagent's OpenAI path sends only the `ModelConfig`'s settings and ignores the request's generation config, so the runtime writes the chosen version's values through the pointers the model reads, for the settings the `ModelConfig` sets (temperature, topP and maxTokens). The runtime's tests check this against kagent's own model constructor. On dev, `risk-agent-system-prompt` v5 (`variant-b`) carries `{"model": {"temperature": 0.1, "topP": 0.5, "maxTokens": 384}}` against v3 (`production`) on the `ModelConfig`'s 0.7, 0.8 and 1024. Twelve conversations of the same question with varying amounts reached the model; the gateway saw 17 calls with the variant's settings, equal to the 17 v5 generations in Langfuse, and the rest with the baseline:
+
+| Version | Label | Model calls | Traces | Mean latency | Mean output tokens | Max output tokens |
+|---|---|---|---|---|---|---|
+| v3 | production | 22 | 5 | 12.5 s | 223 | 622 |
+| v5 | variant-b | 17 | 5 | 6.7 s | 220 | 371 |
 
 These are model-call samples from dev conversations, with different inputs and no controlled workload or answer-quality scores. They demonstrate version comparison in Langfuse, not a winning variant. The LLM-version A/B remains on hold.

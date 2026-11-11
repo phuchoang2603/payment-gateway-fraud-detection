@@ -151,11 +151,11 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 |---|---|---|---|
 | Inference | Qwen3.5-4B (FP8) chat, Qwen3-Embedding and the d3-edge decision model on vLLM through KServe, one shared GPU | [Inference](llm/inference.md) | Done on dev; [benchmark](llm/inference.md#benchmark) with FP8 KV cache kept |
 | Agent gateway | One gateway for models, MCP tools and REST APIs: per-client keys, rate and token limits, PII masking, Jev request screening, mesh-only access | [Gateway and Jev policy (novel)](llm/gateway-and-jev-policy.md) | Done on dev |
-| Agents | Global model config; the `coordinator` entry agent behind the A2A gateway with `evidence-agent` (knowledge tools) and `risk-agent` as sub-agents; sandboxed on Agent Substrate with warm start and KEDA-scaled workers; registry | [Agents](llm/agents.md) | Configured on dev; Substrate rejects Agents until the platform enables per-template snapshot locations |
+| Agents | Global model config; the `coordinator` entry agent behind the A2A gateway with `evidence-agent` (knowledge tools) and `risk-agent` as sub-agents; sandboxed on Agent Substrate with warm start and KEDA-scaled workers; registry | [Agents](llm/agents.md) | Done on dev; a kagent UI chat transfers to `risk-agent` and uses a risk and a knowledge tool |
 | Retrieval | RAG pipeline into Iceberg and a Feast pgvector store, governed in OpenMetadata; Web API by id and MCP tools | [RAG](llm/rag.md) | Done on dev; chunks by id on `rag-api`, customer features by id on `risk-serving` |
 | Autoscaling and releases | KEDA on `rag-api`, `risk-serving` and the agent worker pool; blue-green MCP releases; Locust load test | [Autoscaling](llm/scaling.md), [MCP releases](llm/mcp-releases.md) | MCP servers done on dev; worker-pool scale-out has numbers, no capture |
 | Prompt management | Prompts managed and versioned in Langfuse (seeded from Git); agents read them at each model call | [Langfuse](llm/langfuse.md#prompts) | Done on dev |
-| A/B tests | Prompt A/B tests per agent in Langfuse, compared per version | [Langfuse](llm/langfuse.md#ab-tests) | Prompt tests done on dev; per-version model settings implemented, not yet run on dev; LLM-version A/B not built |
+| A/B tests | Prompt A/B tests per agent in Langfuse, compared per version | [Langfuse](llm/langfuse.md#ab-tests) | Prompt and per-version model-setting tests done on dev; LLM-version A/B not built |
 | Agent tracing | Agent traces from kagent to Langfuse, linked to prompt versions; LLM, gateway and API metrics in VictoriaMetrics with a Grafana dashboard | [Langfuse](llm/langfuse.md), [metrics](deployment/observability.md#llm-metrics) | Done on dev |
 | Custom agent runtime | Go ADK runtime with per-agent Langfuse prompts, conversation-stable variants and prompt-version trace linkage | [Custom Go ADK runtime (novel)](llm/custom-go-adk-runtime.md) | Implemented on dev; startup and prompt-linkage evidence recorded, evaluation limits stated |
 | GPU scheduling | Kueue queueing for GPU training and serving workloads | [Agents](llm/agents.md) | Planned |
@@ -173,6 +173,6 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 
 ## Limits and scope
 
-- Open gaps: no agent conversation has used the `risk-agent`'s `knowledge` tool or a model-settings variant on dev because Substrate rejects Agents; KServe serves the model from the registry rather than inside the image; LLM-version A/B is not built; the Web API has no public HTTPS hostname; and the training-set rebuild is not incremental.
+- Open gaps: KServe serves the model from the registry rather than inside the image; LLM-version A/B is not built; the Web API has no public HTTPS hostname; and the training-set rebuild is not incremental.
 - Synthetic data cannot establish real-world fraud-model quality. Unlabelled drift measures distribution change, not accuracy.
 - Real card custody, live processor connectivity, live money movement, settlement and reconciliation files, payouts and FX are out of scope. The gateway demonstrates PCI-oriented boundaries with synthetic data, not compliance.

@@ -135,9 +135,17 @@ The release catalog job publishes the entry agents and the MCP servers from the 
 
 Prompt management, A/B comparisons and trace details are documented in [Langfuse](langfuse.md).
 
+At 18:40 UTC on 2026-11-11 a dev chat in the kagent UI sent the coordinator a payment with its identifiers. It transferred to `risk_agent`, which called `get_risk_features` and then the knowledge tools:
+
+![kagent chat: transfer_to_agent risk_agent, then get_risk_features with the payment's identifiers](images/risk-knowledge-chat-transfer.png)
+
+The answer lists the feature values, flags the IP and shipping country mismatch, and cites `fraud-patterns#high-value-fraud` from `get_knowledge_chunk`:
+
+![The answer: feature table, key observations and the cited high-value fraud chunk](images/risk-knowledge-chat-answer.png)
+
 ## Known limits
 
-- The `risk-agent` is configured with both `risk` and `knowledge` tools (version 0.3.0, prompt v3 in Langfuse), but no conversation has used both: since 2026-11-10 the platform's Substrate API runs with `--preview=` empty, which disables per-template snapshot locations. The `Harness` requires one, so Substrate rejects every Agent (`snapshot_config.storage_location: Forbidden`) and the coordinator is not Ready on dev. The fix is in the platform repo's `substrate` dev values, not in this chart.
+- The `risk-agent` answers from both `risk` and `knowledge` tools; the dev capture is below. The kagent UI and its chat are behind the platform's Dex login, so the chat needs a signed-in user.
 - The worker-pool scale-out has no dashboard capture ([Scaling](scaling.md#limits)).
 - The chat model sometimes answers an evidence question without calling the knowledge tools; the answer then has no citation. A question that asks for the passages makes it search.
 - In one of 16 conversations sent four at a time, the first message was refused ("retry after the session becomes available"), and one UI chat lost its stream after the tool result. A retry answered both.
