@@ -1,6 +1,26 @@
 enabled: true
 generator:
   config: historical-dev.yaml
+  workers: 1
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+      ephemeral-storage: 5Gi
+    limits:
+      cpu: '2'
+      memory: 2Gi
+      ephemeral-storage: 10Gi
+spark:
+  profiles:
+    dev:
+      driver:
+        memory: 1g
+        memoryOverhead: 512m
+      executor:
+        requestCores: 500m
+        memory: 2g
+        memoryOverhead: 512m
 bronze:
   enabled: true
 analytics:
@@ -26,3 +46,9 @@ catalog:
             - platform-dev
 features:
   enabled: true
+  driverMemory: 2g
+  materializeResources:
+    requests: {cpu: 500m, memory: 3Gi, ephemeral-storage: 2Gi}
+    limits: {memory: 4Gi, ephemeral-storage: 4Gi}
+  streaming:
+    enabled: false
