@@ -66,7 +66,7 @@ One FastAPI process serves both, so there is one deployment, one reader identity
 
 | Interface | Endpoint | Purpose |
 |---|---|---|
-| REST (`/v1`, routed as `/knowledge/v1` at the gateway) | `GET /v1/chunks/{chunk_id}` | The data-pull Web API: retrieval by id, with pydantic models and path validation; later also customer features by id |
+| REST (`/v1`, routed as `/knowledge/v1` at the gateway) | `GET /v1/chunks/{chunk_id}` | The data-pull Web API: retrieval by id, with pydantic models and path validation. Customer features by id are served by `risk-serving` ([scaling](scaling.md#customer-features-api)) |
 | MCP (`/mcp`, routed as `/mcp/knowledge`) | `search_knowledge(query, top_k, audience)`, `get_knowledge_chunk(chunk_id)` | The agents' tools. Search embeds the question through the gateway and runs the HNSW query; it exists only as a tool because its callers are agents |
 | Health | `/healthz` (liveness), `/readyz` (database reachable) | Kubernetes probes; readiness does not wait for a knowledge version, so the first deploy is not blocked by the pipeline |
 | Metrics | `/metrics` | REST requests by path and status, MCP tool calls by tool and outcome |
@@ -101,6 +101,6 @@ The `rag-pipeline` and `rag-serving` images use the shared [CI](../deployment/ci
 
 ## Limits
 
-- The Web API serves chunks by id only; there is no customer-features-by-ID route on `rag-api`.
-- The `risk-agent` has no `knowledge` (RAG) tool; only the `evidence-agent` calls `search_knowledge`, so no single agent combines prediction and retrieval ([agents](agents.md#known-limits)).
+- The Web API on `rag-api` serves chunks by id only; the customer features route is on `risk-serving`.
+- The `risk-agent` is configured with the `knowledge` tool, but that has not run on dev ([agents](agents.md#known-limits)).
 - Alternate-backend failover is not implemented.

@@ -31,4 +31,6 @@ The seeds give every agent a variant that adds one instruction to its prompt. Th
 | v3 | production | 6.824 s | 271 | 5 |
 | v4 | variant-b | 1 min 13 s | 337 | 2 |
 
+A version's config may also carry model settings, `{"model": {"temperature": 0.1, "topP": 0.5, "maxTokens": 160}}`, so a variant can differ by sampling as well as by text; a setting left out keeps the `ModelConfig`'s value. kagent's OpenAI path sends only the `ModelConfig`'s settings and ignores the request's generation config, so the runtime writes the chosen version's values through the pointers the model reads, for the settings the `ModelConfig` sets (temperature, topP and maxTokens). The runtime's tests check this against kagent's own model constructor. No conversation has run with a model-settings variant on dev, for the reason in [Agents](agents.md#known-limits).
+
 These are model-call samples from dev conversations, with different inputs and no controlled workload or answer-quality scores. They demonstrate version comparison in Langfuse, not a winning variant. The LLM-version A/B remains on hold.

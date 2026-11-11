@@ -77,8 +77,8 @@ Tried and dropped on dev, 2026-11-03: KServe's Knative canary (Knative Serving 1
 
 ## Limits
 
-- **Feature retrieval outside Fraud.** Feature lookups by customer and payment-method ID reach agents through the risk MCP (`get_risk_features`), a Rollout behind KEDA with a bounded pre-promotion check ([scaling](../llm/scaling.md), [MCP releases](../llm/mcp-releases.md)). The Feast feature server is a single-replica Deployment reachable only in the cluster, with no autoscaling and no load test of its own, and `rag-api` has no customer-features-by-ID route.
-- **Load test.** The recorded Locust run targets the knowledge API ([load test](../llm/scaling.md#load-test-and-service-level)), not Triton or Feast.
+- **Feature retrieval outside Fraud.** Feature lookups by customer and payment-method ID reach agents through the risk MCP (`get_risk_features`), a Rollout behind KEDA with a bounded pre-promotion check ([scaling](../llm/scaling.md), [MCP releases](../llm/mcp-releases.md)). `GET /v1/customers/{customer_id}/features?integration_id=…` on `risk-serving` returns the `customer_daily` and `customer_stream` views by explicit feature references and is exposed at the gateway as `/risk/v1` with client keys and rate limits. The Feast feature server is a single-replica Deployment reachable only in the cluster, with no autoscaler; one replica sustained about 40 req/s on dev ([customer features load test](../llm/scaling.md#customer-features-api)). The dev Feast has no live stream features, so `customer_stream` reads `missing`.
+- **Load test.** Locust runs cover the knowledge API and the customer features route ([load test](../llm/scaling.md#load-test-and-service-level)), not Triton.
 - **Model-inside-image.** Not used (see the rubric gap above).
 - **Waypoint on prod.** No waypoint has been created on prod, so the A/B route is verified on dev only.
 

@@ -17,7 +17,7 @@ One agentgateway `Gateway` in `llm` is the only entry to the agents (A2A), the m
 
 An MCP server or REST API is one entry under `gateway.mcpServers` or `gateway.apiRoutes` in the values, and an A2A route one entry agent under `agents.list`; the chart renders its route, backend and policy. The A2A backend rewrites the agent card's URLs to the gateway's address and signs a short-lived token (ES256, 300 s) for each call to the kagent controller, which admits only the gateway. The OpenAI-compatible `/v1` route uses `backend.ai.routes` so chat completions, embeddings and model listing each get the right request shape.
 
-The risk route uses the same strict `x-api-key` authentication and per-client limits as knowledge. Dedicated rollout-analysis identities may call the two preview Services at their tool ports; agent calls still pass through the gateway. Feast separately admits the risk pod through its NetworkPolicy.
+The risk MCP route uses the same strict `x-api-key` authentication and per-client limits as knowledge. Dedicated rollout-analysis identities may call the two preview Services at their tool ports; agent calls still pass through the gateway. Feast separately admits the risk pod through its NetworkPolicy. The REST routes (`/knowledge/v1`, `/risk/v1`) read the key from `Authorization: Bearer`; on dev an `x-api-key` header on those routes gets 401 "no API Key found".
 
 The shared kagent model configuration sends model calls to the gateway’s `/v1` route and references the agents’ credential Secret:
 

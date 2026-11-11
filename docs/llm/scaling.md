@@ -28,6 +28,17 @@ The service level for the chunk endpoint is p95 at or below 500 ms and no failed
 
 ![Locust report for rag-api: 54,453 requests, 0 failures, p95 86 ms, 181.7 req/s, 60 users](images/rag-locust-report.png)
 
+### Customer features API
+
+[`src/llm/risk_serving/loadtest/locustfile.py`](../../src/llm/risk_serving/loadtest/locustfile.py) calls `GET /v1/customers/{customer_id}/features` on `risk-serving` for 200 customers materialized into the dev Feast online store; 19 of 20 requests are valid and 1 omits `integration_id` and must return 422. The Job, [`features-loadtest.yaml`](../../infra/charts/llm-platform/benchmark/features-loadtest.yaml), runs as `llm-benchmark` directly against `risk-serving`. Each request is one `get-online-features` call to the single Feast server replica, which has a 1 CPU limit. Two runs on 2026-11-11, 5 minutes each:
+
+| Users | Requests | Failures | Aggregate req/s | p50 | p95 | p99 |
+|---|---|---|---|---|---|---|
+| 60 | 17,323 | 9,724 (56.1%, all 502) | 58.0 | 480 ms | 2,000 ms | 2,800 ms |
+| 20 | 11,695 | 1 (0.01%) | 39.2 | 170 ms | 490 ms | 700 ms |
+
+At 60 users the Feast server reached its CPU limit and its reads exceeded the route's 5-second budget, which the API reports as 502 rather than as partial features; `risk-serving` scaled from 2 to 4 replicas and stayed near idle. At 20 users the route met a p95 of 500 ms. Through the gateway the route needs a client key sent as `Authorization: Bearer`: 401 without a key or with a wrong one, 200 with a valid one, and of 300 parallel requests with one client key 128 returned 200 and 172 returned 429 under the 120 requests per minute limit.
+
 ## KEDA scale-out
 
 The "Replicas: MCP servers and agent workers" panel in the LLM agents dashboard (Autoscaling row) shows desired and current replicas for `rag-api`, `risk-serving` and the agent worker pool. The risk run (05:29 to 05:35 UTC on 2026-11-05) and the Locust run (05:36 to 05:42) are both on it; the gaps are scrape gaps of the metrics store.
@@ -77,4 +88,4 @@ KEDA scales the WorkerPool from 2 to 6 workers on Substrate's own metric, the nu
 
 - The agent worker scale-out has numbers only. The 2026-10-31 run has no Grafana capture, and the 2026-11-05 attempt read 667m of the 700m target and asked for a third worker, but that worker (on `dev-server3`) stayed not Ready for 26 minutes because its credential bundle was issued late and its readiness probe timed out. The dashboard capture above shows the pool at 3 workers, not a scale-out. A clean capture needs a dev window with spare node capacity and a signed-in Grafana session.
 - The risk run demonstrates scaling, not a failure-free service level: the server's counters account for 520 of the 528 client calls, and the remaining eight outcomes were not reconciled. The 5 calls/s target itself was not reached.
-- The Locust run is one run on dev, directly against `rag-api`; the Feast feature server has no load test and no autoscaler ([serving limits](../ml/serving.md#limits)).
+- The knowledge Locust run is one run on dev, directly against `rag-api`. The Feast feature server is a single replica without an autoscaler, so the customer features API is bounded by it at about 40 req/s on dev ([serving limits](../ml/serving.md#limits)).

@@ -137,7 +137,7 @@ Prompt management, A/B comparisons and trace details are documented in [Langfuse
 
 ## Known limits
 
-- The `risk-agent` has no `knowledge` (RAG) tool, so no single agent combines model prediction and retrieval; the coordinator hands each question to one specialist.
+- The `risk-agent` is configured with both `risk` and `knowledge` tools (version 0.3.0, prompt v3 in Langfuse), but no conversation has used both: since 2026-11-10 the platform's Substrate API runs with `--preview=` empty, which disables per-template snapshot locations. The `Harness` requires one, so Substrate rejects every Agent (`snapshot_config.storage_location: Forbidden`) and the coordinator is not Ready on dev. The fix is in the platform repo's `substrate` dev values, not in this chart.
 - The worker-pool scale-out has no dashboard capture ([Scaling](scaling.md#limits)).
 - The chat model sometimes answers an evidence question without calling the knowledge tools; the answer then has no citation. A question that asks for the passages makes it search.
 - In one of 16 conversations sent four at a time, the first message was refused ("retry after the session becomes available"), and one UI chat lost its stream after the tool result. A retry answered both.
