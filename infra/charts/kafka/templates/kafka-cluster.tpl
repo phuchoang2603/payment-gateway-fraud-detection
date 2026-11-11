@@ -111,9 +111,8 @@ spec:
     template:
       pod:
         metadata:
-          # Off the ambient dataplane like the broker it talks to: ztunnel's DNS
-          # proxy will not resolve the broker's advertised `.svc` short name for an
-          # off-mesh peer, so the operator must resolve via CoreDNS directly.
+          # Off-mesh like the broker: ztunnel won't route an ambient client to the
+          # off-mesh broker's advertised address, so resolve via CoreDNS instead.
           labels:
             istio.io/dataplane-mode: none
     topicOperator:
