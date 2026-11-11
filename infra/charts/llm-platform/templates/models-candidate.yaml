@@ -1,0 +1,102 @@
+{{- $candidate := .Values.models.candidate }}
+{{- if $candidate.enabled }}
+{{- $uri := printf "hf://%s:%s" $candidate.repo $candidate.revision }}
+{{- $gateway := include "llm-platform.principal" (dict "namespace" .Release.Namespace "name" .Values.gateway.name) }}
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: {{ $candidate.name }}
+  namespace: {{ $candidate.namespace }}
+spec:
+  model:
+    name: {{ $candidate.name }}
+    uri: {{ $uri }}
+  replicas: {{ $candidate.replicas }}
+  rolloutStrategy:
+    maxSurge: 0
+    maxUnavailable: 1
+  template:
+    securityContext:
+      {{- include "llm-platform.podSecurity" .Values.vllm | nindent 6 }}
+    resourceClaims:
+      - name: gpu
+        resourceClaimName: {{ $candidate.gpuClaim }}
+    containers:
+      - name: main
+        image: {{ .Values.vllm.image }}
+        command:
+          - vllm
+          - serve
+          - /mnt/models
+          - --served-model-name={{ $candidate.name }}
+          - --port=8000
+        args:
+          - --gpu-memory-utilization={{ $candidate.gpuMemoryUtilization }}
+          {{- toYaml $candidate.args | nindent 10 }}
+        env:
+          - name: USER
+            value: vllm
+        # Triton compiles the attention and linear-attention kernels for this card at start, which takes about ten minutes.
+        startupProbe:
+          httpGet: {path: /health, port: 8000}
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: {{ .Values.vllm.startupFailureThreshold }}
+        resources:
+          {{- toYaml $candidate.resources | nindent 10 }}
+          claims:
+            - name: gpu
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: {{ .Values.vllm.uid }}
+          {{- include "llm-platform.containerSecurity" . | nindent 10 }}
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: {{ $candidate.name }}
+  namespace: {{ $candidate.namespace }}
+spec:
+  from:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      namespace: {{ .Release.Namespace }}
+  to:
+    - group: ""
+      kind: Service
+      name: {{ $candidate.name }}-kserve-workload-svc
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ $candidate.name }}-workload
+  namespace: {{ $candidate.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $candidate.name }}
+      app.kubernetes.io/component: llminferenceservice-workload
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [{{ $gateway | quote }}]
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: {{ $candidate.name }}
+spec:
+  ai:
+    provider:
+      custom:
+        model: {{ $candidate.name }}
+        backendRef:
+          kind: Service
+          name: {{ $candidate.name }}-kserve-workload-svc
+          namespace: {{ $candidate.namespace }}
+          port: 8000
+        formats:
+          - type: Completions
+            path: /v1/chat/completions
+{{- end }}

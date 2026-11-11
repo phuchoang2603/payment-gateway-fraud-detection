@@ -68,6 +68,33 @@ models:
     resources:
       requests: {cpu: "1", memory: 8Gi}
       limits: {memory: 12Gi}
+  # The chat model's A/B candidate: the smaller Qwen3.5-0.8B, served on the platform's ml-gpu claim (a 4 GiB Turing
+  # card, so fp16 weights, no CUDA graphs and a short context) while the 4B model stays on llm-gpu. The gateway sends
+  # `weight` percent of chat completions to it. The pod must run where the claim lives, so it is in `namespace`; the
+  # claim is the one the model-serving chart's Triton uses, so enable this only where Triton is not deployed.
+  candidate:
+    enabled: false
+    name: qwen35-08b
+    repo: Qwen/Qwen3.5-0.8B
+    revision: 2fc06364715b967f1860aea9cf38778875588b17
+    namespace: ml
+    gpuClaim: ml-gpu
+    weight: 20
+    replicas: 1
+    gpuMemoryUtilization: "0.85"
+    args:
+      - --dtype=float16
+      - --language-model-only
+      - --max-model-len=16384
+      - --max-num-seqs=8
+      - --enforce-eager
+      - --reasoning-parser=qwen3
+      - --default-chat-template-kwargs={"enable_thinking":false}
+      - --enable-auto-tool-choice
+      - --tool-call-parser=qwen3_coder
+    resources:
+      requests: {cpu: 500m, memory: 3Gi}
+      limits: {memory: 6Gi}
   embedding:
     name: qwen3-embedding
     repo: Qwen/Qwen3-Embedding-0.6B

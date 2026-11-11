@@ -1,4 +1,6 @@
 models:
+  candidate:
+    enabled: true
   chat:
     gpuMemoryUtilization: "0.72"
     resources:
