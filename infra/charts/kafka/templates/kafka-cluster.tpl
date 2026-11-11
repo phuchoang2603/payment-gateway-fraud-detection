@@ -108,6 +108,14 @@ spec:
       {{- toYaml .Values.monitoring.exporterResources | nindent 6 }}
   {{- end }}
   entityOperator:
+    template:
+      pod:
+        metadata:
+          # Off the ambient dataplane like the broker it talks to: ztunnel's DNS
+          # proxy will not resolve the broker's advertised `.svc` short name for an
+          # off-mesh peer, so the operator must resolve via CoreDNS directly.
+          labels:
+            istio.io/dataplane-mode: none
     topicOperator:
       reconciliationIntervalMs: 120000
 {{- with .Values.entityOperator.topicOperator.jvmOptions }}

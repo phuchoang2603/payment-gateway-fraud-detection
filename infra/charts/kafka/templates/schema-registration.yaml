@@ -25,6 +25,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: schema-register
+        istio.io/dataplane-mode: none
     spec:
       automountServiceAccountToken: false
       restartPolicy: Never
@@ -77,11 +78,6 @@ spec:
               app.kubernetes.io/name: karapace
               app.kubernetes.io/instance: {{ .Release.Name }}
       ports:
-        # The registration Job runs in the ambient mesh, so its egress to karapace is
-        # captured by ztunnel and tunnelled over HBONE (15008) rather than sent to the
-        # pod IP on 8081; admit both so the boundary still limits egress to karapace.
         - port: {{ .Values.schemaRegistry.port }}
-          protocol: TCP
-        - port: 15008
           protocol: TCP
 {{- end }}
