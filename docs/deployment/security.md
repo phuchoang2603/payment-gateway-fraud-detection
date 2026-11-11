@@ -34,7 +34,11 @@ Hosted checkout uses session-bound credentials; internal merchant calls use inte
 
 | Surface | Authentication and policy |
 |---|---|
-| Models, MCP tools and agents | agentgateway: per-client API keys, rate/token limits and mesh-only backend access; dev checks returned 401 without a key and 20 × 429 in a 160-request burst |
+| Models, MCP tools and agents | agentgateway: per-client API keys, rate/token limits and mesh-only backend access; checks in [gateway and Jev policy](../llm/gateway-and-jev-policy.md#checks-on-dev) |
 | Grafana and other platform UIs | Platform-owned access configuration in [`talos-proxmox/apps`](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps) |
 
-A dedicated feature-API gateway rate-limit acceptance remains missing.
+## Limits
+
+- The agentgateway rate limit is checked on dev for the model, knowledge and MCP routes. The Feast feature server has no gateway route or rate limit; only in-cluster callers reach it.
+- The knowledge Web API has no public HTTPS hostname; it is reachable only through the internal gateway ([networking](networking.md#internal-api-and-data-endpoints)).
+- Alertmanager routes to `blackhole`, so alerts are visible but not delivered ([observability](observability.md#dashboards-and-alerts)).

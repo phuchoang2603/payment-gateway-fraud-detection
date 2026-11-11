@@ -9,7 +9,7 @@ Production moved from AWS to GCP on 2026-11-02.
 | Infrastructure | Proxmox VMs: one control plane and two workers | GCP project `talos-proxmox`, `us-central1-a`, single zone |
 | Baseline nodes | `dev-server1` (control plane), `dev-server2`, `dev-server3` | One On-Demand `e2-standard-4` control plane and three On-Demand `e2-standard-4` workers (`cpu` pool) |
 | Elastic capacity | None | Cluster Autoscaler over a GCE Spot group (`spot` pool) of `e2-standard-4` workers, 0 to 12 nodes / 48 vCPU / 192 GiB |
-| GPU | One RTX 5060 Ti (16 GiB) on `dev-server1`, shared by the chat and embedding servers through one DRA claim | One fixed on-demand NVIDIA L4 on `g2-standard-4` (`talos.dev/nodepool: gpu`, tainted `burst.talos.dev/gpu-training`), shared by training, scoring and Triton through one DRA claim; the LLM platform is disabled in prod |
+| GPU | One RTX 5060 Ti (16 GiB) on `dev-server1`, shared by the chat and embedding servers through one DRA claim | One fixed on-demand NVIDIA L4 on `g2-standard-4` (`talos.dev/nodepool: gpu`, tainted `burst.talos.dev/gpu-training`), shared by training, scoring and Triton through one DRA claim; the LLM and RAG applications are enabled in prod and target the GCP GPU pool ([inference](../llm/inference.md)) |
 | Volumes | `local-path` | GCE persistent disks (`pd-balanced`) through the default `cloud-block` StorageClass |
 | Object storage | MinIO `platform-dev` | GCS bucket `talos-proxmox-prod-platform` through the S3-compatible XML API |
 

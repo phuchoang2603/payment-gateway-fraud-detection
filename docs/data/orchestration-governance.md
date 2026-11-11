@@ -23,6 +23,20 @@ Batch lakehouse publication uses [write–audit–publish](write-audit-publish.m
 
 A platform admission policy rejects deleting or terminating an active workflow in `data`; stop runs with `shutdown: Stop`.
 
+### DP1: raw to Bronze
+
+`dp1-bronze` is the ingest and validate pipeline for the raw zone. `spark-historical` (or `spark-kafka` for the Kafka source) writes the delivered rows to an Iceberg audit branch; `checks` runs the Bronze contract rules in ClickHouse against that branch; `publish-tables` fast-forwards main only if every rule passed; the exit handler publishes run status and lineage to OpenMetadata. Spark sizing is below and the publish protocol is in [write–audit–publish](write-audit-publish.md).
+
+![Argo Workflows graph of dp1-bronze-mngks: spark-historical, then checks, publish-tables and the exit handler; spark-kafka skipped because the source is historical; the first checks attempt (checks(0)) failed and its retry checks(1) passed](images/argo-dp1-bronze.png)
+
+The red `checks(0)` is an execution failure that Argo retried; a failed data rule would not be retried.
+
+### DP2 and DP3: Silver, Gold and marts
+
+`dp-pipeline` runs plan → build → check → publish for Silver, then the same four stages for Gold and for the ClickHouse marts side by side, then profiles the published marts. A plan step compares the requested range, the source snapshots and the image with the last published output and skips the build, check and publish steps when they match.
+
+![Argo Workflows graph of dp-backfill-ww2pp: for the first month the silver, check-silver and publish-silver steps are skipped (grey) because plan-silver found matching output; Gold and the marts run as parallel branches before profile](images/argo-backfill-parallel-skip.png)
+
 The recorded GCP backfill and its checks-before-publish capture are in [Write–audit–publish (novel)](write-audit-publish.md#release-protocol). [Historical replay](online.md#historical-replay) uses the live feature engine with logical time, isolated outputs and seed reuse.
 
 ### Spark sizing and placement
@@ -72,6 +86,10 @@ The `data-pipelines` application owns the shared catalog connections. A PostSync
 Pipelines publish lineage (historical source and Kafka topics → Bronze → Silver → gold tables and marts; the feature journal → `feature-writer` → `gold.feat_stream_*`; Bronze `payment_events` → `stream-history` → `gold.feat_stream_*`; `gold.feat_*_daily` → `feast-materialize`), their execution status, with the Silver snapshots a DP3 run read as its execution parameters, and native test results. The exit handler publishes lineage on success and failure: the edges are the pipeline's structure, and a backfill that stops at a later month has already published earlier ones. OpenMetadata's Flink connector reads the live job from its JobManager REST API; if it cannot resolve the Flink job's Kafka topics, the SDK publishes `payments.events.v1` → streaming job → journal and reject topics. `dp-daily`'s exit handler publishes Bronze and the pipeline together, because the pipeline runs through `templateRef` without its own exit handler. A run succeeds only when every expected test reports Success.
 
 ![OpenMetadata lineage: historical-payments-v19 → bronze.payment_events → silver.attempts → gold tables and fact_payment_attempt → fact_merchant_day](images/openmetadata-lineage.png)
+
+Each published table also carries its contract's test cases. The catalog's data-quality view after the recorded AWS run shows all 58 tests passing across the 15 Silver, Gold and mart tables, which covers the validation rows for DP1 to DP3:
+
+![OpenMetadata data quality: 58 tests, 58 successful, 15 healthy data assets](images/openmetadata-data-quality.png)
 
 ### RAG knowledge workflow and AI assets
 

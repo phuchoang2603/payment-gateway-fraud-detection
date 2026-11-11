@@ -98,7 +98,7 @@ The result is model v5, a score of 0.0006 against the decline threshold 0.8597, 
 
 The [Langfuse trace evidence](langfuse.md#traces) records both tools between model calls; the [runtime note](custom-go-adk-runtime.md#evidence-and-limits) shows the retry’s transfer and prompt-version linkage.
 
-Its releases and scaling are in [Scaling](scaling.md). A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
+Its releases are on [MCP releases](mcp-releases.md) and its scaling on [Scaling](scaling.md). A gateway call listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm); authentication results are in the [gateway checks](gateway-and-jev-policy.md#checks-on-dev).
 
 A retry on 2026-11-05 at 06:04 UTC returned score 0.0006 from model v5 against threshold 0.8597, with both stream views correctly marked `expired`. In the same conversation, a later policy question transferred to `evidence_agent`, which retrieved `decline-codes#new-account-geo-mismatch` and `risk-decision#requirements-requirement-rules-baseline-policy` and cited them:
 
@@ -137,5 +137,7 @@ Prompt management, A/B comparisons and trace details are documented in [Langfuse
 
 ## Known limits
 
+- The `risk-agent` has no `knowledge` (RAG) tool, so no single agent combines model prediction and retrieval; the coordinator hands each question to one specialist.
+- The worker-pool scale-out has no dashboard capture ([Scaling](scaling.md#limits)).
 - The chat model sometimes answers an evidence question without calling the knowledge tools; the answer then has no citation. A question that asks for the passages makes it search.
 - In one of 16 conversations sent four at a time, the first message was refused ("retry after the session becomes available"), and one UI chat lost its stream after the tool result. A retry answered both.
