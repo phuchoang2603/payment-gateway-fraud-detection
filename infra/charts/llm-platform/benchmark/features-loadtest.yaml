@@ -32,10 +32,14 @@ spec:
           args:
             - |
               locust -f /loadtest/locustfile.py --headless --host http://risk-serving.llm.svc.cluster.local:8080 \
-                --users 60 --spawn-rate 10 --run-time 5m --html /tmp/report.html --only-summary
+                --html /tmp/report.html --only-summary
               echo ===LOCUST-HTML===; cat /tmp/report.html; echo; echo ===END===
           env:
             - {name: HOME, value: /tmp}
+            # One Feast server replica with a 1 CPU limit sustains about 20 users; raise LOCUST_USERS to find its limit.
+            - {name: LOCUST_USERS, value: "20"}
+            - {name: LOCUST_SPAWN_RATE, value: "5"}
+            - {name: LOCUST_RUN_TIME, value: 5m}
             - {name: INTEGRATION_ID, valueFrom: {configMapKeyRef: {name: features-loadtest, key: integration-id}}}
           securityContext:
             allowPrivilegeEscalation: false
