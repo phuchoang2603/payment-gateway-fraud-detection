@@ -1,14 +1,16 @@
 {{- /*
-Every pod in this namespace is enrolled in the Istio ambient mesh, so in-mesh peers (including
-the unmeshed CNPG and Strimzi operators) reach workloads over the ztunnel HBONE tunnel on 15008,
-and kubelet health probes are rewritten to the ztunnel link-local source. Cilium enforces
-NetworkPolicy below Istio, so any per-workload policy that selects a meshed pod is deny-by-default
-for that traffic before ztunnel's mTLS/authorization runs. On egress this cuts the other way: a
-workload with any egress policy can only reach a meshed peer over HBONE 15008, never the peer's
-real application port, since ztunnel dials 15008 and Cilium drops anything the policy omits. This
-single additive policy admits the mesh transport for the whole namespace in both directions once;
-per-workload policies then only describe their own application-level rules. Keep it on an early
-sync-wave so it exists before the workloads it admits.
+Every pod in this namespace is enrolled in the Istio ambient mesh except those that opt out with
+`istio.io/dataplane-mode: none` (the Kafka broker, whose KRaft controller DNS breaks under ztunnel),
+so in-mesh peers (including the unmeshed CNPG and Strimzi operators) reach workloads over the ztunnel
+HBONE tunnel on 15008, and kubelet health probes are rewritten to the ztunnel link-local source.
+Cilium enforces NetworkPolicy below Istio, so any per-workload policy that selects a meshed pod is
+deny-by-default for that traffic before ztunnel's mTLS/authorization runs. On egress this cuts the
+other way: a workload with any egress policy can only reach a meshed peer over HBONE 15008, never the
+peer's real application port, since ztunnel dials 15008 and Cilium drops anything the policy omits.
+This single additive policy admits the mesh transport for the whole namespace in both directions once;
+per-workload policies then only describe their own application-level rules. Pods that opt out of the
+mesh are excluded from the selector so this policy never constrains their off-mesh egress. Keep it on
+an early sync-wave so it exists before the workloads it admits.
 */ -}}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -18,7 +20,10 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  podSelector: {}
+  podSelector:
+    matchExpressions:
+      - key: istio.io/dataplane-mode
+        operator: DoesNotExist
   policyTypes:
     - Ingress
     - Egress
