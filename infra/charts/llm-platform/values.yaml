@@ -79,7 +79,7 @@ models:
     revision: 2fc06364715b967f1860aea9cf38778875588b17
     namespace: ml
     gpuClaim: ml-gpu
-    weight: 20
+    weight: 50
     replicas: 1
     gpuMemoryUtilization: "0.85"
     args:
