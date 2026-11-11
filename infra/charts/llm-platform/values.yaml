@@ -422,6 +422,8 @@ risk:
     callsPerSecondPerReplica: "5"
     prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
   rollout:
+    # The tool the pre-promotion analysis calls; an environment without the model server analyses get_risk_features.
+    tool: score_payment_risk
     arguments:
       request:
         integration_id: rollout-analysis

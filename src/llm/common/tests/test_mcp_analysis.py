@@ -52,6 +52,31 @@ def test_analysis_accepts_missing_history_but_rejects_failed_feature_reads(statu
         validate("score_payment_risk", {"structuredContent": data})
 
 
+@pytest.mark.parametrize("status", ["available", "missing", "error"])
+def test_analysis_of_feature_reads_needs_no_score_and_still_rejects_failed_views(status):
+    views = {
+        view: {"status": "missing"}
+        for view in ("customer_daily", "payment_method_daily", "customer_stream", "payment_method_stream")
+    }
+    views["request_features"] = {"status": "available"}
+    views["customer_stream"]["status"] = status
+    result = {"structuredContent": {"views": views}}
+    if status == "error":
+        with pytest.raises(ValueError, match="feature views"):
+            validate("get_risk_features", result)
+    else:
+        validate("get_risk_features", result)
+
+
+def test_analysis_of_feature_reads_rejects_missing_request_features():
+    views = {
+        view: {"status": "available"}
+        for view in ("customer_daily", "payment_method_daily", "customer_stream", "payment_method_stream")
+    }
+    with pytest.raises(ValueError, match="request features"):
+        validate("get_risk_features", {"structuredContent": {"views": views}})
+
+
 def test_analysis_rejects_missing_request_features():
     data = {
         "score": 0.5,

@@ -36,7 +36,7 @@ spec:
                       - name: MCP_URL
                         value: http://risk-serving-preview.{{ .Release.Namespace }}.svc.cluster.local:{{ $server.port }}/mcp
                       - name: MCP_TOOL
-                        value: score_payment_risk
+                        value: {{ $server.rollout.tool }}
                       - name: MCP_ARGUMENTS
                         value: {{ toJson $server.rollout.arguments | quote }}
                     securityContext:
