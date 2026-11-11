@@ -79,7 +79,14 @@ spec:
               values: [{{ $.Values.monitoring.serviceAccount | quote }}]
       toPorts:
         - ports: [{port: '9404', protocol: TCP}]
-    - fromEntities: [world]
+    - fromCIDRSet:
+        # Cilium classifies the ztunnel-rewritten kubelet probe source (a link-local
+        # address outside the cluster CIDRs) as reserved:world, so a fromEntities:[world]
+        # deny also drops the kafka-exporter /healthz probe on 9404. Deny the world range
+        # but exempt that probe source so the metrics boundary still blocks real external
+        # peers without breaking the ambient-mesh readiness probe.
+        - cidr: 0.0.0.0/0
+          except: [{{ $.Values.monitoring.meshProbeSource }}]
       toPorts:
         - ports: [{port: '9404', protocol: TCP}]
 {{- end }}
