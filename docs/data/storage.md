@@ -22,7 +22,7 @@ Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT
 
 ## Lakehouse
 
-On a fresh bucket, initialize `runs/payment-gateway/spark-events/` with a hidden `.keep` object before submitting Spark: its event logger requires an existing directory prefix.
+Spark's event logger requires an existing directory prefix, so the `data-pipelines` chart's `spark-event-log-dir` Sync hook writes a hidden `.keep` object under `sparkEventLogDir` before any Spark application, on a fresh bucket as on an existing one.
 
 Tables are Iceberg, registered in the Polaris REST catalog that the `lakehouse` chart deploys. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
 
