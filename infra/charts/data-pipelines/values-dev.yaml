@@ -18,9 +18,10 @@ spark:
         memory: 2g
         memoryOverhead: 512m
       executor:
+        cores: 1
         requestCores: 500m
         memory: 3g
-        memoryOverhead: 512m
+        memoryOverhead: 1g
 bronze:
   enabled: true
 analytics:
