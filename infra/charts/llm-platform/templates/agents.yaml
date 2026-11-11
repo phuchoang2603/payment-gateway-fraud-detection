@@ -184,10 +184,8 @@ spec:
   substrate:
     workerPoolRef:
       name: {{ $pool.name }}
-    {{- with $agents.snapshotRoot }}
     snapshotPolicy:
-      location: {{ . }}
-    {{- end }}
+      location: {{ $agents.snapshotRoot }}
 ---
 apiVersion: api.kagent.dev/v1alpha3
 kind: Agent

@@ -208,8 +208,7 @@ agents:
   # from the agent's Langfuse prompt, and the call's trace linked to that prompt version.
   runtime:
     image: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/agent-runtime
-  # A per-agent snapshot location is a Substrate preview feature; when it is empty the platform's own location applies.
-  snapshotRoot: ""
+  snapshotRoot: s3://platform-dev/substrate/llm-agents/
   workerPool:
     name: llm-agents
     image: ghcr.io/kagent-dev/substrate/ateworker-gvisor:v1.0.0-rc1
