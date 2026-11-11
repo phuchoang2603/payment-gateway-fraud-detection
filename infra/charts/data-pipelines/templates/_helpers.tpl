@@ -474,6 +474,10 @@ spec:
               - name: WAP_BRANCH
                 value: {{ include "data-pipelines.wapBranch" . | quote }}
               {{- end }}
+              {{- with .root.Values.sparkEventLogDir }}
+              - name: SPARK_EVENT_LOG_DIR
+                value: {{ . | quote }}
+              {{- end }}
               {{- range .extraEnv }}
               - name: {{ .name }}
                 value: {{ .value | quote }}

@@ -6,6 +6,8 @@ Credential-bearing Spark configuration must remain covered by log redaction.
 
 import os
 
+import boto3
+from botocore.config import Config
 from pyspark.sql import SparkSession
 
 ICEBERG_CATALOG = "lake"
@@ -37,10 +39,30 @@ def session(app_name):
             .config(f"spark.sql.catalog.{ICEBERG_CATALOG}.warehouse", local_warehouse)
         )
     else:
+        ensure_event_log_prefix()
         builder = _rest_catalog(builder)
     spark = builder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
     return spark
+
+
+def ensure_event_log_prefix():
+    """Spark's event logger fails on an object-store prefix that holds no object, so create one before the context starts."""
+    directory = os.environ.get("SPARK_EVENT_LOG_DIR")
+    if not directory:
+        return
+    bucket, _, prefix = directory.removeprefix("s3a://").partition("/")
+    client = boto3.client(
+        "s3",
+        endpoint_url=os.environ["S3_ENDPOINT"],
+        region_name=os.environ.get("AWS_REGION", "us-east-1"),
+        config=Config(
+            s3={"addressing_style": "path" if os.environ["S3_PATH_STYLE"] == "true" else "virtual"},
+            request_checksum_calculation="when_required",
+            response_checksum_validation="when_required",
+        ),
+    )
+    client.put_object(Bucket=bucket, Key=f"{prefix.rstrip('/')}/.keep", Body=b"")
 
 
 def _rest_catalog(builder):
