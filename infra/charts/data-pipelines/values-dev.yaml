@@ -15,11 +15,11 @@ spark:
   profiles:
     dev:
       driver:
-        memory: 1g
+        memory: 2g
         memoryOverhead: 512m
       executor:
         requestCores: 500m
-        memory: 2g
+        memory: 3g
         memoryOverhead: 512m
 bronze:
   enabled: true
