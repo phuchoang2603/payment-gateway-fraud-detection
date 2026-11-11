@@ -38,3 +38,11 @@ spec:
     config.storage.replication.factor: -1
     status.storage.replication.factor: -1
     metadata.recovery.strategy: none
+  template:
+    pod:
+      metadata:
+        # Follows the broker off the ambient dataplane: the broker advertises its
+        # listeners with the `.svc` short name, which ztunnel's DNS proxy fails to
+        # resolve for an off-mesh peer, so clients must use CoreDNS directly.
+        labels:
+          istio.io/dataplane-mode: none

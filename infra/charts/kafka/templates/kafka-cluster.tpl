@@ -92,6 +92,14 @@ spec:
       transaction.state.log.min.isr: {{ .Values.kafka.minInsyncReplicas }}
       default.replication.factor: {{ .Values.kafka.replicationFactor }}
       min.insync.replicas: {{ .Values.kafka.minInsyncReplicas }}
+    template:
+      pod:
+        metadata:
+          # KRaft advertises its controller quorum with the `.svc` short name, which
+          # ztunnel's DNS proxy fails to search-expand, breaking the broker's own
+          # controller connection. Keep the broker pods off the ambient dataplane.
+          labels:
+            istio.io/dataplane-mode: none
   {{- if .Values.monitoring.enabled }}
   kafkaExporter:
     topicRegex: {{ .Values.monitoring.topicRegex | quote }}
@@ -100,6 +108,14 @@ spec:
       {{- toYaml .Values.monitoring.exporterResources | nindent 6 }}
   {{- end }}
   entityOperator:
+    template:
+      pod:
+        metadata:
+          # Off the ambient dataplane like the broker it talks to: ztunnel's DNS
+          # proxy will not resolve the broker's advertised `.svc` short name for an
+          # off-mesh peer, so the operator must resolve via CoreDNS directly.
+          labels:
+            istio.io/dataplane-mode: none
     topicOperator:
       reconciliationIntervalMs: 120000
 {{- with .Values.entityOperator.topicOperator.jvmOptions }}
