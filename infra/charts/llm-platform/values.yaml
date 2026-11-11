@@ -68,33 +68,27 @@ models:
     resources:
       requests: {cpu: "1", memory: 8Gi}
       limits: {memory: 12Gi}
-  # The chat model's A/B candidate: the smaller Qwen3.5-0.8B, served on the platform's ml-gpu claim (a 4 GiB Turing
-  # card, so fp16 weights, no CUDA graphs and a short context) while the 4B model stays on llm-gpu. The gateway sends
-  # `weight` percent of chat completions to it. The pod must run where the claim lives, so it is in `namespace`; the
-  # claim is the one the model-serving chart's Triton uses, so enable this only where Triton is not deployed.
+  # The chat model's A/B candidate: the previous Qwen generation at the same size and precision (Qwen3-4B-Instruct-2507,
+  # FP8), served from the llm-gpu claim next to the chat model. The gateway sends `weight` percent of chat completions to
+  # it, so the two generations see the same traffic. Two 4B servers need the fractions below to share the card, which
+  # caps both at 8 concurrent sequences and the candidate at an 8k context.
   candidate:
     enabled: false
-    name: qwen35-08b
-    repo: Qwen/Qwen3.5-0.8B
-    revision: 2fc06364715b967f1860aea9cf38778875588b17
-    namespace: ml
-    gpuClaim: ml-gpu
-    weight: 50
+    name: qwen3-4b
+    repo: Qwen/Qwen3-4B-Instruct-2507-FP8
+    revision: 8591804019c8b22094c3b5b4454e0edc05dffc98
     replicas: 1
-    gpuMemoryUtilization: "0.85"
+    weight: 50
+    gpuMemoryUtilization: "0.36"
     args:
-      - --dtype=float16
-      - --language-model-only
-      - --max-model-len=16384
+      - --max-model-len=8192
+      - --kv-cache-dtype=fp8
       - --max-num-seqs=8
-      - --enforce-eager
-      - --reasoning-parser=qwen3
-      - --default-chat-template-kwargs={"enable_thinking":false}
       - --enable-auto-tool-choice
-      - --tool-call-parser=qwen3_coder
+      - --tool-call-parser=hermes
     resources:
-      requests: {cpu: 500m, memory: 3Gi}
-      limits: {memory: 6Gi}
+      requests: {cpu: "1", memory: 6Gi}
+      limits: {memory: 10Gi}
   embedding:
     name: qwen3-embedding
     repo: Qwen/Qwen3-Embedding-0.6B

@@ -6,7 +6,6 @@ apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceService
 metadata:
   name: {{ $candidate.name }}
-  namespace: {{ $candidate.namespace }}
 spec:
   model:
     name: {{ $candidate.name }}
@@ -20,7 +19,7 @@ spec:
       {{- include "llm-platform.podSecurity" .Values.vllm | nindent 6 }}
     resourceClaims:
       - name: gpu
-        resourceClaimName: {{ $candidate.gpuClaim }}
+        resourceClaimName: llm-gpu
     containers:
       - name: main
         image: {{ .Values.vllm.image }}
@@ -36,7 +35,6 @@ spec:
         env:
           - name: USER
             value: vllm
-        # Triton compiles the attention and linear-attention kernels for this card at start, which takes about ten minutes.
         startupProbe:
           httpGet: {path: /health, port: 8000}
           periodSeconds: 10
@@ -51,26 +49,10 @@ spec:
           runAsUser: {{ .Values.vllm.uid }}
           {{- include "llm-platform.containerSecurity" . | nindent 10 }}
 ---
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: ReferenceGrant
-metadata:
-  name: {{ $candidate.name }}
-  namespace: {{ $candidate.namespace }}
-spec:
-  from:
-    - group: agentgateway.dev
-      kind: AgentgatewayBackend
-      namespace: {{ .Release.Namespace }}
-  to:
-    - group: ""
-      kind: Service
-      name: {{ $candidate.name }}-kserve-workload-svc
----
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: {{ $candidate.name }}-workload
-  namespace: {{ $candidate.namespace }}
 spec:
   selector:
     matchLabels:
@@ -94,7 +76,6 @@ spec:
         backendRef:
           kind: Service
           name: {{ $candidate.name }}-kserve-workload-svc
-          namespace: {{ $candidate.namespace }}
           port: 8000
         formats:
           - type: Completions
