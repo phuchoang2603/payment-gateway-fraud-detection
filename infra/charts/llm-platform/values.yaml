@@ -64,6 +64,7 @@ models:
       temperature: "0.7"
       topP: "0.8"
       presencePenalty: "1.5"
+      maxTokens: 1024
     resources:
       requests: {cpu: "1", memory: 8Gi}
       limits: {memory: 12Gi}
@@ -184,6 +185,9 @@ gateway:
     knowledge:
       service: rag-api
       port: 8080
+    risk:
+      service: risk-serving
+      port: 8080
 
 secretStore: gateway-doppler
 # Platform-owned credentials this app consumes: the Kubeflow artifacts identity.
@@ -197,7 +201,8 @@ metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
 agents:
   namespace: llm-agents
   # The global model config: the chat model through the gateway, with its sampling settings. kagent's Go runtime
-  # takes those only from here, so an A/B variant differs by its prompt text.
+  # takes those only from here; a prompt version's `model` config overrides temperature, topP and maxTokens, the
+  # settings set here, for its conversations.
   modelConfig: default-model-config
   # Every agent runs this runtime: kagent's Go runtime with each model call's system prompt and A/B variant taken
   # from the agent's Langfuse prompt, and the call's trace linked to that prompt version.
@@ -251,10 +256,10 @@ agents:
         # The variant is the seed prompt followed by this instruction.
         addendum: Answer in at most five sentences, then list the passages you cited.
     - name: risk-agent
-      version: 0.2.0
-      mcpServers: [risk]
+      version: 0.3.0
+      mcpServers: [risk, knowledge]
       title: Risk agent
-      description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, and explains what drives it.
+      description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, explains what drives it, and cites the knowledge base for what a code or policy means.
       abTest:
         label: variant-b
         share: 0.5

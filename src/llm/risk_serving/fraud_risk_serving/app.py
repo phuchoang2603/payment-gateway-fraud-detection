@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Path, Query
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
@@ -12,7 +12,7 @@ from mcp.types import ToolAnnotations
 from prometheus_client import CollectorRegistry, Counter, Histogram, make_asgi_app
 
 from fraud_risk_serving.drivers import Reference
-from fraud_risk_serving.features import VIEW_FIELDS, RiskRequest, features
+from fraud_risk_serving.features import VIEW_FIELDS, CustomerFeatures, RiskRequest, customer_features, features
 from fraud_risk_serving.model import Model
 
 
@@ -30,7 +30,7 @@ def rounded(value):
 def create_app(transport=None):
     registry = CollectorRegistry()
     calls = Counter("risk_mcp_tool_calls_total", "Risk MCP calls", ["tool", "outcome"], registry=registry)
-    for tool in ("get_risk_features", "score_payment_risk"):
+    for tool in ("get_risk_features", "score_payment_risk", "customer_features"):
         for outcome in ("success", "failure"):
             calls.labels(tool, outcome)
     latency = Histogram("risk_tool_latency_seconds", "Risk tool call latency", ["tool"], registry=registry)
@@ -115,6 +115,24 @@ def create_app(transport=None):
             state.clear()
 
     app = FastAPI(title="Payment risk MCP", version="0.1.0", lifespan=lifespan)
+
+    @app.get("/v1/customers/{customer_id}/features", response_model=CustomerFeatures)
+    async def customer_features_by_id(
+        customer_id: str = Path(min_length=1, max_length=200),
+        integration_id: str = Query(min_length=1, max_length=200),
+    ) -> CustomerFeatures:
+        with latency.labels("customer_features").time():
+            try:
+                result = await customer_features(
+                    state["client"], feast_url, integration_id, customer_id, datetime.now(UTC)
+                )
+            except ValueError as error:
+                calls.labels("customer_features", "failure").inc()
+                raise HTTPException(status_code=502, detail=str(error)) from error
+        for view, observed in result.views.items():
+            statuses.labels(view, observed.status).inc()
+        calls.labels("customer_features", "success").inc()
+        return result
 
     @app.get("/healthz")
     async def healthz():

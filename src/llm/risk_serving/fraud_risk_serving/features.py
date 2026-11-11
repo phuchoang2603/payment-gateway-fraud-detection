@@ -1,6 +1,7 @@
 import json
 import math
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
@@ -58,6 +59,22 @@ VIEW_FIELDS = {
         "scored_hour_utc",
     ],
 }
+
+
+CUSTOMER_VIEWS = ("customer_daily", "customer_stream")
+
+
+class ViewFeatures(BaseModel):
+    status: Literal["available", "missing", "expired", "future", "error"]
+    event_timestamp: AwareDatetime | None = None
+    values: dict[str, int | float | bool | None]
+
+
+class CustomerFeatures(BaseModel):
+    integration_id: str
+    customer_id: str
+    scored_at: AwareDatetime
+    views: dict[Literal["customer_daily", "customer_stream"], ViewFeatures]
 
 
 def nullable(name):
@@ -144,3 +161,29 @@ async def features(client, url, request: RiskRequest, scored_at: datetime):
         if views[scope + "_daily"]["status"] != "available" and views["request_features"]["status"] == "available":
             views["request_features"]["values"][scope + "_amount_to_30d_avg"] = None
     return {"feature_service": "payment_risk_v1", "scored_at": scored_at.isoformat(), "views": views}
+
+
+async def customer_features(client, url, integration_id: str, customer_id: str, scored_at: datetime):
+    refs = [f"{view}:{name}" for view in CUSTOMER_VIEWS for name in VIEW_FIELDS[view]]
+    content, _ = await read(
+        client,
+        "feature store",
+        "POST",
+        url.rstrip("/") + "/get-online-features",
+        5,
+        json={
+            "features": refs,
+            "full_feature_names": True,
+            "entities": {"integration_id": [integration_id], "customer_id": [customer_id]},
+        },
+    )
+    try:
+        response = json.loads(content)
+        names, results = response["metadata"]["feature_names"], response["results"]
+        if len(names) != len(results) or len(names) != len(set(names)):
+            raise ValueError("invalid field list")
+        fields = dict(zip(names, results, strict=True))
+        views = {view: evaluate(view, VIEW_FIELDS[view], fields, scored_at) for view in CUSTOMER_VIEWS}
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("feature store returned a malformed response") from error
+    return CustomerFeatures(integration_id=integration_id, customer_id=customer_id, scored_at=scored_at, views=views)
