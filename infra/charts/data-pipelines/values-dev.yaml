@@ -51,5 +51,12 @@ features:
   materializeResources:
     requests: {cpu: 500m, memory: 3Gi, ephemeral-storage: 2Gi}
     limits: {memory: 4Gi, ephemeral-storage: 4Gi}
+  historyParallelism: 1
   streaming:
     enabled: true
+    jobManager:
+      resources:
+        requests: {cpu: 250m}
+    taskManager:
+      resources:
+        requests: {cpu: 250m}
