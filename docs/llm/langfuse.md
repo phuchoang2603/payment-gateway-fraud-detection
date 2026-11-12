@@ -46,14 +46,15 @@ The chat model has an A/B candidate: Qwen3-4B-Instruct-2507 in FP8 (`qwen3-4b`) 
 
 The same twelve conversations (six rounds of two, the question from the prompt test with varying amounts) ran against each, with the prompt tests' 50/50 split unchanged. Langfuse's model name is the one the agent requests, `qwen35-4b` in both runs, so the rows below are the two time windows; the gateway logs the served model as `qwen3-4b` in the first.
 
-| Model | Conversations completed | Model calls | Traces | Mean latency | Median latency | Mean output tokens | `transfer_to_agent` | `search_knowledge` |
-|---|---|---|---|---|---|---|---|---|
-| qwen3-4b | 12 of 12 | 37 | 13 | 8.2 s | 3.9 s | 193 | 8 | 0 |
-| qwen35-4b | 10 of 12 | 61 | 12 | 8.4 s | 4.7 s | 168 | 12 | 12 |
+| Model | Conversations completed | Model calls | Traces | Mean latency | Median latency | Mean output tokens | `transfer_to_agent` | `search_knowledge` | `ask_user` |
+|---|---|---|---|---|---|---|---|---|---|
+| qwen3-4b | 12 of 12 | 37 | 13 | 8.2 s | 3.9 s | 193 | 8 | 0 | 0 |
+| qwen35-4b | 10 of 12 | 69 | 13 | 7.8 s | 4.1 s | 165 | 13 | 12 | 6 |
 
-![Langfuse model calls in the two runs](images/langfuse-model-ab.png)
+The Langfuse observations view, filtered to the model calls and to each run's time window (UTC, in the filter bar), shows the counts above. The tool names listed beside the table are those found inside the window: the Qwen3-4B window has `get_risk_features` and `score_payment_risk` and no knowledge-base tool, the Qwen3.5-4B window also has `search_knowledge` and `get_knowledge_chunk`.
 
-The Langfuse observations view, filtered to the model calls, shows the two runs as the two bursts of the evening (Qwen3-4B first, Qwen3.5-4B second) under one model name, as noted above.
+![Langfuse model calls in the Qwen3-4B window](images/langfuse-model-ab-qwen3-4b.png)
 
-Latency and output length are close. The difference is behaviour: the question asks for the risk features and what the knowledge base says, and Qwen3.5-4B handed over to the risk agent in every conversation and searched the knowledge base in all of them, while Qwen3-4B never searched it and transferred in eight. Two Qwen3.5-4B conversations returned an empty response instead of a task, so completion is not a win for it. The sample is small and unscored.
+![Langfuse model calls in the Qwen3.5-4B window](images/langfuse-model-ab-qwen35-4b.png)
 
+Latency and output length are close. The difference is behaviour: the question asks for the risk features and what the knowledge base says. Qwen3.5-4B searched the knowledge base in twelve conversations, and it asked the user for a missing field six times, which Qwen3-4B never did. Qwen3-4B never searched the knowledge base and transferred to the risk agent eight times. Two Qwen3.5-4B conversations returned an empty response instead of a task, so completion is not a win for it. The sample is small and unscored.
