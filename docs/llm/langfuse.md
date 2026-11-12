@@ -40,11 +40,19 @@ A version's config may also carry model settings, `{"model": {"temperature": 0.1
 
 These are model-call samples from dev conversations, with different inputs and no answer-quality scores. They demonstrate version comparison in Langfuse, not a winning variant.
 
+Langfuse's own metrics view for the prompt sums every run since the versions were published, including the model-version runs below. It lists v3 (`production`) with 90 generations, median latency 5.2 s and median output 219 tokens, and v5 (`variant-b`) with 48, 4.9 s and 206:
+
+![Langfuse prompt metrics for risk-agent-system-prompt: v3 production and v5 variant-b](images/langfuse-prompt-metrics-v3-v5.png)
+
 ### Model versions
 
 The chat model has an A/B candidate: Qwen3-4B-Instruct-2507 in FP8 (`qwen3-4b`) against the served Qwen3.5-4B in FP8 (`qwen35-4b`), the same size and precision, so the difference is the model generation. The candidate is the `models.candidate` block in the [`llm-platform` values](../../infra/charts/llm-platform/values.yaml) and a gateway backend weighted by `weight`. The two do not fit the dev GPU together: with the chat server cut to 0.36 of the card, vLLM's startup profiling left no memory for its cache and the pod crash-looped. On dev they take turns on the full `llm-gpu` claim with the same settings (0.72 of the card, 32k context, 32 sequences, FP8 KV cache); one is stopped while the other serves.
 
-The same twelve conversations (six rounds of two, the question from the prompt test with varying amounts) ran against each, with the prompt tests' 50/50 split unchanged. Langfuse's model name is the one the agent requests, `qwen35-4b` in both runs, so the rows below are the two time windows; the gateway logs the served model as `qwen3-4b` in the first.
+The weighted split is built and renders at 50/50, but the two servers could not run together, so this comparison is by time window and not a live traffic split: the Qwen3-4B run finished before the Qwen3.5-4B run began, and the route sent every request to whichever server was up. The same twelve conversations (six rounds of two, the question from the prompt test with varying amounts) ran in each window. Langfuse records the model the agent requests, `qwen35-4b` from the `ModelConfig` in both runs, so it cannot tell the windows apart by model. The model that answered is the gateway's `gen_ai_response_model` label, charted per window below; the windows do not overlap, and the gateway's counts, 37 and 69 model calls, equal Langfuse's counts for the same windows.
+
+![Gateway chat requests per served model: qwen3-4b first, then qwen35-4b](images/gateway-served-model-windows.png)
+
+A trace cannot record the response's model without a change in kagent: the ADK ends the `generate_content` span before any plugin callback runs, and kagent builds its model with no hook to wrap.
 
 | Model | Conversations completed | Model calls | Traces | Mean latency | Median latency | Mean output tokens | `transfer_to_agent` | `search_knowledge` | `ask_user` |
 |---|---|---|---|---|---|---|---|---|---|
