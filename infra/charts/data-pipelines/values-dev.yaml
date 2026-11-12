@@ -51,5 +51,7 @@ features:
   materializeResources:
     requests: {cpu: 500m, memory: 3Gi, ephemeral-storage: 2Gi}
     limits: {memory: 4Gi, ephemeral-storage: 4Gi}
+  historyStart: "2026-09-02"
+  historyEnd: "2026-10-27"
   streaming:
-    enabled: false
+    enabled: true
