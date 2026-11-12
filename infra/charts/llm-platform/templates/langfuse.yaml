@@ -164,10 +164,10 @@ metadata:
   name: langfuse-ui
   namespace: istio-system
 subjects:
-  - name: kubeflow-gateway-istio
+  - name: istio-ingressgateway
     spec:
       fqdn: {{ $stores.hostname | quote }}
-      target: http://kubeflow-gateway-istio.istio-system.svc.cluster.local:80
+      target: http://istio-ingressgateway.istio-system.svc.cluster.local:80
 tunnelRef:
   kind: ClusterTunnel
   name: {{ $stores.clusterTunnel }}
