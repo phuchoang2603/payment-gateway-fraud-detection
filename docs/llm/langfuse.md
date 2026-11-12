@@ -38,4 +38,18 @@ A version's config may also carry model settings, `{"model": {"temperature": 0.1
 | v3 | production | 22 | 5 | 12.5 s | 223 | 622 |
 | v5 | variant-b | 17 | 5 | 6.7 s | 220 | 371 |
 
-These are model-call samples from dev conversations, with different inputs and no controlled workload or answer-quality scores. They demonstrate version comparison in Langfuse, not a winning variant. The LLM-version A/B remains on hold.
+These are model-call samples from dev conversations, with different inputs and no answer-quality scores. They demonstrate version comparison in Langfuse, not a winning variant.
+
+### Model versions
+
+The chat model has an A/B candidate: Qwen3-4B-Instruct-2507 in FP8 (`qwen3-4b`) against the served Qwen3.5-4B in FP8 (`qwen35-4b`), the same size and precision, so the difference is the model generation. The candidate is the `models.candidate` block in the [`llm-platform` values](../../infra/charts/llm-platform/values.yaml) and a gateway backend weighted by `weight`. The two do not fit the dev GPU together: with the chat server cut to 0.36 of the card, vLLM's startup profiling left no memory for its cache and the pod crash-looped. On dev they take turns on the full `llm-gpu` claim with the same settings (0.72 of the card, 32k context, 32 sequences, FP8 KV cache); one is stopped while the other serves.
+
+The same twelve conversations (six rounds of two, the question from the prompt test with varying amounts) ran against each, with the prompt tests' 50/50 split unchanged. Langfuse's model name is the one the agent requests, `qwen35-4b` in both runs, so the rows below are the two time windows; the gateway logs the served model as `qwen3-4b` in the first.
+
+| Model | Conversations completed | Model calls | Traces | Mean latency | Median latency | Mean output tokens | `transfer_to_agent` | `search_knowledge` |
+|---|---|---|---|---|---|---|---|---|
+| qwen3-4b | 12 of 12 | 37 | 13 | 8.2 s | 3.9 s | 193 | 8 | 0 |
+| qwen35-4b | 10 of 12 | 61 | 12 | 8.4 s | 4.7 s | 168 | 12 | 12 |
+
+Latency and output length are close. The difference is behaviour: the question asks for the risk features and what the knowledge base says, and Qwen3.5-4B handed over to the risk agent in every conversation and searched the knowledge base in all of them, while Qwen3-4B never searched it and transferred in eight. Two Qwen3.5-4B conversations returned an empty response instead of a task, so completion is not a win for it. The sample is small and unscored.
+

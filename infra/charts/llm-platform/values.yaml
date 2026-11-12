@@ -69,21 +69,22 @@ models:
       requests: {cpu: "1", memory: 8Gi}
       limits: {memory: 12Gi}
   # The chat model's A/B candidate: the previous Qwen generation at the same size and precision (Qwen3-4B-Instruct-2507,
-  # FP8), served from the llm-gpu claim next to the chat model. The gateway sends `weight` percent of chat completions to
-  # it, so the two generations see the same traffic. Two 4B servers need the fractions below to share the card, which
-  # caps both at 8 concurrent sequences and the candidate at an 8k context.
+  # FP8), served from the llm-gpu claim. Two 4B servers do not fit the card together (vLLM's startup profiling needs
+  # far more than the weights), so the versions take turns: set the chat model's `stopped` and `weight` 100 to serve
+  # only the candidate, then reverse both. The gateway sends `weight` percent of chat completions to it.
   candidate:
     enabled: false
     name: qwen3-4b
     repo: Qwen/Qwen3-4B-Instruct-2507-FP8
     revision: 8591804019c8b22094c3b5b4454e0edc05dffc98
     replicas: 1
-    weight: 50
-    gpuMemoryUtilization: "0.36"
+    weight: 100
+    cacheSize: 6Gi
+    gpuMemoryUtilization: "0.72"
     args:
-      - --max-model-len=8192
+      - --max-model-len=32768
       - --kv-cache-dtype=fp8
-      - --max-num-seqs=8
+      - --max-num-seqs=32
       - --enable-auto-tool-choice
       - --tool-call-parser=hermes
     resources:
