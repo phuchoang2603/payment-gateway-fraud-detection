@@ -38,6 +38,10 @@ Over the same window, Kafka reports zero under-replicated partitions and Flink r
 
 ![Kafka and Flink metrics during the acceptance window](images/data-operations-2026-11-03.png)
 
+The dev cluster's three nodes report CPU, memory, network and disk IO through node-exporter into the same VictoriaMetrics; the capture covers 00:15 to 03:15 UTC on 2026-11-12, one colour per node.
+
+![Dev cluster CPU, memory, network and disk IO from node-exporter](images/compute-telemetry-dev.png)
+
 Select the environment before comparing results. VictoriaMetrics preserves dotted OTLP names and resource labels; canary queries also select `rollout.revision`. Missing series remain **No data**, never a healthy zero.
 
 Namespace-local rules cover sustained errors/latency, notification age, lag, failed jobs, checkpoint failures and missing signals. Shared Alertmanager currently routes to `blackhole`: alerts evaluate and are visible, but no external notifications are delivered.
