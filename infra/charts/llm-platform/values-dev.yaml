@@ -1,17 +1,6 @@
 models:
-  candidate:
-    enabled: true
   chat:
-    gpuMemoryUtilization: "0.36"
-    args:
-      - --language-model-only
-      - --max-model-len=32768
-      - --kv-cache-dtype=fp8
-      - --max-num-seqs=8
-      - --reasoning-parser=qwen3
-      - --default-chat-template-kwargs={"enable_thinking":false}
-      - --enable-auto-tool-choice
-      - --tool-call-parser=qwen3_coder
+    gpuMemoryUtilization: "0.72"
     resources:
       requests: {cpu: 500m}
     schedulerResources:
