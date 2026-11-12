@@ -84,8 +84,12 @@ KEDA scales the WorkerPool from 2 to 6 workers on Substrate's own metric, the nu
 | Conversations accepted on the first message | 12 of 12 |
 | Time to the full answer | 79 to 123 s, median 112 s (the shared GPU is the limit) |
 
+Thirty parallel conversation loops of six rounds each, one coordinator question per round, ran from 03:43 to 04:01 UTC on 2026-11-12, with the pool at two workers. KEDA took it to 3 workers at 03:46, 5 at 03:47 and 6, its maximum, at 03:48. Substrate created 232 conversation actors on those workers over the window and resumed them 7,582 times, so many conversations were held on a few workers, each booked at 256Mi in a 2Gi worker. The "Agent fleet" row of the LLM agents dashboard, under the Autoscaling row's replica panel, shows the pool, its workers by state, desired against ready, and the actors' lifecycle operations:
+
+![Grafana: agent workers rise from 2 to 6 under thirty parallel conversations; the Agent fleet row shows workers by state, desired and ready workers, and actor create and resume operations](images/worker-pool-scale-out.png)
+
 ## Limits
 
-- The agent worker scale-out has numbers only. The 2026-10-31 run has no Grafana capture, and the 2026-11-05 attempt read 667m of the 700m target and asked for a third worker, but that worker (on `dev-server3`) stayed not Ready for 26 minutes because its credential bundle was issued late and its readiness probe timed out. The dashboard capture above shows the pool at 3 workers, not a scale-out. A clean capture needs a dev window with spare node capacity and a signed-in Grafana session.
+- The scale-out run shows the pool growing and conversations multiplexed on workers, not a service level. The gateway's per-key limit of 120 requests and 60,000 tokens a minute throttled it: 90 model calls were answered 429, and the A2A route returned 503 141 times while new sessions waited for a worker, so most of the 180 conversations did not finish. The pool stayed at 6 workers through the end of the capture, as KEDA's cooldown had not elapsed.
 - The risk run demonstrates scaling, not a failure-free service level: the server's counters account for 520 of the 528 client calls, and the remaining eight outcomes were not reconciled. The 5 calls/s target itself was not reached.
 - The knowledge Locust run is one run on dev, directly against `rag-api`. The Feast feature server is a single replica without an autoscaler, so the customer features API is bounded by it at about 40 req/s on dev ([serving limits](../ml/serving.md#limits)).
