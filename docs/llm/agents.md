@@ -127,11 +127,19 @@ Agents run on Agent Substrate in their own namespace, `llm-agents` (Pod Security
 
 ## Registry
 
-The release catalog job publishes the entry agents and the MCP servers from the chart values to agentregistry. The coordinator's entry names its sub-agents and lists the MCP servers they use; prompts are in Langfuse and tools come from the servers.
+The release catalog job publishes the MCP servers and every agent from the chart values to agentregistry. The coordinator's entry names its sub-agents and lists the MCP servers they use; the sub-agents are published too, marked as running inside the coordinator. Prompts are in Langfuse and tools come from the servers.
 
-![agentregistry: the knowledge MCP server, 0.1.0](images/agents-registry-mcp-server.png)
+The two MCP servers, risk scoring and the knowledge base, both at 0.1.0:
 
-![agentregistry: coordinator 0.2.0 with its sub-agents](images/agents-registry-agent.png)
+![agentregistry: the risk and knowledge MCP servers, 0.1.0](images/agents-registry-servers.png)
+
+The three agents at their current versions, coordinator 0.2.0, evidence agent 0.3.0 and risk agent 0.3.0:
+
+![agentregistry: coordinator 0.2.0, evidenceagent 0.3.0 and riskagent 0.3.0](images/agents-registry-agents.png)
+
+The risk agent's entry lists the `risk` and `knowledge` servers it uses:
+
+![agentregistry: riskagent 0.3.0 with the risk and knowledge MCP servers](images/agents-registry-riskagent.png)
 
 Prompt management, A/B comparisons and trace details are documented in [Langfuse](langfuse.md).
 
