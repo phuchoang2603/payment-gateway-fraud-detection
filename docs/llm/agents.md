@@ -145,7 +145,6 @@ The answer lists the feature values, flags the IP and shipping country mismatch,
 
 ## Known limits
 
-- The `risk-agent` answers from both `risk` and `knowledge` tools; the dev capture is below. The kagent UI and its chat are behind the platform's Dex login, so the chat needs a signed-in user.
 - The worker-pool scale-out has no dashboard capture ([Scaling](scaling.md#limits)).
 - The chat model sometimes answers an evidence question without calling the knowledge tools; the answer then has no citation. A question that asks for the passages makes it search.
 - In one of 16 conversations sent four at a time, the first message was refused ("retry after the session becomes available"), and one UI chat lost its stream after the tool result. A retry answered both.

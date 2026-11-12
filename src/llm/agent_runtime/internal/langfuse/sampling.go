@@ -35,8 +35,12 @@ func newBaseline(live Sampling) baseline {
 }
 
 // apply sets each tunable setting to the variant's value, or back to the
-// ModelConfig's when the variant leaves it out. A runtime serves one
-// conversation at a time, so the write cannot reach another conversation.
+// ModelConfig's when the variant leaves it out. A Substrate worker multiplexes
+// many actors, but each actor is its own gVisor sandbox with its own runtime
+// process, so the pointers are never shared between conversations. Inside an
+// actor the variant follows from the prompt name and the actor's name, so
+// concurrent calls of one agent write the same values, and the agents of one
+// conversation take turns through transfer_to_agent.
 func (b baseline) apply(settings *ModelSettings) {
 	if settings == nil {
 		settings = &ModelSettings{}

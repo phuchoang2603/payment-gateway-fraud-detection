@@ -10,7 +10,7 @@ applications:
   clickhouse:
     enabled: true
   ml-training:
-    enabled: false
+    enabled: true
   llm-platform:
     enabled: true
   rag-pipeline:

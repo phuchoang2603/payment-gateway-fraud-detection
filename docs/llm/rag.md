@@ -102,5 +102,4 @@ The `rag-pipeline` and `rag-serving` images use the shared [CI](../deployment/ci
 ## Limits
 
 - The Web API on `rag-api` serves chunks by id only; the customer features route is on `risk-serving`.
-- The `risk-agent` is configured with the `knowledge` tool, but that has not run on dev ([agents](agents.md#known-limits)).
 - Alternate-backend failover is not implemented.
