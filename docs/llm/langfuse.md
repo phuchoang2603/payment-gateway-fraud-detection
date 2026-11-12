@@ -51,5 +51,9 @@ The same twelve conversations (six rounds of two, the question from the prompt t
 | qwen3-4b | 12 of 12 | 37 | 13 | 8.2 s | 3.9 s | 193 | 8 | 0 |
 | qwen35-4b | 10 of 12 | 61 | 12 | 8.4 s | 4.7 s | 168 | 12 | 12 |
 
+![Langfuse model calls in the two runs](images/langfuse-model-ab.png)
+
+The Langfuse observations view, filtered to the model calls, shows the two runs as the two bursts of the evening (Qwen3-4B first, Qwen3.5-4B second) under one model name, as noted above.
+
 Latency and output length are close. The difference is behaviour: the question asks for the risk features and what the knowledge base says, and Qwen3.5-4B handed over to the risk agent in every conversation and searched the knowledge base in all of them, while Qwen3-4B never searched it and transferred in eight. Two Qwen3.5-4B conversations returned an empty response instead of a task, so completion is not a win for it. The sample is small and unscored.
 
