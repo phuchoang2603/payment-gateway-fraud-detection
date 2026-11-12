@@ -40,9 +40,9 @@ Wire schemas: [payments](../contracts/payments/v1) · [fraud](../contracts/fraud
 | Historical generator | Python; per-day synthetic history to object storage | Immutable datasets v18 (dev), v19 (prod) | Deployed |
 | Live simulator | Python; current-time gateway traffic and labels | None | Deployed; runs as a bounded Job |
 | Data pipelines (DP1, `dp-pipeline`) | Spark on the Spark Operator: Bronze, then Silver, Gold features and ClickHouse marts; checks and lineage in OpenMetadata | Iceberg tables, ClickHouse marts, run reports | Running on prod (v19 backfill) |
-| Flink streaming features, Feast writer and server | Python; window features to Redis and `gold.feat_stream_*`, stream history replay, materialization | Checkpoints, Feast Redis, stream tables | Deployed in dev; enabled in prod |
-| Training and model serving | Kubeflow Pipelines, Katib, Trainer, Model Registry, Triton on the GPU ([training](ml/training.md), [pipeline](ml/pipeline.md), [drift](ml/drift.md), [serving](ml/serving.md)) | Training-set versions, registered models | Done on dev, including drift and A/B; `ml-training` enabled in prod |
-| LLM and agent platform | vLLM on KServe, agentgateway, kagent agents on Agent Substrate, RAG pipeline and knowledge API ([LLM agents](llm/agents.md)) | Feast pgvector and Iceberg knowledge chunks, Langfuse | Deployed in dev; `llm-platform` and `rag-pipeline` enabled in prod |
+| Flink streaming features, Feast writer and server | Python; window features to Redis and `gold.feat_stream_*`, stream history replay, materialization | Checkpoints, Feast Redis, stream tables | Evidence on dev; prod is retired |
+| Training and model serving | Kubeflow Pipelines, Katib, Trainer, Model Registry, Triton on the GPU ([training](ml/training.md), [pipeline](ml/pipeline.md), [drift](ml/drift.md), [serving](ml/serving.md)) | Training-set versions, registered models | Evidence recorded on an earlier dev build, including drift and A/B; prod is retired. The current dev has `ml-training` enabled and no trained model yet |
+| LLM and agent platform | vLLM on KServe, agentgateway, kagent agents on Agent Substrate, RAG pipeline and knowledge API ([LLM agents](llm/agents.md)) | Feast pgvector and Iceberg knowledge chunks, Langfuse | Evidence on dev; prod is retired |
 
 ### Deployment view
 
@@ -153,7 +153,7 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Agent gateway | One gateway for models, MCP tools and REST APIs: per-client keys, rate and token limits, PII masking, Jev request screening, mesh-only access | [Gateway and Jev policy (novel)](llm/gateway-and-jev-policy.md) | Done on dev |
 | Agents | Global model config; the `coordinator` entry agent behind the A2A gateway with `evidence-agent` (knowledge tools) and `risk-agent` as sub-agents; sandboxed on Agent Substrate with warm start and KEDA-scaled workers; registry | [Agents](llm/agents.md) | Done on dev; a kagent UI chat transfers to `risk-agent` and uses a risk and a knowledge tool |
 | Retrieval | RAG pipeline into Iceberg and a Feast pgvector store, governed in OpenMetadata; Web API by id and MCP tools | [RAG](llm/rag.md) | Done on dev; chunks by id on `rag-api`, customer features by id on `risk-serving` |
-| Autoscaling and releases | KEDA on `rag-api`, `risk-serving` and the agent worker pool; blue-green MCP releases; Locust load test | [Autoscaling](llm/scaling.md), [MCP releases](llm/mcp-releases.md) | MCP servers done on dev; worker-pool scale-out has numbers, no capture |
+| Autoscaling and releases | KEDA on `rag-api`, `risk-serving` and the agent worker pool; blue-green MCP releases; Locust load test | [Autoscaling](llm/scaling.md), [MCP releases](llm/mcp-releases.md) | MCP servers and the worker pool done on dev; the pool scaled from 2 to 6 workers under 30 parallel conversations |
 | Prompt management | Prompts managed and versioned in Langfuse (seeded from Git); agents read them at each model call | [Langfuse](llm/langfuse.md#prompts) | Done on dev |
 | A/B tests | Prompt A/B tests per agent in Langfuse, compared per version | [Langfuse](llm/langfuse.md#ab-tests) | Prompt, per-version model-setting and model-version (Qwen3-4B against Qwen3.5-4B) tests done on dev |
 | Agent tracing | Agent traces from kagent to Langfuse, linked to prompt versions; LLM, gateway and API metrics in VictoriaMetrics with a Grafana dashboard | [Langfuse](llm/langfuse.md), [metrics](deployment/observability.md#llm-metrics) | Done on dev |
@@ -173,6 +173,6 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 
 ## Limits and scope
 
-- Open gaps: KServe serves the model from the registry rather than inside the image; the Web API has no public HTTPS hostname; and the training-set rebuild is not incremental.
+- Open gaps: the current dev has no registered `payment-risk` model, so the risk agent cannot return a score; KServe serves the model from the registry rather than inside the image; the Web API has no public HTTPS hostname; and the training-set rebuild is not incremental.
 - Synthetic data cannot establish real-world fraud-model quality. Unlabelled drift measures distribution change, not accuracy.
 - Real card custody, live processor connectivity, live money movement, settlement and reconciliation files, payouts and FX are out of scope. The gateway demonstrates PCI-oriented boundaries with synthetic data, not compliance.
