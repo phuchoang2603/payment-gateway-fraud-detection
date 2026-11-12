@@ -139,12 +139,13 @@ At 18:40 UTC on 2026-11-11 a dev chat in the kagent UI sent the coordinator a pa
 
 ![kagent chat: transfer_to_agent risk_agent, then get_risk_features with the payment's identifiers](images/risk-knowledge-chat-transfer.png)
 
-The answer lists the feature values, flags the IP and shipping country mismatch, and cites `fraud-patterns#high-value-fraud` from `get_knowledge_chunk`:
+The answer lists the feature values, flags the IP and shipping country mismatch, and cites `fraud-patterns#high-value-fraud` from `get_knowledge_chunk`. It did not call `score_payment_risk`, because dev has no served model (see Known limits):
 
 ![The answer: feature table, key observations and the cited high-value fraud chunk](images/risk-knowledge-chat-answer.png)
 
 ## Known limits
 
+- Dev has no registered `payment-risk` model, so Triton has no InferenceService and `score_payment_risk` cannot return a score there. `ml-training` is enabled on dev, but its first training set must be built from the 22-hour-old lakehouse, the build's staging pod asks for 8 GiB while the dev nodes have at most 3.3 GiB of memory left to request, and the stream features need the Flink replay that dev has off.
 - The worker-pool scale-out has no dashboard capture ([Scaling](scaling.md#limits)).
 - The chat model sometimes answers an evidence question without calling the knowledge tools; the answer then has no citation. A question that asks for the passages makes it search.
 - In one of 16 conversations sent four at a time, the first message was refused ("retry after the session becomes available"), and one UI chat lost its stream after the tool result. A retry answered both.
