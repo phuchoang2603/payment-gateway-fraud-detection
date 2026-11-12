@@ -37,7 +37,7 @@ The service level for the chunk endpoint is p95 at or below 500 ms and no failed
 | 60 | 17,323 | 9,724 (56.1%, all 502) | 58.0 | 480 ms | 2,000 ms | 2,800 ms |
 | 20 | 11,695 | 1 (0.01%) | 39.2 | 170 ms | 490 ms | 700 ms |
 
-At 60 users the Feast server reached its CPU limit and its reads exceeded the route's 5-second budget, which the API reports as 502 rather than as partial features; `risk-serving` scaled from 2 to 4 replicas and stayed near idle. At 20 users the route met a p95 of 500 ms. Through the gateway the route needs a client key sent as `Authorization: Bearer`: 401 without a key or with a wrong one, 200 with a valid one, and of 300 parallel requests with one client key 128 returned 200 and 172 returned 429 under the 120 requests per minute limit.
+At 60 users the Feast server reached its CPU limit and its reads exceeded the route's 5-second budget, which the API reports as 502 rather than as partial features; `risk-serving` scaled from 2 to 4 replicas and stayed near idle. At 20 users the route met a p95 of 500 ms ([20-user Locust report](loadtest/features-api-locust.html)). Through the gateway the route needs a client key sent as `Authorization: Bearer`: 401 without a key or with a wrong one, 200 with a valid one, and of 300 parallel requests with one client key 128 returned 200 and 172 returned 429 under the 120 requests per minute limit.
 
 ## KEDA scale-out
 
