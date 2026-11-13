@@ -7,5 +7,8 @@ database:
 ingress:
   tunnel:
     hostname: pay-gateway.phuchoang.sbs
+redis:
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
 features:
   enabled: true

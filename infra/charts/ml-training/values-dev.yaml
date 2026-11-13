@@ -9,6 +9,9 @@ drift:
   # Dev traffic is small.
   policy:
     samples: 200
+serving:
+  resources:
+    requests: {cpu: 100m, memory: 1Gi}
 experiment:
   enabled: true
   analysis:

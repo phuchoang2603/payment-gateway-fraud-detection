@@ -48,6 +48,11 @@ catalog:
 features:
   enabled: true
   driverMemory: 2g
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+  redis:
+    resources:
+      requests: {cpu: 50m, memory: 256Mi}
   materializeResources:
     requests: {cpu: 500m, memory: 3Gi, ephemeral-storage: 2Gi}
     limits: {memory: 4Gi, ephemeral-storage: 4Gi}
