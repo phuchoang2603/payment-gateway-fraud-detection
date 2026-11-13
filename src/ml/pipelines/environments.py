@@ -9,7 +9,6 @@ class Environment:
 
     name: str
     nodes: dict = field(default_factory=dict)
-    off_gpu: bool = True
     spark_cpu: str = "3"
     parallelism: int = 4
     chunk_days: int = 16
@@ -28,7 +27,6 @@ PROD = Environment(
 )
 DEV = Environment(
     name="dev",
-    off_gpu=False,
     spark_cpu="1",
     parallelism=1,
     plan=("2g", "4G"),

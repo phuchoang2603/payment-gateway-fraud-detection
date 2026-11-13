@@ -1,6 +1,6 @@
 # Pipeline
 
-**Status: dev runs done.** Three Kubeflow pipelines, all compiled from Git by `src/ml/pipelines/compile_pipelines.py` into the chart's `files/{dev,prod}` and deployed as a `Pipeline` and `PipelineVersion`. Dev runs the same chart as prod, compiled without node selectors, with smaller Spark sizes and without the rule that keeps steps off GPU nodes, since the dev workers are too small to hold the steps alone; the platform's `xgboost-gpu-distributed` runtime selects the local GPU there. Screenshots come from `kubeflow.phuchoang.sbs`.
+**Status: dev runs done.** Three Kubeflow pipelines, all compiled from Git by `src/ml/pipelines/compile_pipelines.py` into the chart's `files/{dev,prod}` and deployed as a `Pipeline` and `PipelineVersion`. Dev runs the same chart as prod, compiled without node selectors and with smaller Spark sizes; the platform's `xgboost-gpu-distributed` runtime selects the local GPU there. Screenshots come from `kubeflow.phuchoang.sbs`.
 
 | Pipeline | Does | Started by |
 |---|---|---|

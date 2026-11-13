@@ -49,7 +49,6 @@ def payment_risk_training(environment):
             return configure(
                 task,
                 nodes=environment.nodes,
-                off_gpu=environment.off_gpu,
                 cpu="1",
                 memory=environment.light_memory,
                 retries=2,
@@ -78,7 +77,6 @@ def payment_risk_training(environment):
             def spark(sizes):
                 return {
                     "nodes": environment.nodes,
-                    "off_gpu": environment.off_gpu,
                     "cpu": environment.spark_cpu,
                     "heap": sizes[0],
                     "memory": sizes[1],
@@ -127,7 +125,6 @@ def payment_risk_training(environment):
                     trials=tune_trials,
                 ),
                 nodes=environment.nodes,
-                off_gpu=environment.off_gpu,
                 storage=False,
             ).after(split)
             params, experiment = tuned.outputs["params"], tuned.outputs["experiment"]
@@ -140,7 +137,6 @@ def payment_risk_training(environment):
                     params=params,
                 ),
                 nodes=environment.nodes,
-                off_gpu=environment.off_gpu,
                 storage=False,
             )
             verdict = light(
@@ -155,7 +151,6 @@ def payment_risk_training(environment):
             configure(
                 publish_metrics(summary=verdict.outputs["summary"]),
                 nodes=environment.nodes,
-                off_gpu=environment.off_gpu,
                 storage=False,
             )
             with dsl.If(verdict.outputs["passed"] == "true", name="passed"):
@@ -171,7 +166,6 @@ def payment_risk_training(environment):
                         trigger=trigger,
                     ),
                     nodes=environment.nodes,
-                    off_gpu=environment.off_gpu,
                 )
                 configure(
                     roll_out(
@@ -180,7 +174,6 @@ def payment_risk_training(environment):
                         role=role,
                     ),
                     nodes=environment.nodes,
-                    off_gpu=environment.off_gpu,
                     storage=False,
                 )
 
