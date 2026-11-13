@@ -1295,10 +1295,6 @@ platforms:
           - mountPath: /tmp/spark
             sizeLimit: 24Gi
             volumeName: spill
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1366,10 +1362,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1437,10 +1429,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
         exec-gate:
           configMapAsEnv:
           - configMapName: ml-training-config
@@ -1489,10 +1477,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1564,10 +1548,6 @@ platforms:
           - mountPath: /tmp/spark
             sizeLimit: 24Gi
             volumeName: spill
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1635,10 +1615,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1706,10 +1682,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
         exec-record-version:
           configMapAsEnv:
           - configMapName: ml-training-config
@@ -1758,10 +1730,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1829,10 +1797,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
         exec-split-windows:
           configMapAsEnv:
           - configMapName: ml-training-config
@@ -1881,10 +1845,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -1956,10 +1916,6 @@ platforms:
           - mountPath: /tmp/spark
             sizeLimit: 24Gi
             volumeName: spill
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
@@ -2027,7 +1983,3 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist

@@ -28,9 +28,6 @@ CONFIG_KEYS = (
 )
 
 
-OFF_GPU = [{"key": "nvidia.com/gpu.present", "operator": "DoesNotExist"}]
-
-
 def step(name, values, outputs=()):
     """Returns the container spec that runs one step.
 
@@ -212,11 +209,7 @@ def promote_challenger(run_id: str, steps_percent: str, promoted: dsl.OutputPath
 
 
 def configure(task, *, nodes, memory="1G", cpu="250m", storage=True, retries=0):
-    """Sets a step's caching, retries, resources, environment, credentials and placement.
-
-    No pipeline step scores or trains: those run in GPU jobs. So every step is kept off GPU nodes, where
-    its CPU request would starve the GPU job it launches.
-    """
+    """Sets a step's caching, retries, resources, environment, credentials and placement."""
     task.set_caching_options(False)
     if retries:
         task.set_retry(num_retries=retries, backoff_duration="30s")
@@ -238,7 +231,6 @@ def configure(task, *, nodes, memory="1G", cpu="250m", storage=True, retries=0):
         )
     for key, value in nodes.items():
         kubernetes.add_node_selector(task, key, value)
-    kubernetes.add_node_affinity(task, match_expressions=OFF_GPU)
     return task
 
 

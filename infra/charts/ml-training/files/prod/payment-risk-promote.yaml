@@ -122,10 +122,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
