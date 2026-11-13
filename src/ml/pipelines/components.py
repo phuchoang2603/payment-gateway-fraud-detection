@@ -211,11 +211,11 @@ def promote_challenger(run_id: str, steps_percent: str, promoted: dsl.OutputPath
     return step("promote_challenger", locals(), ("promoted",))
 
 
-def configure(task, *, nodes, memory="1G", cpu="250m", storage=True, retries=0):
+def configure(task, *, nodes, off_gpu=True, memory="1G", cpu="250m", storage=True, retries=0):
     """Sets a step's caching, retries, resources, environment, credentials and placement.
 
-    No pipeline step scores or trains: those run in GPU jobs. So every step is kept off GPU nodes, where
-    its CPU request would starve the GPU job it launches.
+    No pipeline step scores or trains: those run in GPU jobs. So where `off_gpu` is set, every step is kept
+    off GPU nodes, where its CPU request would starve the GPU job it launches.
     """
     task.set_caching_options(False)
     if retries:
@@ -238,13 +238,14 @@ def configure(task, *, nodes, memory="1G", cpu="250m", storage=True, retries=0):
         )
     for key, value in nodes.items():
         kubernetes.add_node_selector(task, key, value)
-    kubernetes.add_node_affinity(task, match_expressions=OFF_GPU)
+    if off_gpu:
+        kubernetes.add_node_affinity(task, match_expressions=OFF_GPU)
     return task
 
 
-def spark_task(task, *, nodes, cpu, heap, memory):
+def spark_task(task, *, nodes, off_gpu, cpu, heap, memory):
     """Configures a step that runs local Spark on `cpu` cores with a driver heap and a spill volume."""
-    configure(task, nodes=nodes, cpu=cpu, memory=memory, retries=2)
+    configure(task, nodes=nodes, off_gpu=off_gpu, cpu=cpu, memory=memory, retries=2)
     task.set_env_variable("SPARK_MASTER", f"local[{cpu}]")
     task.set_env_variable("PYSPARK_SUBMIT_ARGS", f"--driver-memory {heap} pyspark-shell")
     task.set_env_variable("SPARK_LOCAL_DIR", "/tmp/spark")

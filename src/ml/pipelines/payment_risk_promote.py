@@ -16,6 +16,7 @@ def payment_risk_promote(environment):
         configure(
             promote_challenger(run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER, steps_percent=steps_percent),
             nodes=environment.nodes,
+            off_gpu=environment.off_gpu,
             storage=False,
         )
 

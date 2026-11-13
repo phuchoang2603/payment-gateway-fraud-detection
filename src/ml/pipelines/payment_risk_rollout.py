@@ -16,6 +16,7 @@ def payment_risk_rollout(environment):
         configure(
             roll_out(run_id=dsl.PIPELINE_JOB_ID_PLACEHOLDER, version=version, role=role),
             nodes=environment.nodes,
+            off_gpu=environment.off_gpu,
             storage=False,
         )
 
