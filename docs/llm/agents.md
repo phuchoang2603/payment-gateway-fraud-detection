@@ -147,12 +147,20 @@ At 18:40 UTC on 2026-11-11 a dev chat in the kagent UI sent the coordinator a pa
 
 ![kagent chat: transfer_to_agent risk_agent, then get_risk_features with the payment's identifiers](images/risk-knowledge-chat-transfer.png)
 
-The answer lists the feature values, flags the IP and shipping country mismatch, and cites `fraud-patterns#high-value-fraud` from `get_knowledge_chunk`. It did not call `score_payment_risk`, because dev has no served model (see Known limits):
+The answer lists the feature values, flags the IP and shipping country mismatch, and cites `fraud-patterns#high-value-fraud` from `get_knowledge_chunk`. It did not call `score_payment_risk`, because dev had no served model that day:
 
 ![The answer: feature table, key observations and the cited high-value fraud chunk](images/risk-knowledge-chat-answer.png)
 
+On 2026-11-13 dev served `payment-risk` v1, trained on 2026-08-06..2026-10-29 with test PR-AUC 0.8851. A chat sent the coordinator a customer, a fingerprint and an amount of 30082 minor units. It transferred to `risk_agent`, which called `score_payment_risk` and `search_knowledge`:
+
+![kagent chat: transfer_to_agent risk_agent, then score_payment_risk with the analyst's identifiers](images/risk-score-chat-transfer.png)
+
+The answer reports a score of 0.0658 from model version 1 against the decline threshold 0.7737, lists the drivers with the caveat that they are not attributions, and cites `decline-codes#high-amount`:
+
+![The answer: score 0.0658, threshold 0.7737, drivers and the cited high-amount decline chunk](images/risk-score-chat-answer.png)
+
 ## Known limits
 
-- Dev has no registered `payment-risk` model, so Triton has no InferenceService and `score_payment_risk` cannot return a score there. `ml-training` is enabled on dev, but its first training set must be built from the 22-hour-old lakehouse, the build's staging pod asks for 8 GiB while the dev nodes have at most 3.3 GiB of memory left to request, and the stream features need the Flink replay that dev has off.
+- A new agent session restores from a Substrate snapshot with a 10-second limit. On a dev worker node under heavy load the restore exceeds it and the first message is refused; a new chat usually lands on another node.
 - The chat model sometimes answers an evidence question without calling the knowledge tools; the answer then has no citation. A question that asks for the passages makes it search.
 - In one of 16 conversations sent four at a time, the first message was refused ("retry after the session becomes available"), and one UI chat lost its stream after the tool result. A retry answered both.

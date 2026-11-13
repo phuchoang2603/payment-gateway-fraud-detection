@@ -173,6 +173,6 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 
 ## Limits and scope
 
-- Open gaps: the current dev has no registered `payment-risk` model, so the risk agent cannot return a score; KServe serves the model from the registry rather than inside the image; the Web API has no public HTTPS hostname; and the training-set rebuild is not incremental.
+- Open gaps: KServe serves the model from the registry rather than inside the image; the Web API has no public HTTPS hostname; and the training-set rebuild is not incremental.
 - Synthetic data cannot establish real-world fraud-model quality. Unlabelled drift measures distribution change, not accuracy.
 - Real card custody, live processor connectivity, live money movement, settlement and reconciliation files, payouts and FX are out of scope. The gateway demonstrates PCI-oriented boundaries with synthetic data, not compliance.
