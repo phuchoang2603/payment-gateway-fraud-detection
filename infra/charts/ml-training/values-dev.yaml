@@ -4,15 +4,15 @@ global:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/drift: dev
 environment: dev
 notebook:
+  enabled: false
   storageClass: local-path
 drift:
-  # Dev replays 2026-09-02 to 2026-10-27, so the windows are shorter than prod's, and traffic is small.
+  # Dev traffic is small.
   policy:
     samples: 200
-  windows:
-    trainDays: 36
-    validationDays: 9
-    testDays: 9
+serving:
+  resources:
+    requests: {cpu: 100m, memory: 1Gi}
 experiment:
   enabled: true
   analysis:

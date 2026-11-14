@@ -5,6 +5,10 @@
 // {"abTest": {"label": "variant-b", "share": 0.5}}. Each conversation falls on
 // one side by a hash of its session id, so it keeps its variant for every
 // model call, and the call is linked to the chosen version in Langfuse.
+//
+// A prompt version's config may also carry model settings,
+// {"model": {"temperature": 0.2, "topP": 0.9, "maxTokens": 256}}, so a variant
+// can differ by sampling as well as by text.
 package langfuse
 
 import (
@@ -27,8 +31,15 @@ type ABTest struct {
 	Share *float64 `json:"share"`
 }
 
+type ModelSettings struct {
+	Temperature *float64 `json:"temperature"`
+	TopP        *float64 `json:"topP"`
+	MaxTokens   *int64   `json:"maxTokens"`
+}
+
 type Config struct {
-	ABTest *ABTest `json:"abTest"`
+	ABTest *ABTest        `json:"abTest"`
+	Model  *ModelSettings `json:"model"`
 }
 
 type Prompt struct {

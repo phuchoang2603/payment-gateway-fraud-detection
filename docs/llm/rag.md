@@ -66,7 +66,7 @@ One FastAPI process serves both, so there is one deployment, one reader identity
 
 | Interface | Endpoint | Purpose |
 |---|---|---|
-| REST (`/v1`, routed as `/knowledge/v1` at the gateway) | `GET /v1/chunks/{chunk_id}` | The data-pull Web API: retrieval by id, with pydantic models and path validation; later also customer features by id |
+| REST (`/v1`, routed as `/knowledge/v1` at the gateway) | `GET /v1/chunks/{chunk_id}` | The data-pull Web API: retrieval by id, with pydantic models and path validation. Customer features by id are served by `risk-serving` ([scaling](scaling.md#customer-features-api)) |
 | MCP (`/mcp`, routed as `/mcp/knowledge`) | `search_knowledge(query, top_k, audience)`, `get_knowledge_chunk(chunk_id)` | The agents' tools. Search embeds the question through the gateway and runs the HNSW query; it exists only as a tool because its callers are agents |
 | Health | `/healthz` (liveness), `/readyz` (database reachable) | Kubernetes probes; readiness does not wait for a knowledge version, so the first deploy is not blocked by the pipeline |
 | Metrics | `/metrics` | REST requests by path and status, MCP tool calls by tool and outcome |
@@ -79,7 +79,7 @@ One FastAPI process serves both, so there is one deployment, one reader identity
 
 Both environments render an Argo Rollout with active and preview Services, readiness gating and a bounded pre-promotion MCP check. A PodDisruptionBudget keeps one replica available, and KEDA owns the desired count. Callers retain mesh identity through the fixed active Service.
 
-[`app.py`](../../src/llm/rag_serving/fraud_rag_serving/app.py) implements async MCP tools with a shared `httpx.AsyncClient`, thread-offloaded Feast calls and locked lazy initialization. [`api.yaml`](../../infra/charts/rag-pipeline/templates/api.yaml) owns blue-green release/readiness; [`mcp.yaml`](../../infra/charts/llm-platform/templates/mcp.yaml) owns gateway routing. A failed candidate analysis retains the active revision; the shared blue-green gate and dev results are in [MCP servers](scaling.md#blue-green-releases). Alternate-backend failover is not implemented. The load test below measures request handling/scaling, not failed-rollout recovery.
+[`app.py`](../../src/llm/rag_serving/fraud_rag_serving/app.py) implements async MCP tools with a shared `httpx.AsyncClient`, thread-offloaded Feast calls and locked lazy initialization. [`api.yaml`](../../infra/charts/rag-pipeline/templates/api.yaml) owns blue-green release/readiness; [`mcp.yaml`](../../infra/charts/llm-platform/templates/mcp.yaml) owns gateway routing. A failed candidate analysis retains the active revision; the gate and its dev results are on [MCP releases](mcp-releases.md).
 
 ### Checks through the gateway
 
@@ -87,20 +87,19 @@ Both environments render an Argo Rollout with active and preview Services, readi
 GET /knowledge/v1/chunks/decline-codes%23new-account-geo-mismatch  →  200 {"chunk_id": "decline-codes#new-account-geo-mismatch", "title": "Decline and reason-code glossary", ...}
 GET /knowledge/v1/chunks/decline-codes%23missing                   →  404 {"detail":"unknown chunk_id"}
 GET /knowledge/v1/chunks/not-a-chunk-id                            →  422 string_pattern_mismatch on path.chunk_id
-no key                                                             →  401
-160 requests at once with one client's key                         →  140 × 200, 20 × 429
 ```
 
-MCP discovery, authentication and mesh results are in the [gateway checks](gateway-and-jev-policy.md#checks-on-dev).
-
-### Load test, scaling and releases
-
-The Locust run, its service level, KEDA scale-out and blue-green dev captures of `rag-api` are in [Scaling](scaling.md).
+Authentication, rate limits, MCP discovery and mesh results are owned by the [gateway checks](gateway-and-jev-policy.md#checks-on-dev). Throughput, latency and KEDA scale-out are on [Autoscaling and load test](scaling.md), and blue-green releases on [MCP releases](mcp-releases.md).
 
 ### Tests
 
-[`src/llm/rag_serving/tests/test_service.py`](../../src/llm/rag_serving/tests/test_service.py) uses pytest fixtures and mocks for the store and the embedding client (a fake embedder counts gateway calls, the store functions are monkeypatched), and covers the REST paths (200, 404, 422), the MCP tools, validation before any gateway call, readiness, lazy loading, metrics and the app lifespan. The serving member enforces `--cov-fail-under=90`; in CI (Python CI run 41112821278, job `src/llm/rag_serving`, commit 724831f): 14 passed, 98.52% coverage.
+[`src/llm/rag_serving/tests/test_service.py`](../../src/llm/rag_serving/tests/test_service.py) uses pytest fixtures and mocks for the store and the embedding client (a fake embedder counts gateway calls, the store functions are monkeypatched), and covers the REST paths (200, 404, 422), the MCP tools, validation before any gateway call, readiness, lazy loading, metrics and the app lifespan. The serving member enforces `--cov-fail-under=90`; coverage and mutation results are on [CI](../deployment/ci.md#coverage-and-mutation-testing).
 
 ## CI/CD
 
 The `rag-pipeline` and `rag-serving` images use the shared [CI](../deployment/ci.md) and [release flow](../deployment/cd.md#release-flow). Argo CD reconciles the chart; Argo Workflows runs the knowledge pipeline ([recorded run](#a-complete-run-on-dev)).
+
+## Limits
+
+- The Web API on `rag-api` serves chunks by id only; the customer features route is on `risk-serving`.
+- Alternate-backend failover is not implemented.

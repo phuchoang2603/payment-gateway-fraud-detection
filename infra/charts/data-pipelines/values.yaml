@@ -337,6 +337,8 @@ features:
     - feast-server
     - data-pipelines
   streaming:
+    # False skips the live Flink job; batch features still materialize and serve.
+    enabled: true
     sourceTopic: payments.events.v1
     sourcePartitions: 3
     maxEntityEntries: 50000

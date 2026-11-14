@@ -22,7 +22,7 @@ Bucket names have no meaning to application code: workloads receive `S3_ENDPOINT
 
 ## Lakehouse
 
-On a fresh bucket, initialize `runs/payment-gateway/spark-events/` with a hidden `.keep` object before submitting Spark: its event logger requires an existing directory prefix.
+Spark's event logger requires an existing directory prefix, so `batch.spark.session` writes a hidden `.keep` object under `sparkEventLogDir` through the batch `Store` before it starts the Spark context, on a fresh bucket as on an existing one.
 
 Tables are Iceberg, registered in the Polaris REST catalog that the `lakehouse` chart deploys. Spark writes them; ClickHouse reads them through a DataLakeCatalog database.
 
@@ -32,33 +32,85 @@ The recorded AWS v19 backfill held Bronze in full, and Silver and Gold from 2025
 |---|---|---|
 | Partitioning | Bronze by `_source` and `days(occurred_at)` (labels by `days(label_available_at)`); Silver by `payment_day` (labels by availability day); Gold by day of `event_timestamp`, `dim_customer` by month | One-day and one-month reads touch only their partitions |
 | Write order | Silver events by `occurred_at` and attempts by `started_at` within each file (`WRITE LOCALLY ORDERED BY`) | File min/max statistics prune time filters inside a day, for Spark and ClickHouse alike |
-| Write distribution | `write.distribution-mode=hash` and a target file size on every table, except the historical Bronze and Silver event writes, which use `distribution-mode=none` with the fanout writer | Without it, each Spark task writes one small file per partition it touches. Historical files hold one purchase day each and Silver reads Bronze files back, so those tasks already touch only a few day partitions; at v19 the hash shuffle cost about 217 GB of executor disk for no extra clustering |
-| Compaction | Bronze, the files of the last 3 days of Kafka appends | Kafka runs append small files; `rewrite_data_files` with `binpack` and an `_ingested_at` filter merges only those. Silver and Gold need none: every run rewrites whole day partitions at the 256 MB target |
-| Z-order | `silver.attempts` by `customer_id` and `payment_method_fingerprint`, one month at a time, on demand (`maintain-lakehouse task=zorder start end`) | Feature queries filter one customer or card over a window; clustering lets file statistics skip files. The report compares one customer's planned files and bytes for that month before and after |
-| Maintenance | All tables, nightly | `expire_snapshots` (older than 7 days, last 10 kept) and dropping `audit-*` branches older than 7 days, which would otherwise pin their files; no full-table rewrites, so its cost does not grow with history |
+| Write distribution | `write.distribution-mode=hash` and a target file size on every table, except the historical Bronze and Silver event writes, which use `distribution-mode=none` with the fanout writer | Fewer small files per partition; skipped where input is already day-aligned ([details](#write-distribution)) |
+| Compaction | Bronze and the stream feature tables, the files of the last 3 days of appends | Appends leave small files; `binpack` merges only recent ones. Silver and Gold need none: every run rewrites whole day partitions at the 256 MB target |
+| Z-order | `silver.attempts` by `customer_id` and `payment_method_fingerprint`, one month, on demand (`maintain-lakehouse task=zorder start end`) | Cluster one customer or card's rows so file statistics can skip files; measured, not adopted |
+| Maintenance | All tables, nightly | Expire snapshots older than 7 days (last 10 kept) and drop stale `audit-*` branches; no full-table rewrites |
 
-**Recorded AWS evidence (v19, `maintain-lakehouse-zorder-8z67x`, 2026-11-01).**
+Code: catalog and table setup in [`spark.py`](../../src/data-pipeline/batch/batch/spark.py) and [`lakehouse.py`](../../src/data-pipeline/batch/batch/lakehouse.py), maintenance in [`maintenance.py`](../../src/data-pipeline/batch/batch/maintenance.py). Spark merges evolving Parquet schemas and deduplicates canonical events by `event_id` before writing Silver.
 
-- **Partitioning prunes:** one Bronze day (2025-10-29) plans 4 of 2,904 files and 282 MB of 113.7 GB.
-- **Z-order does not prune at this layout:** September 2026 of `silver.attempts` was rewritten with `zorder(customer_id, payment_method_fingerprint)` in 70 seconds, and the month's busiest customer still plans all 30 files (2.50 GB before, 2.52 GB after). Each day partition is one file under the 256 MB target, so the customer appears in every file and file statistics cannot skip any; clustering only helps once a partition spans several files, or through Parquet row-group statistics, which planning does not count. Silver therefore keeps its time order and is not Z-ordered on a schedule.
+### Partitioning and pruning
 
-Kafka offsets are derived from the Bronze rows themselves, not from snapshot metadata, so compaction and snapshot expiry never lose ingestion progress.
+Tables are created with a day partition, a 256 MB target file size and write–audit–publish enabled; Silver then declares a local write order so each file's min/max statistics cover a narrow time range ([`lakehouse.py`](../../src/data-pipeline/batch/batch/lakehouse.py), [`bronze/ingest.py`](../../src/data-pipeline/batch/batch/bronze/ingest.py)):
 
-`maintain-lakehouse` (task `nightly`) runs from a daily 03:43 UTC CronWorkflow (enabled in prod, suspended in dev) and holds `dp-writer` and `dp1-bronze-writer`, so it never commits alongside a pipeline run. It reports before/after files and bytes per table and the branches it dropped; task `zorder` is the on-demand storage evidence.
+```python
+TARGET_FILE_BYTES = 256 * 1024 * 1024
+TABLE_PROPERTIES = (
+    f"TBLPROPERTIES ('write.distribution-mode' = 'hash', 'write.target-file-size-bytes' = '{TARGET_FILE_BYTES}', "
+    "'write.wap.enabled' = 'true')"
+)
+# Bronze events (ingest.py)
+f"PARTITIONED BY (_source, days(occurred_at)) {TABLE_PROPERTIES}"
+# Silver tables (lakehouse.py)
+spark.sql(f"ALTER TABLE {name} WRITE LOCALLY ORDERED BY {order}")
+```
 
-### Implementation references
-
-Catalog/session setup: [`spark.py`](../../src/data-pipeline/batch/batch/spark.py). Table properties and branch writes: [`lakehouse.py`](../../src/data-pipeline/batch/batch/lakehouse.py). Maintenance: [`maintenance.py`](../../src/data-pipeline/batch/batch/maintenance.py). Mart DDL/build: [`gold/sql/marts`](../../src/data-pipeline/batch/batch/gold/sql/marts), [`gold/marts.py`](../../src/data-pipeline/batch/batch/gold/marts.py). Spark merges evolving Parquet schemas and deduplicates canonical events by `event_id` before writing Silver.
+Without a partition a one-day read lists every file; with it Iceberg plans only that day's files. On the recorded AWS v19 backfill (`maintain-lakehouse-zorder-8z67x`, 2026-11-01), one Bronze day (2025-10-29) plans **4 of 2,904 files and 282 MB of 113.7 GB**.
 
 ### Write distribution
 
-These retained Spark UI captures are from the actual AWS `dp1-bronze-historical` attempts on 2026-10-30. Before the fanout change, the `write payment_events` stage shows **202.3 GiB of shuffle write**, followed by retry attempts.
+The default `hash` distribution shuffles rows so each task writes one file per partition it owns. That is the right default for Kafka appends and the daily Gold rewrite, but historical source files already hold one purchase day each, so their tasks touch only a few partitions. Those two writers opt out and write in place:
+
+```python
+LOCAL_WRITE_OPTIONS = {"distribution-mode": "none", "fanout-enabled": "true"}
+```
+
+The retained Spark UI captures are the actual AWS `dp1-bronze-historical` attempts on 2026-10-30. Before the change, the `write payment_events` stage shows **202.3 GiB of shuffle write**, followed by retry attempts:
 
 ![Spark UI before local fanout: payment-event write creates 202.3 GiB of shuffle](images/spark-dp1-hash-write-stages.png)
 
-The later successful run shows `write payment_events` reading **105.9 GiB** with no shuffle read/write recorded for that stage; all 1,428 tasks completed. The earlier attempt retried; the captures show different stages and byte categories.
+The later successful run shows `write payment_events` reading **105.9 GiB** with no shuffle read or write for that stage; all 1,428 tasks completed. At v19 the hash shuffle had cost about 217 GB of executor disk for no extra clustering. The two captures show different stages and byte categories.
 
 ![Spark UI after local fanout: successful payment-event write without a shuffle](images/spark-dp1-stages.png)
+
+### Compaction and snapshot maintenance
+
+Kafka runs append small files to Bronze, so the nightly job bin-packs only files appended in the last three days (Bronze and the stream feature tables) and expires old snapshots and abandoned audit branches. Silver and Gold are not compacted because every run rewrites whole day partitions at the target size ([`maintenance.py`](../../src/data-pipeline/batch/batch/maintenance.py)):
+
+```python
+def compact_call(table: str, since: datetime) -> str:
+    column = "event_timestamp" if table in STREAM_TABLES else "_ingested_at"
+    return (
+        f"CALL {ICEBERG_CATALOG}.system.rewrite_data_files(table => '{table}', strategy => 'binpack', "
+        f"where => \"{column} >= TIMESTAMP '{sql_time(since)}'\", "
+        f"options => map('target-file-size-bytes', '{TARGET_FILE_BYTES}'))"
+    )
+...
+spark.sql(
+    f"CALL {ICEBERG_CATALOG}.system.expire_snapshots(table => '{table}', "
+    f"older_than => TIMESTAMP '{sql_time(cutoff)}', retain_last => {RETAIN_SNAPSHOTS})"
+)
+```
+
+The `where` filter keeps the rewrite proportional to recent ingestion instead of table size, and dropping `audit-*` branches releases the files they pin. Each `maintain-lakehouse` report records files and bytes per table before and after; this page holds no recorded before/after figures for the Bronze compaction, so the compaction gain is not quantified here. Kafka offsets are derived from the Bronze rows themselves, not from snapshot metadata, so compaction and snapshot expiry never lose ingestion progress.
+
+`maintain-lakehouse` (task `nightly`) runs from a daily 03:43 UTC CronWorkflow (enabled in prod, suspended in dev) and holds `dp-writer` and `dp1-bronze-writer`, so it never commits alongside a pipeline run.
+
+### Z-order
+
+Feature queries filter one customer or card over a window, so the on-demand `zorder` task rewrites one month of `silver.attempts` sorted on those columns and compares what Iceberg's planner selects for the month's busiest customer before and after:
+
+```python
+report["before"] = planned(spark, table, window)
+spark.sql(
+    f"CALL {ICEBERG_CATALOG}.system.rewrite_data_files(table => '{table}', strategy => 'sort', "
+    f"sort_order => 'zorder(customer_id,payment_method_fingerprint)', where => \"{silver.PAYMENT_DAY} BETWEEN DATE '{first}' AND DATE '{last}'\", "
+    f"options => map('target-file-size-bytes', '{TARGET_FILE_BYTES}', 'rewrite-all', 'true'))"
+).collect()
+report["after"] = planned(spark, table, window)
+```
+
+September 2026 was rewritten in 70 seconds and the busiest customer still plans all 30 files (2.50 GB before, 2.52 GB after). Each day partition is one file under the 256 MB target, so the customer appears in every file and file statistics cannot skip any. Clustering helps only once a partition spans several files, or through Parquet row-group statistics, which planning does not count. Silver therefore keeps its time order and is not Z-ordered on a schedule.
 
 ## Warehouse
 
@@ -97,6 +149,29 @@ DP3 builds two native MergeTree marts in the ClickHouse `marts` database ([DDL](
 | Bloom filters, `GRANULARITY 4` | `customer_id`, `payment_method_fingerprint` | Q2 one customer's 30 days, Q3 one card across customers |
 | `minmax`, `set(8)` | `risk_score`, `outcome` | Q4 approved high-risk attempts and declines by outcome |
 | `fact_merchant_day` | monthly partitions, `(integration_id, day, merchant_id)` | Q5 daily KPIs without scanning attempts |
+
+The structures are declared in [`fact_payment_attempt.sql`](../../src/data-pipeline/batch/batch/gold/sql/marts/fact_payment_attempt.sql) (abridged):
+
+```sql
+CREATE TABLE {if_not_exists}{table} (
+  customer_id String CODEC(ZSTD(3)),
+  payment_method_fingerprint String CODEC(ZSTD(3)),
+  started_at DateTime64(6, 'UTC'),
+  risk_score Nullable(Float64),
+  outcome LowCardinality(String),
+  -- ... other columns
+  INDEX ix_customer customer_id TYPE bloom_filter(0.01) GRANULARITY 4,
+  INDEX ix_method payment_method_fingerprint TYPE bloom_filter(0.01) GRANULARITY 4,
+  INDEX ix_score risk_score TYPE minmax GRANULARITY 4,
+  INDEX ix_outcome outcome TYPE set(8) GRANULARITY 4
+) ENGINE = MergeTree
+PARTITION BY toDate(started_at)
+ORDER BY (integration_id, toDate(started_at), merchant_id, started_at)
+TTL toDateTime(started_at) + INTERVAL {retention_days} DAY DELETE
+SETTINGS ttl_only_drop_parts = 1
+```
+
+Without these, a card lookup reads every granule of the window; the measured gain is in the query table below.
 
 Time comes first because almost every dashboard and tool query has a time range; a merchant-first key would make network-wide time queries scan every partition. The hot merchant holds about half of all attempts, so Q1 is reported for it and for a median merchant. No projections: a customer-ordered copy would double storage on the 30 GiB volume shared with Langfuse.
 

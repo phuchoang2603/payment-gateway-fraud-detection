@@ -1,5 +1,6 @@
 {{- $gateway := .Values.gateway }}
 {{- $chat := .Values.models.chat }}
+{{- $candidate := .Values.models.candidate }}
 {{- $embedding := .Values.models.embedding }}
 {{- $decision := .Values.models.decision }}
 {{- $screening := $gateway.screening }}
@@ -205,6 +206,13 @@ spec:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
           name: {{ $chat.name }}
+          {{- if $candidate.enabled }}
+          weight: {{ sub 100 ($candidate.weight | int) }}
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: {{ $candidate.name }}
+          weight: {{ $candidate.weight }}
+          {{- end }}
       timeouts:
         request: 300s
 ---

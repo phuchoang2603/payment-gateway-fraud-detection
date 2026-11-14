@@ -127,6 +127,7 @@ spec:
               - cluster.local/ns/{{ .Release.Namespace }}/sa/{{ .Values.gateway.name }}
               - {{ .Values.metricsAgent }}
               - cluster.local/ns/{{ .Release.Namespace }}/sa/risk-serving-analysis
+              - cluster.local/ns/{{ .Release.Namespace }}/sa/llm-benchmark
       to:
         - operation:
             ports: [{{ $risk.port | quote }}]

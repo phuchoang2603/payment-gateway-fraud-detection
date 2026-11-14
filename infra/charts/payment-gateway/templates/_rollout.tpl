@@ -20,6 +20,7 @@ strategy:
     steps:
       {{- range .Values.rollout.weights }}
       - setWeight: {{ . }}
+      {{- if $.Values.rollout.analysis.enabled }}
       - analysis:
           templates:
             - templateName: edge-checkout
@@ -27,5 +28,6 @@ strategy:
             - name: revision
               valueFrom:
                 podTemplateHashValue: Latest
+      {{- end }}
       {{- end }}
 {{- end -}}

@@ -31,4 +31,38 @@ The seeds give every agent a variant that adds one instruction to its prompt. Th
 | v3 | production | 6.824 s | 271 | 5 |
 | v4 | variant-b | 1 min 13 s | 337 | 2 |
 
-These are model-call samples from dev conversations, with different inputs and no controlled workload or answer-quality scores. They demonstrate version comparison in Langfuse, not a winning variant. The LLM-version A/B remains on hold.
+A version's config may also carry model settings, `{"model": {"temperature": 0.1, "topP": 0.5, "maxTokens": 160}}`, so a variant can differ by sampling as well as by text; a setting left out keeps the `ModelConfig`'s value. kagent's OpenAI path sends only the `ModelConfig`'s settings and ignores the request's generation config, so the runtime writes the chosen version's values through the pointers the model reads, for the settings the `ModelConfig` sets (temperature, topP and maxTokens). The runtime's tests check this against kagent's own model constructor. On dev, `risk-agent-system-prompt` v5 (`variant-b`) carries `{"model": {"temperature": 0.1, "topP": 0.5, "maxTokens": 384}}` against v3 (`production`) on the `ModelConfig`'s 0.7, 0.8 and 1024. Twelve conversations of the same question with varying amounts reached the model; the gateway saw 17 calls with the variant's settings, equal to the 17 v5 generations in Langfuse, and the rest with the baseline:
+
+| Version | Label | Model calls | Traces | Mean latency | Mean output tokens | Max output tokens |
+|---|---|---|---|---|---|---|
+| v3 | production | 22 | 5 | 12.5 s | 223 | 622 |
+| v5 | variant-b | 17 | 5 | 6.7 s | 220 | 371 |
+
+These are model-call samples from dev conversations, with different inputs and no answer-quality scores. They demonstrate version comparison in Langfuse, not a winning variant.
+
+Langfuse's own metrics view for the prompt sums every run since the versions were published, including the model-version runs below. It lists v3 (`production`) with 90 generations, median latency 5.2 s and median output 219 tokens, and v5 (`variant-b`) with 48, 4.9 s and 206:
+
+![Langfuse prompt metrics for risk-agent-system-prompt: v3 production and v5 variant-b](images/langfuse-prompt-metrics-v3-v5.png)
+
+### Model versions
+
+The chat model has an A/B candidate: Qwen3-4B-Instruct-2507 in FP8 (`qwen3-4b`) against the served Qwen3.5-4B in FP8 (`qwen35-4b`), the same size and precision, so the difference is the model generation. The candidate is the `models.candidate` block in the [`llm-platform` values](../../infra/charts/llm-platform/values.yaml) and a gateway backend weighted by `weight`. The two do not fit the dev GPU together: with the chat server cut to 0.36 of the card, vLLM's startup profiling left no memory for its cache and the pod crash-looped. On dev they take turns on the full `llm-gpu` claim with the same settings (0.72 of the card, 32k context, 32 sequences, FP8 KV cache); one is stopped while the other serves.
+
+The weighted split is built and renders at 50/50, but the two servers could not run together, so this comparison is by time window and not a live traffic split: the Qwen3-4B run finished before the Qwen3.5-4B run began, and the route sent every request to whichever server was up. The same twelve conversations (six rounds of two, the question from the prompt test with varying amounts) ran in each window. Langfuse records the model the agent requests, `qwen35-4b` from the `ModelConfig` in both runs, so it cannot tell the windows apart by model. The model that answered is the gateway's `gen_ai_response_model` label, charted per window below; the windows do not overlap, and the gateway's counts, 37 and 69 model calls, equal Langfuse's counts for the same windows.
+
+![Gateway chat requests per served model: qwen3-4b first, then qwen35-4b](images/gateway-served-model-windows.png)
+
+A trace cannot record the response's model without a change in kagent: the ADK ends the `generate_content` span before any plugin callback runs, and kagent builds its model with no hook to wrap.
+
+| Model | Conversations completed | Model calls | Traces | Mean latency | Median latency | Mean output tokens | `transfer_to_agent` | `search_knowledge` | `ask_user` |
+|---|---|---|---|---|---|---|---|---|---|
+| qwen3-4b | 12 of 12 | 37 | 13 | 8.2 s | 3.9 s | 193 | 8 | 0 | 0 |
+| qwen35-4b | 10 of 12 | 69 | 13 | 7.8 s | 4.1 s | 165 | 13 | 12 | 6 |
+
+The Langfuse observations view, filtered to the model calls and to each run's time window (UTC, in the filter bar), shows the counts above. The tool names listed beside the table are those found inside the window: the Qwen3-4B window has `get_risk_features` and `score_payment_risk` and no knowledge-base tool, the Qwen3.5-4B window also has `search_knowledge` and `get_knowledge_chunk`.
+
+![Langfuse model calls in the Qwen3-4B window](images/langfuse-model-ab-qwen3-4b.png)
+
+![Langfuse model calls in the Qwen3.5-4B window](images/langfuse-model-ab-qwen35-4b.png)
+
+Latency and output length are close. The difference is behaviour: the question asks for the risk features and what the knowledge base says. Qwen3.5-4B searched the knowledge base in twelve conversations, and it asked the user for a missing field six times, which Qwen3-4B never did. Qwen3-4B never searched the knowledge base and transferred to the risk agent eight times. Two Qwen3.5-4B conversations returned an empty response instead of a task, so completion is not a win for it. The sample is small and unscored.

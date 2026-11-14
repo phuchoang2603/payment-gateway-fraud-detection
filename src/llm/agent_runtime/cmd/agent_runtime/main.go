@@ -25,6 +25,7 @@ import (
 	runnerpkg "github.com/kagent-dev/kagent/go/adk/pkg/runner"
 	"github.com/kagent-dev/kagent/go/adk/pkg/session"
 	"github.com/kagent-dev/kagent/go/adk/pkg/telemetry"
+	configv1 "github.com/kagent-dev/kagent/go/api/gen/kagent/config/v1"
 	processconfig "github.com/kagent-dev/kagent/go/core/pkg/config"
 	"github.com/kagent-dev/kagent/go/pkg/logging"
 	"github.com/kagent-dev/kagent/go/pkg/tracing"
@@ -188,6 +189,7 @@ func run(logLevel, host, port, configDir string) error {
 	if err != nil {
 		return fmt.Errorf("create Google ADK Runner config: %w", err)
 	}
+	bindSampling(prompts, rootAgentName(appName), agentConfig)
 	promptPlugin, err := prompts.Plugin()
 	if err != nil {
 		return fmt.Errorf("create Langfuse prompt plugin: %w", err)
@@ -242,6 +244,22 @@ func run(logLevel, host, port, configDir string) error {
 	}
 
 	return kagentApp.Run()
+}
+
+func rootAgentName(appName string) string {
+	if _, name, found := strings.Cut(appName, "__NS__"); found {
+		return name
+	}
+	return appName
+}
+
+func bindSampling(prompts *langfuse.Prompts, name string, agentConfig *configv1.ADKAgentConfig) {
+	if openai := agentConfig.GetModel().GetOpenai(); openai != nil {
+		prompts.Bind(name, langfuse.Sampling{Temperature: openai.Temperature, TopP: openai.TopP, MaxTokens: openai.MaxTokens})
+	}
+	for _, child := range agentConfig.GetSubAgents() {
+		bindSampling(prompts, child.Name, child)
+	}
 }
 
 func deriveAppName(kagentName, kagentNamespace string, agentCard *a2atype.AgentCard, logger *slog.Logger) string {

@@ -2,7 +2,7 @@
 
 **Status: dev runs done.** Code: [`src/ml`](../../src/ml); chart: [`infra/charts/ml-training`](../../infra/charts/ml-training). The pipeline that runs this is on [pipeline](pipeline.md), the retraining trigger on [drift](drift.md), the served model on [serving](serving.md).
 
-Everything measured below ran on dev (RTX 5060 Ti of `dev-server1`) against training-set snapshot `7781420152380000469`: the replayed history 2026-09-02 to 2026-10-27 at a 10% negative sample.
+Everything measured below ran on dev (RTX 5060 Ti of `dev-server1`) against training-set snapshot `7781420152380000469`: the replayed history 2026-09-02 to 2026-10-27 at a 10% negative sample. A later dev build replays 2026-07-29 to 2026-10-29 with prod's 56, 14 and 14 day windows and registered a new `v1` (test PR-AUC 0.8851), which the [risk agent](../llm/agents.md#risk-agent) scores with.
 
 ## Training data
 

@@ -13,8 +13,10 @@
 {{- $catalog = append $catalog (toYaml $entry) }}
 {{- end }}
 {{- range $agent := .Values.agents.list }}
-{{- if $agent.entry }}
 {{- $notes := list (printf "%s through the agent gateway; each agent's system prompt and A/B test in Langfuse as <agent>-system-prompt." $.Values.models.chat.name) }}
+{{- if not $agent.entry }}
+{{- $notes = append $notes "Runs inside the coordinator, which hands it questions; it is not called on its own." }}
+{{- end }}
 {{- $servers := $agent.mcpServers | default list }}
 {{- with $agent.agents }}
 {{- $notes = append $notes (printf "Hands questions to its sub-agents %s, which run inside it." (join ", " .)) }}
@@ -42,7 +44,6 @@
 {{- $_ := set $entry.spec "mcpServers" $refs }}
 {{- end }}
 {{- $catalog = append $catalog (toYaml $entry) }}
-{{- end }}
 {{- end }}
 {{- $agentList := list }}
 {{- range $agent := .Values.agents.list }}

@@ -38,7 +38,53 @@ The simulator continues the historical entity world: it rebuilds the world from 
 
 The job reads only `attempt_started` events, keyed on the client `attempted_at`; risk decisions do not gate contributions. Per-customer and per-method attempt counts over 5 minutes, 1 hour and 24 hours, plus distinct customer devices over 24 hours, cover `[t − window, t)`. Per-window coverage stays unknown until the job has run for that window's length, and missing history is null, never zero. An attempt time after its observed availability fails the job. Long 7- and 30-day windows are computed offline by DP3, not by Flink; there is no HybridSource bootstrap.
 
-Each keyed customer/method [`Aggregate`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/Aggregate.java) expires old entries before admitting pending ones. Pending inputs enter one microsecond after their attempt time. An indexed deadline queue drives timers without rescanning history or rewriting the whole collection; contribution and device state update incrementally in RocksDB. Changed values/progress produce a new revision; prior served snapshots remain immutable.
+Each keyed customer/method [`Aggregate`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/Aggregate.java) is a `KeyedProcessFunction`, not a built-in Flink window: sliding 5-minute, 1-hour and 24-hour windows per entity would otherwise copy every attempt into each pane. It keeps one contribution per attempt in RocksDB map state and one counter per window, and a deadline queue says when each contribution enters or leaves each window. `Wire.WINDOWS` is `{5 min, 1 h, 24 h}`.
+
+When an attempt arrives, `processElement` stores it and queues its admission one microsecond after its attempt time, so an attempt never counts in its own window:
+
+```java
+Contribution prior = entries.get(identity);
+if (prior != null && !prior.digest.equals(packet.fact.digest))
+  throw new IllegalStateException("conflicting attempt start");
+if (prior == null) {
+  // ... size guard, then:
+  entries.put(identity, contribution);
+  state.size++;
+  deadlines.add(contribution.startedAt + 1, identity, 0);
+}
+```
+
+`activate` then admits the contribution into every window that still covers its attempt time and queues one expiry per window, `startedAt + window + 1`. A contribution already older than 24 hours is dropped instead of counted; this is the `too_late` path:
+
+```java
+if (entry.startedAt < now - Wire.DAY) {
+  entries.remove(identity);
+  state.size--;
+  return;
+}
+for (int i = 0; i < Wire.WINDOWS.length; i++) {
+  if (entry.startedAt < now - Wire.WINDOWS[i]) continue;
+  state.counts[i]++;
+  deadlines.add(entry.startedAt + Wire.WINDOWS[i] + 1, identity, i + 1);
+  // ... distinct devices over 24 h
+}
+```
+
+`advance` (abridged below) moves the entity clock forward and pops every due deadline. Expiries decrement the counters and are applied before admissions that share the same instant, which matches the reference model; only the 24-hour expiry deletes the contribution. After a pass, `emit` writes a new snapshot revision only if a count, the coverage flags or the source progress changed:
+
+```java
+while ((instant = deadlines.next()) != null && instant <= now) {
+  // expiry at an instant precedes admission at that instant
+  ...
+  if (action.kind == 0) { activations.add(action); continue; }
+  state.counts[action.kind - 1]--;          // a window expired for this attempt
+  if (action.kind == 3) { entries.remove(action.identity); state.size--; }
+  ...
+  for (Action action : activations) activate(state, action.identity, entries.get(action.identity), boundary);
+}
+```
+
+Because each attempt costs one map entry and three queued deadlines, the work per event does not grow with window length, and a timer is registered only for the earliest deadline (`schedule`), not one per attempt. Live mode registers processing-time timers; replay registers event-time timers on the logical seed clock, so the same code produces both. Prior served snapshots stay immutable.
 
 ### Late, too-late and duplicate trace
 
@@ -59,6 +105,10 @@ Consider a covered entity at 12:10 UTC, with no other attempts:
 
 In live mode `Aggregate` uses processing-time timers and applies attempt-time membership. Too-late records are counted; they do not have a dedicated too-late side-output topic. The rejects topic serves invalid or conflicting records.
 
+A bounded Flink 2.2.1 job (2026-11-03, a four-record collection source) exercised the same paths. Its UI metrics tab shows the counters the table predicts: one too-late attempt dropped, one identical redelivery dropped by event dedup, and two attempts classed as 5–15 minutes late.
+
+![Flink UI metrics of the bounded run: Deduplicate_events too_late = 1, duplicates_dropped = 1 and lateness 5m_15m attempts = 2](images/flink-late-duplicate-counters-2026-11-04.png)
+
 One bounded dev run on 2026-10-29, from PR #101's dev releases. Prod was untouched.
 
 - **Run:** simulator run `e0810a50db3f41a4b6fb2b0f99b37c7a`, 11:17:10–12:18:31 UTC. Traffic was admitted for 3,600 s (until 12:17:10); held store-and-forward attempts kept flushing until the pod was removed.
@@ -73,7 +123,7 @@ One bounded dev run on 2026-10-29, from PR #101's dev releases. Prod was untouch
 | Too late | none injected | — | — | `too_late` never registered (0) |
 | Rejects | none injected | — | reject topic: 0 records | `rejected` never registered (0) |
 
-Flink counters reset on restart and count only attempt starts; raw-topic duplicate rates cover all event types. The `1m_5m` metric includes processing delay, so it need not equal network lateness. No too-late or poison records were injected in this live run; replay fixtures cover those paths locally.
+Flink counters reset on restart and count only attempt starts; raw-topic duplicate rates cover all event types. The `1m_5m` metric includes processing delay, so it need not equal network lateness. No too-late or poison records were injected in this live run; the bounded run and the local replay below cover those paths.
 
 ![Backpressure on the event deduplication operator](images/online-backpressure.png)
 
@@ -93,6 +143,12 @@ The counters above came from Flink's REST API (`/jobs/<id>/vertices/<id>/metrics
 ### Local correctness comparison
 
 The JVM tests compare 2,498 serialized snapshots from 503 deliveries against the independent [v2 reference](../../src/data-pipeline/features/reference_v2.py), including late inputs, duplicates, conflicts and coverage boundaries. They also verify processing-time timers, RocksDB checkpoint/restore, source-clock recovery, typed serializers, bounded load and transactional Kafka output. A packaged-job test runs the application JAR in the production Flink base image.
+
+A seeded local replay (seed 2603: 1,221 deliveries with 58 late, 8 too late, 17 duplicates and 4 conflicts) compares three degraded variants and the handled job with the reference, counting incorrect feature cells out of 3,234.
+
+![Incorrect feature cells out of 3,234: naive baseline 683, dedup disabled 541, arrival-time windows 274, handled 0](images/streaming-replay-correctness.png)
+
+This is local process evidence, not a Flink runtime or throughput measurement.
 
 <a id="evidence"></a>
 

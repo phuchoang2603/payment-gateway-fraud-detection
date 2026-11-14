@@ -1,0 +1,60 @@
+# On-demand Locust load test of the customer features Web API, applied with kubectl outside the application:
+#   kubectl -n llm create configmap features-loadtest \
+#     --from-file=src/llm/risk_serving/loadtest/locustfile.py --from-file=customer-ids.txt \
+#     --from-literal=integration-id=<integration_id>
+#   kubectl -n llm apply -f infra/charts/llm-platform/benchmark/features-loadtest.yaml
+# It calls risk-serving directly as the llm-benchmark identity, which risk-serving's mesh rule admits, so the result is the API's
+# own throughput and latency rather than the gateway's per-client rate limit. The HTML report is printed between
+# markers at the end of the log.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: features-loadtest
+  namespace: llm
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: llm-benchmark
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: locust
+          image: locustio/locust:2.46.7
+          command: [sh, -c]
+          args:
+            - |
+              locust -f /loadtest/locustfile.py --headless --host http://risk-serving.llm.svc.cluster.local:8080 \
+                --html /tmp/report.html --only-summary
+              echo ===LOCUST-HTML===; cat /tmp/report.html; echo; echo ===END===
+          env:
+            - {name: HOME, value: /tmp}
+            # One Feast server replica with a 1 CPU limit sustains about 20 users; raise LOCUST_USERS to find its limit.
+            - {name: LOCUST_USERS, value: "20"}
+            - {name: LOCUST_SPAWN_RATE, value: "5"}
+            - {name: LOCUST_RUN_TIME, value: 5m}
+            - {name: INTEGRATION_ID, valueFrom: {configMapKeyRef: {name: features-loadtest, key: integration-id}}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {memory: 1Gi}
+          volumeMounts:
+            - {name: loadtest, mountPath: /loadtest}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: loadtest
+          configMap:
+            name: features-loadtest
+        - name: tmp
+          emptyDir: {}

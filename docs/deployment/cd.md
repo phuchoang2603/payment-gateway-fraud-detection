@@ -53,7 +53,7 @@ The same flow delivers services and pipeline WorkflowTemplates; Argo Workflows r
 
 Only Edge uses a canary; the other five Go services remain Deployments. Rollouts controls the public route's `edge`/`edge-canary` weights and Service hash selectors; Argo CD ignores those controller-owned fields. Internal callers use stable `edge`; only public `/checkout/` traffic is split.
 
-The platform supplies Rollouts v1.10.1 and Gateway API plugin v0.17.0. The application owns the [Rollout and analysis templates](../../infra/charts/payment-gateway/templates/rollout.yaml). Dev receives configuration only; acceptance runs directly against prod.
+The platform supplies Rollouts v1.10.1 and Gateway API plugin v0.17.0. The application owns the [Rollout and analysis templates](../../infra/charts/payment-gateway/templates/rollout.yaml). Dev receives configuration only and sets `rollout.analysis.enabled: false`, since it has no public checkout traffic to measure; acceptance runs directly against prod.
 
 Subsequent candidates receive 10%, 25%, then 50% of public checkout traffic. Each step warms up for five minutes and requires two passing observations, one minute apart: at least 100 candidate checkout requests in five minutes, 5xx fraction at most 1%, p95 at most one second and latest sample age at most 120 seconds. Queries select environment, namespace and Rollout pod hash; business declines do not count as 5xx. Empty, stale, non-finite or insufficient observations abort after warm-up; three consecutive query errors abort. The rollout's progress deadline is 30 minutes. Low traffic cannot silently promote.
 

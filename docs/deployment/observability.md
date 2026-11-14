@@ -38,6 +38,10 @@ Over the same window, Kafka reports zero under-replicated partitions and Flink r
 
 ![Kafka and Flink metrics during the acceptance window](images/data-operations-2026-11-03.png)
 
+The dev cluster's three nodes report CPU, memory, network and disk IO through node-exporter into the same VictoriaMetrics; the capture covers 00:15 to 03:15 UTC on 2026-11-12, with the nodes stacked in each panel.
+
+![Dev cluster CPU, memory, network and disk IO from node-exporter](images/compute-telemetry-dev.png)
+
 Select the environment before comparing results. VictoriaMetrics preserves dotted OTLP names and resource labels; canary queries also select `rollout.revision`. Missing series remain **No data**, never a healthy zero.
 
 Namespace-local rules cover sustained errors/latency, notification age, lag, failed jobs, checkpoint failures and missing signals. Shared Alertmanager currently routes to `blackhole`: alerts evaluate and are visible, but no external notifications are delivered.
@@ -68,6 +72,6 @@ The risk server exports `risk_mcp_tool_calls_total{tool,outcome}`, `risk_tool_la
 
 ### LLM dashboard
 
-The "LLM agents" dashboard ([`files/dashboards/llm-agents.json`](../../infra/charts/llm-platform/files/dashboards/llm-agents.json)) shows A2A calls and failures per agent route, MCP tool calls by outcome, screen route calls, guard checks and screen latency, and the model's tokens, time to first token and round-trip. Its MCP panels count the knowledge and risk servers, and a Risk tool row shows the tool's mean and p95 latency, the feature view statuses, and an Autoscaling row with the KEDA replicas of both MCP servers and the agent worker pool. The ConfigMap carries the `grafana_folder` annotation from `dashboards.folder`, so the dashboard lands in the `LLM` folder like the other components' dashboards. On dev, `score_payment_risk` read 1.04 s mean and 4.63 s p95 over the 3 hours shown, every feature view `available`, and 2 replicas for both MCP servers:
+The "LLM agents" dashboard ([`files/dashboards/llm-agents.json`](../../infra/charts/llm-platform/files/dashboards/llm-agents.json)) shows A2A calls and failures per agent route, MCP tool calls by outcome, screen route calls, guard checks and screen latency, and the model's tokens, time to first token and round-trip. Its MCP panels count the knowledge and risk servers, and a Risk tool row shows the tool's mean and p95 latency, the feature view statuses, an Autoscaling row with the KEDA replicas of both MCP servers and the agent worker pool, and an Agent fleet row with the pool's workers by state and the conversation actors' lifecycle ([scale-out capture](../llm/scaling.md#agent-worker-pool)). The ConfigMap carries the `grafana_folder` annotation from `dashboards.folder`, so the dashboard lands in the `LLM` folder like the other components' dashboards. On dev, `score_payment_risk` read 1.04 s mean and 4.63 s p95 over the 3 hours shown, every feature view `available`, and 2 replicas for both MCP servers:
 
 ![Grafana, LLM folder: LLM agents with the Risk tool row, latency, feature views by status and MCP server replicas](images/llm-risk-tools.png)

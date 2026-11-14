@@ -8,6 +8,8 @@ import os
 
 from pyspark.sql import SparkSession
 
+from batch.store import Store
+
 ICEBERG_CATALOG = "lake"
 
 
@@ -37,10 +39,17 @@ def session(app_name):
             .config(f"spark.sql.catalog.{ICEBERG_CATALOG}.warehouse", local_warehouse)
         )
     else:
+        ensure_event_log_prefix()
         builder = _rest_catalog(builder)
     spark = builder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
     return spark
+
+
+def ensure_event_log_prefix():
+    """Spark's event logger fails on an object-store prefix that holds no object, so create one before the context starts."""
+    if os.environ.get("SPARK_EVENT_LOG_DIR"):
+        Store(os.environ["SPARK_EVENT_LOG_DIR"]).write(".keep", b"")
 
 
 def _rest_catalog(builder):

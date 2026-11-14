@@ -1,0 +1,96 @@
+{{- $candidate := .Values.models.candidate }}
+{{- if $candidate.enabled }}
+{{- $uri := printf "hf://%s:%s" $candidate.repo $candidate.revision }}
+{{- $gateway := include "llm-platform.principal" (dict "namespace" .Release.Namespace "name" .Values.gateway.name) }}
+apiVersion: serving.kserve.io/v1alpha1
+kind: LocalModelNamespaceCache
+metadata:
+  name: {{ $candidate.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  sourceModelUri: {{ $uri }}
+  modelSize: {{ $candidate.cacheSize }}
+  nodeGroups: [{{ .Values.gpu.localModelNodeGroup }}]
+---
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: {{ $candidate.name }}
+  annotations:
+    llm.fraud-detection.dev/model-cache: {{ $uri | sha256sum | trunc 12 }}
+spec:
+  model:
+    name: {{ $candidate.name }}
+    uri: {{ $uri }}
+  replicas: {{ $candidate.replicas }}
+  rolloutStrategy:
+    maxSurge: 0
+    maxUnavailable: 1
+  template:
+    securityContext:
+      {{- include "llm-platform.podSecurity" .Values.vllm | nindent 6 }}
+    resourceClaims:
+      - name: gpu
+        resourceClaimName: llm-gpu
+    containers:
+      - name: main
+        image: {{ .Values.vllm.image }}
+        command:
+          - vllm
+          - serve
+          - /mnt/models
+          - --served-model-name={{ $candidate.name }}
+          - --port=8000
+        args:
+          - --gpu-memory-utilization={{ $candidate.gpuMemoryUtilization }}
+          {{- toYaml $candidate.args | nindent 10 }}
+        env:
+          - name: USER
+            value: vllm
+        startupProbe:
+          httpGet: {path: /health, port: 8000}
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: {{ .Values.vllm.startupFailureThreshold }}
+        resources:
+          {{- toYaml $candidate.resources | nindent 10 }}
+          claims:
+            - name: gpu
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: {{ .Values.vllm.uid }}
+          {{- include "llm-platform.containerSecurity" . | nindent 10 }}
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ $candidate.name }}-workload
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $candidate.name }}
+      app.kubernetes.io/component: llminferenceservice-workload
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [{{ $gateway | quote }}]
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: {{ $candidate.name }}
+spec:
+  ai:
+    provider:
+      custom:
+        model: {{ $candidate.name }}
+        backendRef:
+          kind: Service
+          name: {{ $candidate.name }}-kserve-workload-svc
+          port: 8000
+        formats:
+          - type: Completions
+            path: /v1/chat/completions
+{{- end }}

@@ -48,6 +48,8 @@ type Prompts struct {
 	ConversationFile string
 
 	choices sync.Map
+	// sampling holds each bound agent's model settings, by prompt name.
+	sampling sync.Map
 }
 
 var _ sdktrace.SpanProcessor = (*Prompts)(nil)
@@ -61,6 +63,12 @@ func NewPrompts(source PromptSource) *Prompts {
 // underscores for hyphens.
 func PromptName(agentName string) string {
 	return strings.ReplaceAll(agentName, "_", "-") + "-system-prompt"
+}
+
+// Bind records where the named agent's model reads its sampling settings, so
+// the prompt version chosen for a call can override them.
+func (p *Prompts) Bind(agentName string, live Sampling) {
+	p.sampling.Store(PromptName(agentName), newBaseline(live))
 }
 
 func (p *Prompts) conversation(ctx agent.Context) string {
@@ -114,6 +122,9 @@ func (p *Prompts) BeforeModel(ctx agent.Context, req *model.LLMRequest) (*model.
 	}
 	instruction := req.Config.SystemInstruction
 	instruction.Parts = append([]*genai.Part{{Text: chosen.prompt.Prompt}}, instruction.Parts...)
+	if bound, ok := p.sampling.Load(name); ok {
+		bound.(baseline).apply(chosen.prompt.Config.Model)
+	}
 	p.choices.Store(ctx.InvocationID(), chosen)
 	return nil, nil
 }

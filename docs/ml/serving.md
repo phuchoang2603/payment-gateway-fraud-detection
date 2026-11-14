@@ -22,7 +22,7 @@ The `payment-risk` InferenceService runs NVIDIA Triton with the FIL backend on t
 - **Image.** Triton `26.10-py3` pinned by digest. It runs on the dev driver through CUDA forward compatibility. The node pulls from `nvcr.io`, whose DNS answers are occasionally stale on the dev LAN; a failed pull is retried with `talosctl image pull`.
 - **Rubric gap.** The model is not baked into the image. A model image needs a registry write credential or a platform-run registry; the version stays traceable through the Model Registry instead.
 
-On 2026-11-04, after recreating the unallocated dev claim with its selector, `ml-gpu` allocated `gpu-1` (GTX 1650 UUID `GPU-f5a79fce-f9b1-1881-6037-6502c34eccf7`). The predictor became Ready with zero restarts; FIL loaded version 4, and `nvidia-smi` inside the predictor reported 128 MiB used out of 4096 MiB. The isolated `payment-risk-fit-gtx1650-20261104` TrainJob also completed with exit code 0 on the same claim: its container ran from 08:02:25 to 08:02:51 UTC while the predictor remained Ready. Scoring through the risk MCP remains pending verification.
+On 2026-11-04, after recreating the unallocated dev claim with its selector, `ml-gpu` allocated `gpu-1` (GTX 1650 UUID `GPU-f5a79fce-f9b1-1881-6037-6502c34eccf7`). The predictor became Ready with zero restarts; FIL loaded version 4, and `nvidia-smi` inside the predictor reported 128 MiB used out of 4096 MiB. The isolated `payment-risk-fit-gtx1650-20261104` TrainJob also completed with exit code 0 on the same claim: its container ran from 08:02:25 to 08:02:51 UTC while the predictor remained Ready. The risk MCP later scored through this predictor: model v5 answered the agent's `score_payment_risk` call ([risk agent](../llm/agents.md#risk-agent)).
 
 ## Deploy and rollback
 
@@ -63,6 +63,10 @@ On dev, v4 (the same data and settings as v3, registered by a manual run with a 
 | 10% | 171 of 1,834 | 1.17% / 1.20% | 381 µs / 376 µs |
 | 20% | 370 of 1,873 | 1.08% / 1.00% | 416 µs / 418 µs |
 
+The Kubeflow runs page lists the three promotion runs: `dev-promote-v4-b` and `dev-promote-v4-c` failed (aborted by the analysis) and `dev-promote-v4-d` succeeded in 31 min 53 s.
+
+![Kubeflow Runs: dev-promote-v4-b and -c failed, dev-promote-v4-d succeeded, with the challenger and training runs around them](images/kfp-runs.png)
+
 Between the runs, the swap itself found a limit: with the challenger, the old champion and the new champion's surge pod on the one GPU node, the new pod sat Pending on CPU for 11 minutes until the challenger was deleted by hand, which is why the step now deletes it first. The Service kept its waypoint label through the swap, and the KEDA scaler stayed in place.
 
 ![Triton requests per second by service over the promotion: the challenger at 0.2 per second in the aborted run, then at 10% and 20% of the champion's traffic, then the champion's pod replaced](images/ab-triton-by-service.png)
@@ -71,13 +75,11 @@ Between the runs, the swap itself found a limit: with the challenger, the old ch
 
 Tried and dropped on dev, 2026-11-03: KServe's Knative canary (Knative Serving 1.23.0 and 1.24.0 reject DRA `resourceClaims`) and its InferenceGraph (the router discards response headers, so binary answers fail). A waypoint route split 400 binary requests 309 to 91 at 80/20, at +2.4 ms median and +9.8 ms p99. Not verified: the platform's seccomp policy for the waypoint pod runs on dev and is applied to prod, but no waypoint has been created on prod.
 
-## Planned
+## Limits
 
-| Capability | Plan |
-|---|---|
-| Feature-retrieval API | Typed, validated lookups by customer and method ID with health checks, deployed by Helm with rolling update and automatic rollback |
-| Autoscaling of the retrieval API | Request-driven autoscaling for the Feast retrieval API; inference scales as above |
-| A/B traffic on the retrieval API | Not planned beyond the model experiment above |
-| Load test | Locust run against the retrieval API, recording throughput, latency percentiles and errors as an HTML report |
+- **Feature retrieval outside Fraud.** Feature lookups by customer and payment-method ID reach agents through the risk MCP (`get_risk_features`), a Rollout behind KEDA with a bounded pre-promotion check ([scaling](../llm/scaling.md), [MCP releases](../llm/mcp-releases.md)). `GET /v1/customers/{customer_id}/features?integration_id=…` on `risk-serving` returns the `customer_daily` and `customer_stream` views by explicit feature references and is exposed at the gateway as `/risk/v1` with client keys and rate limits. The Feast feature server is a single-replica Deployment reachable only in the cluster, with no autoscaler; one replica sustained about 40 req/s on dev ([customer features load test](../llm/scaling.md#customer-features-api)). The dev Feast has no live stream features, so `customer_stream` reads `missing`.
+- **Load test.** Locust runs cover the knowledge API and the customer features route ([load test](../llm/scaling.md#load-test-and-service-level)), not Triton.
+- **Model-inside-image.** Not used (see the rubric gap above).
+- **Waypoint on prod.** No waypoint has been created on prod, so the A/B route is verified on dev only.
 
 Every decision records the policy, model and feature versions it used. The model call never triggers payment effects; only the decision does.

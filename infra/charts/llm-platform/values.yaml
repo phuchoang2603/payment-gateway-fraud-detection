@@ -64,9 +64,32 @@ models:
       temperature: "0.7"
       topP: "0.8"
       presencePenalty: "1.5"
+      maxTokens: 1024
     resources:
       requests: {cpu: "1", memory: 8Gi}
       limits: {memory: 12Gi}
+  # The chat model's A/B candidate: the previous Qwen generation at the same size and precision (Qwen3-4B-Instruct-2507,
+  # FP8), served from the llm-gpu claim. Two 4B servers do not fit the card together (vLLM's startup profiling needs
+  # far more than the weights), so the versions take turns: set the chat model's `stopped` and `weight` 100 to serve
+  # only the candidate, then reverse both. The gateway sends `weight` percent of chat completions to it.
+  candidate:
+    enabled: false
+    name: qwen3-4b
+    repo: Qwen/Qwen3-4B-Instruct-2507-FP8
+    revision: 8591804019c8b22094c3b5b4454e0edc05dffc98
+    replicas: 1
+    weight: 100
+    cacheSize: 6Gi
+    gpuMemoryUtilization: "0.72"
+    args:
+      - --max-model-len=32768
+      - --kv-cache-dtype=fp8
+      - --max-num-seqs=32
+      - --enable-auto-tool-choice
+      - --tool-call-parser=hermes
+    resources:
+      requests: {cpu: "1", memory: 6Gi}
+      limits: {memory: 10Gi}
   embedding:
     name: qwen3-embedding
     repo: Qwen/Qwen3-Embedding-0.6B
@@ -184,6 +207,9 @@ gateway:
     knowledge:
       service: rag-api
       port: 8080
+    risk:
+      service: risk-serving
+      port: 8080
 
 secretStore: gateway-doppler
 # Platform-owned credentials this app consumes: the Kubeflow artifacts identity.
@@ -197,7 +223,8 @@ metricsAgent: cluster.local/ns/observability/sa/vmagent-vmks
 agents:
   namespace: llm-agents
   # The global model config: the chat model through the gateway, with its sampling settings. kagent's Go runtime
-  # takes those only from here, so an A/B variant differs by its prompt text.
+  # takes those only from here; a prompt version's `model` config overrides temperature, topP and maxTokens, the
+  # settings set here, for its conversations.
   modelConfig: default-model-config
   # Every agent runs this runtime: kagent's Go runtime with each model call's system prompt and A/B variant taken
   # from the agent's Langfuse prompt, and the call's trace linked to that prompt version.
@@ -251,10 +278,10 @@ agents:
         # The variant is the seed prompt followed by this instruction.
         addendum: Answer in at most five sentences, then list the passages you cited.
     - name: risk-agent
-      version: 0.2.0
-      mcpServers: [risk]
+      version: 0.3.0
+      mcpServers: [risk, knowledge]
       title: Risk agent
-      description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, and explains what drives it.
+      description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, explains what drives it, and cites the knowledge base for what a code or policy means.
       abTest:
         label: variant-b
         share: 0.5
@@ -417,6 +444,8 @@ risk:
     callsPerSecondPerReplica: "5"
     prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
   rollout:
+    # The tool the pre-promotion analysis calls; an environment without the model server analyses get_risk_features.
+    tool: score_payment_risk
     arguments:
       request:
         integration_id: rollout-analysis

@@ -2,7 +2,7 @@
 
 Fraud analysts ask an agent about decline codes, risk decisions and payment behaviour; it answers from the knowledge base and cites the passages it used. Agents are read-only: they cannot change risk decisions, retry payments, issue refunds or promote models, and they never sit in the payment decision path.
 
-**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route and request screening. Prod configuration targets the GCP GPU pool; the dev captures below do not establish production readiness.
+**Status:** built and running on dev: the `coordinator` entry agent with the `evidence-agent` and `risk-agent` sub-agents, the A2A route and request screening. The dev captures below do not establish production readiness.
 
 - Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform): [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) (model config, MCP servers, templates, the entry agent, worker pool and its autoscaler), [`a2a.yaml`](../../infra/charts/llm-platform/templates/a2a.yaml) (the A2A route), [`catalog.yaml`](../../infra/charts/llm-platform/templates/catalog.yaml) and [`files/catalog.py`](../../infra/charts/llm-platform/files/catalog.py) (registry, prompt seeds), prompt seeds in [`files/prompts/`](../../infra/charts/llm-platform/files/prompts).
 - Runtime: kagent 1.0.0-rc1 with Agent Substrate 1.0.0-rc1, installed by the platform; the agent runtime image is [`src/llm/agent_runtime`](../../src/llm/agent_runtime).
@@ -47,7 +47,7 @@ One kagent `ModelConfig`, `default-model-config`, used by every agent: provider 
 
 The [gateway note](gateway-and-jev-policy.md#routes) shows the shared base URL and credential Secret in the kagent model configuration.
 
-[`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) generates this shared base URL and binds the ModelConfig to every template. Dev calls through this gateway returned chat completions and 1024-dimensional embeddings; direct model access from an unapproved pod was reset. A new end-to-end proof still needs one trace matched to gateway route counters.
+[`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) generates this shared base URL and binds the ModelConfig to every template. Dev calls through this gateway returned chat completions and 1024-dimensional embeddings; direct model access from an unapproved pod was reset. The model-version runs match the gateway's chat counts to Langfuse's model calls per window ([Langfuse](langfuse.md#model-versions)).
 
 ## Agents
 
@@ -55,7 +55,7 @@ The [gateway note](gateway-and-jev-policy.md#routes) shows the shared base URL a
 |---|---|---|---|
 | `coordinator` 0.2.0 | kagent `Agent` behind `/a2a/coordinator` | sub-agents `evidence_agent`, `risk_agent` | Entry agent: hands each question to the specialist that owns it |
 | `evidence-agent` 0.3.0 | `AgentTemplate`, compiled into the coordinator | `knowledge` MCP server | Explains declines, policy and payment behaviour from the knowledge base, citing chunk ids |
-| `risk-agent` 0.2.0 | `AgentTemplate`, compiled into the coordinator | `risk` MCP server | Reads online features and re-scores supplied payment inputs with the served fraud model; drivers are not attributions |
+| `risk-agent` 0.3.0 | `AgentTemplate`, compiled into the coordinator | `risk` and `knowledge` MCP servers | Reads online features, re-scores supplied payment inputs with the served fraud model and cites the policy behind a decision; drivers are not attributions |
 
 The specialists are kagent Shared sub-agents: `subAgent` bindings compile their templates into the coordinator's runtime, and the coordinator transfers the conversation to one of them, which answers the analyst. A conversation is one actor and one trace, with no second network hop. Callers reach agents only through the gateway's `/a2a/coordinator` route.
 
@@ -79,7 +79,7 @@ The kagent UI is published by the platform behind its Dex login:
 
 ### Risk agent
 
-`risk-agent` 0.2.0 re-scores a payment with the served fraud model through the `risk` MCP server at `/mcp/risk`. Both environments render the same tools and prompt; the evidence below is from dev. The tool takes a `request` object (`integration_id`, `customer_id`, `payment_method_fingerprint`, `amount_minor`, both account-creation timestamps, `shipping_country`, `ip_country`, `item_count`, `has_device`) and sets the scoring time itself, so the result is a what-if re-score, not a stored decision.
+`risk-agent` re-scores a payment with the served fraud model through the `risk` MCP server at `/mcp/risk`. Both environments render the same tools and prompt; the evidence below is from dev. The tool takes a `request` object (`integration_id`, `customer_id`, `payment_method_fingerprint`, `amount_minor`, both account-creation timestamps, `shipping_country`, `ip_country`, `item_count`, `has_device`) and sets the scoring time itself, so the result is a what-if re-score, not a stored decision.
 
 - `get_risk_features` returns the five `payment_risk_v1` views, each with a status (`available`, `missing`, `future`, `expired`, `error`, `timeout`) and values only when `available`.
 - `score_payment_risk` returns the probability, model version, decline threshold, `at_or_above_decline_threshold`, the view statuses and the drivers. Unavailable views contribute NaN to Triton, and an upstream error returns no score.
@@ -98,7 +98,7 @@ The result is model v5, a score of 0.0006 against the decline threshold 0.8597, 
 
 The [Langfuse trace evidence](langfuse.md#traces) records both tools between model calls; the [runtime note](custom-go-adk-runtime.md#evidence-and-limits) shows the retry’s transfer and prompt-version linkage.
 
-Its releases and scaling are in [Scaling](scaling.md). A gateway call returned 401 without a key, listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm).
+Its releases are on [MCP releases](mcp-releases.md) and its scaling on [Scaling](scaling.md). A gateway call listed both tools and scored a dev customer with all five views `available` (748 ms cold, 256 ms warm); authentication results are in the [gateway checks](gateway-and-jev-policy.md#checks-on-dev).
 
 A retry on 2026-11-05 at 06:04 UTC returned score 0.0006 from model v5 against threshold 0.8597, with both stream views correctly marked `expired`. In the same conversation, a later policy question transferred to `evidence_agent`, which retrieved `decline-codes#new-account-geo-mismatch` and `risk-decision#requirements-requirement-rules-baseline-policy` and cited them:
 
@@ -109,6 +109,22 @@ A retry on 2026-11-05 at 06:04 UTC returned score 0.0006 from model v5 against t
 Pending: answer quality still needs evaluation; the risk answer rendered 347677 minor units as dollars, described expired stream values as uncaptured and explained the policy before retrieving evidence. The first explicit transfer follow-up was rejected by the gateway's request-screening webhook with HTTP 403; a plain policy question succeeded.
 
 Prompt-version evidence for the retry is in [Langfuse](langfuse.md#prompts).
+
+Since 0.3.0 the risk agent also has the `knowledge` server, so one answer can carry a score and the policy behind it. At 18:40 UTC on 2026-11-11 a dev chat in the kagent UI sent the coordinator a payment with its identifiers. It transferred to `risk_agent`, which called `get_risk_features` and then the knowledge tools:
+
+![kagent chat: transfer_to_agent risk_agent, then get_risk_features with the payment's identifiers](images/risk-knowledge-chat-transfer.png)
+
+The answer lists the feature values, flags the IP and shipping country mismatch, and cites `fraud-patterns#high-value-fraud` from `get_knowledge_chunk`. It did not call `score_payment_risk`, because dev had no served model that day:
+
+![The answer: feature table, key observations and the cited high-value fraud chunk](images/risk-knowledge-chat-answer.png)
+
+On 2026-11-13 dev served `payment-risk` v1, trained on 2026-08-06..2026-10-29 with test PR-AUC 0.8851. A chat sent the coordinator a customer, a fingerprint and an amount of 30082 minor units. It transferred to `risk_agent`, which called `score_payment_risk` and `search_knowledge`:
+
+![kagent chat: transfer_to_agent risk_agent, then score_payment_risk with the analyst's identifiers](images/risk-score-chat-transfer.png)
+
+The answer reports a score of 0.0658 from model version 1 against the decline threshold 0.7737, lists the drivers, led by the 1-hour and 5-minute stream attempt counts as missing values, with the caveat that they are not attributions, and cites `decline-codes#high-amount`:
+
+![The answer: score 0.0658, threshold 0.7737, drivers and the cited high-amount decline chunk](images/risk-score-chat-answer.png)
 
 ## Runtime
 
@@ -127,15 +143,24 @@ Agents run on Agent Substrate in their own namespace, `llm-agents` (Pod Security
 
 ## Registry
 
-The release catalog job publishes the entry agents and the MCP servers from the chart values to agentregistry. The coordinator's entry names its sub-agents and lists the MCP servers they use; prompts are in Langfuse and tools come from the servers.
+The release catalog job publishes the MCP servers and every agent from the chart values to agentregistry. The coordinator's entry names its sub-agents and lists the MCP servers they use; the sub-agents are published too, marked as running inside the coordinator. Prompts are in Langfuse and tools come from the servers.
 
-![agentregistry: the knowledge MCP server, 0.1.0](images/agents-registry-mcp-server.png)
+The two MCP servers, risk scoring and the knowledge base, both at 0.1.0:
 
-![agentregistry: coordinator 0.2.0 with its sub-agents](images/agents-registry-agent.png)
+![agentregistry: the risk and knowledge MCP servers, 0.1.0](images/agents-registry-servers.png)
+
+The three agents at their current versions, coordinator 0.2.0, evidence agent 0.3.0 and risk agent 0.3.0:
+
+![agentregistry: coordinator 0.2.0, evidenceagent 0.3.0 and riskagent 0.3.0](images/agents-registry-agents.png)
+
+The risk agent's entry lists the `risk` and `knowledge` servers it uses:
+
+![agentregistry: riskagent 0.3.0 with the risk and knowledge MCP servers](images/agents-registry-riskagent.png)
 
 Prompt management, A/B comparisons and trace details are documented in [Langfuse](langfuse.md).
 
 ## Known limits
 
+- A new agent session restores from a Substrate snapshot with a 10-second limit. On a dev worker node under heavy load the restore exceeds it and the first message is refused; a new chat usually lands on another node.
 - The chat model sometimes answers an evidence question without calling the knowledge tools; the answer then has no citation. A question that asks for the passages makes it search.
 - In one of 16 conversations sent four at a time, the first message was refused ("retry after the session becomes available"), and one UI chat lost its stream after the tool result. A retry answered both.

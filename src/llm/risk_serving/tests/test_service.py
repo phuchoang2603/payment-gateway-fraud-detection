@@ -83,3 +83,57 @@ def test_mcp_reads_and_scores_with_observable_success_and_failure(request_input,
         assert 'risk_tool_latency_seconds_count{tool="score_payment_risk"} 2.0' in metrics
         status = "missing" if missing else "available"
         assert f'risk_view_status_total{{status="{status}",view="customer_daily"}} 3.0' in metrics
+
+
+def customer_upstream(request):
+    response = feast_response(datetime.now(UTC) - timedelta(minutes=1))
+    keep = [
+        i
+        for i, n in enumerate(response["metadata"]["feature_names"])
+        if n.startswith(("customer_daily__", "customer_stream__"))
+    ]
+    return httpx.Response(
+        200,
+        json={
+            "metadata": {"feature_names": [response["metadata"]["feature_names"][i] for i in keep]},
+            "results": [response["results"][i] for i in keep],
+        },
+    )
+
+
+def test_customer_features_route_returns_typed_views_and_counts_the_call():
+    with TestClient(create_app(httpx.MockTransport(customer_upstream))) as client:
+        response = client.get("/v1/customers/customer-1/features", params={"integration_id": "merchant"})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["customer_id"] == "customer-1"
+        assert body["integration_id"] == "merchant"
+        assert set(body["views"]) == {"customer_daily", "customer_stream"}
+        assert body["views"]["customer_daily"]["status"] == "available"
+        metrics = client.get("/metrics/").text
+        assert 'risk_mcp_tool_calls_total{outcome="success",tool="customer_features"} 1.0' in metrics
+        assert 'risk_view_status_total{status="available",view="customer_stream"} 1.0' in metrics
+
+
+@pytest.mark.parametrize(
+    "path,params",
+    [
+        ("/v1/customers/customer-1/features", {}),
+        ("/v1/customers/customer-1/features", {"integration_id": ""}),
+        ("/v1/customers/customer-1/features", {"integration_id": "x" * 201}),
+        (f"/v1/customers/{'c' * 201}/features", {"integration_id": "merchant"}),
+    ],
+)
+def test_customer_features_route_rejects_invalid_identifiers(path, params):
+    with TestClient(create_app(httpx.MockTransport(customer_upstream))) as client:
+        assert client.get(path, params=params).status_code == 422
+
+
+def test_customer_features_route_maps_store_failure_to_bad_gateway():
+    with TestClient(create_app(httpx.MockTransport(lambda _: httpx.Response(503)))) as client:
+        response = client.get("/v1/customers/customer-1/features", params={"integration_id": "merchant"})
+        assert response.status_code == 502
+        assert "feature store" in response.json()["detail"]
+        assert (
+            'risk_mcp_tool_calls_total{outcome="failure",tool="customer_features"} 1.0' in client.get("/metrics/").text
+        )

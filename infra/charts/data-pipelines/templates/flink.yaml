@@ -42,6 +42,7 @@ roleRef:
   kind: Role
   name: fraud-streaming
   apiGroup: rbac.authorization.k8s.io
+{{- if .Values.features.streaming.enabled }}
 ---
 apiVersion: flink.apache.org/v1beta1
 kind: FlinkDeployment
@@ -231,4 +232,5 @@ spec:
       relabelConfigs:
         - targetLabel: job
           replacement: fraud-streaming
+{{- end }}
 {{- end }}

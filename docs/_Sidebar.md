@@ -29,7 +29,8 @@
 - [Gateway and Jev policy (novel)](llm/gateway-and-jev-policy.md)
 - [Custom Go ADK runtime (novel)](llm/custom-go-adk-runtime.md)
 - [RAG](llm/rag.md)
-- [Scaling](llm/scaling.md)
+- [Autoscaling and load test](llm/scaling.md)
+- [MCP releases](llm/mcp-releases.md)
 - [Langfuse](llm/langfuse.md)
 
 **Deployment**

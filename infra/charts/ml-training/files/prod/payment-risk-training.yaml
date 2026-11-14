@@ -1295,10 +1295,6 @@ platforms:
           - mountPath: /tmp/spark
             sizeLimit: 24Gi
             volumeName: spill
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
@@ -1369,10 +1365,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
@@ -1443,10 +1435,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
@@ -1498,10 +1486,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
@@ -1576,10 +1560,6 @@ platforms:
           - mountPath: /tmp/spark
             sizeLimit: 24Gi
             volumeName: spill
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
@@ -1650,10 +1630,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
@@ -1724,10 +1700,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
@@ -1779,10 +1751,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
@@ -1853,10 +1821,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
@@ -1908,10 +1872,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
@@ -1986,10 +1946,6 @@ platforms:
           - mountPath: /tmp/spark
             sizeLimit: 24Gi
             volumeName: spill
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
@@ -2060,10 +2016,6 @@ platforms:
             - configMapKey: EXPERIMENT_WINDOW
               envVar: EXPERIMENT_WINDOW
             optional: false
-          nodeAffinity:
-          - matchExpressions:
-            - key: nvidia.com/gpu.present
-              operator: DoesNotExist
           nodeSelector:
             labels:
               talos.dev/nodepool: spot
