@@ -37,7 +37,7 @@ The red `checks(0)` is an execution failure that Argo retried; a failed data rul
 
 ![Argo Workflows graph of dp-backfill-ww2pp: for the first month the silver, check-silver and publish-silver steps are skipped (grey) because plan-silver found matching output; Gold and the marts run as parallel branches before profile](images/argo-backfill-parallel-skip.png)
 
-The recorded GCP backfill and its checks-before-publish capture are in [Write–audit–publish (novel)](write-audit-publish.md#release-protocol). [Historical replay](online.md#historical-replay) uses the live feature engine with logical time, isolated outputs and seed reuse.
+The recorded GCP backfill and its checks-before-publish capture are in [Write–audit–publish (novel)](write-audit-publish.md#release-protocol). [Historical replay (novel)](historical-replay.md) uses the live feature engine with logical time, isolated outputs and seed reuse.
 
 ### Spark sizing and placement
 

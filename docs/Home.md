@@ -126,7 +126,6 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Flink jobs | Baseline, late arrivals, duplicates, windows, dead-letter topic; output ends at the feature journal topic | [Online data](data/online.md) | Done: local correctness, dev recovery, and a runtime check with a too-late input, a duplicate and late attempts |
 | Storage | Lakehouse compaction, partitioning, Z-order; ClickHouse warehouse indexing (`ORDER BY`, skip indexes) | [Storage](data/storage.md) | Done on v19: partitioning, write order, mart codecs and `EXPLAIN`; a Z-order run showed no file skipping at one file per day |
 | Orchestration | DP1 (raw → Bronze), then `dp-pipeline`: Silver, then Gold and the marts side by side, each layer with ingest, validate and publish stages; unchanged stages skipped | [Orchestration and governance](data/orchestration-governance.md) | Recorded AWS backfill 2025-10-29 to 2026-10-28 completed |
-| Data design notes | Audited multi-table lakehouse publication; shared live/historical feature engine and recoverable replay | [Write–audit–publish (novel)](data/write-audit-publish.md), [Historical replay](data/online.md#historical-replay) | Shared operators, isolated replay and catalog publication |
 | Incremental curation | Silver and Gold take a day range and overwrite only those days, so the daily run and a backfill are the same job; CI checks daily runs against one backfill for both | [Offline data](data/offline.md) | Verified in recorded AWS monthly backfill |
 | Governance | Lineage and validation for DP1–DP3 in the catalog | [Orchestration and governance](data/orchestration-governance.md) | Recorded AWS: source-to-marts lineage, 58 passing tests |
 | Schemas | SCD2 dimensions, `feat_` tables with `event_timestamp`/`created`, naming conventions, relationships | [Storage](data/storage.md#schemas-and-naming) | Done |
@@ -142,7 +141,7 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Serving | KServe inference from the registry, rollback | [Serving](ml/serving.md) | Done on dev |
 | Scoring | Go Fraud calling the model under a missing-feature policy; the risk MCP re-scores through the same predictor | [Serving](ml/serving.md), [risk agent](llm/agents.md#risk-agent) | Done on dev |
 | Autoscaling | KEDA on Triton queue time, scraped metrics and a Grafana dashboard | [Serving](ml/serving.md#autoscaling-and-dashboard) | Done on dev |
-| A/B | Challenger model behind a waypoint route, stepwise weights gated by Argo Rollouts analysis, per-version panels | [Serving](ml/serving.md#ab-experiment) | Done on dev |
+| A/B | Challenger model behind a waypoint route, stepwise weights gated by Argo Rollouts analysis, per-version panels | [Analysis-gated promotion (novel)](ml/analysis-gated-promotion.md#model-challenger) | Done on dev |
 | Drift | Periodic drift comparison and retraining trigger | [Drift](ml/drift.md) | Done on dev; thresholds uncalibrated |
 
 ### LLM and agent platform
@@ -157,9 +156,21 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Prompt management | Prompts managed and versioned in Langfuse (seeded from Git); agents read them at each model call | [Langfuse](llm/langfuse.md#prompts) | Done on dev |
 | A/B tests | Prompt A/B tests per agent in Langfuse, compared per version | [Langfuse](llm/langfuse.md#ab-tests) | Prompt, per-version model-setting and model-version (Qwen3-4B against Qwen3.5-4B) tests done on dev |
 | Agent tracing | Agent traces from kagent to Langfuse, linked to prompt versions; LLM, gateway and API metrics in VictoriaMetrics with a Grafana dashboard | [Langfuse](llm/langfuse.md), [metrics](deployment/observability.md#llm-metrics) | Done on dev |
-| Custom agent runtime | Go ADK runtime with per-agent Langfuse prompts, conversation-stable variants and prompt-version trace linkage | [Custom Go ADK runtime (novel)](llm/custom-go-adk-runtime.md) | Implemented on dev; startup and prompt-linkage evidence recorded, evaluation limits stated |
 | GPU scheduling | Kueue queueing for GPU training and serving workloads | [Agents](llm/agents.md) | Planned |
 | Model loading | Pinned revisions in the KServe local model cache, loaded with InstantTensor | [Inference](llm/inference.md) | Done on dev |
+
+### Novel ideas
+
+Tools and techniques beyond the course, two per rubric sheet, each with its proof on the linked page.
+
+| Rubric sheet | Idea | Proof |
+|---|---|---|
+| Data platform | [Write–audit–publish](data/write-audit-publish.md): candidate Iceberg snapshots on an audit branch, checked in ClickHouse, then published together through the catalog | GCP backfill: 15 of 15 tasks, checks before each publication |
+| Data platform | [Historical replay](data/historical-replay.md): history replayed through the live Flink operators on a logical clock, so training and serving features come from one engine | 0 incorrect feature cells of 3,234 against a reference; 23-unit replay, about 236M rows per stream table |
+| ML platform | [NVIDIA DRA GPU sharing](ml/nvidia-dra.md): resource claims put three vLLM servers on one card, and Triton with its training jobs on another | Triton Ready while a TrainJob finished on the same claim; three model servers reserving one claim |
+| ML platform | [Analysis-gated promotion](ml/analysis-gated-promotion.md): the checkout canary and the model challenger move traffic only after live-metric analysis passes | Prod: faulty Edge build rejected, retry promoted; dev: two model promotions aborted, the third promoted v4 |
+| LLM and agents | [Gateway and Jev policy](llm/gateway-and-jev-policy.md): one agentgateway for models, tools and APIs, with keys, limits, PII masking and screening by a decision model | Route, key, limit and screening checks on dev |
+| LLM and agents | [Custom Go ADK runtime](llm/custom-go-adk-runtime.md): Langfuse prompts per agent, conversation-stable A/B variants with their own sampling, prompt-version trace links | Six of six cold conversations accepted; model calls linked to prompt versions |
 
 ### Delivery and operations
 
@@ -167,7 +178,7 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 |---|---|---|---|
 | CI, validation and verification | Coverage, boundary tests, changed-code mutation tests, property tests and load tests | [CI](deployment/ci.md) | Coverage and mutation results listed |
 | Infrastructure and IaC | Cloud/VM provisioning, Talos bootstrap and shared operators | [Infrastructure](deployment/infra.md) | Platform-owned; prod provisioning run captured |
-| Docker, CD and canary deployment | Image optimization, test/build/deploy flow and guarded Edge promotion | [Delivery](deployment/cd.md) | Prod canary verified 2026-11-03 |
+| Docker, CD and canary deployment | Image optimization, test/build/deploy flow and guarded Edge promotion | [Delivery](deployment/cd.md), [Edge canary](ml/analysis-gated-promotion.md#edge-checkout-canary) | Prod canary verified 2026-11-03 |
 | Observability | Metrics, logs, traces and alert evaluation | [Observability](deployment/observability.md) | Prod captures recorded; external alert delivery disabled |
 | Security and secrets | Doppler, External Secrets and service authorization | [Security](deployment/security.md) | Done; secret delivery and mesh authorization captured |
 

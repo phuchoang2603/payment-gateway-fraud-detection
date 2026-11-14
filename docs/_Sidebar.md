@@ -12,6 +12,7 @@
 - [Storage](data/storage.md)
 - [Orchestration and governance](data/orchestration-governance.md)
 - [Write–audit–publish (novel)](data/write-audit-publish.md)
+- [Historical replay (novel)](data/historical-replay.md)
 
 **ML**
 
@@ -20,6 +21,8 @@
 - [Pipeline](ml/pipeline.md)
 - [Drift](ml/drift.md)
 - [Serving](ml/serving.md)
+- [NVIDIA DRA GPU sharing (novel)](ml/nvidia-dra.md)
+- [Analysis-gated promotion (novel)](ml/analysis-gated-promotion.md)
 - [Background](ml/background.md)
 
 **LLM**

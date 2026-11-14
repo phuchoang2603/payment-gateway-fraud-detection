@@ -107,9 +107,7 @@ The journal topic `fraud.feature-updates.v2.live-v19` feeds `feature-writer`, wh
 
 ### Stream history replay
 
-![Argo summary of the stream-history replay](images/argo-stream-history-replay-2026-11-07.png)
-
-The full Kappa replay ran as `stream-history-jvm-v19-8trbp` over `start=2026-07-29`, `end=2026-10-29`: 23 units, all FINISHED and published, Succeeded in about 2 d 8 h (2026-11-04 to 2026-11-07). `gold.feat_stream_customer` then held 236,441,166 rows and `gold.feat_stream_payment_method` 236,453,680, under the `live-v19` epoch.
+The full replay that fills `gold.feat_stream_*` is on [Historical replay (novel)](../data/historical-replay.md#full-replay).
 
 ## Entities, views and service
 

@@ -51,30 +51,4 @@ The same flow delivers services and pipeline WorkflowTemplates; Argo Workflows r
 
 ## Edge progressive delivery
 
-Only Edge uses a canary; the other five Go services remain Deployments. Rollouts controls the public route's `edge`/`edge-canary` weights and Service hash selectors; Argo CD ignores those controller-owned fields. Internal callers use stable `edge`; only public `/checkout/` traffic is split.
-
-The platform supplies Rollouts v1.10.1 and Gateway API plugin v0.17.0. The application owns the [Rollout and analysis templates](../../infra/charts/payment-gateway/templates/rollout.yaml). Dev receives configuration only and sets `rollout.analysis.enabled: false`, since it has no public checkout traffic to measure; acceptance runs directly against prod.
-
-Subsequent candidates receive 10%, 25%, then 50% of public checkout traffic. Each step warms up for five minutes and requires two passing observations, one minute apart: at least 100 candidate checkout requests in five minutes, 5xx fraction at most 1%, p95 at most one second and latest sample age at most 120 seconds. Queries select environment, namespace and Rollout pod hash; business declines do not count as 5xx. Empty, stale, non-finite or insufficient observations abort after warm-up; three consecutive query errors abort. The rollout's progress deadline is 30 minutes. Low traffic cannot silently promote.
-
-For an incident, run `kubectl --kubeconfig ~/.kube/talos-prod.yaml argo rollouts abort edge -n payment-gateway` when the kubectl plugin is installed, then revert the source image/chart and publish through the existing release flow. Confirm stable endpoints and HTTPRoute weights before considering recovery complete. Abort does not undo database migrations or changes to other services.
-
-Prod acceptance on 2026-11-03 verified abort to stable/canary weights 100/0, reconciliation without weight reset, and automatic promotion after two passing observations at each stage. The rollout failure alert fired on abort and resolved on retry.
-
-Browser captures from the retained prod AnalysisRuns below show the failed attempts and healthy retry. The Rollouts UI displays UTC−05:00; all captures are from 2026-11-03.
-
-With no candidate traffic, Analysis 2-1 failed after warm-up. The blank measurement is an empty query result, not zero requests.
-
-![No-data analysis rejected an empty candidate request result](images/edge-analysis-no-data-2026-11-03.png)
-
-The fault attempt, Analysis 2-1.1, failed the 1% error threshold: the UI rounds the stored 0.0721649 fraction to 0.07. Its request guard also failed (97 against a minimum of 100); freshness and p95 passed.
-
-![Faulted candidate failed the error-rate guard](images/edge-analysis-failed-2026-11-03.png)
-
-On the healthy retry, final-stage Analysis 2-5 passed all four guards. Its two request observations were 1,703 and 1,832.
-
-![Healthy candidate passed both final-stage observations](images/edge-analysis-passed-2026-11-03.png)
-
-All three stages completed, promoting revision `787688ff9d` to stable at 100% traffic.
-
-![Completed Edge rollout with the new stable revision](images/edge-rollout-promoted-2026-11-03.png)
+Edge is the one service released as a canary: public checkout traffic moves to a candidate in 10%, 25% and 50% steps, each gated by a metrics analysis. The design, the incident procedure and the prod acceptance captures are on [Analysis-gated promotion (novel)](../ml/analysis-gated-promotion.md#edge-checkout-canary).
