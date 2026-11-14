@@ -46,7 +46,7 @@ The generator removes these fields from both records and Arrow schemas for v2; i
 
 ### Publication
 
-Submit `generate-historical` in `data`. Shards write per-day Parquet, separate `.v2`/`.v3` event files and `_day.json` markers; `config.json` pins inputs and the generator digest, and `manifest.json` publishes the inventory. Complete days are skipped, incomplete days regenerated, and changed inputs or an already published version are refused. Full-scale v19 publication also enforces the configured 100 GB minimum source size. Credentials come from Secrets; roots and shard settings come from chart values.
+Submit `generate-historical` in `data`. Shards write per-day Parquet, separate `.v2`/`.v3` event files and `_day.json` markers; `config.json` pins inputs and the generator digest, and `manifest.json` publishes the inventory. Complete days are skipped, incomplete days regenerated, and changed inputs or an already published version are refused. Full-scale v19 publication also enforces the configured 100 GB minimum source size. Credentials come from Secrets. The chart values set the default shard count and config file; a run can override them, the output root and `duration-days` at submit time, for example a bounded scale test with the `historical-smoke.yaml` profile: `argo submit -n data --from workflowtemplate/generate-historical -p shards=4 -p config=historical-smoke.yaml -p output=s3://<bucket>/runs/<name>`. A version that is already published at an output root is refused, so each smoke run needs its own root.
 
 | Dataset / run | Events | Labels | Files / size |
 |---|---:|---:|---|

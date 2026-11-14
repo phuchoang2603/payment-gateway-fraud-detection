@@ -17,6 +17,7 @@ from simulator.historical import (
     SourceTooSmall,
     VersionPublished,
     generate,
+    load_generator_config,
     produce,
     publish,
 )
@@ -306,3 +307,16 @@ def test_chargeback_labels_are_delayed_observations_of_successful_attempts(tmp_p
             <= delay
             <= timedelta(days=config.world.label_delays.max_days)
         )
+
+
+def test_submit_overrides_replace_output_and_duration_and_ignore_empty_values(tmp_path):
+    config = load_generator_config(SMALL_GENERATOR, output=str(tmp_path), duration_days="2")
+    assert (config.output, config.duration_days) == (str(tmp_path), 2)
+    assert load_generator_config(SMALL_GENERATOR, output="", duration_days=None).duration_days == 6
+    with pytest.raises(ValidationError):
+        load_generator_config(SMALL_GENERATOR, duration_days="0")
+
+
+@pytest.mark.parametrize("name", ["historical-dev.yaml", "historical-full.yaml", "historical-smoke.yaml"])
+def test_shipped_generator_configs_validate(name):
+    load_generator_config(Path(__file__).parents[1] / "configs" / name)

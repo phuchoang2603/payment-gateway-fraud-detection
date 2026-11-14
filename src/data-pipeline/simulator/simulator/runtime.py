@@ -24,7 +24,11 @@ def main() -> int:
     contracts = Path(os.environ.get("GENERATOR_CONTRACTS", DEFAULT_CONTRACTS))
     try:
         workers = int(os.environ.get("GENERATOR_WORKERS", "1"))
-        config = load_generator_config(Path(path))
+        config = load_generator_config(
+            Path(path),
+            output=os.environ.get("GENERATOR_OUTPUT"),
+            duration_days=os.environ.get("GENERATOR_DURATION_DAYS"),
+        )
         if mode == "shard":
             index, count = int(os.environ["SHARD_INDEX"]), int(os.environ["SHARD_COUNT"])
             produce(config, contracts, (index, count), workers)

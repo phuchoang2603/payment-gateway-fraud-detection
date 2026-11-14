@@ -129,9 +129,11 @@ class GeneratorConfig(StrictModel):
         return version
 
 
-def load_generator_config(path: Path) -> GeneratorConfig:
-    """Parse and validate the historical generation YAML configuration."""
-    return GeneratorConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+def load_generator_config(path: Path, **overrides: object) -> GeneratorConfig:
+    """Parse and validate the historical generation YAML configuration, applying non-empty overrides."""
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    document.update({key: value for key, value in overrides.items() if value not in (None, "")})
+    return GeneratorConfig.model_validate(document)
 
 
 @cache

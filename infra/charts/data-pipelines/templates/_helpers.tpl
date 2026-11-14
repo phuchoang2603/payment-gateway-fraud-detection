@@ -28,12 +28,16 @@ container:
     - name: GENERATOR_WORKERS
       value: {{ $values.generator.workers | toString | quote }}
     - name: SIMULATOR_CONFIG
-      value: {{ printf "/app/configs/%s" $values.generator.config | quote }}
+      value: "/app/configs/{{ "{{workflow.parameters.config}}" }}"
+    - name: GENERATOR_OUTPUT
+      value: "{{ "{{workflow.parameters.output}}" }}"
+    - name: GENERATOR_DURATION_DAYS
+      value: "{{ "{{workflow.parameters.duration-days}}" }}"
 {{- if .shard }}
     - name: SHARD_INDEX
       value: {{ "{{inputs.parameters.index}}" | quote }}
     - name: SHARD_COUNT
-      value: {{ $values.generator.shards | toString | quote }}
+      value: "{{ "{{workflow.parameters.shards}}" }}"
 {{- end }}
     - name: AWS_REGION
       value: {{ $values.config.AWS_REGION | quote }}

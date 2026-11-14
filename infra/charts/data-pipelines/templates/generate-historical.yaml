@@ -7,6 +7,16 @@ metadata:
 spec:
   serviceAccountName: historical-generator
   entrypoint: generate
+  arguments:
+    parameters:
+      - name: shards
+        value: {{ .Values.generator.shards | quote }}
+      - name: config
+        value: {{ .Values.generator.config | quote }}
+      - name: output
+        value: ""
+      - name: duration-days
+        value: ""
   synchronization:
     mutexes:
       - name: historical-generator-writer
@@ -21,8 +31,7 @@ spec:
                 - name: index
                   value: {{ "{{item}}" | quote }}
             withSequence:
-              start: "0"
-              end: {{ sub .Values.generator.shards 1 | quote }}
+              count: "{{ "{{workflow.parameters.shards}}" }}"
           - name: publish
             template: publish
             depends: shard
