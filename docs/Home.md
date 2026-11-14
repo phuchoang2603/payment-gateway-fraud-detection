@@ -161,12 +161,11 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 
 ### Novel ideas
 
-Tools and techniques beyond the course, two per rubric sheet.
+Tools and techniques beyond the course, by rubric sheet.
 
 | Rubric sheet | Idea | Result |
 |---|---|---|
 | Data platform | [Write–audit–publish](data/write-audit-publish.md): candidate Iceberg snapshots on an audit branch, checked in ClickHouse, then published together through the catalog | GCP backfill: 15 of 15 tasks, checks before each publication |
-| Data platform | [Historical replay](data/historical-replay.md): history replayed through the live Flink operators on a logical clock, so training and serving features come from one engine | 0 incorrect feature cells of 3,234 against a reference; 23-unit replay, about 236M rows per stream table |
 | ML platform | [NVIDIA DRA GPU sharing](ml/nvidia-dra.md): resource claims put three vLLM servers on one card, and Triton with its training jobs on another | Triton Ready while a TrainJob finished on the same claim; three model servers reserving one claim |
 | ML platform | [Analysis-gated promotion](ml/analysis-gated-promotion.md): the checkout canary and the model challenger move traffic only after live-metric analysis passes | Prod: faulty Edge build rejected, retry promoted; dev: two model promotions aborted, the third promoted v4 |
 | LLM and agents | [Gateway and Jev policy](llm/gateway-and-jev-policy.md): one agentgateway for models, tools and APIs, with keys, limits, PII masking and screening by a decision model | Route, key, limit and screening checks on dev |
