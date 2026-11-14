@@ -83,4 +83,3 @@ On 2026-11-04, two temporary ambient-mesh pods called only Vault's gRPC health R
 
 ![Istio access logs: allowed Edge identity and denied default identity](images/mesh-allowed-denied-2026-11-04.png)
 
-See [Delivery](cd.md#edge-progressive-delivery) for canary results and [Security and secrets](security.md) for secret delivery and application access controls.

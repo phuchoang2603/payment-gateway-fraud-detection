@@ -14,7 +14,7 @@ The read-only [risk agent tool](../llm/agents.md#risk-agent) uses the same onlin
 
 The `payment-risk` InferenceService runs NVIDIA Triton with the FIL backend on the GPU; nothing scores on a CPU. The chart owns the `ServingRuntime` (the pinned Triton image and the shared GPU claim, by name); the platform places the pod on the GPU node and adds its toleration; the `roll_out` step creates and patches the service, and Argo CD does not own it. It is a Standard-mode Deployment with one replica and is cluster-local.
 
-- **GPU sharing.** Triton, the fit and Katib TrainJobs, and the gate and experiment jobs all reference the chart's one `ResourceClaim` (`ml-gpu`), so they run together on the ML GPU (dev GTX 1650, prod L4). The dev claim selects the GTX 1650 by its DRA product name; the RTX 5060 Ti is reserved for the separate LLM claim. The chart's `TrainingRuntime` carries the claim, because a TrainJob cannot patch `resourceClaims`. The instance group is `KIND_GPU`, never `KIND_AUTO`, which would fall back to the CPU; without a GPU the predictor stays Pending and the fraud service records `timeout` or `error`.
+- **GPU.** Triton holds the `ml-gpu` claim it shares with the training jobs, and its instance group is `KIND_GPU`, never `KIND_AUTO`, which would fall back to the CPU; without a GPU the predictor stays Pending and the fraud service records `timeout` or `error`. The sharing is on [NVIDIA DRA GPU sharing (novel)](nvidia-dra.md).
 - **Model loading.** `roll_out` sets the storage URI to `model-registry://payment-risk/<version>`. KServe resolves the registry version to the model directory in object storage and mounts it at `/mnt/models`. `record_version` writes the repository entry there: `payment-risk/config.pbtxt` and `payment-risk/<N>/xgboost.json`, where `N` is the version's number, so every answer names the version that made it. The config carries the ordered feature list and the registry version as parameters.
 - **Request:** Open Inference Protocol v2, `POST /v2/models/payment-risk/infer`, with one FP32 row in the packaged feature order sent as binary tensor data (`Inference-Header-Content-Length`). A missing feature or an unavailable view is NaN, which XGBoost treats as missing and JSON cannot carry. Go reads the order, the decline threshold and the bin edges of each version from `GET /v2/models/payment-risk/config` and keeps them per version.
 - **Response:** the fraud class's probability is the second of two FP32 values, and `model_version` is the version number. If that number differs from the version the cached order belongs to, Go discards the score and reads the order again on the next call, so a rollout never scores a row laid out for another version.
@@ -22,11 +22,10 @@ The `payment-risk` InferenceService runs NVIDIA Triton with the FIL backend on t
 - **Image.** Triton `26.10-py3` pinned by digest. It runs on the dev driver through CUDA forward compatibility. The node pulls from `nvcr.io`, whose DNS answers are occasionally stale on the dev LAN; a failed pull is retried with `talosctl image pull`.
 - **Rubric gap.** The model is not baked into the image. A model image needs a registry write credential or a platform-run registry; the version stays traceable through the Model Registry instead.
 
-On 2026-11-04, after recreating the unallocated dev claim with its selector, `ml-gpu` allocated `gpu-1` (GTX 1650 UUID `GPU-f5a79fce-f9b1-1881-6037-6502c34eccf7`). The predictor became Ready with zero restarts; FIL loaded version 4, and `nvidia-smi` inside the predictor reported 128 MiB used out of 4096 MiB. The isolated `payment-risk-fit-gtx1650-20261104` TrainJob also completed with exit code 0 on the same claim: its container ran from 08:02:25 to 08:02:51 UTC while the predictor remained Ready. The risk MCP later scored through this predictor: model v5 answered the agent's `score_payment_risk` call ([risk agent](../llm/agents.md#risk-agent)).
 
 ## Deploy and rollback
 
-`roll_out` is the last step of `payment-risk-training` for a passing model. It patches the storage URI, waits until the Deployment has rolled out the new storage URI, sends an all-missing row and fails unless Triton answers with a probability from the new version, then marks the version `production` and the previous one `archived`. If the check fails, it patches the previous version back. The `payment-risk-rollout` pipeline reruns the step for any earlier version that passed its gate, for rollback.
+`roll_out` is the last step of `payment-risk-training` for a passing model. It patches the storage URI, waits until the Deployment has rolled out the new storage URI, sends an all-missing row and fails unless Triton answers with a probability from the new version, then marks the version `production` and the previous one `archived`. If the check fails, it patches the previous version back. The `payment-risk-rollout` pipeline reruns the step for any earlier version that passed its gate, for rollback. A version can also run as a challenger first, with [analysis-gated promotion](analysis-gated-promotion.md#model-challenger).
 
 On dev, `payment-risk-rollout` with `version=v1` served the earlier version again in 1 min 47 s (3 of 3 steps), and the next training run rolled `v3` out in 20 min 30 s. A binary request for `v2` with all 50 features missing, and one with only `amount_minor` and `has_device` set, both returned `model_version` 2 and a probability of 0.8937. The Kubeflow endpoints page shows the service ready on the `payment-risk-triton` runtime with the registry URI of the live version; the model's registry entry is on [training](training.md#versions).
 
@@ -40,46 +39,9 @@ On dev a throwaway service with the chart's runtime and predictor values, and th
 
 The ML serving dashboard (`ml-serving` in the ML folder of the platform Grafana) shows Triton's request rate, queue and compute time per request, predictor replicas, GPU utilization, and the fraud service's `fraud.model.calls` by status and enforcement. The Grafana sidecar only watches a fixed list of namespaces, so the chart creates the dashboard ConfigMap in `observability`, which the Argo CD project allows for that reason.
 
-## A/B experiment
-
-A gate-passed version can run as a challenger next to the champion, and traffic moves to it in bounded steps that an analysis must approve.
-
-- **Challenger service.** `roll_out` with `role=challenger` serves the version as the InferenceService `payment-risk-challenger` on the same runtime, GPU claim and KEDA scaling, and the registry marks it `challenger`.
-- **Split.** An Istio waypoint in `ml` and a Gateway API route split the champion's Service between the two services, 100/0 until the `payment-risk-promote` pipeline changes the weights. Only that pipeline changes them, never above 20 percent, and Argo CD ignores them as it does for Edge. The split is random per request, and `roll_out` labels the champion Service for the waypoint.
-- **Analysis.** Each step runs an Argo Rollouts `AnalysisRun` built from the `payment-risk-challenger` template, over a 10 minute window on the chart's values and 5 minutes on dev. It needs a minimum number of challenger requests, a failure rate of at most 1%, a queue plus compute time per request of at most twice the champion's, and a decline share within 2 percentage points of the champion's (a ratio of two shares near 0.3% is noise at these volumes).
-- **Outcome.** A failed analysis returns the weights to 0, deletes the challenger and archives its version. After the last step the challenger is deleted, then the champion service is updated to its version and probed, so the single GPU node never holds three model servers; a failed probe redeploys the old version.
-- **Scoring.** Go Fraud scores each answer under the layout and threshold of the version that produced it, and `fraud.model.calls` carries `model_version` and `declined`.
-
-On dev, v4 (the same data and settings as v3, registered by a manual run with a lowered `gate_margin`, so the two score identically) ran as the challenger next to v3 under about 4 payments per second from the live simulator. Three `payment-risk-promote` runs, in order:
-
-| Run | Steps | Result |
-|---|---|---|
-| `dev-promote-v4-b` | 10, 20 | Aborted at 10%: the decline ratio was 3.7 on 1 decline in 94 calls. Weights back to 0, challenger deleted, v4 archived. The check became the difference in decline share |
-| `dev-promote-v4-c` | 10, 20 | Aborted at 10%: 46 to 57 challenger requests against a minimum of 50, because the simulator then sent 1.7 payments per second. Same cleanup |
-| `dev-promote-v4-d` | 10, 20 | Both steps passed and v4 replaced v3 as production; v3 is `archived` |
-
-| Step | Challenger calls | Decline share, challenger / champion | Queue plus compute per request, challenger / champion |
-|---|---:|---|---|
-| 10% | 171 of 1,834 | 1.17% / 1.20% | 381 µs / 376 µs |
-| 20% | 370 of 1,873 | 1.08% / 1.00% | 416 µs / 418 µs |
-
-The Kubeflow runs page lists the three promotion runs: `dev-promote-v4-b` and `dev-promote-v4-c` failed (aborted by the analysis) and `dev-promote-v4-d` succeeded in 31 min 53 s.
-
-![Kubeflow Runs: dev-promote-v4-b and -c failed, dev-promote-v4-d succeeded, with the challenger and training runs around them](images/kfp-runs.png)
-
-Between the runs, the swap itself found a limit: with the challenger, the old champion and the new champion's surge pod on the one GPU node, the new pod sat Pending on CPU for 11 minutes until the challenger was deleted by hand, which is why the step now deletes it first. The Service kept its waypoint label through the swap, and the KEDA scaler stayed in place.
-
-![Triton requests per second by service over the promotion: the challenger at 0.2 per second in the aborted run, then at 10% and 20% of the champion's traffic, then the champion's pod replaced](images/ab-triton-by-service.png)
-
-![Model calls per second by version: v4 takes a share from v3 in the two steps, and at 03:54 v4 becomes the only version](images/ab-calls-by-version.png)
-
-Tried and dropped on dev, 2026-11-03: KServe's Knative canary (Knative Serving 1.23.0 and 1.24.0 reject DRA `resourceClaims`) and its InferenceGraph (the router discards response headers, so binary answers fail). A waypoint route split 400 binary requests 309 to 91 at 80/20, at +2.4 ms median and +9.8 ms p99. Not verified: the platform's seccomp policy for the waypoint pod runs on dev and is applied to prod, but no waypoint has been created on prod.
-
 ## Limits
 
 - **Feature retrieval outside Fraud.** Feature lookups by customer and payment-method ID reach agents through the risk MCP (`get_risk_features`), a Rollout behind KEDA with a bounded pre-promotion check ([scaling](../llm/scaling.md), [MCP releases](../llm/mcp-releases.md)). `GET /v1/customers/{customer_id}/features?integration_id=…` on `risk-serving` returns the `customer_daily` and `customer_stream` views by explicit feature references and is exposed at the gateway as `/risk/v1` with client keys and rate limits. The Feast feature server is a single-replica Deployment reachable only in the cluster, with no autoscaler; one replica sustained about 40 req/s on dev ([customer features load test](../llm/scaling.md#customer-features-api)). The dev Feast has no live stream features, so `customer_stream` reads `missing`.
 - **Load test.** Locust runs cover the knowledge API and the customer features route ([load test](../llm/scaling.md#load-test-and-service-level)), not Triton.
-- **Model-inside-image.** Not used (see the rubric gap above).
-- **Waypoint on prod.** No waypoint has been created on prod, so the A/B route is verified on dev only.
 
 Every decision records the policy, model and feature versions it used. The model call never triggers payment effects; only the decision does.

@@ -6,7 +6,7 @@
 |---|---|---|
 | `payment-risk-training` | Builds the training set, fits, gates, registers and rolls out a version | The [drift](drift.md) check, or a manual run |
 | `payment-risk-rollout` | Serves any earlier gated version, for rollback | A manual run |
-| `payment-risk-promote` | Moves a challenger from 0 to a bounded share of traffic, gated by analysis ([serving](serving.md#ab-experiment)) | A manual run |
+| `payment-risk-promote` | Moves a challenger from 0 to a bounded share of traffic, gated by analysis ([analysis-gated promotion](analysis-gated-promotion.md#model-challenger)) | A manual run |
 
 ## Training pipeline
 
