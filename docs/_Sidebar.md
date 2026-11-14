@@ -40,7 +40,7 @@
 
 - [CI, validation and verification](deployment/ci.md)
 - [Infrastructure and IaC](deployment/infra.md)
-- [Docker, CD and canary deployment](deployment/cd.md)
+- [Docker and CD](deployment/cd.md)
 - [Observability](deployment/observability.md)
 - [Security and secrets](deployment/security.md)
 - [Domains, HTTPS, gateways and mesh](deployment/networking.md)

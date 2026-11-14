@@ -121,7 +121,7 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 |---|---|---|---|
 | Engineering fundamentals | Multi-stage Docker images and size comparison | [Docker images](deployment/cd.md#docker-images) | Done; Spark image 5.07 → 3.06 GB, streaming −25% compressed |
 | Offline generator | Skew, schema evolution, duplicates; ≥ 100 GB stored for Bronze ingestion | [Offline data](data/offline.md) | Done (v19: 133.5 GB) |
-| Online generator | Late arrivals and streaming duplicates | [Online data](data/online.md) | Done; see [evidence](data/online.md#late-too-late-and-duplicate-trace) |
+| Online generator | Late arrivals and streaming duplicates | [Online data](data/online.md) | Done |
 | Spark jobs | Baseline, skew, schema evolution, duplicates, integrated into pipelines | [Offline data](data/offline.md) | Done: AWS v19 run; skew timings, deduplication and schema-evolution comparisons on GCP, 2026-11-04 |
 | Flink jobs | Baseline, late arrivals, duplicates, windows, dead-letter topic; output ends at the feature journal topic | [Online data](data/online.md) | Done: local correctness, dev recovery, and a runtime check with a too-late input, a duplicate and late attempts |
 | Storage | Lakehouse compaction, partitioning, Z-order; ClickHouse warehouse indexing (`ORDER BY`, skip indexes) | [Storage](data/storage.md) | Done on v19: partitioning, write order, mart codecs and `EXPLAIN`; a Z-order run showed no file skipping at one file per day |
@@ -161,9 +161,9 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 
 ### Novel ideas
 
-Tools and techniques beyond the course, two per rubric sheet, each with its proof on the linked page.
+Tools and techniques beyond the course, two per rubric sheet.
 
-| Rubric sheet | Idea | Proof |
+| Rubric sheet | Idea | Result |
 |---|---|---|
 | Data platform | [Write–audit–publish](data/write-audit-publish.md): candidate Iceberg snapshots on an audit branch, checked in ClickHouse, then published together through the catalog | GCP backfill: 15 of 15 tasks, checks before each publication |
 | Data platform | [Historical replay](data/historical-replay.md): history replayed through the live Flink operators on a logical clock, so training and serving features come from one engine | 0 incorrect feature cells of 3,234 against a reference; 23-unit replay, about 236M rows per stream table |
@@ -178,7 +178,7 @@ Tools and techniques beyond the course, two per rubric sheet, each with its proo
 |---|---|---|---|
 | CI, validation and verification | Coverage, boundary tests, changed-code mutation tests, property tests and load tests | [CI](deployment/ci.md) | Coverage and mutation results listed |
 | Infrastructure and IaC | Cloud/VM provisioning, Talos bootstrap and shared operators | [Infrastructure](deployment/infra.md) | Platform-owned; prod provisioning run captured |
-| Docker, CD and canary deployment | Image optimization, test/build/deploy flow and guarded Edge promotion | [Delivery](deployment/cd.md), [Edge canary](ml/analysis-gated-promotion.md#edge-checkout-canary) | Prod canary verified 2026-11-03 |
+| Docker and CD | Image optimization, test/build/deploy flow and guarded Edge promotion | [Delivery](deployment/cd.md), [Edge canary](ml/analysis-gated-promotion.md#edge-checkout-canary) | Prod canary verified 2026-11-03 |
 | Observability | Metrics, logs, traces and alert evaluation | [Observability](deployment/observability.md) | Prod captures recorded; external alert delivery disabled |
 | Security and secrets | Doppler, External Secrets and service authorization | [Security](deployment/security.md) | Done; secret delivery and mesh authorization captured |
 

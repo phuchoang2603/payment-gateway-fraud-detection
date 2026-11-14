@@ -25,7 +25,7 @@ The `payment-risk` InferenceService runs NVIDIA Triton with the FIL backend on t
 
 ## Deploy and rollback
 
-`roll_out` is the last step of `payment-risk-training` for a passing model. It patches the storage URI, waits until the Deployment has rolled out the new storage URI, sends an all-missing row and fails unless Triton answers with a probability from the new version, then marks the version `production` and the previous one `archived`. If the check fails, it patches the previous version back. The `payment-risk-rollout` pipeline reruns the step for any earlier version that passed its gate, for rollback.
+`roll_out` is the last step of `payment-risk-training` for a passing model. It patches the storage URI, waits until the Deployment has rolled out the new storage URI, sends an all-missing row and fails unless Triton answers with a probability from the new version, then marks the version `production` and the previous one `archived`. If the check fails, it patches the previous version back. The `payment-risk-rollout` pipeline reruns the step for any earlier version that passed its gate, for rollback. A version can also run as a challenger first, with [analysis-gated promotion](analysis-gated-promotion.md#model-challenger).
 
 On dev, `payment-risk-rollout` with `version=v1` served the earlier version again in 1 min 47 s (3 of 3 steps), and the next training run rolled `v3` out in 20 min 30 s. A binary request for `v2` with all 50 features missing, and one with only `amount_minor` and `has_device` set, both returned `model_version` 2 and a probability of 0.8937. The Kubeflow endpoints page shows the service ready on the `payment-risk-triton` runtime with the registry URI of the live version; the model's registry entry is on [training](training.md#versions).
 
@@ -39,14 +39,9 @@ On dev a throwaway service with the chart's runtime and predictor values, and th
 
 The ML serving dashboard (`ml-serving` in the ML folder of the platform Grafana) shows Triton's request rate, queue and compute time per request, predictor replicas, GPU utilization, and the fraud service's `fraud.model.calls` by status and enforcement. The Grafana sidecar only watches a fixed list of namespaces, so the chart creates the dashboard ConfigMap in `observability`, which the Argo CD project allows for that reason.
 
-## A/B experiment
-
-A gate-passed version can run as a challenger beside the champion, with traffic moved in analysis-gated steps by the `payment-risk-promote` pipeline. The mechanism and the dev runs are on [Analysis-gated promotion (novel)](analysis-gated-promotion.md#model-challenger).
-
 ## Limits
 
 - **Feature retrieval outside Fraud.** Feature lookups by customer and payment-method ID reach agents through the risk MCP (`get_risk_features`), a Rollout behind KEDA with a bounded pre-promotion check ([scaling](../llm/scaling.md), [MCP releases](../llm/mcp-releases.md)). `GET /v1/customers/{customer_id}/features?integration_id=…` on `risk-serving` returns the `customer_daily` and `customer_stream` views by explicit feature references and is exposed at the gateway as `/risk/v1` with client keys and rate limits. The Feast feature server is a single-replica Deployment reachable only in the cluster, with no autoscaler; one replica sustained about 40 req/s on dev ([customer features load test](../llm/scaling.md#customer-features-api)). The dev Feast has no live stream features, so `customer_stream` reads `missing`.
 - **Load test.** Locust runs cover the knowledge API and the customer features route ([load test](../llm/scaling.md#load-test-and-service-level)), not Triton.
-- **Model-inside-image.** Not used (see the rubric gap above).
 
 Every decision records the policy, model and feature versions it used. The model call never triggers payment effects; only the decision does.

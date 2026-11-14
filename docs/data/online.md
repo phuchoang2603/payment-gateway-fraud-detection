@@ -1,6 +1,6 @@
 # Online data
 
-Live gateway events and bounded historical replay use the same Java Flink feature operators. Both publish an epoch-scoped feature journal and persist stream features to Iceberg; the live feature writer also pushes updates to Feast/Redis.
+Live gateway events and bounded [historical replay](historical-replay.md) use the same Java Flink feature operators. Both publish an epoch-scoped feature journal and persist stream features to Iceberg; the live feature writer also pushes updates to Feast/Redis.
 
 ## Live simulator
 
@@ -164,5 +164,3 @@ This is local process evidence, not a Flink runtime or throughput measurement.
 | Job restored | from checkpoint 181 at 11:51:40.443 UTC, 2.4 s after deletion |
 | First new checkpoint | 182 completed at 11:52:43.455 UTC, about 65 s after deletion |
 | Journal integrity | `fraud.feature-updates.v2.live-v18` over the run: 13,159 updates for 5,746 entities, with 0 repeated or conflicting `(key, revision)` pairs and 0 revision regressions, across this restart and the upgrade restart before it |
-
-History is replayed through these same operators: [Historical replay (novel)](historical-replay.md).

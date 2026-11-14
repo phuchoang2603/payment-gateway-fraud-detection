@@ -24,7 +24,7 @@ On 2026-11-04, all 20 gateway ExternalSecrets reported `SecretSynced`, `Ready=Tr
 - [Network policies](../../infra/charts/payment-gateway/templates/network-policy.yaml) restrict pod traffic; [database policies](../../infra/charts/payment-gateway/templates/database-network-policy.yaml) isolate database access.
 - Each service owns a database with separate migration/runtime roles; Payments CDC has a replication identity.
 
-The allowed/denied service-account test and its access-log proof are maintained in [Networking](networking.md#where-encryption-terminates), alongside the public TLS and ingress boundaries.
+The allowed and denied service-account test, with its access logs, is on [Networking](networking.md#where-encryption-terminates).
 
 Card data is synthetic. The vault encrypts fictional fixtures and issues opaque tokens; raw card data stays out of logs, events, Fraud, Redis and the lake. This demonstrates PCI DSS-oriented isolation, not compliance.
 

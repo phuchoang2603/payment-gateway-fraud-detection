@@ -36,14 +36,14 @@ Labels, scenario and oracle fields, and anything that happens after the attempt 
 
 ## Build order
 
-Steps 2–8 are implemented; the prod captures are under [Online and offline paths](#online-and-offline-paths).
+Steps 2–8 are implemented.
 
 1. **DP3 offline features.** A daily Spark job over Silver writes `feat_customer_daily` and `feat_payment_method_daily` with `event_timestamp` and `created`, for the 7- and 30-day windows.
 2. **Offline store.** Feast's Spark offline store reads the `feat_` tables through `SparkSource(table=…)` on the Iceberg catalog. Training builds its dataset with `get_historical_features(payment_risk_v1)` from `label_attempt`.
-3. **Streaming features to offline.** The `feature-writer` appends journal snapshots to `gold.feat_stream_*` with PyIceberg, keeping the Kafka offsets in the same commit. History comes from a Kappa replay of Bronze through the same Flink job.
+3. **Streaming features to offline.** The `feature-writer` appends journal snapshots to `gold.feat_stream_*` with PyIceberg, keeping the Kafka offsets in the same commit. History comes from a [replay of Bronze through the same Flink job](../data/historical-replay.md).
 4. **Streaming features to online.** The same process pushes each batch to Redis with Feast's `push` before buffering its Iceberg append.
 5. **Materialization.** `feast-materialize` loads the daily views into Redis after DP3 and checks a sample against the offline rows.
-6. **TTL and feature services.** 31 days 12 hours for daily views and 24 hours 5 minutes for stream views, with reasons on the [TTL](#ttl-and-freshness) section; one `payment_risk_v1` service for training and Go Fraud.
+6. **TTL and feature services.** 31 days 12 hours for daily views and 24 hours 5 minutes for stream views; one `payment_risk_v1` service for training and Go Fraud.
 7. **Natural keys.** Views key on integration plus customer or payment-method IDs, and Go Fraud requests the new service.
 8. **Governance.** OpenMetadata's Flink connector records the live job, with SDK lineage as the fallback; the writer, history and materialization publish lineage and run status.
 
@@ -56,9 +56,6 @@ Steps 2–8 are implemented; the prod captures are under [Online and offline pat
 
 The training image installs `fraud_feast[spark]` and runs `python -m fraud_feast.spark_jars <spark-jars-directory>` during its build to use the same pinned, checksum-verified JARs as `data-platform-spark`. Set `SPARK_MASTER=local[*]` for retrieval in one Kubeflow Pipelines step, with local disk for Spark spill. Local Spark is also the default for materialization. No Feast SparkApplications are created.
 
-History splits the range into units of `historyUnitDays` (7 in dev, 4 in prod) and runs up to `historyParallelism` of them at once (six in prod, with JobManagers on the stable worker pool). Each unit runs as `history-v19-<YYYYMMDD>` with its own topics, Flink deployment, transactional IDs and consumer group, because one logical-clock job needs a single ordered input partition and cannot itself run in parallel. Each unit adds a one-day lead-in so its 24-hour windows and dedup horizon are complete, which makes units independent. The seed sorts the unit's Bronze rows with DuckDB, writes them with one bootstrap clock control before and one final control after, and the barrier releases inputs as soon as the bootstrap arrives. Bounded Flink then runs to FINISHED, and the writer reads the journal from zero to committed EOF. It deletes each table’s epoch and unit range in a short commit, then writes buffered rows without lead-in through the same writer and conflict retries as live mode. A unit is partially visible while running or after failure; nothing trains until the entire replay passes its gates. A failed unit restarts from the range delete; live recovery instead uses Iceberg offset properties. Before it deletes anything the writer requires zero decode rejects, a completed seed and a FINISHED job, and fails the unit otherwise; duplicates and too-late rejects are reported only. `fraud_feast.materialize --stream-recovery` rebuilds stream Redis from the last STREAM_TTL of batch rows.
-
-**Why Kappa and not a batch implementation.** A second, Spark implementation of the short windows would have to be proved equal to Flink's and kept equal. Replaying history through the same Flink job means training and serving share one implementation, at the cost of replay time.
 
 ### Materialization
 
@@ -104,10 +101,6 @@ The journal topic `fraud.feature-updates.v2.live-v19` feeds `feature-writer`, wh
 ![OpenMetadata lineage of gold.feat_customer_daily](images/openmetadata-lineage-feast-materialize-2026-11-04.png)
 
 `silver.attempts` → `gold.feat_customer_daily` → `feast-materialize`. Both graphs appeared after the metadata-discovery and materialize runs.
-
-### Stream history replay
-
-The full replay that fills `gold.feat_stream_*` is on [Historical replay (novel)](../data/historical-replay.md#full-replay).
 
 ## Entities, views and service
 

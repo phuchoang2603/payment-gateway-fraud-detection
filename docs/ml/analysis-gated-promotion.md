@@ -18,7 +18,6 @@ flowchart LR
 | Traffic split | Gateway API route weights, set by the Rollouts plugin | Istio waypoint route weights, set by the `payment-risk-promote` pipeline |
 | Steps | 10%, 25%, 50% | Bounded steps up to 20% |
 | Analysis | Request count, 5xx fraction, p95, sample age | Request count, failure rate, queue plus compute time against the champion, decline share against the champion |
-| Proof | Prod, 2026-11-03: a faulty build rejected, the healthy retry promoted | Dev, 2026-11-04: two runs aborted, the third promoted v4 |
 
 ## Edge checkout canary
 
@@ -89,5 +88,4 @@ Tried and dropped on dev, 2026-11-03: KServe's Knative canary (Knative Serving 1
 
 ## Limits
 
-- The Edge canary needs public checkout traffic, so its recorded acceptance is from prod, before prod was retired.
 - The model challenger's waypoint route is verified on dev only; no waypoint was created on prod.

@@ -2,7 +2,7 @@
 
 Self-hosted chat, embedding and decision models for the agents, the RAG pipeline and the gateway's request screen, and how fast the chat model serves agent traffic. Every caller reaches them through agentgateway with per-client API keys, request/token limits and mesh authorization; nothing calls a model server directly.
 
-- Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform) (`models.yaml`, values `models`). Application `llm-platform` in namespace `llm`. GPU placement follows the platform-owned DRA `llm-gpu` claim.
+- Chart: [`infra/charts/llm-platform`](../../infra/charts/llm-platform) (`models.yaml`, values `models`). Application `llm-platform` in namespace `llm`. The three model servers share one GPU through the platform-owned `llm-gpu` claim, each with a fixed memory fraction ([NVIDIA DRA GPU sharing](../ml/nvidia-dra.md)).
 - Platform prerequisites (KServe 0.21 `LLMInferenceService` presets, the GPU DRA driver, the `llm-gpu` node group for the local model cache, agentgateway) come from the platform repository.
 
 ## Models
@@ -14,10 +14,6 @@ Self-hosted chat, embedding and decision models for the agents, the RAG pipeline
 | [d3-edge](https://huggingface.co/vllm-sr/d3-edge) | `d3-edge` | `c454ee39b862248d70abd7f84195d2f54ffe6d43` | vLLM nightly `2b009fc6` pinned by digest (release 0.32 does not serve `/v1/systemone`), text only, max length 2 048, 16 concurrent sequences | Decision model classifying prompts as action, jailbreak or safe |
 
 All three are KServe `LLMInferenceService`s. The chat model runs behind llm-d's endpoint picker (EPP) and an InferencePool, so a second replica would join the same pool rather than a new route.
-
-## One GPU, three models
-
-The three model servers share one GPU through an NVIDIA DRA claim, each with a fixed memory fraction; the claim, the fractions and their sizing are on [NVIDIA DRA GPU sharing (novel)](../ml/nvidia-dra.md#llm-gpu-three-vllm-servers).
 
 ## Weights and start-up
 

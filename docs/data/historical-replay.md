@@ -1,6 +1,6 @@
 # Historical replay (novel)
 
-Training needs months of streaming features, and serving reads the same features live. Instead of a second, batch implementation of the windows, history is replayed through the live Flink job's own operators: published Bronze is seeded into isolated Kafka topics, the job runs on a logical clock, and the output lands in the same Iceberg stream tables the feature store reads. Live and historical features therefore come from one engine, and the equivalence is tested rather than assumed.
+Training needs months of streaming features, and serving reads the same features live. A second, Spark implementation of the short windows would have to be proved equal to Flink's and kept equal. Instead, history is replayed through the live Flink job's own operators: published Bronze is seeded into isolated Kafka topics, the job runs on a logical clock, and the output lands in the same Iceberg stream tables the feature store reads. Training and serving share one implementation, checked against an independent [reference](online.md#local-correctness-comparison), at the cost of replay time.
 
 ```mermaid
 flowchart LR
@@ -11,25 +11,20 @@ flowchart LR
     writer --> iceberg[Iceberg stream features]
 ```
 
-Proof it worked:
-
-- **Same results as an independent reference.** The JVM tests compare 2,498 snapshots from 503 deliveries with the reference implementation, and a seeded replay with late, too-late, duplicate and conflicting inputs has 0 incorrect feature cells out of 3,234 ([correctness comparison](online.md#local-correctness-comparison)).
-- **Full replay.** 2026-07-29 to 2026-10-29 in 23 units, all finished and published, about 236 million rows per stream table ([below](#full-replay)).
-- **Stability at volume.** Backpressure and checkpoint tuning took a unit from stalling near 1 million events to 227–466 events/s ([below](#backpressure-and-optimization)).
-
 ## How it runs
 
 [`stream-history`](../../infra/charts/data-pipelines/templates/stream-history.yaml) plans bounded date units, seeds isolated Kafka topics from Bronze, runs Flink to `FINISHED`, writes history features, then deletes successful units’ topics and publishes lineage. Failed or stopped units retain their seeds for reuse; their Flink deployments are still cleaned up. [`history.py`](../../src/data-pipeline/streaming/fraud_streaming/history.py) owns planning/seeding; [`StreamJob`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/StreamJob.java) runs the shared operators with a logical seed clock. Historical topics and the configured history epoch are isolated from live `payments.events.v1` and the live epoch; replay never overwrites live features.
 
+History splits the range into units of `historyUnitDays` (7 in dev, 4 in prod) and runs up to `historyParallelism` of them at once (six in prod, with JobManagers on the stable worker pool). Each unit runs as `history-v19-<YYYYMMDD>` with its own topics, Flink deployment, transactional IDs and consumer group, because one logical-clock job needs a single ordered input partition and cannot itself run in parallel. Each unit adds a one-day lead-in so its 24-hour windows and dedup horizon are complete, which makes units independent. The seed sorts the unit's Bronze rows with DuckDB, writes them with one bootstrap clock control before and one final control after, and the barrier releases inputs as soon as the bootstrap arrives. Bounded Flink then runs to FINISHED, and the writer reads the journal from zero to committed EOF. It deletes each table’s epoch and unit range in a short commit, then writes buffered rows without lead-in through the same writer and conflict retries as live mode. A unit is partially visible while running or after failure; nothing trains until the entire replay passes its gates. A failed unit restarts from the range delete; live recovery instead uses Iceberg offset properties. Before it deletes anything the writer requires zero decode rejects, a completed seed and a FINISHED job, and fails the unit otherwise; duplicates and too-late rejects are reported only.
+
 Run `stream-history` with `start`/`end` only after Bronze is published. Unit size and concurrency come from `features.historyUnitDays`, `features.historyParallelism` and `features.historyWriterParallelism` in the environment's values. Redis stream recovery is a separate `feast-materialize stream-recovery` run over the last 24 hours 5 minutes.
 
-## Flink processing and publication
+## Flink processing
 
-- Each unit adds a one-day lead-in for the 24-hour windows.
 - [`ObserveSource`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/ObserveSource.java) releases clock controls only after their input-offset boundary; progress and buffered records are checkpointed together.
 - Seed reuse requires matching date range, epoch, Bronze snapshot and Kafka topic end offsets.
 
-Replay uses the same [windows](online.md#windows), [deduplication and rejects](online.md#late-too-late-and-duplicate-trace) as live traffic. Instead of wall-clock processing-time timers, it advances event-time timers with the logical seed clock, so old attempts contribute at their historical availability time. Each unit runs at parallelism 1 to preserve ordering; separate units run concurrently. History writers stage day-partitioned Parquet files in parallel, then atomically replace each unit's range per Iceberg table. Commit conflicts reuse the staged files; retries replace the range without duplicates. History does not push to Redis.
+Replay uses the same [windows](online.md#windows), [deduplication and rejects](online.md#late-too-late-and-duplicate-trace) as live traffic. Instead of wall-clock processing-time timers, it advances event-time timers with the logical seed clock, so old attempts contribute at their historical availability time. History writers stage day-partitioned Parquet files in parallel, then atomically replace each unit's range per Iceberg table. Commit conflicts reuse the staged files; retries replace the range without duplicates. History does not push to Redis.
 
 Prod Flink, 2026-11-05 at 18:12 UTC: unit `20260907` running all seven vertices, with backpressure upstream of the window aggregates. UI time: UTC−05:00.
 
@@ -39,7 +34,7 @@ Prod Flink, 2026-11-05 at 18:12 UTC: unit `20260907` running all seven vertices,
 
 ![Argo summary of the stream-history replay](images/argo-stream-history-replay-2026-11-07.png)
 
-The full Kappa replay ran as `stream-history-jvm-v19-8trbp` over `start=2026-07-29`, `end=2026-10-29`: 23 units, all FINISHED and published, Succeeded in about 2 d 8 h (2026-11-04 to 2026-11-07). `gold.feat_stream_customer` then held 236,441,166 rows and `gold.feat_stream_payment_method` 236,453,680, under the `live-v19` epoch.
+The full replay ran as `stream-history-jvm-v19-8trbp` over `start=2026-07-29`, `end=2026-10-29`: 23 units, all FINISHED and published, Succeeded in about 2 d 8 h (2026-11-04 to 2026-11-07). `gold.feat_stream_customer` then held 236,441,166 rows and `gold.feat_stream_payment_method` 236,453,680, under the `live-v19` epoch.
 
 ## Backpressure and optimization
 

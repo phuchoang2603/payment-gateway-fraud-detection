@@ -80,7 +80,7 @@ Vault exposes metadata to Edge and fixture resolution only to the processor. Tok
 
 ## Routing and gateway
 
-The public checkout path uses Cloudflare Tunnel and an Istio Gateway API route; internal calls use the ambient service mesh. [Domains, HTTPS, gateways and the service mesh](../deployment/networking.md) owns hostname configuration, TLS boundaries, routing, identities and verification. [Delivery](../deployment/cd.md#edge-progressive-delivery) owns stable/canary rollout behavior.
+The public checkout path uses Cloudflare Tunnel and an Istio Gateway API route; internal calls use the ambient service mesh. [Domains, HTTPS, gateways and the service mesh](../deployment/networking.md) owns hostname configuration, TLS boundaries, routing, identities and verification. [Analysis-gated promotion](../ml/analysis-gated-promotion.md#edge-checkout-canary) owns stable/canary rollout behavior.
 
 ## Consistency and recovery
 

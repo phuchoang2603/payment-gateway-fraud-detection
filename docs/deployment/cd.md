@@ -1,4 +1,4 @@
-# Docker, CD and canary deployment
+# Docker and CD
 
 GitHub Actions builds images after contract/Helm checks, Go tests and Python tests; Argo CD reconciles application Helm charts. CI has no cluster credentials.
 
@@ -47,8 +47,4 @@ GHCR platform manifests rechecked on 2026-11-05 contain **1,221,394,562 → 908,
 3. Publication waits for every other workflow on that commit/event to succeed and skips superseded revisions. It records the chart revision and image tags in [`release.yaml`](../../infra/argocd/app-of-apps/release.yaml) on the release branch.
 4. The [dev](../../infra/argocd/dev/root.yaml) or [prod](../../infra/argocd/prod/root.yaml) root reconciles the release. Bootstrap requires the namespace, Doppler token, AppProject and root once.
 
-The same flow delivers services and pipeline WorkflowTemplates; Argo Workflows runs their plan, build, validation and publish stages. Prod enables the gateway, Kafka, data pipelines with Flink/Feast, ClickHouse and lakehouse. The prod root also enables live traffic, ML training, LLM and RAG Applications. Nonsecret settings are in [chart values](../../infra/charts); Doppler credentials reach workloads through External Secrets.
-
-## Edge progressive delivery
-
-Edge is the one service released as a canary: public checkout traffic moves to a candidate in 10%, 25% and 50% steps, each gated by a metrics analysis. The design, the incident procedure and the prod acceptance captures are on [Analysis-gated promotion (novel)](../ml/analysis-gated-promotion.md#edge-checkout-canary).
+The same flow delivers services and pipeline WorkflowTemplates; Argo Workflows runs their plan, build, validation and publish stages. Prod enables the gateway, Kafka, data pipelines with Flink/Feast, ClickHouse and lakehouse. The prod root also enables live traffic, ML training, LLM and RAG Applications. Nonsecret settings are in [chart values](../../infra/charts); Doppler credentials reach workloads through External Secrets. Edge is released as a canary with [analysis-gated promotion](../ml/analysis-gated-promotion.md#edge-checkout-canary).
