@@ -12,6 +12,7 @@
 - [Storage](data/storage.md)
 - [Orchestration and governance](data/orchestration-governance.md)
 - [Write–audit–publish (novel)](data/write-audit-publish.md)
+- [Cluster Autoscaler (novel)](data/cluster-autoscaler.md)
 
 **ML**
 

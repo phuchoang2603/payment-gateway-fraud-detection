@@ -166,6 +166,7 @@ Tools and techniques beyond the course, by rubric sheet.
 | Rubric sheet | Idea | Result |
 |---|---|---|
 | Data platform | [Write–audit–publish](data/write-audit-publish.md): candidate Iceberg snapshots on an audit branch, checked in ClickHouse, then published together through the catalog | GCP backfill: 15 of 15 tasks, checks before each publication |
+| Data platform | [Cluster Autoscaler for batch and streaming](data/cluster-autoscaler.md): generator shards, Spark executors and Flink TaskManagers on a Spot group that grows from zero for Pending pods and drains when idle | v19 generator (133.5 GB), October backfill and the 23-unit history replay on Spot nodes |
 | ML platform | [NVIDIA DRA GPU sharing](ml/nvidia-dra.md): resource claims put three vLLM servers on one card, and Triton with its training jobs on another | Triton Ready while a TrainJob finished on the same claim; three model servers reserving one claim |
 | ML platform | [Analysis-gated promotion](ml/analysis-gated-promotion.md): the checkout canary and the model challenger move traffic only after live-metric analysis passes | Prod: faulty Edge build rejected, retry promoted; dev: two model promotions aborted, the third promoted v4 |
 | LLM and agents | [Gateway and Jev policy](llm/gateway-and-jev-policy.md): one agentgateway for models, tools and APIs, with keys, limits, PII masking and screening by a decision model | Route, key, limit and screening checks on dev |
