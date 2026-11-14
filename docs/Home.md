@@ -156,6 +156,8 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Prompt management | Prompts managed and versioned in Langfuse (seeded from Git); agents read them at each model call | [Langfuse](llm/langfuse.md#prompts) | Done on dev |
 | A/B tests | Prompt A/B tests per agent in Langfuse, compared per version | [Langfuse](llm/langfuse.md#ab-tests) | Prompt, per-version model-setting and model-version (Qwen3-4B against Qwen3.5-4B) tests done on dev |
 | Agent tracing | Agent traces from kagent to Langfuse, linked to prompt versions; LLM, gateway and API metrics in VictoriaMetrics with a Grafana dashboard | [Langfuse](llm/langfuse.md), [metrics](deployment/observability.md#llm-metrics) | Done on dev |
+| Refunds | Full and partial refunds of a succeeded payment in the gateway: idempotent per request, capped at the paid amount, one ledger event per refund and a signed `payment.refunded` delivery | [Payment gateway](payment-gateway/architecture.md) | Planned |
+| Refund agent | An agent tool that drafts a refund from a payment's history and risk decision; an analyst approves it before the gateway runs it, and the Jev screen keeps blocking direct refund requests to the read-only agents | [Agents](llm/agents.md) | Planned |
 | GPU scheduling | Kueue queueing for GPU training and serving workloads | [Agents](llm/agents.md) | Planned |
 | Model loading | Pinned revisions in the KServe local model cache, loaded with InstantTensor | [Inference](llm/inference.md) | Done on dev |
 
@@ -166,7 +168,7 @@ Tools and techniques beyond the course, by rubric sheet.
 | Rubric sheet | Idea | Result |
 |---|---|---|
 | Data platform | [Write–audit–publish](data/write-audit-publish.md): candidate Iceberg snapshots on an audit branch, checked in ClickHouse, then published together through the catalog | GCP backfill: 15 of 15 tasks, checks before each publication |
-| Data platform | [Cluster Autoscaler for batch and streaming](data/cluster-autoscaler.md): generator shards, Spark executors and Flink TaskManagers on a Spot group that grows from zero for Pending pods and drains when idle | v19 generator (133.5 GB), October backfill and the 23-unit history replay on Spot nodes |
+| Data platform | [Cluster Autoscaler for batch and streaming](data/cluster-autoscaler.md): generator shards, Spark executors and Flink TaskManagers on a Spot group that grows from zero for Pending pods and drains when idle | Spot 0 → 4 → 0 nodes around a generator run; v19 generator (133.5 GB), October backfill and the 23-unit history replay on Spot nodes |
 | ML platform | [NVIDIA DRA GPU sharing](ml/nvidia-dra.md): resource claims put three vLLM servers on one card, and Triton with its training jobs on another | Triton Ready while a TrainJob finished on the same claim; three model servers reserving one claim |
 | ML platform | [Analysis-gated promotion](ml/analysis-gated-promotion.md): the checkout canary and the model challenger move traffic only after live-metric analysis passes | Prod: faulty Edge build rejected, retry promoted; dev: two model promotions aborted, the third promoted v4 |
 | LLM and agents | [Gateway and Jev policy](llm/gateway-and-jev-policy.md): one agentgateway for models, tools and APIs, with keys, limits, PII masking and screening by a decision model | Route, key, limit and screening checks on dev |
