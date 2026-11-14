@@ -6,7 +6,7 @@ Three workloads scale on KEDA. The two MCP servers are the agents' tools and the
 |---|---|---|---|
 | Knowledge API (`rag-api`) | 2 to 4 replicas | Combined REST and MCP request rate, 10 req/s per replica | [Locust run](#load-test-and-service-level), [scale-out](#knowledge-api-rag-api) |
 | Risk MCP (`risk-serving`) | 2 to 4 replicas | Tool-call rate, 5 calls/s per replica | [Scale-out](#risk-mcp-risk-serving) |
-| Agent workers (`llm-agents` WorkerPool) | 2 to 6 workers | Partly or fully booked workers, 0.7 per worker | [Twelve conversations](#agent-worker-pool) |
+| Agent workers (`llm-agents` WorkerPool) | 2 to 6 workers | Partly or fully booked workers, 0.7 per worker | [Thirty parallel conversations](#agent-worker-pool) |
 
 Model servers are not autoscaled: each environment has one GPU ([Inference](inference.md)). Agent conversations are Substrate actors, created on demand and suspended to zero when idle ([Agents](agents.md#sandbox-warm-start-and-autoscaling)). The coordinator and its sub-agents therefore scale as workers, not as per-agent replicas; the MCP server captures below show the KEDA mechanism on the tools they call. Releases of the two MCP servers are on [MCP releases](mcp-releases.md).
 

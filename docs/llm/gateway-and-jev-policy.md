@@ -13,7 +13,7 @@ One agentgateway `Gateway` in `llm` is the only entry to the agents (A2A), the m
 | `/v1/chat/completions`, `/v1/embeddings` | `qwen35-4b` InferencePool (through the endpoint picker), `qwen3-embedding` | agents, the RAG pipeline, `rag-api`, the benchmark |
 | `/v1/systemone` | `d3-edge`, the Jev decision model (agentgateway's `SystemOne` format), on its own route without the prompt guard | clients with a key, and the LLM route's request screen |
 | `/mcp/<server>` | MCP server `<server>` (`knowledge` → `rag-api` `/mcp`, `risk` → `risk-serving` `/mcp`) | agents, kagent's tool discovery |
-| `/<api>/v1/...` | REST API `<api>` (today `knowledge` → `rag-api` `/v1`) | API clients |
+| `/<api>/v1/...` | REST API `<api>` (`knowledge` → `rag-api` `/v1`, `risk` → `risk-serving` `/v1`) | API clients |
 
 An MCP server or REST API is one entry under `gateway.mcpServers` or `gateway.apiRoutes` in the values, and an A2A route one entry agent under `agents.list`; the chart renders its route, backend and policy. The A2A backend rewrites the agent card's URLs to the gateway's address and signs a short-lived token (ES256, 300 s) for each call to the kagent controller, which admits only the gateway. The OpenAI-compatible `/v1` route uses `backend.ai.routes` so chat completions, embeddings and model listing each get the right request shape.
 

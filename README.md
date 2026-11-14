@@ -31,7 +31,7 @@ A payment gateway for a refurbished-electronics marketplace, built to connect re
 
 ## Deployment and security
 
-- **Platform:** Talos on Proxmox (dev) and GCP (prod), OpenTofu, Argo CD and shared operators, owned by [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox).
+- **Platform:** Talos on Proxmox (dev) and GCP (prod, now retired), OpenTofu, Argo CD and shared operators, owned by [talos-proxmox](https://github.com/phuchoang2603/talos-proxmox).
 - **Delivery:** GitHub Actions → GHCR → Argo CD; Istio checkout canary stages at **10%, 25%, 50%**. [CI](docs/deployment/ci.md) · [Delivery](docs/deployment/cd.md).
 - **Access:** Cloudflare Tunnel/HTTPS, Istio ambient mTLS, service-account policies and Doppler/External Secrets. [Networking](docs/deployment/networking.md) · [Security](docs/deployment/security.md).
 
@@ -58,8 +58,8 @@ A payment gateway for a refurbished-electronics marketplace, built to connect re
 | Overview and status | [Home](docs/Home.md) |
 | Payment gateway | [Architecture](docs/payment-gateway/architecture.md) · [Conventions](docs/payment-gateway/conventions.md) |
 | Data | [Offline](docs/data/offline.md) · [Online](docs/data/online.md) · [Storage](docs/data/storage.md) · [Orchestration and governance](docs/data/orchestration-governance.md) · [Write–audit–publish](docs/data/write-audit-publish.md) |
-| ML | [Feature store](docs/ml/feature-store.md) · [Training](docs/ml/training.md) · [Pipeline](docs/ml/pipeline.md) · [Drift](docs/ml/drift.md) · [Serving](docs/ml/serving.md) |
-| LLM | [Agents](docs/llm/agents.md) · [Inference](docs/llm/inference.md) · [Gateway and Jev policy](docs/llm/gateway-and-jev-policy.md) · [RAG](docs/llm/rag.md) · [Autoscaling](docs/llm/scaling.md) · [MCP releases](docs/llm/mcp-releases.md) · [Langfuse](docs/llm/langfuse.md) |
+| ML | [Feature store](docs/ml/feature-store.md) · [Training](docs/ml/training.md) · [Pipeline](docs/ml/pipeline.md) · [Drift](docs/ml/drift.md) · [Serving](docs/ml/serving.md) · [Background](docs/ml/background.md) |
+| LLM | [Agents](docs/llm/agents.md) · [Inference](docs/llm/inference.md) · [Gateway and Jev policy](docs/llm/gateway-and-jev-policy.md) · [Custom Go ADK runtime](docs/llm/custom-go-adk-runtime.md) · [RAG](docs/llm/rag.md) · [Autoscaling](docs/llm/scaling.md) · [MCP releases](docs/llm/mcp-releases.md) · [Langfuse](docs/llm/langfuse.md) |
 | Deployment | [CI](docs/deployment/ci.md) · [Infrastructure](docs/deployment/infra.md) · [CD](docs/deployment/cd.md) · [Observability](docs/deployment/observability.md) · [Security](docs/deployment/security.md) · [Networking](docs/deployment/networking.md) |
 
 ## Getting started
