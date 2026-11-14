@@ -1,6 +1,6 @@
 # Online data
 
-Live gateway events and bounded historical replay use the same Java Flink feature operators. Both publish an epoch-scoped feature journal and persist stream features to Iceberg; the live feature writer also pushes updates to Feast/Redis.
+Live gateway events and bounded [historical replay](#historical-replay) use the same Java Flink feature operators. Both publish an epoch-scoped feature journal and persist stream features to Iceberg; the live feature writer also pushes updates to Feast/Redis.
 
 ## Live simulator
 
@@ -167,23 +167,7 @@ This is local process evidence, not a Flink runtime or throughput measurement.
 
 ## Historical replay
 
-[`stream-history`](../../infra/charts/data-pipelines/templates/stream-history.yaml) plans bounded date units, seeds isolated Kafka topics from Bronze, runs Flink to `FINISHED`, writes history features, then deletes successful units’ topics and publishes lineage. Failed or stopped units retain their seeds for reuse; their Flink deployments are still cleaned up. [`history.py`](../../src/data-pipeline/streaming/fraud_streaming/history.py) owns planning/seeding; [`StreamJob`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/StreamJob.java) runs the shared operators with a logical seed clock. Historical topics and the configured history epoch are isolated from live `payments.events.v1` and the live epoch; replay never overwrites live features.
-
-Run `stream-history` with `start`/`end` only after Bronze is published. Unit size and concurrency come from `features.historyUnitDays`, `features.historyParallelism` and `features.historyWriterParallelism` in the environment's values. Redis stream recovery is a separate `feast-materialize stream-recovery` run over the last 24 hours 5 minutes.
-
-### Flink processing and publication
-
-- Each unit adds a one-day lead-in for the 24-hour windows.
-- [`ObserveSource`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/ObserveSource.java) releases clock controls only after their input-offset boundary; progress and buffered records are checkpointed together.
-- Seed reuse requires matching date range, epoch, Bronze snapshot and Kafka topic end offsets.
-
-Replay uses the same [windows](#windows), [deduplication and rejects](#late-too-late-and-duplicate-trace) as live traffic. Instead of wall-clock processing-time timers, it advances event-time timers with the logical seed clock, so old attempts contribute at their historical availability time. Each unit runs at parallelism 1 to preserve ordering; separate units run concurrently. History writers stage day-partitioned Parquet files in parallel, then atomically replace each unit's range per Iceberg table. Commit conflicts reuse the staged files; retries replace the range without duplicates. History does not push to Redis.
-
-Prod Flink, 2026-11-05 at 18:12 UTC: unit `20260907` running all seven vertices, with backpressure upstream of the window aggregates. UI time: UTC−05:00.
-
-![GCP JVM historical replay: source, deduplication, windows and journal sinks](images/flink-jvm-history-20260907-2026-11-05.png)
-
-The full 2026-07-29 to 2026-10-29 replay completed on 2026-11-07: all 23 units FINISHED and published, totalling about 236M rows per stream table. See the [feature store](../ml/feature-store.md#stream-history-replay) page.
+Training needs months of streaming features, and serving reads the same features live. A second, Spark implementation of the short windows would have to be proved equal to Flink's and kept equal. Instead, history is replayed through the live Flink job's own operators: published Bronze is seeded into isolated Kafka topics, the job runs on a logical clock, and the output lands in the same Iceberg stream tables the feature store reads. Training and serving share one implementation, checked against an independent [reference](#local-correctness-comparison), at the cost of replay time.
 
 ```mermaid
 flowchart LR
@@ -194,11 +178,32 @@ flowchart LR
     writer --> iceberg[Iceberg stream features]
 ```
 
+### How it runs
+
+[`stream-history`](../../infra/charts/data-pipelines/templates/stream-history.yaml) plans bounded date units, seeds isolated Kafka topics from Bronze, runs Flink to `FINISHED`, writes history features, then deletes successful units’ topics and publishes lineage. Failed or stopped units retain their seeds for reuse; their Flink deployments are still cleaned up. [`history.py`](../../src/data-pipeline/streaming/fraud_streaming/history.py) owns planning/seeding; [`StreamJob`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/StreamJob.java) runs the shared operators with a logical seed clock. Historical topics and the configured history epoch are isolated from live `payments.events.v1` and the live epoch; replay never overwrites live features.
+
+History splits the range into units of `historyUnitDays` (7 in dev, 4 in prod) and runs up to `historyParallelism` of them at once (six in prod, with JobManagers on the stable worker pool). Each unit runs as `history-v19-<YYYYMMDD>` with its own topics, Flink deployment, transactional IDs and consumer group, because one logical-clock job needs a single ordered input partition and cannot itself run in parallel. Each unit adds a one-day lead-in so its 24-hour windows and dedup horizon are complete, which makes units independent. The seed sorts the unit's Bronze rows with DuckDB, writes them with one bootstrap clock control before and one final control after, and the barrier releases inputs as soon as the bootstrap arrives. Bounded Flink then runs to FINISHED, and the writer reads the journal from zero to committed EOF. It deletes each table’s epoch and unit range in a short commit, then writes buffered rows without lead-in through the same writer and conflict retries as live mode. A unit is partially visible while running or after failure; nothing trains until the entire replay passes its gates. A failed unit restarts from the range delete; live recovery instead uses Iceberg offset properties. Before it deletes anything the writer requires zero decode rejects, a completed seed and a FINISHED job, and fails the unit otherwise; duplicates and too-late rejects are reported only.
+
+Run `stream-history` with `start`/`end` only after Bronze is published. Unit size and concurrency come from `features.historyUnitDays`, `features.historyParallelism` and `features.historyWriterParallelism` in the environment's values. Redis stream recovery is a separate `feast-materialize stream-recovery` run over the last 24 hours 5 minutes.
+
+### Flink processing
+
+- [`ObserveSource`](../../src/data-pipeline/streaming/jvm/src/main/java/dev/fraud/stream/ObserveSource.java) releases clock controls only after their input-offset boundary; progress and buffered records are checkpointed together.
+- Seed reuse requires matching date range, epoch, Bronze snapshot and Kafka topic end offsets.
+
+Replay uses the same [windows](#windows), [deduplication and rejects](#late-too-late-and-duplicate-trace) as live traffic. Instead of wall-clock processing-time timers, it advances event-time timers with the logical seed clock, so old attempts contribute at their historical availability time. History writers stage day-partitioned Parquet files in parallel, then atomically replace each unit's range per Iceberg table. Commit conflicts reuse the staged files; retries replace the range without duplicates. History does not push to Redis.
+
+Prod Flink, 2026-11-05 at 18:12 UTC: unit `20260907` running all seven vertices, with backpressure upstream of the window aggregates. UI time: UTC−05:00.
+
+![GCP JVM historical replay: source, deduplication, windows and journal sinks](images/flink-jvm-history-20260907-2026-11-05.png)
+
+### Full replay
+
+![Argo summary of the stream-history replay](images/argo-stream-history-replay-2026-11-07.png)
+
+The full replay ran as `stream-history-jvm-v19-8trbp` over `start=2026-07-29`, `end=2026-10-29`: 23 units, all FINISHED and published, Succeeded in about 2 d 8 h (2026-11-04 to 2026-11-07). `gold.feat_stream_customer` then held 236,441,166 rows and `gold.feat_stream_payment_method` 236,453,680, under the `live-v19` epoch.
+
 ### Backpressure and optimization
-
-<a id="historical-replay-optimization"></a>
-
-<a id="backpressure"></a>
 
 Recorded AWS-era replay measurements; current settings come from the environment values.
 

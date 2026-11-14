@@ -13,7 +13,7 @@ Production moved from AWS to GCP on 2026-11-02 and was retired on 2026-11-09; si
 | Volumes | `local-path` | GCE persistent disks (`pd-balanced`) through the default `cloud-block` StorageClass |
 | Object storage | MinIO `platform-dev` | GCS bucket `talos-proxmox-prod-platform` through the S3-compatible XML API |
 
-The full-scale generator uses the Spot pool: one shard per Spot node, selected by `talos.dev/nodepool: spot` in the prod values. Both clusters have one control plane and are not highly available.
+The Spot pool runs the generator, Spark executors and Flink TaskManagers ([Cluster Autoscaler](../data/cluster-autoscaler.md)). Both clusters have one control plane and are not highly available.
 
 ## Platform and application ownership
 

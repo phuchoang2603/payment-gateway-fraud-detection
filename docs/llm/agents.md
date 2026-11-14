@@ -45,8 +45,6 @@ flowchart LR
 
 One kagent `ModelConfig`, `default-model-config`, used by every agent: provider OpenAI, model `qwen35-4b` with the model card's non-thinking sampling, the agents' gateway key, and the gateway's `/v1` route as base URL. Changing the model, the gateway or the key for all agents is one edit. Its sampling settings are the ones every agent uses; kagent's Go runtime takes them only from here.
 
-The [gateway note](gateway-and-jev-policy.md#routes) shows the shared base URL and credential Secret in the kagent model configuration.
-
 [`agents.yaml`](../../infra/charts/llm-platform/templates/agents.yaml) generates this shared base URL and binds the ModelConfig to every template. Dev calls through this gateway returned chat completions and 1024-dimensional embeddings; direct model access from an unapproved pod was reset. The model-version runs match the gateway's chat counts to Langfuse's model calls per window ([Langfuse](langfuse.md#model-versions)).
 
 ## Agents
@@ -108,8 +106,6 @@ A retry on 2026-11-05 at 06:04 UTC returned score 0.0006 from model v5 against t
 
 Pending: answer quality still needs evaluation; the risk answer rendered 347677 minor units as dollars, described expired stream values as uncaptured and explained the policy before retrieving evidence. The first explicit transfer follow-up was rejected by the gateway's request-screening webhook with HTTP 403; a plain policy question succeeded.
 
-Prompt-version evidence for the retry is in [Langfuse](langfuse.md#prompts).
-
 Since 0.3.0 the risk agent also has the `knowledge` server, so one answer can carry a score and the policy behind it. At 18:40 UTC on 2026-11-11 a dev chat in the kagent UI sent the coordinator a payment with its identifiers. It transferred to `risk_agent`, which called `get_risk_features` and then the knowledge tools:
 
 ![kagent chat: transfer_to_agent risk_agent, then get_risk_features with the payment's identifiers](images/risk-knowledge-chat-transfer.png)
@@ -156,8 +152,6 @@ The three agents at their current versions, coordinator 0.2.0, evidence agent 0.
 The risk agent's entry lists the `risk` and `knowledge` servers it uses:
 
 ![agentregistry: riskagent 0.3.0 with the risk and knowledge MCP servers](images/agents-registry-riskagent.png)
-
-Prompt management, A/B comparisons and trace details are documented in [Langfuse](langfuse.md).
 
 ## Known limits
 

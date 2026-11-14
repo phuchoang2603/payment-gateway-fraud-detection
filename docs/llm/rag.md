@@ -3,7 +3,7 @@
 The agents answer from a small knowledge base about the payment gateway: decline codes, risk policy, the payment lifecycle, the checkout API, fraud features and support guidance. A pipeline turns documents into embedded chunks in a feature store, and one service serves them as a Web API (by id) and as MCP tools (search and read). It never reads payment data.
 
 - Code: [`src/llm`](../../src/llm), a uv workspace: [`common`](../../src/llm/common) (Feast store, gateway embedding client), [`rag_pipeline`](../../src/llm/rag_pipeline) (corpus, chunking, validation, steps, OpenMetadata) and [`rag_serving`](../../src/llm/rag_serving) (FastAPI + MCP).
-- Deployment: [`infra/charts/rag-pipeline`](../../infra/charts/rag-pipeline), application `rag-pipeline` (workflow in `data`, store and API in `llm`). Images `rag-pipeline` and `rag-serving`.
+- Deployment: [`infra/charts/rag-pipeline`](../../infra/charts/rag-pipeline), application `rag-pipeline` (workflow in `data`, store and API in `llm`). Images `rag-pipeline` and `rag-serving`, built and released by the shared [release flow](../deployment/cd.md#release-flow).
 - Contract: [`contracts/data-products/knowledge-base`](../../contracts/data-products/knowledge-base).
 
 ## Pipeline
@@ -37,7 +37,6 @@ Each new `rag-pipeline` image starts one run, rendered as a `Workflow` named aft
 Run `rag-knowledge-07ae38319a`, 2026-10-30 19:12–19:25 UTC, every step succeeded in 13 minutes:
 
 ![Argo Workflows: rag-knowledge-07ae38319a, every step succeeded](images/rag-argo-workflow.png)
-
 
 ```text
 publish-corpus  {"knowledge_version": "0aa3e93777236677", "documents": 17, "skip": false}
@@ -94,10 +93,6 @@ Authentication, rate limits, MCP discovery and mesh results are owned by the [ga
 ### Tests
 
 [`src/llm/rag_serving/tests/test_service.py`](../../src/llm/rag_serving/tests/test_service.py) uses pytest fixtures and mocks for the store and the embedding client (a fake embedder counts gateway calls, the store functions are monkeypatched), and covers the REST paths (200, 404, 422), the MCP tools, validation before any gateway call, readiness, lazy loading, metrics and the app lifespan. The serving member enforces `--cov-fail-under=90`; coverage and mutation results are on [CI](../deployment/ci.md#coverage-and-mutation-testing).
-
-## CI/CD
-
-The `rag-pipeline` and `rag-serving` images use the shared [CI](../deployment/ci.md) and [release flow](../deployment/cd.md#release-flow). Argo CD reconciles the chart; Argo Workflows runs the knowledge pipeline ([recorded run](#a-complete-run-on-dev)).
 
 ## Limits
 

@@ -2,11 +2,11 @@
 
 Three workloads scale on KEDA. The two MCP servers are the agents' tools and the knowledge Web API; the worker pool runs the agents themselves.
 
-| Workload | Range | Metric and target | Proof |
-|---|---|---|---|
-| Knowledge API (`rag-api`) | 2 to 4 replicas | Combined REST and MCP request rate, 10 req/s per replica | [Locust run](#load-test-and-service-level), [scale-out](#knowledge-api-rag-api) |
-| Risk MCP (`risk-serving`) | 2 to 4 replicas | Tool-call rate, 5 calls/s per replica | [Scale-out](#risk-mcp-risk-serving) |
-| Agent workers (`llm-agents` WorkerPool) | 2 to 6 workers | Partly or fully booked workers, 0.7 per worker | [Thirty parallel conversations](#agent-worker-pool) |
+| Workload | Range | Metric and target |
+|---|---|---|
+| Knowledge API (`rag-api`) | 2 to 4 replicas | Combined REST and MCP request rate, 10 req/s per replica |
+| Risk MCP (`risk-serving`) | 2 to 4 replicas | Tool-call rate, 5 calls/s per replica |
+| Agent workers (`llm-agents` WorkerPool) | 2 to 6 workers | Partly or fully booked workers, 0.7 per worker |
 
 Model servers are not autoscaled: each environment has one GPU ([Inference](inference.md)). Agent conversations are Substrate actors, created on demand and suspended to zero when idle ([Agents](agents.md#sandbox-warm-start-and-autoscaling)). The coordinator and its sub-agents therefore scale as workers, not as per-agent replicas; the MCP server captures below show the KEDA mechanism on the tools they call. Releases of the two MCP servers are on [MCP releases](mcp-releases.md).
 
@@ -68,9 +68,7 @@ Risk's 5 calls/s target is above what one dev client generates, so the target wa
 | 05:33:05 | 0.430 / 0.5 | 4 (3) |
 | 05:34:06 | 0.442 / 0.5 | 4 (4) |
 
-The risk server was back to 2 replicas by 05:43. The panel before the worker pool was added shows this run alone:
-
-![Grafana: risk-serving desired and current replicas rise from 2 to 3 and 4 at 05:32 and stay at 4](images/scale-risk-serving.png)
+The risk server was back to 2 replicas by 05:43.
 
 While the new pods started on the full node, two of them failed their liveness probe, which had no startup grace, and were restarted; the chart now gives the pod a startup probe like `rag-api`'s.
 

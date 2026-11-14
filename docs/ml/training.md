@@ -22,7 +22,6 @@ Everything measured below ran on dev (RTX 5060 Ti of `dev-server1`) against trai
 
 These are the windows for a first run on a full replay. A later run rolls them: contiguous test, validation and train windows of 14, 14 and 56 days ending on the start date minus one day, or on the latest earlier day for which every day of the three windows has rows in the stream tables (`risk_model.windows.rolling`, `latest_covered`), so a gap between replayed and live history is never spanned. Passing all four of `train`, `validation`, `test` and `cutoff` overrides the rule. `WindowSplitter` rejects overlapping, gapped or misordered windows, and rows outside every window.
 
-
 ## Notebook
 
 [`payment_risk_exploration.ipynb`](../../src/ml/notebooks/payment_risk_exploration.ipynb) is committed without outputs. It was executed top to bottom with `jupyter nbconvert --execute` in a one-off Job, because the Notebook server avoids GPU nodes while its volume sits on one, and the figures below are that execution's outputs, saved as PNG. Its fits and scores run in GPU TrainJobs (`steps.fit_on_gpu`, `steps.gate`, `steps.experiments`) while Triton holds the same GPU. Environment overrides: `NOTEBOOK_END_DAY`, `NOTEBOOK_TRAIN_DAYS`, `NOTEBOOK_VALIDATION_DAYS`, `NOTEBOOK_TEST_DAYS`, `NOTEBOOK_COMPARE_RATE`, `NOTEBOOK_ABLATION_RATE`, `NOTEBOOK_FOLDS` and `NOTEBOOK_SNAPSHOT`; an unset snapshot builds a new dataset version.
@@ -86,7 +85,7 @@ The pipeline's fit took 4.0 s and stopped at round 45. The notebook's last cell 
 | `v3` | defaults | 0.9370 | 0.9895 | 0.9110 | 0.8834 | 0.5122 / 0.0783 |
 | `v4` | defaults, same data, with the [drift](drift.md) reference profile | 0.9370 | 0.9895 | 0.9110 | 0.8834 | 0.5122 / 0.0783 |
 
-Four trials did not beat the defaults, so `v3` was gated against `v2` and replaced it. `v4` retrains `v3`'s data and settings for the reference profile and scores the same, so a manual run registered it with a lowered `gate_margin`; it replaced `v3` through the [A/B promotion](serving.md#ab-experiment). `v2` is `ARCHIVED`; the first version was archived too and its model files deleted, because the registry has no delete call. The registry UI hides archived versions.
+Four trials did not beat the defaults, so `v3` was gated against `v2` and replaced it. `v4` retrains `v3`'s data and settings for the reference profile and scores the same, so a manual run registered it with a lowered `gate_margin`; it replaced `v3` through the [analysis-gated promotion](analysis-gated-promotion.md#model-challenger). `v2` is `ARCHIVED`; the first version was archived too and its model files deleted, because the registry has no delete call. The registry UI hides archived versions.
 
 ![Model Registry, payment-risk v3: properties including cutoff, pipeline run, feature service, params, sources and thresholds](images/registry-version.png)
 

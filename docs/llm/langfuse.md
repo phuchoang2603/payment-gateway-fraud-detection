@@ -20,16 +20,7 @@ The Langfuse prompt `risk-agent-system-prompt` was published as `production` ver
 
 ## A/B tests
 
-A test is part of the prompt: the `production` version's config names the other label and the share of conversations it gets, for example `{"abTest": {"label": "variant-b", "share": 0.5}}`. The runtime hashes the prompt name and the conversation, so a conversation keeps its side for every model call, and each agent in it is split on its own. The trace is tagged with each tested agent's side (`evidence-agent:variant-b`), and every model call is linked to its version, so Langfuse compares the versions directly. Ending a test is a config edit in Langfuse; adopting the variant is moving the `production` label.
-
-The seeds give every agent a variant that adds one instruction to its prompt. The dev metrics view captured on 2026-11-05, with its “Past 30 days” filter, shows the current risk prompt labels alongside recorded generations:
-
-![Langfuse prompt metrics: risk-agent production v3 and variant-b v4, with latency, output tokens and generation counts](images/langfuse-prompt-ab.png)
-
-| Prompt version | Label | Median latency | Median output tokens | Model calls |
-|---|---|---|---|---|
-| v3 | production | 6.824 s | 271 | 5 |
-| v4 | variant-b | 1 min 13 s | 337 | 2 |
+A test is part of the prompt: the `production` version's config names the other label and the share of conversations it gets, for example `{"abTest": {"label": "variant-b", "share": 0.5}}`. The runtime hashes the prompt name and the conversation, so a conversation keeps its side for every model call, and each agent in it is split on its own. The trace is tagged with each tested agent's side (`evidence-agent:variant-b`), and every model call is linked to its version, so Langfuse compares the versions directly. Ending a test is a config edit in Langfuse; adopting the variant is moving the `production` label. The seeds give every agent a variant that adds one instruction to its prompt.
 
 A version's config may also carry model settings, `{"model": {"temperature": 0.1, "topP": 0.5, "maxTokens": 160}}`, so a variant can differ by sampling as well as by text; a setting left out keeps the `ModelConfig`'s value. kagent's OpenAI path sends only the `ModelConfig`'s settings and ignores the request's generation config, so the runtime writes the chosen version's values through the pointers the model reads, for the settings the `ModelConfig` sets (temperature, topP and maxTokens). The runtime's tests check this against kagent's own model constructor. On dev, `risk-agent-system-prompt` v5 (`variant-b`) carries `{"model": {"temperature": 0.1, "topP": 0.5, "maxTokens": 384}}` against v3 (`production`) on the `ModelConfig`'s 0.7, 0.8 and 1024. Twelve conversations of the same question with varying amounts reached the model; the gateway saw 17 calls with the variant's settings, equal to the 17 v5 generations in Langfuse, and the rest with the baseline:
 

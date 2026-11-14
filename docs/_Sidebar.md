@@ -12,6 +12,7 @@
 - [Storage](data/storage.md)
 - [Orchestration and governance](data/orchestration-governance.md)
 - [Write–audit–publish (novel)](data/write-audit-publish.md)
+- [Cluster Autoscaler (novel)](data/cluster-autoscaler.md)
 
 **ML**
 
@@ -20,6 +21,8 @@
 - [Pipeline](ml/pipeline.md)
 - [Drift](ml/drift.md)
 - [Serving](ml/serving.md)
+- [NVIDIA DRA GPU sharing (novel)](ml/nvidia-dra.md)
+- [Analysis-gated promotion (novel)](ml/analysis-gated-promotion.md)
 - [Background](ml/background.md)
 
 **LLM**
@@ -37,7 +40,7 @@
 
 - [CI, validation and verification](deployment/ci.md)
 - [Infrastructure and IaC](deployment/infra.md)
-- [Docker, CD and canary deployment](deployment/cd.md)
+- [Docker and CD](deployment/cd.md)
 - [Observability](deployment/observability.md)
 - [Security and secrets](deployment/security.md)
 - [Domains, HTTPS, gateways and mesh](deployment/networking.md)
