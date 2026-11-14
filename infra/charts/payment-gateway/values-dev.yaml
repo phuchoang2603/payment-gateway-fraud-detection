@@ -10,5 +10,8 @@ ingress:
 redis:
   resources:
     requests: {cpu: 50m, memory: 128Mi}
+rollout:
+  analysis:
+    enabled: false
 features:
   enabled: true

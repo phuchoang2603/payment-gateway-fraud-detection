@@ -355,6 +355,7 @@ rollout:
   metricsAddress: http://vmsingle-vmks.observability.svc.cluster.local:8428
   weights: [10, 25, 50]
   analysis:
+    enabled: true
     warmup: 5m
     interval: 1m
     count: 2
