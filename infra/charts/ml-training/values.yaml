@@ -95,6 +95,7 @@ serving:
               type: Value
               value: "5000"
 notebook:
+  enabled: true
   storageClass: cloud-block
   storageSize: 20Gi
   resources:
