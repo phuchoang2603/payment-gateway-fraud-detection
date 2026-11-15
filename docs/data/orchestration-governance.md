@@ -80,7 +80,3 @@ Each published table also carries its contract's test cases. The catalog's data-
 ### RAG knowledge workflow and AI assets
 
 The RAG pipeline's `rag-knowledge` workflow also runs in `data`, from the [`rag-pipeline` chart](../../infra/charts/rag-pipeline). It is governed the same way: the knowledge-base contract's checks run through the shared checks image, and its exit handler publishes the run status and the lineage from the corpus container to `knowledge.chunks`.
-
-## Schema registry
-
-Karapace serves an internal Protobuf schema registry at `http://schema-registry.payment-gateway.svc.cluster.local:8081` with `BACKWARD_TRANSITIVE` compatibility. A registration Job registers the payment and label `<topic>-value` subjects from the root contracts on each release; an incompatible change fails the Job. Topic payloads stay raw protobuf without registry framing, so the registry gates compatibility rather than serving consumers.

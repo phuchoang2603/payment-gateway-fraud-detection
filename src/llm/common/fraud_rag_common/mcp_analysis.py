@@ -25,7 +25,8 @@ def validate_views(data):
 
 def validate(tool, result):
     if result.get("isError"):
-        raise ValueError("preview returned an MCP tool error")
+        text = " ".join(item.get("text", "") for item in result.get("content", []) if isinstance(item, dict))
+        raise ValueError(f"preview returned an MCP tool error: {text}".strip(": "))
     data = result.get("structuredContent")
     if not isinstance(data, dict):
         raise ValueError("preview returned no structured result")
@@ -51,7 +52,8 @@ def validate(tool, result):
         raise ValueError("unsupported analysis tool")
 
 
-REACHABLE_SECONDS = 150
+REACHABLE_SECONDS = 120
+TOOL_SECONDS = 120
 RETRY_SECONDS = 2
 
 
@@ -63,7 +65,10 @@ def unreachable(error):
 
 async def analyze(url, tool, arguments):
     headers = {"Accept": "application/json, text/event-stream"}
-    async with asyncio.timeout(200), httpx.AsyncClient(timeout=30, trust_env=False) as client:
+    async with (
+        asyncio.timeout(REACHABLE_SECONDS + TOOL_SECONDS + 30),
+        httpx.AsyncClient(timeout=30, trust_env=False) as client,
+    ):
 
         async def rpc(method, params):
             response = await client.post(
@@ -94,7 +99,13 @@ async def analyze(url, tool, arguments):
         tools = await rpc("tools/list", {})
         if tool not in {entry["name"] for entry in tools["tools"]}:
             raise ValueError("preview does not expose the required tool")
-        result = await rpc("tools/call", {"name": tool, "arguments": arguments})
+        # A release can roll the preview's upstreams (features, model, reference) at the same moment.
+        deadline = asyncio.get_running_loop().time() + TOOL_SECONDS
+        while True:
+            result = await rpc("tools/call", {"name": tool, "arguments": arguments})
+            if not result.get("isError") or asyncio.get_running_loop().time() >= deadline:
+                break
+            await asyncio.sleep(RETRY_SECONDS)
         validate(tool, result)
         print(json.dumps({"tool": tool, "outcome": "success"}))
 

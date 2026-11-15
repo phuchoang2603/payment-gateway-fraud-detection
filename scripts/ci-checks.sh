@@ -50,8 +50,8 @@ check_python() (
 )
 
 check_python_scripts() {
-  uvx --from ruff==0.16.6 ruff check --target-version py311 scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
-  uvx --from ruff==0.16.6 ruff format --check scripts/schema_registry.py scripts/codegen-proto.py scripts/release.py
+  uvx --from ruff==0.16.6 ruff check --target-version py311 scripts/codegen-proto.py scripts/release.py
+  uvx --from ruff==0.16.6 ruff format --check scripts/codegen-proto.py scripts/release.py
 }
 
 check_go() (

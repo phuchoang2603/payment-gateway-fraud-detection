@@ -82,17 +82,6 @@
       ]
     },
     {
-      "service": "schema-register",
-      "image-suffix": "/schema-register",
-      "context": ".",
-      "dockerfile": "infra/docker/schema-register.Dockerfile",
-      "paths": [
-        "infra/docker/schema-register.Dockerfile",
-        "contracts/payments/v1",
-        "scripts/schema_registry.py"
-      ]
-    },
-    {
       "service": "live-simulator",
       "image-suffix": "/live-simulator",
       "context": ".",
