@@ -88,6 +88,19 @@ GET /knowledge/v1/chunks/decline-codes%23missing                   →  404 {"de
 GET /knowledge/v1/chunks/not-a-chunk-id                            →  422 string_pattern_mismatch on path.chunk_id
 ```
 
+### Public HTTPS
+
+The data-pull Web API has its own domains: `https://knowledge.phuchoang.sbs/v1/chunks/{chunk_id}` and `https://customer-features.phuchoang.sbs/v1/customers/{customer_id}/features`. Cloudflare holds the domains and certificates, and its tunnel reaches a separate `agentgateway` listener that carries only these two REST routes, with the same client keys and rate limit as inside the cluster. The MCP tools on the same servers, and the model and agent routes, have no public path ([networking](../deployment/networking.md#internal-api-and-data-endpoints)). From outside the cluster on dev, 2026-11-15:
+
+| Request | Result |
+|---|---|
+| `knowledge` chunk `decline-codes#new-account-geo-mismatch`, with a client key | 200, the chunk |
+| `knowledge` chunk `decline-codes#missing`, with a key | 404 `unknown chunk_id` |
+| `knowledge` chunk, without a key | 401 |
+| `customer-features` with `integration_id`, with a key | 200, feature views by status |
+| `customer-features` without `integration_id` | 422 |
+| `/v1/chat/completions`, `/mcp/knowledge` or `/healthz` on a public hostname | 404 |
+
 Authentication, rate limits, MCP discovery and mesh results are owned by the [gateway checks](gateway-and-jev-policy.md#checks-on-dev). Throughput, latency and KEDA scale-out are on [Autoscaling and load test](scaling.md), and blue-green releases on [MCP releases](mcp-releases.md).
 
 ### Tests
