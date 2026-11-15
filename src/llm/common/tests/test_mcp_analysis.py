@@ -177,3 +177,36 @@ def test_analysis_does_not_retry_a_preview_that_answers_with_an_error(monkeypatc
     with pytest.raises(ValueError, match="JSON-RPC"):
         asyncio.run(analyze("http://preview/mcp", "get_knowledge_chunk", {"chunk_id": "known"}))
     assert len(calls) == 1
+
+
+def tool_upstream(results):
+    def upstream(request):
+        import json
+
+        method = json.loads(request.content)["method"]
+        if method == "initialize":
+            result = {"protocolVersion": "2025-06-18"}
+        elif method == "tools/list":
+            result = {"tools": [{"name": "get_knowledge_chunk"}]}
+        else:
+            result = results.pop(0) if len(results) > 1 else results[0]
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": result})
+
+    return upstream
+
+
+def test_analysis_retries_a_tool_error_while_upstreams_settle(monkeypatch):
+    error = {"isError": True, "content": [{"type": "text", "text": "feature server read failed (ReadTimeout)"}]}
+    passage = {"structuredContent": {"chunk_id": "known", "text": "passage", "knowledge_version": "v1"}}
+    results = [error, error, passage]
+    serve(monkeypatch, tool_upstream(results))
+    asyncio.run(analyze("http://preview/mcp", "get_knowledge_chunk", {"chunk_id": "known"}))
+    assert results == [passage]
+
+
+def test_analysis_fails_with_the_tool_error_once_the_window_ends(monkeypatch):
+    monkeypatch.setattr(analysis, "TOOL_SECONDS", 0)
+    error = {"isError": True, "content": [{"type": "text", "text": "model server read failed (ConnectError)"}]}
+    serve(monkeypatch, tool_upstream([error]))
+    with pytest.raises(ValueError, match="model server read failed"):
+        asyncio.run(analyze("http://preview/mcp", "get_knowledge_chunk", {"chunk_id": "known"}))
