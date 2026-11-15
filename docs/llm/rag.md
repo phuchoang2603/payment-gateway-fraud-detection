@@ -94,6 +94,8 @@ The data-pull Web API has its own domains: `https://knowledge.phuchoang.sbs/v1/c
 
 | Request | Result |
 |---|---|
+| TLS on both hostnames | TLS 1.3, HTTP/2, Cloudflare edge certificate from Google Trust Services (WE1), valid to 2027-01-08 |
+| `http://` on both hostnames | 301 to `https://` |
 | `knowledge` chunk `decline-codes#new-account-geo-mismatch`, with a client key | 200, the chunk |
 | `knowledge` chunk `decline-codes#missing`, with a key | 404 `unknown chunk_id` |
 | `knowledge` chunk, without a key | 401 |
