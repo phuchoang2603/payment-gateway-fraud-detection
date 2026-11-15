@@ -107,7 +107,7 @@ flowchart TB
     F -->|"model score"| KS
 ```
 
-Only Edge `/checkout/*` is publicly routed. Internal APIs are ClusterIP-only behind the Istio ambient mesh with service-account authorization; see [domains, HTTPS and mesh routing](deployment/networking.md). The marketplace context is in the [marketplace gateway note](https://github.com/phuchoang2603/refurbished-marketplace/blob/main/docs/ecommerce-fraud-gateway.md).
+Only Edge `/checkout/*` and the data-pull Web API (`knowledge.phuchoang.sbs`, `customer-features.phuchoang.sbs`, behind client keys) are publicly routed. Other internal APIs are ClusterIP-only behind the Istio ambient mesh with service-account authorization; see [domains, HTTPS and mesh routing](deployment/networking.md). The marketplace context is in the [marketplace gateway note](https://github.com/phuchoang2603/refurbished-marketplace/blob/main/docs/ecommerce-fraud-gateway.md).
 
 ## Roadmap
 
@@ -151,7 +151,7 @@ Open work is planned in [OpenSpec changes](../openspec/changes); finished change
 | Inference | Qwen3.5-4B (FP8) chat, Qwen3-Embedding and the d3-edge decision model on vLLM through KServe, one shared GPU | [Inference](llm/inference.md) | Done on dev; [benchmark](llm/inference.md#benchmark) with FP8 KV cache kept |
 | Agent gateway | One gateway for models, MCP tools and REST APIs: per-client keys, rate and token limits, PII masking, Jev request screening, mesh-only access | [Gateway and Jev policy (novel)](llm/gateway-and-jev-policy.md) | Done on dev |
 | Agents | Global model config; the `coordinator` entry agent behind the A2A gateway with `evidence-agent` (knowledge tools) and `risk-agent` as sub-agents; sandboxed on Agent Substrate with warm start and KEDA-scaled workers; registry | [Agents](llm/agents.md) | Done on dev; a kagent UI chat transfers to `risk-agent`, which scores with `score_payment_risk` and cites a knowledge chunk |
-| Retrieval | RAG pipeline into Iceberg and a Feast pgvector store, governed in OpenMetadata; Web API by id and MCP tools | [RAG](llm/rag.md) | Done on dev; chunks by id on `rag-api`, customer features by id on `risk-serving` |
+| Retrieval | RAG pipeline into Iceberg and a Feast pgvector store, governed in OpenMetadata; Web API by id on its own HTTPS domains, and MCP tools | [RAG](llm/rag.md), [public HTTPS](llm/rag.md#public-https) | Done on dev; chunks by id on `rag-api`, customer features by id on `risk-serving` |
 | Autoscaling and releases | KEDA on `rag-api`, `risk-serving` and the agent worker pool; blue-green MCP releases; Locust load test | [Autoscaling](llm/scaling.md), [MCP releases](llm/mcp-releases.md) | MCP servers and the worker pool done on dev; the pool scaled from 2 to 6 workers under 30 parallel conversations |
 | Prompt management | Prompts managed and versioned in Langfuse (seeded from Git); agents read them at each model call | [Langfuse](llm/langfuse.md#prompts) | Done on dev |
 | A/B tests | Prompt A/B tests per agent in Langfuse, compared per version | [Langfuse](llm/langfuse.md#ab-tests) | Prompt, per-version model-setting and model-version (Qwen3-4B against Qwen3.5-4B) tests done on dev |
@@ -186,7 +186,7 @@ Tools and techniques beyond the course, by rubric sheet.
 
 ## Limits and scope
 
-- Open gaps: KServe serves the model from the registry rather than inside the image; the Web API has no public HTTPS hostname; the training-set rebuild is not incremental; and the LLM-version A/B compares time windows, because the two chat models do not fit the dev GPU together.
+- Open gaps: KServe serves the model from the registry rather than inside the image; the training-set rebuild is not incremental; and the LLM-version A/B compares time windows, because the two chat models do not fit the dev GPU together.
 - Prod (GCP) is retired; prod captures on these pages were recorded before that, and current evidence is from dev.
 - Synthetic data cannot establish real-world fraud-model quality. Unlabelled drift measures distribution change, not accuracy.
 - Real card custody, live processor connectivity, live money movement, settlement and reconciliation files, payouts and FX are out of scope. The gateway demonstrates PCI-oriented boundaries with synthetic data, not compliance.

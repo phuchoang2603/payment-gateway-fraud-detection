@@ -39,6 +39,8 @@ The following hostnames have live `TunnelBinding` resources as of 2026-11-05. Bo
 | Kagent | `kagent.phuchoang.sbs` | Shared Istio ingress → `kagent-ui.kagent:8080`; OAuth2 proxy |
 | Agent Registry | `agentregistry.phuchoang.sbs` | Shared Istio ingress → `agentregistry.agentregistry:12121`; OAuth2 proxy |
 | Langfuse | `langfuse.phuchoang.sbs` | App-owned `TunnelBinding` → `langfuse-web.llm:3000`; built-in email/password login |
+| Knowledge Web API | `knowledge.phuchoang.sbs` | App-owned `TunnelBinding` → `agentgateway.llm:8080` (public listener) → `/v1` on `rag-api`; client API keys and rate limit |
+| Customer features Web API | `customer-features.phuchoang.sbs` | App-owned `TunnelBinding` → `agentgateway.llm:8080` (public listener) → `/v1` on `risk-serving`; client API keys and rate limit |
 
 The platform owns the bindings for [Grafana](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/observability), [Argo CD](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/argocd-post), [Workflows](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/argo-workflows), [OpenMetadata](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/openmetadata), [Dex/shared UI authentication](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/auth), [Kubeflow](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/kubeflow), [Kagent](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/kagent) and [Agent Registry](https://github.com/phuchoang2603/talos-proxmox/tree/main/apps/components/agentregistry). The application owns [Langfuse's VirtualService](../../infra/charts/llm-platform/templates/langfuse.yaml); its tunnel binding and shared authentication are platform-owned.
 
@@ -48,7 +50,7 @@ The desired tunnel origin for both Istio ingress Services is **port 80**, not th
 
 ## Internal API and data endpoints
 
-The `llm/agentgateway` is a separate ClusterIP Gateway with class `agentgateway`; it has no public `TunnelBinding` in this inventory. Its HTTPRoutes are internal and do not inherit the checkout hostname.
+The `llm/agentgateway` is a separate ClusterIP Gateway with class `agentgateway`. Its `http` listener (port 80) carries the internal routes below. Its `public` listener (port 8080) carries only the two data-pull REST routes, matched by their public hostnames, and is the only target of its [tunnel bindings](../../infra/charts/llm-platform/templates/apis.yaml); the tunnel connector runs outside the mesh, so the gateway's mesh policy admits port 8080 from any source and the routes' client keys do the authentication.
 
 | Internal entry point | Routing | Access boundary |
 |---|---|---|

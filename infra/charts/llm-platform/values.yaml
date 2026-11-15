@@ -202,14 +202,21 @@ gateway:
       title: Payment risk scoring
       description: Read-only online features and what-if scoring with the served fraud model; drivers are not attributions.
 
-  # REST APIs behind /<name>/v1, each a Service in this namespace, with client keys and limits like the LLM route.
+  # REST APIs behind /<name>/v1, each a Service in this namespace, with client keys and limits like the LLM route. An
+  # API with a hostname is also served at https://<hostname>/v1 through the Cloudflare tunnel, on a listener that
+  # carries only these routes, so the LLM, MCP and A2A routes stay internal.
   apiRoutes:
     knowledge:
       service: rag-api
       port: 8080
+      hostname: knowledge.phuchoang.sbs
     risk:
       service: risk-serving
       port: 8080
+      hostname: customer-features.phuchoang.sbs
+  public:
+    port: 8080
+    clusterTunnel: talos-proxmox
 
 secretStore: gateway-doppler
 # Platform-owned credentials this app consumes: the Kubeflow artifacts identity.

@@ -39,6 +39,12 @@ spec:
       allowedRoutes:
         namespaces:
           from: Same
+    - name: public
+      port: {{ $gateway.public.port }}
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

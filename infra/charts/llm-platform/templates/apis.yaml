@@ -24,6 +24,39 @@ spec:
           port: {{ $api.port }}
       timeouts:
         request: 30s
+{{- with $api.hostname }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api-{{ $name }}-public
+spec:
+  parentRefs:
+    - name: {{ $gateway.name }}
+      sectionName: public
+  hostnames: [{{ . | quote }}]
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /v1}
+      backendRefs:
+        - name: {{ $api.service }}
+          port: {{ $api.port }}
+      timeouts:
+        request: 30s
+---
+apiVersion: networking.cfargotunnel.com/v1alpha1
+kind: TunnelBinding
+metadata:
+  name: api-{{ $name }}
+subjects:
+  - name: {{ $gateway.name }}
+    spec:
+      fqdn: {{ . | quote }}
+      target: http://{{ $gateway.name }}.{{ $.Release.Namespace }}.svc.cluster.local:{{ $gateway.public.port }}
+tunnelRef:
+  kind: ClusterTunnel
+  name: {{ $gateway.public.clusterTunnel }}
+{{- end }}
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -34,6 +67,11 @@ spec:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
       name: api-{{ $name }}
+    {{- if $api.hostname }}
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: api-{{ $name }}-public
+    {{- end }}
   traffic:
     apiKeyAuthentication:
       mode: Strict
