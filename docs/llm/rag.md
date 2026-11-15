@@ -90,18 +90,11 @@ GET /knowledge/v1/chunks/not-a-chunk-id                            →  422 stri
 
 ### Public HTTPS
 
-The data-pull Web API has its own domains: `https://knowledge.phuchoang.sbs/v1/chunks/{chunk_id}` and `https://customer-features.phuchoang.sbs/v1/customers/{customer_id}/features`. Cloudflare holds the domains and certificates, and its tunnel reaches a separate `agentgateway` listener that carries only these two REST routes, with the same client keys and rate limit as inside the cluster. The MCP tools on the same servers, and the model and agent routes, have no public path ([networking](../deployment/networking.md#internal-api-and-data-endpoints)). From outside the cluster on dev, 2026-11-15:
+The data-pull Web API has its own domains: `https://knowledge.phuchoang.sbs/v1/chunks/{chunk_id}` and `https://customer-features.phuchoang.sbs/v1/customers/{customer_id}/features`. Cloudflare holds the domains and certificates, and its tunnel reaches a separate `agentgateway` listener that carries only these two REST routes, with the same client keys and rate limit as inside the cluster. The MCP tools on the same servers, and the model and agent routes, have no public path ([networking](../deployment/networking.md#internal-api-and-data-endpoints)). Served over TLS 1.3 with Cloudflare's certificate (Google Trust Services, valid to 2027-01-08). From outside the cluster on dev, 2026-11-15:
 
-| Request | Result |
-|---|---|
-| TLS on both hostnames | TLS 1.3, HTTP/2, Cloudflare edge certificate from Google Trust Services (WE1), valid to 2027-01-08 |
-| `http://` on both hostnames | 301 to `https://` |
-| `knowledge` chunk `decline-codes#new-account-geo-mismatch`, with a client key | 200, the chunk |
-| `knowledge` chunk `decline-codes#missing`, with a key | 404 `unknown chunk_id` |
-| `knowledge` chunk, without a key | 401 |
-| `customer-features` with `integration_id`, with a key | 200, feature views by status |
-| `customer-features` without `integration_id` | 422 |
-| `/v1/chat/completions`, `/mcp/knowledge` or `/healthz` on a public hostname | 404 |
+![Requests to the public domains from outside the cluster: chunk and customer features 200 with a key, 401 without one, 422 without integration_id, 404 for MCP and model paths, http redirected to https](images/public-api-responses.png)
+
+![Argo CD on dev: the public HTTPRoutes and TunnelBindings for both domains, synced and healthy](images/public-api-argo-routes.png)
 
 Authentication, rate limits, MCP discovery and mesh results are owned by the [gateway checks](gateway-and-jev-policy.md#checks-on-dev). Throughput, latency and KEDA scale-out are on [Autoscaling and load test](scaling.md), and blue-green releases on [MCP releases](mcp-releases.md).
 
