@@ -2,7 +2,6 @@ global:
   imageTags:
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection: dev
     ghcr.io/phuchoang2603/payment-gateway-fraud-detection/connect-debezium: dev
-    ghcr.io/phuchoang2603/payment-gateway-fraud-detection/schema-register: dev
 kafka:
   clusterName: payment-gateway-kafka
   version: 4.3.1
@@ -64,7 +63,6 @@ entities:
   fraudFeatures:
     topics:
     - name: fraud.feature-updates.v2.live-v20
-      valueSchema: features/v2/features.proto
       partitions: 3
       retention: 1209600000
     - name: fraud.feature-rejects.v1.live-v20
@@ -73,11 +71,9 @@ entities:
   payments:
     topics:
     - name: payments.events.v1
-      valueSchema: payments/v1/events.proto
       partitions: 3
       retention: 604800000
     - name: fraud.labels.v1
-      valueSchema: payments/v1/labels.proto
       partitions: 3
       retention: 604800000
     connector:
@@ -96,32 +92,6 @@ entities:
         payload: payload
         routeByField: event_type
         topic: payments.events.v1
-schemaRegistry:
-  enabled: true
-  port: 8081
-  compatibility: BACKWARD_TRANSITIVE
-  registration:
-    enabled: true
-    image:
-      repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/schema-register
-    activeDeadlineSeconds: 600
-    resources:
-      requests:
-        cpu: 25m
-        memory: 32Mi
-      limits:
-        cpu: 200m
-        memory: 128Mi
-  image:
-    repository: ghcr.io/aiven-open/karapace
-    tag: 6.2.4
-  resources:
-    requests:
-      cpu: 25m
-      memory: 128Mi
-    limits:
-      cpu: 200m
-      memory: 256Mi
 
 monitoring:
   enabled: true

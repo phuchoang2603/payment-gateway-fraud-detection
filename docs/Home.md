@@ -36,7 +36,7 @@ Wire schemas: [payments](../contracts/payments/v1) · [fraud](../contracts/fraud
 | Processor simulator | Go; simulated sales with configurable latency and lost responses | Operation results | Deployed |
 | Notifier | Go; signed, deduplicated webhooks with retries | Inbox, deliveries, retry state | Deployed |
 | Fraud | Go; validates inputs, applies the rules policy, retrieves features, scores with the model | Policy and decision metadata, assessments | Deployed |
-| Kafka, Debezium, Karapace | Outbox CDC, internal event transport, schema registry | Topics, registered schemas | Deployed |
+| Kafka, Debezium | Outbox CDC, internal event transport | Topics | Deployed |
 | Historical generator | Python; per-day synthetic history to object storage | Immutable datasets v18 (dev), v19 (prod) | Deployed |
 | Live simulator | Python; current-time gateway traffic and labels | None | Deployed; runs as a bounded Job |
 | Data pipelines (DP1, `dp-pipeline`) | Spark on the Spark Operator: Bronze, then Silver, Gold features and ClickHouse marts; checks and lineage in OpenMetadata | Iceberg tables, ClickHouse marts, run reports | Recorded on prod (v19 backfill); prod is retired |

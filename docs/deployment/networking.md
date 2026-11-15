@@ -64,7 +64,6 @@ The `llm/agentgateway` is a separate ClusterIP Gateway with class `agentgateway`
 | `edge.payment-gateway.svc.cluster.local:8080` | Internal merchant API, including `/v1/payments`; stable Edge Service | Integration credentials and mesh policy; this path has no public checkout route |
 | `payments`, `fraud-service`, `vault-simulator`, `notifier`, `processor-simulator` in `payment-gateway`, port 8000 | Private Go/gRPC service calls | Service-account identities and NetworkPolicy; Vault fixture resolution uses a separate port 8001 |
 | `payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc.cluster.local:9092` | Internal Kafka clients | Kafka namespace/network configuration; no public hostname |
-| `schema-registry.payment-gateway.svc.cluster.local:8081` | Internal schema HTTP API | Internal Service/NetworkPolicy; no public hostname |
 | `feast-server.data.svc.cluster.local:6566` | Feast feature retrieval | Internal Service/NetworkPolicy; no public hostname |
 | `clickhouse.data.svc.cluster.local:8123` / `:9000` | SQL HTTP / native protocol | Database users and NetworkPolicy; no public hostname |
 | `iceberg-catalog.data.svc.cluster.local:8181` | Polaris REST catalog | Catalog credentials and NetworkPolicy; no public hostname |

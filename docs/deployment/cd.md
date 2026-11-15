@@ -12,7 +12,6 @@ Application images are built from Dockerfiles in [`infra/docker`](../../infra/do
 | Live simulator and historical generator | `live-simulator.Dockerfile`; slim Python |
 | Feast | `feast.Dockerfile`; slim Python |
 | Streaming | `streaming.Dockerfile`; typed JVM Flink job and Python seed/orchestration tools, without PyFlink |
-| Schema registration | `schema-register.Dockerfile`; protoc build stage, slim Python runtime |
 | Debezium Connect | `connect-debezium.Dockerfile`; Strimzi with the Debezium plugin |
 | Spark jobs | `data-platform-spark.Dockerfile`; checksummed connectors, slim Python and headless JRE |
 | Metadata jobs | `data-platform-metadata.Dockerfile`; pinned OpenMetadata ingestion base |
