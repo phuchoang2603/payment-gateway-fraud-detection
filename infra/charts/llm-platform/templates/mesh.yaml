@@ -96,6 +96,11 @@ spec:
     - to:
         - operation:
             ports: ["15020"]
+    # The Cloudflare tunnel connector runs outside the mesh, so it has no identity; the public listener carries only
+    # the key-checked REST routes.
+    - to:
+        - operation:
+            ports: [{{ .Values.gateway.public.port | quote }}]
 ---
 # Identity of the on-demand benchmark in benchmark/.
 apiVersion: v1
