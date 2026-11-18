@@ -93,3 +93,4 @@ Thumbs.db
 # Agents
 .agents/
 .claude/
+.golangci.yml

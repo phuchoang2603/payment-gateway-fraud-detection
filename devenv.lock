@@ -17,6 +17,22 @@
         "type": "github"
       }
     },
+    "devenv-modules": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794973428,
+        "narHash": "sha256-Etlq7lFL8oUI/zMtnlfUjBtE9GEuczEAhlD9Sn9CF2g=",
+        "owner": "phuchoang2603",
+        "repo": "devenv-modules",
+        "rev": "b63db38aee60d066f9fca75bc8424646c051dc15",
+        "type": "github"
+      },
+      "original": {
+        "owner": "phuchoang2603",
+        "repo": "devenv-modules",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -93,6 +109,7 @@
     "root": {
       "inputs": {
         "devenv": "devenv",
+        "devenv-modules": "devenv-modules",
         "git-hooks": "git-hooks",
         "nixpkgs": "nixpkgs",
         "treefmt-nix": "treefmt-nix"

@@ -1,25 +1,26 @@
 {
   pkgs,
-  lib,
   config,
+  inputs,
   ...
 }:
 {
+  imports = map (m: "${inputs.devenv-modules}/${m}.nix") [
+    "base"
+    "go"
+    "python"
+    "kubernetes"
+  ];
+
   env.JAVA_HOME = "${pkgs.jdk17}/lib/openjdk";
-  env.UV_PYTHON_DOWNLOADS = "never";
-  env.UV_PYTHON_PREFERENCE = "only-system";
-  env.LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc pkgs.zlib ];
+  env.LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+    pkgs.stdenv.cc.cc
+    pkgs.zlib
+  ];
 
   packages = with pkgs; [
-    kubernetes-helm
-    kubectl
     jdk17
     maven
-
-    ruff
-    uv
-    gofumpt
-    golangci-lint
 
     protobuf
     protoc-gen-go
@@ -32,23 +33,11 @@
     zlib
   ];
 
-  languages = {
-    go = {
-      delve = {
-        enable = true;
-      };
-      enable = true;
-      lsp = {
-        enable = true;
-      };
-    };
-    python = {
-      enable = true;
-      lsp = {
-        enable = true;
-      };
-      package = lib.mkDefault pkgs.python312;
-    };
+  repo.lintIgnores = [ "infra/charts/ml-training/files/**" ];
+
+  repo.golangci = {
+    linters.exclusions.generated = "strict";
+    formatters.exclusions.paths = [ "\\.pb\\.go$" ];
   };
 
   tasks."codegen:proto" = {
@@ -73,26 +62,8 @@
     ];
   };
 
-  tasks."repo:check".exec = ''bash "${config.git.root}/scripts/ci-checks.sh"'';
-
-  git-hooks.hooks = {
-    treefmt.enable = true;
-  };
-
-  treefmt = {
-    enable = true;
-    config.programs = {
-      ruff-format = {
-        enable = true;
-        excludes = [ "src/data-pipeline/simulator/simulator/contracts/**" ];
-      };
-      gofumpt = {
-        enable = true;
-        extra = true;
-        excludes = [
-          "src/payment-gateway/shared/proto/**/*.pb.go"
-        ];
-      };
-    };
+  treefmt.config.programs = {
+    ruff-format.excludes = [ "src/data-pipeline/simulator/simulator/contracts/**" ];
+    gofumpt.excludes = [ "src/payment-gateway/shared/proto/**/*.pb.go" ];
   };
 }
