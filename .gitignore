@@ -92,5 +92,6 @@ Thumbs.db
 
 # Agents
 .agents/
-.claude/
+.claude/*
+!.claude/skills/
 .golangci.yml
