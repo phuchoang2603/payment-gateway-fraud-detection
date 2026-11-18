@@ -4,6 +4,14 @@
   inputs,
   ...
 }:
+let
+  module = "github.com/phuchoang2603/payment-gateway-fraud-detection";
+  denyDomain =
+    desc: packages:
+    map (pkg: {
+      inherit pkg desc;
+    }) packages;
+in
 {
   imports = map (m: "${inputs.devenv-modules}/${m}.nix") [
     "base"
@@ -36,7 +44,30 @@
   repo.lintIgnores = [ "infra/charts/ml-training/files/**" ];
 
   repo.golangci = {
+    linters.enable = [ "depguard" ];
     linters.exclusions.generated = "strict";
+    linters.settings.depguard.rules.domain = {
+      files = [ "**/internal/domain/**" ];
+      deny =
+        denyDomain "Domain code must not depend on transport." [
+          "net/http"
+          "google.golang.org/grpc"
+        ]
+        ++ denyDomain "Domain code must not depend on generated protobuf bindings." [
+          "${module}/shared/proto"
+          "google.golang.org/protobuf"
+        ]
+        ++ denyDomain "Domain code must not depend on databases or storage adapters." [
+          "database/sql"
+          "github.com/jackc/pgx"
+          "github.com/redis/go-redis"
+          "github.com/twmb/franz-go"
+        ]
+        ++ denyDomain "Domain code must not depend on observability." [
+          "go.opentelemetry.io"
+          "${module}/shared/observe"
+        ];
+    };
     formatters.exclusions.paths = [ "\\.pb\\.go$" ];
   };
 

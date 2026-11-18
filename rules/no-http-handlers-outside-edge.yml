@@ -1,0 +1,17 @@
+id: no-http-handlers-outside-edge
+language: go
+severity: error
+message: Only the Go edge serves HTTP; internal synchronous APIs use gRPC with protobuf contracts.
+note: Public HTTP/JSON belongs in src/payment-gateway/edge. Use gRPC services in the other modules.
+ignores:
+  - "src/payment-gateway/edge/**"
+  - "**/*_test.go"
+rule:
+  any:
+    - pattern: http.NewServeMux()
+    - pattern: http.Server{$$$}
+    - kind: call_expression
+      has:
+        field: function
+        kind: selector_expression
+        regex: '^http\.(Handle|HandleFunc|ListenAndServe|ListenAndServeTLS)$|\.HandleFunc$|^\w*[mM]ux\.Handle$'

@@ -1,0 +1,44 @@
+id: no-http-handlers-outside-edge
+snapshots:
+  "func register() {\n\thttp.HandleFunc(\"/health\", health)\n}\n":
+    labels:
+    - source: http.HandleFunc("/health", health)
+      style: primary
+      start: 19
+      end: 53
+    - source: http.HandleFunc
+      style: secondary
+      start: 19
+      end: 34
+  "func serve() error {\n\treturn http.ListenAndServe(\":8080\", nil)\n}\n":
+    labels:
+    - source: http.ListenAndServe(":8080", nil)
+      style: primary
+      start: 29
+      end: 62
+    - source: http.ListenAndServe
+      style: secondary
+      start: 29
+      end: 48
+  "func serve() {\n\tmux := http.NewServeMux()\n\t_ = mux\n}\n":
+    labels:
+    - source: http.NewServeMux()
+      style: primary
+      start: 23
+      end: 41
+  "func serve() {\n\tserver := &http.Server{Addr: \":8080\"}\n\t_ = server\n}\n":
+    labels:
+    - source: "http.Server{Addr: \":8080\"}"
+      style: primary
+      start: 27
+      end: 53
+  "func serve(mux *http.ServeMux) {\n\tmux.HandleFunc(\"GET /v1/payments\", list)\n}\n":
+    labels:
+    - source: mux.HandleFunc("GET /v1/payments", list)
+      style: primary
+      start: 34
+      end: 74
+    - source: mux.HandleFunc
+      style: secondary
+      start: 34
+      end: 48

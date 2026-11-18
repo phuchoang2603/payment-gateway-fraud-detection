@@ -52,3 +52,20 @@ quote-style = "double"
 [tool.protobuf]
 python-package = "simulator.contracts"
 sources = ["payments/v1/types.proto", "payments/v1/events.proto", "payments/v1/labels.proto"]
+
+[tool.importlinter]
+root_package = "simulator"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Simulator domain does not import transport or generated protobuf"
+type = "forbidden"
+source_modules = ["simulator.world", "simulator.lifecycle", "simulator.live.model", "simulator.live.config"]
+forbidden_modules = [
+    "simulator.contracts",
+    "simulator.live.redelivery",
+    "simulator.live.runtime",
+    "simulator.runtime",
+    "confluent_kafka",
+    "httpx",
+]

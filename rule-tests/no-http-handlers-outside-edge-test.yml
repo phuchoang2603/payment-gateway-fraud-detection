@@ -1,0 +1,34 @@
+id: no-http-handlers-outside-edge
+valid:
+  - |
+    func call() {
+    	response, err := http.DefaultClient.Do(request)
+    	_, _ = response, err
+    }
+  - |
+    func middleware(next http.Handler) http.Handler {
+    	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { next.ServeHTTP(w, r) })
+    }
+invalid:
+  - |
+    func serve() {
+    	mux := http.NewServeMux()
+    	_ = mux
+    }
+  - |
+    func serve(mux *http.ServeMux) {
+    	mux.HandleFunc("GET /v1/payments", list)
+    }
+  - |
+    func serve() error {
+    	return http.ListenAndServe(":8080", nil)
+    }
+  - |
+    func serve() {
+    	server := &http.Server{Addr: ":8080"}
+    	_ = server
+    }
+  - |
+    func register() {
+    	http.HandleFunc("/health", health)
+    }
