@@ -41,7 +41,5 @@ spec:
   template:
     pod:
       metadata:
-        # Off-mesh like the broker: ztunnel won't route an ambient client to the
-        # off-mesh broker's advertised address, so resolve via CoreDNS instead.
         labels:
           istio.io/dataplane-mode: none

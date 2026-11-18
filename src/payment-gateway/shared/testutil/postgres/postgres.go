@@ -26,7 +26,6 @@ func AdminURL(t testing.TB) string {
 	if testing.Short() {
 		t.Skip("-short disables test containers")
 	}
-	// Ryuk owns the process-scoped container; tests clean up their own databases.
 	postgresOnce.Do(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()

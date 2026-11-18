@@ -27,7 +27,6 @@ spec:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
       dp-product: bronze-payments
   templates:
-    # The mutex sits on this template so dp-daily's Kafka step, which references it, holds it too.
     - name: bronze
       synchronization:
         mutexes:

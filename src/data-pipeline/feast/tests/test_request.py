@@ -48,7 +48,6 @@ def one(transform, **overrides):
     return {name: values[0] for name, values in result.items()}
 
 
-# Equivalence partitions of the country pair: both present and equal, both present and different, either absent.
 @pytest.mark.parametrize(
     ("ip", "shipping", "expected"),
     [
@@ -66,7 +65,6 @@ def test_country_mismatch_partitions(transform, ip, shipping, expected):
     )
 
 
-# Boundary values of account age: created at the scoring instant, one microsecond and one day before, and absent.
 @pytest.mark.parametrize(
     ("created", "days"),
     [
@@ -86,7 +84,6 @@ def test_account_age_boundaries(transform, created, days):
     assert result["merchant_account_age_days"] == days
 
 
-# Partitions of the 30-day history: usable, empty (zero count or zero sum), unknown (null or NaN from offline nulls).
 @pytest.mark.parametrize(
     ("total", "count", "expected"),
     [
@@ -110,7 +107,6 @@ def test_relative_amount_partitions(transform, total, count, expected):
     assert result["customer_amount_to_30d_avg"] == expected
 
 
-# Boundary values of the scoring hour, including an offset timestamp and the ISO string Go sends online.
 @pytest.mark.parametrize(
     ("scored", "hour"),
     [
@@ -152,8 +148,6 @@ AMOUNTS = st.integers(min_value=0, max_value=10**10)
 COUNTS = st.integers(min_value=0, max_value=10**6)
 
 
-# Idempotency: the request view is a pure function, so the same request gives the same features on every call,
-# and the relative amount is the amount over the 30-day mean whenever that mean exists.
 @settings(max_examples=300, deadline=None)
 @given(amount=AMOUNTS, total=AMOUNTS, count=COUNTS, offset=st.integers(-48, 48))
 def test_request_features_are_deterministic_and_scale_with_the_mean(

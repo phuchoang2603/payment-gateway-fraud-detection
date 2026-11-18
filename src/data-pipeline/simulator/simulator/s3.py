@@ -12,7 +12,6 @@ GCS_HOST = "storage.googleapis.com"
 
 class _GCSCreateOnlyAuth(S3SigV4QueryAuth):
     def _modify_request_before_signing(self, request):
-        # The query signer normally moves form bodies into the URL; S3 object bodies must stay intact.
         body, request.data = request.data, None
         try:
             super()._modify_request_before_signing(request)
@@ -29,7 +28,6 @@ def _create_only_signer(context, **_):
 
 
 def _create_only(params, **_):
-    # GCS rejects mixed x-amz/x-goog headers; query authentication keeps its generation precondition usable.
     headers = params["headers"]
     if headers.pop("If-None-Match", None) == "*":
         headers["x-goog-if-generation-match"] = "0"

@@ -7,7 +7,6 @@ notebook:
   enabled: false
   storageClass: local-path
 drift:
-  # Dev traffic is small.
   policy:
     samples: 200
 serving:

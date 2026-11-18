@@ -204,7 +204,6 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
                 name = f"request_features__{field}"
                 expected = result.loc[example["label_attempt"], name]
                 if field.endswith("_amount_to_30d_avg"):
-                    # This test writes no daily rows to Redis, so the online ratio has no average.
                     assert actual[name]["values"][0] is None
                     continue
                 assert actual[name]["values"][0] == (None if pd.isna(expected) else expected)
@@ -218,7 +217,6 @@ def test_point_in_time_arrow_with_daily_created_ttl_epochs_and_missing_method(sp
 
     assert pd.isna(result.loc["live", "request_features__customer_account_age_days"])
     assert pd.isna(result.loc["no-method", "request_features__merchant_account_age_days"])
-    # Daily rows hold count 7 or 8 for both amount_sum_minor_30d and attempt_count_30d, so the average is 1.
     assert result.loc["history", "request_features__customer_amount_to_30d_avg"] == 1200
     assert result.loc["live", "request_features__payment_method_amount_to_30d_avg"] == 1200
     assert pd.isna(result.loc["expired", "request_features__customer_amount_to_30d_avg"])

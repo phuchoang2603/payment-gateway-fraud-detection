@@ -50,10 +50,6 @@ type Config struct {
 	Bins        metric.Int64Counter
 }
 
-// served is what the client knows of one model version Triton serves: the registry version it was packaged as, the
-// feature order and decline threshold that packaging recorded (a zero threshold means it recorded none) and, when it
-// recorded them, each feature's bin edges with the attributes that count a value into each bin (the last bin is the
-// missing one).
 type served struct {
 	version   string
 	order     []string
@@ -90,8 +86,6 @@ func New(config Config) (*Client, error) {
 // Close releases the client's idle connections.
 func (c *Client) Close() { c.http.CloseIdleConnections() }
 
-// row lays the features out in the model's order. A value is NaN, which the model reads as missing, when its view is
-// not available or the view holds no number for it; booleans are 0 or 1, as in training.
 func row(features application.FeatureObservation, order []string) []float32 {
 	values := make([]float32, len(order))
 	for index, name := range order {
@@ -146,7 +140,6 @@ func (c *Client) Score(ctx context.Context, features application.FeatureObservat
 	return observation
 }
 
-// count adds each scored value to its feature's bin: the number of edges at or below it, or the missing bin for NaN.
 func (c *Client) count(ctx context.Context, layout served, values []float32) {
 	if c.config.Bins == nil || layout.edges == nil {
 		return
@@ -160,8 +153,6 @@ func (c *Client) count(ctx context.Context, layout served, values []float32) {
 	}
 }
 
-// layout returns the feature order rows are laid out in. It reads the model's configuration when the client knows no
-// version yet, and again while an answer from a version it has not read is waiting to be learned.
 func (c *Client) layout(ctx context.Context) ([]string, error) {
 	c.mu.RLock()
 	order, waiting := c.order, len(c.pending) > 0
@@ -210,7 +201,6 @@ func (c *Client) address(path string) string {
 	return strings.TrimRight(c.config.URL, "/") + "/v2/models/" + c.config.Model + path
 }
 
-// fetch reads the feature order and registry version the model was packaged with from its Triton config.
 func (c *Client) fetch(ctx context.Context) (served, error) {
 	call, err := http.NewRequestWithContext(ctx, http.MethodGet, c.address("/config"), nil)
 	if err != nil {
@@ -241,8 +231,6 @@ func (c *Client) fetch(ctx context.Context) (served, error) {
 	return known, nil
 }
 
-// profile reads the bin edges of the reference profile into a served model, and ignores a missing or malformed set,
-// which only stops the counting.
 func (c *Client) profile(known *served, text string) {
 	var edges map[string][]float64
 	if c.config.Bins == nil || json.Unmarshal([]byte(text), &edges) != nil || len(edges) == 0 {
@@ -266,7 +254,6 @@ func (c *Client) profile(known *served, text string) {
 	}
 }
 
-// infer scores one row and returns the fraud probability and the registry version of the model that made it.
 func (c *Client) infer(ctx context.Context, values []float32) (float64, string, error) {
 	tensor := make([]byte, 0, 4*len(values))
 	for _, value := range values {
@@ -318,7 +305,6 @@ func (c *Client) infer(ctx context.Context, values []float32) (float64, string, 
 	return score, "v" + answer.ModelVersion, nil
 }
 
-// do sends a request and returns the bounded body and headers of a 200 answer.
 func (c *Client) do(call *http.Request) ([]byte, http.Header, error) {
 	result, err := c.http.Do(call)
 	if err != nil {

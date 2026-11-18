@@ -23,7 +23,6 @@ def norm(vector) -> float:
     return math.sqrt(sum(float(value) * float(value) for value in vector))
 
 
-# The ids match the quality rules in contracts/data-products/knowledge-base/knowledge-chunks.odcs.yaml.
 def contract_rules(rows: list[dict]) -> dict:
     ids = [row["chunk_id"] for row in rows]
     duplicates = sorted({chunk_id for chunk_id in ids if ids.count(chunk_id) > 1})

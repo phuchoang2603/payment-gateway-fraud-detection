@@ -148,8 +148,6 @@ nodeSelector:
 {{- end }}
 {{- end -}}
 
-{{- /* A large feature-store step: on the Spark executors' pool, with a scratch volume for disk spill. Node root
-disks are too small for it, so the scratch is a claim on features.scratchClass when one is set. */}}
 {{- define "data-pipelines.featureScratch" -}}
 - name: {{ .name }}
   {{- if .root.Values.features.scratchClass }}
@@ -211,8 +209,6 @@ retryStrategy:
 {{- include "data-pipelines.env" .root | nindent 6 }}
 {{- end -}}
 
-{{- /* The batch image that writes Silver, Gold and the marts; a stage whose output on main came from the same range and
-inputs by this image is skipped. */}}
 {{- define "data-pipelines.codeVersion" -}}
 {{ include "data-pipelines.image" (dict "image" .Values.images.spark "global" .Values.global) }}
 {{- end -}}
@@ -425,16 +421,10 @@ spec:
     spark.sql.adaptive.coalescePartitions.enabled: "true"
     spark.sql.adaptive.advisoryPartitionSizeInBytes: {{ $sizing.advisoryPartitionSize | quote }}
     spark.io.compression.codec: zstd
-    {{- /* glibc gives each thread's native allocations their own arena, which grows a container's resident memory
-    past its overhead without the JVM noticing. */}}
     spark.executorEnv.MALLOC_ARENA_MAX: "2"
     spark.decommission.enabled: "true"
-    {{- /* A spot executor that is shutting down rejects tasks; without exclusion a task retries on it until its
-    attempts run out, as the v19 Silver labels write did. */}}
     spark.excludeOnFailure.enabled: "true"
     spark.task.maxFailures: "8"
-    {{- /* Spot reclaims and failed launches lose executors steadily; by default the application exits after twice
-    its executor count of failures over its whole life, which a long v19 Silver run reached. */}}
     spark.executor.maxNumFailures: "200"
     spark.executor.failuresValidityInterval: "30m"
     spark.storage.decommission.enabled: "true"

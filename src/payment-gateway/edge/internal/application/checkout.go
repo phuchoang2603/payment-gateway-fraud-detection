@@ -77,8 +77,6 @@ func (s *Service) pay(ctx context.Context, req PayRequest, number string) (PayRe
 	return PayResult{Payment: view.Payment, Attempt: attempt}, nil
 }
 
-// A conflict on a per-render key means the same form was already submitted through another
-// replica with a different token; the existing attempt is the answer.
 func (s *Service) latestAttempt(ctx context.Context, req PayRequest) (PayResult, error) {
 	view, err := s.Checkout(ctx, req.SessionID, req.CheckoutToken)
 	if err != nil {

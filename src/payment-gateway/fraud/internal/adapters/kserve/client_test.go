@@ -45,7 +45,6 @@ func views(v map[string]application.ViewObservation) application.FeatureObservat
 	return application.FeatureObservation{Service: "payment_risk_v1", Views: v}
 }
 
-// triton is a fake Triton server for one model: its config parameters, its answer to an infer call and a count of both.
 type triton struct {
 	registryVersion string
 	featureOrder    string
@@ -405,7 +404,6 @@ func TestAnEndpointOrNameThatCouldMisdirectTheCallIsRejected(t *testing.T) {
 	}
 }
 
-// bins records the bin each value is counted into, as "feature/bin/version".
 type bins struct {
 	noop.Int64Counter
 	seen map[string]int64

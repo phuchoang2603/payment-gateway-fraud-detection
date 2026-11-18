@@ -196,7 +196,6 @@ def changes(states: DataFrame, keys: list[str], output: list[str], floor: dateti
     """The rows after `floor` whose values differ from the entity's previous row; `floor` rows are the baseline. An
     entity has no row until it is first non-empty, and then always a row there."""
     ordered = Window.partitionBy(*keys).orderBy(ANCHOR)
-    # to_json compares rows null-safely; a hash would let (null, 1) and (1, null) collide.
     rows = states.withColumns(
         {"_values": F.to_json(F.struct(*output)), "_previous_begun": F.lag("_begun").over(ordered)}
     ).withColumn("_previous", F.lag("_values").over(ordered))

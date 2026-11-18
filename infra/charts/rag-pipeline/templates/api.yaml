@@ -4,7 +4,6 @@ kind: Rollout
 metadata:
   name: rag-api
 spec:
-  # KEDA owns the replica count (ScaledObject below), so the chart leaves it unset.
   strategy:
     blueGreen:
       activeService: rag-api
@@ -41,7 +40,6 @@ spec:
               value: {{ $api.port | quote }}
             {{- include "rag-pipeline.gatewayEnv" (dict "root" . "secret" .Values.gateway.apiKeySecret) | nindent 12 }}
             {{- include "rag-pipeline.dbEnv" (dict "root" . "secret" "rag-db-reader") | nindent 12 }}
-          # Importing Feast takes close to a minute on a busy dev node.
           startupProbe:
             httpGet: {path: /healthz, port: http}
             periodSeconds: 5
@@ -87,7 +85,6 @@ spec:
     matchLabels:
       app.kubernetes.io/name: rag-api
 ---
-# REST requests and MCP tool calls load the same process, so the target is their combined rate.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -106,7 +103,6 @@ spec:
         query: {{ printf "sum(rate({__name__=~\"knowledge_api_requests_total|knowledge_mcp_tool_calls_total\",namespace=\"%s\",job=\"%s/rag-api\"}[1m]))" .Release.Namespace .Release.Namespace | quote }}
         threshold: {{ $api.autoscaling.requestsPerSecondPerReplica | quote }}
 ---
-# Agents reach the knowledge tools only through the gateway's /mcp/knowledge route.
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
@@ -122,7 +118,6 @@ spec:
             principals:
               - cluster.local/ns/{{ .Release.Namespace }}/sa/{{ .Values.gateway.serviceAccount }}
               - {{ .Values.metricsAgent }}
-              # The on-demand load test (loadtest/job.yaml) measures the API itself, behind the gateway's rate limit.
               - cluster.local/ns/{{ .Release.Namespace }}/sa/{{ .Values.api.loadTestServiceAccount }}
               - cluster.local/ns/{{ .Release.Namespace }}/sa/rag-api-analysis
 ---

@@ -18,8 +18,6 @@ PAGE = 100
 STAGING = "__staging"
 OTHER_TABLE = re.compile(r"\{table:([A-Za-z0-9_.]+)\}")
 LAKEHOUSE_TABLE = re.compile(rf"{LAKEHOUSE}\.`([A-Za-z0-9_]+\.[A-Za-z0-9_]+)`")
-# A Silver or Gold run records its day range on its commits; its rules then audit only the rows that run could have
-# written, so check time follows the range, not the history. Bronze and the marts audit as before.
 RANGE_PROPERTIES = ("dp2.range", "dp3.range")
 LABEL_LOOKBACK_DAYS = 45
 
@@ -47,12 +45,10 @@ SCOPES = {
     "gold.feat_payment_method_daily": lambda start, end: (
         f"event_timestamp > {instant(start)} AND event_timestamp <= {instant(end + timedelta(days=1))}"
     ),
-    # A run also rewrites the label rows of earlier attempt days whose labels became available in its range.
     "gold.label_attempt": lambda start, end: (
         f"event_timestamp >= {instant(start - timedelta(days=LABEL_LOOKBACK_DAYS))} "
         f"AND event_timestamp < {instant(end + timedelta(days=1))}"
     ),
-    # Every version still open at the range start: each customer's chain through its current version.
     "gold.dim_customer": lambda start, end: f"(valid_to_ts IS NULL OR valid_to_ts >= {instant(start)})",
 }
 
@@ -127,7 +123,6 @@ def products():
     return [product for product in os.environ["CHECK_PRODUCT"].split(",") if product]
 
 
-# Full-load self-joins need disk-backed sorting rather than a hash table that grows with the payment count.
 SPILL_SETTINGS = (
     "max_bytes_before_external_group_by = 800000000, max_bytes_before_external_sort = 400000000, "
     "join_algorithm = 'full_sorting_merge', "
@@ -159,8 +154,6 @@ def rendered(check, snapshot=None, staging=False, audited=None, scopes=None):
     settings = SPILL_SETTINGS
     where = (scopes or {}).get(check.table) if check.database == LAKEHOUSE else None
     if where:
-        # A table filter applies to every read of the table, a self-join's both sides included, and keeps column
-        # pruning and filter pushdown that a SELECT * subquery would lose. Its key is database.table, unquoted.
         quoted = where.replace("\\", "\\\\").replace("'", "\\'")
         settings = f"additional_table_filters = {{'{LAKEHOUSE}.{check.table}': '{quoted}'}}, {settings}"
     if snapshot is not None and check.database == LAKEHOUSE:

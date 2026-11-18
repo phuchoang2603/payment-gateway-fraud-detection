@@ -98,10 +98,8 @@ func run(logLevel, host, port, configDir string) error {
 	kagentName := runtime.Name
 	kagentNamespace := runtime.Namespace
 
-	// Derive app name from process identity or agent card.
 	appName := deriveAppName(kagentName, kagentNamespace, agentCard, logger)
 
-	// Fall back to appName / "default" so traces always have a non-empty service identity.
 	serviceName := kagentName
 	if serviceName == "" {
 		serviceName = appName
@@ -110,9 +108,6 @@ func run(logLevel, host, port, configDir string) error {
 	if serviceNamespace == "" {
 		serviceNamespace = "default"
 	}
-	// The same identity reaches the resource and every invocation span, so a
-	// consumer reads one contract whichever runtime executed the agent. Model
-	// identity stays on the model spans the ADK emits per call.
 	runtimeTelemetry := processconfig.RuntimeTelemetry(runtime.GetTelemetry()).WithEnvironment(os.Environ())
 	runtimeTelemetry.Runtime = tracing.RuntimeADKGo
 	runtimeTelemetry.AgentName = serviceName
@@ -132,7 +127,6 @@ func run(logLevel, host, port, configDir string) error {
 		}
 	}()
 
-	// Create one authenticated controller channel for all kagent persistence.
 	tokenService := auth.NewKAgentTokenService(appName)
 	if err := tokenService.Start(context.Background()); err != nil {
 		logger.Error("failed to start token service", "error", err)
@@ -154,9 +148,6 @@ func run(logLevel, host, port, configDir string) error {
 		}
 	}()
 
-	// The executor needs a session service for its BeforeExecute callback
-	// (session creation/lookup). This must be created before the executor.
-	// AgentConfig.session_db_url selects the actor-local DurableDir store.
 	sessionService, err := session.NewService(agentConfig.SessionDbUrl)
 	if err != nil {
 		return fmt.Errorf("open local session store %s: %w", agentConfig.SessionDbUrl, err)
@@ -170,7 +161,6 @@ func run(logLevel, host, port, configDir string) error {
 
 	ctx := logging.IntoContext(context.Background(), logger)
 
-	// Build memory service if configured.
 	var memoryService *kagentmemory.KagentMemoryService
 	if agentConfig.Memory != nil {
 		memSvc, err := kagentmemory.New(kagentmemory.Config{
@@ -211,7 +201,6 @@ func run(logLevel, host, port, configDir string) error {
 		return fmt.Errorf("create A2A executor: %w", err)
 	}
 
-	// Build the agent card.
 	if agentCard == nil {
 		agentCard = &a2atype.AgentCard{
 			Name:        "go-adk-agent",
@@ -222,10 +211,8 @@ func run(logLevel, host, port, configDir string) error {
 			},
 		}
 	}
-	// A2A task events remain streamable even when LLM responses are not.
 	agentCard.Capabilities.Streaming = true
 
-	// Delegate the actor-local A2A server and task store to app.New.
 	kagentApp, err := app.New(app.AppConfig{
 		ControllerClient: controllerClient,
 		AgentCard:        *agentCard,

@@ -1,7 +1,3 @@
-# Build one module independently. The build context is the repository root.
-# docker build -f infra/docker/go-service.Dockerfile \
-#   --build-arg SERVICE_PATH=src/payment-gateway/edge --build-arg BUILD_PKG=./cmd/edge \
-#   --build-arg BUILD_BIN=edge --build-arg EXPOSE_PORT=8080 -t fraud-edge .
 FROM golang:1.26-bookworm AS builder
 
 ARG SERVICE_PATH=src/payment-gateway/edge

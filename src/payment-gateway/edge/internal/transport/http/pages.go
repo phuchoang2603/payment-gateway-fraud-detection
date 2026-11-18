@@ -44,7 +44,6 @@ type pageData struct {
 
 var hostnamePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$`)
 
-// The form posts to this origin and is answered with a redirect to the merchant's return URL, which browsers check against the same form-action list.
 func merchantOrigin(raw string) string {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme != "https" {

@@ -30,8 +30,6 @@ func (r *statusRecorder) Write(body []byte) (int, error) {
 	return r.ResponseWriter.Write(body)
 }
 
-// The access log carries method, route pattern, status and request ID only: never paths with
-// tokens, query strings, headers or bodies.
 func (s *Server) withCorrelation(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := strings.Map(func(character rune) rune {

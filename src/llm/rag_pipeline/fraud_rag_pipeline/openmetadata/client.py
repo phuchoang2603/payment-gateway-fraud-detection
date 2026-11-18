@@ -8,7 +8,6 @@ PIPELINE_SERVICE = "argo"
 PIPELINE = "rag-knowledge"
 STORAGE_SERVICE = "platform-object-storage"
 KNOWLEDGE_PREFIX = "datasets/payment-gateway/knowledge"
-# Same naming as the data pipelines' warehouse helper: ClickHouse service, default database, lakehouse schema.
 CHUNKS_TABLE = 'clickhouse.default.lakehouse."knowledge.chunks"'
 
 
@@ -33,7 +32,6 @@ class Catalog:
     def _put(self, path: str, body: dict) -> dict:
         response = self.client.put(path, json=body)
         response.raise_for_status()
-        # Lineage and pipeline-status writes succeed with an empty body.
         return response.json() if response.content else {}
 
     def _get(self, path: str) -> dict:

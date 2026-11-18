@@ -12,17 +12,6 @@ import (
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/notifier/internal/domain"
 )
 
-// Environment variables (all prefixed NOTIFIER_):
-//
-//	DATABASE_URL                                   runtime database URL (serve)
-//	MIGRATE_DATABASE_URL                           owner database URL (migrate); falls back to DATABASE_URL
-//	GRPC_ADDR (:8000), SHUTDOWN_TIMEOUT (10s)
-//	INTEGRATIONS_JSON                               JSON array of integrations
-//	KAFKA_BROKERS                                   comma-separated bootstrap servers
-//	KAFKA_TOPIC (payments.events.v1), KAFKA_GROUP (gateway-notifier)
-//	DELIVERY_TIMEOUT (10s), DELIVERY_INITIAL_DELAY (2m), DELIVERY_BACKOFF_FACTOR (2),
-//	DELIVERY_MAX_DELAY (6h), DELIVERY_MAX_ATTEMPTS (12), DELIVERY_POLL_INTERVAL (1s),
-//	DELIVERY_BATCH_SIZE (20), DELIVERY_CONCURRENCY (4)
 const (
 	defaultGRPCAddr        = ":8000"
 	defaultShutdownTimeout = 10 * time.Second

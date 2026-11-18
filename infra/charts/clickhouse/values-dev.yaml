@@ -1,4 +1,3 @@
-# ClickHouse 26.10 needs AVX2: dev-server3's Pentium G5400 lacks it, so the server runs only on dev-server1 or dev-server2.
 affinity:
   nodeAffinity:
     requiredDuringSchedulingIgnoredDuringExecution:

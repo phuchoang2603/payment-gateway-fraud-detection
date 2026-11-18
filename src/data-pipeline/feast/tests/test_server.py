@@ -47,7 +47,6 @@ def test_health_is_served(client):
     assert client.get("/health").status_code == 200
 
 
-# Partitions of the request body: a valid service read, an unknown service, and malformed bodies.
 @pytest.mark.parametrize(
     ("body", "status"),
     [

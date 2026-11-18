@@ -22,7 +22,6 @@ func address(t *rapid.T) Address {
 	}
 }
 
-// restyle changes case and spacing only, as two entries of the same place typed differently.
 func restyle(t *rapid.T, value, label string) string {
 	words := strings.Fields(value)
 	for i, word := range words {

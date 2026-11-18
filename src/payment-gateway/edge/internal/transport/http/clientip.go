@@ -6,8 +6,6 @@ import (
 	"strings"
 )
 
-// clientAddress trusts only the entries appended by the configured number of ingress hops: with
-// one hop it is the rightmost entry, so anything a client prepends is ignored.
 func (s *Server) clientAddress(r *http.Request) (netip.Addr, bool) {
 	var entries []string
 	for _, line := range r.Header.Values(s.opts.TrustedProxyHeader) {

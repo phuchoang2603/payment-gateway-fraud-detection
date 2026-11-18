@@ -30,7 +30,6 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-      # Pull requests test the projects their change affects; pushes to main test them all.
       - id: projects
         env:
           BASE: ${{ github.event.pull_request.base.sha }}

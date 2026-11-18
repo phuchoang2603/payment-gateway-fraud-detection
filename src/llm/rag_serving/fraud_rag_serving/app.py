@@ -70,7 +70,6 @@ class Knowledge:
         self.feature_store = None
         self.lock = asyncio.Lock()
 
-    # The registry exists only after the first pipeline run, and the reader role cannot create it.
     async def store(self):
         """Load a readable registry once; allow a later request to retry a failed load."""
         if self.feature_store is None:
@@ -84,8 +83,6 @@ class Knowledge:
                     self.feature_store = feature_store
         return self.feature_store
 
-    # Loading Feast takes seconds, longer than the gateway allows the first tool call; a missing registry is retried
-    # on first use.
     async def warm(self) -> None:
         """Attempt registry initialization without making a missing registry fatal to startup."""
         try:
@@ -154,8 +151,6 @@ async def get_knowledge_chunk(chunk_id: str) -> Chunk:
     return await counted("get_knowledge_chunk", find_chunk(chunk_id))
 
 
-# Callers are restricted by mesh authorization to the agent gateway, which rewrites Host, so the
-# SDK's DNS-rebinding check (meant for browser-reachable local servers) is disabled.
 mcp_app = mcp.streamable_http_app(
     stateless_http=True,
     json_response=True,

@@ -1,4 +1,3 @@
-# Picked up by the platform Grafana's dashboard sidecar.
 apiVersion: v1
 kind: ConfigMap
 metadata:

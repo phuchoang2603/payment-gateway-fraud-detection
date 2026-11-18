@@ -27,8 +27,6 @@ spec:
       {{- include "data-pipelines.kafkaClientLabels" $ | nindent 6 }}
       dp-product: lakehouse
   templates:
-    # Maintenance commits to the tables the writers commit to, so it holds both writer mutexes wherever this template
-    # is referenced, including the daily schedule.
     - name: maintain
       synchronization:
         mutexes:

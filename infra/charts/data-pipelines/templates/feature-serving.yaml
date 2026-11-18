@@ -61,7 +61,6 @@ spec:
           ports:
             - name: http
               containerPort: 6566
-          # Loading the registry and the Spark source module takes over a minute on a cold start.
           startupProbe:
             httpGet: {path: /health, port: http}
             periodSeconds: 10

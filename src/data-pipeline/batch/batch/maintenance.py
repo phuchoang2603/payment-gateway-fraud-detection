@@ -27,7 +27,6 @@ from batch.store import Store
 
 RETAIN = timedelta(days=7)
 RETAIN_SNAPSHOTS = 10
-# Kafka runs append to Bronze; compacting the files ingested in these days keeps its partitions few and large.
 COMPACT = timedelta(days=3)
 AUDIT_PREFIX = "audit-"
 BRONZE_TABLES = (bronze.EVENTS, bronze.LABELS, bronze.REJECTED)

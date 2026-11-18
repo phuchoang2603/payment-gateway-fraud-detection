@@ -12,7 +12,6 @@ spec:
   service:
     spec:
       type: ClusterIP
-  # The namespace enforces the restricted Pod Security level; the generated proxy sets everything but seccomp.
   deployment:
     spec:
       template:
@@ -97,9 +96,6 @@ spec:
           - type: SystemOne
             path: /v1/systemone
 ---
-# /v1/systemone stays outside the LLM route's prompt guard, which calls it. The guard's webhook sends the screen header;
-# its rule converts the webhook's messages into one question about the latest user turn and the decision model's
-# answer into the guard's pass or reject verdict. Other calls pass through unchanged.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -144,8 +140,6 @@ spec:
       local:
         - requests: {{ $screening.requestsPerMinute }}
           unit: Minutes
-    # After a hand-off, ADK passes the previous agent's turns to the next one as user messages that start with
-    # "For context:"; the screen judges the analyst's latest message, not those.
     transformation:
       request:
         body: >-
@@ -222,7 +216,6 @@ spec:
       timeouts:
         request: 300s
 ---
-# agentgateway applies one policy per target, so authentication, limits and guards for the route live together.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -249,7 +242,6 @@ spec:
           key: apiKey.client
   backend:
     ai:
-      # Without this map every request is parsed as a chat completion, which rejects embedding requests.
       routes:
         /v1/chat/completions: Completions
         /v1/embeddings: Embeddings
@@ -261,8 +253,6 @@ spec:
               builtins: [CreditCard, Email]
               matches:
                 {{- toYaml $gateway.piiPatterns | nindent 16 }}
-          # Runs after masking, so the decision model never sees the masked values. The webhook calls the gateway's
-          # /v1/systemone route with the screen header.
           - webhook:
               action: Reject
               failureMode: {{ $gateway.screening.failureMode }}

@@ -277,7 +277,6 @@ def later(field, seconds):
     return lambda update: getattr(update, field).FromDatetime(DAY + timedelta(seconds=seconds))
 
 
-# Every rejection the writer guards, one partition each; a valid customer and method snapshot decode.
 @pytest.mark.parametrize(
     ("record", "error"),
     [
@@ -359,7 +358,6 @@ def test_live_main_writes_and_reports(lake, monkeypatch, tmp_path):
     assert lake.load_table(TABLES["customer"]).scan().to_arrow().num_rows == 1
 
 
-# Partitions of the writer's mode flags.
 @pytest.mark.parametrize(
     ("argv", "epoch", "failure"),
     [

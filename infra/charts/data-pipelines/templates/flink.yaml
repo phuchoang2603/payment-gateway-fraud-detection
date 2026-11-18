@@ -13,7 +13,6 @@ metadata:
 rules:
   - apiGroups: [apps]
     resources: [deployments]
-    # Flink reads its own Deployment for owner references; history units run as <history epoch>-<YYYYMMDD>.
     resourceNames:
       - fraud-streaming-{{ .Values.features.epoch }}
       {{- $day := .Values.features.historyStart | toDate "2006-01-02" }}

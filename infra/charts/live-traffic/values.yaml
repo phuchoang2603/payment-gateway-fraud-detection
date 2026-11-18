@@ -31,8 +31,6 @@ simulator:
     redelivery:
       enabled: false
       rate: 0.015
-    # Drift steps change the drawn purchases from an offset of the run, for example:
-    #   - {after_seconds: 3600, foreign_ip_probability: 0.15, amount_scale: 1.8}
     drift: []
 objectStorage:
   endpoint: https://minio.home.phuchoang.sbs

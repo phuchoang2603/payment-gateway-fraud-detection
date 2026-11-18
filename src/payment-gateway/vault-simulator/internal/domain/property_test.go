@@ -7,7 +7,6 @@ import (
 	"pgregory.net/rapid"
 )
 
-// withCheckDigit appends the digit that makes the number pass the Luhn check.
 func withCheckDigit(body string) string {
 	for digit := range 10 {
 		candidate := fmt.Sprintf("%s%d", body, digit)

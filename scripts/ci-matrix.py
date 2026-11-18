@@ -9,7 +9,6 @@ from pathlib import Path, PurePosixPath
 MANIFESTS = {"go": "go.mod", "python": "pyproject.toml"}
 JVM_PACKAGES = {"pyspark", "apache-flink"}
 IVY_PACKAGES = {"pyspark"}
-# A change here runs every project.
 SHARED = ["contracts/", "scripts/", ".github/workflows/"]
 
 
@@ -82,7 +81,6 @@ def local_dependencies(project, kind):
             paths.add(resolve(project, source["path"]))
         elif source.get("workspace") and name in members:
             paths.add(members[name])
-    # The project itself, or an ancestor on its import path, is not an outside dependency.
     own = PurePosixPath(project)
     return {path for path in paths if path != own and path not in own.parents}
 

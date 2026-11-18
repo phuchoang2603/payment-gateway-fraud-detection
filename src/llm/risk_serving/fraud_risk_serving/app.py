@@ -17,7 +17,6 @@ from fraud_risk_serving.model import Model
 
 
 def rounded(value):
-    # The gateway masks any run of 13 or more digits as a card number, and a full-precision float has more.
     if isinstance(value, float):
         return round(value, 4)
     if isinstance(value, dict):
@@ -93,7 +92,6 @@ def create_app(transport=None):
     async def score_payment_risk(request: RiskRequest) -> dict[str, Any]:
         return await invoke("score_payment_risk", request, True)
 
-    # Ambient mesh admits callers by identity; the gateway rewrites Host before forwarding MCP requests.
     mcp_app = mcp.streamable_http_app(
         stateless_http=True,
         json_response=True,

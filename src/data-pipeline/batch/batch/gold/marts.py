@@ -30,20 +30,14 @@ SILVER_LABELS = "lakehouse.`silver.labels`"
 TRUTH = "LABEL_SOURCE_SIMULATION_TRUTH"
 CHARGEBACK = "LABEL_SOURCE_CHARGEBACK"
 CHARGEBACK_DAYS = 21
-# Labels become available up to this many days after their attempt (silver.curate.LABEL_LOOKBACK).
 LABEL_LOOKBACK_DAYS = 45
-# The label summary and the staged attempts are ordered by a payment-hash bucket, so each fact insert joins one bucket of
-# each: labels are read once in total rather than once per rebuilt day, and the hash table holds one bucket of attempts.
 BUCKETS = 64
 BUCKET = f"cityHash64(payment_id) % {BUCKETS}"
-# The label summary is grouped per attempt in this many passes, so one pass holds a share of the window's groups.
 LABEL_PASSES = 8
 LABEL_COLUMNS = (
     "integration_id, payment_id, attempt_id, source, is_fraud, scenario, label_available_at, observation_id"
 )
 DDL = Path(__file__).with_name("sql") / "marts"
-# The settings that let full-history joins finish on the 4 GiB prod server: disk-backed sort-merge joins and
-# aggregation instead of in-memory hash tables.
 SPILL = {
     "join_algorithm": "full_sorting_merge",
     "max_bytes_before_external_sort": "400000000",
@@ -187,7 +181,6 @@ def unchanged(client: ClickHouse, first: date, end: date, snapshots: dict, code:
         )
     except RuntimeError:
         return False
-    # ClickHouse returns Int64 quoted or bare depending on output_format_json_quote_64bit_integers.
     return len(info) == 1 and {key: str(value) for key, value in info[0].items()} == {
         "run_range": run_range(first, end),
         "code_version": code,
@@ -226,8 +219,6 @@ def build(
         last = str(min(date.fromisoformat(last), complete_before - timedelta(days=1)))
     days = rebuilt_days(first, end, start, date.fromisoformat(last)) if last else []
     months = months_of(days)
-    # build_info describes the live marts after publish, which keep the newer days of earlier runs; an empty window
-    # ends the day before it starts.
     live_end = client.value(f"SELECT toString(max(window_end)) FROM {name(BUILD_INFO)}")
     window_end = max(
         start - timedelta(days=1),
@@ -236,8 +227,6 @@ def build(
     )
 
     if days:
-        # Only labels that can belong to the rebuilt days' attempts: available from the first day until the label
-        # lookback after the last.
         label_window = (
             f"linkage = 'linked' AND label_available_at >= toDate('{days[0]}') "
             f"AND label_available_at < toDate('{days[-1] + timedelta(days=LABEL_LOOKBACK_DAYS + 1)}')"
@@ -267,7 +256,6 @@ GROUP BY integration_id, payment_id, attempt_id""",
             SPILL,
             "attempts",
         )
-        # The attempts are the right side, which ClickHouse builds the hash table from: one bucket of them.
         for bucket in range(BUCKETS):
             client.execute(
                 f"""INSERT INTO {name(FACT, staging=True)}
@@ -281,7 +269,6 @@ RIGHT JOIN (SELECT * FROM {name(ATTEMPTS, staging=True)} WHERE bucket = {bucket}
             )
 
     if months:
-        # A merchant-day partition is a month, so the live days of the touched months are regrouped with the staged ones.
         source = (
             f"(SELECT * FROM {name(FACT)} WHERE toYYYYMM(started_at) IN ({', '.join(months)}) "
             f"AND toDate(started_at) >= toDate('{start}') AND toDate(started_at) NOT IN ({day_list(days)}) "

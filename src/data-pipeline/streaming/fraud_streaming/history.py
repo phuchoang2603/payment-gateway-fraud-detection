@@ -58,7 +58,6 @@ def lake():
             else "true",
         },
     )
-    # Polaris runs with STS disabled and rejects PyIceberg's default request for vended credentials.
     catalog._session.headers.pop("X-Iceberg-Access-Delegation", None)
     return catalog
 
@@ -140,9 +139,7 @@ def read_report():
     return json.loads(body)
 
 
-# Bronze ordering for replay: event time, then the keys that make it total.
 ORDER = "recorded_at, integration_id, payment_id, aggregate_version, event_id, _source_file, _kafka_offset"
-# Columns the seed reads, where Bronze has them: the event fields it encodes and the provenance that orders duplicates.
 PROVENANCE = ("_source_file", "_kafka_offset")
 
 
@@ -263,7 +260,6 @@ def seed(start, end):
             "bootstrap.servers": brokers,
             "enable.idempotence": True,
             "acks": "all",
-            # Bounds the producer's own buffer; produce() blocks on BufferError until it drains.
             "queue.buffering.max.kbytes": 262144,
             "linger.ms": 50,
             "batch.size": 1048576,
@@ -363,7 +359,6 @@ def main():
         reset_topics(delete_only=args.delete)
     else:
         planned = units(date.fromisoformat(args.start), date.fromisoformat(args.end), args.days)
-        # The Flink Role names each unit's Deployment from the chart's history range and unit length.
         allowed = {
             unit["id"]
             for unit in units(

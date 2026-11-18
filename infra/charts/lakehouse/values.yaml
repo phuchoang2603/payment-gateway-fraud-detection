@@ -30,7 +30,6 @@ lakehouse:
 polaris:
   fullnameOverride: iceberg-catalog
   replicaCount: 1
-  # At 250m the catalog missed liveness probes while Spark runs shared its node and was killed mid-request.
   resources:
     requests:
       cpu: "1"

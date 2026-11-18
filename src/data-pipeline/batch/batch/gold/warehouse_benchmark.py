@@ -123,7 +123,6 @@ def measure(client: marts.ClickHouse, label: str, sql: str, settings: dict) -> d
     wanted = [runs["cold"], *warm]
     ids = ", ".join(f"'{query_id}'" for query_id in wanted)
     for _ in range(LOG_ATTEMPTS):
-        # A query's log entry can land after the response, so one flush may miss it.
         client.execute("SYSTEM FLUSH LOGS")
         logged = {
             row["query_id"]: row

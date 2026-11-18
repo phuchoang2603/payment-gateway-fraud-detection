@@ -62,7 +62,6 @@ spec:
       remoteRef:
         key: LANGFUSE_REDIS_PASSWORD
 ---
-# The shared ClickHouse in `data` owns the langfuse user; its password stays in the platform store.
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:

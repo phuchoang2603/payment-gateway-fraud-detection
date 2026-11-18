@@ -4,8 +4,6 @@ generator:
   shards: 12
   workers: 3
   retryLimit: 10
-  # One shard per spot e2-standard-4 node (pool limit 12 nodes / 48 vCPU). Dev v18 measured about 115 purchases/s per
-  # worker before the world-table change; v19 is about 190M purchases, so 36 workers need several hours.
   activeDeadlineSeconds: 64800
   nodeSelector:
     talos.dev/nodepool: spot
@@ -22,33 +20,19 @@ config:
   S3_ENDPOINT: https://storage.googleapis.com
   AWS_REGION: auto
   S3_PATH_STYLE: 'true'
-# Workflow step pods stay off spot nodes: a reclaimed resource-step pod makes Argo submit a second SparkApplication.
 workflowNodeSelector:
   talos.dev/nodepool: cpu
 spark:
-  # Spark pods share the generator's spot pool. Its 12-node limit means a Spark run and a generator run cannot both
-  # hold their full node counts, so run them one after the other.
   nodeSelector:
     talos.dev/nodepool: spot
-  # A spot reclaim of the driver's node restarts the whole application, so drivers run on the on-demand baseline
-  # pool, which has about 5.8 GiB and 1 vCPU free on one node.
   driverNodeSelector:
     talos.dev/nodepool: cpu
   retry:
     limit: 10
     policy: Always
-  # The spot pool is e2-standard-4 only (12 nodes, 48 vCPU, 192 GiB). A node leaves 3270m / 13217Mi for pods
-  # after Talos reservations and DaemonSets, so a 4-core executor does not fit: 11 executors of 3 cores, one per node,
-  # each 9g + 3g (5 GiB executors were OOM-killed in the Iceberg write; DP2's Python workers hold the broadcast
-  # duplicate keys in overhead memory), spreading shuffle over 24Gi of ephemeral storage, the practical limit of the
-  # 40Gi root volume. The driver runs on the on-demand pool at 4g + 1.5g: it collects DP2's duplicated-ID keys as a
-  # sorted array rather than a broadcast hash relation. Shuffle partitions stay at 1024 rather than 3-4x the 33 cores:
-  # v19 shuffles reach hundreds of GB, and AQE coalesces small partitions up to the 128 MB advisory size.
   profiles:
     large:
       shufflePartitions: 1024
-      # DP2's Python processes hold the broadcast duplicate keys (about 160 MB each), and that memory counts against
-      # memoryOverhead, not the JVM heap; 1g and 2g overheads were OOM-killed.
       driver:
         requestCores: 500m
         memory: 4g
@@ -57,11 +41,6 @@ spark:
       executor:
         memory: 9g
         memoryOverhead: 3g
-    # DP3 collects only day lists and counts, so a 2g heap suffices and the driver fits the spare memory of the on-demand
-    # pool, where the large driver's 5.5 GiB left it unschedulable. The Python driver process lives in the overhead,
-    # which 512m left OOMKilled. Gold runs no Python, but its executors still outgrow a 3g overhead: May 2026's
-    # dim_customer rebuild was OOMKilled at 9g + 3g while its tasks peaked at 331 MB of execution memory, so the same
-    # 12g holds a smaller heap and more native memory (shuffle buffers, compression).
     gold:
       executors: 11
       shufflePartitions: 1024
@@ -121,7 +100,6 @@ catalog:
           config:
             hostPort: http://fraud-streaming-live-v20-rest.data.svc.cluster.local:8081
 checks:
-  # The v19 Bronze event suite took about 1490 s against the 1500 s default; Silver has more rules on similar volume.
   nativeTimeoutSeconds: 4800
 features:
   enabled: true
@@ -132,12 +110,10 @@ features:
   epoch: live-v20
   historyEpoch: history-v19
   checkpointRoot: s3a://talos-proxmox-prod-platform/runs/payment-gateway/flink/history
-  # Burst nodes have 40Gi root disks, too small for Spark spill or a week's DuckDB sort.
   scratchClass: cloud-standard-scratch
   replicationFactor: 1
   historyStart: "2026-07-29"
   historyEnd: "2026-10-29"
-  # A 4-day unit replays 5 days with its lead-in day, about 12M seeded events or 1.6 GB at 130 compressed bytes each.
   historyUnitDays: 4
   historyParallelism: 6
   redis:

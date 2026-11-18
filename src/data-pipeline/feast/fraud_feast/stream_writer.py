@@ -130,7 +130,6 @@ def commit_with_retry(table, write, attempts=8):
         except CommitFailedException:
             if attempt == attempts - 1:
                 raise
-            # Concurrent history units commit on the same tables; jitter keeps their retries apart.
             time.sleep(min(0.1 * 2**attempt, 5) * (0.5 + random.random()))
 
 
@@ -179,7 +178,6 @@ class HistoryWriter:
         for scope, table in self.tables.items():
             if not rows[scope]:
                 continue
-            # Iceberg add_files assigns IDs through name mapping; its input must omit field IDs.
             schema = pa.schema([field.remove_metadata() for field in table.schema().as_arrow()])
             batch = pa.Table.from_pylist(rows[scope], schema=schema)
             if (
@@ -225,7 +223,6 @@ class HistoryWriter:
             def replace_range(transaction):
                 transaction.delete(predicate)
                 if self.files[scope]:
-                    # UUID paths belong to this attempt; failed optimistic commits can reuse them.
                     transaction.add_files(self.files[scope], check_duplicate_files=False)
 
             commit_with_retry(table, replace_range)

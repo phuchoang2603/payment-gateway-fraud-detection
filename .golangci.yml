@@ -1,7 +1,5 @@
 version: "2"
 
-# Default linters (errcheck, govet, ineffassign, staticcheck, unused) plus
-# type-checking replace separate go vet / go build steps in CI.
 linters:
   exclusions:
     generated: strict
@@ -13,3 +11,6 @@ formatters:
     gofumpt:
       extra:
         group-params: true
+  exclusions:
+    paths:
+      - '\.pb\.go$'

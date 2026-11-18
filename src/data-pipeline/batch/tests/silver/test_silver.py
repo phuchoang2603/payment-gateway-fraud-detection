@@ -140,7 +140,6 @@ def payment(n, minutes, attempt=True):
 
 
 def history():
-    # pay-2 begins two minutes before midnight UTC and finishes after it; pay-4 has a conflicting redelivery.
     midnight = DAY - 12 * 60
     events = [
         *payment(1, 0),
@@ -195,7 +194,6 @@ def test_any_split_of_a_range_and_any_rerun_build_the_same_silver_as_one_backfil
             only_current = [r.asDict() for r in current[table].exceptAll(backfill[table]).collect()]
             assert not only_backfill and not only_current, f"{step} {table}: {only_backfill} vs {only_current}"
 
-    # Each example is several Spark runs, so few examples; the explicit one is the daily schedule.
     @settings(max_examples=3, deadline=None, database=None, derandomize=True)
     @given(cuts=st.sets(st.integers(1, span)), rerun=st.tuples(offsets, offsets).map(sorted))
     @example(cuts=set(range(1, span + 1)), rerun=[1, 3])

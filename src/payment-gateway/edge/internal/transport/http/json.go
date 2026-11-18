@@ -117,8 +117,6 @@ func containsCardField(value any) bool {
 	return false
 }
 
-// decodeJSON rejects card-like fields anywhere in the body before strict decoding; the offending
-// name and value are never echoed or logged.
 func decodeJSON(w http.ResponseWriter, r *http.Request, limit int64, allowCardNumber bool, dst any) error {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil {

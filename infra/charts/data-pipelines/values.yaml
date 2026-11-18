@@ -50,19 +50,14 @@ storage:
     data:
       AWS_ACCESS_KEY_ID: OBJECT_GATEWAY_ACCESS_KEY_ID
       AWS_SECRET_ACCESS_KEY: OBJECT_GATEWAY_SECRET_ACCESS_KEY
-# Node selector for pipeline workflow pods (resource steps, checks, publication); empty schedules them anywhere.
 workflowNodeSelector: {}
 spark:
   nodeSelector: {}
-  # Driver placement when it differs from the executors'; empty uses nodeSelector.
   driverNodeSelector: {}
   tolerations: []
   retry:
     limit: 2
     policy: OnError
-  # Executor sizes for a prod spot node (e2-standard-4, 40Gi boot disk, allocatable about 3.5 vCPU and 14 GiB).
-  # Each profile names the executor count and shuffle partitions; `dev` fits one dev node and `large` fills the prod
-  # pool: 11 executors of 3 cores, one per node, with the 12th node left for the driver.
   profiles:
     dev:
       executors: 1
@@ -74,7 +69,6 @@ spark:
         memory: 2g
         memoryOverhead: 512m
         ephemeralStorage: 5Gi
-      # Dev nodes keep about 1.5 CPU and 7 GiB free next to Flink, OpenMetadata and ClickHouse.
       executor:
         cores: 2
         requestCores: '1'
@@ -105,8 +99,6 @@ bronze:
   activeDeadlineSeconds: 7200
   kafka:
     bootstrapServers: payment-gateway-kafka-kafka-bootstrap.payment-gateway.svc:9092
-    # Must match the topic partition count of payments.events.v1 and fraud.labels.v1 in infra/charts/kafka/values.yaml.
-    # The Spark Kafka source makes one task per partition, so executor cores and shuffle partitions follow this value.
     partitions: 3
     executorMemory: 6g
     executorMemoryOverhead: 1g
@@ -129,14 +121,11 @@ pipeline:
   profile: dev
   reportRoot: s3://platform-dev/runs/payment-gateway/pipeline
   activeDeadlineSeconds: 14400
-  # dp-daily at 04:17 UTC, after the 03:43 maintenance; suspended unless pipeline.suspend is false. Without start and end a run covers yesterday and
-  # the lookback days before it, which catches late outcomes.
   schedule: 17 4 * * *
   lookbackDays: 2
 marts:
   clickhouseUrl: http://clickhouse.data.svc.cluster.local:8123
   user: marts
-  # The clickhouse chart's ExternalSecret for the marts user in the same namespace.
   passwordSecret: clickhouse-marts
   retentionDays: 90
   resources:
@@ -278,14 +267,12 @@ catalog:
 checks:
   connectorsConfigMap: metadata-connectors
   connectorSecret: metadata-clickhouse
-  # Limit for each table's `metadata test` run; each contract rule is a ClickHouse scan over the lakehouse table.
   nativeTimeoutSeconds: 1500
 features:
   enabled: false
   suspend: true
   driverMemory: 6g
   spillSize: 100Gi
-  # Storage class for the spill volume of materialization and the history seed; empty uses node disk.
   scratchClass: ""
   materializeResources:
     requests: {cpu: "2", memory: 8Gi, ephemeral-storage: 2Gi}
@@ -299,7 +286,6 @@ features:
   checkpointRoot: s3://platform-dev/runs/payment-gateway/flink/history
   replicationFactor: 1
   historyStart: "2026-07-29"
-  # Each unit is one single-partition logical-clock Flink job, so units in parallel are the only way to scale a replay.
   historyUnitDays: 7
   historyParallelism: 2
   historyWriterParallelism: 2
@@ -336,7 +322,6 @@ features:
     - feast-server
     - data-pipelines
   streaming:
-    # False skips the live Flink job; batch features still materialize and serve.
     enabled: true
     sourceTopic: payments.events.v1
     sourcePartitions: 3

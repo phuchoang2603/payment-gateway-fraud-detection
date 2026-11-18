@@ -73,7 +73,6 @@ func modelProto(value application.ModelObservation) *fraudv1.ModelEvidence {
 	return result
 }
 
-// riskAssessment carries the model's version and score only when the score met the missing-feature policy.
 func riskAssessment(result application.Result, outcome paymentsv1.RiskOutcome) *paymentsv1.RiskAssessment {
 	decision := result.Evidence.Decision
 	assessment := &paymentsv1.RiskAssessment{Outcome: outcome, ReasonCodes: decision.Reasons, PolicyVersion: decision.PolicyVersion, AssessmentId: result.Evidence.AssessmentID, EvidenceSha256: result.EvidenceHash}

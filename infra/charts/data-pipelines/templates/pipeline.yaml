@@ -35,8 +35,6 @@ spec:
                   value: "{{ "{{workflow.parameters.start}}" }}"
                 - name: end
                   value: "{{ "{{workflow.parameters.end}}" }}"
-    # Silver, Gold and the marts for one range of UTC days, on one write-audit-publish branch. The mutex sits on this
-    # template so the daily run and every backfill month serialize, wherever they reference it.
     - name: pipeline
       synchronization:
         mutexes:
@@ -47,8 +45,6 @@ spec:
           - name: end
       dag:
         tasks:
-          # A stage is skipped when every table it writes already holds, at the head of main, this range's output from
-          # the same inputs by the same code (openmetadata.plan, batch.gold.marts plan): a re-run resumes where it failed.
           - name: plan-silver
             template: plan-silver
             arguments:
@@ -67,7 +63,6 @@ spec:
                   value: "{{ "{{inputs.parameters.start}}" }}"
                 - name: end
                   value: "{{ "{{inputs.parameters.end}}" }}"
-          # Write-audit-publish per layer: Silver is audited and published before Gold and the marts read it.
           - name: check-silver
             template: check-silver
             depends: silver
@@ -76,10 +71,6 @@ spec:
             template: publish-silver
             depends: check-silver
             when: "{{ "{{tasks.plan-silver.outputs.parameters.decision}}" }} == run"
-          # Gold and the marts both read published Silver and nothing of each other, so they run side by side: the Gold
-          # Spark job overlaps the ClickHouse mart build. The mart build, the two checks and the mart profile share the
-          # dp-clickhouse mutex, so the small ClickHouse server runs one of them at a time. A failure in one branch
-          # leaves the other's output publishable, and the run fails.
           - name: plan-gold
             template: plan-gold
             depends: publish-silver
@@ -181,7 +172,6 @@ spec:
 {{- include "data-pipelines.profile" (dict "root" $ "mutex" "dp-clickhouse") | nindent 4 }}
 {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp2-silver,dp3-features,dp3-marts" "dataset" .Values.bronze.datasetVersion "report" $report) | nindent 4 }}
 ---
-# Daily: Kafka into Bronze, then yesterday and the lookback days through Silver, Gold and the marts.
 apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:
@@ -227,9 +217,6 @@ spec:
                     value: ""
 {{- include "data-pipelines.publish" (dict "root" $ "pipelines" "dp1-bronze-kafka,dp2-silver,dp3-features,dp3-marts" "dataset" .Values.bronze.datasetVersion "report" $report) | nindent 6 }}
 ---
-# Backfill: the same pipeline month by month, in date order, one month at a time. dim_customer continues each month
-# from the versions the month before published, so order matters; a failure stops the rest, and a new backfill from
-# the failed month resumes.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -265,7 +252,6 @@ spec:
                 - name: end
                   value: "{{ "{{item.end}}" }}"
             withParam: "{{ "{{steps.months.outputs.result}}" }}"
-      # One month at a time, and none after a failed one: each month continues from the one before.
       parallelism: 1
       failFast: true
     - name: months

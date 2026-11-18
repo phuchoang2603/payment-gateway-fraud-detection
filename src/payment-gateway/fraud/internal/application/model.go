@@ -64,7 +64,6 @@ func (s *Service) WithModel(config ModelConfig) error {
 	return nil
 }
 
-// scoreModel calls the scorer and applies the missing-feature policy to the evidence's decision.
 func (s *Service) scoreModel(ctx context.Context, evidence *Evidence) {
 	call, stop := context.WithTimeout(ctx, s.model.Timeout)
 	defer stop()

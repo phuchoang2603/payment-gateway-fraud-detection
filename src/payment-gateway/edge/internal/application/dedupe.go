@@ -17,8 +17,6 @@ type dedupeEntry struct {
 	at     time.Time
 }
 
-// attemptCache makes a re-posted hosted form reuse the first submission's result, so a second
-// tokenization never presents a different token under the same idempotency key.
 type attemptCache struct {
 	mu      sync.Mutex
 	entries map[string]*dedupeEntry

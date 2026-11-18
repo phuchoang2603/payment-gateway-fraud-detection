@@ -4,8 +4,6 @@ from feast.protos.feast.core.Registry_pb2 import Registry as RegistryProto
 
 
 class PrefixS3RegistryStore(S3RegistryStore):
-    # Feast's S3 store calls HeadBucket first, which needs bucket-wide ListBucket. The gateway keys may list only
-    # their own prefixes, so the registry object is read directly.
     def get_registry_proto(self):
         try:
             body = self.s3_client.Object(self._bucket, self._key).get()["Body"].read()

@@ -1,5 +1,3 @@
-# Standalone chat server for model-server variants. Set models.chat.stopped in the chart first to free the GPU,
-# edit the args below for one variant, then: kubectl apply -f server.yaml (delete it after the run).
 apiVersion: v1
 kind: Pod
 metadata:

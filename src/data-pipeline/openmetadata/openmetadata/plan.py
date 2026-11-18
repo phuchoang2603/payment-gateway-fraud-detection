@@ -81,7 +81,6 @@ def main() -> int:
     decision = "skip" if unchanged(catalog, layer, day_range, os.environ.get("DP_CODE_VERSION", "")) else "run"
     (output / "decision").write_text(decision)
     if layer == "gold":
-        # The marts read the same published Silver, so they get its snapshots here rather than from Gold.
         snapshots = main_snapshots(catalog, SILVER_INPUTS)
         (output / "silver_snapshots").write_text(json.dumps(snapshots, sort_keys=True))
     print(f"{layer} {day_range or 'daily'}: {decision}")

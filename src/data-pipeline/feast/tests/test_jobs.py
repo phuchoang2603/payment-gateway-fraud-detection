@@ -27,7 +27,6 @@ def lake_env(monkeypatch):
     return monkeypatch
 
 
-# Partitions of the storage addressing: path-style for MinIO, virtual-hosted for S3.
 @pytest.mark.parametrize(
     ("path_style", "virtual", "addressing"),
     [("true", "false", "path"), ("false", "true", "virtual")],
@@ -87,7 +86,6 @@ def flink(responses):
     return rest
 
 
-# Partitions of the Flink overview: one finished job, one running job, none, and two.
 @pytest.mark.parametrize(
     ("jobs", "finished"),
     [
@@ -134,7 +132,6 @@ def test_counters_sum_every_vertex_and_classify_decode_rejects(monkeypatch):
     }
 
 
-# Boundary values of a history range: one day, empty, reversed, and a live epoch.
 @pytest.mark.parametrize(
     ("epoch", "start", "end", "valid"),
     [
@@ -252,7 +249,6 @@ def sampled(monkeypatch, value, timestamp, *, names=None):
     return store, {"samples": {"customer": [row]}}
 
 
-# Partitions of an online read: equal, a different value, a different time, and a missing column.
 @pytest.mark.parametrize(
     ("value", "timestamp", "names", "error"),
     [
@@ -286,7 +282,6 @@ def test_verify_online_main_records_the_check(monkeypatch, tmp_path):
     assert json.loads(report.read_text()) == {"samples": {}, "sampled": 0, "checked": True}
 
 
-# Partitions of the materialization flags: daily with and without a since day, stream recovery, and both.
 @pytest.mark.parametrize(
     ("argv", "expected"),
     [
@@ -342,7 +337,6 @@ def test_registry_store_raises_other_client_errors():
         store.get_registry_proto()
 
 
-# The two windows the Spark test does not reach: an explicit since day, and stream recovery (STREAM_TTL back).
 @pytest.mark.parametrize(
     ("since", "recovery", "start", "views"),
     [
@@ -352,7 +346,6 @@ def test_registry_store_raises_other_client_errors():
 )
 def test_materialize_windows(monkeypatch, since, recovery, start, views):
     feature_store = MagicMock()
-    # Stop after the first daily materialization: the sampling that follows needs a live Spark session.
     feature_store.materialize.side_effect = None if recovery else StopIteration
     if recovery:
         report = materialize.run(None, feature_store, AT, 2, since, stream_recovery=True)

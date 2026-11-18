@@ -27,7 +27,6 @@ spec:
         data-pipelines.fraud-detection.dev/scratch: "true"
   templates:
     - name: months
-      # Caps concurrent units only; a workflow-level cap would also count each unit's own steps.
       parallelism: {{ .Values.features.historyParallelism }}
       steps:
         - - name: plan
@@ -259,14 +258,9 @@ spec:
       metadata:
         labels:
           data-pipelines.fraud-detection.dev/scratch: "true"
-      # A fresh sort volume is owned by root; the streaming image runs as the flink group.
       securityContext: {fsGroup: 9999}
       {{- end }}
       {{- if has $mode (list "seed" "verify" "writer") }}
-      # A spot reclaim or a transient catalog or broker error retries the step. The seed recreates its topics empty
-      # before writing, and the writer replaces the unit's rows, so a retry leaves one copy.
-      # Backoff without maxDuration: Argo measures maxDuration from the step's first start, so a seed reclaimed after
-      # two minutes would never retry.
       retryStrategy:
         limit: 5
         retryPolicy: Always
@@ -326,7 +320,6 @@ spec:
           {{- if eq $mode "seed" }}
           - name: DATASET_VERSION
             value: {{ $.Values.bronze.datasetVersion | quote }}
-          # The seed sorts one day of Bronze at a time; the sort and the file PyIceberg is decoding share the limit.
           - {name: HISTORY_SORT_MEMORY, value: 3GB}
           - {name: PYICEBERG_MAX_WORKERS, value: "2"}
           {{- end }}
@@ -344,8 +337,6 @@ spec:
           {{- end }}
         resources:
           {{- if eq $mode "seed" }}
-          # DuckDB sorts a week of Bronze under HISTORY_SORT_MEMORY and spills the rest to the sort volume; the Arrow
-          # batches and the producer queue need the headroom above it.
           requests: {cpu: "1", memory: 6Gi, ephemeral-storage: 2Gi}
           limits: {memory: 8Gi, ephemeral-storage: 4Gi}
           {{- else if eq $mode "verify" }}
@@ -355,8 +346,6 @@ spec:
           requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 2Gi}
           limits: {memory: 4Gi, ephemeral-storage: 4Gi}
           {{- else }}
-          # The topic cleanup only calls the Kafka admin API, and it must fit in what the on-demand pool has left while
-          # the replay holds the burst pool.
           requests: {cpu: 50m, memory: 128Mi, ephemeral-storage: 256Mi}
           limits: {memory: 512Mi, ephemeral-storage: 1Gi}
           {{- end }}

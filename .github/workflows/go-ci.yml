@@ -21,7 +21,6 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-      # Pull requests test the projects their change affects; pushes to main test them all.
       - id: projects
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
@@ -37,7 +36,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      GOWORK: "off"
       CI_TEST_REPORTS: /tmp/ci-test-evidence
     steps:
       - uses: actions/checkout@v7.0.1
@@ -89,7 +87,7 @@ jobs:
       - name: Install mutation testing tool
         run: go install github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0
       - name: Report mutations in handwritten Go logic
-        run: bash scripts/check-go-mutations.sh "$GO_PROJECT" "$MUTATION_MODE"
+        run: bash scripts/ci-checks.sh go-mutations "$GO_PROJECT" "$MUTATION_MODE"
       - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:

@@ -14,16 +14,9 @@ WRITE_PROPERTIES = {
     "write.target-file-size-bytes": str(TARGET_FILE_BYTES),
     "write.wap.enabled": "true",
 }
-# For input already laid out by the target's day partition (one historical file per purchase day, or Bronze files
-# read back for Silver), each task touches only a few partitions, so the hash shuffle adds no clustering: write in
-# place with one open file per partition.
 LOCAL_WRITE_OPTIONS = {"distribution-mode": "none", "fanout-enabled": "true"}
 
-# Write-audit-publish: a pipeline run writes to this branch (spark.wap.branch), its checks audit the branch heads, and
-# only a passing run fast-forwards main. Readers of another pipeline's tables use main, so they see audited data only.
 WAP_BRANCH_ENV = "WAP_BRANCH"
-# The code that wrote a commit (the batch image), so a later run can tell output built from the same inputs by the same
-# code, and skip rebuilding it.
 CODE_PROPERTY = "dp.code_version"
 CODE_ENV = "DP_CODE_VERSION"
 

@@ -34,9 +34,7 @@ TABLES = (PAYMENT_EVENTS, ATTEMPTS, LABELS, REJECTED)
 PAYMENT_KEY = ["integration_id", "payment_id"]
 ATTEMPT_KEY = [*PAYMENT_KEY, "attempt_id"]
 PAYMENT_DAY = "payment_day"
-# Payments expire 60 minutes after creation; a day of margin keeps every event of a payment inside the read.
 LIFECYCLE = DAY
-# Chargebacks become available 7 to 21 days after the payment.
 LABEL_LOOKBACK = timedelta(days=45)
 RUN_PROPERTY = "dp2.run_id"
 RANGE_PROPERTY = "dp2.range"
@@ -337,7 +335,6 @@ def run(spark, run_id: str, start_day, end_day) -> dict:
     with phase(spark, phases, "write attempts"):
         written[ATTEMPTS] = write(spark, ATTEMPTS, attempts(events, status), in_days, pins)
 
-    # Labels of the range's availability days link to the attempts and rejections of the lookback days before.
     lookback = (F.col(PAYMENT_DAY) >= F.lit(start_day - LABEL_LOOKBACK)) & (F.col(PAYMENT_DAY) <= F.lit(end_day))
     known = read_at(spark, ATTEMPTS, written[ATTEMPTS]["snapshot_id"]).where(lookback)
     known_status = known.select(*PAYMENT_KEY, "payment_status").distinct()
@@ -362,7 +359,6 @@ def run(spark, run_id: str, start_day, end_day) -> dict:
 
     conflict_events = hashed.join(conflicting.select(*PAYMENT_KEY), PAYMENT_KEY, "left_semi")
     conflict_distinct = distinct_events(conflict_events).drop("hashes")
-    # A rejected attempt is attributed to the historical source when any of its payment's copies came from it.
     sources = conflict_events.groupBy(*PAYMENT_KEY).agg(
         F.when(F.max((F.col("_source") == "historical").cast("int")) == 1, "historical")
         .otherwise("kafka")

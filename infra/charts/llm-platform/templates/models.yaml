@@ -4,8 +4,6 @@
 {{- range $role, $model := dict "chat" $chat "embedding" $embedding "decision" $decision }}
 {{- $uri := printf "hf://%s:%s" $model.repo $model.revision }}
 ---
-# KServe keeps the model on the GPU nodes' local disk. Its admission links an LLMInferenceService whose URI matches a
-# cache to the cached copy, so the cache exists first.
 apiVersion: serving.kserve.io/v1alpha1
 kind: LocalModelNamespaceCache
 metadata:
@@ -22,7 +20,6 @@ kind: LLMInferenceService
 metadata:
   name: {{ $model.name }}
   annotations:
-    # Changes with the cache, so the service is re-admitted and linked to it.
     llm.fraud-detection.dev/model-cache: {{ $uri | sha256sum | trunc 12 }}
     {{- if $model.stopped }}
     serving.kserve.io/stop: "true"
@@ -30,10 +27,8 @@ metadata:
 spec:
   model:
     name: {{ $model.name }}
-    # Served from the local cache; without one, KServe's storage initializer downloads the revision into /mnt/models.
     uri: {{ $uri }}
   replicas: {{ $model.replicas }}
-  # The servers hold fixed fractions of the one GPU, so a surge pod would oversubscribe it: replace in place.
   rolloutStrategy:
     maxSurge: 0
     maxUnavailable: 1
@@ -80,16 +75,12 @@ spec:
         env:
           - name: USER
             value: vllm
-          # InstantTensor sizes its pinned host staging (chunk size x I/O depth) from the container's memory limit by
-          # default and OOM-killed the servers on dev; the weights are on local disk, so a shallow queue loads them as fast.
           - name: INSTANTTENSOR_IO_DEPTH
             value: {{ $.Values.vllm.instantTensorIODepth | quote }}
           {{- with $model.instantTensorBufferSize }}
           - name: INSTANTTENSOR_BUFFER_SIZE
             value: {{ . | quote }}
           {{- end }}
-        # Loading the weights, torch.compile and CUDA-graph capture outlast the preset's 10-minute startup window
-        # on the dev GPU; a restart repeats all of it, so the window is wider.
         startupProbe:
           httpGet: {path: /health, port: 8000}
           periodSeconds: 10

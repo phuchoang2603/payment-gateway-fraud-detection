@@ -34,7 +34,6 @@ def bronze_table(tmp_path, monkeypatch):
     catalog.create_namespace("bronze")
     template = bronze()
     rows = []
-    # Two copies at the same instant in different files, a day boundary, the lead-in day, and a row past the end.
     for minutes, payment, source in [
         (60 * 30, "pay-3", "part-1.parquet"),
         (5, "pay-1", "part-1.parquet"),
@@ -57,7 +56,6 @@ def bronze_table(tmp_path, monkeypatch):
         "_kafka_offset",
         pa.array([None] * len(rows), pa.int64()),
     )
-    # Iceberg format 2 has no column type for an all-null value; such fields go absent rather than null.
     table = table.select(
         [name for name in table.column_names if not pa.types.is_null(table[name].type)]
     )
@@ -98,7 +96,6 @@ def test_seed_writes_the_unit_in_replay_order_between_bootstrap_and_final_clocks
     monkeypatch.setenv("STREAM_RUN", "history-ci-seed")
     monkeypatch.setenv("KAFKA_BROKERS", kafka)
     monkeypatch.setenv("HISTORY_SEED_REPORT", str(tmp_path / "seed.json"))
-    # A failed first attempt left a partial unit behind; the retried seed must replace it, not append to it.
     monkeypatch.setattr("sys.argv", ["history", "topics"])
     history.main()
     history.seed("2025-09-01", "2025-09-02")
@@ -108,11 +105,9 @@ def test_seed_writes_the_unit_in_replay_order_between_bootstrap_and_final_clocks
     report = json.loads((tmp_path / "seed.json").read_text())
     events = consume(kafka, "payments.events.history-ci-seed")
     clocks = [json.loads(m.value()) for m in consume(kafka, "fraud.clock.history-ci-seed")]
-    # pay-late is past the exclusive end; the lead-in day (pay-0) is included.
     assert [m.key() for m in events] == [b"pay-0", b"pay-1", b"pay-1", b"pay-2", b"pay-3"]
     facts = [PaymentEvent.FromString(m.value()) for m in events]
     recorded = [fact.recorded_at.ToMicroseconds() for fact in facts]
-    # The decoded facts are the live job's input: same attempt and keys as the Bronze row they came from.
     assert {
         (
             fact.integration_id,

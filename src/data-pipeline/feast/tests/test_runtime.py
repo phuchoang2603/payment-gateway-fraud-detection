@@ -43,7 +43,6 @@ ENV = {
 }
 
 
-# Partitions of the Redis password: plain, containing a comma or quote (escaped for Feast's JSON decoding), empty.
 @pytest.mark.parametrize(
     ("password", "encoded"),
     [("plain", '"plain"'), ("a,b", '"a\\u002cb"'), ('q"uote', '"q\\"uote"'), ("", None)],
@@ -63,7 +62,6 @@ def test_redis_connection_encodes_the_password(monkeypatch, password, encoded):
     )
 
 
-# Partitions of the store mode: offline Spark with Redis, online with a file offline store, offline without Redis.
 @pytest.mark.parametrize(
     ("kwargs", "offline", "online"),
     [

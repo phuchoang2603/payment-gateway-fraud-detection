@@ -18,7 +18,6 @@
       "markDeletedTables" false
       "includeStoredProcedures" false
       "overrideMetadata" false)))) }}
-# The same ClickHouse service the data pipelines register, filtered to the knowledge tables this chart owns.
 apiVersion: v1
 kind: ConfigMap
 metadata:

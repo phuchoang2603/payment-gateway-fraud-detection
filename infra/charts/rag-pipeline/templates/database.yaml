@@ -19,7 +19,6 @@ spec:
       owner: rag_writer
       secret:
         name: rag-db-writer
-  # The reader can SELECT every table the writer (Feast) creates, including ones created later.
   managed:
     roles:
       - name: rag_reader
@@ -34,7 +33,6 @@ spec:
   resources:
     {{- toYaml $db.resources | nindent 4 }}
 ---
-# Feast's Postgres online store uses pgvector but never creates the extension.
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
@@ -49,9 +47,6 @@ spec:
     - name: vector
       ensure: present
 ---
-# Mesh identities, not a NetworkPolicy: in the ambient mesh, peers and the (unmeshed) CNPG operator reach the pod
-# through ztunnel, which a port-based NetworkPolicy blocks. Only the RAG workloads may use Postgres; the instance
-# manager's status port stays open to the operator.
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:

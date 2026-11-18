@@ -1,5 +1,3 @@
-# kagent's Go agent runtime with the Langfuse prompt plugin. The build context is the repository root.
-# The runtime image mirrors kagent's: bash for its built-in shell tool and writable config, skills and plugin dirs.
 FROM golang:1.27.3-bookworm AS builder
 
 ENV GOWORK=off

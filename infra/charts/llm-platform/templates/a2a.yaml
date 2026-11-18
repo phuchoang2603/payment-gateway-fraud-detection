@@ -21,8 +21,6 @@ spec:
 {{- range $agent := $agents.list }}
 {{- if $agent.entry }}
 ---
-# kagent serves every Agent's public A2A endpoint from its controller. As an A2A backend the gateway rewrites the
-# agent card's URLs to the address the caller used.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:

@@ -26,7 +26,6 @@ type sellerJSON struct {
 	AccountCreatedAt time.Time `json:"account_created_at"`
 }
 
-// Email is accepted so marketplaces can send their full buyer record, and is discarded at decode.
 type buyerJSON struct {
 	ExternalID       string    `json:"external_id"`
 	AccountCreatedAt time.Time `json:"account_created_at"`
@@ -292,8 +291,6 @@ type paymentMethodResponseJSON struct {
 	Fingerprint        string `json:"fingerprint"`
 }
 
-// Tokenization is not replay-cached: the idempotency header is required for uniformity, but each
-// call mints a fresh opaque token and the card number never outlives the vault call.
 func (s *Server) createPaymentMethod(w http.ResponseWriter, r *http.Request) {
 	integration, err := s.authenticate(r)
 	if err != nil {

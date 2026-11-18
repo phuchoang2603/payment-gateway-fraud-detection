@@ -51,7 +51,6 @@ def request_features_view(customer_daily, payment_method_daily):
             )
 
         def relative(view):
-            # Offline nulls arrive as NaN; a zero sum or count has no average to compare with.
             return [
                 None
                 if not count or not total or count != count or total != total

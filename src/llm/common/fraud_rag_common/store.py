@@ -87,8 +87,6 @@ def table_name(view: FeatureView) -> str:
     return compute_table_id(PROJECT, view, False)
 
 
-# Feast creates `vector_value` without a dimension and never indexes it; pgvector can only index a
-# dimensioned column, and only the v1 ORDER BY ... LIMIT query (not v2's GROUP BY) can use the index.
 def index_statements(table: str) -> list[sql.Composed]:
     return [
         sql.SQL("ALTER TABLE {} ALTER COLUMN vector_value TYPE vector({}) USING vector_value::vector({})").format(
@@ -122,7 +120,6 @@ def vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(repr(float(value)) for value in vector) + "]"
 
 
-# The search and the index check share this query, so the index check proves what the search does.
 def nearest_query(table: str) -> sql.Composed:
     return sql.SQL(
         "SELECT entity_key, vector_value <=> %(q)s::vector AS distance FROM {} "
@@ -157,9 +154,6 @@ def read(feature_store: FeatureStore, chunk_ids: list[str]) -> list[dict | None]
     return rows
 
 
-# Feast 0.67 cannot return ids with distances on Postgres: v1 retrieval returns only the embedding column and v2
-# can pair ids with the wrong rows. The nearest-neighbour query runs on Feast's own table, then `read` fetches the
-# features through Feast.
 def search(feature_store: FeatureStore, vector: list[float], top_k: int) -> list[tuple[str, float]]:
     _, view = definitions("unused")
     with psycopg.connect(**connection()) as conn:

@@ -86,7 +86,6 @@ async def analyze(url, tool, arguments):
             "clientInfo": {"name": "rollout-analysis", "version": "1"},
         }
         deadline = asyncio.get_running_loop().time() + REACHABLE_SECONDS
-        # A new preview pod becomes an endpoint of its Service in the mesh a moment after it is Ready.
         while True:
             try:
                 initialized = await rpc("initialize", handshake)
@@ -99,7 +98,6 @@ async def analyze(url, tool, arguments):
         tools = await rpc("tools/list", {})
         if tool not in {entry["name"] for entry in tools["tools"]}:
             raise ValueError("preview does not expose the required tool")
-        # A release can roll the preview's upstreams (features, model, reference) at the same moment.
         deadline = asyncio.get_running_loop().time() + TOOL_SECONDS
         while True:
             result = await rpc("tools/call", {"name": tool, "arguments": arguments})

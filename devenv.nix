@@ -68,6 +68,8 @@
     ];
   };
 
+  tasks."repo:check".exec = ''bash "${config.git.root}/scripts/ci-checks.sh"'';
+
   git-hooks.hooks = {
     treefmt.enable = true;
   };

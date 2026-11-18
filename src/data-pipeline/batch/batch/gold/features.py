@@ -50,7 +50,6 @@ FEAT_CUSTOMER = f"{NAMESPACE}.feat_customer_daily"
 FEAT_METHOD = f"{NAMESPACE}.feat_payment_method_daily"
 LABEL_ATTEMPT = f"{NAMESPACE}.label_attempt"
 TABLES = (DIM_CUSTOMER, FEAT_CUSTOMER, FEAT_METHOD, LABEL_ATTEMPT)
-# Bump when a change to DP3 would make earlier gold rows differ from a fresh run over the same days.
 LOGIC_VERSION = "3"
 
 RUN_PROPERTY = "dp3.run_id"
@@ -68,7 +67,6 @@ PAYMENT_KEY = silver.PAYMENT_KEY
 CUSTOMER_KEY = ["integration_id", "customer_id"]
 METHOD_KEY = ["integration_id", "payment_method_fingerprint"]
 WINDOWS = {"7d": timedelta(days=7), "30d": timedelta(days=30)}
-# Reads assume an attempt's client time is at most a day after its start.
 CLOCK_MARGIN = timedelta(days=1)
 WINDOW_COLUMNS = [
     *silver.ATTEMPT_KEY,
@@ -248,7 +246,6 @@ def familiar_sets(profile: DataFrame, intervals: DataFrame) -> DataFrame:
         intervals.select(*CUSTOMER_KEY, F.col("end").alias("_at"), toggle.alias("_toggle"))
     )
     points = profile.withColumns({"_at": F.col("started_at"), "_toggle": F.lit(0).cast("long")})
-    # Edges at an attempt's instant apply first: intervals are [start, end).
     ordered = (
         Window.partitionBy(*CUSTOMER_KEY)
         .orderBy("_at", F.col("payment_id").asc_nulls_first(), F.col("attempt_id").asc_nulls_first())
@@ -413,9 +410,7 @@ def replace_customers(spark, events, attempts, floor, cutoff, pins) -> tuple[dic
     """
     template = dim_customer(profiles(events.limit(0), attempts.limit(0)))
     create_table(spark, DIM_CUSTOMER, template, PARTITIONS[DIM_CUSTOMER]())
-    # The DELETE and append below are two commits; a retry after a failure between them must not read the first.
     restage(spark, DIM_CUSTOMER)
-    # Pinned before the DELETE below, so recomputing a lost block never reads the rows this run removed.
     stored = read_at(spark, DIM_CUSTOMER, ref_snapshot(spark, DIM_CUSTOMER, write_ref()))
     in_range = started_between(attempts, floor, cutoff).where(F.col("customer_id").isNotNull())
     opened_in_range = (F.col("valid_from_ts") >= F.lit(floor)) & (F.col("valid_from_ts") < F.lit(cutoff))
@@ -423,7 +418,6 @@ def replace_customers(spark, events, attempts, floor, cutoff, pins) -> tuple[dic
         in_range.select(*CUSTOMER_KEY)
         .unionByName(stored.where(opened_in_range).select(*CUSTOMER_KEY))
         .distinct()
-        # Persisted, not locally checkpointed: a lost spot executor's blocks are recomputed from the lineage.
         .persist(StorageLevel.MEMORY_AND_DISK)
     )
     mine = stored.join(customers, CUSTOMER_KEY, "left_semi")
@@ -440,7 +434,6 @@ def replace_customers(spark, events, attempts, floor, cutoff, pins) -> tuple[dic
         .groupBy(*CUSTOMER_KEY)
         .agg(F.min("valid_from_ts").alias("_next_from"))
     )
-    # attempt_started occurs at the attempt's start, so its events partition prunes to the range.
     starts = events.where(
         (F.col(silver.PAYMENT_DAY) >= F.lit((floor - DAY).date()))
         & (F.col(silver.PAYMENT_DAY) <= F.lit(cutoff.date()))
@@ -482,7 +475,6 @@ def run(spark, run_id: str, start_day: date, end_day: date) -> dict:
         CODE_PROPERTY: code_version(),
     }
     tables = {}
-    # The daily views read the range plus one longest window, pruned to their columns, once.
     history = max(WINDOWS.values()) + CLOCK_MARGIN
     windowed = (
         started_between(frames[silver.ATTEMPTS], floor - history, cutoff)

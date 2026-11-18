@@ -143,7 +143,6 @@ func (c *Client) Read(ctx context.Context, request application.Request) (observa
 		}
 		observation.Views[name] = evaluate(name, names, fields, request.ScoredAt, ttl)
 	}
-	// Feast's online read ignores TTL, so a ratio built from an expired or missing daily row is unknown, as in training.
 	if features, exists := observation.Views["request_features"]; exists && features.Status == "available" {
 		for _, scope := range []string{"customer", "payment_method"} {
 			if observation.Views[scope+"_daily"].Status != "available" {

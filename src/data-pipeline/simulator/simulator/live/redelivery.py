@@ -31,7 +31,6 @@ def run_redelivery(config, stop):
             "group.id": settings.group,
             "auto.offset.reset": "latest",
             "enable.auto.commit": True,
-            # Only offsets stored after a record is fully handled are committed.
             "enable.auto.offset.store": False,
         }
     )

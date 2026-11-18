@@ -56,12 +56,10 @@ applications:
   clickhouse:
     destinationNamespace: data
     path: infra/charts/clickhouse
-  # The LLM applications stay off in every environment until the cluster has capacity and the llm namespace is allowed.
   llm-platform:
     enabled: false
     destinationNamespace: llm
     path: infra/charts/llm-platform
-    # KEDA owns the agents' worker pool size; the chart only sets its starting size.
     ignoreDifferences:
       - group: ate.dev
         kind: WorkerPool
@@ -106,7 +104,6 @@ applications:
     destinationNamespace: ml
     path: infra/charts/ml-training
     syncWave: "3"
-    # The promotion pipeline owns the route's weights, as the Edge rollout owns its own.
     ignoreDifferences:
       - group: gateway.networking.k8s.io
         kind: HTTPRoute

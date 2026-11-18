@@ -30,8 +30,7 @@ type PromptSource interface {
 
 type choice struct {
 	prompt Prompt
-	// tag names the agent's A/B side on the trace, or is empty when its prompt runs no test.
-	tag string
+	tag    string
 }
 
 // Prompts sets each model call's system prompt from the calling agent's
@@ -47,8 +46,7 @@ type Prompts struct {
 	// file on every run and restore. Without the file, the session id is used.
 	ConversationFile string
 
-	choices sync.Map
-	// sampling holds each bound agent's model settings, by prompt name.
+	choices  sync.Map
 	sampling sync.Map
 }
 

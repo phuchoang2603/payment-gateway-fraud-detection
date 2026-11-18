@@ -10,7 +10,6 @@ spec:
     - name: {{ $gateway.name }}
       sectionName: http
   rules:
-    # Only the versioned API is exposed; the service's probes, metrics and MCP endpoint stay internal.
     - matches:
         - path: {type: PathPrefix, value: /{{ $name }}/v1}
       filters:

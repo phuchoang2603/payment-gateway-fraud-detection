@@ -84,7 +84,6 @@ def test_entities_join_valid_attempt_request_and_available_simulation_truth(spar
         assert row.has_device is False
 
 
-# Boundary values of the cohort and cutoff: an empty or reversed range, and a cutoff without an offset.
 @pytest.mark.parametrize(
     ("start", "end", "cutoff", "error"),
     [

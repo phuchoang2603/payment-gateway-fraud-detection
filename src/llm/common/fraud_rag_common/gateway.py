@@ -7,7 +7,6 @@ import httpx
 DIMENSION = 1024
 RETRYABLE = {429, 502, 503, 504}
 ATTEMPTS = 6
-# Qwen3-Embedding is asymmetric: queries carry an instruction, documents are embedded as-is.
 QUERY_INSTRUCTION = (
     "Instruct: Given a question about payment-gateway fraud operations, retrieve the passages that answer it\nQuery: "
 )
@@ -50,7 +49,6 @@ class Embedder:
             raise ValueError("embedding count does not match input count")
         return vectors
 
-    # The gateway limits tokens per client per minute, so a full corpus can hit 429 and must wait it out.
     def _post(self, client: httpx.Client, batch: list[str]) -> dict:
         for attempt in range(ATTEMPTS):
             response = client.post(self.endpoint, json={"model": self.model, "input": batch})

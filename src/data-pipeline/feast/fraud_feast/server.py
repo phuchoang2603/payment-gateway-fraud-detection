@@ -17,6 +17,5 @@ def _transform_dict_with_full_names(view, inputs):
 
 
 def get_app(feature_store):
-    # Feast 0.67 filters Python outputs by full names without adding their prefixes.
     OnDemandFeatureView.transform_dict = _transform_dict_with_full_names
     return feast_app(feature_store)

@@ -18,7 +18,6 @@ def operating_index(curve, rate):
 
 def threshold_at(curve, rate):
     """Returns the score threshold at a false-positive rate, read from a `roc_curve` result."""
-    # roc_curve's first threshold is infinity, which would not serialize, so it is capped.
     return float(min(curve[2][operating_index(curve, rate)], 2.0))
 
 

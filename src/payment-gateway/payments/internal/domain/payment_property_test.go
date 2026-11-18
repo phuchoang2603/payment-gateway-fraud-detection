@@ -18,7 +18,6 @@ var allowedPhases = map[Phase][]Phase{
 	PhaseUnknown:      {PhaseDeclined, PhaseSucceeded},
 }
 
-// command draws any lifecycle command against the payment, valid or not, so the property covers rejections too.
 func command(t *rapid.T, state State, step int) Command {
 	version := state.Version
 	if rapid.IntRange(0, 9).Draw(t, "stale") == 0 {

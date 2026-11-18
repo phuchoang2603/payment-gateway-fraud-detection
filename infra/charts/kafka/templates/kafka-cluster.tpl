@@ -95,9 +95,6 @@ spec:
     template:
       pod:
         metadata:
-          # KRaft advertises its controller quorum with the `.svc` short name, which
-          # ztunnel's DNS proxy fails to search-expand, breaking the broker's own
-          # controller connection. Keep the broker pods off the ambient dataplane.
           labels:
             istio.io/dataplane-mode: none
   {{- if .Values.monitoring.enabled }}
@@ -111,8 +108,6 @@ spec:
     template:
       pod:
         metadata:
-          # Off-mesh like the broker: ztunnel won't route an ambient client to the
-          # off-mesh broker's advertised address, so resolve via CoreDNS instead.
           labels:
             istio.io/dataplane-mode: none
     topicOperator:

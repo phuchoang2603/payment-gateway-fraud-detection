@@ -20,11 +20,9 @@ spec:
     labels:
       app.kubernetes.io/part-of: rag-pipeline
       app.kubernetes.io/component: workflow
-      # The pipeline namespace is not enrolled in the mesh; the gateway and pgvector admit this workflow by identity.
       istio.io/dataplane-mode: ambient
   securityContext:
     {{- include "rag-pipeline.podSecurity" . | nindent 4 }}
-  # The executor's own containers need the restricted settings too; the namespace enforces them.
   podSpecPatch: |
     initContainers:
       - name: init
@@ -67,7 +65,6 @@ spec:
         parameters:
           - name: version
             globalName: knowledge-version
-            # Every step sets the global; steps after publish write no file and pass their input through.
             valueFrom: {path: /tmp/outputs/version, default: "{{ "{{inputs.parameters.version}}" }}"}
           - name: skip
             valueFrom: {path: /tmp/outputs/skip, default: "false"}
@@ -106,7 +103,6 @@ spec:
         envFrom:
           - secretRef:
               name: rag-clickhouse
-        # The OpenMetadata ingestion image keeps its Python packages in the airflow user's home.
         securityContext:
           runAsUser: 50000
           {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
@@ -121,7 +117,6 @@ spec:
         - name: metadata-connectors
           configMap:
             name: rag-metadata-connectors
-    # The version output defaults to empty, so a run that failed before publishing the corpus records status only.
     - name: publish
       retryStrategy:
         limit: 2
@@ -143,10 +138,6 @@ spec:
           requests: {cpu: 50m, memory: 128Mi}
           limits: {memory: 512Mi}
 ---
-# One run per rag-pipeline image: a changed corpus or pipeline code yields a new image tag, hence a new Workflow.
-# It is an ordinary resource in the last wave, not a sync hook, so a failed run never blocks or retries the sync;
-# its result is in Argo Workflows and in the OpenMetadata run status. Argo CD prunes the superseded run; the current one
-# has no TTL, because self-heal would recreate a deleted run and execute it again.
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:

@@ -73,8 +73,6 @@ data:
     {{- $value | nindent 4 }}
   {{- end }}
 ---
-# One run per catalog content: a changed agent, MCP server or prompt yields a new Job. It is an ordinary resource,
-# not a sync hook, so a failed run never blocks a sync; Argo CD prunes the superseded run.
 apiVersion: batch/v1
 kind: Job
 metadata:
