@@ -2,6 +2,8 @@
 
 A payment gateway for a refurbished-electronics marketplace, connecting checkout, fraud decisions and the data used to train and investigate them.
 
+Built as [FSDS](https://github.com/phuchoang2603/fsds) coursework: the course repository holds the requirements and reference examples, which this project adapts to its synthetic payment scope.
+
 ## Domain
 
 The marketplace owns buyers, sellers, orders and inventory. The gateway owns checkout sessions, payment attempts, fraud assessments, simulated processing and signed outcome webhooks. Each payment can have multiple attempts; their lifecycle events feed the lakehouse, streaming features and model training. Cards and fraud labels are synthetic.

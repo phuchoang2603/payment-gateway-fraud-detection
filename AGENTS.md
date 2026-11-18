@@ -1,2 +1,0 @@
-- This is FSDS coursework. When planning or applying changes, read `../fsds` (relative to the main checkout) for relevant examples and requirements. Never execute, import or modify it, adapt its examples to this project's synthetic payment scope, and say when it is unavailable.
-- Preserve immutable datasets and historical acceptance evidence when removing superseded code.
