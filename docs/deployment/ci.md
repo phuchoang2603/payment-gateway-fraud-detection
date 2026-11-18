@@ -6,11 +6,11 @@ GitHub Actions validates pull requests and `main`; successful checks gate image 
 
 | Workflow | Validation |
 |---|---|
-| [CI](../../.github/workflows/ci.yml) | Contract lint, generated-reference diff, Helm lint/render for all charts and values |
-| [Go CI](../../.github/workflows/go-ci.yml) | Lint, unit tests, Postgres integration tests through testcontainers, changed-code mutation testing on PRs |
-| [Python CI](../../.github/workflows/python-ci.yml) | Ruff lint/format, pytest and coverage artifacts per project; knowledge API mutation results for affected knowledge API code |
+| [CI](../../.github/workflows/ci.yml) | `devenv tasks run repo:lint`: shared and repository ast-grep rules, golangci-lint with domain import rules, Ruff, import-linter, contract lint, generated-reference diff, Helm lint/render for all charts and values; JVM operator tests |
+| [Go CI](../../.github/workflows/go-ci.yml) | Unit tests, Postgres integration tests through testcontainers, changed-code mutation testing on PRs |
+| [Python CI](../../.github/workflows/python-ci.yml) | pytest and coverage per project; knowledge API mutation results for affected knowledge API code |
 
-[`scripts/ci-checks.sh`](../../scripts/ci-checks.sh) holds shared checks. On PRs, [`ci-matrix.py`](../../scripts/ci-matrix.py) selects affected projects and local dependencies; `main` tests every project.
+Every job runs inside devenv through the shared reusable workflow. [`scripts/lint.sh`](../../scripts/lint.sh) holds the static checks and [`scripts/check.sh`](../../scripts/check.sh) the tests; each project runs in its own job and every project runs on every push.
 
 ## Test techniques
 
@@ -23,7 +23,7 @@ GitHub Actions validates pull requests and `main`; successful checks gate image 
 | Property-based idempotency | [Knowledge API](../../src/llm/rag_serving/tests/test_service.py): arbitrary repeated chunk reads; [Gold ranges](../../src/data-pipeline/batch/tests/gold/test_gold_ranges.py): reruns and range splits; [payment lifecycle](../../src/payment-gateway/payments/internal/domain/payment_property_test.go): arbitrary command sequences preserve state invariants |
 | API throughput and latency | [Knowledge API](../llm/loadtest/knowledge-api-locust.html) and [customer features API](../llm/loadtest/features-api-locust.html) Locust reports; runs, service levels and results on [Autoscaling and load test](../llm/scaling.md#load-test-and-service-level) |
 
-A Python project can set a minimum total coverage with `coverage-fail-under` under `[tool.ci]` in its `pyproject.toml`; `scripts/ci-checks.sh` passes it to pytest-cov. `src/ml` sets 90 (97.9% line and branch combined when set).
+A Python project can set a minimum total coverage with `coverage-fail-under` under `[tool.ci]` in its `pyproject.toml`; `scripts/check.sh` passes it to pytest-cov. `src/ml` sets 90 (97.9% line and branch combined when set).
 
 ## Coverage and mutation testing
 
