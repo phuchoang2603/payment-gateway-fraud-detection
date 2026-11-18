@@ -100,7 +100,13 @@ def create_app(transport=None):
 
     @asynccontextmanager
     async def lifespan(_):
-        async with httpx.AsyncClient(transport=transport, follow_redirects=False, trust_env=False) as client:
+        # NOTE: no keep-alive, so a read never reuses a connection that a rolling upstream pod closes as it drains.
+        async with httpx.AsyncClient(
+            transport=transport,
+            follow_redirects=False,
+            trust_env=False,
+            limits=httpx.Limits(max_keepalive_connections=0),
+        ) as client:
             state["client"] = client
             state["model"] = Model(
                 client, os.getenv("MODEL_URL", "http://payment-risk-predictor.ml.svc.cluster.local")
