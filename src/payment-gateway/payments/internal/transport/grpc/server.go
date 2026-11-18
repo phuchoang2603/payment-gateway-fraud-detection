@@ -25,24 +25,36 @@ func NewServer(service *application.Service) *Server {
 	return &Server{service: service}
 }
 
-func (s *Server) CreatePayment(ctx context.Context, request *paymentsv1.CreatePaymentRequest) (*paymentsv1.Payment, error) {
+func (s *Server) CreatePayment(ctx context.Context, request *paymentsv1.CreatePaymentRequest) (*paymentsv1.CreatePaymentResponse, error) {
 	payment, err := s.service.CreatePayment(ctx, request)
-	return payment, toStatus(err)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &paymentsv1.CreatePaymentResponse{Payment: payment}, nil
 }
 
-func (s *Server) StartAttempt(ctx context.Context, request *paymentsv1.StartAttemptRequest) (*paymentsv1.AttemptResult, error) {
+func (s *Server) StartAttempt(ctx context.Context, request *paymentsv1.StartAttemptRequest) (*paymentsv1.StartAttemptResponse, error) {
 	result, err := s.service.StartAttempt(ctx, request)
-	return result, toStatus(err)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &paymentsv1.StartAttemptResponse{Attempt: result}, nil
 }
 
-func (s *Server) GetPayment(ctx context.Context, request *paymentsv1.GetPaymentRequest) (*paymentsv1.Payment, error) {
+func (s *Server) GetPayment(ctx context.Context, request *paymentsv1.GetPaymentRequest) (*paymentsv1.GetPaymentResponse, error) {
 	payment, err := s.service.GetPayment(ctx, request)
-	return payment, toStatus(err)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &paymentsv1.GetPaymentResponse{Payment: payment}, nil
 }
 
-func (s *Server) GetCheckoutSession(ctx context.Context, request *paymentsv1.GetCheckoutSessionRequest) (*paymentsv1.Payment, error) {
+func (s *Server) GetCheckoutSession(ctx context.Context, request *paymentsv1.GetCheckoutSessionRequest) (*paymentsv1.GetCheckoutSessionResponse, error) {
 	payment, err := s.service.GetCheckoutSession(ctx, request)
-	return payment, toStatus(err)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &paymentsv1.GetCheckoutSessionResponse{Payment: payment}, nil
 }
 
 func toStatus(err error) error {

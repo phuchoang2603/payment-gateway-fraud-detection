@@ -125,7 +125,7 @@ func (s *Server) pollReadiness(ctx context.Context) {
 	}
 }
 
-func (s *Server) Sale(ctx context.Context, req *processorv1.SaleRequest) (*processorv1.Operation, error) {
+func (s *Server) Sale(ctx context.Context, req *processorv1.SaleRequest) (*processorv1.SaleResponse, error) {
 	operation, err := s.processor.Sale(ctx, domain.Sale{
 		OperationKey:    req.GetOperationKey(),
 		IntegrationID:   req.GetIntegrationId(),
@@ -137,15 +137,15 @@ func (s *Server) Sale(ctx context.Context, req *processorv1.SaleRequest) (*proce
 		return nil, mapError(err)
 	}
 	s.outcomes.Add(ctx, 1, observe.Label("outcome", string(operation.Outcome)))
-	return toProto(operation), nil
+	return &processorv1.SaleResponse{Operation: toProto(operation)}, nil
 }
 
-func (s *Server) GetOperation(ctx context.Context, req *processorv1.GetOperationRequest) (*processorv1.Operation, error) {
+func (s *Server) GetOperation(ctx context.Context, req *processorv1.GetOperationRequest) (*processorv1.GetOperationResponse, error) {
 	operation, err := s.processor.GetOperation(ctx, req.GetOperationKey())
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return toProto(operation), nil
+	return &processorv1.GetOperationResponse{Operation: toProto(operation)}, nil
 }
 
 func mapError(err error) error {

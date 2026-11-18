@@ -24,14 +24,14 @@ type recordingVault struct {
 	block     bool
 }
 
-func (v recordingVault) DescribeMethod(ctx context.Context, _ *vaultv1.DescribeMethodRequest) (*vaultv1.MethodMetadata, error) {
+func (v recordingVault) DescribeMethod(ctx context.Context, _ *vaultv1.DescribeMethodRequest) (*vaultv1.DescribeMethodResponse, error) {
 	md, _ := metadata.FromIncomingContext(ctx)
 	v.requestID <- first(md.Get("x-request-id"))
 	if v.block {
 		<-ctx.Done()
 		return nil, status.FromContextError(ctx.Err()).Err()
 	}
-	return &vaultv1.MethodMetadata{Type: "card", Fingerprint: "fp"}, nil
+	return &vaultv1.DescribeMethodResponse{Metadata: &vaultv1.MethodMetadata{Type: "card", Fingerprint: "fp"}}, nil
 }
 
 func first(values []string) string {

@@ -1,18 +1,19 @@
 syntax = "proto3";
 package payments.v1;
 
-option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1;paymentsv1";
 import "google/protobuf/timestamp.proto";
 import "payments/v1/types.proto";
 
+option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1;paymentsv1";
+
 // Edge -> Payments. Edge has authenticated the integration and computed fingerprints.
 service PaymentService {
-  rpc CreatePayment(CreatePaymentRequest) returns (Payment);
-  rpc StartAttempt(StartAttemptRequest) returns (AttemptResult);
-  rpc GetPayment(GetPaymentRequest) returns (Payment);
+  rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse);
+  rpc StartAttempt(StartAttemptRequest) returns (StartAttemptResponse);
+  rpc GetPayment(GetPaymentRequest) returns (GetPaymentResponse);
   // Resolves a session from its checkout token; the returned integration_id scopes
   // later vault and attempt calls. The token is not echoed back.
-  rpc GetCheckoutSession(GetCheckoutSessionRequest) returns (Payment);
+  rpc GetCheckoutSession(GetCheckoutSessionRequest) returns (GetCheckoutSessionResponse);
 }
 message CreatePaymentRequest {
   string integration_id = 1;
@@ -31,8 +32,26 @@ message StartAttemptRequest {
   AttemptSignals signals = 5;
   string checkout_token = 6;
 }
-message GetPaymentRequest { string integration_id = 1; string payment_id = 2; }
-message GetCheckoutSessionRequest { string session_id = 1; string checkout_token = 2; }
+message GetPaymentRequest {
+  string integration_id = 1;
+  string payment_id = 2;
+}
+message GetCheckoutSessionRequest {
+  string session_id = 1;
+  string checkout_token = 2;
+}
+message CreatePaymentResponse {
+  Payment payment = 1;
+}
+message StartAttemptResponse {
+  AttemptResult attempt = 1;
+}
+message GetPaymentResponse {
+  Payment payment = 1;
+}
+message GetCheckoutSessionResponse {
+  Payment payment = 1;
+}
 enum PaymentStatus {
   PAYMENT_STATUS_UNSPECIFIED = 0;
   PAYMENT_STATUS_OPEN = 1;

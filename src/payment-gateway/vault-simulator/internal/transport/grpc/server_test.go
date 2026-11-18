@@ -178,13 +178,13 @@ func TestTokenizeIssuesOpaqueTokensWithStableFingerprint(t *testing.T) {
 			ctx, cancel := rpcContext()
 			described, err := edge.DescribeMethod(ctx, &vaultv1.DescribeMethodRequest{IntegrationId: integrationA.String(), Token: token})
 			cancel()
-			if err != nil || described.GetFingerprint() != want || described.GetType() != "card" {
+			if err != nil || described.GetMetadata().GetFingerprint() != want || described.GetMetadata().GetType() != "card" {
 				t.Fatalf("describe: %v %v", described, err)
 			}
 			ctx, cancel = rpcContext()
-			fixture, err := processor.ResolveForProcessing(ctx, &vaultv1.ResolveRequest{IntegrationId: integrationA.String(), Token: token})
+			fixture, err := processor.ResolveForProcessing(ctx, &vaultv1.ResolveForProcessingRequest{IntegrationId: integrationA.String(), Token: token})
 			cancel()
-			if err != nil || fixture.GetCardReference() != card.ref || fixture.GetBehavior() != card.behavior {
+			if err != nil || fixture.GetFixture().GetCardReference() != card.ref || fixture.GetFixture().GetBehavior() != card.behavior {
 				t.Fatalf("resolve: %v %v", fixture, err)
 			}
 		}
@@ -236,7 +236,7 @@ func TestForeignIntegrationTokenIsNotFound(t *testing.T) {
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("describe foreign token: %v", err)
 	}
-	_, err = processor.ResolveForProcessing(ctx, &vaultv1.ResolveRequest{IntegrationId: integrationB.String(), Token: issued.GetToken()})
+	_, err = processor.ResolveForProcessing(ctx, &vaultv1.ResolveForProcessingRequest{IntegrationId: integrationB.String(), Token: issued.GetToken()})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("resolve foreign token: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestNoPlaintextFixtureOrCardNumberInStorageOrLogs(t *testing.T) {
 	}
 	ctx, cancel := rpcContext()
 	defer cancel()
-	if _, err := processor.ResolveForProcessing(ctx, &vaultv1.ResolveRequest{IntegrationId: integrationA.String(), Token: issued.GetToken()}); err != nil {
+	if _, err := processor.ResolveForProcessing(ctx, &vaultv1.ResolveForProcessingRequest{IntegrationId: integrationA.String(), Token: issued.GetToken()}); err != nil {
 		t.Fatal(err)
 	}
 	_, _ = tokenize(t, edge, integrationA, "4242424242424242")
@@ -375,7 +375,7 @@ func TestResolveIsNotServedOnTheVaultPort(t *testing.T) {
 	ctx, cancel := rpcContext()
 	defer cancel()
 	err := h.vaultConn.Invoke(ctx, vaultv1.ProcessingService_ResolveForProcessing_FullMethodName,
-		&vaultv1.ResolveRequest{IntegrationId: integrationA.String(), Token: "vt_x"}, &vaultv1.ProcessingFixture{})
+		&vaultv1.ResolveForProcessingRequest{IntegrationId: integrationA.String(), Token: "vt_x"}, &vaultv1.ProcessingFixture{})
 	if status.Code(err) != codes.Unimplemented {
 		t.Fatalf("resolve on vault port: %v", err)
 	}

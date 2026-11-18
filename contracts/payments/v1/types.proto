@@ -1,13 +1,23 @@
 syntax = "proto3";
 package payments.v1;
 
-option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1;paymentsv1";
 import "google/protobuf/timestamp.proto";
 
+option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1;paymentsv1";
+
 // Amounts are integer minor units in the specified ISO 4217 currency.
-message Money { int64 minor_units = 1; string currency = 2; }
-message MerchantRef { string merchant_id = 1; string external_seller_id = 2; }
-message CustomerRef { string customer_id = 1; string external_buyer_id = 2; }
+message Money {
+  int64 minor_units = 1;
+  string currency = 2;
+}
+message MerchantRef {
+  string merchant_id = 1;
+  string external_seller_id = 2;
+}
+message CustomerRef {
+  string customer_id = 1;
+  string external_buyer_id = 2;
+}
 message LineItem {
   string product_id = 1;
   string category = 2;
@@ -35,7 +45,10 @@ message AttemptContext {
   CustomerRef customer = 2;
   CheckoutSnapshot snapshot = 3;
 }
-message PaymentMethod { string type = 1; string fingerprint = 2; }
+message PaymentMethod {
+  string type = 1;
+  string fingerprint = 2;
+}
 // Unobserved optional signals remain absent, not empty or zero.
 message AttemptSignals {
   google.protobuf.Timestamp attempted_at = 1;

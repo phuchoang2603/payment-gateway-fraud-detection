@@ -1,8 +1,9 @@
 syntax = "proto3";
 package fraud.v1;
 
-option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/fraud/v1;fraudv1";
 import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/fraud/v1;fraudv1";
 
 enum FeatureViewStatus {
   FEATURE_VIEW_STATUS_UNSPECIFIED = 0;

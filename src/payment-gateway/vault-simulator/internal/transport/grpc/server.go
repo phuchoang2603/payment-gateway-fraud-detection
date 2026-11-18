@@ -153,7 +153,7 @@ func (s *Server) TokenizeCard(ctx context.Context, req *vaultv1.TokenizeCardRequ
 	return &vaultv1.TokenizeCardResponse{Token: token, Metadata: methodMetadata(method)}, nil
 }
 
-func (s *Server) DescribeMethod(ctx context.Context, req *vaultv1.DescribeMethodRequest) (*vaultv1.MethodMetadata, error) {
+func (s *Server) DescribeMethod(ctx context.Context, req *vaultv1.DescribeMethodRequest) (*vaultv1.DescribeMethodResponse, error) {
 	integrationID, err := parseIntegration(req.GetIntegrationId())
 	if err != nil {
 		return nil, err
@@ -162,10 +162,10 @@ func (s *Server) DescribeMethod(ctx context.Context, req *vaultv1.DescribeMethod
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return methodMetadata(method), nil
+	return &vaultv1.DescribeMethodResponse{Metadata: methodMetadata(method)}, nil
 }
 
-func (p processingServer) ResolveForProcessing(ctx context.Context, req *vaultv1.ResolveRequest) (*vaultv1.ProcessingFixture, error) {
+func (p processingServer) ResolveForProcessing(ctx context.Context, req *vaultv1.ResolveForProcessingRequest) (*vaultv1.ResolveForProcessingResponse, error) {
 	integrationID, err := parseIntegration(req.GetIntegrationId())
 	if err != nil {
 		return nil, err
@@ -174,7 +174,7 @@ func (p processingServer) ResolveForProcessing(ctx context.Context, req *vaultv1
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return &vaultv1.ProcessingFixture{CardReference: fixture.CardReference, Behavior: protoBehavior(fixture.Behavior)}, nil
+	return &vaultv1.ResolveForProcessingResponse{Fixture: &vaultv1.ProcessingFixture{CardReference: fixture.CardReference, Behavior: protoBehavior(fixture.Behavior)}}, nil
 }
 
 func parseIntegration(value string) (uuid.UUID, error) {

@@ -27,7 +27,7 @@ func NewClient(conn grpc.ClientConnInterface) *Client {
 
 func (c *Client) Sale(ctx context.Context, request application.SaleRequest) (application.Operation, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, requestIDHeader, request.CorrelationID)
-	operation, err := c.client.Sale(ctx, &processorv1.SaleRequest{
+	response, err := c.client.Sale(ctx, &processorv1.SaleRequest{
 		OperationKey:       request.OperationKey,
 		IntegrationId:      request.IntegrationID,
 		PaymentMethodToken: request.PaymentMethodToken,
@@ -37,18 +37,18 @@ func (c *Client) Sale(ctx context.Context, request application.SaleRequest) (app
 	if err != nil {
 		return application.Operation{}, err
 	}
-	return mapOperation(operation)
+	return mapOperation(response.GetOperation())
 }
 
 func (c *Client) GetOperation(ctx context.Context, operationKey string) (application.Operation, error) {
-	operation, err := c.client.GetOperation(ctx, &processorv1.GetOperationRequest{OperationKey: operationKey})
+	response, err := c.client.GetOperation(ctx, &processorv1.GetOperationRequest{OperationKey: operationKey})
 	if status.Code(err) == codes.NotFound {
 		return application.Operation{}, application.ErrOperationNotFound
 	}
 	if err != nil {
 		return application.Operation{}, err
 	}
-	return mapOperation(operation)
+	return mapOperation(response.GetOperation())
 }
 
 func mapOperation(operation *processorv1.Operation) (application.Operation, error) {

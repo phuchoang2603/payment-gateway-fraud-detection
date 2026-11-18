@@ -161,14 +161,14 @@ func (p *FakeProcessor) TokenFor(operationKey string) string {
 	return p.tokens[operationKey]
 }
 
-func (p *FakeProcessor) Sale(ctx context.Context, request *processorv1.SaleRequest) (*processorv1.Operation, error) {
+func (p *FakeProcessor) Sale(ctx context.Context, request *processorv1.SaleRequest) (*processorv1.SaleResponse, error) {
 	p.mu.Lock()
 	p.saleCalls[request.GetOperationKey()]++
 	p.tokens[request.GetOperationKey()] = request.GetPaymentMethodToken()
 	behavior, delay, reason := p.behavior, p.delay, p.reason
 	if existing, ok := p.operations[request.GetOperationKey()]; ok {
 		p.mu.Unlock()
-		return existing, nil
+		return &processorv1.SaleResponse{Operation: existing}, nil
 	}
 	p.mu.Unlock()
 
@@ -201,14 +201,14 @@ func (p *FakeProcessor) Sale(ctx context.Context, request *processorv1.SaleReque
 		case <-time.After(delay):
 		}
 	}
-	return operation, nil
+	return &processorv1.SaleResponse{Operation: operation}, nil
 }
 
-func (p *FakeProcessor) GetOperation(_ context.Context, request *processorv1.GetOperationRequest) (*processorv1.Operation, error) {
+func (p *FakeProcessor) GetOperation(_ context.Context, request *processorv1.GetOperationRequest) (*processorv1.GetOperationResponse, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if operation, ok := p.operations[request.GetOperationKey()]; ok {
-		return operation, nil
+		return &processorv1.GetOperationResponse{Operation: operation}, nil
 	}
 	return nil, status.Error(codes.NotFound, "unknown operation")
 }

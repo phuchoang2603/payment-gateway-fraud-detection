@@ -1,8 +1,9 @@
 syntax = "proto3";
 package features.v2;
 
-option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/features/v2;featuresv2";
 import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/features/v2;featuresv2";
 
 enum EntityView {
   ENTITY_VIEW_UNSPECIFIED = 0;

@@ -1,14 +1,15 @@
 syntax = "proto3";
 package processor.v1;
 
-option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/processor/v1;processorv1";
 import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/processor/v1;processorv1";
 
 // Synthetic processor. Operation-key idempotency and status queries are simulator
 // capabilities, not universal bank-protocol guarantees.
 service ProcessorService {
-  rpc Sale(SaleRequest) returns (Operation);
-  rpc GetOperation(GetOperationRequest) returns (Operation);
+  rpc Sale(SaleRequest) returns (SaleResponse);
+  rpc GetOperation(GetOperationRequest) returns (GetOperationResponse);
 }
 message SaleRequest {
   string operation_key = 1;
@@ -17,7 +18,15 @@ message SaleRequest {
   int64 amount_minor_units = 4;
   string currency = 5;
 }
-message GetOperationRequest { string operation_key = 1; }
+message GetOperationRequest {
+  string operation_key = 1;
+}
+message SaleResponse {
+  Operation operation = 1;
+}
+message GetOperationResponse {
+  Operation operation = 1;
+}
 enum OperationOutcome {
   OPERATION_OUTCOME_UNSPECIFIED = 0;
   OPERATION_OUTCOME_APPROVED = 1;

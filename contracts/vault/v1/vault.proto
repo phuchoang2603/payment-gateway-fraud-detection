@@ -9,17 +9,38 @@ option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/sh
 // ProcessingService.
 service VaultService {
   rpc TokenizeCard(TokenizeCardRequest) returns (TokenizeCardResponse);
-  rpc DescribeMethod(DescribeMethodRequest) returns (MethodMetadata);
+  rpc DescribeMethod(DescribeMethodRequest) returns (DescribeMethodResponse);
 }
 service ProcessingService {
-  rpc ResolveForProcessing(ResolveRequest) returns (ProcessingFixture);
+  rpc ResolveForProcessing(ResolveForProcessingRequest) returns (ResolveForProcessingResponse);
 }
-message TokenizeCardRequest { string integration_id = 1; string card_number = 2; }
-message TokenizeCardResponse { string token = 1; MethodMetadata metadata = 2; }
-message DescribeMethodRequest { string integration_id = 1; string token = 2; }
+message TokenizeCardRequest {
+  string integration_id = 1;
+  string card_number = 2;
+}
+message TokenizeCardResponse {
+  string token = 1;
+  MethodMetadata metadata = 2;
+}
+message DescribeMethodRequest {
+  string integration_id = 1;
+  string token = 2;
+}
+message DescribeMethodResponse {
+  MethodMetadata metadata = 1;
+}
 // Safe to pass to Payments and fraud: no card identity or behavior.
-message MethodMetadata { string type = 1; string fingerprint = 2; }
-message ResolveRequest { string integration_id = 1; string token = 2; }
+message MethodMetadata {
+  string type = 1;
+  string fingerprint = 2;
+}
+message ResolveForProcessingRequest {
+  string integration_id = 1;
+  string token = 2;
+}
+message ResolveForProcessingResponse {
+  ProcessingFixture fixture = 1;
+}
 enum Behavior {
   BEHAVIOR_UNSPECIFIED = 0;
   BEHAVIOR_APPROVE = 1;
@@ -27,4 +48,7 @@ enum Behavior {
   BEHAVIOR_ISSUER_DECLINE = 3;
   BEHAVIOR_INVALID = 4;
 }
-message ProcessingFixture { string card_reference = 1; Behavior behavior = 2; }
+message ProcessingFixture {
+  string card_reference = 1;
+  Behavior behavior = 2;
+}

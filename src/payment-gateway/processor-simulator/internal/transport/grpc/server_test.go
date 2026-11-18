@@ -45,13 +45,13 @@ type fakeVault struct {
 	server   *grpc.Server
 }
 
-func (f *fakeVault) ResolveForProcessing(ctx context.Context, req *vaultv1.ResolveRequest) (*vaultv1.ProcessingFixture, error) {
+func (f *fakeVault) ResolveForProcessing(ctx context.Context, req *vaultv1.ResolveForProcessingRequest) (*vaultv1.ResolveForProcessingResponse, error) {
 	f.calls.Add(1)
 	behavior, ok := f.fixtures[req.GetIntegrationId()+"/"+req.GetToken()]
 	if !ok {
 		return nil, status.Error(codes.NotFound, "token not found")
 	}
-	return &vaultv1.ProcessingFixture{CardReference: "card-0001", Behavior: behavior}, nil
+	return &vaultv1.ResolveForProcessingResponse{Fixture: &vaultv1.ProcessingFixture{CardReference: "card-0001", Behavior: behavior}}, nil
 }
 
 func startFakeVault(t *testing.T) (*fakeVault, config.Vault) {
@@ -150,13 +150,14 @@ func (h *harness) sale(t *testing.T, key, token string, amount int64) (*processo
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return h.client.Sale(ctx, &processorv1.SaleRequest{
+	response, err := h.client.Sale(ctx, &processorv1.SaleRequest{
 		OperationKey:       key,
 		IntegrationId:      integration,
 		PaymentMethodToken: token,
 		AmountMinorUnits:   amount,
 		Currency:           "USD",
 	})
+	return response.GetOperation(), err
 }
 
 func (h *harness) operationCount(t *testing.T) int {
@@ -242,7 +243,7 @@ func TestSameKeyDifferentRequestIsRejectedWithAlreadyExists(t *testing.T) {
 		}
 	}
 	original, err := h.client.GetOperation(ctx, &processorv1.GetOperationRequest{OperationKey: "op-conflict"})
-	if err != nil || original.GetProcessorReference() != first.GetProcessorReference() {
+	if err != nil || original.GetOperation().GetProcessorReference() != first.GetProcessorReference() {
 		t.Fatalf("original outcome changed: %v %v", original, err)
 	}
 	if h.operationCount(t) != 1 {
@@ -360,7 +361,7 @@ func TestVaultOutageOnNewOperationIsUnavailableAndRecoveryUsesRecordedOutcome(t 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	status1, err := h.client.GetOperation(ctx, &processorv1.GetOperationRequest{OperationKey: "op-before-outage"})
-	if err != nil || status1.GetProcessorReference() != first.GetProcessorReference() || status1.GetDeclineReason() != "ISSUER_DECLINED" {
+	if err != nil || status1.GetOperation().GetProcessorReference() != first.GetProcessorReference() || status1.GetOperation().GetDeclineReason() != "ISSUER_DECLINED" {
 		t.Fatalf("status during outage: %v %v", status1, err)
 	}
 	replay, err := h.sale(t, "op-before-outage", tokenIssuer, 4200)
@@ -394,11 +395,11 @@ func TestInjectedTimeoutRecordsOutcomeThenStatusQueryReturnsIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if recorded.GetDeclineReason() != "INSUFFICIENT_FUNDS" || recorded.GetOutcome() != processorv1.OperationOutcome_OPERATION_OUTCOME_DECLINED {
+	if recorded.GetOperation().GetDeclineReason() != "INSUFFICIENT_FUNDS" || recorded.GetOperation().GetOutcome() != processorv1.OperationOutcome_OPERATION_OUTCOME_DECLINED {
 		t.Fatalf("recorded outcome: %v", recorded)
 	}
 	replay, err := h.client.Sale(statusCtx, &processorv1.SaleRequest{OperationKey: "op-timeout", IntegrationId: integration, PaymentMethodToken: tokenNSF, AmountMinorUnits: 900, Currency: "USD"})
-	if err != nil || replay.GetProcessorReference() != recorded.GetProcessorReference() {
+	if err != nil || replay.GetOperation().GetProcessorReference() != recorded.GetOperation().GetProcessorReference() {
 		t.Fatalf("replay after timeout: %v %v", replay, err)
 	}
 	if h.operationCount(t) != 1 {

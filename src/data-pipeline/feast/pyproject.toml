@@ -5,7 +5,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "feast[redis]==0.67.0",
     "confluent-kafka==2.12.0",
-    "protobuf==7.36.1",
+    "protobuf==7.36.2",
     "pyiceberg[pyarrow,sql-sqlite]>=0.10,<0.11",
     "boto3>=1.38,<2",
 ]

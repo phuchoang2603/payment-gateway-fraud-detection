@@ -175,7 +175,7 @@ type fakePayments struct {
 	w *world
 }
 
-func (f fakePayments) CreatePayment(ctx context.Context, req *paymentsv1.CreatePaymentRequest) (*paymentsv1.Payment, error) {
+func (f fakePayments) CreatePayment(ctx context.Context, req *paymentsv1.CreatePaymentRequest) (*paymentsv1.CreatePaymentResponse, error) {
 	w := f.w
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -194,7 +194,7 @@ func (f fakePayments) CreatePayment(ctx context.Context, req *paymentsv1.CreateP
 		if !bytes.Equal(w.createDigest[key], digest) {
 			return nil, status.Error(codes.AlreadyExists, "idempotency key reused with different content")
 		}
-		return existing, nil
+		return &paymentsv1.CreatePaymentResponse{Payment: existing}, nil
 	}
 	w.counter++
 	id := fmt.Sprintf("pay-%d", w.counter)
@@ -218,10 +218,10 @@ func (f fakePayments) CreatePayment(ctx context.Context, req *paymentsv1.CreateP
 	w.sessions[session] = stored
 	w.createKeys[key] = payment
 	w.createDigest[key] = digest
-	return payment, nil
+	return &paymentsv1.CreatePaymentResponse{Payment: payment}, nil
 }
 
-func (f fakePayments) GetPayment(ctx context.Context, req *paymentsv1.GetPaymentRequest) (*paymentsv1.Payment, error) {
+func (f fakePayments) GetPayment(ctx context.Context, req *paymentsv1.GetPaymentRequest) (*paymentsv1.GetPaymentResponse, error) {
 	w := f.w
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -233,10 +233,10 @@ func (f fakePayments) GetPayment(ctx context.Context, req *paymentsv1.GetPayment
 	if !found || stored.payment.GetIntegrationId() != req.GetIntegrationId() {
 		return nil, status.Error(codes.NotFound, "payment not found")
 	}
-	return stored.payment, nil
+	return &paymentsv1.GetPaymentResponse{Payment: stored.payment}, nil
 }
 
-func (f fakePayments) GetCheckoutSession(ctx context.Context, req *paymentsv1.GetCheckoutSessionRequest) (*paymentsv1.Payment, error) {
+func (f fakePayments) GetCheckoutSession(ctx context.Context, req *paymentsv1.GetCheckoutSessionRequest) (*paymentsv1.GetCheckoutSessionResponse, error) {
 	w := f.w
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -250,10 +250,10 @@ func (f fakePayments) GetCheckoutSession(ctx context.Context, req *paymentsv1.Ge
 	if stored.token != req.GetCheckoutToken() {
 		return nil, status.Error(codes.Unauthenticated, "bad checkout token")
 	}
-	return stored.payment, nil
+	return &paymentsv1.GetCheckoutSessionResponse{Payment: stored.payment}, nil
 }
 
-func (f fakePayments) StartAttempt(ctx context.Context, req *paymentsv1.StartAttemptRequest) (*paymentsv1.AttemptResult, error) {
+func (f fakePayments) StartAttempt(ctx context.Context, req *paymentsv1.StartAttemptRequest) (*paymentsv1.StartAttemptResponse, error) {
 	w := f.w
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -270,7 +270,7 @@ func (f fakePayments) StartAttempt(ctx context.Context, req *paymentsv1.StartAtt
 		if existing.token != req.GetPaymentMethodToken() {
 			return nil, status.Error(codes.AlreadyExists, "idempotency key reused with a different method")
 		}
-		return existing.result, nil
+		return &paymentsv1.StartAttemptResponse{Attempt: existing.result}, nil
 	}
 	if stored.payment.GetStatus() != paymentsv1.PaymentStatus_PAYMENT_STATUS_OPEN {
 		return nil, status.Error(codes.FailedPrecondition, "payment is closed")
@@ -293,7 +293,7 @@ func (f fakePayments) StartAttempt(ctx context.Context, req *paymentsv1.StartAtt
 	}
 	stored.payment.Attempts = append(stored.payment.Attempts, result)
 	w.attemptKeys[key] = attemptRecord{token: req.GetPaymentMethodToken(), result: result}
-	return result, nil
+	return &paymentsv1.StartAttemptResponse{Attempt: result}, nil
 }
 
 type fakeVault struct {
@@ -320,7 +320,7 @@ func (f fakeVault) TokenizeCard(ctx context.Context, req *vaultv1.TokenizeCardRe
 	return &vaultv1.TokenizeCardResponse{Token: value, Metadata: method}, nil
 }
 
-func (f fakeVault) DescribeMethod(ctx context.Context, req *vaultv1.DescribeMethodRequest) (*vaultv1.MethodMetadata, error) {
+func (f fakeVault) DescribeMethod(ctx context.Context, req *vaultv1.DescribeMethodRequest) (*vaultv1.DescribeMethodResponse, error) {
 	w := f.w
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -332,7 +332,7 @@ func (f fakeVault) DescribeMethod(ctx context.Context, req *vaultv1.DescribeMeth
 	if !found || token.inactive || token.integration != req.GetIntegrationId() {
 		return nil, status.Error(codes.NotFound, "unknown token")
 	}
-	return token.method, nil
+	return &vaultv1.DescribeMethodResponse{Metadata: token.method}, nil
 }
 
 type harness struct {

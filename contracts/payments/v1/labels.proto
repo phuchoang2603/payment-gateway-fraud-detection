@@ -1,8 +1,9 @@
 syntax = "proto3";
 package payments.v1;
 
-option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1;paymentsv1";
 import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1;paymentsv1";
 
 // Delivered separately from PaymentEvent; never a decision input.
 enum LabelSource {

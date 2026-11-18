@@ -40,7 +40,7 @@ func (c *Client) Close() error {
 func (c *Client) Resolve(ctx context.Context, integrationID, token string) (domain.Behavior, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
-	fixture, err := c.client.ResolveForProcessing(ctx, &vaultv1.ResolveRequest{IntegrationId: integrationID, Token: token})
+	response, err := c.client.ResolveForProcessing(ctx, &vaultv1.ResolveForProcessingRequest{IntegrationId: integrationID, Token: token})
 	if err != nil {
 		switch status.Code(err) {
 		case codes.NotFound, codes.InvalidArgument:
@@ -49,7 +49,7 @@ func (c *Client) Resolve(ctx context.Context, integrationID, token string) (doma
 			return "", fmt.Errorf("%w: %s", application.ErrVaultUnavailable, status.Code(err))
 		}
 	}
-	switch fixture.GetBehavior() {
+	switch response.GetFixture().GetBehavior() {
 	case vaultv1.Behavior_BEHAVIOR_APPROVE:
 		return domain.BehaviorApprove, nil
 	case vaultv1.Behavior_BEHAVIOR_INSUFFICIENT_FUNDS:

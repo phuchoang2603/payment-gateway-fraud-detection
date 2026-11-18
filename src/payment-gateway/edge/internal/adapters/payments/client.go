@@ -54,7 +54,7 @@ func (c *Client) CreatePayment(ctx context.Context, cmd application.CreatePaymen
 	if err != nil {
 		return application.Payment{}, grpcerr.Map(err, "payments create")
 	}
-	return paymentFrom(response), nil
+	return paymentFrom(response.GetPayment()), nil
 }
 
 func (c *Client) GetPayment(ctx context.Context, integrationID, paymentID string) (application.Payment, error) {
@@ -62,7 +62,7 @@ func (c *Client) GetPayment(ctx context.Context, integrationID, paymentID string
 	if err != nil {
 		return application.Payment{}, grpcerr.Map(err, "payments get")
 	}
-	return paymentFrom(response), nil
+	return paymentFrom(response.GetPayment()), nil
 }
 
 func (c *Client) GetCheckoutSession(ctx context.Context, sessionID, checkoutToken string) (application.Payment, error) {
@@ -70,7 +70,7 @@ func (c *Client) GetCheckoutSession(ctx context.Context, sessionID, checkoutToke
 	if err != nil {
 		return application.Payment{}, grpcerr.Map(err, "payments session")
 	}
-	return paymentFrom(response), nil
+	return paymentFrom(response.GetPayment()), nil
 }
 
 func (c *Client) StartAttempt(ctx context.Context, cmd application.StartAttemptCommand) (application.Attempt, error) {
@@ -93,7 +93,7 @@ func (c *Client) StartAttempt(ctx context.Context, cmd application.StartAttemptC
 	if err != nil {
 		return application.Attempt{}, grpcerr.Map(err, "payments attempt")
 	}
-	attempt := attemptFrom(response)
+	attempt := attemptFrom(response.GetAttempt())
 	if attempt.Status == "" {
 		return application.Attempt{}, domain.New(domain.ErrInternal, "payments attempt: unspecified status")
 	}

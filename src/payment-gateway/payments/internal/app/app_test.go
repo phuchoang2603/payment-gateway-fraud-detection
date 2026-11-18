@@ -121,11 +121,12 @@ func TestReadinessIsServingWithRedisAndFraudAndProcessorDown(t *testing.T) {
 		t.Fatalf("liveness = %v", got)
 	}
 
-	response, err := instance.payments.CreatePayment(context.Background(), testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
+	created, err := instance.payments.CreatePayment(context.Background(), testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
 	if err != nil {
 		t.Fatalf("create with redis down: %v", err)
 	}
-	attempt, err := instance.payments.StartAttempt(context.Background(), testsupport.AttemptRequest(response, "attempt-1", "vault-token"))
+	started, err := instance.payments.StartAttempt(context.Background(), testsupport.AttemptRequest(created.GetPayment(), "attempt-1", "vault-token"))
+	attempt := started.GetAttempt()
 	if err != nil || attempt.GetStatus() != paymentsv1.AttemptStatus_ATTEMPT_STATUS_PENDING || attempt.GetAssessmentStatus() != paymentsv1.AssessmentStatus_ASSESSMENT_STATUS_ASSESSMENT_ERROR {
 		t.Fatalf("attempt with fraud down = %v, %v; want recoverable assessment failure", attempt, err)
 	}
@@ -151,17 +152,19 @@ func TestGRPCErrorMappingAndCorrelationPropagation(t *testing.T) {
 	instance.waitReady(t)
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "x-request-id", "request-abc-123")
 
-	payment, err := instance.payments.CreatePayment(ctx, testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
+	paymentCreated, err := instance.payments.CreatePayment(ctx, testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
 	if err != nil {
 		t.Fatal(err)
 	}
+	payment := paymentCreated.GetPayment()
 	if events := db.Events(t, payment.GetPaymentId()); events[0].GetCorrelationId() != "request-abc-123" {
 		t.Fatalf("correlation id = %q", events[0].GetCorrelationId())
 	}
-	generated, err := instance.payments.CreatePayment(context.Background(), testsupport.CreateRequest(testsupport.IntegrationID, "key-2", "order-2", 12500))
+	generatedCreated, err := instance.payments.CreatePayment(context.Background(), testsupport.CreateRequest(testsupport.IntegrationID, "key-2", "order-2", 12500))
 	if err != nil {
 		t.Fatal(err)
 	}
+	generated := generatedCreated.GetPayment()
 	if id := db.Events(t, generated.GetPaymentId())[0].GetCorrelationId(); len(id) < 16 {
 		t.Fatalf("generated correlation id = %q", id)
 	}
@@ -220,10 +223,11 @@ func TestOTLPMetricsRecordFraudDecline(t *testing.T) {
 	instance := startApp(t, testConfig(db.AppURL, fraud.Addr, processor.Addr))
 	instance.waitReady(t)
 	fraud.SetAssessment(testsupport.Decline("HIGH_AMOUNT"))
-	payment, err := instance.payments.CreatePayment(context.Background(), testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
+	paymentCreated, err := instance.payments.CreatePayment(context.Background(), testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
 	if err != nil {
 		t.Fatal(err)
 	}
+	payment := paymentCreated.GetPayment()
 	if _, err := instance.payments.StartAttempt(context.Background(), testsupport.AttemptRequest(payment, "attempt-1", "vault-token")); err != nil {
 		t.Fatal(err)
 	}
@@ -251,10 +255,11 @@ func TestShutdownIsBoundedWhileARequestIsStillRunning(t *testing.T) {
 	cfg.FraudTimeout, cfg.AttemptBudget = time.Minute, time.Minute
 	instance := startApp(t, cfg)
 	instance.waitReady(t)
-	payment, err := instance.payments.CreatePayment(context.Background(), testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
+	paymentCreated, err := instance.payments.CreatePayment(context.Background(), testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
 	if err != nil {
 		t.Fatal(err)
 	}
+	payment := paymentCreated.GetPayment()
 	go func() {
 		_, _ = instance.payments.StartAttempt(context.Background(), testsupport.AttemptRequest(payment, "attempt-1", "vault-token"))
 	}()

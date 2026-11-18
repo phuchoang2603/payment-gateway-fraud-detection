@@ -17,6 +17,7 @@ in
     "base"
     "go"
     "sqlc"
+    "proto"
     "python"
     "kubernetes"
   ];
@@ -30,10 +31,6 @@ in
   packages = with pkgs; [
     jdk17
     maven
-
-    protobuf
-    protoc-gen-go
-    protoc-gen-go-grpc
 
     openspec
     zlib
@@ -68,11 +65,11 @@ in
     };
   };
 
-  tasks."codegen:proto" = {
-    exec = ''bash "${config.git.root}/scripts/codegen-proto.sh"'';
+  tasks."codegen:proto-python" = {
+    exec = ''python3 "${config.git.root}/scripts/codegen-proto.py"'';
+    after = [ "codegen:proto" ];
     execIfModified = [
       "contracts/**/*.proto"
-      "scripts/codegen-proto.sh"
       "scripts/codegen-proto.py"
       "src/**/pyproject.toml"
       "devenv.lock"
@@ -82,6 +79,5 @@ in
 
   treefmt.config.programs = {
     ruff-format.excludes = [ "src/data-pipeline/simulator/simulator/contracts/**" ];
-    gofumpt.excludes = [ "src/payment-gateway/shared/proto/**/*.pb.go" ];
   };
 }

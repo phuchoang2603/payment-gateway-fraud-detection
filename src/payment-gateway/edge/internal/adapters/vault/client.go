@@ -31,5 +31,5 @@ func (c *Client) Describe(ctx context.Context, integrationID, token string) (app
 	if err != nil {
 		return application.PaymentMethod{}, grpcerr.Map(err, "vault describe")
 	}
-	return application.PaymentMethod{Type: response.GetType(), Fingerprint: response.GetFingerprint()}, nil
+	return application.PaymentMethod{Type: response.GetMetadata().GetType(), Fingerprint: response.GetMetadata().GetFingerprint()}, nil
 }
