@@ -13,84 +13,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  projects:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.projects.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-      - id: projects
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-        run: echo "matrix=$(python3 scripts/ci-matrix.py --kind go ${BASE:+--changed "$BASE"})" >> "$GITHUB_OUTPUT"
-
   go:
     name: go (${{ matrix.project }})
-    needs: projects
-    if: fromJSON(needs.projects.outputs.matrix).include[0] != null
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.projects.outputs.matrix) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      CI_TEST_REPORTS: /tmp/ci-test-evidence
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-go@v6.5.0
-        with:
-          go-version-file: ${{ matrix.project }}/go.mod
-          cache-dependency-path: ${{ matrix.project }}/go.sum
-      - uses: golangci/golangci-lint-action@v9.3.0
-        with:
-          version: v2.15.0
-          install-only: true
-      - name: Lint and test Go module
-        env:
-          GO_PROJECT: ${{ matrix.project }}
-        run: bash scripts/ci-checks.sh go "$GO_PROJECT"
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: go-test-evidence-${{ matrix.id }}
-          path: ${{ env.CI_TEST_REPORTS }}
-          if-no-files-found: warn
+      matrix:
+        project:
+          - src/llm/agent_runtime
+          - src/payment-gateway/edge
+          - src/payment-gateway/fraud
+          - src/payment-gateway/notifier
+          - src/payment-gateway/payments
+          - src/payment-gateway/processor-simulator
+          - src/payment-gateway/shared
+          - src/payment-gateway/vault-simulator
+    uses: phuchoang2603/devenv-modules/.github/workflows/devenv.yml@main
+    with:
+      run: bash scripts/check.sh go ${{ matrix.project }}
+      timeout-minutes: 30
 
   mutation:
-    if: github.event_name == 'pull_request' && fromJSON(needs.projects.outputs.matrix).include[0] != null
+    if: github.event_name == 'pull_request'
     name: mutation (${{ matrix.project }})
-    needs: projects
     strategy:
       fail-fast: false
       max-parallel: 2
-      matrix: ${{ fromJSON(needs.projects.outputs.matrix) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 55
-    env:
-      CI_TEST_REPORTS: /tmp/go-mutation-evidence
-      MUTATION_BASE: ${{ github.event.pull_request.base.sha }}
-      MUTATION_MODE: diff
-      MUTATION_BUDGET: 15m
-      GO_PROJECT: ${{ matrix.project }}
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-go@v6.5.0
-        with:
-          go-version-file: ${{ matrix.project }}/go.mod
-          cache-dependency-path: ${{ matrix.project }}/go.sum
-      - name: Install mutation testing tool
-        run: go install github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0
-      - name: Report mutations in handwritten Go logic
-        run: bash scripts/ci-checks.sh go-mutations "$GO_PROJECT" "$MUTATION_MODE"
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: go-mutation-evidence-${{ matrix.id }}
-          path: ${{ env.CI_TEST_REPORTS }}
-          if-no-files-found: warn
+      matrix:
+        project:
+          - src/llm/agent_runtime
+          - src/payment-gateway/edge
+          - src/payment-gateway/fraud
+          - src/payment-gateway/notifier
+          - src/payment-gateway/payments
+          - src/payment-gateway/processor-simulator
+          - src/payment-gateway/shared
+          - src/payment-gateway/vault-simulator
+    uses: phuchoang2603/devenv-modules/.github/workflows/devenv.yml@main
+    with:
+      run: MUTATION_BASE=${{ github.event.pull_request.base.sha }} MUTATION_BUDGET=15m bash scripts/check.sh go-mutations ${{ matrix.project }} diff
+      fetch-depth: 0
+      timeout-minutes: 55
