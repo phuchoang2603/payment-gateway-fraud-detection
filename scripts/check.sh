@@ -34,13 +34,13 @@ has_own_devenv() {
 
 in_project_devenv() {
   local mode="$1" project="$2"
-  (cd "$project" && CI_TEST_REPORTS="$report_dir" devenv shell -- bash "$OLDPWD/scripts/check.sh" "$mode" "$project")
+  (cd "$project" && CI_TEST_REPORTS="$report_dir" devenv shell -- bash "$OLDPWD/scripts/check.sh" "$mode" "$project" "${@:3}")
 }
 
 check_python() (
   [[ -d "$1/tests" ]] || return 0
   if has_own_devenv "$1"; then
-    in_project_devenv python "$1"
+    in_project_devenv python "$@"
     return
   fi
   local reports="$report_dir/${1#src/}"
@@ -50,7 +50,7 @@ check_python() (
   floor="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb")).get("tool", {}).get("ci", {}).get("coverage-fail-under", 0))')"
   COVERAGE_FILE="$reports/.coverage" uv run --locked --with "pytest-cov==$PYTEST_COV" pytest -q --durations=10 \
     --cov=. --cov-config="$coverage_config" --cov-fail-under="$floor" --cov-report=term \
-    --cov-report="xml:$reports/coverage.xml" --cov-report="html:$reports/coverage-html" | tee "$reports/pytest.txt"
+    --cov-report="xml:$reports/coverage.xml" --cov-report="html:$reports/coverage-html" "${@:2}" | tee "$reports/pytest.txt"
   summarize "Python tests: $1" "$reports/pytest.txt"
   local group
   for group in $(python3 -c 'import tomllib; print(" ".join(tomllib.load(open("pyproject.toml", "rb")).get("tool", {}).get("ci", {}).get("test-groups", [])))'); do
@@ -153,7 +153,7 @@ check_jvm() (
 )
 
 usage() {
-  printf 'Usage: %s [all|go [module]|go-mutations <module> {diff|full}|python [project]|jvm]\n' "$0" >&2
+  printf 'Usage: %s [all|go [module]|go-mutations <module> {diff|full}|python [project [pytest args]]|jvm]\n' "$0" >&2
   exit 2
 }
 
@@ -175,7 +175,7 @@ case "${1:-all}" in
     ;;
   python)
     if [[ -n "${2:-}" ]]; then
-      check_python "$2"
+      check_python "${@:2}"
     else
       each_project pyproject.toml check_python
     fi

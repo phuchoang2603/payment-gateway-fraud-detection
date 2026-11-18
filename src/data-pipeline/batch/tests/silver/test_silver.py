@@ -173,6 +173,7 @@ def test_a_payment_belongs_to_the_day_of_its_first_event(spark, report_root):
     assert late.count() == 4
 
 
+@pytest.mark.property
 def test_any_split_of_a_range_and_any_rerun_build_the_same_silver_as_one_backfill(spark, report_root):
     events, labels = history()
     load_bronze(spark, events, labels)

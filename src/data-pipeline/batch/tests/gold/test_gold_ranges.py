@@ -74,6 +74,7 @@ SPAN = 14
 OFFSETS = st.integers(0, SPAN)
 
 
+@pytest.mark.property
 def test_any_split_of_a_range_and_any_rerun_build_the_same_gold_as_one_backfill(spark, lake):
     silver_history(spark, lake)
     last = FIRST + timedelta(days=SPAN)

@@ -34,6 +34,7 @@ module-root = ""
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-n 2 --dist loadfile"
+markers = ["property: Hypothesis properties that run the Spark jobs many times"]
 
 [tool.ruff]
 line-length = 119
