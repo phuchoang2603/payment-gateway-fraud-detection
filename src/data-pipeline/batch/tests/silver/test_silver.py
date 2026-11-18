@@ -194,7 +194,7 @@ def test_any_split_of_a_range_and_any_rerun_build_the_same_silver_as_one_backfil
             only_current = [r.asDict() for r in current[table].exceptAll(backfill[table]).collect()]
             assert not only_backfill and not only_current, f"{step} {table}: {only_backfill} vs {only_current}"
 
-    @settings(max_examples=2, deadline=None, database=None, derandomize=True)
+    @settings(max_examples=3, deadline=None, database=None, derandomize=True)
     @given(cuts=st.sets(st.integers(1, span)), rerun=st.tuples(offsets, offsets).map(sorted))
     @example(cuts=set(range(1, span + 1)), rerun=[1, 3])
     def split(cuts, rerun):
