@@ -1,7 +1,12 @@
 import os
+import time
 from pathlib import Path
 
 import pytest
+
+# NOTE: PySpark returns collected timestamps in the host timezone, and production runs in UTC.
+os.environ["TZ"] = "UTC"
+time.tzset()
 
 CONTRACTS = Path(__file__).resolve().parents[4] / "contracts"
 

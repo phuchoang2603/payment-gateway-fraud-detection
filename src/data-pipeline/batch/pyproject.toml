@@ -17,6 +17,7 @@ dev = [
     "hypothesis>=6.100,<7",
     "pyspark==4.1.3",
     "pytest>=9,<10",
+    "pytest-xdist>=3.8,<4",
     "ruff>=0.14,<1",
     "testcontainers==4.15.0",
 ]
@@ -32,6 +33,7 @@ module-root = ""
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "-n 2 --dist loadfile"
 
 [tool.ruff]
 line-length = 119
