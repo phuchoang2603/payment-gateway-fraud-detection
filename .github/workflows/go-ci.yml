@@ -29,8 +29,10 @@ jobs:
           - src/payment-gateway/vault-simulator
     uses: phuchoang2603/devenv-modules/.github/workflows/devenv.yml@main
     with:
-      run: bash scripts/check.sh go ${{ matrix.project }}
+      run: CI_TEST_REPORTS=/tmp/test-evidence bash scripts/check.sh go ${{ matrix.project }}
       timeout-minutes: 30
+      artifact-name: go-test-evidence-${{ matrix.project }}
+      artifact-path: /tmp/test-evidence
 
   mutation:
     if: github.event_name == 'pull_request'
@@ -50,6 +52,8 @@ jobs:
           - src/payment-gateway/vault-simulator
     uses: phuchoang2603/devenv-modules/.github/workflows/devenv.yml@main
     with:
-      run: MUTATION_BASE=${{ github.event.pull_request.base.sha }} MUTATION_BUDGET=15m bash scripts/check.sh go-mutations ${{ matrix.project }} diff
+      run: CI_TEST_REPORTS=/tmp/mutation-evidence MUTATION_BASE=${{ github.event.pull_request.base.sha }} MUTATION_BUDGET=15m bash scripts/check.sh go-mutations ${{ matrix.project }} diff
       fetch-depth: 0
       timeout-minutes: 55
+      artifact-name: go-mutation-evidence-${{ matrix.project }}
+      artifact-path: /tmp/mutation-evidence

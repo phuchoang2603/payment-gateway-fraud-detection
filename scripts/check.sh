@@ -4,7 +4,6 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 PYTEST_COV=7.0.0
-GREMLINS=v0.6.0
 
 report_dir="$(realpath -m "${CI_TEST_REPORTS:-$(mktemp -d)}")"
 coverage_config="$(realpath scripts/coverage.toml)"
@@ -126,10 +125,6 @@ check_go_mutations() (
   local mutation_dir status=0
   mutation_dir="$(mktemp -d)"
   trap 'rm -rf "$mutation_dir"' EXIT
-  if ! command -v gremlins > /dev/null; then
-    GOBIN="$mutation_dir/bin" go install "github.com/go-gremlins/gremlins/cmd/gremlins@$GREMLINS"
-    export PATH="$mutation_dir/bin:$PATH"
-  fi
   cp go.mod "$mutation_dir/go.mod"
   cp go.sum "$mutation_dir/go.sum"
   if [[ -d ../shared && "$(basename "$PWD")" != shared ]]; then

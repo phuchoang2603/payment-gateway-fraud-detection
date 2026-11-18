@@ -96,7 +96,6 @@ lint_helm() {
   lint_sql_jobs
 }
 
-ast-grep test
 lint_python_scripts
 each_project go.mod lint_go
 each_project pyproject.toml lint_python

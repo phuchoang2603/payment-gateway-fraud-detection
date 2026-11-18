@@ -41,6 +41,8 @@ in
     zlib
   ];
 
+  repo.gremlins.enable = true;
+
   repo.lintIgnores = [ "infra/charts/ml-training/files/**" ];
 
   repo.golangci = {
