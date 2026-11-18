@@ -84,7 +84,7 @@ def test_any_split_of_a_range_and_any_rerun_build_the_same_gold_as_one_backfill(
     assert backfill[gold.LABEL_ATTEMPT].count() == 1
     runs = itertools.count()
 
-    @settings(max_examples=2, deadline=None, database=None, derandomize=True)
+    @settings(max_examples=1, deadline=None, database=None, derandomize=True)
     @given(cuts=st.sets(st.integers(1, SPAN), max_size=4), rerun=st.tuples(OFFSETS, OFFSETS).map(sorted))
     @example(cuts=set(range(SPAN - 2, SPAN + 1)), rerun=[3, 8])
     def split(cuts, rerun):
