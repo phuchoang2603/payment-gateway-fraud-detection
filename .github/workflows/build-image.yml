@@ -48,5 +48,5 @@ jobs:
           push: ${{ inputs.publish }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ inputs.image }}
-          cache-to: type=gha,mode=max,scope=${{ inputs.image }}
+          cache-from: type=registry,ref=ghcr.io/${{ inputs.image }}:buildcache
+          cache-to: ${{ inputs.publish && format('type=registry,ref=ghcr.io/{0}:buildcache,mode=max', inputs.image) || '' }}

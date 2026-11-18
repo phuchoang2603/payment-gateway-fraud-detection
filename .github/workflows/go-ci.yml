@@ -31,6 +31,7 @@ jobs:
     with:
       run: CI_TEST_REPORTS=/tmp/test-evidence bash scripts/check.sh go ${{ matrix.project }}
       timeout-minutes: 30
+      cache-key: go-${{ matrix.project }}
       artifact-name: go-test-evidence-${{ matrix.project }}
       artifact-path: /tmp/test-evidence
 
@@ -55,5 +56,6 @@ jobs:
       run: CI_TEST_REPORTS=/tmp/mutation-evidence MUTATION_BASE=${{ github.event.pull_request.base.sha }} MUTATION_BUDGET=15m bash scripts/check.sh go-mutations ${{ matrix.project }} diff
       fetch-depth: 0
       timeout-minutes: 55
+      cache-key: go-${{ matrix.project }}
       artifact-name: go-mutation-evidence-${{ matrix.project }}
       artifact-path: /tmp/mutation-evidence
