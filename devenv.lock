@@ -20,11 +20,11 @@
     "devenv-modules": {
       "flake": false,
       "locked": {
-        "lastModified": 1794980468,
-        "narHash": "sha256-xjUrxrWTOsLZmIkjMVpyEMO41ULXMmnbFw8jwVuQN2A=",
+        "lastModified": 1794984704,
+        "narHash": "sha256-LLJDiEF1Ey5morUmlKtGCEMS6+ngwjZLzJOe/BoiF30=",
         "owner": "phuchoang2603",
         "repo": "devenv-modules",
-        "rev": "e0ab99fecd6b09ca74da743bac2afbc7003903d9",
+        "rev": "b0c80b3b65a335a7e45c5f4303be6ec7ce33a206",
         "type": "github"
       },
       "original": {

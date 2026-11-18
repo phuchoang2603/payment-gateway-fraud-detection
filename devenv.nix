@@ -43,8 +43,6 @@ in
 
   repo.gremlins.enable = true;
 
-  repo.lintIgnores = [ "infra/charts/ml-training/files/**" ];
-
   repo.golangci = {
     linters.enable = [ "depguard" ];
     linters.exclusions.generated = "strict";
@@ -70,7 +68,6 @@ in
           "${module}/shared/observe"
         ];
     };
-    formatters.exclusions.paths = [ "\\.pb\\.go$" ];
   };
 
   tasks."codegen:proto" = {
