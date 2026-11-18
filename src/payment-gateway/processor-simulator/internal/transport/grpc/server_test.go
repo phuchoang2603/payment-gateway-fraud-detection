@@ -123,7 +123,9 @@ func newHarness(t *testing.T, options harnessOptions) *harness {
 	go func() { done <- server.Run(runCtx, grpcListener) }()
 	t.Cleanup(func() {
 		cancel()
-		<-done
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
 	})
 	conn, err := grpc.NewClient(grpcListener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {

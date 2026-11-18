@@ -98,7 +98,9 @@ func newHarness(t *testing.T) *harness {
 	go func() { done <- server.Run(runCtx, vaultListener, processingListener) }()
 	t.Cleanup(func() {
 		cancel()
-		<-done
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
 	})
 
 	connect := func(addr string) *grpc.ClientConn {

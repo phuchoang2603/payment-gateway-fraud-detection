@@ -7,11 +7,6 @@ inputs:
         follows: nixpkgs
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
-  nixpkgs-python:
-    url: github:cachix/nixpkgs-python
-    inputs:
-      nixpkgs:
-        follows: nixpkgs
   treefmt-nix:
     url: github:numtide/treefmt-nix
     inputs:

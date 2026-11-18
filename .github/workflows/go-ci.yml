@@ -47,7 +47,7 @@ jobs:
           cache-dependency-path: ${{ matrix.project }}/go.sum
       - uses: golangci/golangci-lint-action@v9.3.0
         with:
-          version: v2.13.2
+          version: v2.15.0
           install-only: true
       - name: Lint and test Go module
         env:

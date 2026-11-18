@@ -20,7 +20,20 @@ check_projects() {
   done < <(git ls-files -z -- "src/**/$manifest")
 }
 
+has_own_devenv() {
+  [[ -n "${DEVENV_ROOT:-}" && -f "$1/devenv.yaml" && "$DEVENV_ROOT" != "$PWD/$1" ]]
+}
+
+in_project_devenv() {
+  local mode="$1" project="$2"
+  (cd "$project" && CI_TEST_REPORTS="$report_dir" devenv shell -- bash "$OLDPWD/scripts/ci-checks.sh" "$mode" "$project")
+}
+
 check_python() (
+  if has_own_devenv "$1"; then
+    in_project_devenv python "$1"
+    return
+  fi
   local reports="$report_dir/${1#src/}"
   mkdir -p "$reports"
   cd "$1"

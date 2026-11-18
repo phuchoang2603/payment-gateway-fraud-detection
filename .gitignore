@@ -88,7 +88,7 @@ Thumbs.db
 .devenv/
 .direnv/
 .ruff_cache/
-/.pre-commit-config.yaml
+.pre-commit-config.yaml
 
 # Agents
 .agents/

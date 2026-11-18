@@ -18,40 +18,21 @@ context: |
   the existing cross-language shared boundary.
   Keep protobuf definitions under root contracts/ and generated Go bindings
   under src/payment-gateway/shared/proto/ outside domain code.
-  Prefer supported modern APIs and idiomatic code; use Context7 for current public
-  library, SDK and framework guidance. Prefer the repository's Nix devenv.
-  Keep devenv task definitions and CI workflow steps short. Move substantive shell
-  logic into tracked scripts, reuse focused functions for repeated checks, and
-  include devenv script paths in execIfModified so edits rerun tasks.
-  Start fresh within the changed area: do not preserve legacy compatibility,
-  adapters, fallback paths or old config formats unless the user explicitly asks.
-  Remove superseded code, dead paths and stale configuration, tests and docs
-  together; preserve immutable datasets and historical acceptance evidence.
-  Update affected producers, consumers, contracts and configuration together.
-  Choose simple designs with a concrete benefit; avoid speculative abstractions,
-  dependencies or protocol migrations just to adopt something newer.
-  Keep tests small and behavior-focused. Each test should protect a distinct
-  business rule, boundary, failure mode, resource lifecycle or integration contract.
-  Reuse coverage; do not add config-only, config-getter, trivial getter/no-op,
-  implementation-mirroring or redundant tests, equivalent parameter combinations,
-  or config-only CI suites/jobs. Test configuration only through meaningful
-  behavior when it protects a distinct failure or security boundary. Remove
-  unnecessary tests in the changed area rather than replacing them one-for-one.
+  scripts/ci-checks.sh is the single entry point for checks; include devenv
+  script paths in execIfModified so edits rerun tasks.
+  Preserve immutable datasets and historical acceptance evidence when removing
+  superseded code.
   Keep Python tests, Go lint and Helm lint in independent CI jobs without
   change-detection jobs or matrices. Discover and validate all Helm charts. Keep
   check jobs in the CI workflow and reuse one image workflow for explicit service
   image jobs. Do not run any tests locally, including unit, integration, smoke,
   end-to-end or acceptance tests. Let CI checks run all tests and image builds;
-  inspect their results and report pending or failed checks honestly. Local
-  verification is limited to non-test checks such as lint, formatting, schema
-  validation and diff review.
-  Do not add score-only tests or custom coverage/mutation gate tooling. Record real
-  failures honestly; replacing a verification policy does not turn old failures into passes.
-  Keep documentation minimal. The root README is the entry point; CONTRIBUTING.md
-  covers only initial prerequisites, entering devenv and a wiki link. Keep workflow,
-  storage, CI and project-specific instructions in docs/ for the wiki, not in
-  CONTRIBUTING.md. Update existing pages instead of adding per-directory READMEs
-  or repeating information maintained elsewhere.
+  inspect their results. Local verification is limited to non-test checks such
+  as lint, formatting, schema validation and diff review.
+  Do not add score-only tests or custom coverage/mutation gate tooling.
+  The root README is the entry point; CONTRIBUTING.md covers only initial
+  prerequisites, entering devenv and a wiki link. Keep workflow, storage, CI and
+  project-specific instructions in docs/ for the wiki, not in CONTRIBUTING.md.
   Consult the FSDS coursework repository (`../fsds` relative to the main repository checkout) for relevant examples and requirements when planning or applying changes. Read it only; never execute, import or modify it. Adapt examples to this project's synthetic payment scope and contracts, treat them as references rather than evidence of this project's implementation, and report when it is unavailable.
 
 rules:
@@ -59,27 +40,14 @@ rules:
     - Explain the concrete problem and expected behavior concisely.
     - Identify intentional breaking changes; do not assume legacy compatibility is required.
   design:
-    - Prefer supported APIs and remove obsolete paths within the changed area.
-    - Keep transport separate from domain in both languages; add storage and use-case coordination only when behavior needs them, without empty packages.
-    - Justify new abstractions, dependencies and protocols with a current requirement.
     - Plan coordinated contract and caller updates for intentional breaking changes.
   specs:
     - Specify observable behavior and meaningful boundaries without mirroring implementation details.
   tasks:
     - Include cleanup of superseded code and affected references in implementation tasks.
-    - Reuse existing behavioral coverage; add tests only for distinct uncovered risks. Do not plan config-only, config-getter, trivial getter/no-op or redundant tests or config-only CI suites/jobs.
     - Run all tests through CI checks, never locally; distinguish non-test local checks from CI test execution.
-    - Keep documentation work proportional; update existing guides instead of adding READMEs.
 
 operations:
-  apply:
-    guidance:
-      - Consult the FSDS coursework repository (`../fsds` relative to the main repository checkout) for relevant examples and requirements when planning or applying changes. Read it only; never execute, import or modify it. Adapt examples to this project's synthetic payment scope and contracts, treat them as references rather than evidence of this project's implementation, and report when it is unavailable.
-      - Use devenv when available and Context7 for current public API guidance.
-      - Start fresh in the changed area unless the user explicitly requests legacy compatibility. Remove superseded code, compatibility adapters, dead paths and stale config, tests and docs together; preserve immutable datasets and historical evidence.
-      - Reuse behavioral coverage and remove unnecessary tests in the changed area. Do not add config-only, config-getter, trivial getter/no-op, implementation-mirroring or redundant tests or config-only CI suites/jobs; configuration coverage must protect meaningful behavior or a distinct failure/security boundary.
-      - Never run tests locally; let CI checks run all unit, integration, smoke, end-to-end and acceptance tests. Use only relevant non-test checks locally and inspect CI results.
-      - Report actual validation results and remaining gaps without adding low-value tests.
   archive:
     guidance:
       - Keep the outcome concise and report unresolved verification gaps honestly.

@@ -1,6 +1,13 @@
-{ pkgs, config, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  ...
+}:
 {
   env.JAVA_HOME = "${pkgs.jdk17}/lib/openjdk";
+  env.UV_PYTHON_DOWNLOADS = "never";
+  env.UV_PYTHON_PREFERENCE = "only-system";
   env.LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc pkgs.zlib ];
 
   packages = with pkgs; [
@@ -10,6 +17,7 @@
     maven
 
     ruff
+    uv
     gofumpt
     golangci-lint
 
@@ -39,10 +47,7 @@
       lsp = {
         enable = true;
       };
-      uv = {
-        enable = true;
-      };
-      version = "3.14";
+      package = lib.mkDefault pkgs.python312;
     };
   };
 
