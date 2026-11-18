@@ -22,10 +22,8 @@ context: |
   superseded code.
   Run lint in one repo:lint CI job and tests in independent per-project jobs
   without change-detection jobs. Keep check jobs in the CI workflows and reuse
-  one image workflow for explicit service image jobs. Do not run any tests locally, including unit, integration, smoke,
-  end-to-end or acceptance tests. Let CI checks run all tests and image builds;
-  inspect their results. Local verification is limited to non-test checks such
-  as lint, formatting, schema validation and diff review.
+  one image workflow for explicit service image jobs. CI runs the same devenv as
+  local work, so tests may run locally; inspect CI results before reporting.
   Do not add score-only tests or custom coverage/mutation gate tooling.
   The root README is the entry point; CONTRIBUTING.md covers only initial
   prerequisites, entering devenv and a wiki link. Keep workflow, storage, CI and
@@ -42,7 +40,6 @@ rules:
     - Specify observable behavior and meaningful boundaries without mirroring implementation details.
   tasks:
     - Include cleanup of superseded code and affected references in implementation tasks.
-    - Run all tests through CI checks, never locally; distinguish non-test local checks from CI test execution.
 
 operations:
   archive:
