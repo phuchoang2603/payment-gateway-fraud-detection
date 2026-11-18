@@ -290,6 +290,7 @@ features:
   historyParallelism: 2
   historyWriterParallelism: 2
   historyEnd: "2026-10-29"
+  serverReplicas: 2
   resources:
     requests:
       cpu: 100m

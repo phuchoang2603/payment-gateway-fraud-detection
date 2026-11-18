@@ -84,6 +84,7 @@ type Store interface {
 	Transition(ctx context.Context, request TransitionRequest) (domain.State, error)
 	LoadPayment(ctx context.Context, paymentID uuid.UUID) (domain.State, error)
 	LoadPaymentBySession(ctx context.Context, sessionID uuid.UUID) (domain.State, error)
+	AttemptSignals(ctx context.Context, paymentID, attemptID uuid.UUID) (*paymentsv1.AttemptSignals, error)
 	Idempotency(ctx context.Context, integrationID uuid.UUID, scope, key string) (IdempotencyRecord, error)
 	ProcessorRequest(ctx context.Context, attemptID uuid.UUID) (ProcessorRequestRecord, error)
 	AssessmentRequest(context.Context, uuid.UUID) (AssessmentRequestRecord, error)

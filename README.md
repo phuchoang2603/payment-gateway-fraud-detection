@@ -23,7 +23,7 @@ A payment gateway for a refurbished-electronics marketplace, built to connect re
 
 ## LLM and agents
 
-- **Agents:** coordinator, evidence and risk agents; read-only tools, cited knowledge retrieval and Langfuse prompts/traces. [Agents](docs/llm/agents.md).
+- **Agents:** analyst and merchant entry agents with evidence and risk specialists; read-only tools, cited knowledge retrieval and Langfuse prompts/traces. [Agents](docs/llm/agents.md).
 - **Model access:** agentgateway API keys, rate limits, PII masking and request screening; vLLM/KServe inference. [Gateway](docs/llm/gateway-and-jev-policy.md) · [Inference](docs/llm/inference.md).
 - **Knowledge API:** dev load test, 60 users over 5 minutes: **181.7 requests/s**, **p95 86 ms**, **0 failures across 54,453 requests**, with KEDA scaling 2 → 4 replicas. [Autoscaling](docs/llm/scaling.md) · [RAG](docs/llm/rag.md).
 

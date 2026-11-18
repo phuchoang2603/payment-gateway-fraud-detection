@@ -176,6 +176,23 @@ func TestTheModelCallSpanIsLinkedToTheChosenVersion(t *testing.T) {
 	}
 }
 
+func TestTheModelCallSpanNamesTheDeclaredTools(t *testing.T) {
+	prompts := NewPrompts(&fakeSource{prompts: map[string]Prompt{Production: production}})
+	tracer, recorder := recordSpans(t, prompts)
+	request := &model.LLMRequest{Config: &genai.GenerateContentConfig{Tools: []*genai.Tool{
+		{FunctionDeclarations: []*genai.FunctionDeclaration{{Name: "review_decline"}, {Name: "get_payment_status"}}},
+	}}}
+	if _, err := prompts.BeforeModel(callbackContext{agent: "evidence_agent", session: "s1", invocation: "i1"}, request); err != nil {
+		t.Fatal(err)
+	}
+
+	_, span := tracer.Start(context.Background(), "generate_content gpt-oss", trace.WithAttributes(invocationIDAttribute.String("i1")))
+	span.End()
+	if got := attributes(recorder.Ended()[0])[toolsAttribute].AsStringSlice(); !slices.Equal(got, []string{"get_payment_status", "review_decline"}) {
+		t.Fatalf("tools %v", got)
+	}
+}
+
 func TestTheChoiceIsDroppedWhenTheRunEnds(t *testing.T) {
 	prompts := NewPrompts(&fakeSource{prompts: map[string]Prompt{Production: production}})
 	tracer, recorder := recordSpans(t, prompts)
@@ -204,12 +221,12 @@ func TestTheChoiceIsDroppedWhenTheRunEnds(t *testing.T) {
 func TestEachAgentInTheRuntimeUsesItsOwnPrompt(t *testing.T) {
 	source := &fakeSource{prompts: map[string]Prompt{Production: production}}
 	prompts := NewPrompts(source)
-	for _, agentName := range []string{"coordinator", "risk_agent"} {
+	for _, agentName := range []string{"analyst_assistant", "risk_agent"} {
 		if _, err := prompts.BeforeModel(callbackContext{agent: agentName, session: "s1"}, &model.LLMRequest{}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	want := []string{"coordinator-system-prompt@production", "risk-agent-system-prompt@production"}
+	want := []string{"analyst-assistant-system-prompt@production", "risk-agent-system-prompt@production"}
 	if !slices.Equal(source.labels, want) {
 		t.Fatalf("fetched %v, want %v", source.labels, want)
 	}

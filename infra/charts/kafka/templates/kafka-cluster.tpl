@@ -101,6 +101,13 @@ spec:
   kafkaExporter:
     topicRegex: {{ .Values.monitoring.topicRegex | quote }}
     groupRegex: {{ .Values.monitoring.groupRegex | quote }}
+    template:
+      pod:
+        metadata:
+          # Off-mesh like the broker: ztunnel resets the exporter's connection to the
+          # off-mesh broker's replication listener.
+          labels:
+            istio.io/dataplane-mode: none
     resources:
       {{- toYaml .Values.monitoring.exporterResources | nindent 6 }}
   {{- end }}

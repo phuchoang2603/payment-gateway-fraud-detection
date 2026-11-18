@@ -13,6 +13,7 @@ import (
 
 type Config struct {
 	GRPCAddr        string
+	MCPAddr         string
 	ShutdownTimeout time.Duration
 
 	DatabaseURL        string
@@ -73,6 +74,7 @@ func FromLookup(lookup func(string) string) (Config, error) {
 	r := &reader{lookup: lookup}
 	cfg := Config{
 		GRPCAddr:               r.text("PAYMENTS_GRPC_ADDR", ":8000"),
+		MCPAddr:                r.text("PAYMENTS_MCP_ADDR", ":8001"),
 		ShutdownTimeout:        r.duration("PAYMENTS_SHUTDOWN_TIMEOUT", 10*time.Second),
 		DatabaseURL:            r.text("PAYMENTS_DATABASE_URL", ""),
 		MigrateDatabaseURL:     r.text("PAYMENTS_MIGRATE_DATABASE_URL", ""),
@@ -137,7 +139,7 @@ func (c Config) Validate() error {
 			problems = append(problems, errors.New(message))
 		}
 	}
-	for name, addr := range map[string]string{"PAYMENTS_GRPC_ADDR": c.GRPCAddr} {
+	for name, addr := range map[string]string{"PAYMENTS_GRPC_ADDR": c.GRPCAddr, "PAYMENTS_MCP_ADDR": c.MCPAddr} {
 		_, port, err := net.SplitHostPort(addr)
 		portNumber, convErr := strconv.Atoi(port)
 		require(err == nil && convErr == nil && portNumber >= 0 && portNumber <= 65535, name+" must be host:port")

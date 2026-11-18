@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/domain"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/metrics"
 	transport "github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/transport/grpc"
+	mcptransport "github.com/phuchoang2603/payment-gateway-fraud-detection/payments/internal/transport/mcp"
 	paymentsv1 "github.com/phuchoang2603/payment-gateway-fraud-detection/shared/proto/payments/v1"
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/shared/security/secretbox"
 )
@@ -116,7 +118,7 @@ func (a *App) Close() {
 	a.pool.Close()
 }
 
-func (a *App) Serve(ctx context.Context, grpcListener net.Listener) error {
+func (a *App) Serve(ctx context.Context, grpcListener, mcpListener net.Listener) error {
 	defer a.Close()
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus(transport.LivenessService, healthpb.HealthCheckResponse_SERVING)
@@ -128,6 +130,14 @@ func (a *App) Serve(ctx context.Context, grpcListener net.Listener) error {
 	)
 	paymentsv1.RegisterPaymentServiceServer(grpcServer, transport.NewServer(a.service))
 	healthpb.RegisterHealthServer(grpcServer, healthServer)
+
+	mcpMux := http.NewServeMux()
+	mcpMux.Handle("POST /mcp", mcptransport.NewHandler(a.service))
+	mcpServer := &http.Server{
+		Handler:           observe.HTTPServer(mcpMux, mcpMux),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 
 	background, stopBackground := context.WithCancel(context.WithoutCancel(ctx))
 	var group sync.WaitGroup
@@ -147,6 +157,7 @@ func (a *App) Serve(ctx context.Context, grpcListener net.Listener) error {
 
 	errCh := make(chan error, 2)
 	go func() { errCh <- grpcServer.Serve(grpcListener) }()
+	go func() { errCh <- mcpServer.Serve(mcpListener) }()
 
 	var serveErr error
 	select {
@@ -156,17 +167,19 @@ func (a *App) Serve(ctx context.Context, grpcListener net.Listener) error {
 
 	stopBackground()
 	healthServer.SetServingStatus("readiness", healthpb.HealthCheckResponse_NOT_SERVING)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), a.config.ShutdownTimeout)
+	defer cancel()
 	stopped := make(chan struct{})
 	go func() {
+		_ = mcpServer.Shutdown(shutdownCtx)
 		grpcServer.GracefulStop()
 		close(stopped)
 	}()
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), a.config.ShutdownTimeout)
-	defer cancel()
 	select {
 	case <-stopped:
 	case <-shutdownCtx.Done():
 		slog.Warn("graceful stop timed out; forcing stop")
+		_ = mcpServer.Close()
 		grpcServer.Stop()
 		<-stopped
 	}

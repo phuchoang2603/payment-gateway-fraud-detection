@@ -1,4 +1,5 @@
 {{- $gateway := .Values.gateway }}
+{{- $a2a := .Values.agents.a2a }}
 {{- range $name, $server := $gateway.mcpServers }}
 ---
 apiVersion: agentgateway.dev/v1alpha1
@@ -10,19 +11,23 @@ spec:
     targets:
       - name: {{ $name }}
         static:
-          host: {{ $server.service }}.{{ $.Release.Namespace }}.svc.cluster.local
+          host: {{ $server.service }}.{{ $server.namespace | default $.Release.Namespace }}.svc.cluster.local
           port: {{ $server.port }}
           path: {{ $server.path }}
           protocol: StreamableHTTP
+{{- range $agent := $.Values.agents.entryAgents }}
+{{- $analystTokens := hasKey $agent.profiles $a2a.analystClient }}
+{{- if has $name (include "llm-platform.agentServers" (dict "root" $ "agent" $agent) | fromJsonArray) }}
+{{- $route := printf "mcp-%s-%s" $agent.name $name }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: mcp-{{ $name }}
+  name: {{ $route }}
 spec:
   parentRefs:
     - name: {{ $gateway.name }}
-      sectionName: http
+      sectionName: {{ $agent.name }}
   rules:
     - matches:
         - path: {type: PathPrefix, value: /mcp/{{ $name }}}
@@ -36,25 +41,70 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: mcp-{{ $name }}
+  name: {{ $route }}
 spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
-      name: mcp-{{ $name }}
+      name: {{ $route }}
   traffic:
-    apiKeyAuthentication:
+    jwtAuthentication:
       mode: Strict
-      location:
-        header:
-          name: x-api-key
-      secretSelector:
-        matchLabels:
-          {{ $gateway.keyLabel }}: "true"
+      providers:
+        - issuer: {{ $a2a.signing.issuer }}
+          audiences: [kagent]
+          jwks:
+            inline: {{ $a2a.signing.jwks | quote }}
+        - issuer: {{ $a2a.analystIssuer }}
+          audiences: [kubeflow-oidc-authservice]
+          jwks:
+            remote:
+              url: {{ printf "%s/keys" $a2a.analystIssuer }}
+    transformation:
+      request:
+        {{- if $server.audience }}
+        set:
+          - name: x-knowledge-audience
+            value: {{ $server.audience | toJson | quote }}
+        remove: [x-fraud-caller, x-fraud-integration]
+        {{- else if and (eq $name "payments") (eq $agent.audience "merchant") }}
+        set:
+          - name: x-fraud-scope
+            value: '"integration"'
+          - name: x-fraud-integration
+            value: 'string(jwt.integration_id)'
+        remove: [x-fraud-caller, x-knowledge-audience]
+        {{- else if eq $name "payments" }}
+        set:
+          - name: x-fraud-scope
+            value: 'has(jwt.integration_id) ? "integration" : "all"'
+          - name: x-fraud-integration
+            value: 'has(jwt.integration_id) ? string(jwt.integration_id) : ""'
+        remove: [x-fraud-caller, x-knowledge-audience]
+        {{- else }}
+        remove: [x-fraud-caller, x-fraud-integration, x-knowledge-audience]
+        {{- end }}
     rateLimit:
       local:
         - requests: {{ $gateway.limits.requestsPerMinute }}
           burst: {{ $gateway.limits.burst }}
           unit: Minutes
-          key: apiKey.client
+          key: 'has(jwt.user_id) ? jwt.user_id : jwt.sub'
+  backend:
+    mcp:
+      authorization:
+        action: Require
+        policy:
+          matchExpressions:
+            - >-
+              {{- if and (eq $name "payments") (eq $agent.audience "merchant") }}
+              mcp.tool.name == "get_payment_status" &&
+              {{- end }}
+              ((jwt.iss == {{ $a2a.signing.issuer | toJson }} && has(jwt.client) &&
+              jwt.client in {{ keys $agent.profiles | sortAlpha | toJson }}{{ if not $analystTokens }} && has(jwt.integration_id){{ end }})
+              {{- if $analystTokens }}
+              || jwt.iss == {{ $a2a.analystIssuer | toJson }}
+              {{- end }})
+{{- end }}
+{{- end }}
 {{- end }}

@@ -55,3 +55,32 @@ func (q *Queries) LatestEventVersion(ctx context.Context, paymentID uuid.UUID) (
 	err := row.Scan(&version)
 	return version, err
 }
+
+const listEventPayloads = `-- name: ListEventPayloads :many
+SELECT payload FROM payment_events WHERE payment_id = $1 AND event_type = $2 ORDER BY aggregate_version
+`
+
+type ListEventPayloadsParams struct {
+	PaymentID uuid.UUID
+	EventType string
+}
+
+func (q *Queries) ListEventPayloads(ctx context.Context, arg ListEventPayloadsParams) ([][]byte, error) {
+	rows, err := q.db.Query(ctx, listEventPayloads, arg.PaymentID, arg.EventType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items [][]byte
+	for rows.Next() {
+		var payload []byte
+		if err := rows.Scan(&payload); err != nil {
+			return nil, err
+		}
+		items = append(items, payload)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

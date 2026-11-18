@@ -38,6 +38,7 @@ spec:
     config.storage.replication.factor: -1
     status.storage.replication.factor: -1
     metadata.recovery.strategy: none
+    plugin.discovery: service_load
   template:
     pod:
       metadata:

@@ -2,7 +2,7 @@
 {{- if $svc.networkPolicy.enabled }}
 {{- $callers := $svc.mesh.callers }}
 {{- range $svc.mesh.rules }}
-{{- $callers = concat $callers .callers }}
+{{- $callers = concat $callers (.callers | default list) }}
 {{- end }}
 {{- $from := deepCopy $svc.networkPolicy.ingressFrom }}
 {{- if not $from }}

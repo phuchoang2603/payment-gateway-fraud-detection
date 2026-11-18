@@ -33,7 +33,7 @@ type running struct {
 
 func testConfig(databaseURL, fraudAddr, processorAddr string) config.Config {
 	return config.Config{
-		GRPCAddr: "127.0.0.1:0", ShutdownTimeout: 500 * time.Millisecond,
+		GRPCAddr: "127.0.0.1:0", MCPAddr: "127.0.0.1:0", ShutdownTimeout: 500 * time.Millisecond,
 		DatabaseURL: databaseURL, RedisAddr: closedAddr, RedisTimeout: 50 * time.Millisecond,
 		FraudAddr: fraudAddr, ProcessorAddr: processorAddr,
 		EncryptionKey: []byte("0123456789abcdef0123456789abcdef"), CheckoutTokenKey: []byte("checkout-token-key-for-tests-0123456789"),
@@ -53,11 +53,15 @@ func startApp(t *testing.T, cfg config.Config) *running {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mcpListener, err := net.Listen("tcp", cfg.MCPAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_ = application.Serve(ctx, grpcListener)
+		_ = application.Serve(ctx, grpcListener, mcpListener)
 	}()
 	conn, err := grpc.NewClient(grpcListener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {

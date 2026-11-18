@@ -71,7 +71,7 @@ func TestEachAgentKeepsItsOwnBaselineAndUnboundAgentsAreUntouched(t *testing.T) 
 	if *other.Temperature != 0.3 || *live.Temperature != 0.1 {
 		t.Fatalf("other %v, evidence %v", *other.Temperature, *live.Temperature)
 	}
-	if _, err := prompts.BeforeModel(callbackContext{agent: "coordinator", session: "s1"}, &model.LLMRequest{}); err != nil {
+	if _, err := prompts.BeforeModel(callbackContext{agent: "analyst_assistant", session: "s1"}, &model.LLMRequest{}); err != nil {
 		t.Fatal(err)
 	}
 	if *other.Temperature != 0.3 || *live.Temperature != 0.1 {

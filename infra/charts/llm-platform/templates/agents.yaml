@@ -6,40 +6,34 @@
 {{- $runtime := $agents.runtime.image }}
 {{- $digest := index (.Values.global.imageDigests | default dict) $runtime }}
 {{- $runtimeImage := ternary (printf "%s@%s" $runtime $digest) (printf "%s:%s" $runtime (index .Values.global.imageTags $runtime)) (not (empty $digest)) }}
+{{- $models := list (dict "name" $agents.modelConfig "baseUrl" (printf "%s/v1" $gatewayUrl)) }}
+{{- range $agent := $agents.entryAgents }}
+{{- if ne (include "llm-platform.humanInput" $agent) "true" }}
+{{- $models = append $models (dict "name" (include "llm-platform.modelConfig" (dict "root" $ "agent" $agent)) "baseUrl" (printf "%s:%d/v1" $gatewayUrl (int $agent.port)) "passthrough" true) }}
+{{- end }}
+{{- end }}
+{{- range $model := $models }}
 apiVersion: api.kagent.dev/v1alpha3
 kind: ModelConfig
 metadata:
-  name: {{ $agents.modelConfig }}
+  name: {{ $model.name }}
   namespace: {{ $ns }}
 spec:
   provider: OpenAI
-  model: {{ .Values.models.chat.name }}
+  model: {{ $.Values.models.chat.name }}
+  {{- if $model.passthrough }}
+  tokenPassthrough: true
+  {{- else }}
   apiKeySecret: llm-gateway-agents
   apiKeySecretKey: key
+  {{- end }}
   openAI:
-    baseUrl: {{ $gatewayUrl }}/v1
-    {{- with .Values.models.chat.sampling }}
+    baseUrl: {{ $model.baseUrl }}
+    {{- with $.Values.models.chat.sampling }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-{{- range $name, $server := .Values.gateway.mcpServers }}
 ---
-apiVersion: api.kagent.dev/v1alpha3
-kind: RemoteMCPServer
-metadata:
-  name: {{ $name }}
-  namespace: {{ $ns }}
-spec:
-  description: {{ $server.description | quote }}
-  url: {{ $gatewayUrl }}/mcp/{{ $name }}
-  protocol: STREAMABLE_HTTP
-  headersFrom:
-    - name: x-api-key
-      valueFrom:
-        type: Secret
-        name: llm-gateway-agents
-        key: key
 {{- end }}
----
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -124,36 +118,90 @@ spec:
         query: >-
           sum(max by (ate_worker_state) (ate_workerpool_workers{ate_workerpool_namespace="{{ $ns }}",ate_workerpool_name="{{ $pool.name }}",ate_worker_state=~"partial|at_capacity"}))
         threshold: {{ $pool.autoscaling.busyWorkersPerReplica | quote }}
-{{- range $agent := $agents.list }}
+{{- range $agent := $agents.entryAgents }}
+{{- $modelConfig := include "llm-platform.modelConfig" (dict "root" $ "agent" $agent) }}
+{{- range $name := include "llm-platform.agentServers" (dict "root" $ "agent" $agent) | fromJsonArray }}
+{{- $server := index $.Values.gateway.mcpServers $name }}
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: RemoteMCPServer
+metadata:
+  name: {{ $agent.name }}-{{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    kagent.dev/discovery: disabled
+spec:
+  description: {{ $server.description | quote }}
+  url: {{ $gatewayUrl }}:{{ $agent.port }}/mcp/{{ $name }}
+  protocol: STREAMABLE_HTTP
+  tokenPassthrough: true
+{{- end }}
+{{- $bindings := list }}
+{{- range $name := $agent.mcpServers | default list }}
+{{- $resolved := include "llm-platform.mcpServer" (dict "root" $ "name" $name "audience" $agent.audience) }}
+{{- /* No tool list: the agent gets every tool the server lists, discovered at runtime. */}}
+{{- $bindings = append $bindings (dict "mcp" (dict "server" (dict "kind" "RemoteMCPServer" "name" (printf "%s-%s" $agent.name $resolved)))) }}
+{{- end }}
+{{- range $name := $agent.agents }}
+{{- $specialist := index $agents.specialists $name }}
+{{- /* kagent compiles the template into this agent's runtime as an ADK sub-agent named after the binding; the
+runtime reads that agent's Langfuse prompt by the same name. */}}
+{{- $bindings = append $bindings (dict "subAgent" (dict "name" ($name | replace "-" "_") "description" $specialist.description "templateRef" (dict "name" (printf "%s-%s" $name $agent.name)))) }}
 {{- $tools := list }}
-{{- range $server := $agent.mcpServers | default list }}
-{{- $_ := required (printf "gateway.mcpServers.%s is not defined" $server) (index $.Values.gateway.mcpServers $server) }}
-{{- $tools = append $tools (dict "mcp" (dict "server" (dict "kind" "RemoteMCPServer" "name" $server))) }}
+{{- range $server := $specialist.mcpServers }}
+{{- $resolved := include "llm-platform.mcpServer" (dict "root" $ "name" $server "audience" $agent.audience) }}
+{{- $tools = append $tools (dict "mcp" (dict "server" (dict "kind" "RemoteMCPServer" "name" (printf "%s-%s" $agent.name $resolved)))) }}
 {{- end }}
-{{- range $name := $agent.agents | default list }}
-{{- $target := dict }}
-{{- range $candidate := $agents.list }}
-{{- if eq $candidate.name $name }}{{ $target = $candidate }}{{ end }}
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: {{ $name }}-{{ $agent.name }}
+  namespace: {{ $ns }}
+spec:
+  modelConfig:
+    name: {{ $modelConfig }}
+  description: {{ $specialist.description | quote }}
+  tools:
+    {{- toYaml $tools | nindent 4 }}
 {{- end }}
-{{- $tools = append $tools (dict "subAgent" (dict "name" ($name | replace "-" "_") "description" (required (printf "agents.list has no %s" $name) $target.description) "templateRef" (dict "name" $name))) }}
-{{- end }}
-{{- $template := dict "modelConfig" (dict "name" $agents.modelConfig) "description" $agent.description }}
-{{- with $tools }}
-{{- $_ := set $template "tools" . }}
-{{- end }}
-{{- if $agent.entry }}
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: {{ $agent.name }}
+  namespace: {{ $ns }}
+spec:
+  modelConfig:
+    name: {{ $modelConfig }}
+  description: {{ $agent.description | quote }}
+  tools:
+    {{- toYaml $bindings | nindent 4 }}
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: EgressPolicy
+metadata:
+  name: {{ $agent.name }}-gateway
+  namespace: {{ $ns }}
+spec:
+  destinations:
+    - origin: {{ $gatewayUrl }}:{{ $agent.port }}
 ---
 apiVersion: api.kagent.dev/v1alpha3
 kind: Harness
 metadata:
   name: {{ $agent.name }}
   namespace: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   kagent: {}
   workload:
     image: {{ $runtimeImage }}
     command: [/app/agent-runtime]
   env:
+    - name: AGENT_POLICY
+      value: {{ include "llm-platform.agentPolicy" (dict "root" $ "agent" $agent) | quote }}
     - name: LANGFUSE_HOST
       value: {{ $langfuseOrigin }}
     - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
@@ -179,6 +227,8 @@ kind: Agent
 metadata:
   name: {{ $agent.name }}
   namespace: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/version: {{ $agent.version | quote }}
 spec:
@@ -189,13 +239,5 @@ spec:
     name: {{ $agent.name }}
   egressPolicyRefs:
     - name: langfuse
-{{- end }}
----
-apiVersion: api.kagent.dev/v1alpha3
-kind: AgentTemplate
-metadata:
-  name: {{ $agent.name }}
-  namespace: {{ $ns }}
-spec:
-  {{- toYaml $template | nindent 2 }}
+    - name: {{ $agent.name }}-gateway
 {{- end }}

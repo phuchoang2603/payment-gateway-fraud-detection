@@ -50,16 +50,21 @@ The desired tunnel origin for both Istio ingress Services is **port 80**, not th
 
 ## Internal API and data endpoints
 
-The `llm/agentgateway` is a separate ClusterIP Gateway with class `agentgateway`. Its `http` listener (port 80) carries the internal routes below. Its `public` listener (port 8080) carries only the two data-pull REST routes, matched by their public hostnames, and is the only target of its [tunnel bindings](../../infra/charts/llm-platform/templates/apis.yaml); the tunnel connector runs outside the mesh, so the gateway's mesh policy admits port 8080 from any source and the routes' client keys do the authentication.
+The `llm/agentgateway` is a separate ClusterIP Gateway with class `agentgateway`. Its `http` listener (port 80) carries model and data routes; its dedicated merchant (8081) and analyst (8082) listeners carry native caller JWTs, separately from model egress credentials. Its `public` listener (port 8080) carries only the two data-pull REST routes, matched by their public hostnames, and is the only target of its [tunnel bindings](../../infra/charts/llm-platform/templates/apis.yaml); the tunnel connector runs outside the mesh, so the gateway's mesh policy admits port 8080 from any source and the routes' client keys do the authentication.
 
 | Internal entry point | Routing | Access boundary |
 |---|---|---|
 | `agentgateway.llm.svc.cluster.local:80/v1/embeddings` | Embedding backend; the more specific prefix takes precedence over `/v1` | Client API keys, route policies and mesh identity |
 | `agentgateway.llm.svc.cluster.local:80/v1` | Chat/completions backend | Client API keys, prompt policies and rate limits |
+| `agentgateway.llm.svc.cluster.local:8083/v1` | Chat/completions and embeddings for `decline-reviewer`, without the request screen | Caller JWT, PII masking and rate limits |
 | `agentgateway.llm.svc.cluster.local:80/v1/systemone` | Exact decision route; screening requests have a separate header match | Decision-route policy and mesh identity |
 | `agentgateway.llm.svc.cluster.local:80/knowledge/v1` | Rewrite `/knowledge/v1` to `/v1` on `rag-api:8080` | Client API keys and route policy |
-| `agentgateway.llm.svc.cluster.local:80/mcp/knowledge` | Knowledge MCP backend | `x-api-key` policy and mesh identity |
-| `agentgateway.llm.svc.cluster.local:80/a2a/coordinator` | Coordinator A2A backend | Client-key/route policy; gateway signs the upstream JWT |
+| `agentgateway.llm.svc.cluster.local:8081/mcp/{knowledge-merchant,payments}` | Merchant knowledge and payment status | Native actor origin allowlist, caller JWT, tool authorization and mesh identity |
+| `agentgateway.llm.svc.cluster.local:8082/mcp/{knowledge,risk,payments}` | Analyst knowledge, risk and payments | Native actor origin allowlist, caller JWT and mesh identity |
+| `agentgateway.llm.svc.cluster.local:8083/mcp/{knowledge,risk,payments}` | Decline-reviewer tools | Native actor origin allowlist, merchant JWT with an integration, and mesh identity |
+| `agentgateway.llm.svc.cluster.local:80/a2a/{analyst-assistant,merchant-assistant}` | Entry-agent A2A backends | Per-client key; gateway signs client JWTs |
+| `agentgateway.llm.svc.cluster.local:8081/a2a/internal/decline-reviewer` | Delegated decline review | Merchant origin grant and validated user JWT passthrough |
+| `payments.payment-gateway.svc.cluster.local:8001/mcp` | Read-only payments MCP transport | Gateway identity only; trusted integration scope |
 | `payment-risk-predictor.ml.svc.cluster.local:80` | Service-attached HTTPRoute through an Istio waypoint; champion/challenger weights | Internal inference and mesh policies |
 | `edge.payment-gateway.svc.cluster.local:8080` | Internal merchant API, including `/v1/payments`; stable Edge Service | Integration credentials and mesh policy; this path has no public checkout route |
 | `payments`, `fraud-service`, `vault-simulator`, `notifier`, `processor-simulator` in `payment-gateway`, port 8000 | Private Go/gRPC service calls | Service-account identities and NetworkPolicy; Vault fixture resolution uses a separate port 8001 |

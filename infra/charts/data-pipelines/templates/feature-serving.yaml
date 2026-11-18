@@ -14,9 +14,18 @@ metadata:
   name: {{ $name }}
   namespace: {{ $.Values.namespace }}
 spec:
+  {{- if eq $mode "serve" }}
+  replicas: {{ $.Values.features.serverReplicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  {{- else }}
   replicas: 1
   strategy:
     type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ $name }}
@@ -71,6 +80,10 @@ spec:
           livenessProbe:
             httpGet: {path: /health, port: http}
             periodSeconds: 10
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           {{- end }}
           volumeMounts:
             - name: runtime
@@ -153,6 +166,17 @@ spec:
           protocol: TCP
     {{- end }}
 {{- end }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: feast-server
+  namespace: {{ .Values.namespace }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: feast-server
 ---
 apiVersion: v1
 kind: Service

@@ -346,6 +346,28 @@ func (s *Store) LoadPaymentBySession(ctx context.Context, sessionID uuid.UUID) (
 	return state, err
 }
 
+func (s *Store) AttemptSignals(ctx context.Context, paymentID, attemptID uuid.UUID) (*paymentsv1.AttemptSignals, error) {
+	var signals *paymentsv1.AttemptSignals
+	err := s.readSnapshot(ctx, func(q *sqlcgen.Queries) error {
+		payloads, err := q.ListEventPayloads(ctx, sqlcgen.ListEventPayloadsParams{PaymentID: paymentID, EventType: "attempt_started"})
+		if err != nil {
+			return fmt.Errorf("list attempt events: %w", err)
+		}
+		for _, payload := range payloads {
+			event := &paymentsv1.PaymentEvent{}
+			if err := proto.Unmarshal(payload, event); err != nil {
+				return fmt.Errorf("unmarshal attempt event: %w", err)
+			}
+			if started := event.GetAttemptStarted(); started.GetAttemptId() == attemptID.String() {
+				signals = started.GetSignals()
+				return nil
+			}
+		}
+		return application.ErrNotFound
+	})
+	return signals, err
+}
+
 func loadState(ctx context.Context, q *sqlcgen.Queries, paymentID uuid.UUID) (domain.State, error) {
 	row, err := q.GetPayment(ctx, paymentID)
 	if err != nil {

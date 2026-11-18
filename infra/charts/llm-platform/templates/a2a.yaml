@@ -1,7 +1,17 @@
 {{- $gateway := .Values.gateway }}
-{{- $agents := .Values.agents }}
-{{- $controller := $agents.a2a.controller }}
-{{- $signing := $agents.a2a.signing }}
+{{- $a2a := .Values.agents.a2a }}
+{{- $signing := $a2a.signing }}
+{{- $reviews := dict }}
+{{- range .Values.agents.entryAgents }}
+{{- $owner := . }}
+{{- range $name, $skill := (.remoteSkills | default dict) }}
+{{- $_ := set $reviews (printf "%s-%s" $owner.name $skill.agent) (dict "listener" $owner.name "port" $owner.port "agent" $skill.agent) }}
+{{- end }}
+{{- end }}
+{{- $integrated := list }}
+{{- range $client, $config := $a2a.clients }}
+{{- if $config.integration }}{{ $integrated = append $integrated ($config.profile | default $client) }}{{ end }}
+{{- end }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -17,75 +27,227 @@ spec:
     - secretKey: signingKey
       remoteRef:
         key: {{ $signing.remoteKey }}
-{{- $routes := list }}
-{{- range $agent := $agents.list }}
-{{- if $agent.entry }}
+{{- range $client, $config := $a2a.clients }}
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
-  name: a2a-{{ $agent.name }}
+  name: a2a-{{ $client }}
 spec:
   a2a:
-    host: {{ $controller.host }}
-    port: {{ $controller.port }}
+    host: {{ $a2a.controller.host }}
+    port: {{ $a2a.controller.port }}
   policies:
     auth:
       jwtSign:
         signingKeyRef:
           name: {{ $signing.secret }}
         alg: {{ $signing.alg }}
+        kid: {{ $signing.kid }}
         ttl: {{ $signing.ttl }}
         claims:
-          {{- toYaml $signing.claims | nindent 10 }}
+          iss: {{ $signing.issuer }}
+          sub: {{ $signing.subject }}
+          aud: kagent
+          client: {{ $config.profile | default $client }}
+          user_id: {{ if $config.integration }}{{ printf "%s:%s" $client $config.integration | quote }}{{ else }}{{ $client }}{{ end }}
+          {{- with $config.integration }}
+          integration_id: {{ . | quote }}
+          {{- end }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: a2a-{{ $agent.name }}
+  name: a2a-{{ $client }}
 spec:
   parentRefs:
     - name: {{ $gateway.name }}
       sectionName: http
   rules:
     - matches:
-        - path: {type: PathPrefix, value: /a2a/{{ $agent.name }}}
+        - path: {type: PathPrefix, value: /a2a/{{ $config.agent }}}
       backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
-          name: a2a-{{ $agent.name }}
+          name: a2a-{{ $client }}
       filters:
         - type: URLRewrite
           urlRewrite:
             path:
               type: ReplacePrefixMatch
-              replacePrefixMatch: /agents/{{ $agents.namespace }}/{{ $agent.name }}
+              replacePrefixMatch: /agents/{{ $.Values.agents.namespace }}/{{ $config.agent }}
       timeouts:
         request: 600s
-{{- $routes = append $routes (printf "a2a-%s" $agent.name) }}
-{{- end }}
-{{- end }}
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: a2a
+  name: a2a-{{ $client }}
 spec:
   targetRefs:
-    {{- range $route := $routes }}
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
-      name: {{ $route }}
-    {{- end }}
+      name: a2a-{{ $client }}
   traffic:
     apiKeyAuthentication:
       mode: Strict
+      location:
+        header:
+          name: x-api-key
       secretSelector:
         matchLabels:
           {{ $gateway.keyLabel }}: "true"
+    authorization:
+      action: Require
+      policy:
+        matchExpressions:
+          - {{ printf "apiKey.client == %q" $client | quote }}
+    transformation:
+      request:
+        remove: [authorization, x-fraud-caller, x-fraud-integration]
     rateLimit:
       local:
         - requests: {{ $gateway.limits.requestsPerMinute }}
           burst: {{ $gateway.limits.burst }}
           unit: Minutes
           key: apiKey.client
+{{- end }}
+{{- if $reviews }}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: a2a-review-card
+spec:
+  a2a:
+    host: {{ $a2a.controller.host }}
+    port: {{ $a2a.controller.port }}
+  policies:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: {{ $signing.secret }}
+        alg: {{ $signing.alg }}
+        kid: {{ $signing.kid }}
+        ttl: {{ $signing.ttl }}
+        claims:
+          iss: {{ $signing.issuer }}
+          sub: {{ $signing.subject }}
+          aud: kagent
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: a2a-review
+spec:
+  a2a:
+    host: {{ $a2a.controller.host }}
+    port: {{ $a2a.controller.port }}
+  policies:
+    auth:
+      passthrough: {}
+{{- range $key, $review := $reviews }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: a2a-review-{{ $key }}
+spec:
+  parentRefs:
+    - name: {{ $gateway.name }}
+      sectionName: {{ $review.listener }}
+  rules:
+    - name: card
+      matches:
+        - method: GET
+          path: {type: Exact, value: /a2a/internal/{{ $review.agent }}}
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: a2a-review-card
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /agents/{{ $.Values.agents.namespace }}/{{ $review.agent }}/.well-known/agent-card.json
+    - name: call
+      matches:
+        - method: POST
+          path: {type: PathPrefix, value: /a2a/internal/{{ $review.agent }}}
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: a2a-review
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /agents/{{ $.Values.agents.namespace }}/{{ $review.agent }}
+      timeouts:
+        request: 600s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: a2a-review-{{ $key }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: a2a-review-{{ $key }}
+  traffic:
+    transformation:
+      request:
+        remove: [x-fraud-caller, x-fraud-integration]
+    rateLimit:
+      local:
+        - requests: {{ $gateway.limits.requestsPerMinute }}
+          burst: {{ $gateway.limits.burst }}
+          unit: Minutes
+          key: 'has(jwt.user_id) ? jwt.user_id : jwt.sub'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: a2a-review-card-host-{{ $key }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: a2a-review-{{ $key }}
+      sectionName: card
+  traffic:
+    transformation:
+      request:
+        set:
+          - name: host
+            value: {{ printf "\"%s.%s.svc.cluster.local:%d\"" $gateway.name $.Release.Namespace (int $review.port) | squote }}
+        remove: [x-fraud-caller, x-fraud-integration]
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: a2a-review-credential-{{ $key }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: a2a-review-{{ $key }}
+      sectionName: call
+  traffic:
+    jwtAuthentication:
+      mode: Strict
+      providers:
+        - issuer: {{ $signing.issuer }}
+          audiences: [kagent]
+          jwks:
+            inline: {{ $signing.jwks | quote }}
+    authorization:
+      action: Require
+      policy:
+        matchExpressions:
+          - {{ printf "has(jwt.integration_id) && jwt.client in %s" ($integrated | sortAlpha | toJson) | quote }}
+{{- end }}
+{{- end }}

@@ -193,12 +193,39 @@ services:
   payments:
     image:
       repository: ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments
+    ports:
+    - name: grpc
+      containerPort: 8000
+      appProtocol: kubernetes.io/h2c
+    - name: mcp
+      containerPort: 8001
+      appProtocol: http
     mesh:
-      callers:
-      - edge
+      rules:
+      - callers:
+        - edge
+        ports:
+        - 8000
+      - principals:
+        - cluster.local/ns/llm/sa/agentgateway
+        ports:
+        - 8001
+    networkPolicy:
+      ingressFrom:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: edge
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: llm
+        podSelector:
+          matchLabels:
+            gateway.networking.k8s.io/gateway-name: agentgateway
     env:
     - name: PAYMENTS_GRPC_ADDR
       value: :8000
+    - name: PAYMENTS_MCP_ADDR
+      value: :8001
     - name: PAYMENTS_FRAUD_ADDR
       value: fraud-service.payment-gateway.svc.cluster.local:8000
     - name: PAYMENTS_PROCESSOR_ADDR
