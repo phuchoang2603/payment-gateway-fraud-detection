@@ -1,5 +1,18 @@
 {{- $catalog_ := .Values.catalog }}
 {{- $registry := $catalog_.registry }}
+{{- $allAgents := list }}
+{{- $ports := dict }}
+{{- $defaultAudience := "" }}
+{{- range $entry := .Values.agents.entryAgents }}
+{{- if eq (include "llm-platform.humanInput" $entry) "true" }}
+{{- $defaultAudience = $defaultAudience | default $entry.audience }}
+{{- $_ := set $ports $entry.audience $entry.port }}
+{{- end }}
+{{- $allAgents = append $allAgents (merge (dict "entry" true) (deepCopy $entry)) }}
+{{- end }}
+{{- range $name, $specialist := .Values.agents.specialists }}
+{{- $allAgents = append $allAgents (merge (dict "name" $name) (deepCopy $specialist)) }}
+{{- end }}
 {{- $catalog := list }}
 {{- range $name, $server := .Values.gateway.mcpServers }}
 {{- $entry := dict
@@ -8,23 +21,21 @@
   "metadata" (dict "name" $name "tag" $server.version)
   "spec" (dict
     "title" $server.title
-    "description" (printf "%s Served through the agent gateway with an agent key." $server.description)
-    "remote" (dict "type" "streamable-http" "url" (printf "http://%s.%s.svc.cluster.local/mcp/%s" $.Values.gateway.name $.Release.Namespace $name))) }}
+    "description" (printf "%s Served through the permitted entry agent listener with native caller-token propagation." $server.description)
+    "remote" (dict "type" "streamable-http" "url" (printf "http://%s.%s.svc.cluster.local:%v/mcp/%s" $.Values.gateway.name $.Release.Namespace (index $ports ($server.audience | default $defaultAudience)) $name))) }}
 {{- $catalog = append $catalog (toYaml $entry) }}
 {{- end }}
-{{- range $agent := .Values.agents.list }}
+{{- range $agent := $allAgents }}
 {{- $notes := list (printf "%s through the agent gateway; each agent's system prompt and A/B test in Langfuse as <agent>-system-prompt." $.Values.models.chat.name) }}
 {{- if not $agent.entry }}
-{{- $notes = append $notes "Runs inside the coordinator, which hands it questions; it is not called on its own." }}
+{{- $notes = append $notes "Compiled as a local specialist inside the entry agents that name it; it is not deployed independently." }}
 {{- end }}
 {{- $servers := $agent.mcpServers | default list }}
+{{- if $agent.entry }}
+{{- $servers = include "llm-platform.agentServers" (dict "root" $ "agent" $agent) | fromJsonArray }}
+{{- end }}
 {{- with $agent.agents }}
 {{- $notes = append $notes (printf "Hands questions to its sub-agents %s, which run inside it." (join ", " .)) }}
-{{- range $name := . }}
-{{- range $candidate := $.Values.agents.list }}
-{{- if eq $candidate.name $name }}{{ $servers = concat $servers ($candidate.mcpServers | default list) }}{{ end }}
-{{- end }}
-{{- end }}
 {{- end }}
 {{- $entry := dict
   "apiVersion" "ar.dev/v1alpha1"
@@ -36,6 +47,11 @@
     "source" (dict
       "repository" (dict "url" $registry.repository "subfolder" "infra/charts/llm-platform")
       "protocol" "A2A")) }}
+{{- with $agent.remoteSkills }}
+{{- range $name, $skill := . }}
+{{- $_ := set $entry.spec "description" (printf "%s Calls remote skill %s, served by %s through the gateway's internal A2A route." $entry.spec.description $name $skill.agent) }}
+{{- end }}
+{{- end }}
 {{- with uniq $servers }}
 {{- $refs := list }}
 {{- range $server := . }}
@@ -46,14 +62,14 @@
 {{- $catalog = append $catalog (toYaml $entry) }}
 {{- end }}
 {{- $agentList := list }}
-{{- range $agent := .Values.agents.list }}
+{{- range $agent := $allAgents }}
 {{- $agentList = append $agentList (pick $agent "name" "version" "abTest") }}
 {{- end }}
 {{- $data := dict
   "registry.yaml" (join "\n---\n" $catalog)
   "agents.json" (toJson $agentList)
   "publish.py" (.Files.Get "files/catalog.py") }}
-{{- range $agent := .Values.agents.list }}
+{{- range $agent := $allAgents }}
 {{- $_ := set $data (printf "prompt-%s.md" $agent.name) ($.Files.Get (printf "files/prompts/%s.md" $agent.name)) }}
 {{- end }}
 {{- $hash := $data | toJson | sha256sum | trunc 10 }}

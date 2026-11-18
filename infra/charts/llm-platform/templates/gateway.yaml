@@ -38,6 +38,22 @@ spec:
       allowedRoutes:
         namespaces:
           from: Same
+    {{- range .Values.agents.entryAgents }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- if .modelPort }}
+    - name: {{ .name }}-model
+      port: {{ .modelPort }}
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+    {{- end }}
     - name: public
       port: {{ $gateway.public.port }}
       protocol: HTTP
@@ -182,15 +198,24 @@ spec:
     ai:
       routes:
         /v1/systemone: SystemOne
+{{- /* The LLM route screens the latest user message. An agent that only other agents call (humanInput: false) has its
+own model listener and route without the screen, so what it receives never passes through it. */}}
+{{- $routes := list (dict "name" "llm" "listener" "http" "screened" true) }}
+{{- range $agent := .Values.agents.entryAgents }}
+{{- if ne (include "llm-platform.humanInput" $agent) "true" }}
+{{- $routes = append $routes (dict "name" (printf "llm-%s" $agent.name) "listener" (printf "%s-model" $agent.name) "screened" false "overrides" $agent.modelOverrides) }}
+{{- end }}
+{{- end }}
+{{- range $route := $routes }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: llm
+  name: {{ $route.name }}
 spec:
   parentRefs:
     - name: {{ $gateway.name }}
-      sectionName: http
+      sectionName: {{ $route.listener }}
   rules:
     - matches:
         - path: {type: PathPrefix, value: /v1/embeddings}
@@ -219,12 +244,12 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: llm
+  name: {{ $route.name }}
 spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
-      name: llm
+      name: {{ $route.name }}
   traffic:
     apiKeyAuthentication:
       mode: Strict
@@ -246,6 +271,13 @@ spec:
         /v1/chat/completions: Completions
         /v1/embeddings: Embeddings
         /v1/models: Models
+      {{- with $route.overrides }}
+      overrides:
+        {{- range $field, $value := . }}
+        - field: {{ $field }}
+          value: {{ $value | toJson }}
+        {{- end }}
+      {{- end }}
       promptGuard:
         request:
           - regex:
@@ -253,6 +285,9 @@ spec:
               builtins: [CreditCard, Email]
               matches:
                 {{- toYaml $gateway.piiPatterns | nindent 16 }}
+          {{- if $route.screened }}
+          # Runs after masking, so the decision model never sees the masked values. The webhook calls the gateway's
+          # /v1/systemone route with the screen header.
           - webhook:
               action: Reject
               failureMode: {{ $gateway.screening.failureMode }}
@@ -263,9 +298,11 @@ spec:
               headers:
                 ":path": '"/v1/systemone"'
                 x-llm-screen: '"request"'
+          {{- end }}
         response:
           - regex:
               action: Mask
               builtins: [CreditCard, Email]
               matches:
                 {{- toYaml $gateway.piiPatterns | nindent 16 }}
+{{- end }}

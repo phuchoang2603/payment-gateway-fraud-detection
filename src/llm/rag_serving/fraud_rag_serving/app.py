@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi import Path as PathParam
 from fraud_rag_common import store
 from fraud_rag_common.gateway import Embedder
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from prometheus_client import Counter, make_asgi_app
 from pydantic import BaseModel, Field
@@ -41,11 +41,10 @@ class Chunk(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    """Bound semantic-search input size, result count and optional audience."""
+    """Bound semantic-search input size and result count."""
 
     query: str = Field(min_length=1, max_length=2000)
     top_k: int = Field(default=5, ge=1, le=20)
-    audience: Audience | None = None
 
 
 class SearchHit(BaseModel):
@@ -96,17 +95,17 @@ class Knowledge:
         rows = await asyncio.to_thread(store.read, feature_store, [chunk_id])
         return Chunk(**rows[0]) if rows and rows[0] else None
 
-    async def search(self, request: SearchRequest) -> SearchResponse:
+    async def search(self, request: SearchRequest, audience: Audience | None = None) -> SearchResponse:
         """Embed once, retrieve candidates and filter passages by the requested audience."""
         feature_store = await self.store()
         vector = await self.embedder.query(self.client, request.query)
-        depth = request.top_k * 3 if request.audience else request.top_k
+        depth = request.top_k * 3 if audience else request.top_k
         candidates = await asyncio.to_thread(store.search, feature_store, vector, depth)
         rows = await asyncio.to_thread(store.read, feature_store, [chunk_id for chunk_id, _ in candidates])
         hits = [
             SearchHit(distance=distance, chunk=Chunk(**row))
             for (_, distance), row in zip(candidates, rows)
-            if row and (request.audience is None or row["audience"] in (request.audience, "both"))
+            if row and (audience is None or row["audience"] in (audience, "both"))
         ]
         return SearchResponse(hits=sorted(hits, key=lambda hit: hit.distance)[: request.top_k])
 
@@ -129,26 +128,34 @@ async def counted(tool: str, call):
     return result
 
 
-async def find_chunk(chunk_id: str) -> Chunk:
+async def find_chunk(chunk_id: str, audience: Audience | None) -> Chunk:
     """Resolve a passage or raise the MCP tool’s unknown-ID error."""
     found = await knowledge.chunk(chunk_id)
-    if found is None:
+    if found is None or (audience is not None and found.audience not in (audience, "both")):
         raise ValueError(f"unknown chunk_id: {chunk_id}")
     return found
 
 
+def request_audience(ctx: Context) -> Audience | None:
+    request = ctx.request_context.request
+    value = request.headers.get("x-knowledge-audience") if request is not None else None
+    if value not in (None, "analyst", "merchant"):
+        raise ValueError("invalid knowledge audience")
+    return value
+
+
 @mcp.tool()
-async def search_knowledge(query: str, top_k: int = 5, audience: Audience | None = None) -> SearchResponse:
+async def search_knowledge(query: str, ctx: Context, top_k: int = 5) -> SearchResponse:
     """Search the payment-gateway knowledge base: decline codes, risk policy, payment lifecycle,
     checkout API, features and support guidance. Returns passages with their chunk_id."""
-    request = SearchRequest(query=query, top_k=top_k, audience=audience)
-    return await counted("search_knowledge", knowledge.search(request))
+    request = SearchRequest(query=query, top_k=top_k)
+    return await counted("search_knowledge", knowledge.search(request, request_audience(ctx)))
 
 
 @mcp.tool()
-async def get_knowledge_chunk(chunk_id: str) -> Chunk:
+async def get_knowledge_chunk(chunk_id: str, ctx: Context) -> Chunk:
     """Return one knowledge-base passage by its chunk_id, for example 'decline-codes#high-amount'."""
-    return await counted("get_knowledge_chunk", find_chunk(chunk_id))
+    return await counted("get_knowledge_chunk", find_chunk(chunk_id, request_audience(ctx)))
 
 
 mcp_app = mcp.streamable_http_app(

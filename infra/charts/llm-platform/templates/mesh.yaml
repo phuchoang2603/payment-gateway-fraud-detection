@@ -91,6 +91,23 @@ spec:
               - {{ . | quote }}
               {{- end }}
               - {{ .Values.agents.egressGateway | quote }}
+      to:
+        - operation:
+            ports: ["80"]
+    - from:
+        - source:
+            principals:
+              - {{ .Values.agents.egressGateway | quote }}
+              - cluster.local/ns/kagent/sa/kagent-controller
+      to:
+        - operation:
+            ports:
+              {{- range .Values.agents.entryAgents }}
+              - {{ .port | quote }}
+              {{- with .modelPort }}
+              - {{ . | quote }}
+              {{- end }}
+              {{- end }}
     - to:
         - operation:
             ports: ["15020"]

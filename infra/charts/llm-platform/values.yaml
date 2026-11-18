@@ -107,6 +107,7 @@ gateway:
     benchmark: LLM_GATEWAY_BENCHMARK_API_KEY
     ragingest: LLM_GATEWAY_RAG_INGEST_API_KEY
     ragapi: LLM_GATEWAY_RAG_API_KEY
+    analyst-ui: LLM_GATEWAY_ANALYST_UI_API_KEY
   clientNamespaces:
     agents: llm-agents
   limits:
@@ -143,7 +144,7 @@ gateway:
       service: rag-api
       port: 8080
       path: /mcp
-      version: 0.1.0
+      version: 0.2.0
       title: Payment-gateway knowledge base
       description: Search and read passages about decline codes, risk policy, the payment lifecycle, the checkout API and fraud features.
     risk:
@@ -153,13 +154,32 @@ gateway:
       version: 0.1.0
       title: Payment risk scoring
       description: Read-only online features and what-if scoring with the served fraud model; drivers are not attributions.
+    knowledge-merchant:
+      serves: knowledge
+      service: rag-api
+      port: 8080
+      path: /mcp
+      audience: merchant
+      version: 0.2.0
+      title: Merchant knowledge base
+      description: Merchant and shared payment guidance, without analyst-only knowledge.
+    payments:
+      service: payments
+      namespace: payment-gateway
+      port: 8001
+      path: /mcp
+      version: 0.1.0
+      title: Read-only payment queries
+      description: Integration-scoped payment status and analyst risk inputs.
 
   apiRoutes:
     knowledge:
+      clients: [benchmark, analyst-ui]
       service: rag-api
       port: 8080
       hostname: knowledge.phuchoang.sbs
     risk:
+      clients: [benchmark, analyst-ui]
       service: risk-serving
       port: 8080
       hostname: customer-features.phuchoang.sbs
@@ -198,37 +218,152 @@ agents:
       secret: kagent-gateway-signing-key
       remoteKey: KAGENT_GATEWAY_SIGNING_KEY
       alg: ES256
+      kid: gateway-signing
       ttl: 300s
-      claims: {iss: "urn:platform:kagent:gateway", sub: agentgateway, aud: kagent}
-  list:
-    - name: evidence-agent
-      version: 0.3.0
+      issuer: urn:platform:kagent:gateway
+      subject: agentgateway
+      jwks: '{"keys":[{"kty":"EC","crv":"P-256","x":"NavrGdA_xoEL7-lPXnCShh8nbZ5PxnFeT-q7gsEEZy4","y":"91MePK63xtPJixjHab9snqFcTJdqrliiIXBUFV9ImS0","use":"sig","alg":"ES256","kid":"gateway-signing"}]}'
+    analystIssuer: https://auth.phuchoang.sbs/dex
+    analystClient: analyst-ui
+    userIdClaim: user_id
+    clients:
+      analyst-ui:
+        agent: analyst-assistant
+  specialists:
+    evidence-agent:
+      version: 0.4.0
       title: Evidence agent
-      description: Read-only fraud-analyst agent that explains declines, risk decisions and payment behaviour from the knowledge base, citing its passages.
+      description: Read-only payment guidance from audience-scoped knowledge, citing retrieved passages.
       mcpServers: [knowledge]
       abTest:
         label: variant-b
         share: 0.5
         addendum: Answer in at most five sentences, then list the passages you cited.
-    - name: risk-agent
-      version: 0.3.0
-      mcpServers: [risk, knowledge]
+    risk-agent:
+      version: 0.4.0
       title: Risk agent
-      description: Read-only agent that assesses the fraud risk of one payment, card or customer from its online features and the fraud model's score, explains what drives it, and cites the knowledge base for what a code or policy means.
+      description: Read-only what-if risk assessment from recorded payment inputs and online features.
+      mcpServers: [payments, risk, knowledge]
       abTest:
         label: variant-b
         share: 0.5
         addendum: Start with the returned probability and model version, then give up to three drivers with the attribution caveat; if scoring failed, report the error without a risk level.
-    - name: coordinator
+  profileBases:
+    analyst:
+      tools: [get_payment_status, get_attempt_risk_inputs, get_risk_features, score_payment_risk, search_knowledge, get_knowledge_chunk]
+      limits:
+        toolCalls: 16
+        remoteCalls: 0
+  # NOTE: kagent does not admit one origin for both token-passthrough tool calls and model calls, so an agent with `humanInput: false` takes its model calls on its own unscreened `modelPort` listener.
+  entryAgents:
+    - name: analyst-assistant
+      port: 8082
+      audience: analyst
       version: 0.2.0
-      title: Coordinator
-      description: Read-only entry agent for fraud analysts that hands each question to the evidence or risk agent.
-      entry: true
+      title: Analyst assistant
+      description: Read-only analyst entry agent for decline codes, risk decisions and payment behaviour.
       agents: [evidence-agent, risk-agent]
+      mcpServers: [payments, knowledge]
       abTest:
         label: variant-b
         share: 0.5
         addendum: Before you transfer, tell the analyst in one sentence which specialist will answer and why.
+      profiles:
+        analyst-ui:
+          extends: analyst
+          fromUser:
+            get_payment_status: [integration_id, payment_id]
+            get_attempt_risk_inputs: [integration_id, payment_id]
+            get_risk_features: [request.integration_id, request.customer_id, request.payment_method_fingerprint]
+            score_payment_risk: [request.integration_id, request.customer_id, request.payment_method_fingerprint]
+    - name: decline-reviewer
+      port: 8083
+      modelPort: 8084
+      audience: analyst
+      humanInput: false
+      # NOTE: thinking keeps the reasoning out of the answer, so the final message is only the JSON result.
+      modelOverrides:
+        chat_template_kwargs:
+          enable_thinking: true
+      version: 0.1.0
+      title: Decline reviewer
+      description: Independent analyst review of one declined payment, called by merchant-assistant; it returns only merchant-safe fields.
+      mcpServers: [payments, risk, knowledge]
+      profiles:
+        merchant:
+          extends: analyst
+          fromUser:
+            get_payment_status: [payment_id]
+            get_attempt_risk_inputs: [payment_id]
+            get_risk_features: [request.customer_id, request.payment_method_fingerprint]
+            score_payment_risk: [request.customer_id, request.payment_method_fingerprint]
+          bind:
+            get_payment_status:
+              integration_id: integration
+            get_attempt_risk_inputs:
+              integration_id: integration
+            get_risk_features:
+              request.integration_id: integration
+            score_payment_risk:
+              request.integration_id: integration
+          input:
+            schema:
+              type: object
+              properties:
+                payment_id:
+                  type: string
+                  pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              required: [payment_id]
+              additionalProperties: false
+          output:
+            schema:
+              type: object
+              properties:
+                payment_id:
+                  type: string
+                reason_code:
+                  type: string
+                merchant_wording:
+                  type: string
+                review_outcome:
+                  type: string
+                  enum: [needs_analyst_review, consistent_with_policy]
+                retry_advice:
+                  type: string
+              required: [payment_id, reason_code, merchant_wording, review_outcome, retry_advice]
+              additionalProperties: false
+            forbidden: [score, features, drivers, model, model_version, decline_threshold, risk_inputs]
+    - name: merchant-assistant
+      port: 8081
+      audience: merchant
+      version: 0.1.0
+      title: Merchant assistant
+      description: Read-only merchant payment status and decline explanations through an independent analyst review.
+      agents: [evidence-agent]
+      mcpServers: [payments]
+      abTest:
+        label: variant-b
+        share: 0.5
+        addendum: Before you call review_decline, tell the merchant in one sentence that an independent review is under way.
+      profiles:
+        merchant:
+          tools: [get_payment_status, search_knowledge, get_knowledge_chunk]
+          remoteSkills: [review_decline]
+          bind:
+            get_payment_status:
+              integration_id: integration
+          fromUser:
+            get_payment_status: [payment_id]
+            review_decline: [request.payment_id]
+          limits:
+            toolCalls: 10
+            remoteCalls: 2
+      remoteSkills:
+        review_decline:
+          agent: decline-reviewer
+          description: >-
+            Review an existing declined payment. The request must be a JSON string containing only payment_id,
+            copied exactly from the merchant conversation or payment status result. The review returns only merchant-safe guidance.
 
 catalog:
   image: python:3.12.16-slim-bookworm

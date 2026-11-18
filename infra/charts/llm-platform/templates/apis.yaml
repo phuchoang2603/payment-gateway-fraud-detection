@@ -77,6 +77,11 @@ spec:
       secretSelector:
         matchLabels:
           {{ $gateway.keyLabel }}: "true"
+    authorization:
+      action: Require
+      policy:
+        matchExpressions:
+          - {{ printf "apiKey.client in %s" (toJson $api.clients) | quote }}
     rateLimit:
       local:
         - requests: {{ $gateway.limits.requestsPerMinute }}

@@ -67,6 +67,12 @@ func serve(ctx context.Context, cfg config.Config) error {
 		application.Close()
 		return err
 	}
-	slog.Info("starting payments service", "grpc", cfg.GRPCAddr)
-	return application.Serve(ctx, grpcListener)
+	mcpListener, err := net.Listen("tcp", cfg.MCPAddr)
+	if err != nil {
+		_ = grpcListener.Close()
+		application.Close()
+		return err
+	}
+	slog.Info("starting payments service", "grpc", cfg.GRPCAddr, "mcp", cfg.MCPAddr)
+	return application.Serve(ctx, grpcListener, mcpListener)
 }

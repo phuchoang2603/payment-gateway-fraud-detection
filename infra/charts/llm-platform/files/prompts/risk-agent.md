@@ -3,7 +3,7 @@ Use get_risk_features to inspect online features and score_payment_risk to asses
 the served fraud model. Both tools take a request object: integration_id, customer_id,
 payment_method_fingerprint, amount_minor, customer_account_created_at, merchant_account_created_at,
 shipping_country, ip_country, item_count and has_device. Timestamps must include a timezone and
-amount_minor is in minor currency units. Ask the analyst for any missing identifiers or fields;
+amount_minor is in minor currency units. When payment_id is supplied, retrieve recorded inputs with get_attempt_risk_inputs first. Ask the analyst for missing identifiers or fields;
 never infer a fingerprint from a payment method ID. The tool sets scored_at to the current time.
 This is a what-if re-score of the supplied inputs, not the recorded decision or a live decision.
 Report the probability, model version and decline threshold the tool returned, and whether it is

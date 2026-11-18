@@ -1,14 +1,22 @@
 import asyncio
+from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from fraud_rag_common import store
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from mcp.server.mcpserver import Context
 from pydantic import ValidationError
 
 from fraud_rag_serving import app as service
+
+
+def request_context(audience=None):
+    headers = [] if audience is None else [(b"x-knowledge-audience", audience.encode())]
+    return Context(request_context=SimpleNamespace(request=Request({"type": "http", "headers": headers})))
+
 
 ROWS = {
     "decline-codes#high-amount": {
@@ -20,6 +28,18 @@ ROWS = {
         "synthetic": True,
         "source_path": "x",
         "text": "Decline and reason-code glossary › HIGH_AMOUNT\n\nSource: risk.",
+        "knowledge_version": "v",
+        "content_sha256": "h",
+    },
+    "risk-policy#threshold": {
+        "chunk_id": "risk-policy#threshold",
+        "doc_id": "risk-policy",
+        "title": "Risk policy",
+        "section": "Threshold",
+        "audience": "analyst",
+        "synthetic": True,
+        "source_path": "z",
+        "text": "Internal scoring threshold.",
         "knowledge_version": "v",
         "content_sha256": "h",
     },
@@ -66,11 +86,16 @@ def client(monkeypatch):
         assert fs is registry
         assert vector == [1.0]
         assert isinstance(top_k, int) and top_k > 0
-        return [("checkout-api#public-routes", 0.2), ("decline-codes#high-amount", 0.1)][:top_k]
+        return [
+            ("checkout-api#public-routes", 0.2),
+            ("decline-codes#high-amount", 0.1),
+            ("risk-policy#threshold", 0.3),
+        ][:top_k]
 
     monkeypatch.setattr(store, "read", read)
     monkeypatch.setattr(store, "search", search)
     test_client = TestClient(service.app)
+    test_client.context = request_context()
     test_client.embedder = embedder
     return test_client
 
@@ -91,11 +116,15 @@ def test_malformed_chunk_id_is_422(client):
 
 
 def test_search_tool_ranks_by_distance_and_filters_audience(client):
-    ranked = asyncio.run(service.search_knowledge("high amount")).hits
-    analyst = asyncio.run(service.search_knowledge("high amount", audience="analyst")).hits
+    ranked = asyncio.run(service.search_knowledge("high amount", client.context)).hits
+    analyst = asyncio.run(service.search_knowledge("high amount", request_context("analyst"))).hits
 
-    assert [hit.chunk.chunk_id for hit in ranked] == ["decline-codes#high-amount", "checkout-api#public-routes"]
-    assert [hit.chunk.chunk_id for hit in analyst] == ["decline-codes#high-amount"]
+    assert [hit.chunk.chunk_id for hit in ranked] == [
+        "decline-codes#high-amount",
+        "checkout-api#public-routes",
+        "risk-policy#threshold",
+    ]
+    assert [hit.chunk.chunk_id for hit in analyst] == ["decline-codes#high-amount", "risk-policy#threshold"]
 
 
 @pytest.mark.parametrize(
@@ -104,13 +133,13 @@ def test_search_tool_ranks_by_distance_and_filters_audience(client):
 )
 def test_invalid_search_is_rejected_without_calling_the_gateway(client, arguments):
     with pytest.raises(ValidationError):
-        asyncio.run(service.search_knowledge(**arguments))
+        asyncio.run(service.search_knowledge(ctx=client.context, **arguments))
     assert client.embedder.calls == 0
 
 
 @pytest.mark.parametrize("query,top_k", [("x", 1), ("x" * 2000, 20)])
 def test_search_accepts_boundary_values_and_limits_results(client, query, top_k):
-    hits = asyncio.run(service.search_knowledge(query, top_k=top_k)).hits
+    hits = asyncio.run(service.search_knowledge(query, client.context, top_k=top_k)).hits
 
     assert len(hits) == min(top_k, len(ROWS))
     assert client.embedder.calls == 1
@@ -121,7 +150,7 @@ def test_repeated_chunk_reads_are_stable_for_arbitrary_existing_ids(client):
     @given(ids=st.lists(st.sampled_from(list(ROWS)), min_size=1, max_size=10))
     def repeated(ids):
         async def read():
-            return [await service.get_knowledge_chunk(chunk_id) for chunk_id in ids]
+            return [await service.get_knowledge_chunk(chunk_id, client.context) for chunk_id in ids]
 
         first, second = asyncio.run(read()), asyncio.run(read())
         assert [chunk.model_dump() for chunk in first] == [ROWS[chunk_id] for chunk_id in ids]
@@ -162,7 +191,7 @@ def test_embedding_failure_does_not_return_partial_search_results(client, monkey
     before = failures._value.get()
     monkeypatch.setattr(client.embedder, "query", unavailable)
     with pytest.raises(TimeoutError, match="embedding unavailable"):
-        asyncio.run(service.search_knowledge("high amount"))
+        asyncio.run(service.search_knowledge("high amount", client.context))
 
     assert failures._value.get() == before + 1
 
@@ -171,9 +200,11 @@ def test_mcp_exposes_two_tools_backed_by_the_same_functions(client):
     tools = asyncio.run(service.mcp.list_tools())
 
     assert {tool.name for tool in tools} == {"search_knowledge", "get_knowledge_chunk"}
-    assert asyncio.run(service.get_knowledge_chunk("decline-codes#high-amount")).doc_id == "decline-codes"
+    assert (
+        asyncio.run(service.get_knowledge_chunk("decline-codes#high-amount", client.context)).doc_id == "decline-codes"
+    )
     with pytest.raises(ValueError, match="unknown chunk_id"):
-        asyncio.run(service.get_knowledge_chunk("decline-codes#missing"))
+        asyncio.run(service.get_knowledge_chunk("decline-codes#missing", client.context))
 
 
 def test_liveness_needs_nothing(client):
@@ -256,9 +287,9 @@ def test_metrics_count_rest_requests_and_tool_outcomes(client):
     ]
     before = [counter._value.get() for counter in counters]
     client.get("/v1/chunks/decline-codes%23high-amount")
-    asyncio.run(service.search_knowledge("high amount"))
+    asyncio.run(service.search_knowledge("high amount", client.context))
     with pytest.raises(ValueError):
-        asyncio.run(service.get_knowledge_chunk("decline-codes#missing"))
+        asyncio.run(service.get_knowledge_chunk("decline-codes#missing", client.context))
 
     assert [counter._value.get() for counter in counters] == [value + 1 for value in before]
 
@@ -293,3 +324,22 @@ def test_lifespan_builds_the_embedder_and_serves_mcp(monkeypatch):
         )
         assert response.status_code == 200
         assert response.json()["result"]["serverInfo"]["name"] == "knowledge"
+
+
+def test_merchant_context_filters_search_and_chunk_lookup(client):
+    ctx = request_context("merchant")
+    hits = asyncio.run(service.search_knowledge("risk policy", ctx)).hits
+    assert {hit.chunk.audience for hit in hits} == {"merchant", "both"}
+    with pytest.raises(ValueError, match="unknown chunk_id"):
+        asyncio.run(service.get_knowledge_chunk("risk-policy#threshold", ctx))
+    assert asyncio.run(service.get_knowledge_chunk("checkout-api#public-routes", ctx)).audience == "merchant"
+    assert client.get("/v1/chunks/risk-policy%23threshold").status_code == 200
+    tools = asyncio.run(service.mcp.list_tools())
+    search = next(tool for tool in tools if tool.name == "search_knowledge")
+    assert "audience" not in search.input_schema["properties"]
+
+
+def test_unknown_route_audience_is_refused(client):
+    with pytest.raises(ValueError, match="invalid knowledge audience"):
+        asyncio.run(service.search_knowledge("risk policy", request_context("unexpected")))
+    assert client.embedder.calls == 0

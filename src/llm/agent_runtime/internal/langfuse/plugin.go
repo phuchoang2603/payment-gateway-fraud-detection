@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
@@ -20,6 +21,7 @@ const (
 	promptNameAttribute    = attribute.Key("langfuse.observation.prompt.name")
 	promptVersionAttribute = attribute.Key("langfuse.observation.prompt.version")
 	traceTagsAttribute     = attribute.Key("langfuse.trace.tags")
+	toolsAttribute         = attribute.Key("langfuse.observation.metadata.tools")
 	invocationIDAttribute  = attribute.Key("gcp.vertex.agent.invocation_id")
 	generateContentSpan    = "generate_content"
 )
@@ -30,7 +32,10 @@ type PromptSource interface {
 
 type choice struct {
 	prompt Prompt
-	tag    string
+	// tag names the agent's A/B side on the trace, or is empty when its prompt runs no test.
+	tag string
+	// tools names the function declarations the model call carries.
+	tools []string
 }
 
 // Prompts sets each model call's system prompt from the calling agent's
@@ -97,13 +102,13 @@ func (p *Prompts) choose(ctx context.Context, name, sessionID string) (choice, e
 		tag = strings.TrimSuffix(name, "-system-prompt") + ":" + label
 	}
 	if label == Production {
-		return choice{production, tag}, nil
+		return choice{prompt: production, tag: tag}, nil
 	}
 	variant, err := p.source.Prompt(ctx, name, label)
 	if err != nil {
 		return choice{}, err
 	}
-	return choice{variant, tag}, nil
+	return choice{prompt: variant, tag: tag}, nil
 }
 
 func (p *Prompts) BeforeModel(ctx agent.Context, req *model.LLMRequest) (*model.LLMResponse, error) {
@@ -123,8 +128,20 @@ func (p *Prompts) BeforeModel(ctx agent.Context, req *model.LLMRequest) (*model.
 	if bound, ok := p.sampling.Load(name); ok {
 		bound.(baseline).apply(chosen.prompt.Config.Model)
 	}
+	chosen.tools = declaredTools(req)
 	p.choices.Store(ctx.InvocationID(), chosen)
 	return nil, nil
+}
+
+func declaredTools(req *model.LLMRequest) []string {
+	var names []string
+	for _, tool := range req.Config.Tools {
+		for _, declaration := range tool.FunctionDeclarations {
+			names = append(names, declaration.Name)
+		}
+	}
+	slices.Sort(names)
+	return names
 }
 
 func (p *Prompts) OnStart(_ context.Context, span sdktrace.ReadWriteSpan) {
@@ -146,6 +163,9 @@ func (p *Prompts) OnStart(_ context.Context, span sdktrace.ReadWriteSpan) {
 		)
 		if chosen.tag != "" {
 			span.SetAttributes(traceTagsAttribute.StringSlice([]string{chosen.tag}))
+		}
+		if len(chosen.tools) > 0 {
+			span.SetAttributes(toolsAttribute.StringSlice(chosen.tools))
 		}
 		return
 	}

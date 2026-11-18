@@ -1,5 +1,5 @@
 // Command agent-runtime is kagent's Go ADK runtime (adk/cmd/main.go at the
-// pinned kagent commit) with the Langfuse prompt plugin added.
+// pinned kagent commit) with Langfuse prompts and runtime policy enforcement.
 package main
 
 import (
@@ -31,6 +31,7 @@ import (
 	"github.com/kagent-dev/kagent/go/pkg/tracing"
 
 	"github.com/phuchoang2603/payment-gateway-fraud-detection/agent-runtime/internal/langfuse"
+	"github.com/phuchoang2603/payment-gateway-fraud-detection/agent-runtime/internal/policy"
 )
 
 const (
@@ -175,6 +176,13 @@ func run(logLevel, host, port, configDir string) error {
 		logger.Info("memory service enabled", "app_name", appName)
 	}
 
+	rules, err := policy.Load(os.Getenv("AGENT_POLICY"), rootAgentName(appName))
+	if err != nil {
+		return err
+	}
+	if err := rules.ConfigureRemoteSkills(compiled); err != nil {
+		return err
+	}
 	runnerConfig, err := runnerpkg.CreateRunnerConfig(ctx, compiled, sessionService, appName, memoryService, controllerClient)
 	if err != nil {
 		return fmt.Errorf("create Google ADK Runner config: %w", err)
@@ -184,7 +192,11 @@ func run(logLevel, host, port, configDir string) error {
 	if err != nil {
 		return fmt.Errorf("create Langfuse prompt plugin: %w", err)
 	}
-	runnerConfig.PluginConfig.Plugins = append(runnerConfig.PluginConfig.Plugins, promptPlugin)
+	policyPlugin, err := rules.Plugin()
+	if err != nil {
+		return fmt.Errorf("create policy plugin: %w", err)
+	}
+	runnerConfig.PluginConfig.Plugins = append(runnerConfig.PluginConfig.Plugins, policyPlugin, promptPlugin)
 
 	stream := agentConfig.GetStream()
 	executor, err := a2a.NewKAgentExecutor(a2a.KAgentExecutorConfig{
@@ -223,9 +235,11 @@ func run(logLevel, host, port, configDir string) error {
 		ShutdownTimeout:  5 * time.Second,
 		Logger:           logger,
 		Agent:            runnerConfig.Agent,
+		HealthPaths:      []string{"/health", "/healthz", "/metrics"},
+		HealthHandler:    rules.HealthHandler(),
 		Telemetry:        runtimeTelemetry,
 		Flush:            providers.ForceFlush,
-	}, executor)
+	}, &policy.Executor{AgentExecutor: executor, Policy: rules})
 	if err != nil {
 		return fmt.Errorf("create app: %w", err)
 	}

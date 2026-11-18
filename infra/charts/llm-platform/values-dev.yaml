@@ -9,3 +9,15 @@ models:
 risk:
   rollout:
     tool: get_risk_features
+gateway:
+  clients:
+    merchant-demo: LLM_GATEWAY_MERCHANT_DEMO_API_KEY
+agents:
+  a2a:
+    clients:
+      merchant-demo:
+        agent: merchant-assistant
+        profile: merchant
+        integration: 01234567-89ab-4cde-8fab-0123456789ab
+    signing:
+      jwks: '{"keys":[{"kty":"EC","crv":"P-256","x":"MrerAdWvHiFpy-AZOmqI82ezQRnMCVdZxl1dEe3sN2s","y":"3SdkFfq5MRwbTdba4_XYrq0QYlM9evnqeOgSpk0Jto0","use":"sig","alg":"ES256","kid":"gateway-signing"}]}'

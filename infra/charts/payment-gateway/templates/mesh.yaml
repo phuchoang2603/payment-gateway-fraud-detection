@@ -39,6 +39,9 @@ spec:
               {{- range .callers }}
               - {{ printf "cluster.local/ns/%s/sa/%s" $.Release.Namespace . | quote }}
               {{- end }}
+              {{- range .principals }}
+              - {{ . | quote }}
+              {{- end }}
       to:
         - operation:
             ports:

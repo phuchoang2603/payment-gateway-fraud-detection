@@ -45,7 +45,7 @@ connect:
     -Xmx: 512m
   resources:
     requests:
-      cpu: 250m
+      cpu: 1
       memory: 768Mi
     limits:
       memory: 1Gi

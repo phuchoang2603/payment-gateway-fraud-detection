@@ -5,3 +5,6 @@ RETURNING global_position;
 
 -- name: LatestEventVersion :one
 SELECT coalesce(max(aggregate_version), 0)::bigint AS version FROM payment_events WHERE payment_id = $1;
+
+-- name: ListEventPayloads :many
+SELECT payload FROM payment_events WHERE payment_id = $1 AND event_type = $2 ORDER BY aggregate_version;
