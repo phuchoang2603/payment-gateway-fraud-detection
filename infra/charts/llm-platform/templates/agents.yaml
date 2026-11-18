@@ -9,11 +9,10 @@
 {{- $models := list (dict "name" $agents.modelConfig "baseUrl" (printf "%s/v1" $gatewayUrl)) }}
 {{- range $agent := $agents.entryAgents }}
 {{- if ne (include "llm-platform.humanInput" $agent) "true" }}
-{{- $models = append $models (dict "name" (include "llm-platform.modelConfig" (dict "root" $ "agent" $agent)) "baseUrl" (printf "%s:%d/v1" $gatewayUrl (int $agent.modelPort))) }}
+{{- $models = append $models (dict "name" (include "llm-platform.modelConfig" (dict "root" $ "agent" $agent)) "baseUrl" (printf "%s:%d/v1" $gatewayUrl (int $agent.port)) "passthrough" true) }}
 {{- end }}
 {{- end }}
 {{- range $model := $models }}
-# Substrate's egress gateway replaces the runtime's placeholder Authorization header with this key.
 apiVersion: api.kagent.dev/v1alpha3
 kind: ModelConfig
 metadata:
@@ -22,8 +21,12 @@ metadata:
 spec:
   provider: OpenAI
   model: {{ $.Values.models.chat.name }}
+  {{- if $model.passthrough }}
+  tokenPassthrough: true
+  {{- else }}
   apiKeySecret: llm-gateway-agents
   apiKeySecretKey: key
+  {{- end }}
   openAI:
     baseUrl: {{ $model.baseUrl }}
     {{- with $.Values.models.chat.sampling }}

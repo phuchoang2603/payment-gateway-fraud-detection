@@ -254,7 +254,6 @@ agents:
       limits:
         toolCalls: 16
         remoteCalls: 0
-  # NOTE: kagent does not admit one origin for both token-passthrough tool calls and model calls, so an agent with `humanInput: false` takes its model calls on its own unscreened `modelPort` listener.
   entryAgents:
     - name: analyst-assistant
       port: 8082
@@ -278,7 +277,6 @@ agents:
             score_payment_risk: [request.integration_id, request.customer_id, request.payment_method_fingerprint]
     - name: decline-reviewer
       port: 8083
-      modelPort: 8084
       audience: analyst
       humanInput: false
       # NOTE: thinking keeps the reasoning out of the answer, so the final message is only the JSON result.

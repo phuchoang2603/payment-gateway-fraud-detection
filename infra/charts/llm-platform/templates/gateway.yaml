@@ -45,14 +45,6 @@ spec:
       allowedRoutes:
         namespaces:
           from: Same
-    {{- if .modelPort }}
-    - name: {{ .name }}-model
-      port: {{ .modelPort }}
-      protocol: HTTP
-      allowedRoutes:
-        namespaces:
-          from: Same
-    {{- end }}
     {{- end }}
     - name: public
       port: {{ $gateway.public.port }}
@@ -198,12 +190,12 @@ spec:
     ai:
       routes:
         /v1/systemone: SystemOne
-{{- /* The LLM route screens the latest user message. An agent that only other agents call (humanInput: false) has its
-own model listener and route without the screen, so what it receives never passes through it. */}}
+{{- /* The LLM route screens the latest user message. An agent that only other agents call (humanInput: false) sends
+its model calls with its caller's token to its own listener, on a route without the screen. */}}
 {{- $routes := list (dict "name" "llm" "listener" "http" "screened" true) }}
 {{- range $agent := .Values.agents.entryAgents }}
 {{- if ne (include "llm-platform.humanInput" $agent) "true" }}
-{{- $routes = append $routes (dict "name" (printf "llm-%s" $agent.name) "listener" (printf "%s-model" $agent.name) "screened" false "overrides" $agent.modelOverrides) }}
+{{- $routes = append $routes (dict "name" (printf "llm-%s" $agent.name) "listener" $agent.name "screened" false "overrides" $agent.modelOverrides "clients" (keys $agent.profiles | sortAlpha)) }}
 {{- end }}
 {{- end }}
 {{- range $route := $routes }}
@@ -251,6 +243,7 @@ spec:
       kind: HTTPRoute
       name: {{ $route.name }}
   traffic:
+    {{- if $route.screened }}
     apiKeyAuthentication:
       mode: Strict
       secretSelector:
@@ -265,6 +258,29 @@ spec:
         - tokens: {{ $gateway.limits.tokensPerMinute }}
           unit: Minutes
           key: apiKey.client
+    {{- else }}
+    jwtAuthentication:
+      mode: Strict
+      providers:
+        - issuer: {{ $.Values.agents.a2a.signing.issuer }}
+          audiences: [kagent]
+          jwks:
+            inline: {{ $.Values.agents.a2a.signing.jwks | quote }}
+    authorization:
+      action: Require
+      policy:
+        matchExpressions:
+          - {{ printf "has(jwt.client) && jwt.client in %s" (toJson $route.clients) | quote }}
+    rateLimit:
+      local:
+        - requests: {{ $gateway.limits.requestsPerMinute }}
+          burst: {{ $gateway.limits.burst }}
+          unit: Minutes
+          key: 'has(jwt.user_id) ? jwt.user_id : jwt.sub'
+        - tokens: {{ $gateway.limits.tokensPerMinute }}
+          unit: Minutes
+          key: 'has(jwt.user_id) ? jwt.user_id : jwt.sub'
+    {{- end }}
   backend:
     ai:
       routes:

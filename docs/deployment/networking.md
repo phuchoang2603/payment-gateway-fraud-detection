@@ -56,7 +56,7 @@ The `llm/agentgateway` is a separate ClusterIP Gateway with class `agentgateway`
 |---|---|---|
 | `agentgateway.llm.svc.cluster.local:80/v1/embeddings` | Embedding backend; the more specific prefix takes precedence over `/v1` | Client API keys, route policies and mesh identity |
 | `agentgateway.llm.svc.cluster.local:80/v1` | Chat/completions backend | Client API keys, prompt policies and rate limits |
-| `agentgateway.llm.svc.cluster.local:8084/v1` | Chat/completions and embeddings for `decline-reviewer`, without the request screen | Client API key, PII masking and rate limits |
+| `agentgateway.llm.svc.cluster.local:8083/v1` | Chat/completions and embeddings for `decline-reviewer`, without the request screen | Caller JWT, PII masking and rate limits |
 | `agentgateway.llm.svc.cluster.local:80/v1/systemone` | Exact decision route; screening requests have a separate header match | Decision-route policy and mesh identity |
 | `agentgateway.llm.svc.cluster.local:80/knowledge/v1` | Rewrite `/knowledge/v1` to `/v1` on `rag-api:8080` | Client API keys and route policy |
 | `agentgateway.llm.svc.cluster.local:8081/mcp/{knowledge-merchant,payments}` | Merchant knowledge and payment status | Native actor origin allowlist, caller JWT, tool authorization and mesh identity |

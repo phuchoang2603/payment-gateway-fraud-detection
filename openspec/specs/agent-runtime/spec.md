@@ -43,10 +43,10 @@ The policy plugin SHALL read the native authenticated principal and forwarded si
 - **THEN** the request goes to `decline-reviewer` through the gateway's internal A2A route, preserving the merchant's signed identity and `integration_id`, and both conversations' traces are linked
 
 ### Requirement: Credentials injected at egress
-Agent actors SHALL hold no long-lived signing keys or gateway credentials. Native kagent propagation MAY carry a short-lived authenticated user bearer credential for delegation. Model and Langfuse requests SHALL carry placeholders replaced at egress from Secrets. Model calls SHALL use the shared agents' model key. MCP and internal A2A calls SHALL use native caller-bearer propagation on a credential-free origin dedicated to the entry agent. Substrate SHALL grant each actor only its configured origins, and the gateway SHALL expose tools only on the permitted entry agent's listener. The agent gateway SHALL admit the egress gateway by its mesh identity.
+Agent actors SHALL hold no long-lived signing keys or gateway credentials. Native kagent propagation MAY carry a short-lived authenticated user bearer credential for delegation. Langfuse requests, and model requests of agents that receive human input, SHALL carry placeholders replaced at egress from Secrets; those model calls SHALL use the shared agents' model key. An agent that only other agents call SHALL send its model calls with its caller's propagated bearer to its own entry-agent origin. MCP and internal A2A calls SHALL use native caller-bearer propagation on a credential-free origin dedicated to the entry agent. Substrate SHALL grant each actor only its configured origins, and the gateway SHALL expose tools only on the permitted entry agent's listener. The agent gateway SHALL admit the egress gateway by its mesh identity.
 
 #### Scenario: Model call from an actor
-- **WHEN** an agent calls the model
+- **WHEN** an agent that receives human input calls the model
 - **THEN** the request reaches the gateway through Substrate's egress gateway with the agents' model key, and the actor never sees the key
 
 #### Scenario: MCP call from an actor

@@ -104,9 +104,6 @@ spec:
             ports:
               {{- range .Values.agents.entryAgents }}
               - {{ .port | quote }}
-              {{- with .modelPort }}
-              - {{ . | quote }}
-              {{- end }}
               {{- end }}
     - to:
         - operation:
