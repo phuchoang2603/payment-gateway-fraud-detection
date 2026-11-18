@@ -79,7 +79,7 @@ check_go() (
   mkdir -p "$reports"
   cd "$1"
   export GOWORK=off
-  go test -p 1 -race -count=1 -coverprofile "$reports/coverage.out" ./...
+  go test -race -count=1 -coverprofile "$reports/coverage.out" ./...
   go tool cover -func "$reports/coverage.out" | tee "$reports/coverage.txt"
   go tool cover -html "$reports/coverage.out" -o "$reports/coverage.html"
   summarize "Go coverage: $1" "$reports/coverage.txt"
