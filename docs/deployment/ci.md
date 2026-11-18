@@ -72,4 +72,4 @@ The same passing run executes parameterized invalid/boundary searches and Hypoth
 
 - Coverage above 90% is required and met for the feature and knowledge APIs only. Other projects report lower figures, and `data-pipeline/openmetadata` is at 50.2%.
 - Mutation results cover Go (changed code on PRs) and the knowledge API; no other Python project runs mutation tests.
-- Load tests cover the knowledge API and the customer features API, not Triton; the single Feast server replica bounds the features route ([serving limits](../ml/serving.md#limits)).
+- Load tests cover the knowledge API and the customer features API, not Triton; the Feast server, one replica in the measured run, bounds the features route ([serving limits](../ml/serving.md#limits)).
