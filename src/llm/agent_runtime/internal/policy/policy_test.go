@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"encoding/json"
 	"iter"
 	"slices"
 	"strings"
@@ -79,7 +80,7 @@ func TestToolPolicy(t *testing.T) {
 func declared(names ...string) *genai.Tool {
 	tool := &genai.Tool{}
 	for _, name := range names {
-		tool.FunctionDeclarations = append(tool.FunctionDeclarations, &genai.FunctionDeclaration{Name: name})
+		tool.FunctionDeclarations = append(tool.FunctionDeclarations, &genai.FunctionDeclaration{Name: name, ParametersJsonSchema: map[string]any{"type": "object", "properties": map[string]any{"integration_id": map[string]any{"type": "string"}}}})
 	}
 	return tool
 }
@@ -163,6 +164,39 @@ func TestBindArgumentOverwritesNestedValueInObjectOrJSONString(t *testing.T) {
 		if bindArgument(map[string]any{"request": request}, "request.integration_id", "integration-a") {
 			t.Fatalf("bound %v", request)
 		}
+	}
+}
+
+func TestTheModelIsNeverOfferedABoundArgument(t *testing.T) {
+	p := configured(t)
+	profile := p.config.Profiles["merchant-client"]
+	profile.Tools = append(profile.Tools, "score_payment_risk")
+	profile.Bind = map[string]map[string]string{"get_payment_status": {"integration_id": "integration"}, "score_payment_risk": {"request.integration_id": "integration"}}
+	p.invocations.Store("invocation", &invocation{profile: profile, name: "merchant-client"})
+	status := map[string]any{"type": "object", "properties": map[string]any{"integration_id": map[string]any{"type": "string"}, "payment_id": map[string]any{"type": "string"}}, "required": []any{"integration_id", "payment_id"}}
+	score := map[string]any{
+		"type": "object", "properties": map[string]any{"request": map[string]any{"$ref": "#/$defs/RiskRequest"}}, "required": []any{"request"},
+		"$defs": map[string]any{"RiskRequest": map[string]any{"type": "object", "properties": map[string]any{"integration_id": map[string]any{"type": "string"}, "customer_id": map[string]any{"type": "string"}}, "required": []any{"integration_id", "customer_id"}}},
+	}
+	original := &genai.FunctionDeclaration{Name: "get_payment_status", ParametersJsonSchema: status}
+	request := &model.LLMRequest{Config: &genai.GenerateContentConfig{Tools: []*genai.Tool{{FunctionDeclarations: []*genai.FunctionDeclaration{
+		original, {Name: "score_payment_risk", ParametersJsonSchema: score},
+	}}}}}
+	if _, err := p.BeforeModel(callbackContext{base: context.Background()}, request); err != nil {
+		t.Fatal(err)
+	}
+	for _, declaration := range request.Config.Tools[0].FunctionDeclarations {
+		if raw, _ := json.Marshal(declaration.ParametersJsonSchema); strings.Contains(string(raw), "integration_id") {
+			t.Fatalf("%s offers %s", declaration.Name, raw)
+		}
+	}
+	if _, ok := status["properties"].(map[string]any)["integration_id"]; !ok || original.ParametersJsonSchema == nil {
+		t.Fatal("the shared declaration was modified")
+	}
+	profile.Bind = map[string]map[string]string{"get_payment_status": {"merchant_id": "integration"}}
+	p.invocations.Store("invocation", &invocation{profile: profile, name: "merchant-client"})
+	if _, err := p.BeforeModel(callbackContext{base: context.Background()}, request); err == nil {
+		t.Fatal("a bound argument the tool does not declare was accepted")
 	}
 }
 

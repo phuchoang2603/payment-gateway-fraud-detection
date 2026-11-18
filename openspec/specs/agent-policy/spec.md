@@ -28,7 +28,11 @@ A profile SHALL list the tools, the sub-agent transfers and the remote agent ski
 - **THEN** the call is refused, nothing reaches the gateway, and the model receives the policy error
 
 ### Requirement: Arguments bound from caller context
-A profile SHALL name tool arguments that are bound from caller context. The runtime SHALL set those arguments from the verified context, replacing any value the model supplied, before the tool runs.
+A profile SHALL name tool arguments that are bound from caller context. The runtime SHALL NOT offer those arguments to the model in the tool declarations, and SHALL set them from the verified context, replacing any value the model supplied, before the tool runs.
+
+#### Scenario: Model is not asked for a bound argument
+- **WHEN** the runtime offers `get_payment_status` to a merchant-profile model call
+- **THEN** its declared parameters contain no `integration_id`
 
 #### Scenario: Model names another integration
 - **WHEN** a merchant-profile call to `get_payment_status` carries an `integration_id` other than the merchant's

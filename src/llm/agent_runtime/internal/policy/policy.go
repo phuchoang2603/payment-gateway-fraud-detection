@@ -195,9 +195,14 @@ func (p *Policy) BeforeModel(ctx agent.Context, req *model.LLMRequest) (*model.L
 		}
 		var declarations []*genai.FunctionDeclaration
 		for _, declaration := range entry.FunctionDeclarations {
-			if profile.offers(declaration.Name) {
-				declarations = append(declarations, declaration)
+			if !profile.offers(declaration.Name) {
+				continue
 			}
+			offered, err := hideBound(declaration, profile.Bind[declaration.Name])
+			if err != nil {
+				return nil, err
+			}
+			declarations = append(declarations, offered)
 		}
 		if len(declarations) == 0 {
 			continue
@@ -300,23 +305,6 @@ func (p *Policy) checkTool(ctx agent.Context, run *invocation, name string, args
 		run.remote++
 	}
 	return nil
-}
-
-func bindArgument(args map[string]any, path, value string) bool {
-	key, nested, ok := strings.Cut(path, ".")
-	if !ok {
-		args[key] = value
-		return true
-	}
-	object, ok := args[key].(map[string]any)
-	if !ok {
-		text, _ := args[key].(string)
-		if json.Unmarshal([]byte(text), &object) != nil || object == nil {
-			return false
-		}
-		args[key] = object
-	}
-	return bindArgument(object, nested, value)
 }
 
 func argumentValue(args map[string]any, path string) string {
