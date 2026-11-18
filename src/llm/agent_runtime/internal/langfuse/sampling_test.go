@@ -13,7 +13,7 @@ import (
 
 func ptr[T any](value T) *T { return &value }
 
-func samplingFixture() (Sampling, *Prompts, Prompt, Prompt) {
+func samplingFixture() (Sampling, *Prompts) {
 	live := Sampling{Temperature: ptr(0.7), TopP: ptr(0.8), MaxTokens: ptr(int64(1024))}
 	test := Config{ABTest: &ABTest{Label: "variant-b", Share: ptr(1.0)}}
 	production := Prompt{Name: "evidence-agent-system-prompt", Version: 3, Prompt: "base", Config: test}
@@ -23,11 +23,11 @@ func samplingFixture() (Sampling, *Prompts, Prompt, Prompt) {
 	}
 	prompts := NewPrompts(&fakeSource{prompts: map[string]Prompt{Production: production, "variant-b": variant}})
 	prompts.Bind("evidence_agent", live)
-	return live, prompts, production, variant
+	return live, prompts
 }
 
 func TestAVariantsModelSettingsReplaceTheModelConfigsAndOthersKeepThem(t *testing.T) {
-	live, prompts, _, _ := samplingFixture()
+	live, prompts := samplingFixture()
 
 	if _, err := prompts.BeforeModel(callbackContext{agent: "evidence_agent", session: "s1"}, &model.LLMRequest{}); err != nil {
 		t.Fatal(err)
@@ -61,7 +61,7 @@ func TestTheModelConfigsSettingsReturnWhenTheChosenVersionSetsNone(t *testing.T)
 }
 
 func TestEachAgentKeepsItsOwnBaselineAndUnboundAgentsAreUntouched(t *testing.T) {
-	live, prompts, _, _ := samplingFixture()
+	live, prompts := samplingFixture()
 	other := Sampling{Temperature: ptr(0.3)}
 	prompts.Bind("risk_agent", other)
 

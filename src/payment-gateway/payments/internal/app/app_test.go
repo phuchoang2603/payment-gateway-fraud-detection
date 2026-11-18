@@ -31,10 +31,10 @@ type running struct {
 	health   healthpb.HealthClient
 }
 
-func testConfig(databaseURL, fraudAddr, processorAddr, redisAddr string) config.Config {
+func testConfig(databaseURL, fraudAddr, processorAddr string) config.Config {
 	return config.Config{
 		GRPCAddr: "127.0.0.1:0", ShutdownTimeout: 500 * time.Millisecond,
-		DatabaseURL: databaseURL, RedisAddr: redisAddr, RedisTimeout: 50 * time.Millisecond,
+		DatabaseURL: databaseURL, RedisAddr: closedAddr, RedisTimeout: 50 * time.Millisecond,
 		FraudAddr: fraudAddr, ProcessorAddr: processorAddr,
 		EncryptionKey: []byte("0123456789abcdef0123456789abcdef"), CheckoutTokenKey: []byte("checkout-token-key-for-tests-0123456789"),
 		IdempotencyTTL: time.Hour, PaymentExpiry: 15 * time.Minute, AttemptBudget: 5 * time.Second,
@@ -90,20 +90,20 @@ func (r *running) status(t *testing.T, service string) healthpb.HealthCheckRespo
 	return response.GetStatus()
 }
 
-func (r *running) waitStatus(t *testing.T, service string, want healthpb.HealthCheckResponse_ServingStatus) {
+func (r *running) waitReady(t *testing.T) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if r.status(t, service) == want {
+		if r.status(t, "readiness") == healthpb.HealthCheckResponse_SERVING {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("%s did not become %v (is %v)", service, want, r.status(t, service))
+	t.Fatalf("readiness did not become serving (is %v)", r.status(t, "readiness"))
 }
 
 func TestReadinessIsNotServingWhileTheDatabaseIsDownButLivenessStaysServing(t *testing.T) {
-	instance := startApp(t, testConfig("postgres://payments_app:x@127.0.0.1:1/payments?sslmode=disable&connect_timeout=1", closedAddr, closedAddr, closedAddr))
+	instance := startApp(t, testConfig("postgres://payments_app:x@127.0.0.1:1/payments?sslmode=disable&connect_timeout=1", closedAddr, closedAddr))
 	time.Sleep(300 * time.Millisecond)
 	if got := instance.status(t, "liveness"); got != healthpb.HealthCheckResponse_SERVING {
 		t.Fatalf("liveness = %v", got)
@@ -115,8 +115,8 @@ func TestReadinessIsNotServingWhileTheDatabaseIsDownButLivenessStaysServing(t *t
 
 func TestReadinessIsServingWithRedisAndFraudAndProcessorDown(t *testing.T) {
 	db := testsupport.NewDatabase(t)
-	instance := startApp(t, testConfig(db.AppURL, closedAddr, closedAddr, closedAddr))
-	instance.waitStatus(t, "readiness", healthpb.HealthCheckResponse_SERVING)
+	instance := startApp(t, testConfig(db.AppURL, closedAddr, closedAddr))
+	instance.waitReady(t)
 	if got := instance.status(t, "liveness"); got != healthpb.HealthCheckResponse_SERVING {
 		t.Fatalf("liveness = %v", got)
 	}
@@ -136,7 +136,7 @@ func TestReadinessTurnsNotServingWhenMigrationsAreMissing(t *testing.T) {
 	if _, err := db.Owner.Exec(context.Background(), `UPDATE goose_db_version SET is_applied = false WHERE version_id = (SELECT max(version_id) FROM goose_db_version)`); err != nil {
 		t.Fatal(err)
 	}
-	instance := startApp(t, testConfig(db.AppURL, closedAddr, closedAddr, closedAddr))
+	instance := startApp(t, testConfig(db.AppURL, closedAddr, closedAddr))
 	time.Sleep(300 * time.Millisecond)
 	if got := instance.status(t, "readiness"); got != healthpb.HealthCheckResponse_NOT_SERVING {
 		t.Fatalf("readiness = %v, want NOT_SERVING", got)
@@ -147,8 +147,8 @@ func TestGRPCErrorMappingAndCorrelationPropagation(t *testing.T) {
 	db := testsupport.NewDatabase(t)
 	fraud, _ := testsupport.NewFakeFraud(t)
 	processor, _ := testsupport.NewFakeProcessor(t)
-	instance := startApp(t, testConfig(db.AppURL, fraud.Addr, processor.Addr, closedAddr))
-	instance.waitStatus(t, "readiness", healthpb.HealthCheckResponse_SERVING)
+	instance := startApp(t, testConfig(db.AppURL, fraud.Addr, processor.Addr))
+	instance.waitReady(t)
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "x-request-id", "request-abc-123")
 
 	payment, err := instance.payments.CreatePayment(ctx, testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
@@ -217,8 +217,8 @@ func TestOTLPMetricsRecordFraudDecline(t *testing.T) {
 	db := testsupport.NewDatabase(t)
 	fraud, _ := testsupport.NewFakeFraud(t)
 	processor, _ := testsupport.NewFakeProcessor(t)
-	instance := startApp(t, testConfig(db.AppURL, fraud.Addr, processor.Addr, closedAddr))
-	instance.waitStatus(t, "readiness", healthpb.HealthCheckResponse_SERVING)
+	instance := startApp(t, testConfig(db.AppURL, fraud.Addr, processor.Addr))
+	instance.waitReady(t)
 	fraud.SetAssessment(testsupport.Decline("HIGH_AMOUNT"))
 	payment, err := instance.payments.CreatePayment(context.Background(), testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
 	if err != nil {
@@ -247,10 +247,10 @@ func TestShutdownIsBoundedWhileARequestIsStillRunning(t *testing.T) {
 		}
 		return nil, status.Error(codes.Unavailable, "stopped")
 	})
-	cfg := testConfig(db.AppURL, fraud.Addr, processor.Addr, closedAddr)
+	cfg := testConfig(db.AppURL, fraud.Addr, processor.Addr)
 	cfg.FraudTimeout, cfg.AttemptBudget = time.Minute, time.Minute
 	instance := startApp(t, cfg)
-	instance.waitStatus(t, "readiness", healthpb.HealthCheckResponse_SERVING)
+	instance.waitReady(t)
 	payment, err := instance.payments.CreatePayment(context.Background(), testsupport.CreateRequest(testsupport.IntegrationID, "key-1", "order-1", 12500))
 	if err != nil {
 		t.Fatal(err)

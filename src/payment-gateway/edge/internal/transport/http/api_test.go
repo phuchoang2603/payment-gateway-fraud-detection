@@ -64,9 +64,9 @@ func (h *harness) createPayment(key, apiKey, reference string) created {
 	return out
 }
 
-func (h *harness) tokenize(apiKey, number string) (string, string) {
+func (h *harness) tokenize(number string) (string, string) {
 	h.t.Helper()
-	res := h.do("POST", "/v1/payment-methods", apiHeaders(apiKey, "tok-"+number), fmt.Sprintf(`{"card_number": %q}`, number))
+	res := h.do("POST", "/v1/payment-methods", apiHeaders(syntheticKey, "tok-"+number), fmt.Sprintf(`{"card_number": %q}`, number))
 	if res.StatusCode != http.StatusOK {
 		h.t.Fatalf("tokenize: %d %s", res.StatusCode, res.body)
 	}
@@ -202,7 +202,7 @@ func TestInvalidSnapshotsAreRejectedBeforePayments(t *testing.T) {
 func TestMutatingRoutesRequireAnIdempotencyKey(t *testing.T) {
 	h := newHarness(t)
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
-	token, _ := h.tokenize(syntheticKey, "4111000000000008")
+	token, _ := h.tokenize("4111000000000008")
 	h.world.mu.Lock()
 	baseline := len(h.world.createCalls)
 	h.world.mu.Unlock()
@@ -364,8 +364,8 @@ func TestTestCardTokensMatchIdentityVectorsAndAreOpaque(t *testing.T) {
 	h := newHarness(t)
 	for _, card := range vectors.TestCards {
 		t.Run(card.CardRef, func(t *testing.T) {
-			first, fingerprint := h.tokenize(syntheticKey, card.Number)
-			second, again := h.tokenize(syntheticKey, card.Number)
+			first, fingerprint := h.tokenize(card.Number)
+			second, again := h.tokenize(card.Number)
 			if fingerprint != card.Expected || again != card.Expected {
 				t.Fatalf("fingerprint = %s / %s, want %s", fingerprint, again, card.Expected)
 			}
@@ -420,7 +420,7 @@ func TestSyntheticAttemptCarriesVaultFingerprintAndSimulatedContext(t *testing.T
 	network := vectors.Fingerprint(t, "ip_network")
 	h := newHarness(t)
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
-	token, fingerprint := h.tokenize(syntheticKey, "4111000000000008")
+	token, fingerprint := h.tokenize("4111000000000008")
 
 	clicked := h.world.now().Add(-10 * time.Minute)
 	body := fmt.Sprintf(`{"payment_method_token": %q, "device_fingerprint": "device-abc", "user_agent_family": "chrome",
@@ -458,7 +458,7 @@ func TestSyntheticAttemptCarriesVaultFingerprintAndSimulatedContext(t *testing.T
 func TestAttemptWithoutContextLeavesSignalsAbsent(t *testing.T) {
 	h := newHarness(t)
 	payment := h.createPayment("order-1", realKey, "order-1")
-	token := h.world.issue(realID, "ok")
+	token := h.world.issue(realID)
 	res := h.do("POST", attemptPath(payment), apiHeaders(payment.CheckoutToken, "attempt-1"), fmt.Sprintf(`{"payment_method_token": %q}`, token))
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d: %s", res.StatusCode, res.body)
@@ -471,19 +471,19 @@ func TestAttemptWithoutContextLeavesSignalsAbsent(t *testing.T) {
 	}
 }
 
-func (w *world) issue(integration, behavior string) string {
+func (w *world) issue(integration string) string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.counter++
 	value := fmt.Sprintf("vt_issued_%d", w.counter)
-	w.tokens[value] = &vaultToken{integration: integration, behavior: behavior, method: &vaultv1.MethodMetadata{Type: "card", Fingerprint: "issued-fingerprint"}}
+	w.tokens[value] = &vaultToken{integration: integration, behavior: "ok", method: &vaultv1.MethodMetadata{Type: "card", Fingerprint: "issued-fingerprint"}}
 	return value
 }
 
 func TestRealIntegrationCannotSendSimulatedContext(t *testing.T) {
 	h := newHarness(t)
 	payment := h.createPayment("order-1", realKey, "order-1")
-	token := h.world.issue(realID, "ok")
+	token := h.world.issue(realID)
 	body := fmt.Sprintf(`{"payment_method_token": %q, "simulated_client": {"ip_country": "VN", "ip_network": "203.0.113.5"}}`, token)
 	res := h.do("POST", attemptPath(payment), apiHeaders(payment.CheckoutToken, "attempt-1"), body)
 	if res.StatusCode != http.StatusForbidden {
@@ -512,7 +512,7 @@ func TestAttemptResultsMapToApiStatuses(t *testing.T) {
 			h := newHarness(t)
 			h.world.forcePending = test.pending
 			payment := h.createPayment("order-1", syntheticKey, "order-1")
-			token, _ := h.tokenize(syntheticKey, test.card)
+			token, _ := h.tokenize(test.card)
 			res := h.do("POST", attemptPath(payment), apiHeaders(payment.CheckoutToken, "a1"), fmt.Sprintf(`{"payment_method_token": %q}`, token))
 			var out struct {
 				Status string `json:"status"`
@@ -531,7 +531,7 @@ func TestAttemptResultsMapToApiStatuses(t *testing.T) {
 func TestAttemptRejectsBadCheckoutCredentials(t *testing.T) {
 	h := newHarness(t)
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
-	token, _ := h.tokenize(syntheticKey, "4111000000000008")
+	token, _ := h.tokenize("4111000000000008")
 	body := fmt.Sprintf(`{"payment_method_token": %q}`, token)
 
 	if res := h.do("POST", attemptPath(payment), map[string]string{"Idempotency-Key": "a"}, body); res.StatusCode != http.StatusUnauthorized {
@@ -556,8 +556,8 @@ func TestAttemptRejectsBadCheckoutCredentials(t *testing.T) {
 func TestUnknownInactiveOrForeignTokensAreRejectedBeforeStartingAnAttempt(t *testing.T) {
 	h := newHarness(t)
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
-	foreign := h.world.issue(realID, "ok")
-	inactive := h.world.issue(syntheticID, "ok")
+	foreign := h.world.issue(realID)
+	inactive := h.world.issue(syntheticID)
 	h.world.tokens[inactive].inactive = true
 	for name, token := range map[string]string{"unknown": "vt_unknown", "foreign": foreign, "inactive": inactive} {
 		t.Run(name, func(t *testing.T) {
@@ -577,7 +577,7 @@ func TestUnknownInactiveOrForeignTokensAreRejectedBeforeStartingAnAttempt(t *tes
 func TestSimulatedClientValidation(t *testing.T) {
 	h := newHarness(t)
 	payment := h.createPayment("order-1", syntheticKey, "order-1")
-	token, _ := h.tokenize(syntheticKey, "4111000000000008")
+	token, _ := h.tokenize("4111000000000008")
 	future := h.world.now().Add(time.Second).Format(time.RFC3339Nano)
 	for name, client := range map[string]string{
 		"bad country":    `{"ip_country": "United States"}`,

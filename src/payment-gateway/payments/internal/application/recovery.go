@@ -94,7 +94,7 @@ func (s *Service) lookupOperation(ctx context.Context, state domain.State, attem
 	})
 	if err != nil {
 		if attempt.Phase == domain.PhaseRequested {
-			if _, unknownErr := s.commit(ctx, state, nil, nil, domain.RecordOutcomeUnknown{Envelope: s.envelope(state.Version), AttemptID: attempt.ID}); unknownErr != nil && !errors.Is(unknownErr, domain.ErrStaleVersion) {
+			if _, unknownErr := s.commit(ctx, state, nil, domain.RecordOutcomeUnknown{Envelope: s.envelope(state.Version), AttemptID: attempt.ID}); unknownErr != nil && !errors.Is(unknownErr, domain.ErrStaleVersion) {
 				return nil, unknownErr
 			}
 		}
@@ -115,7 +115,7 @@ func (s *Service) ExpirePayment(ctx context.Context, paymentID uuid.UUID) error 
 	if state.Status != domain.StatusOpen || state.ExpiresAt.After(s.now()) {
 		return nil
 	}
-	_, err = s.commit(ctx, state, nil, nil, domain.ExpirePayment{Envelope: s.envelope(state.Version)})
+	_, err = s.commit(ctx, state, nil, domain.ExpirePayment{Envelope: s.envelope(state.Version)})
 	var ruleErr *domain.RuleError
 	if errors.Is(err, domain.ErrStaleVersion) || (errors.As(err, &ruleErr) && ruleErr.Rule == domain.RuleExpiryWhileUnresolved) || errors.Is(err, ErrPaymentNotOpen) {
 		return nil

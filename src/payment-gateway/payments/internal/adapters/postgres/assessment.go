@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,7 +31,7 @@ func (s *Store) AssessmentRequest(ctx context.Context, id uuid.UUID) (applicatio
 
 func (s *Store) ClaimAssessment(ctx context.Context, id uuid.UUID, lease time.Duration) (application.AssessmentRequestRecord, error) {
 	row, err := sqlcgen.New(s.pool).ClaimAssessmentRequest(ctx, sqlcgen.ClaimAssessmentRequestParams{AttemptID: id, LeaseMs: lease.Milliseconds()})
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return application.AssessmentRequestRecord{}, application.ErrAssessmentBusy
 	}
 	return assessmentRecord(row, err)

@@ -235,8 +235,8 @@ func (s *Service) resumeAttempt(ctx, budgetCtx context.Context, input attemptInp
 	}
 }
 
-func (s *Service) commit(ctx context.Context, state domain.State, claim *IdempotencyClaim, processorRequest *ProcessorRequestRecord, command domain.Command) (domain.State, error) {
-	return s.transition(ctx, TransitionRequest{PaymentID: uuid.MustParse(state.PaymentID), Command: command, Idempotency: claim, ProcessorRequest: processorRequest})
+func (s *Service) commit(ctx context.Context, state domain.State, processorRequest *ProcessorRequestRecord, command domain.Command) (domain.State, error) {
+	return s.transition(ctx, TransitionRequest{PaymentID: uuid.MustParse(state.PaymentID), Command: command, ProcessorRequest: processorRequest})
 }
 
 func (s *Service) transition(ctx context.Context, request TransitionRequest) (domain.State, error) {
@@ -306,7 +306,7 @@ func (s *Service) drive(ctx, budgetCtx context.Context, state domain.State, inpu
 			next, err = s.transition(ctx, TransitionRequest{PaymentID: input.paymentID, AssessmentFence: &record.Fence, Command: domain.RecordRiskDecision{Envelope: s.envelope(state.Version), AttemptID: attemptID, Assessment: wire.Assessment(assessment)}})
 		case domain.PhaseRiskDeclined:
 			s.failure("risk_declined")
-			next, err = s.commit(ctx, state, nil, nil, domain.DeclineAttempt{
+			next, err = s.commit(ctx, state, nil, domain.DeclineAttempt{
 				Envelope: s.envelope(state.Version), AttemptID: attemptID, Source: domain.DeclineSourceRisk, Reason: attempt.DeclineReason,
 			})
 		case domain.PhaseRiskApproved:
@@ -391,7 +391,7 @@ func (s *Service) requestProcessor(ctx context.Context, state domain.State, inpu
 	total := state.Snapshot.Total
 	tokenDigest := sha256.Sum256([]byte(input.token))
 	binding := sha256.Sum256([]byte(fmt.Sprintf("%s\n%s\n%d\n%s\n%x", state.IntegrationID, operationKey(input.attemptID), total.MinorUnits, total.Currency, tokenDigest)))
-	return s.commit(ctx, state, nil, &ProcessorRequestRecord{
+	return s.commit(ctx, state, &ProcessorRequestRecord{
 		OperationKey: operationKey(input.attemptID), PaymentID: input.paymentID, AttemptID: input.attemptID,
 		IntegrationID: input.integrationID, RequestHash: binding[:], EncryptedToken: sealed,
 	}, domain.RequestProcessorOperation{Envelope: s.envelope(state.Version), AttemptID: input.attemptID.String(), OperationKey: operationKey(input.attemptID)})
@@ -413,7 +413,7 @@ func (s *Service) callProcessor(ctx, budgetCtx context.Context, state domain.Sta
 	if err != nil {
 		slog.WarnContext(ctx, "processor outcome unknown", "payment_id", state.PaymentID, "operation_key", attempt.OperationKey, "error", err)
 		s.failure("processor_unknown")
-		return s.commit(ctx, state, nil, nil, domain.RecordOutcomeUnknown{Envelope: s.envelope(state.Version), AttemptID: attempt.ID})
+		return s.commit(ctx, state, nil, domain.RecordOutcomeUnknown{Envelope: s.envelope(state.Version), AttemptID: attempt.ID})
 	}
 	return s.recordOperation(ctx, state, attempt, operation)
 }
@@ -425,14 +425,14 @@ func (s *Service) recordOperation(ctx context.Context, state domain.State, attem
 		if reference == "" {
 			reference = operation.OperationKey
 		}
-		return s.commit(ctx, state, nil, nil, domain.SucceedPayment{Envelope: s.envelope(state.Version), AttemptID: attempt.ID, ProcessorReference: reference})
+		return s.commit(ctx, state, nil, domain.SucceedPayment{Envelope: s.envelope(state.Version), AttemptID: attempt.ID, ProcessorReference: reference})
 	case OutcomeDeclined:
 		reason := operation.DeclineReason
 		if reason == "" {
 			reason = "declined"
 		}
 		s.failure("processor_declined")
-		return s.commit(ctx, state, nil, nil, domain.DeclineAttempt{
+		return s.commit(ctx, state, nil, domain.DeclineAttempt{
 			Envelope: s.envelope(state.Version), AttemptID: attempt.ID, Source: domain.DeclineSourceProcessor, Reason: reason,
 		})
 	}

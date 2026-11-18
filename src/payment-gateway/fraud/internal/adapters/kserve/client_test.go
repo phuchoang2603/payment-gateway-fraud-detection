@@ -24,9 +24,9 @@ var fixedNow = time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
 
 var order = []string{"customer_daily__attempt_count_7d", "customer_daily__decline_rate_7d", "request_features__has_device", "request_features__ip_shipping_country_mismatch", "customer_stream__customer_snapshot_attempt_count_5m"}
 
-func newClient(t *testing.T, url string, timeout time.Duration) *Client {
+func newClient(t *testing.T, url string) *Client {
 	t.Helper()
-	client, err := New(Config{URL: url, Model: "payment-risk", DialTimeout: timeout})
+	client, err := New(Config{URL: url, Model: "payment-risk", DialTimeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestAScoreIsRequestedInTheModelOrderAndTheFraudProbabilityRead(t *testing.T
 		"customer_daily":   {Status: "available", Values: map[string]application.FeatureValue{"attempt_count_7d": integer(3)}},
 		"request_features": {Status: "available", Values: map[string]application.FeatureValue{"has_device": boolean(true)}},
 	})
-	observation := newClient(t, server.URL+"/", time.Second).Score(t.Context(), features)
+	observation := newClient(t, server.URL+"/").Score(t.Context(), features)
 	if observation.Status != application.ModelAvailable || observation.Version != "v3" || observation.Name != "payment-risk" || observation.Score == nil || *observation.Score != 0.25 || !observation.ReadAt.Equal(fixedNow) {
 		t.Fatalf("observation %+v", observation)
 	}
@@ -185,7 +185,7 @@ func TestAScoreIsRequestedInTheModelOrderAndTheFraudProbabilityRead(t *testing.T
 func TestTheOrderIsReadOnceAndReusedAcrossScores(t *testing.T) {
 	fake := newTriton()
 	server := fake.serve(t)
-	client := newClient(t, server.URL, time.Second)
+	client := newClient(t, server.URL)
 	for range 3 {
 		if observation := client.Score(t.Context(), views(nil)); observation.Status != application.ModelAvailable {
 			t.Fatalf("observation %+v", observation)
@@ -200,7 +200,7 @@ func TestTheScoreBoundariesAreAccepted(t *testing.T) {
 	for _, probability := range []float32{0, 1} {
 		fake := newTriton()
 		fake.probabilities = [2]float32{1 - probability, probability}
-		observation := newClient(t, fake.serve(t).URL, time.Second).Score(t.Context(), views(nil))
+		observation := newClient(t, fake.serve(t).URL).Score(t.Context(), views(nil))
 		if observation.Status != application.ModelAvailable || observation.Score == nil || float32(*observation.Score) != probability {
 			t.Fatalf("score %v: %+v", probability, observation)
 		}
@@ -210,7 +210,7 @@ func TestTheScoreBoundariesAreAccepted(t *testing.T) {
 func TestAScoreFromAnotherVersionThanTheOrderIsDiscardedAndTheOrderReadAgain(t *testing.T) {
 	fake := newTriton()
 	server := fake.serve(t)
-	client := newClient(t, server.URL, time.Second)
+	client := newClient(t, server.URL)
 	if first := client.Score(t.Context(), views(nil)); first.Status != application.ModelAvailable || first.Version != "v3" {
 		t.Fatalf("first %+v", first)
 	}
@@ -282,7 +282,7 @@ func TestAnythingElseIsAnErrorWithoutAScoreOrVersion(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			fake := newTriton()
 			test.setup(fake)
-			observation := newClient(t, fake.serve(t).URL, time.Second).Score(t.Context(), views(nil))
+			observation := newClient(t, fake.serve(t).URL).Score(t.Context(), views(nil))
 			if observation.Status != application.ModelError || observation.Score != nil || observation.Version != "" || observation.Name != "payment-risk" || !observation.ReadAt.Equal(fixedNow) {
 				t.Fatalf("observation %+v", observation)
 			}
@@ -293,7 +293,7 @@ func TestAnythingElseIsAnErrorWithoutAScoreOrVersion(t *testing.T) {
 func TestOnlyTheProbabilityOfTheFraudClassIsRead(t *testing.T) {
 	fake := newTriton()
 	fake.probabilities = [2]float32{0.9, 0.125}
-	observation := newClient(t, fake.serve(t).URL, time.Second).Score(t.Context(), views(nil))
+	observation := newClient(t, fake.serve(t).URL).Score(t.Context(), views(nil))
 	if observation.Score == nil || *observation.Score != 0.125 {
 		t.Fatalf("observation %+v", observation)
 	}
@@ -302,7 +302,7 @@ func TestOnlyTheProbabilityOfTheFraudClassIsRead(t *testing.T) {
 func TestAnAnswerFromTheWrongPathOrWithARedirectIsAnError(t *testing.T) {
 	server := httptest.NewServer(http.RedirectHandler("http://elsewhere.invalid/", http.StatusTemporaryRedirect))
 	defer server.Close()
-	if observation := newClient(t, server.URL, time.Second).Score(t.Context(), views(nil)); observation.Status != application.ModelError || observation.Score != nil {
+	if observation := newClient(t, server.URL).Score(t.Context(), views(nil)); observation.Status != application.ModelError || observation.Score != nil {
 		t.Fatalf("observation %+v", observation)
 	}
 }
@@ -318,14 +318,14 @@ func TestTheAnswerSizeLimitIsExact(t *testing.T) {
 			encoded, _ := json.Marshal(h)
 			h["padding"] = strings.Repeat("x", test.size-8-len(encoded))
 		}
-		observation := newClient(t, fake.serve(t).URL, time.Second).Score(t.Context(), views(nil))
+		observation := newClient(t, fake.serve(t).URL).Score(t.Context(), views(nil))
 		if observation.Status != test.status {
 			t.Fatalf("a %d byte answer gave %+v", test.size, observation)
 		}
 	}
 	fake := newTriton()
 	fake.configBody = `{"parameters":{"feature_order":{"string_value":"[\"a__b\"]"},"registry_version":{"string_value":"v3"},"padding":{"string_value":"` + strings.Repeat("x", maxAnswer) + `"}}}`
-	if observation := newClient(t, fake.serve(t).URL, time.Second).Score(t.Context(), views(nil)); observation.Status != application.ModelError {
+	if observation := newClient(t, fake.serve(t).URL).Score(t.Context(), views(nil)); observation.Status != application.ModelError {
 		t.Fatalf("an oversized config gave %+v", observation)
 	}
 }
@@ -342,7 +342,7 @@ func TestASlowModelServerTimesOutAndADeadOneIsAnError(t *testing.T) {
 	defer close(release)
 	deadline, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
 	defer cancel()
-	slow := newClient(t, server.URL, time.Second).Score(deadline, views(nil))
+	slow := newClient(t, server.URL).Score(deadline, views(nil))
 	if slow.Status != application.ModelTimeout || slow.Score != nil {
 		t.Fatalf("slow config: %+v", slow)
 	}
@@ -362,13 +362,13 @@ func TestASlowModelServerTimesOutAndADeadOneIsAnError(t *testing.T) {
 	defer close(stall)
 	late, stop := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer stop()
-	if slowInfer := newClient(t, healthy.URL, time.Second).Score(late, views(nil)); slowInfer.Status != application.ModelTimeout || slowInfer.Score != nil {
+	if slowInfer := newClient(t, healthy.URL).Score(late, views(nil)); slowInfer.Status != application.ModelTimeout || slowInfer.Score != nil {
 		t.Fatalf("slow infer: %+v", slowInfer)
 	}
 	dead := httptest.NewServer(http.NotFoundHandler())
 	address := dead.URL
 	dead.Close()
-	if refused := newClient(t, address, time.Second).Score(t.Context(), views(nil)); refused.Status != application.ModelError || refused.Score != nil {
+	if refused := newClient(t, address).Score(t.Context(), views(nil)); refused.Status != application.ModelError || refused.Score != nil {
 		t.Fatalf("closed model server: %+v", refused)
 	}
 }
@@ -494,7 +494,7 @@ func configOf(version, threshold string) string {
 func TestTwoVersionsBehindOneAddressEachScoreUnderTheirOwnThreshold(t *testing.T) {
 	fake := newTriton()
 	fake.configBody = configOf("v3", "0.5")
-	client := newClient(t, fake.serve(t).URL, time.Second)
+	client := newClient(t, fake.serve(t).URL)
 	if first := client.Score(t.Context(), views(nil)); first.Status != application.ModelAvailable || first.Version != "v3" || first.Threshold != 0.5 {
 		t.Fatalf("first %+v", first)
 	}
@@ -519,7 +519,7 @@ func TestAThresholdThatIsNotAProbabilityIsIgnored(t *testing.T) {
 	for _, text := range []string{"", "x", "0", "-0.2", "1.5"} {
 		fake := newTriton()
 		fake.configBody = configOf("v3", text)
-		if observation := newClient(t, fake.serve(t).URL, time.Second).Score(t.Context(), views(nil)); observation.Status != application.ModelAvailable || observation.Threshold != 0 {
+		if observation := newClient(t, fake.serve(t).URL).Score(t.Context(), views(nil)); observation.Status != application.ModelAvailable || observation.Threshold != 0 {
 			t.Fatalf("threshold %q: %+v", text, observation)
 		}
 	}
@@ -527,7 +527,7 @@ func TestAThresholdThatIsNotAProbabilityIsIgnored(t *testing.T) {
 
 func TestAVersionThatNeverShowsUpInTheConfigIsGivenUpOn(t *testing.T) {
 	fake := newTriton()
-	client := newClient(t, fake.serve(t).URL, time.Second)
+	client := newClient(t, fake.serve(t).URL)
 	client.Score(t.Context(), views(nil))
 	fake.modelVersion = "9"
 	for range maxReads + 5 {

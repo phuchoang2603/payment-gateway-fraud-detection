@@ -100,7 +100,7 @@ func (h *harness) submitTo(base string, payment created, cookie *http.Cookie, s 
 	if s.forward != "" {
 		header["X-Forwarded-For"] = s.forward
 	}
-	request, err := http.NewRequest("POST", base+"/checkout/"+payment.SessionID+"/pay", strings.NewReader(values.Encode()))
+	request, err := http.NewRequest(http.MethodPost, base+"/checkout/"+payment.SessionID+"/pay", strings.NewReader(values.Encode()))
 	if err != nil {
 		h.t.Fatal(err)
 	}

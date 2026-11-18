@@ -8,7 +8,7 @@ func lookupFrom(values map[string]string) func(string) string {
 	return func(name string) string { return values[name] }
 }
 
-func validValues(t *testing.T) map[string]string {
+func validValues() map[string]string {
 	return map[string]string{
 		"VAULT_DATABASE_URL":    "postgres://x",
 		"VAULT_ENCRYPTION_KEY":  "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
@@ -27,7 +27,7 @@ func TestFromLookupRejectsInvalid(t *testing.T) {
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
-			values := validValues(t)
+			values := validValues()
 			mutate(values)
 			if _, err := FromLookup(lookupFrom(values)); err == nil {
 				t.Fatal("expected error")
