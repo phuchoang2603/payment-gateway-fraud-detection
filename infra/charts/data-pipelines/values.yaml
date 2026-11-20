@@ -30,7 +30,6 @@ generator:
   resources:
     requests:
       cpu: '2'
-      memory: 8Gi
       ephemeral-storage: 20Gi
     limits:
       memory: 8Gi
@@ -130,7 +129,6 @@ marts:
   resources:
     requests:
       cpu: 100m
-      memory: 512Mi
     limits:
       memory: 512Mi
 warehouseBenchmark:
@@ -274,7 +272,7 @@ features:
   spillSize: 100Gi
   scratchClass: ""
   materializeResources:
-    requests: {cpu: "2", memory: 8Gi, ephemeral-storage: 2Gi}
+    requests: {cpu: "2", ephemeral-storage: 2Gi}
     limits: {memory: 12Gi, ephemeral-storage: 4Gi}
   registry: s3://platform-dev/runs/payment-gateway/feast/registry.pb
   reportRoot: s3://platform-dev/runs/payment-gateway/feast
@@ -292,7 +290,6 @@ features:
   resources:
     requests:
       cpu: 100m
-      memory: 512Mi
     limits:
       memory: 512Mi
   redis:
@@ -307,7 +304,6 @@ features:
     resources:
       requests:
         cpu: 100m
-        memory: 1536Mi
       limits:
         memory: 1536Mi
     password:
@@ -328,13 +324,11 @@ features:
       resources:
         requests:
           cpu: '1'
-          memory: 1536Mi
         limits:
           memory: 1536Mi
     taskManager:
       resources:
         requests:
           cpu: '1'
-          memory: 2Gi
         limits:
           memory: 2Gi

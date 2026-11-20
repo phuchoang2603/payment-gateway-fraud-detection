@@ -7,5 +7,5 @@ affinity:
               operator: In
               values: [dev-server1, dev-server2]
 resources:
-  requests: {cpu: 500m, memory: 2Gi}
+  requests: {cpu: 500m}
   limits: {memory: 2Gi}

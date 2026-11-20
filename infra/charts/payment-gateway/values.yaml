@@ -47,7 +47,6 @@ defaults:
   resources:
     requests:
       cpu: 10m
-      memory: 64Mi
     limits:
       memory: 64Mi
   terminationGracePeriodSeconds: 30
@@ -220,7 +219,6 @@ services:
     resources:
       requests:
         cpu: 50m
-        memory: 128Mi
       limits:
         memory: 128Mi
     database: payments
@@ -288,7 +286,6 @@ database:
   resources:
     requests:
       cpu: 50m
-      memory: 256Mi
     limits:
       memory: 256Mi
   databases:
@@ -314,7 +311,6 @@ redis:
   resources:
     requests:
       cpu: 100m
-      memory: 640Mi
     limits:
       memory: 640Mi
   maxmemory: 512mb

@@ -10,7 +10,6 @@ generator:
   resources:
     requests:
       cpu: '3'
-      memory: 12Gi
       ephemeral-storage: 10Gi
     limits:
       memory: 12Gi
@@ -122,7 +121,6 @@ features:
     resources:
       requests:
         cpu: 250m
-        memory: 8Gi
       limits:
         memory: 8Gi
   streaming:

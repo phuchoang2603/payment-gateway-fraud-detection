@@ -22,5 +22,5 @@ spec:
     storageClass: {{ .Values.storageClass | quote }}
     size: {{ .Values.databaseSize }}
   resources:
-    requests: {cpu: 50m, memory: 256Mi}
+    requests: {cpu: 50m}
     limits: {memory: 256Mi}

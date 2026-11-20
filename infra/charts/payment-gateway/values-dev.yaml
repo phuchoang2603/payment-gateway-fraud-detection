@@ -10,7 +10,7 @@ ingress:
 redis:
   maxmemory: 128mb
   resources:
-    requests: {cpu: 50m, memory: 192Mi}
+    requests: {cpu: 50m}
     limits: {memory: 192Mi}
 rollout:
   analysis:

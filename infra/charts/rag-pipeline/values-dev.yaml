@@ -1,4 +1,4 @@
 api:
   resources:
-    requests: {cpu: 50m, memory: 384Mi}
+    requests: {cpu: 50m}
     limits: {memory: 384Mi}

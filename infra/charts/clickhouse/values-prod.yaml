@@ -2,5 +2,5 @@ storageClass: cloud-block
 nodeSelector:
   talos.dev/capacity-type: on-demand
 resources:
-  requests: {cpu: 500m, memory: 4Gi}
+  requests: {cpu: 500m}
   limits: {memory: 4Gi}

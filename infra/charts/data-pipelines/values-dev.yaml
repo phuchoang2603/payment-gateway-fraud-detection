@@ -5,7 +5,6 @@ generator:
   resources:
     requests:
       cpu: 500m
-      memory: 2Gi
       ephemeral-storage: 5Gi
     limits:
       memory: 2Gi
@@ -48,15 +47,15 @@ features:
   enabled: true
   driverMemory: 2g
   resources:
-    requests: {cpu: 50m, memory: 256Mi}
+    requests: {cpu: 50m}
     limits: {memory: 256Mi}
   redis:
     maxmemory: 192mb
     resources:
-      requests: {cpu: 50m, memory: 256Mi}
+      requests: {cpu: 50m}
       limits: {memory: 256Mi}
   materializeResources:
-    requests: {cpu: 500m, memory: 4Gi, ephemeral-storage: 2Gi}
+    requests: {cpu: 500m, ephemeral-storage: 2Gi}
     limits: {memory: 4Gi, ephemeral-storage: 4Gi}
   streaming:
     enabled: true

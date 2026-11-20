@@ -73,7 +73,7 @@ spec:
               mountPath: /etc/metadata
               readOnly: true
           resources:
-            requests: {cpu: 100m, memory: 512Mi}
+            requests: {cpu: 100m}
             limits: {memory: 512Mi}
       volumes:
         - name: connectors
@@ -135,7 +135,7 @@ spec:
             mountPath: /etc/metadata
             readOnly: true
         resources:
-          requests: {cpu: 250m, memory: 2Gi}
+          requests: {cpu: 250m}
           limits: {memory: 2Gi}
       volumes:
         - name: connectors

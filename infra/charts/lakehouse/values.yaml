@@ -33,7 +33,6 @@ polaris:
   resources:
     requests:
       cpu: 100m
-      memory: 1536Mi
     limits:
       memory: 1536Mi
   livenessProbe:
@@ -104,6 +103,5 @@ polaris:
     resources:
       requests:
         cpu: 50m
-        memory: 768Mi
       limits:
         memory: 768Mi

@@ -45,5 +45,5 @@ spec:
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
           resources:
-            requests: {cpu: 500m, memory: 1Gi}
+            requests: {cpu: 500m}
             limits: {memory: 3Gi}

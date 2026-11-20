@@ -52,7 +52,7 @@ spec:
               port: http
             periodSeconds: 20
           resources:
-            requests: {cpu: 50m, memory: 128Mi}
+            requests: {cpu: 50m}
             limits: {memory: 128Mi}
           securityContext:
             allowPrivilegeEscalation: false
@@ -152,6 +152,6 @@ spec:
                 capabilities:
                   drop: [ALL]
               resources:
-                requests: {cpu: 100m, memory: 256Mi}
+                requests: {cpu: 100m}
                 limits: {memory: 256Mi}
 {{- end }}

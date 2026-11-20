@@ -11,7 +11,7 @@ drift:
     samples: 200
 serving:
   resources:
-    requests: {cpu: 100m, memory: 512Mi}
+    requests: {cpu: 100m}
     limits: {memory: 512Mi}
 experiment:
   enabled: true

@@ -171,14 +171,14 @@ spec:
                     {{- toYaml . | nindent 20 }}
               {{- end }}
               resources:
-                requests: {cpu: 200m, memory: 1280Mi}
+                requests: {cpu: 200m}
                 limits: {memory: 1280Mi}
             taskManager:
               podTemplate:
                 spec:
                   {{- include "data-pipelines.placement" $ | nindent 18 }}
               resources:
-                requests: {cpu: 1400m, memory: 5Gi}
+                requests: {cpu: 1400m}
                 limits: {memory: 5Gi}
             podTemplate:
               metadata:
@@ -337,16 +337,16 @@ spec:
           {{- end }}
         resources:
           {{- if eq $mode "seed" }}
-          requests: {cpu: "1", memory: 6Gi, ephemeral-storage: 2Gi}
+          requests: {cpu: "1", ephemeral-storage: 2Gi}
           limits: {memory: 8Gi, ephemeral-storage: 4Gi}
           {{- else if eq $mode "verify" }}
-          requests: {cpu: 100m, memory: 512Mi, ephemeral-storage: 256Mi}
+          requests: {cpu: 100m, ephemeral-storage: 256Mi}
           limits: {memory: 1Gi, ephemeral-storage: 1Gi}
           {{- else if eq $mode "writer" }}
-          requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 2Gi}
+          requests: {cpu: 500m, ephemeral-storage: 2Gi}
           limits: {memory: 4Gi, ephemeral-storage: 4Gi}
           {{- else }}
-          requests: {cpu: 50m, memory: 128Mi, ephemeral-storage: 256Mi}
+          requests: {cpu: 50m, ephemeral-storage: 256Mi}
           limits: {memory: 512Mi, ephemeral-storage: 1Gi}
           {{- end }}
         {{- if eq $mode "seed" }}

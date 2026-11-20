@@ -66,13 +66,13 @@ database:
   writerPasswordKey: RAG_DB_WRITER_PASSWORD
   readerPasswordKey: RAG_DB_READER_PASSWORD
   resources:
-    requests: {cpu: 50m, memory: 256Mi}
+    requests: {cpu: 50m}
     limits: {memory: 256Mi}
 
 workflow:
   activeDeadlineSeconds: 1800
   resources:
-    requests: {cpu: 250m, memory: 768Mi}
+    requests: {cpu: 250m}
     limits: {memory: 768Mi}
 
 api:
@@ -86,5 +86,5 @@ api:
     requestsPerSecondPerReplica: "10"
     prometheus: http://vmsingle-vmks.observability.svc.cluster.local:8428
   resources:
-    requests: {cpu: 100m, memory: 512Mi}
+    requests: {cpu: 100m}
     limits: {memory: 512Mi}

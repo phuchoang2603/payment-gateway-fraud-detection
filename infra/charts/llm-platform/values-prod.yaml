@@ -3,15 +3,15 @@ storageClass: cloud-block
 models:
   chat:
     resources:
-      requests: {cpu: 1500m, memory: 10Gi}
+      requests: {cpu: 1500m}
       limits: {memory: 10Gi}
   embedding:
     resources:
-      requests: {cpu: 500m, memory: 4Gi}
+      requests: {cpu: 500m}
       limits: {memory: 4Gi}
   decision:
     resources:
-      requests: {cpu: 250m, memory: 6Gi}
+      requests: {cpu: 250m}
       limits: {memory: 6Gi}
 
 agents:

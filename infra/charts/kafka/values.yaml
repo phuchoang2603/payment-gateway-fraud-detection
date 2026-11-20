@@ -20,7 +20,6 @@ kafka:
   resources:
     requests:
       cpu: 250m
-      memory: 1536Mi
     limits:
       memory: 1536Mi
 entityOperator:
@@ -31,7 +30,6 @@ entityOperator:
     resources:
       requests:
         cpu: 50m
-        memory: 512Mi
       limits:
         memory: 512Mi
 connect:
@@ -44,7 +42,6 @@ connect:
   resources:
     requests:
       cpu: 300m
-      memory: 1Gi
     limits:
       memory: 1Gi
   livenessProbe:
@@ -99,5 +96,5 @@ monitoring:
   topicRegex: '^(payments\.events\..*|fraud\.(labels|feature-updates|feature-rejects)\..*)$'
   groupRegex: '^(gateway-notifier|fraud-features-.*|feature-writer(-.*)?|dp1-bronze-watermarks|simulator-redelivery-v1)$'
   exporterResources:
-    requests: {cpu: 25m, memory: 64Mi}
+    requests: {cpu: 25m}
     limits: {memory: 64Mi}
