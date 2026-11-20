@@ -30,10 +30,9 @@ generator:
   resources:
     requests:
       cpu: '2'
-      memory: 4Gi
+      memory: 8Gi
       ephemeral-storage: 20Gi
     limits:
-      cpu: '4'
       memory: 8Gi
       ephemeral-storage: 40Gi
 config:
@@ -131,7 +130,7 @@ marts:
   resources:
     requests:
       cpu: 100m
-      memory: 256Mi
+      memory: 512Mi
     limits:
       memory: 512Mi
 warehouseBenchmark:
@@ -295,8 +294,7 @@ features:
       cpu: 100m
       memory: 512Mi
     limits:
-      cpu: '1'
-      memory: 1Gi
+      memory: 512Mi
   redis:
     name: payment-gateway-feast-redis
     image:
@@ -309,9 +307,8 @@ features:
     resources:
       requests:
         cpu: 100m
-        memory: 768Mi
+        memory: 1536Mi
       limits:
-        cpu: 500m
         memory: 1536Mi
     password:
       secretName: payment-gateway-feast-redis

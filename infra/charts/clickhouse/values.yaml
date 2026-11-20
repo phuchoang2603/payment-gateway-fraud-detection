@@ -5,7 +5,7 @@ storageClass: local-path
 storageSize: 30Gi
 nodeSelector: {}
 resources:
-  requests: {cpu: "2", memory: 8Gi}
+  requests: {cpu: "2", memory: 12Gi}
   limits: {memory: 12Gi}
 externalSecretStore: gateway-doppler
 passwordStores: {}

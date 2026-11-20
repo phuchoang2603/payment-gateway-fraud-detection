@@ -107,7 +107,7 @@ spec:
             readOnlyRootFilesystem: true
             {{- include "llm-platform.containerSecurity" . | nindent 12 }}
           resources:
-            requests: {cpu: 10m, memory: 32Mi}
+            requests: {cpu: 10m, memory: 128Mi}
             limits: {memory: 128Mi}
           volumeMounts:
             - {name: catalog, mountPath: /etc/catalog}

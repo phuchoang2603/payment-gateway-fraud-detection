@@ -100,7 +100,7 @@ spec:
           volumeMounts:
             - {name: script, mountPath: /script}
           resources:
-            requests: {cpu: 50m, memory: 64Mi}
+            requests: {cpu: 50m, memory: 256Mi}
             limits: {memory: 256Mi}
       volumes:
         - name: script

@@ -46,10 +46,10 @@ defaults:
       failureThreshold: 3
   resources:
     requests:
-      cpu: 50m
+      cpu: 10m
       memory: 64Mi
     limits:
-      memory: 256Mi
+      memory: 64Mi
   terminationGracePeriodSeconds: 30
   externalSecrets: []
   networkPolicy:
@@ -219,10 +219,10 @@ services:
         env: PAYMENTS_CHECKOUT_TOKEN_KEY
     resources:
       requests:
-        cpu: 100m
+        cpu: 50m
         memory: 128Mi
       limits:
-        memory: 512Mi
+        memory: 128Mi
     database: payments
   processor-simulator:
     image:
@@ -287,10 +287,10 @@ database:
     storageClass: local-path
   resources:
     requests:
-      cpu: 100m
+      cpu: 50m
       memory: 256Mi
     limits:
-      memory: 1Gi
+      memory: 256Mi
   databases:
     payments:
       roles:
@@ -314,9 +314,8 @@ redis:
   resources:
     requests:
       cpu: 100m
-      memory: 512Mi
+      memory: 640Mi
     limits:
-      cpu: 500m
       memory: 640Mi
   maxmemory: 512mb
   password:

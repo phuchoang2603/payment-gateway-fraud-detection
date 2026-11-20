@@ -12,8 +12,8 @@ gpu:
   claim: ml-gpu
 training:
   resources:
-    requests: {cpu: 500m, memory: 2Gi}
-    limits: {cpu: "3", memory: 8Gi}
+    requests: {cpu: 500m, memory: 8Gi}
+    limits: {memory: 8Gi}
 config:
   AWS_REGION: us-east-1
   S3_ENDPOINT: https://minio.home.phuchoang.sbs
@@ -72,7 +72,7 @@ dashboards:
   folder: ML
 serving:
   resources:
-    requests: {cpu: 500m, memory: 2Gi}
+    requests: {cpu: 500m, memory: 4Gi}
     limits: {memory: 4Gi}
   predictor:
     minReplicas: 1
@@ -95,5 +95,5 @@ notebook:
   storageClass: cloud-block
   storageSize: 20Gi
   resources:
-    requests: {cpu: '1', memory: 4Gi}
+    requests: {cpu: '1', memory: 8Gi}
     limits: {memory: 8Gi}

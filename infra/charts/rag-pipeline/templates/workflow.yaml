@@ -107,8 +107,8 @@ spec:
           runAsUser: 50000
           {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
         resources:
-          requests: {cpu: 100m, memory: 512Mi}
-          limits: {memory: 2Gi}
+          requests: {cpu: 250m, memory: 768Mi}
+          limits: {memory: 768Mi}
         volumeMounts:
           - name: metadata-connectors
             mountPath: /etc/metadata
@@ -135,7 +135,7 @@ spec:
         securityContext:
           {{- include "rag-pipeline.containerSecurity" . | nindent 10 }}
         resources:
-          requests: {cpu: 50m, memory: 128Mi}
+          requests: {cpu: 50m, memory: 512Mi}
           limits: {memory: 512Mi}
 ---
 apiVersion: argoproj.io/v1alpha1

@@ -12,9 +12,8 @@ simulator:
   resources:
     requests:
       cpu: 100m
-      memory: 512Mi
+      memory: 2Gi
     limits:
-      cpu: '1'
       memory: 2Gi
   config:
     manifest: s3://platform-dev/datasets/payment-gateway/historical/v18/manifest.json

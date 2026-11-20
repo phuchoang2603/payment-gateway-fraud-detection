@@ -32,8 +32,8 @@ polaris:
   replicaCount: 1
   resources:
     requests:
-      cpu: "1"
-      memory: 768Mi
+      cpu: 100m
+      memory: 1536Mi
     limits:
       memory: 1536Mi
   livenessProbe:
@@ -104,6 +104,6 @@ polaris:
     resources:
       requests:
         cpu: 50m
-        memory: 256Mi
+        memory: 768Mi
       limits:
         memory: 768Mi

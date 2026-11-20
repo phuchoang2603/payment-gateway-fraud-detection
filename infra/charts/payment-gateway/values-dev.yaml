@@ -8,8 +8,10 @@ ingress:
   tunnel:
     hostname: pay-gateway.phuchoang.sbs
 redis:
+  maxmemory: 128mb
   resources:
-    requests: {cpu: 50m, memory: 128Mi}
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {memory: 192Mi}
 rollout:
   analysis:
     enabled: false

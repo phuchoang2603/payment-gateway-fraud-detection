@@ -55,6 +55,8 @@ spec:
   serviceAccount: fraud-streaming
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: '1'
+    kubernetes.jobmanager.cpu.limit-factor: '4'
+    kubernetes.taskmanager.cpu.limit-factor: '4'
     taskmanager.rpc.port: '6122'
     taskmanager.data.port: '6121'
     blob.server.port: '6124'

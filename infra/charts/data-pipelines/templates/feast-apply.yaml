@@ -26,6 +26,6 @@ spec:
             {{- include "data-pipelines.lakeEnv" . | nindent 12 }}
             {{- include "data-pipelines.feastEnv" . | nindent 12 }}
           resources:
-            requests: {cpu: 500m, memory: 1Gi}
+            requests: {cpu: 500m, memory: 2Gi}
             limits: {memory: 2Gi}
 {{- end }}

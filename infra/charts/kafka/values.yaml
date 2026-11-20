@@ -20,9 +20,8 @@ kafka:
   resources:
     requests:
       cpu: 250m
-      memory: 1Gi
+      memory: 1536Mi
     limits:
-      cpu: '1'
       memory: 1536Mi
 entityOperator:
   topicOperator:
@@ -32,9 +31,8 @@ entityOperator:
     resources:
       requests:
         cpu: 50m
-        memory: 384Mi
+        memory: 512Mi
       limits:
-        cpu: 500m
         memory: 512Mi
 connect:
   clusterName: payment-gateway-connect
@@ -45,8 +43,8 @@ connect:
     -Xmx: 512m
   resources:
     requests:
-      cpu: 250m
-      memory: 768Mi
+      cpu: 300m
+      memory: 1Gi
     limits:
       memory: 1Gi
   livenessProbe:
@@ -102,4 +100,4 @@ monitoring:
   groupRegex: '^(gateway-notifier|fraud-features-.*|feature-writer(-.*)?|dp1-bronze-watermarks|simulator-redelivery-v1)$'
   exporterResources:
     requests: {cpu: 25m, memory: 64Mi}
-    limits: {cpu: 200m, memory: 128Mi}
+    limits: {memory: 64Mi}

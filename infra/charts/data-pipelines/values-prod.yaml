@@ -10,10 +10,9 @@ generator:
   resources:
     requests:
       cpu: '3'
-      memory: 8Gi
+      memory: 12Gi
       ephemeral-storage: 10Gi
     limits:
-      cpu: 3500m
       memory: 12Gi
       ephemeral-storage: 20Gi
 config:
@@ -123,9 +122,8 @@ features:
     resources:
       requests:
         cpu: 250m
-        memory: 7Gi
+        memory: 8Gi
       limits:
-        cpu: '1'
         memory: 8Gi
   streaming:
     storageRoot: s3a://talos-proxmox-prod-platform/runs/payment-gateway/flink

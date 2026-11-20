@@ -60,7 +60,7 @@ spec:
               valueFrom:
                 secretKeyRef: {name: iceberg-bootstrap, key: client-secret}
           resources:
-            requests: {cpu: 25m, memory: 32Mi}
+            requests: {cpu: 25m, memory: 128Mi}
             limits: {memory: 128Mi}
           volumeMounts:
             - name: setup

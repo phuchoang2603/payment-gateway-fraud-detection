@@ -49,8 +49,8 @@ models:
       presencePenalty: "1.5"
       maxTokens: 1024
     resources:
-      requests: {cpu: "1", memory: 8Gi}
-      limits: {memory: 12Gi}
+      requests: {cpu: "1", memory: 5Gi}
+      limits: {memory: 5Gi}
   candidate:
     enabled: false
     name: qwen3-4b
@@ -67,7 +67,7 @@ models:
       - --enable-auto-tool-choice
       - --tool-call-parser=hermes
     resources:
-      requests: {cpu: "1", memory: 6Gi}
+      requests: {cpu: "1", memory: 10Gi}
       limits: {memory: 10Gi}
   embedding:
     name: qwen3-embedding
@@ -80,7 +80,7 @@ models:
       - --runner=pooling
       - --max-model-len=2048
     resources:
-      requests: {cpu: 250m, memory: 2Gi}
+      requests: {cpu: 250m, memory: 4Gi}
       limits: {memory: 4Gi}
   decision:
     name: d3-edge
@@ -95,8 +95,8 @@ models:
       - --max-model-len=2048
       - --max-num-seqs=16
     resources:
-      requests: {cpu: 250m, memory: 2Gi}
-      limits: {memory: 6Gi}
+      requests: {cpu: 250m, memory: 5Gi}
+      limits: {memory: 5Gi}
 
 gateway:
   name: agentgateway
@@ -184,8 +184,8 @@ agents:
     sandboxClass: gvisor
     sandboxConfig: gvisor-default
     resources:
-      requests: {cpu: 100m, memory: 256Mi}
-      limits: {memory: 2Gi}
+      requests: {cpu: 100m, memory: 384Mi}
+      limits: {memory: 384Mi}
     autoscaling:
       minReplicas: 2
       maxReplicas: 6
@@ -243,14 +243,14 @@ langfuseStores:
     size: 5Gi
     nodeSelector: {}
     resources:
-      requests: {cpu: 100m, memory: 256Mi}
-      limits: {memory: 1Gi}
+      requests: {cpu: 50m, memory: 256Mi}
+      limits: {memory: 256Mi}
   redis:
     name: langfuse-redis
     image: quay.io/opstree/redis:v7.2.16
     maxmemory: 200mb
     resources:
-      requests: {cpu: 50m, memory: 128Mi}
+      requests: {cpu: 50m, memory: 256Mi}
       limits: {memory: 256Mi}
   clickhousePasswordKey: CLICKHOUSE_LANGFUSE_PASSWORD
   clusterTunnel: talos-proxmox
@@ -298,15 +298,15 @@ langfuse:
       - {name: AUTH_DISABLE_USERNAME_PASSWORD, value: "false"}
     web:
       resources:
-        requests: {cpu: 250m, memory: 1Gi}
-        limits: {memory: 2Gi}
+        requests: {cpu: 100m, memory: 1536Mi}
+        limits: {memory: 1536Mi}
       livenessProbe:
         initialDelaySeconds: 600
         failureThreshold: 6
     worker:
       resources:
-        requests: {cpu: 250m, memory: 512Mi}
-        limits: {memory: 1Gi}
+        requests: {cpu: 150m, memory: 768Mi}
+        limits: {memory: 768Mi}
       livenessProbe:
         initialDelaySeconds: 600
   postgresql:
@@ -383,5 +383,5 @@ risk:
         item_count: 2
         has_device: true
   resources:
-    requests: {cpu: 50m, memory: 64Mi}
-    limits: {memory: 256Mi}
+    requests: {cpu: 25m, memory: 128Mi}
+    limits: {memory: 128Mi}
