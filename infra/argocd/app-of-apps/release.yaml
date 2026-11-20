@@ -1,1 +1,45 @@
-{}
+{
+  "global": {
+    "targetRevision": "84eab59180ab0247c0f42ca891869cf8925c3dab",
+    "imageTags": {
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection": "main-6108f7afa4f7f2b007e1ff41d40c2e133ff112b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/edge": "main-6108f7afa4f7f2b007e1ff41d40c2e133ff112b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments": "main-6108f7afa4f7f2b007e1ff41d40c2e133ff112b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/notifier": "main-6108f7afa4f7f2b007e1ff41d40c2e133ff112b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/vault-simulator": "main-6108f7afa4f7f2b007e1ff41d40c2e133ff112b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/processor-simulator": "main-6108f7afa4f7f2b007e1ff41d40c2e133ff112b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/connect-debezium": "main-56a231b81dd2629cf06be47cece1b1bd1361103e",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator": "main-6108f7afa4f7f2b007e1ff41d40c2e133ff112b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata": "main-56a231b81dd2629cf06be47cece1b1bd1361103e",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark": "main-6108f7afa4f7f2b007e1ff41d40c2e133ff112b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast": "main-6108f7afa4f7f2b007e1ff41d40c2e133ff112b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming": "main-56a231b81dd2629cf06be47cece1b1bd1361103e",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-pipeline": "main-6108f7afa4f7f2b007e1ff41d40c2e133ff112b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-serving": "main-56a231b81dd2629cf06be47cece1b1bd1361103e",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/agent-runtime": "main-56a231b81dd2629cf06be47cece1b1bd1361103e",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml": "main-6108f7afa4f7f2b007e1ff41d40c2e133ff112b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/drift": "main-56a231b81dd2629cf06be47cece1b1bd1361103e",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/risk-serving": "main-56a231b81dd2629cf06be47cece1b1bd1361103e"
+    },
+    "imageDigests": {
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection": "sha256:5184827594eceff746ffed7b7f8cd4c9eb4d33cef999841831e4ea93b2df8f9a",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/edge": "sha256:58b41473fc7ef98d6a91e4498e50a63384389b8af6b0e973d72753d146f810ba",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/payments": "sha256:809319b52951aec44d97c83d5e801c153dc6a30f5ecda732330887169ecc050b",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/notifier": "sha256:b980890686f8f8a5904186d8b727b709c768e6ada40e1e25347316a3dee69b30",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/vault-simulator": "sha256:a47279c62c49c0af2c170449259dda7c17d3323df26a60eb4d94c0c05a6b6c24",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/processor-simulator": "sha256:b129de22d7c8f91627eada30e631d981990e274baaa8af757663575430d410bc",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/connect-debezium": "sha256:629dba9a3300c3f937761db2d8d9f82e058436279cb1d8251cc81c415acfd77a",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/live-simulator": "sha256:2a1a4b6875c6e289bceae38bbfef163bd5a97898ecc316e1bd93fe15ced2e2b8",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-metadata": "sha256:0dff22990fc0758ad5c2be97ba4eddc88f206bc8c3f0b08a103d063f7e366d10",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/data-platform-spark": "sha256:28ccb6d7a3550261c05217b467ad49c11ef2253cabcbc65d1d58120913a1bd78",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/feast": "sha256:da3c6af3dc43ecdde034e45d1a9ef7845788fd6dc09ee1c0ca97932c38f9479c",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/streaming": "sha256:88c5901a7781179c387fb99300840f13ec0b60f6a2aedabf9cfed50d5f6ef9a0",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-pipeline": "sha256:97a520e2c7f18237a55cf65c16379351b765b473aa7ba4d327736fb573900f8b",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/rag-serving": "sha256:c197280311d7839093aa63a32cb9a7a3e89f97b9be0da84286acccdb588cb2b6",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/agent-runtime": "sha256:f584ae7c9e297b993cd084564d464b3d9f6c26424348c53aa8de5d1cf8e4e75d",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/ml": "sha256:b2ce3b38279081084e36ae43221c3cacad2a09a4739d896f62de1b80cd756af4",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/drift": "sha256:b5171c7c33028961548ccda2c0d6912cea0948c3b8e4b39f35bc6680cb0d9a15",
+      "ghcr.io/phuchoang2603/payment-gateway-fraud-detection/risk-serving": "sha256:6c04986d346225f8d50650c74f8a883f0b8038db6d62fd42c1bd6e0a73b17ee0"
+    }
+  }
+}
