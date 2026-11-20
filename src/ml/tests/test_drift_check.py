@@ -92,7 +92,7 @@ def test_the_api_is_read_for_the_requested_window(monkeypatch):
 
 def test_main_prints_the_outcome(monkeypatch, capsys):
     """main reads the environment, checks once and prints the outcome as JSON."""
-    answers(monkeypatch, "ok", "ok")
+    answers(monkeypatch, "ok", "ok", created=datetime.now(timezone.utc) - timedelta(days=5))
     monkeypatch.setenv("DRIFT_URL", "http://drift")
     monkeypatch.setattr(drift_check, "Pipelines", lambda: Runs())
     drift_check.main()
